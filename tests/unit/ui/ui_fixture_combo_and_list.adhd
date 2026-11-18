@@ -9,449 +9,282 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const StringView s_ComboPanelKey = "panel";
+const StringView s_ComboKey = "combo";
+const StringView s_SecondComboKey = "other";
 
+Rect ComboPanelBounds(){ return Rect(10.0f, 10.0f, 320.0f, 240.0f); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+interface IComboCallbackObserver{
+    void observeCallback()const;
+}
 
+[extensible]
+class ComboSource : IListDataSource, IComboCallbackObserver{
+    public u64 count = 100000u;
+    public u64 generation = 701u;
+    public u64 contentRevision = 1u;
+    public u64 removed = 0u;
+    public u64 disabled = 0u;
+    public TestObserved<u64> keyCalls;
+    public TestObserved<u64> lookupCalls;
+    public TestObserved<u64> searchCalls;
+    public TestObserved<u64> textCalls;
+    public TestObserved<u64> enabledCalls;
+    public b8 reverse = false;
 
-#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiComboTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-using namespace UiWidgetTests;
-
-inline constexpr Rect s_ComboPanelBounds{ 10.0f, 10.0f, 320.0f, 240.0f };
-inline constexpr AStringView s_ComboPanelKey = "panel";
-inline constexpr AStringView s_ComboKey = "combo";
-inline constexpr AStringView s_SecondComboKey = "other";
-// The combo popup list part and the list's own row container share the "rows" text.
-inline constexpr AStringView s_ComboRowsKey = "rows";
-inline constexpr AStringView s_ListRowsKey = "rows";
-
-
-// Arithmetic combo source with stable keys across reorder and removal.
-class ComboSource : public IListDataSource{
-public:
-    virtual ~ComboSource()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
-    [[nodiscard]] virtual u64 revision()const noexcept override{ observeCallback(); return contentRevision; }
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ observeCallback(); ++keyCalls; return rawKey(index); }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        observeCallback();
-        ++lookupCalls;
-        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
+    public u64 instanceGeneration()const override{ this.observeCallback(); return this.generation; }
+    public u64 revision()const override{ return this.baseRevision(); }
+    protected u64 baseRevision()const{ this.observeCallback(); return this.contentRevision; }
+    public u64 rowCount()const override{ this.observeCallback(); return this.count; }
+    public u64 key(in u64 index)const override{ return this.baseKey(index); }
+    protected u64 baseKey(in u64 index)const{ this.observeCallback(); ++this.keyCalls.value(); return this.rawKey(index); }
+    public Expected<u64> indexOf(in u64 value)const override{ return this.baseIndexOf(value); }
+    protected Expected<u64> baseIndexOf(in u64 value)const{
+        this.observeCallback();
+        ++this.lookupCalls.value();
+        return FindArithmeticFixtureRowIndex(this.count, this.removed, this.reverse, value);
     }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
-        observeCallback();
-        ++searchCalls;
-        return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
+    public Expected<u64> findEnabled(in u64 start, in b8 backwards)const override{
+        this.observeCallback();
+        ++this.searchCalls.value();
+        return FindSingleDisabledFixtureRow(this.count, this.removed, this.reverse, start, backwards, this.disabled);
     }
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        observeCallback();
-        ++textCalls;
-        return index % 2u == 0u ? "First" : "Second";
+    public StringView text(in u64 index)const override{ return this.baseText(index); }
+    protected StringView baseText(in u64 index)const{
+        this.observeCallback();
+        ++this.textCalls.value();
+        if(index % 2u == 0u)
+            return "First";
+        return "Second";
     }
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        observeCallback();
-        ++enabledCalls;
-        return index < count && rawKey(index) != disabled;
+    public b8 enabled(in u64 index)const override{ return this.baseEnabled(index); }
+    protected b8 baseEnabled(in u64 index)const{
+        this.observeCallback();
+        ++this.enabledCalls.value();
+        return index < this.count && this.rawKey(index) != this.disabled;
     }
-    void resetCounters()const noexcept;
-
-
-protected:
-    virtual void observeCallback()const noexcept{}
-    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
-        return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
+    public void resetCounters()const{ ResetComboSourceCounters(this); }
+    public void observeCallback()const override{ }
+    protected u64 rawKey(in u64 index)const{
+        return ArithmeticFixtureRowKey(this.count, this.removed, this.reverse, index);
     }
+}
 
+[extensible]
+class ComboFixture : WidgetFixture{
+    public ComboSource m_source;
+    public ComboState m_state;
+    public ComboResult m_result;
 
-public:
-    u64 count = 100000u;
-    u64 generation = 701u;
-    u64 contentRevision = 1u;
-    u64 removed = 0u;
-    u64 disabled = 0u;
-    mutable u64 keyCalls = 0u;
-    mutable u64 lookupCalls = 0u;
-    mutable u64 searchCalls = 0u;
-    mutable u64 textCalls = 0u;
-    mutable u64 enabledCalls = 0u;
-    b8 reverse = false;
-};
-
-[[nodiscard]] ComboOptions Options()noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ComboFixture : public WidgetFixture{
-public:
-    using WidgetFixture::press;
-
-
-public:
-    [[nodiscard]] b8 declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
-        return declareSource(generation, m_source, m_state, options, bounds);
+    public b8 declareCombo(in u64 generation){ return this.declareCombo(generation, MakeComboFixtureOptions()); }
+    public b8 declareCombo(in u64 generation, in ComboOptions options){ return this.declareCombo(generation, options, ComboPanelBounds()); }
+    public b8 declareCombo(in u64 generation, in ComboOptions options, in Rect bounds){
+        return this.declareSource(generation, this.m_source, this.m_state, options, bounds);
     }
-    [[nodiscard]] b8 declareSource(u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds);
-    [[nodiscard]] b8 prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
-        return declareCombo(generation, options, bounds) && finishPanel();
+    public b8 declareSource(in u64 generation, in IListDataSource source, mut ComboState state){ return this.declareSource(generation, source, state, MakeComboFixtureOptions()); }
+    public b8 declareSource(in u64 generation, in IListDataSource source, mut ComboState state, in ComboOptions options){ return this.declareSource(generation, source, state, options, ComboPanelBounds()); }
+    public b8 declareSource(in u64 generation, in IListDataSource source, mut ComboState state, in ComboOptions options, in Rect bounds){ return DeclareComboFixtureSource(this, generation, source, state, options, bounds); }
+    public b8 prepare(in u64 generation){ return this.prepare(generation, MakeComboFixtureOptions()); }
+    public b8 prepare(in u64 generation, in ComboOptions options){ return this.prepare(generation, options, ComboPanelBounds()); }
+    public b8 prepare(in u64 generation, in ComboOptions options, in Rect bounds){
+        return this.declareCombo(generation, options, bounds) && this.finishPanel();
     }
-    [[nodiscard]] b8 accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
-        return prepare(generation, options, bounds) && m_context.commitFrame(generation);
+    public b8 accept(in u64 generation){ return this.accept(generation, MakeComboFixtureOptions()); }
+    public b8 accept(in u64 generation, in ComboOptions options){ return this.accept(generation, options, ComboPanelBounds()); }
+    public b8 accept(in u64 generation, in ComboOptions options, in Rect bounds){
+        return this.prepare(generation, options, bounds) && this.m_context.commitFrame(generation);
     }
-    [[nodiscard]] WidgetId popup(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), "popup"); }
-    [[nodiscard]] WidgetId list(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), s_ComboRowsKey); }
-    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = s_ComboKey)const{
-        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(list(combo), s_ListRowsKey), key);
+    public WidgetId popup()const{ return this.popup(s_ComboKey); }
+    public WidgetId popup(in StringView key)const{ return RequireUiWidgetId(this.id(key, s_ComboPanelKey), "popup"); }
+    public WidgetId list()const{ return this.list(s_ComboKey); }
+    public WidgetId list(in StringView key)const{ return RequireUiWidgetId(this.id(key, s_ComboPanelKey), "rows"); }
+    public WidgetId row(in u64 key)const{ return this.row(key, s_ComboKey); }
+    public WidgetId row(in u64 key, in StringView combo)const{
+        return RequireUiWidgetPartId(RequireUiWidgetId(this.list(combo), "rows"), key);
     }
-    [[nodiscard]] b8 openByPointer(u64 generation);
+    public b8 openByPointer(in u64 generation){ return OpenComboFixtureByPointer(this, generation); }
+}
 
+class RangeSource : IListDataSource{
+    public u64 generation = 41u;
+    public TestObserved<u64> revisionValue = TestObserved<u64>(1u);
+    public u64 count = 10u;
+    public u64 disabledBegin = 0xffffffffffffffffu;
+    public u64 disabledEnd = 0xffffffffffffffffu;
+    public b8 reversed = false;
+    public b8 badLookup = false;
+    public b8 wrongLookup = false;
+    public b8 badFind = false;
+    public TestObserved<b8> changeRevisionOnLookup;
+    public TestObserved<u64> keyCalls;
+    public TestObserved<u64> lookupCalls;
+    public TestObserved<u64> findCalls;
+    public TestObserved<u64> enabledCalls;
 
-public:
-    ComboSource m_source;
-    ComboState m_state;
-    ComboResult m_result;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiListBehaviorTestSupport{
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RangeSource final : public IListDataSource{
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        ++keyCalls;
-        if(index >= count)
+    public u64 instanceGeneration()const override{ return this.generation; }
+    public u64 revision()const override{ return this.revisionValue.value(); }
+    public u64 rowCount()const override{ return this.count; }
+    public u64 key(in u64 index)const override{
+        ++this.keyCalls.value();
+        if(index >= this.count)
             return 0u;
-        return reversed ? count - index : index + 1u;
+        if(this.reversed)
+            return this.count - index;
+        return index + 1u;
     }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
+    public Expected<u64> indexOf(in u64 key)const override{
         u64 index = 0u;
-        ++lookupCalls;
-        if(changeRevisionOnLookup){
-            changeRevisionOnLookup = false;
-            ++revisionValue;
+        ++this.lookupCalls.value();
+        if(this.changeRevisionOnLookup.value()){
+            this.changeRevisionOnLookup.value() = false;
+            ++this.revisionValue.value();
         }
-        if(key == 0u || key > count)
-            return MakeUnexpected(Failure{});
-        index = badLookup ? count : wrongLookup ? 0u : reversed ? count - key : key - 1u;
+        if(key == 0u || key > this.count)
+            return MakeUnexpected(Failure());
+        if(this.badLookup)
+            index = this.count;
+        else if(this.wrongLookup)
+            index = 0u;
+        else if(this.reversed)
+            index = this.count - key;
+        else
+            index = key - 1u;
         return index;
     }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
         u64 index = 0u;
-        ++findCalls;
-        if(start >= count)
-            return MakeUnexpected(Failure{});
-        if(badFind){
-            index = count;
+        ++this.findCalls.value();
+        if(start >= this.count)
+            return MakeUnexpected(Failure());
+        if(this.badFind){
+            index = this.count;
             return index;
         }
         index = start;
-        if(index >= disabledBegin && index < disabledEnd){
+        if(index >= this.disabledBegin && index < this.disabledEnd){
             if(reverse){
-                if(disabledBegin == 0u)
-                    return MakeUnexpected(Failure{});
-                index = disabledBegin - 1u;
+                if(this.disabledBegin == 0u)
+                    return MakeUnexpected(Failure());
+                index = this.disabledBegin - 1u;
             }
             else{
-                if(disabledEnd >= count)
-                    return MakeUnexpected(Failure{});
-                index = disabledEnd;
+                if(this.disabledEnd >= this.count)
+                    return MakeUnexpected(Failure());
+                index = this.disabledEnd;
             }
         }
         return index;
     }
-
-    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        ++enabledCalls;
-        return index < count && (index < disabledBegin || index >= disabledEnd);
+    public void clearCalls(){
+        this.keyCalls.value() = 0u;
+        this.lookupCalls.value() = 0u;
+        this.findCalls.value() = 0u;
+        this.enabledCalls.value() = 0u;
     }
-
-    void clearCalls()noexcept{
-        keyCalls = 0u;
-        lookupCalls = 0u;
-        findCalls = 0u;
-        enabledCalls = 0u;
+    public StringView text(in u64 unused)const override{ return "row"; }
+    public b8 enabled(in u64 index)const override{
+        ++this.enabledCalls.value();
+        return index < this.count && (index < this.disabledBegin || index >= this.disabledEnd);
     }
-
-
-public:
-    u64 generation = 41u;
-    mutable u64 revisionValue = 1u;
-    u64 count = 10u;
-    u64 disabledBegin = Limit<u64>::s_Max;
-    u64 disabledEnd = Limit<u64>::s_Max;
-    b8 reversed = false;
-    b8 badLookup = false;
-    b8 wrongLookup = false;
-    b8 badFind = false;
-    mutable b8 changeRevisionOnLookup = false;
-    mutable u64 keyCalls = 0u;
-    mutable u64 lookupCalls = 0u;
-    mutable u64 findCalls = 0u;
-    mutable u64 enabledCalls = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] ControlAction Action(const ListState& state, const RangeSource& source, ControlActionKind::Enum kind)noexcept;
-void ExpectResult(const ListResult& actual, const ListResult& expected);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiListTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-using namespace UiWidgetTests;
-
-inline constexpr AStringView s_PanelKey = "panel";
-inline constexpr AStringView s_ListKey = "list";
-inline constexpr AStringView s_PopupKey = "popup";
-inline constexpr AStringView s_UpperPopupKey = "upper";
-inline constexpr AStringView s_RowsKey = "rows";
-inline constexpr AStringView s_ScrollbarKey = "scrollbar";
-inline constexpr AStringView s_FirstRowText = "Ax";
-
-
-// Arithmetic list source that computes rows on demand without allocating per row.
-class ArithmeticSource final : public IListDataSource{
-public:
-    virtual ~ArithmeticSource()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ invalidateText(); return generation; }
-    [[nodiscard]] virtual u64 revision()const noexcept override{ invalidateText(); return contentRevision; }
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ invalidateText(); return count; }
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        invalidateText();
-        ++keyCalls;
-        return duplicate ? 1u : rawKey(index);
-    }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        invalidateText();
-        ++lookupCalls;
-        if(malformedLookup)
-            return count;
-        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
-    }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
-        invalidateText();
-        return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
-    }
-    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        invalidateText();
-        return rawKey(index) != disabled;
-    }
-
-
-private:
-    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
-        return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
-    }
-    void invalidateText()const noexcept{ temporary.fill('?'); }
-
-
-public:
-    u64 count = 100000u;
-    u64 generation = 301u;
-    u64 contentRevision = 1u;
-    u64 removed = 0u;
-    u64 disabled = 0u;
-    u64 specialIndex = Limit<u64>::s_Max;
-    StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3\nPrevious\nNext";
-    mutable u64 keyCalls = 0u;
-    mutable u64 lookupCalls = 0u;
-    mutable u64 textCalls = 0u;
-    mutable Array<u64, 32u> textCallsByIndex{};
-    b8 reverse = false;
-    b8 duplicate = false;
-    b8 malformedLookup = false;
-    mutable Array<char, 128u> temporary{};
-};
-
-[[nodiscard]] ListOptions Options()noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiListBuilderTests : public WidgetFixture{
-public:
-    [[nodiscard]] b8 prepare(const u64 generation, const ListOptions& options = Options()){
-        return prepareSource(generation, m_source, m_state, options);
-    }
-    [[nodiscard]] b8 prepareSource(u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options(), const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
-    [[nodiscard]] b8 accept(const u64 generation, const ListOptions& options = Options()){
-        return prepare(generation, options) && m_context.commitFrame(generation);
-    }
-    [[nodiscard]] b8 preparePopups(u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup = nullptr, ListState* upperState = nullptr);
-    [[nodiscard]] WidgetId row(const u64 key)const{
-        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_RowsKey), key);
-    }
-    [[nodiscard]] b8 wheel(f64 delta = -1.0);
-
-
-public:
-    ArithmeticSource m_source;
-    ListState m_state;
-    ListResult m_result;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-namespace __hidden_ui_glyph_sdf_tests{
-using ComboSource = ::NWB::UiComboTests::ComboSource;
-using ComboFixture = ::NWB::UiComboTests::ComboFixture;
-using ArithmeticSource = ::NWB::UiListTests::ArithmeticSource;
-using UiListBuilderTests = ::NWB::UiListTests::UiListBuilderTests;
-using ::NWB::UiComboTests::s_ComboPanelKey;
-using ::NWB::UiComboTests::s_ComboKey;
-
-ComboOptions MakeComboFixtureOptions()noexcept;
-ListOptions MakeListFixtureOptions()noexcept;
-ControlAction MakeUiListControlAction(u64 instanceGeneration, u64 contentGeneration, u64 contentRevision, const ControlActionKindEnum& kind)noexcept;
-void ExpectUiListResult(const ListResult& actual, const ListResult& expected)noexcept;
-void ResetComboSourceCounters(ComboSource& self)noexcept;
-b8 DeclareComboFixtureSource(ComboFixture& self, u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds)noexcept;
-b8 OpenComboFixtureByPointer(ComboFixture& self, u64 generation)noexcept;
-StringView FormatArithmeticSourceText(ArithmeticSource& self, u64 index)noexcept;
-b8 PrepareUiListFixtureSource(UiListBuilderTests& self, u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display)noexcept;
-b8 PrepareUiListFixtureLowerPopup(UiListBuilderTests& self, u64 generation, PopupState& lowerPopup, ListState& lowerState)noexcept;
-b8 PrepareUiListFixtureTwoPopups(UiListBuilderTests& self, u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState& upperPopup, ListState& upperState)noexcept;
-b8 SendUiListFixtureWheel(UiListBuilderTests& self, f64 delta)noexcept;
-};
-
-NWB_BEGIN
-namespace UiComboTests{
-FOUNDATION_INLINE void ComboSource::resetCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ResetComboSourceCounters(const_cast<ComboSource&>(*this)); }
-FOUNDATION_INLINE ComboOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeComboFixtureOptions(); }
-FOUNDATION_INLINE b8 ComboFixture::declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds){
-    return ::__hidden_ui_glyph_sdf_tests::DeclareComboFixtureSource(*this, generation, source, state, options, bounds);
-}
-FOUNDATION_INLINE b8 ComboFixture::openByPointer(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenComboFixtureByPointer(*this, generation); }
-};
-namespace UiListTests{
-FOUNDATION_INLINE StringView ArithmeticSource::text(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FormatArithmeticSourceText(const_cast<ArithmeticSource&>(*this), index); }
-FOUNDATION_INLINE ListOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeListFixtureOptions(); }
-FOUNDATION_INLINE b8 UiListBuilderTests::prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display){
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureSource(*this, generation, source, state, options, display);
-}
-FOUNDATION_INLINE b8 UiListBuilderTests::preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup, ListState* upperState){
-    if(upperPopup && upperState)
-        return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureTwoPopups(*this, generation, lowerPopup, lowerState, *upperPopup, *upperState);
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureLowerPopup(*this, generation, lowerPopup, lowerState);
-}
-FOUNDATION_INLINE b8 UiListBuilderTests::wheel(const f64 delta){ return ::__hidden_ui_glyph_sdf_tests::SendUiListFixtureWheel(*this, delta); }
-};
-NWB_END
-
-namespace UiListBehaviorTestSupport{
-FOUNDATION_INLINE ControlAction Action(const ListState& state, const RangeSource& source, const ControlActionKind::Enum kind)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeUiListControlAction(state.inputGeneration(), source.instanceGeneration(), source.revision(), kind);
-}
-FOUNDATION_INLINE void ExpectResult(const ListResult& actual, const ListResult& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiListResult(actual, expected);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
+class ArithmeticSource : IListDataSource{
+    public u64 count = 100000u;
+    public u64 generation = 301u;
+    public u64 contentRevision = 1u;
+    public u64 removed = 0u;
+    public u64 disabled = 0u;
+    public u64 specialIndex = 0xffffffffffffffffu;
+    public StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3\nPrevious\nNext";
+    public TestObserved<u64> keyCalls;
+    public TestObserved<u64> lookupCalls;
+    public TestObserved<u64> textCalls;
+    public TestObserved<Array<u64, 32u>> textCallsByIndex;
+    public b8 reverse = false;
+    public b8 duplicate = false;
+    public b8 malformedLookup = false;
+    public TestObserved<String> temporary;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public u64 instanceGeneration()const override{ this.invalidateText(); return this.generation; }
+    public u64 revision()const override{ this.invalidateText(); return this.contentRevision; }
+    public u64 rowCount()const override{ this.invalidateText(); return this.count; }
+    public u64 key(in u64 index)const override{
+        this.invalidateText();
+        ++this.keyCalls.value();
+        if(this.duplicate)
+            return 1u;
+        return this.rawKey(index);
+    }
+    public Expected<u64> indexOf(in u64 value)const override{
+        this.invalidateText();
+        ++this.lookupCalls.value();
+        if(this.malformedLookup)
+            return this.count;
+        return FindArithmeticFixtureRowIndex(this.count, this.removed, this.reverse, value);
+    }
+    public Expected<u64> findEnabled(in u64 start, in b8 backwards)const override{
+        this.invalidateText();
+        return FindSingleDisabledFixtureRow(this.count, this.removed, this.reverse, start, backwards, this.disabled);
+    }
+    public StringView text(in u64 index)const override{ return FormatArithmeticSourceText(this, index); }
+    public b8 enabled(in u64 index)const override{
+        this.invalidateText();
+        return this.rawKey(index) != this.disabled;
+    }
+    protected u64 rawKey(in u64 index)const{
+        return ArithmeticFixtureRowKey(this.count, this.removed, this.reverse, index);
+    }
+    private void invalidateText()const{
+        mut String buffer = this.temporary.value();
+        buffer.resize(128u);
+        for(usize index = 0u; index < buffer.size(); ++index)
+            buffer[index] = '?';
+    }
+}
 
+[extensible]
+class UiListBuilderTests : WidgetFixture{
+    public ArithmeticSource m_source;
+    public ListState m_state;
+    public ListResult m_result;
+
+    public b8 prepare(in u64 generation){ return this.prepare(generation, MakeListFixtureOptions()); }
+    public b8 prepare(in u64 generation, in ListOptions options){
+        return this.prepareSource(generation, this.m_source, this.m_state, options);
+    }
+    public b8 prepareSource(in u64 generation, in IListDataSource source, mut ListState state){ return this.prepareSource(generation, source, state, MakeListFixtureOptions()); }
+    public b8 prepareSource(in u64 generation, in IListDataSource source, mut ListState state, in ListOptions options){ return this.prepareSource(generation, source, state, options, UiListFixtureDisplay()); }
+    public b8 prepareSource(in u64 generation, in IListDataSource source, mut ListState state, in ListOptions options, in DisplayMetrics display){ return PrepareUiListFixtureSource(this, generation, source, state, options, display); }
+    public b8 accept(in u64 generation){ return this.accept(generation, MakeListFixtureOptions()); }
+    public b8 accept(in u64 generation, in ListOptions options){
+        return this.prepare(generation, options) && this.m_context.commitFrame(generation);
+    }
+    public WidgetId row(in u64 key)const{
+        return RequireUiWidgetPartId(RequireUiWidgetId(this.id("list", "panel"), "rows"), key);
+    }
+    public b8 wheel(){ return this.wheel(-1.0); }
+    public b8 wheel(in f64 delta){ return SendUiListFixtureWheel(this, delta); }
+    public b8 preparePopups(in u64 generation, mut PopupState lowerPopup, mut ListState lowerState){
+        return PrepareUiListFixtureLowerPopup(this, generation, lowerPopup, lowerState);
+    }
+    public b8 preparePopups(in u64 generation, mut PopupState lowerPopup, mut ListState lowerState, mut PopupState upperPopup, mut ListState upperState){
+        return PrepareUiListFixtureTwoPopups(this, generation, lowerPopup, lowerState, upperPopup, upperState);
+    }
+}
+
+DisplayMetrics UiListFixtureDisplay(){
+    DisplayMetrics display;
+    display.logicalWidth = 800.0f;
+    display.logicalHeight = 600.0f;
+    display.pixelScaleX = 1.0f;
+    display.pixelScaleY = 1.0f;
+    return display;
+}
+
+ControlAction MakeRangeSourceAction(in ListState state, in RangeSource source, in ControlActionKind kind){
+    return MakeUiListControlAction(state.inputGeneration(), source.instanceGeneration(), source.revision(), kind);
+}
 
 ComboOptions MakeComboFixtureOptions(){
     ComboOptions options = ComboOptions();
@@ -489,12 +322,12 @@ void ExpectUiListResult(in ListResult actual, in ListResult expected){
     EXPECT_EQ(actual.focused, expected.focused);
 }
 
-void ResetComboSourceCounters(mut ComboSource self){
-    self.keyCalls = 0u;
-    self.lookupCalls = 0u;
-    self.searchCalls = 0u;
-    self.textCalls = 0u;
-    self.enabledCalls = 0u;
+void ResetComboSourceCounters(in ComboSource self){
+    self.keyCalls.value() = 0u;
+    self.lookupCalls.value() = 0u;
+    self.searchCalls.value() = 0u;
+    self.textCalls.value() = 0u;
+    self.enabledCalls.value() = 0u;
 }
 
 b8 DeclareComboFixtureSource(mut ComboFixture self, in u64 generation, in IListDataSource source, mut ComboState state, in ComboOptions options, in Rect bounds){
@@ -512,19 +345,20 @@ b8 OpenComboFixtureByPointer(mut ComboFixture self, in u64 generation){
     return self.accept(generation) && self.m_state.isOpen();
 }
 
-StringView FormatArithmeticSourceText(mut ArithmeticSource self, in u64 index){
-    ++self.textCalls;
-    if(index < self.textCallsByIndex.size())
-        ++self.textCallsByIndex[cast<usize>(index)];
+StringView FormatArithmeticSourceText(in ArithmeticSource self, in u64 index){
+    self.temporary.value().resize(128u);
+    ++self.textCalls.value();
+    if(index < self.textCallsByIndex.value().size())
+        ++self.textCallsByIndex.value()[cast<usize>(index)];
     if(index == self.specialIndex){
         for(usize byte = 0u; byte < self.specialText.size(); ++byte)
-            self.temporary[byte] = self.specialText[byte];
-        return StringView(self.temporary.data(), self.specialText.size());
+            self.temporary.value()[byte] = self.specialText[byte];
+        return StringView(self.temporary.value()).substr(0u, self.specialText.size());
     }
     const StringView letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    self.temporary[0u] = letters[cast<usize>(index % 26u)];
-    self.temporary[1u] = 'x';
-    return StringView(self.temporary.data(), 2u);
+    self.temporary.value()[0u] = letters[cast<usize>(index % 26u)];
+    self.temporary.value()[1u] = 'x';
+    return StringView(self.temporary.value()).substr(0u, 2u);
 }
 
 b8 PrepareUiListFixtureSource(mut UiListBuilderTests self, in u64 generation, in IListDataSource source, mut ListState state, in ListOptions options, in DisplayMetrics display){

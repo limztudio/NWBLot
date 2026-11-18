@@ -230,6 +230,40 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
     b8 ok = checkTemplateParamBounds(method.templateParams, enclosingClass, &method, errors);
     if(method.returnType && !checkReturnTypeRef(*method.returnType, enclosingClass, &method, method.span, errors))
         ok = false;
+    if(!method.initializedCppBase.empty()){
+        if(!enclosingClass || enclosingClass->isExtern || !method.isConstructor || method.isOutOfLine || !method.hasBody){
+            reportError(errors, method.span, "'[cpp_base]' requires a constructor defined inside its authored class");
+            return false;
+        }
+        b8 foundBase = false;
+        for(const TypeRef* base : enclosingClass->implementedInterfaces){
+            if(!base || base->name != method.initializedCppBase)
+                continue;
+            const MStringView baseName = m_symbols.resolveBaseTypeName(base->name);
+            const ClassDecl* declared = m_symbols.findClass(baseName);
+            const BuiltinObjectTypeInfo* builtin = FindBuiltinObjectType(baseName);
+            foundBase = declared ? declared->isExtern && declared->isPolymorphicBase : builtin && builtin->isPolymorphicBase;
+            break;
+        }
+        if(!foundBase){
+            reportError(errors, method.span, "'[cpp_base]' must name a direct external polymorphic base");
+            return false;
+        }
+        for(const MStringView argument : method.cppBaseArguments){
+            b8 foundArgument = false;
+            for(const ParamDecl& param : method.params){
+                if(param.name == argument && (param.mode == ParamPassingMode::Mut || param.retainsBorrow)
+                    && !param.forwardsArgument && !param.copiesArgument){
+                    foundArgument = true;
+                    break;
+                }
+            }
+            if(!foundArgument){
+                reportError(errors, method.span, "'[cpp_base]' must forward a 'mut' or 'in borrow' constructor parameter");
+                return false;
+            }
+        }
+    }
     if(method.exportsRvalueOverload){
         const MStringView result = method.returnType ? m_symbols.resolveBaseTypeName(method.returnType->name) : MStringView{};
         if(!enclosingClass || enclosingClass->isExtern || method.isExtern || method.isOverride || method.isStatic || method.isOperator
@@ -466,6 +500,30 @@ b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const Fi
 
 b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
     b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
+    if((classDecl.isExtensible || classDecl.concreteBase) && (classDecl.isExtern || !classDecl.templateParams.empty() || classDecl.isSerialize
+        || classDecl.isReflect || classDecl.recordAlignment || classDecl.isMoveOnly || !classDecl.assetTypeName.empty()
+        || !classDecl.subsystemTypeName.empty() || !classDecl.componentTypeName.empty() || !classDecl.systemTypeName.empty())){
+        reportError(errors, classDecl.span, "authored concrete bases require ordinary non-template classes");
+        return false;
+    }
+    if(classDecl.concreteBase){
+        b8 hasConstructor = false;
+        b8 hasAccessibleDefault = false;
+        for(const MethodDecl* ctor : classDecl.concreteBase->methods){
+            if(ctor->isConstructor){
+                hasConstructor = true;
+                hasAccessibleDefault |= ctor->params.empty() && ctor->access != AccessSpecifier::Private;
+            }
+        }
+        if(hasConstructor && !hasAccessibleDefault){
+            reportError(errors, classDecl.span, "a derived class requires an accessible default constructor on its concrete base");
+            return false;
+        }
+    }
+    if(classDecl.concreteBase && classDecl.isArenaOwner){
+        reportError(errors, classDecl.span, "a derived class must use the caller's storage for its concrete base");
+        return false;
+    }
     for(const TypeAliasDecl* alias : classDecl.cppTypeAliases){
         const MStringView name = alias->name;
         b8 collides = name == classDecl.name || name == alias->aliasedType->name || SymbolTable::FindClassField(classDecl, name)
@@ -589,7 +647,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
         if(const ClassDecl* baseCls = m_symbols.findClass(ifaceName)){
-            if(!classDecl.isExtern && !(baseCls->isExtern && baseCls->isPolymorphicBase)){
+            if(!classDecl.isExtern && !baseCls->isExtensible && !(baseCls->isExtern && baseCls->isPolymorphicBase)){
                 reportError(errors, classDecl.span, "concrete class inheritance is prohibited in adhd; classes are implicitly final and may only implement interfaces");
                 ok = false;
             }
@@ -706,11 +764,44 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     break;
                 }
             }
+            if(!matchesInterface && classDecl.concreteBase){
+                const usize arity = m->params.size();
+                const MethodDecl* inherited = m_symbols.findClassMethod(*classDecl.concreteBase, m->name, &arity, m->isConst);
+                if(inherited && inherited->isOverride && m->isConst == inherited->isConst
+                    && TypeComparator(m_symbols).areEquivalent(m->returnType, inherited->returnType)
+                    && TypeComparator(m_symbols).doParamListsMatchWithSubst(m->params, inherited->params, {}, {})){
+                    matchesInterface = true;
+                    if(m->allowsCppUnwind && !inherited->allowsCppUnwind){
+                        reportError(errors, m->span, "'[cpp_unwind]' cannot weaken a nonthrowing interface contract");
+                        ok = false;
+                    }
+                    for(usize index = 0u; index < arity; ++index)
+                        m->params[index].cppConstReference |= inherited->params[index].cppConstReference;
+                }
+            }
             b8 sdkAllowsUnwind = false;
             for(const TypeRef* baseType : classDecl.implementedInterfaces){
                 if(!baseType)
                     continue;
-                const auto* signature = FindBuiltinReceiverSignature(m_symbols.resolveBaseTypeName(baseType->name), m->name);
+                const MStringView baseName = m_symbols.resolveBaseTypeName(baseType->name);
+                if(const ClassDecl* sdk = m_symbols.findClass(baseName); sdk && sdk->isExtern && sdk->isPolymorphicBase){
+                    for(const MethodDecl* candidate : sdk->methods){
+                        if(candidate->name != m->name || candidate->isConst != m->isConst
+                            || !TypeComparator(m_symbols).areEquivalent(m->returnType, candidate->returnType)
+                            || !TypeComparator(m_symbols).doParamListsMatchWithSubst(m->params, candidate->params, {}, {}))
+                            continue;
+                        matchesInterface = true;
+                        if(m->allowsCppUnwind && !candidate->allowsCppUnwind){
+                            reportError(errors, m->span, "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+                            ok = false;
+                        }
+                        for(usize pi = 0u; pi < m->params.size(); ++pi)
+                            m->params[pi].cppConstReference |= candidate->params[pi].cppConstReference;
+                        break;
+                    }
+                    continue;
+                }
+                const auto* signature = FindBuiltinReceiverSignature(baseName, m->name);
                 if(!signature || signature->arity != m->params.size())
                     continue;
                 if(m->allowsCppUnwind && !signature->allowsCppUnwind){
@@ -735,7 +826,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     if(!ifaceType)
                         continue;
                     const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
-                    if(!m_symbols.findInterface(ifaceName) && !IsNonCopyableBaseInterfaceName(ifaceName)){
+                    if((!classDecl.concreteBase || classDecl.concreteBase->name != ifaceName) && !m_symbols.findInterface(ifaceName) && !IsNonCopyableBaseInterfaceName(ifaceName)){
                         matchesInterface = true;
                         break;
                     }
@@ -889,7 +980,7 @@ b8 TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDecl&
 
     for(usize i = 0u; i < assignedMembers.size(); ++i){
         const FieldDecl* field = SymbolTable::FindClassField(classDecl, assignedMembers[i]);
-        if(!field)
+        if(!field || field->declaringClass != &classDecl)
             continue;
         if(field->defaultExpr != nullptr || field->hasCtorInit){
             reportError(errors, assignedSpans[i], "double-initialization is prohibited in adhd; member already has an inline default value");

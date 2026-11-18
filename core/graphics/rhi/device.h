@@ -80,6 +80,16 @@ private:
 
 
 public:
+    template<typename Observer>
+    [[nodiscard]] static QueueSubmissionPreSubmitHook Bind(u64 identity, Observer& observer)noexcept{
+        QueueSubmissionPreSubmitHook hook;
+        hook.context = &observer;
+        hook.identity = identity;
+        hook.invoke = [](void* context, u64 key, const GpuPhysicalQueueId& queue){
+            return static_cast<Observer*>(context)->prepare(key, queue);
+        };
+        return hook;
+    }
     [[nodiscard]] constexpr b8 valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 

@@ -41,5 +41,14 @@ extern class ArenaObjectSlot<T>{
 };
 
 
+[cpp_header("<core/alloc/general.h>"), cpp_name("::NWB::Core::GlobalUniquePtr"), cpp_flags(no_copy)]
+extern class GlobalUniquePtr<T>{
+    b8 valid()const;
+    mut T deref()const;
+};
+[cpp_header("<core/alloc/general.h>"), cpp_name("::NWB::Core::MakeGlobalUnique")]
+extern GlobalUniquePtr<T> MakeGlobalUnique<T>(...);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

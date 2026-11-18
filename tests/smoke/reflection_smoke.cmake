@@ -5,8 +5,8 @@ nwb_target_adhd_sources(nwb_reflection_smoke NAMESPACE "NWB::Tests::Smoke" SOURC
             "${CMAKE_CURRENT_LIST_DIR}/reflection_probes_and_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_project.adhd"
         )
-target_compile_definitions(nwb_reflection_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
-nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+nwb_target_adhd_definitions(nwb_reflection_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}" reflection_probes_and_runtime nwb_ecs_model nwb_ecs_mesh_skinning)
 # Only the temporal suite's light mutation needs its lit BXDF material, so other reflection runs keep the shared catalog.
 set(_nwb_reflection_temporal_runtime_root "${CMAKE_BINARY_DIR}/Testing/reflection_temporal_smoke_runtime/$<CONFIG>")
 nwb_add_fixture_smoke_assets(nwb_reflection_temporal_smoke_assets reflection_temporal "${_nwb_reflection_temporal_runtime_root}" "reflection temporal" reflection_temporal_assets)

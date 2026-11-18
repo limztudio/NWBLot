@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/simd_memory_guard_fixture.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::AlignedProbeBytes"), cpp_flags(no_copy, no_assign)]
+extern class AlignedProbeBytes{
+    AlignedProbeBytes(in usize size);
+    ByteAddress data()const;
+};
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::s_HasAvx")]
+extern const b8 s_ProbeHasAvx;
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::s_Linux")]
+extern const b8 s_ProbeLinux;
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::Address")]
+extern usize ProbeAddress(in ReadAddress ptr);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::AssumeAligned")]
+extern ByteAddress AssumeProbeAlignment(in ReadAddress ptr);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::BeginWords")]
+extern ByteAddress BeginProbeWords(in ByteAddress ptr, in usize count);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::Word")]
+extern mut u64 ProbeWord(in ByteAddress ptr, in usize lane);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::ByteSpan")]
+extern Span<u8> ProbeByteSpan(in ByteAddress ptr, in usize count);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::CopyPacket")]
+extern void CopyProbePacket<const usize Count>(in ByteAddress dst, in ReadAddress src);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::CompareWords")]
+extern b8 BaselineEqual<const usize Words>(in ByteAddress lhs, in ByteAddress rhs);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::TestWordBits")]
+extern b8 CandidateEqual<const usize Words>(in ByteAddress lhs, in ByteAddress rhs);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::OpaqueEquality")]
+extern b8 OpaqueProbeEquality(in auto callback, in ByteAddress left, in ByteAddress right);
+
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::FlushProbeStdout")]
+extern void FlushProbeStdout();
+
+[cpp_header("<cstdlib>"), cpp_name("::abort")]
+extern void AbortMemoryProbe();
+
+[cpp_header("<cstring>"), cpp_name("__builtin_memcpy")]
+extern void CopyProbeBytes(in ByteAddress dst, in ReadAddress src, in usize count);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

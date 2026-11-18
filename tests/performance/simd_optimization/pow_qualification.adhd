@@ -3,439 +3,453 @@
 
 
 #include "benchmark_support.adhd"
+#include "pow_packed_single.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <utilities/cli/tool_cli.adhd>
 
+#include <tests/common/test_helpers.adhd>
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadRawStatus")]
+extern u64 PowReadRawStatus();
 
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadRawControl")]
+extern u64 PowReadRawControl();
 
-#include <global/numeric_text.h>
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteRawStatus")]
+extern void PowWriteRawStatus(in u64 value);
 
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-#include <excpt.h>
-#pragma push_macro("interface")
-#undef interface
-#include <windows.h>
-#pragma pop_macro("interface")
-#endif
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WriteRawControl")]
+extern void PowWriteRawControl(in u64 value);
 
-namespace SimdOptimizationBenchmark{
-namespace PowKernels{
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadNativeStatus")]
+extern u32 PowReadNativeStatus();
 
-using UInt4 = u32 __attribute__((ext_vector_type(4)));
-using Int4 = i32 __attribute__((ext_vector_type(4)));
-using UInt64x4 = u64 __attribute__((ext_vector_type(4)));
-using Int64x4 = i64 __attribute__((ext_vector_type(4)));
-using Evaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noexcept;
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ClearMappedStatus")]
+extern u32 PowClearMappedStatus();
 
-FOUNDATION_NOINLINE inline SIMDVectorSingle Reference(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
-    return VectorSet(Pow(VectorGetX(x), VectorGetX(y)), Pow(VectorGetY(x), VectorGetY(y)), Pow(VectorGetZ(x), VectorGetZ(y)), Pow(VectorGetW(x), VectorGetW(y)));
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::UpdateControl")]
+extern b8 PowUpdateControl(mut u32 current, in u32 value, in u32 mask);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::CatchHardwareException")]
+extern u32 PowCatchHardwareException(in auto action);
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_HasWindowsTraps")]
+extern const b8 s_PowHasWindowsTraps;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_HasPowerStatus")]
+extern const b8 s_PowHasPowerStatus;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_DenormalSave")]
+extern const u32 s_PowDenormalSave;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_DenormalFlush")]
+extern const u32 s_PowDenormalFlush;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InvalidMask")]
+extern const u32 s_PowInvalidMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_OverflowMask")]
+extern const u32 s_PowOverflowMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ZeroDivideMask")]
+extern const u32 s_PowZeroDivideMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_UnderflowMask")]
+extern const u32 s_PowUnderflowMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InexactMask")]
+extern const u32 s_PowInexactMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ControlExceptionMask")]
+extern const u32 s_PowControlExceptionMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ControlDenormalMask")]
+extern const u32 s_PowControlDenormalMask;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_InvalidException")]
+extern const u32 s_PowInvalidException;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_OverflowException")]
+extern const u32 s_PowOverflowException;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_ZeroDivideException")]
+extern const u32 s_PowZeroDivideException;
+
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::s_UnderflowException")]
+extern const u32 s_PowUnderflowException;
+
+[cpp_header("<cerrno>"), cpp_name("EDOM")]
+extern const i32 s_PowEDOM;
+
+[cpp_header("<cerrno>"), cpp_name("ERANGE")]
+extern const i32 s_PowERANGE;
+
+VectorSingle ReferencePow(in VectorSingle x, in VectorSingle y){
+    return VectorSingle(Pow(x.x, y.x), Pow(x.y, y.y), Pow(x.z, y.z), Pow(x.w, y.w));
 }
 
-FOUNDATION_NOINLINE inline SIMDVectorSingle Production(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
-    return VectorPow(x, y);
-}
+const Array<f64, 16> s_LogCoefficients = Array<f64, 16>(
+    1.0, 1.0 / 3.0, 1.0 / 5.0, 1.0 / 7.0, 1.0 / 9.0, 1.0 / 11.0, 1.0 / 13.0, 1.0 / 15.0,
+    1.0 / 17.0, 1.0 / 19.0, 1.0 / 21.0, 1.0 / 23.0, 1.0 / 25.0, 1.0 / 27.0, 1.0 / 29.0, 1.0 / 31.0
+);
 
-FOUNDATION_NOINLINE inline SIMDVectorSingle PackedSingle(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
-    return VectorExp2(VectorMultiply(VectorLog2(x), y));
-}
+const Array<f64, 21> s_InverseFactorials = Array<f64, 21>(
+    1.0,
+    1.0,
+    0.5,
+    1.0 / 6.0,
+    1.0 / 24.0,
+    1.0 / 120.0,
+    1.0 / 720.0,
+    1.0 / 5040.0,
+    1.0 / 40320.0,
+    1.0 / 362880.0,
+    1.0 / 3628800.0,
+    1.0 / 39916800.0,
+    1.0 / 479001600.0,
+    1.0 / 6227020800.0,
+    1.0 / 87178291200.0,
+    1.0 / 1307674368000.0,
+    1.0 / 20922789888000.0,
+    1.0 / 355687428096000.0,
+    1.0 / 6402373705728000.0,
+    1.0 / 121645100408832000.0,
+    1.0 / 2432902008176640000.0
+);
 
-FOUNDATION_NOINLINE inline SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const UInt4 xBits = BitCast<UInt4>(x), yBits = BitCast<UInt4>(y);
-    const UInt4 magnitude = xBits & 0x7fffffffu, yMagnitude = yBits & 0x7fffffffu;
-    const auto ordinary = (magnitude != 0u) & (magnitude < 0x7f800000u) & (yMagnitude < 0x7f800000u);
-    const UInt4 admittedX = ordinary ? magnitude : UInt4{ 0x3f800000u, 0x3f800000u, 0x3f800000u, 0x3f800000u };
-    const SIMDVectorSingle safeX = BitCast<SIMDVectorSingle>(admittedX);
-    const auto subnormal = admittedX < 0x00800000u;
-    const SIMDVectorSingle normalized = VectorSelect(safeX, VectorScale(VectorSelect(s_SIMDOne, safeX, BitCast<SIMDVectorSingle>(subnormal)), 0x1p24f), BitCast<SIMDVectorSingle>(subnormal));
-    const UInt4 normalizedBits = BitCast<UInt4>(normalized);
-    const Int4 exponent = __builtin_convertvector(normalizedBits >> 23u, Int4) - 127 - (subnormal ? 24 : 0);
-    const SIMDVectorSingle mantissa = BitCast<SIMDVectorSingle>((normalizedBits & 0x007fffffu) | 0x3f800000u);
-    SIMDVectorDouble m = ConvertVectorSingleToDouble(mantissa);
-    SIMDVectorDouble e = __builtin_convertvector(exponent, SIMDVectorDouble);
-    const SIMDVectorDouble upper = VectorDoubleGreater(m, VectorDoubleReplicate(0x1.6a09e667f3bcdp0));
+VectorSingle PackedDoublePow(in VectorSingle x, in VectorSingle y){
+    u32x4 safeBits(0u);
+    u32x4 exponentBits(0u);
+    u32x4 subnormalMask(0u);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const u32 magnitude = SimdGetSingleLaneBits(x, lane) & 0x7fffffffu;
+        const u32 power = SimdGetSingleLaneBits(y, lane);
+        const b8 ordinary = magnitude != 0u && magnitude < 0x7f800000u && (power & 0x7fffffffu) < 0x7f800000u;
+        safeBits[lane] = 0x3f800000u;
+        if(ordinary){
+            safeBits[lane] = magnitude;
+            exponentBits[lane] = power;
+        }
+        if(safeBits[lane] < 0x00800000u)
+            subnormalMask[lane] = u32.max;
+    }
+    const VectorSingle safeX = VectorSingle(safeBits);
+    const VectorSingle subnormal = VectorSingle(subnormalMask);
+    const VectorSingle normalized = VectorSelect(safeX, VectorScale(VectorSelect(VectorSingle(1.0f), safeX, subnormal), 0x1p24f), subnormal);
+    f64x4 exponents(0.0);
+    u32x4 mantissaBits(0u);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const u32 bits = SimdGetSingleLaneBits(normalized, lane);
+        i32 exponent = cast<i32>(bits >> 23u) - 127;
+        if(subnormalMask[lane] != 0u)
+            exponent -= 24;
+        exponents[lane] = cast<f64>(exponent);
+        mantissaBits[lane] = (bits & 0x007fffffu) | 0x3f800000u;
+    }
+    VectorDouble m = ConvertVectorSingleToDouble(VectorSingle(mantissaBits));
+    VectorDouble e = VectorDouble(exponents);
+    const VectorDouble upper = VectorDoubleGreater(m, VectorDoubleReplicate(0x1.6a09e667f3bcdp0));
     m = VectorDoubleSelect(m, VectorDoubleScale(m, 0.5), upper);
-    e = VectorDoubleAdd(e, VectorDoubleSelect(VectorDoubleZero(), s_DoubleSIMDOne, upper));
-    const SIMDVectorDouble z = VectorDoubleDivide(VectorDoubleSubtract(m, s_DoubleSIMDOne), VectorDoubleAdd(m, s_DoubleSIMDOne));
-    const SIMDVectorDouble zSquared = VectorDoubleMultiply(z, z);
-    constexpr Array<f64, 16> s_LogCoefficients = {
-        1.0, 1.0 / 3.0, 1.0 / 5.0, 1.0 / 7.0, 1.0 / 9.0, 1.0 / 11.0, 1.0 / 13.0, 1.0 / 15.0,
-        1.0 / 17.0, 1.0 / 19.0, 1.0 / 21.0, 1.0 / 23.0, 1.0 / 25.0, 1.0 / 27.0, 1.0 / 29.0, 1.0 / 31.0,
-    };
-    SIMDVectorDouble logarithm = VectorDoubleReplicate(s_LogCoefficients[15]);
+    e = VectorDoubleAdd(e, VectorDoubleSelect(VectorDoubleZero(), VectorDouble(1.0), upper));
+    const VectorDouble z = VectorDoubleDivide(VectorDoubleSubtract(m, VectorDouble(1.0)), VectorDoubleAdd(m, VectorDouble(1.0)));
+    const VectorDouble zSquared = VectorDoubleMultiply(z, z);
+    VectorDouble logarithm = VectorDoubleReplicate(s_LogCoefficients[15]);
     for(i32 degree = 14; degree >= 0; --degree)
         logarithm = VectorDoubleMultiplyAdd(logarithm, zSquared, VectorDoubleReplicate(s_LogCoefficients[degree]));
     logarithm = VectorDoubleMultiply(VectorDoubleScale(z, 2.0), logarithm);
-    const SIMDVectorDouble log2 = VectorDoubleAdd(e, VectorDoubleScale(logarithm, 0x1.71547652b82fep0));
-    const SIMDVectorDouble safeY = ConvertVectorSingleToDouble(BitCast<SIMDVectorSingle>(ordinary ? yBits : UInt4{}));
-    const SIMDVectorDouble power = VectorDoubleMultiply(log2, safeY);
-    const SIMDVectorDouble bounded = VectorDoubleMin(VectorDoubleReplicate(129.0), VectorDoubleMax(VectorDoubleReplicate(-151.0), power));
-    const SIMDVectorDouble integral = VectorDoubleFloor(bounded);
-    const SIMDVectorDouble remainder = VectorDoubleScale(VectorDoubleSubtract(bounded, integral), 0x1.62e42fefa39efp-1);
+    const VectorDouble log2 = VectorDoubleAdd(e, VectorDoubleScale(logarithm, 0x1.71547652b82fep0));
+    const VectorDouble safeY = ConvertVectorSingleToDouble(VectorSingle(exponentBits));
+    const VectorDouble power = VectorDoubleMultiply(log2, safeY);
+    const VectorDouble bounded = VectorDoubleMin(VectorDoubleReplicate(129.0), VectorDoubleMax(VectorDoubleReplicate(-151.0), power));
+    const VectorDouble integral = VectorDoubleFloor(bounded);
+    const VectorDouble remainder = VectorDoubleScale(VectorDoubleSubtract(bounded, integral), 0x1.62e42fefa39efp-1);
     // The series use binary64 lanes so the final binary32 rounding has guard bits.
-    constexpr Array<f64, 21> s_InverseFactorials = {
-        1.0,
-        1.0,
-        0.5,
-        1.0 / 6.0,
-        1.0 / 24.0,
-        1.0 / 120.0,
-        1.0 / 720.0,
-        1.0 / 5040.0,
-        1.0 / 40320.0,
-        1.0 / 362880.0,
-        1.0 / 3628800.0,
-        1.0 / 39916800.0,
-        1.0 / 479001600.0,
-        1.0 / 6227020800.0,
-        1.0 / 87178291200.0,
-        1.0 / 1307674368000.0,
-        1.0 / 20922789888000.0,
-        1.0 / 355687428096000.0,
-        1.0 / 6402373705728000.0,
-        1.0 / 121645100408832000.0,
-        1.0 / 2432902008176640000.0,
-    };
-    SIMDVectorDouble exponential = VectorDoubleReplicate(s_InverseFactorials[20]);
+    VectorDouble exponential = VectorDoubleReplicate(s_InverseFactorials[20]);
     for(i32 degree = 19; degree >= 0; --degree)
         exponential = VectorDoubleMultiplyAdd(exponential, remainder, VectorDoubleReplicate(s_InverseFactorials[degree]));
-    const Int64x4 integralBits = __builtin_convertvector(integral, Int64x4);
-    const SIMDVectorDouble scale = BitCast<SIMDVectorDouble>(__builtin_convertvector(integralBits + 1023, UInt64x4) << 52u);
-    UInt4 result = BitCast<UInt4>(ConvertVectorDoubleToSingle(VectorDoubleMultiply(exponential, scale)));
-    const UInt4 yExponent = yMagnitude >> 23u;
-    const UInt4 shifts = yExponent < 127u ? 23u : (yExponent > 150u ? 0u : 150u - yExponent);
-    const UInt4 significand = (yMagnitude & 0x007fffffu) | 0x00800000u;
-    const auto integerY = (yMagnitude == 0u) | (yExponent >= 151u) | ((yExponent >= 127u) & ((significand & ((UInt4{ 1u, 1u, 1u, 1u } << shifts) - 1u)) == 0u));
-    const auto oddY = integerY & (yExponent <= 150u) & (((significand >> shifts) & 1u) != 0u);
-    const UInt4 sign = oddY ? (xBits & 0x80000000u) : UInt4{};
-    result |= sign;
-    const auto yNegative = (yBits & 0x80000000u) != 0u;
-    result = magnitude == 0u ? (yNegative ? 0x7f800000u : 0u) | sign : result;
-    result = magnitude == 0x7f800000u ? (yNegative ? 0u : 0x7f800000u) | sign : result;
-    const auto domain = ((xBits & 0x80000000u) != 0u) & (magnitude != 0u) & (magnitude < 0x7f800000u) & !integerY;
-    result = domain ? 0x7fc00000u : result;
-    const UInt4 infiniteY = yNegative ? (magnitude < 0x3f800000u ? 0x7f800000u : 0u) : (magnitude < 0x3f800000u ? 0u : 0x7f800000u);
-    result = yMagnitude == 0x7f800000u ? (magnitude == 0x3f800000u ? 0x3f800000u : infiniteY) : result;
-    const auto nanX = magnitude > 0x7f800000u, nanY = yMagnitude > 0x7f800000u;
-    const SIMDVectorSingle quiet = VectorAdd(BitCast<SIMDVectorSingle>(nanX ? xBits : UInt4{}), BitCast<SIMDVectorSingle>(nanY ? yBits : UInt4{}));
-    result = (nanX | nanY) ? BitCast<UInt4>(quiet) : result;
-    result = ((xBits == 0x3f800000u) | (yMagnitude == 0u)) ? 0x3f800000u : result;
-    // errno also needs the libm side effects, beyond the packed result bits.
-    if(__builtin_reduce_or(domain) != 0)
-        errno = EDOM;
-    else if(__builtin_reduce_or((magnitude == 0u) & yNegative & !nanY) != 0 || (TestFloatingPointExceptions(FE_OVERFLOW | FE_UNDERFLOW) != 0))
-        errno = ERANGE;
-    return BitCast<SIMDVectorSingle>(result);
-}
-
-[[nodiscard]] FOUNDATION_INLINE NotNull<Evaluate> SelectEvaluator(const u8 variantCode, const b8 useReference)noexcept{
-    if(useReference)
-        return MakeNotNull<Evaluate>(Reference);
-    if(variantCode == 0u)
-        return MakeNotNull<Evaluate>(Production);
-    if(variantCode == 1u)
-        return MakeNotNull<Evaluate>(PackedSingle);
-    return MakeNotNull<Evaluate>(PackedDouble);
-}
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-[[nodiscard]] FOUNDATION_INLINE u32 ObserveTrap(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y){
-    u32 initial{}, control{}, exception{};
-    if(_controlfp_s(&initial, 0u, 0u) != 0)
-        return 1u;
-    const u32 previousFlags = _clearfp();
-    if(_controlfp_s(&control, initial & ~(_EM_INVALID | _EM_OVERFLOW | _EM_ZERODIVIDE), _MCW_EM) != 0)
-        return 2u;
-    __try{
-        const SIMDVectorSingle value = evaluate.get()(x, y);
-        volatile u32 sink = VectorGetIntX(value);
-        if(sink == previousFlags)
-            exception = 0u;
+    u64x4 scaleBits(0u);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const i64 exponent = cast<i64>(VectorDoubleGetByIndex(integral, lane));
+        scaleBits[lane] = cast<u64>(exponent + 1023) << 52u;
     }
-    __except(EXCEPTION_EXECUTE_HANDLER){
-        exception = _exception_code();
+    const VectorSingle positive = ConvertVectorDoubleToSingle(VectorDoubleMultiply(exponential, VectorDouble(scaleBits)));
+    u32x4 signs(0u);
+    u32x4 specialValues(0u);
+    u32x4 specialLanes(0u);
+    u32x4 nanLanes(0u);
+    u32x4 oneLanes(0u);
+    u32x4 nanXBits(0u);
+    u32x4 nanYBits(0u);
+    b8 domainError = false;
+    b8 poleError = false;
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const u32 xBits = SimdGetSingleLaneBits(x, lane);
+        const u32 yBits = SimdGetSingleLaneBits(y, lane);
+        const u32 magnitude = xBits & 0x7fffffffu;
+        const u32 yMagnitude = yBits & 0x7fffffffu;
+        const u32 yExponent = yMagnitude >> 23u;
+        u32 shift = 0u;
+        if(yExponent < 127u)
+            shift = 23u;
+        else if(yExponent <= 150u)
+            shift = 150u - yExponent;
+        const u32 significand = (yMagnitude & 0x007fffffu) | 0x00800000u;
+        const b8 integerY = yMagnitude == 0u || yExponent >= 151u || (yExponent >= 127u && (significand & ((1u << shift) - 1u)) == 0u);
+        u32 sign = 0u;
+        if(integerY && yExponent <= 150u && ((significand >> shift) & 1u) != 0u)
+            sign = xBits & 0x80000000u;
+        const b8 yNegative = (yBits & 0x80000000u) != 0u;
+        signs[lane] = sign;
+        if(magnitude == 0u || magnitude == 0x7f800000u){
+            specialLanes[lane] = u32.max;
+            specialValues[lane] = sign;
+            if((magnitude == 0u) == yNegative)
+                specialValues[lane] |= 0x7f800000u;
+        }
+        if((xBits & 0x80000000u) != 0u && magnitude != 0u && magnitude < 0x7f800000u && !integerY){
+            domainError = true;
+            specialLanes[lane] = u32.max;
+            specialValues[lane] = 0x7fc00000u;
+        }
+        if(yMagnitude == 0x7f800000u){
+            specialLanes[lane] = u32.max;
+            specialValues[lane] = 0u;
+            if(magnitude == 0x3f800000u)
+                specialValues[lane] = 0x3f800000u;
+            else if((magnitude < 0x3f800000u) == yNegative)
+                specialValues[lane] = 0x7f800000u;
+        }
+        if(magnitude > 0x7f800000u)
+            nanXBits[lane] = xBits;
+        if(yMagnitude > 0x7f800000u)
+            nanYBits[lane] = yBits;
+        if(magnitude > 0x7f800000u || yMagnitude > 0x7f800000u)
+            nanLanes[lane] = u32.max;
+        if(xBits == 0x3f800000u || yMagnitude == 0u)
+            oneLanes[lane] = u32.max;
+        if(magnitude == 0u && yNegative && yMagnitude <= 0x7f800000u)
+            poleError = true;
     }
-    const u32 raisedFlags = _clearfp();
-    if(_controlfp_s(&control, initial, _MCW_EM) != 0)
-        return 3u;
-    FOUNDATION_COUT << "trap exception=0x" << StreamHex << exception << " flags=0x" << raisedFlags << " mask=0x" << (control & _MCW_EM) << StreamDec << '\n';
-    return exception;
+
+    const VectorSingle quiet = VectorAdd(VectorSingle(nanXBits), VectorSingle(nanYBits));
+    VectorSingle result = VectorSelect(VectorOrInt(positive, VectorSingle(signs)), VectorSingle(specialValues), VectorSingle(specialLanes));
+    result = VectorSelect(result, quiet, VectorSingle(nanLanes));
+    result = VectorSelect(result, VectorSingle(1.0f), VectorSingle(oneLanes));
+    if(domainError)
+        SetMathErrno(s_PowEDOM);
+    else if(poleError || TestFloatingPointExceptions(FE_OVERFLOW | FE_UNDERFLOW) != 0)
+        SetMathErrno(s_PowERANGE);
+    return result;
 }
 
-struct TrapEdgeObservation{
-    u32 code = 0u;
-    u32 flags = 0u;
-    u32 control = 0u;
-    u32 valueBits = 0u;
-    i32 error = 0;
-    u64 nativeStatus = 0u;
-    u64 nativeControl = 0u;
+VectorSingle EvaluatePow(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y){
+    if(reference)
+        return ReferencePow(x, y);
+    if(variant == 0u)
+        return VectorPow(x, y);
+    if(variant == 1u)
+        return PackedSinglePow(x, y);
+    return PackedDoublePow(x, y);
+}
 
-    friend b8 operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled)noexcept{
-    u32 initial{}, control{}, exception{}, valueBits{};
-    if(_controlfp_s(&initial, 0u, 0u) != 0)
-        return MakeUnexpected(Failure{});
+b8 ObservePowKernel(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y, mut Array<u32, 4> bits,
+    mut i32 standardFlags, mut u32 mappedFlags, mut u64 nativeBits, mut i32 storedError){
+    PowWriteRawStatus(0u);
+    PowClearMappedStatus();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
-        return MakeUnexpected(Failure{});
-#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    u64 initialNativeControl{};
-    __asm__ __volatile__("mrs %0, fpcr" : "=r"(initialNativeControl));
-    const u64 clearNativeStatus = 0u;
-    __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
-#endif
-    if(_controlfp_s(&control, (initial | _MCW_EM) & ~enabled, _MCW_EM) != 0)
-        return MakeUnexpected(Failure{});
-    errno = E2BIG;
-    __try{
-        const SIMDVectorSingle value = evaluate.get()(x, y);
-        volatile u32 sink = VectorGetIntX(value);
-        valueBits = sink;
-    }
-    __except(EXCEPTION_EXECUTE_HANDLER){
-        exception = _exception_code();
-    }
-    const i32 observedError = errno;
-    u64 nativeStatus{}, nativeControl{};
-#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(nativeStatus));
-    __asm__ __volatile__("mrs %0, fpcr" : "=r"(nativeControl));
-#endif
-    u32 observedControl{};
-    if(_controlfp_s(&observedControl, 0u, 0u) != 0)
-        return MakeUnexpected(Failure{});
-    const u32 flags = _clearfp();
-    if(_controlfp_s(&control, initial, _MCW_EM) != 0)
-        return MakeUnexpected(Failure{});
-#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    __asm__ __volatile__("msr fpcr, %0" : : "r"(initialNativeControl));
-#endif
-    return TrapEdgeObservation{ exception, flags, observedControl, valueBits, observedError, nativeStatus, nativeControl };
-}
-#endif
-
-[[nodiscard]] FOUNDATION_INLINE i32 VerifyTrapsImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> x = {
-        VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0x1.fffffep127f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0x1.fffffep127f, -1.0f, 1.0f, 1.0f),
-        VectorSet(-1.0f, 0x1.fffffep127f, 1.0f, 1.0f),
-    };
-    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> y = {
-        VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
-        VectorSet(2.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(2.0f, 0.5f, 1.0f, 1.0f),
-        VectorSet(0.5f, 2.0f, 1.0f, 1.0f),
-    };
-    u32 failures = 0u;
-    constexpr Array<u32, 3> s_ReferenceCategories = { EXCEPTION_FLT_INVALID_OPERATION, EXCEPTION_FLT_OVERFLOW, EXCEPTION_FLT_DIVIDE_BY_ZERO };
-    b8 delivered = true;
-    for(usize index = 0u; index < x.size(); ++index){
-        FOUNDATION_COUT << "trap case=" << index << " reference\n";
-        const u32 expected = ObserveTrap(MakeNotNull<Evaluate>(Reference), x[index], y[index]);
-        FOUNDATION_COUT << "trap case=" << index << " candidate\n";
-        const u32 actual = ObserveTrap(evaluate, x[index], y[index]);
-        delivered = delivered && (index < s_ReferenceCategories.size() ? expected == s_ReferenceCategories[index] : (expected == EXCEPTION_FLT_INVALID_OPERATION || expected == EXCEPTION_FLT_OVERFLOW));
-        failures += expected != actual;
-    }
-    FOUNDATION_COUT << "trap differences=" << failures << " distinguishable=" << delivered << '\n';
-    return delivered ? (failures == 0u ? 0 : 1) : 2;
-#else
-    FOUNDATION_COUT << "trap qualification unavailable on this platform\n";
-    return 2;
-#endif
+        return false;
+    SetMathErrno(s_ArgumentListTooLong);
+    const VectorSingle value = EvaluatePow(variant, reference, x, y);
+    storedError = CurrentMathErrno();
+    standardFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    mappedFlags = PowReadNativeStatus();
+    nativeBits = PowReadRawStatus();
+    for(usize lane = 0u; lane < 4u; ++lane)
+        bits[lane] = SimdGetSingleLaneBits(value, lane);
+    return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE i32 VerifyTrapEdgesImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    const i32 savedError = errno;
-#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    u64 savedNativeStatus{}, savedNativeControl{};
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(savedNativeStatus));
-    __asm__ __volatile__("mrs %0, fpcr" : "=r"(savedNativeControl));
-#endif
-    const auto environment = HoldFloatingPointExceptions();
-    if(!environment)
-        return 2;
-    ScopeExit restore([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*environment))
-            __builtin_trap();
-#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-        __asm__ __volatile__("msr fpsr, %0" : : "r"(savedNativeStatus));
-        __asm__ __volatile__("msr fpcr, %0" : : "r"(savedNativeControl));
-#endif
-        errno = savedError;
+[ordered]
+class PowQualificationEnvironmentScope : NoCopy{
+    private i32 m_error = 0;
+    private u64 m_status = 0u;
+    private u64 m_control = 0u;
+    private Expected<FloatingPointEnvironment> m_environment = MakeUnexpected(Failure());
+    private b8 m_restoreControl = false;
+
+    public PowQualificationEnvironmentScope(){ this.capture(false); }
+    public PowQualificationEnvironmentScope(in b8 restoreControl){ this.capture(restoreControl); }
+
+    private void capture(in b8 restoreControl){
+        this.m_restoreControl = restoreControl;
+        this.m_error = CurrentMathErrno();
+        if(restoreControl){
+            this.m_status = PowReadRawStatus();
+            this.m_control = PowReadRawControl();
+        }
+        this.m_environment = HoldFloatingPointExceptions();
+        if(!restoreControl)
+            this.m_status = PowReadRawStatus();
+    }
+
+    public b8 available()const{ return this.m_environment.has_value(); }
+
+    public ~PowQualificationEnvironmentScope(){
+        if(!this.available())
+            return;
+        if(!SetFloatingPointEnvironment(this.m_environment.value()))
+            TerminateInvariant();
+        PowWriteRawStatus(this.m_status);
+        if(this.m_restoreControl)
+            PowWriteRawControl(this.m_control);
+        SetMathErrno(this.m_error);
+    }
+}
+
+u32 ObservePowTrap(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y){
+    u32 initial = 0u;
+    u32 control = 0u;
+    if(!PowUpdateControl(initial, 0u, 0u))
+        return 1u;
+    PowClearMappedStatus();
+    if(!PowUpdateControl(control, initial & ~(s_PowInvalidMask | s_PowOverflowMask | s_PowZeroDivideMask), s_PowControlExceptionMask))
+        return 2u;
+    const u32 code = PowCatchHardwareException(lambda[in variant, in reference, in x, in y]() -> void{
+        const VectorSingle value = EvaluatePow(variant, reference, x, y);
+        ObserveValue<u32>(SimdGetSingleLaneBits(value, 0u));
     });
-    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
-#else
-    constexpr Array<u32, 1> s_DenormalModes = { _DN_SAVE };
-#endif
-    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 3> x = {
-        VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
-        VectorSetInt(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u),
-    };
-    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 3> y = {
-        VectorSet(149.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(127.0f, 1.0f, 1.0f, 1.0f),
-        VectorSet(0.0f, 1.0f, 1.0f, 1.0f),
-    };
-    u32 differences = 0u, cases = 0u;
+    const u32 flags = PowClearMappedStatus();
+    if(!PowUpdateControl(control, initial, s_PowControlExceptionMask))
+        return 3u;
+    WriteBenchmarkStdout(StringFormat("trap exception=0x{:x} flags=0x{:x} mask=0x{:x}\n", code, flags, control & s_PowControlExceptionMask));
+    return code;
+}
+
+class PowTrapEdge{
+    public u32 code = 0u;
+    public u32 flags = 0u;
+    public u32 control = 0u;
+    public u32 valueBits = 0u;
+    public i32 error = 0;
+    public u64 nativeStatus = 0u;
+    public u64 nativeControl = 0u;
+    public b8 operator==(in PowTrapEdge rhs)const{
+        return this.code == rhs.code && this.flags == rhs.flags && this.control == rhs.control && this.valueBits == rhs.valueBits &&
+            this.error == rhs.error && this.nativeStatus == rhs.nativeStatus && this.nativeControl == rhs.nativeControl;
+    }
+}
+
+Expected<PowTrapEdge> ObservePowTrapEdge(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y, in u32 enabled){
+    u32 initial = 0u;
+    u32 control = 0u;
+    if(!PowUpdateControl(initial, 0u, 0u) || !ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+        return MakeUnexpected(Failure());
+    const u64 initialNativeControl = PowReadRawControl();
+    PowWriteRawStatus(0u);
+    if(!PowUpdateControl(control, (initial | s_PowControlExceptionMask) & ~enabled, s_PowControlExceptionMask))
+        return MakeUnexpected(Failure());
+    SetMathErrno(s_ArgumentListTooLong);
+    PowTrapEdge edge;
+    u32 valueBits = 0u;
+    edge.code = PowCatchHardwareException(lambda[in variant, in reference, in x, in y, mut valueBits]() -> void{
+        const VectorSingle value = EvaluatePow(variant, reference, x, y);
+        valueBits = ObserveValue<u32>(SimdGetSingleLaneBits(value, 0u));
+    });
+    edge.error = CurrentMathErrno();
+    edge.valueBits = valueBits;
+    edge.nativeStatus = PowReadRawStatus();
+    edge.nativeControl = PowReadRawControl();
+    if(!PowUpdateControl(edge.control, 0u, 0u))
+        return MakeUnexpected(Failure());
+    edge.flags = PowClearMappedStatus();
+    if(!PowUpdateControl(control, initial, s_PowControlExceptionMask))
+        return MakeUnexpected(Failure());
+    PowWriteRawControl(initialNativeControl);
+    return edge;
+}
+
+i32 VerifyPowTrapsKernel(in u8 variant){
+    if(!s_PowHasWindowsTraps){
+        WriteBenchmarkStdout("trap qualification unavailable on this platform\n");
+        return 2;
+    }
+    const Array<f32x4, 5> bases(f32x4(-1.0f,1.0f,1.0f,1.0f), f32x4(0x1.fffffep127f,1.0f,1.0f,1.0f),
+        f32x4(0.0f,1.0f,1.0f,1.0f), f32x4(0x1.fffffep127f,-1.0f,1.0f,1.0f), f32x4(-1.0f,0x1.fffffep127f,1.0f,1.0f));
+    const Array<f32x4, 5> powers(f32x4(0.5f,1.0f,1.0f,1.0f), f32x4(2.0f,1.0f,1.0f,1.0f),
+        f32x4(-1.0f,1.0f,1.0f,1.0f), f32x4(2.0f,0.5f,1.0f,1.0f), f32x4(0.5f,2.0f,1.0f,1.0f));
+    const Array<u32, 3> categories(s_PowInvalidException, s_PowOverflowException, s_PowZeroDivideException);
+    u32 failures = 0u;
     b8 delivered = true;
-    for(const u32 denormalMode : s_DenormalModes){
-        u32 control{};
-        if(_controlfp_s(&control, denormalMode, _MCW_DN) != 0 || (control & _MCW_DN) != denormalMode)
+    for(usize index = 0u; index < bases.size(); ++index){
+        WriteBenchmarkStdout(StringFormat("trap case={} reference\n", index));
+        const u32 expected = ObservePowTrap(variant, true, VectorSingle(bases[index]), VectorSingle(powers[index]));
+        WriteBenchmarkStdout(StringFormat("trap case={} candidate\n", index));
+        const u32 actual = ObservePowTrap(variant, false, VectorSingle(bases[index]), VectorSingle(powers[index]));
+        if(index < categories.size())
+            delivered = delivered && expected == categories[index];
+        else
+            delivered = delivered && (expected == s_PowInvalidException || expected == s_PowOverflowException);
+        failures += cast<u32>(expected != actual);
+    }
+    WriteBenchmarkStdout(StringFormat("trap differences={} distinguishable={}\n", failures, cast<u32>(delivered)));
+    if(!delivered)
+        return 2;
+    return cast<i32>(failures != 0u);
+}
+
+i32 VerifyPowTrapEdgesKernel(in u8 variant){
+    if(!s_PowHasWindowsTraps)
+        return 2;
+    PowQualificationEnvironmentScope guard(true);
+    if(!guard.available())
+        return 2;
+    const Array<u32, 2> denormalModes(s_PowDenormalSave, s_PowDenormalFlush);
+    const Array<u32, 2> enabledMasks(s_PowUnderflowMask, s_PowUnderflowMask | s_PowInexactMask);
+    const Array<f32x4, 3> bases(f32x4(0.5f,1.0f,1.0f,1.0f), f32x4(0.5f,1.0f,1.0f,1.0f), f32x4(VectorSingle(u32x4(1u,0x3f800000u,0x3f800000u,0x3f800000u))));
+    const Array<f32x4, 3> powers(f32x4(149.0f,1.0f,1.0f,1.0f), f32x4(127.0f,1.0f,1.0f,1.0f), f32x4(0.0f,1.0f,1.0f,1.0f));
+    u32 differences = 0u;
+    u32 cases = 0u;
+    b8 delivered = true;
+    for(usize denormalIndex = 0u; denormalIndex < 1u + cast<usize>(s_PowHasPowerStatus); ++denormalIndex){
+        const u32 denormal = denormalModes[denormalIndex];
+        u32 control = 0u;
+        if(!PowUpdateControl(control, denormal, s_PowControlDenormalMask) || (control & s_PowControlDenormalMask) != denormal)
             return 2;
-        for(const i32 mode : s_Modes){
+        for(usize modeIndex = 0u; modeIndex < 4u; ++modeIndex){
+            const i32 mode = SimdRoundingModeByIndex(modeIndex);
             if(!SetFloatingPointRoundingMode(mode))
                 return 2;
-            for(const u32 enabled : { _EM_UNDERFLOW, _EM_UNDERFLOW | _EM_INEXACT }){
-                for(usize index = 0u; index < x.size(); ++index){
-                    const auto expected = ObserveTrapEdge(MakeNotNull<Evaluate>(Reference), x[index], y[index], enabled), actual = ObserveTrapEdge(evaluate, x[index], y[index], enabled);
+            for(in u32 enabled : enabledMasks){
+                for(usize index = 0u; index < bases.size(); ++index){
+                    const auto base = VectorSingle(bases[index]);
+                    const auto power = VectorSingle(powers[index]);
+                    const auto expected = ObservePowTrapEdge(variant, true, base, power, enabled);
+                    const auto actual = ObservePowTrapEdge(variant, false, base, power, enabled);
                     if(!expected || !actual)
                         return 2;
-                    if(index < 2u && denormalMode == _DN_SAVE)
-                        delivered = delivered && expected->code == EXCEPTION_FLT_UNDERFLOW;
-                    const b8 different = *expected != *actual;
-                    differences += different;
+                    const PowTrapEdge lhs = expected.value();
+                    const PowTrapEdge rhs = actual.value();
+                    if(index < 2u && denormal == s_PowDenormalSave)
+                        delivered = delivered && lhs.code == s_PowUnderflowException;
+                    const b8 different = !(lhs == rhs);
+                    differences += cast<u32>(different);
                     ++cases;
-                    FOUNDATION_COUT << "trap_edge DN=" << denormalMode << " rounding=" << mode << " enabled=" << enabled << " case=" << index
-                             << " expected=" << expected->code << '/' << expected->flags << '/' << expected->control << '/' << expected->error << '/' << expected->nativeStatus << '/' << expected->nativeControl << '/' << expected->valueBits
-                             << " actual=" << actual->code << '/' << actual->flags << '/' << actual->control << '/' << actual->error << '/' << actual->nativeStatus << '/' << actual->nativeControl << '/' << actual->valueBits
-                             << " differs=" << different << '\n';
+                    WriteBenchmarkStdout(StringFormat("trap_edge DN={} rounding={} enabled={} case={} expected={}/{}/{}/{}/{}/{}/{} actual={}/{}/{}/{}/{}/{}/{} differs={}\n",
+                        denormal, mode, enabled, index, lhs.code, lhs.flags, lhs.control, lhs.error, lhs.nativeStatus, lhs.nativeControl, lhs.valueBits,
+                        rhs.code, rhs.flags, rhs.control, rhs.error, rhs.nativeStatus, rhs.nativeControl, rhs.valueBits, cast<u32>(different)));
                 }
             }
         }
     }
-    FOUNDATION_COUT << "trap edge cases=" << cases << " differences=" << differences << " distinguishable=" << delivered << '\n';
-    return delivered ? (differences == 0u ? 0 : 1) : 2;
-#else
-    return 2;
-#endif
+    WriteBenchmarkStdout(StringFormat("trap edge cases={} differences={} distinguishable={}\n", cases, differences, cast<u32>(delivered)));
+    if(!delivered)
+        return 2;
+    return cast<i32>(differences != 0u);
 }
-
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ObservePowKernel(
-    const u8 variantCode,
-    const b8 useReference,
-    const SIMDVectorSingle x,
-    const SIMDVectorSingle y,
-    Array<u32, 4>& outBits,
-    i32& outStandardFlags,
-    u32& outMappedFlags,
-    u64& outNativeBits,
-    i32& outError
-)noexcept{
-#pragma STDC FENV_ACCESS ON
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    const u64 clearNativeStatus = 0u;
-    __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
-#endif
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    _clearfp();
-#endif
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
-        return false;
-    const auto evaluate = PowKernels::SelectEvaluator(variantCode, useReference);
-    errno = E2BIG;
-    const SIMDVectorSingle result = evaluate.get()(x, y);
-    outError = errno;
-    outStandardFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    u32 mappedStatus = 0u;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    mappedStatus = _statusfp();
-#endif
-    u64 nativeStatus = 0u;
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(nativeStatus));
-#endif
-    outMappedFlags = mappedStatus;
-    outNativeBits = nativeStatus;
-    for(usize lane = 0u; lane < 4u; ++lane)
-        outBits[lane] = VectorGetIntByIndex(result, lane);
-    return true;
-}
-
-FOUNDATION_INLINE void EvaluatePowKernel(const u8 variantCode, const b8 useReference, const SIMDVectorSingle x, const SIMDVectorSingle y, UInt4& outBits)noexcept{
-    const auto evaluate = PowKernels::SelectEvaluator(variantCode, useReference);
-    StoreInt(evaluate.get()(x, y), outBits);
-}
-
-FOUNDATION_INLINE void FOUNDATION_SIMD_CALL SelectPowSrgbLinearBranch(const SIMDVectorSingle nonlinear, const SIMDVectorSingle linearBranch, const SIMDVectorSingle clamped, const f32 cutoff, UInt4& outBits)noexcept{
-    StoreInt(VectorSelect(nonlinear, linearBranch, VectorLessOrEqual(clamped, VectorReplicate(cutoff))), outBits);
-}
-
-[[nodiscard]] FOUNDATION_INLINE i32 VerifyPowTrapsKernel(const u8 variantCode){
-    return PowKernels::VerifyTrapsImpl(PowKernels::SelectEvaluator(variantCode, false));
-}
-
-[[nodiscard]] FOUNDATION_INLINE i32 VerifyPowTrapEdgesKernel(const u8 variantCode){
-    return PowKernels::VerifyTrapEdgesImpl(PowKernels::SelectEvaluator(variantCode, false));
-}
-
-class PowQualificationEnvironmentScope final{
-public:
-    PowQualificationEnvironmentScope()noexcept
-        : m_originalError(errno)
-        , m_environment(HoldFloatingPointExceptions())
-    {
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-        __asm__ __volatile__("mrs %0, fpsr" : "=r"(m_originalNativeStatus));
-#endif
-    }
-
-    ~PowQualificationEnvironmentScope()noexcept{
-        if(!m_environment)
-            return;
-        if(!SetFloatingPointEnvironment(*m_environment))
-            __builtin_trap();
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-        __asm__ __volatile__("msr fpsr, %0" : : "r"(m_originalNativeStatus));
-#endif
-        errno = m_originalError;
-    }
-
-    PowQualificationEnvironmentScope(const PowQualificationEnvironmentScope&) = delete;
-    PowQualificationEnvironmentScope& operator=(const PowQualificationEnvironmentScope&) = delete;
-
-public:
-    [[nodiscard]] b8 available()const noexcept{
-        return static_cast<b8>(m_environment);
-    }
-
-private:
-    i32 m_originalError;
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    u64 m_originalNativeStatus = 0u;
-#endif
-    Expected<FloatingPointEnvironment> m_environment;
-};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const StringView s_ExceptionalLabel = "exceptional";
 const StringView s_RandomLabel = "random";
@@ -547,12 +561,9 @@ Expected<PowObservation> ObservePow(in u8 variantCode, in b8 useReference, in Ve
 VectorSingle EncodePowSrgb(in VectorSingle linear, in u8 variantCode, in b8 useReference){
     const VectorSingle clamped = Saturate(linear);
     const VectorSingle exponent = VectorSingle(s_EncodeExponent, s_EncodeExponent, s_EncodeExponent, s_EncodeExponent);
-    u32x4 powBits = u32x4(0u, 0u, 0u, 0u);
-    EvaluatePowKernel(variantCode, useReference, clamped, exponent, powBits);
-    const VectorSingle nonlinear = VectorSingle(powBits) * 1.055f - VectorSingle(0.055f, 0.055f, 0.055f, 0.055f);
-    u32x4 branchBits = u32x4(0u, 0u, 0u, 0u);
-    SelectPowSrgbLinearBranch(nonlinear, clamped * 12.92f, clamped, 0.0031308f, branchBits);
-    const VectorSingle encoded = VectorSingle(branchBits);
+    const VectorSingle powered = EvaluatePow(variantCode, useReference, clamped, exponent);
+    const VectorSingle nonlinear = powered * 1.055f - VectorSingle(0.055f, 0.055f, 0.055f, 0.055f);
+    const VectorSingle encoded = VectorSelect(nonlinear, clamped * 12.92f, VectorLessOrEqual(clamped, VectorSingle(0.0031308f)));
     const VectorSingle scaled = Saturate(encoded) * 255.0f + VectorSingle(0.5f, 0.5f, 0.5f, 0.5f);
     return Min(Floor(scaled), VectorSingle(255.0f, 255.0f, 255.0f, 255.0f));
 }
@@ -845,29 +856,15 @@ i32 RunPowQualificationCli(in Span<StringView> args){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-int main(const int argc, const char* const* argv){
-    if(argc <= 0)
+i32 RunPowQualificationCliEntry(in ConsoleArguments arguments){
+    if(arguments.count <= 0)
         return 2;
-    Array<StringView, 4> args{};
-    const usize count = Min(static_cast<usize>(argc), args.size());
+    Array<StringView, 4> args;
+    const usize count = Min(cast<usize>(arguments.count), args.size());
     for(usize index = 0u; index < count; ++index)
-        args[index] = StringView(argv[index]);
-    return SimdOptimizationBenchmark::RunPowQualificationCli(Span<const StringView>(args.data(), count));
+        args[index] = arguments.text(cast<i32>(index));
+    return RunPowQualificationCli(Span<StringView>(args).first(count));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

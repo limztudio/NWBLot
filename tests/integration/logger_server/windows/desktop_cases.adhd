@@ -1,0 +1,148 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "desktop_sdk.adhd"
+#include "../protocol_sdk.adhd"
+#include <logger/server/clipboard_text.adhd>
+#include <logger/server/log_row_painter.adhd>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/value_storage.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyLogRowPainter_EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext(){
+    HeapStorage storage;
+    WinDeviceContext dc = WinDeviceContext();
+    ASSERT_TRUE(dc.valid());
+    WinBitmapInfo bitmapInfo = WinBitmapInfo();
+    bitmapInfo.bmiHeader.biSize = size_of<WinBitmapHeader>();
+    bitmapInfo.bmiHeader.biWidth = 4;
+    bitmapInfo.bmiHeader.biHeight = -4;
+    bitmapInfo.bmiHeader.biPlanes = 1u;
+    bitmapInfo.bmiHeader.biBitCount = 32u;
+    bitmapInfo.bmiHeader.biCompression = s_WinRgbBitmap;
+    WinDibSection bitmap(dc, bitmapInfo);
+    ASSERT_TRUE(bitmap.valid());
+    WinSelectedBitmap selection(dc, bitmap);
+    ASSERT_TRUE(selection.valid());
+    ASSERT_TRUE(bitmap.hasPixels());
+    ASSERT_NE(WinSetTextColor(dc.native(), WinRgb(3u, 4u, 5u)), s_WinInvalidColor);
+    ASSERT_NE(WinSetBackgroundMode(dc.native(), s_WinOpaque), 0);
+
+    const WinLogRow message(NativeLogText(storage, ProtocolText("")), LogType::Error);
+    WinDrawItem item = WinDrawItem();
+    item.hDC = dc.native();
+    item.rcItem.right = 4;
+    item.rcItem.bottom = 4;
+    WinDrawLogRow(item, message);
+    const u32 firstPixel = WinPixel(dc.native(), 1, 1);
+    item.itemID = 1u;
+    WinDrawLogRow(item, message);
+    EXPECT_EQ(firstPixel, WinRgb(170u, 0u, 0u));
+    EXPECT_EQ(WinPixel(dc.native(), 1, 1), WinRgb(200u, 0u, 0u));
+    EXPECT_EQ(WinTextColor(dc.native()), WinRgb(3u, 4u, 5u));
+    EXPECT_EQ(WinBackgroundMode(dc.native()), s_WinOpaque);
+}
+
+void VerifyLogRowPainter_LongTextWrapsWithinHiddenParentClientWidth(){
+    HeapStorage storage;
+    WinStaticWindow parent(s_WinPopup, 60, 100);
+    ASSERT_TRUE(parent.valid());
+    WinStaticWindow child(parent, s_WinChild, 60, 100);
+    ASSERT_TRUE(child.valid());
+    child.useDefaultGuiFont();
+    const WinLogRow message(NativeLogText(storage, ProtocolText("A long message that must wrap across several narrow rows of the hidden logger window.")), LogType::Info);
+    WinMeasureItem item = WinMeasureItem();
+    WinMeasureLogRow(parent.native(), child.native(), item, message);
+    EXPECT_GT(item.itemHeight, s_WinLogFontHeight);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyLoggerClipboardText_EmptyInputOwnsOneTerminatedNativeString(){
+    HeapStorage storage;
+    TestValueSlot<WinMessageDeque> slot;
+    mut WinMessageDeque messages = slot.constructIn(storage);
+    auto memory = WinBuildClipboardText(messages);
+    ASSERT_TRUE(memory.has_value());
+    const WinGlobalHandle handle = CheckedTestValue<WinClipboardText, WinClipboardFailure>(memory).native();
+    EXPECT_GE(WinGlobalSize(handle), s_NativeCharacterBytes);
+    WinGlobalTextLock text(handle);
+    ASSERT_TRUE(text.valid());
+    EXPECT_EQ(text.character(0u), 0u);
+    EXPECT_TRUE(text.unlock());
+}
+
+void VerifyLoggerClipboardText_MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator(){
+    HeapStorage storage;
+    TestValueSlot<WinMessageDeque> slot;
+    mut WinMessageDeque messages = slot.constructIn(storage);
+    messages.emplace_back(NativeLogText(storage, ProtocolText("first")), LogType::Info);
+    messages.emplace_back(NativeLogText(storage, ProtocolText("한글 Ω")), LogType::Warning);
+    auto memory = WinBuildClipboardText(messages);
+    ASSERT_TRUE(memory.has_value());
+    const WinGlobalHandle handle = CheckedTestValue<WinClipboardText, WinClipboardFailure>(memory).native();
+    const PlatformStringView expected = ProtocolText("first\r\n한글 Ω\r\n");
+    EXPECT_GE(WinGlobalSize(handle), (expected.size() + 1u) * s_NativeCharacterBytes);
+    WinGlobalTextLock text(handle);
+    ASSERT_TRUE(text.valid());
+    EXPECT_EQ(text.view(expected.size()), expected);
+    EXPECT_EQ(text.character(expected.size()), 0u);
+    EXPECT_TRUE(text.unlock());
+}
+
+void VerifyLoggerClipboardText_NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory(){
+    HeapStorage storage;
+    TestValueSlot<WinMessageDeque> slot;
+    mut WinMessageDeque messages = slot.constructIn(storage);
+    WinGlobalHandle freed = WinGlobalHandle();
+    {
+        auto memory = WinBuildClipboardText(messages);
+        ASSERT_TRUE(memory.has_value());
+        freed = CheckedTestValue<WinClipboardText, WinClipboardFailure>(memory).native();
+    }
+    EXPECT_EQ(WinGlobalFlags(freed), s_WinInvalidMemory);
+    WinGlobalHandle transferred = WinGlobalHandle();
+    {
+        auto memory = WinBuildClipboardText(messages);
+        ASSERT_TRUE(memory.has_value());
+        transferred = CheckedTestValue<WinClipboardText, WinClipboardFailure>(memory).native();
+        CheckedTestValue<WinClipboardText, WinClipboardFailure>(memory).release();
+    }
+    WinOwnedGlobalMemory cleanup(transferred);
+    EXPECT_NE(WinGlobalFlags(transferred), s_WinInvalidMemory);
+    EXPECT_NE(WinGlobalSize(transferred), 0u);
+}
+
+void VerifyLoggerClipboardText_ByteCountRejectsOverflowBeforeNativeAllocation(){
+    const auto empty = WinClipboardBytes(0u);
+    ASSERT_TRUE(empty.has_value());
+    EXPECT_EQ(empty.value(), s_NativeCharacterBytes);
+    const usize maxCharacters = (usize.max / s_NativeCharacterBytes) - 1u;
+    const auto boundary = WinClipboardBytes(maxCharacters);
+    ASSERT_TRUE(boundary.has_value());
+    EXPECT_EQ(boundary.value(), (maxCharacters + 1u) * s_NativeCharacterBytes);
+    const auto overflow = WinClipboardBytes(maxCharacters + 1u);
+    ASSERT_FALSE(overflow.has_value());
+    EXPECT_EQ(overflow.error(), MakeErrorCode(ErrorCondition::value_too_large));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(LogRowPainter, EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext, VerifyLogRowPainter_EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext)
+NWB_ADHD_GTEST(LogRowPainter, LongTextWrapsWithinHiddenParentClientWidth, VerifyLogRowPainter_LongTextWrapsWithinHiddenParentClientWidth)
+NWB_ADHD_GTEST(LoggerClipboardText, EmptyInputOwnsOneTerminatedNativeString, VerifyLoggerClipboardText_EmptyInputOwnsOneTerminatedNativeString)
+NWB_ADHD_GTEST(LoggerClipboardText, MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator, VerifyLoggerClipboardText_MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator)
+NWB_ADHD_GTEST(LoggerClipboardText, NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory, VerifyLoggerClipboardText_NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory)
+NWB_ADHD_GTEST(LoggerClipboardText, ByteCountRejectsOverflowBeforeNativeAllocation, VerifyLoggerClipboardText_ByteCountRejectsOverflowBeforeNativeAllocation)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

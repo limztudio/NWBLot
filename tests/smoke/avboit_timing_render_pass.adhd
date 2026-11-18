@@ -8,66 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-
-#include <core/graphics/runtime/render_pass.h>
-#include <core/graphics/runtime/runtime.h>
-
-namespace NWB::Tests::Smoke{
-using Impl::s_TimingScopeFrame;
-using Impl::s_TimingScopeOpaqueRegular;
-using Impl::s_TimingScopeShadowVisibility;
-using Impl::s_TimingScopeLightSpaceShadowViews;
-using Impl::s_TimingScopeLightSpaceShadowOpaqueCapture;
-using Impl::s_TimingScopeLightSpaceShadowTransparentCapture;
-using Impl::s_TimingScopeLightSpaceShadowShade;
-using Impl::s_TimingScopeLightSpaceShadowMapOpaque;
-using Impl::s_TimingScopeLightSpaceShadowMapTransparent;
-using Impl::s_TimingScopeLightSpaceShadowFallbackOpaque;
-using Impl::s_TimingScopeLightSpaceShadowFallbackTransparent;
-using Impl::s_TimingScopeDeferredLighting;
-using Impl::s_TimingScopeDeferredComposite;
-using Impl::s_TimingScopeDeferredPresent;
-using Impl::s_TimingScopeAvboitClear;
-using Impl::s_TimingScopeAvboitOccupancy;
-using Impl::s_TimingScopeAvboitDepthWarp;
-using Impl::s_TimingScopeAvboitExtinction;
-using Impl::s_TimingScopeAvboitIntegration;
-using Impl::s_TimingScopeAvboitAccumulate;
-using Impl::s_TimingScopeRefractionResolve;
-using Impl::s_TimingScopeRefractionClassifyTiles;
-using Impl::s_TimingScopeRefractionClearTileArguments;
-using Impl::s_TimingScopeOpticalBoundsFinalize;
-using Impl::s_TimingScopeCausticPhotons;
-using Impl::s_TimingScopeCausticResolve;
-using Impl::s_TimingScopeShadowOpaqueTrace;
-using Impl::s_TimingScopeShadowGeometryDownsample;
-using Impl::s_TimingScopeShadowOpaqueTemporal;
-using Impl::s_TimingScopeShadowOpaqueResolve;
-using Impl::s_TimingScopeShadowTransparentTrace;
-using Impl::s_TimingScopeShadowTransparentTemporal;
-using Impl::s_TimingScopeShadowTransparentResolve;
-using Core::GraphicsRuntime;
-using Core::IRenderPass;
-
-class TimingProbeUnfocusedPass final : public Core::IRenderPass{
-public:
-    explicit TimingProbeUnfocusedPass(Core::GraphicsRuntime& graphics)noexcept : Core::IRenderPass(graphics){}
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class TimingProbeUnfocusedPass : IRenderPass{
+    public TimingProbeUnfocusedPass(mut GraphicsRuntime graphics){}
+    public b8 shouldRenderUnfocused()override{ return true; }
 }
 
 

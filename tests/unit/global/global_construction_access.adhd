@@ -1,0 +1,158 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "global_construction_state.adhd"
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ScalarKind")]
+extern class ScalarKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ProbeArrayKind")]
+extern class ProbeArrayKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::NestedKind")]
+extern class NestedKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PlacementKind")]
+extern class PlacementKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PlacementArrayKind")]
+extern class PlacementArrayKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ArgumentKind")]
+extern class ArgumentKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PrivateDtorKind")]
+extern class PrivateDtorKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::OperatorDtorKind")]
+extern class OperatorDtorKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PrivateCtorKind")]
+extern class PrivateCtorKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::RawPrivateKind")]
+extern class RawPrivateKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PolyBaseKind")]
+extern class PolyBaseKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PolyConcreteKind")]
+extern class PolyConcreteKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PolyMiddleKind")]
+extern class PolyMiddleKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ConstPolyBaseKind")]
+extern class ConstPolyBaseKind;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ProbeOwner")]
+extern class ProbeOwner<Kind, S>{
+    void reset();
+};
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ActiveProbe")]
+extern class ActiveProbe<S>;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::RejectingArena")]
+extern class RejectingStorage{
+    usize attempts;
+    usize deallocations;
+};
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PolymorphicAllocationState")]
+extern class PolymorphicAllocationState{
+    usize paddingDestructors;
+    usize baseDestructors;
+    usize concreteDestructors;
+};
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ScalarRebinding")]
+extern class ScalarRebinding<S>;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ArrayRebinding")]
+extern class ArrayRebinding<S, const usize Empty>;
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ArrayProbeOwner")]
+extern class ArrayProbeOwner<S, const usize Empty>{
+    void reset();
+};
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ReentryArrayStorage")]
+extern class ReentryArrayStorage<S, const usize Empty>{
+    b8 available()const;
+    ArrayProbeOwner<S, Empty> constructOne(mut usize destroyed);
+    ArrayProbeOwner<S, Empty> constructPair(mut usize destroyed, mut ArrayRebinding<S, Empty> binding);
+};
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::GenericObject")]
+extern auto GenericObject<Kind>(mut auto storage, ...);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::GlobalObject")]
+extern auto GlobalObject<Kind>(mut HeapStorageHandle storage, ...);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PersistentObject")]
+extern auto PersistentObject<Kind>(mut PersistentStorage storage, ...);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::RawObject")]
+extern auto RawObject<Kind>(mut auto storage, ...);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::DeleteRawObject")]
+extern void DeleteRawObject(mut auto storage, in auto pointer);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::OwnRawScalar")]
+extern auto OwnRawScalar(mut auto storage, mut ConstructionState state);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ConvertingArgument")]
+extern auto ConvertingArgument(mut auto storage, mut ConstructionState state);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::Present")]
+extern b8 ProbePresent(in auto value);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::RejectedRaw")]
+extern b8 RejectedRaw(mut RejectingStorage rejecting, mut auto source, mut ConstructionState state);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::RejectedScalar")]
+extern auto RejectedScalar(mut RejectingStorage rejecting, mut auto source, mut ConstructionState state);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::RejectedArray")]
+extern auto RejectedArray(mut RejectingStorage rejecting, mut auto source, in usize count);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::AdjustedBase")]
+extern b8 AdjustedBase(in auto owner);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::SetReentry")]
+extern void SetReentry(mut PolymorphicAllocationState state, mut auto binding);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::MoveProbeOwner")]
+extern ProbeOwner<Kind, S> MoveProbeOwner<Kind, S>(mut auto value);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ReleaseWithDeleter")]
+extern auto ReleaseWithDeleter(mut auto owner);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ConstructionStats")]
+extern ArenaMemoryStats ConstructionStats(in auto storage);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::PlacementCalls")]
+extern mut usize PlacementCalls();
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ProbeConstructors")]
+extern mut usize ProbeConstructors();
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::ProbeDestructors")]
+extern mut usize ProbeDestructors();
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("NWB_EXPECT_CONSTRUCTION_FAILURE")]
+extern void ExpectConstructionFailure(in auto expression);
+
+[cpp_header("<tests/unit/global/global_construction_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Construction::TransferProbe")]
+extern void TransferProbe(mut auto target, mut auto source);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

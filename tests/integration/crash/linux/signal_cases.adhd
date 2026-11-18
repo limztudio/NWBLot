@@ -1,0 +1,112 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../suite.adhd"
+#include "signal_sdk.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void OriginalSignalOwner(in i32 signal){}
+void ForeignSignalOwner(in i32 signal){}
+
+void OriginalTerminateOwner(){ ExitTestChild(123); }
+void ForeignTerminateOwner(){ ExitTestChild(124); }
+
+class SignalEnvironment{
+    public AlternateStack stack;
+    public SignalAction action;
+    public TerminationHandler termination = ReadTerminationHandler();
+    private b8 ready = false;
+
+    public b8 save(){
+        this.ready = this.stack.read() && this.action.read(s_IllegalInstruction);
+        return this.ready;
+    }
+
+    public ~SignalEnvironment(){
+        if(this.ready){
+            UninstallCrashHandler();
+            if(!this.action.install(s_IllegalInstruction) || !this.stack.install())
+                FailTestCleanup();
+            ExchangeTerminationHandler(this.termination);
+        }
+    }
+}
+
+void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(){
+    const StringView group = "crash_restore_native_hooks";
+    RemoveTestArtifacts(group);
+    UninstallCrashHandler();
+    const Path spoolDirectory = SpoolDirectory(group);
+    SignalEnvironment previous;
+    ASSERT_TRUE(previous.save());
+    AlternateStack disabled;
+    disabled.disable();
+    ASSERT_TRUE(disabled.install());
+    SignalAction desired;
+    desired.setHandler(OriginalSignalOwner);
+    ASSERT_TRUE(desired.clearMask());
+    ASSERT_TRUE(desired.install(s_IllegalInstruction));
+    ExchangeTerminationHandler(OriginalTerminateOwner);
+    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    TestValueSlot<PersistentCrashConfig> slot;
+    mut PersistentCrashConfig config = slot.constructIn(installArena);
+    config.applicationName = "restore-native-hooks";
+    config.spoolDirectory = spoolDirectory;
+    ASSERT_TRUE(InstallCrashHandler(config));
+    UninstallCrashHandler();
+    AlternateStack restoredStack;
+    SignalAction restoredAction;
+    ASSERT_TRUE(restoredStack.read());
+    ASSERT_TRUE(restoredAction.read(s_IllegalInstruction));
+    EXPECT_TRUE(restoredStack.disabled());
+    EXPECT_TRUE(restoredAction.matches(OriginalSignalOwner));
+    EXPECT_TRUE(TerminationHandlerMatches(OriginalTerminateOwner));
+    EXPECT_FALSE(TestCrashState().platformRestorePending);
+    RemoveTestArtifacts(group);
+}
+
+void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
+    const StringView group = "crash_preserve_foreign_hooks";
+    RemoveTestArtifacts(group);
+    UninstallCrashHandler();
+    const Path spoolDirectory = SpoolDirectory(group);
+    SignalStackMemory memory;
+    SignalEnvironment previous;
+    ASSERT_TRUE(previous.save());
+    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    TestValueSlot<PersistentCrashConfig> slot;
+    mut PersistentCrashConfig config = slot.constructIn(installArena);
+    config.applicationName = "preserve-foreign-hooks";
+    config.spoolDirectory = spoolDirectory;
+    ASSERT_TRUE(InstallCrashHandler(config));
+    SignalAction foreignAction;
+    foreignAction.setHandler(ForeignSignalOwner);
+    ASSERT_TRUE(foreignAction.clearMask());
+    ASSERT_TRUE(foreignAction.install(s_IllegalInstruction));
+    AlternateStack foreignStack;
+    foreignStack.use(memory);
+    ASSERT_TRUE(foreignStack.install());
+    ExchangeTerminationHandler(ForeignTerminateOwner);
+    UninstallCrashHandler();
+    AlternateStack retainedStack;
+    SignalAction retainedAction;
+    ASSERT_TRUE(retainedStack.read());
+    ASSERT_TRUE(retainedAction.read(s_IllegalInstruction));
+    EXPECT_EQ(retainedStack.address(), foreignStack.address());
+    EXPECT_TRUE(retainedAction.matches(ForeignSignalOwner));
+    EXPECT_TRUE(TerminationHandlerMatches(ForeignTerminateOwner));
+    EXPECT_FALSE(TestCrashState().platformRestorePending);
+    RemoveTestArtifacts(group);
+}
+
+NWB_ADHD_GTEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners, VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners)
+NWB_ADHD_GTEST(Crash, UninstallPreservesNewerForeignNativeHookOwners, VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners)
+NWB_ADHD_GTEST(Crash, LinuxSignalHandlerWritesCrashPackage, VerifyCrash_LinuxSignalHandlerWritesCrashPackage)
+NWB_ADHD_GTEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers, VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

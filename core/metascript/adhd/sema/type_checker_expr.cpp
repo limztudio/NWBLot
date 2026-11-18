@@ -116,6 +116,11 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text);
         const MethodDecl* memberMethod = m_symbols.findClassMethod(*ownerClass, expr.text);
         const b8 isInheritedBuiltinMethod = m_symbols.findInheritedBuiltinReceiverMethod(ownerClass, nullptr, expr.text) != nullptr;
+        if((field && !m_symbols.canAccessMember(*ownerClass, ownerClass, field->declaringClass, field->access))
+            || (memberMethod && !m_symbols.canAccessMember(*ownerClass, ownerClass, memberMethod->declaringClass, memberMethod->access))){
+            reportError(errors, expr.span, "cannot access an inherited private member");
+            ok = false;
+        }
         if(!field && !memberMethod && !isInheritedBuiltinMethod){
             reportError(errors, expr.span, "unknown member on 'this'");
             ok = false;
@@ -162,7 +167,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             const ClassDecl* accessedCls = nullptr;
             const FieldDecl* accessedField = nullptr;
             const MStringView resolvedEnumName = resolveScopeAccessEnumTypeName(ownerClass, &method, expr, scope, &accessedCls, &accessedField);
-            if(accessedCls && accessedField && !m_symbols.canAccessPrivateMembers(*accessedCls, ownerClass) && accessedField->access != AccessSpecifier::Public){
+            if(accessedCls && accessedField && !m_symbols.canAccessMember(*accessedCls, ownerClass, accessedField->declaringClass, accessedField->access)){
                 reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                 ok = false;
             }
@@ -267,7 +272,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 recordRequiredHeader(staticCls->requiredHeader);
                 expr.resolvedCppNamespace = staticCls->cppNamespace;
                 if(const FieldDecl* staticField = SymbolTable::FindClassField(*staticCls, expr.scopeChain[1]); staticField && staticField->isStatic){
-                    if(!m_symbols.canAccessPrivateMembers(*staticCls, ownerClass) && staticField->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessMember(*staticCls, ownerClass, staticField->declaringClass, staticField->access)){
                         reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                         ok = false;
                     }
@@ -370,7 +375,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     ok = false;
                 }
                 else if(field && !memberMethod){
-                    if(!m_symbols.canAccessPrivateMembers(*targetCls, ownerClass) && field->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessMember(*targetCls, ownerClass, field->declaringClass, field->access)){
                         reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                         ok = false;
                     }
@@ -451,7 +456,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             }
         }
         else if(customOpIdx){
-            if(opDeclCls && !m_symbols.canAccessPrivateMembers(*opDeclCls, ownerClass) && customOpIdx->access != AccessSpecifier::Public){
+            if(opDeclCls && !m_symbols.canAccessMember(*opDeclCls, ownerClass, customOpIdx->declaringClass, customOpIdx->access)){
                 reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
                 ok = false;
             }
@@ -551,7 +556,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 }
             }
             else if(opMethod){
-                if(opDeclCls && !m_symbols.canAccessPrivateMembers(*opDeclCls, ownerClass) && opMethod->access != AccessSpecifier::Public){
+                if(opDeclCls && !m_symbols.canAccessMember(*opDeclCls, ownerClass, opMethod->declaringClass, opMethod->access)){
                     reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
                     ok = false;
                 }
@@ -582,13 +587,31 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             reportError(errors, expr.span, "a layout query cannot be a mutable target");
             ok = false;
         }
-        if(!checkTypeRef(*expr.targetType, ownerClass, &method, errors))
+        if(expr.targetType && !checkTypeRef(*expr.targetType, ownerClass, &method, errors))
             ok = false;
+        for(usize index = 0u; index < expr.callTemplateArgs.size(); ++index){
+            const b8 isMethodResult = expr.layoutQuery == LayoutQueryKind::NothrowRvalueMember && index == 0u;
+            if(!checkTypeRef(*expr.callTemplateArgs[index].type, ownerClass, &method, isMethodResult, errors))
+                ok = false;
+        }
+        if(expr.layoutQuery == LayoutQueryKind::NothrowCall){
+            const usize arity = expr.callTemplateArgs.size();
+            const MethodDecl* callable = m_symbols.findFreeFunction(expr.text, &arity);
+            if(!callable){
+                reportError(errors, expr.span, "is_nothrow_call requires a declared free function");
+                ok = false;
+            }
+            else{
+                expr.resolvedCppNamespace = callable->cppNamespace;
+                expr.resolvedCppExportName = callable->cppExportName;
+                recordRequiredHeader(callable->requiredHeader);
+            }
+        }
         if(expr.layoutQuery == LayoutQueryKind::Offset){
             const ClassDecl* cls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.targetType->name));
             if(cls && !cls->isExtern){
                 const FieldDecl* field = SymbolTable::FindClassField(*cls, expr.text);
-                if(!field || field->isStatic || (!m_symbols.canAccessPrivateMembers(*cls, ownerClass) && field->access != AccessSpecifier::Public)){
+                if(!field || field->isStatic || (!m_symbols.canAccessMember(*cls, ownerClass, field->declaringClass, field->access))){
                     reportError(errors, expr.span, "offset_of requires an accessible instance field");
                     ok = false;
                 }

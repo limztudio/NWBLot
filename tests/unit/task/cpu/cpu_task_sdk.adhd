@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <loader/callback_shutdown.adhd>
+
+[cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::RetireAfterTask")]
+extern auto RetireAfterTask(in auto state, in auto action);
+[cpp_header("<global/terminal_entry.h>"), cpp_name("::InvokeTerminalEntry")]
+extern i32 CatchTaskFailure<Error>(in auto action, in auto error, in auto unexpected);
+[cpp_header("<cstdlib>"), cpp_name("::std::_Exit")]
+extern void ExitTestProcess(in u32 code);
+[cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::TaskConstructible")]
+extern b8 TaskConstructible<T>();
+[cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::ThrowingMoveTask")]
+extern class ThrowingMoveTask;
+[cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::ThrowingCopyTask")]
+extern class ThrowingCopyTask;
+[cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::NullProfileEvents")]
+extern usize ReadNullProfileEvents(mut CpuTaskScheduler scheduler, in usize capacity);
+[cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::SubmitNullDependencies")]
+extern Expected<CpuTaskHandle, CpuTaskAdmissionError> SubmitNullDependencies(mut auto scheduler, in auto action, in usize count);
+[cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::SubmitAfter")]
+extern Expected<CpuTaskHandle, CpuTaskAdmissionError> SubmitAfter(mut CpuTaskScope scope, in auto action, in CpuTaskOptions options, in CpuTaskHandle dependency);
+[cpp_header("<loader/project_entry.adhd.h>"), cpp_name("::NWB::IProjectEntryCallbacks"), cpp_flags(polymorphic_base)]
+extern class ProjectShutdownListener{
+    [cpp_flags(unwind)] void onShutdown();
+};
+[cpp_header("<loader/callback_shutdown.adhd.h>"), cpp_name("::NWB::LoaderDetail::CallbackShutdownGuard"), cpp_flags(no_copy, no_assign)]
+extern class LoaderShutdownGuard{
+    void activate();
+};

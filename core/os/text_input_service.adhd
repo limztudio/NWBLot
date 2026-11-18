@@ -3,7 +3,7 @@
 
 
 [cpp_header("<core/os/text_input_service.h>"), cpp_name("::NWB::Core::QueuedTextInputService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
-extern class QueuedTextInputService{
+extern class QueuedTextInputService : ITextInputService{
     TextInputSessionToken activeSession(...)const;
     Expected<TextInputSessionToken, TextInputAdmission> begin(...);
     b8 end(...);
@@ -13,6 +13,18 @@ extern class QueuedTextInputService{
     u64 surroundingRevision(...)const;
     TextInputAdmission updateCaret(...);
     TextInputAdmission updateSurrounding(...);
+    TextInputCapabilities capabilities()const;
+    TextInputAdmission startNativeSession(in TextInputSessionToken token, in TextInputSessionDesc description);
+    void endNativeSession(in TextInputSessionToken token);
+    TextInputAdmission emitCommit(in TextInputSessionToken token, in StringView text);
+    TextInputAdmission emitPreedit(in TextInputSessionToken token, in StringView text, in usize anchor, in usize caret, in b8 visible = true);
+    TextInputAdmission emitDeleteSurrounding(in TextInputSessionToken token, in usize before, in usize after, in u64 revision, in TextInputDeletionBasis basis);
+    b8 cancelSession(in TextInputSessionToken token, in TextInputCancelReason reason);
+    usize surroundingCaretByte()const;
+    TextInputAdmission updateNativeCaret(in TextInputRect rectangle);
+    void updateNativeSurrounding(in StringView text, in usize anchor, in usize caret, in u64 revision, in TextInputChangeCause cause);
+    StringView surroundingText()const;
+    TextInputRect caretRect()const;
 };
 
 

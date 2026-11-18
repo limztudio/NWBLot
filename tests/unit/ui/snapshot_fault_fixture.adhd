@@ -1,0 +1,45 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <impl/ecs_ui/toolkit/text/layout.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// These tests change owned records after freeze to exercise the validation boundary.
+class TextLayoutFaultFixture{
+    public void invalidateGlyphPosition(mut TextLayout layout)const{
+        layout.m_glyphs[1u].position.x = bit_cast<f32>(0x7f800000u);
+    }
+    public void invalidateLineRecord(mut TextLayout layout, in u32 mutation)const{
+        mut TextLine line = layout.m_lines[1u];
+        switch(mutation){
+        case 0u: line.byteBegin = 0u; break;
+        case 1u: line.byteEnd = 4u; break;
+        case 2u: line.breakEnd = 4u; break;
+        case 3u: line.firstCluster = 0u; break;
+        case 4u: line.clusterCount = 2u; break;
+        case 5u: line.firstGlyph = 0u; break;
+        case 6u: line.glyphCount = 2u; break;
+        case 7u: line.top = 11.0f; break;
+        case 8u: line.height = 0.0f; break;
+        case 9u: line.advance = -1.0f; break;
+        case 10u: line.baseline = bit_cast<f32>(0x7f800000u); break;
+        case 11u: line.height = bit_cast<f32>(0x7fc00000u); break;
+        case 12u: line.advance = 11.0f; break;
+        case 13u: layout.m_lines[0u].breakEnd = 1u; break;
+        case 14u: layout.m_clusters.back().glyphCount = u32.max; break;
+        }
+    }
+}
+
+class DrawSnapshotFaultFixture{
+    public mut DrawCommand command(mut DrawSnapshot snapshot, in usize index)const{ return snapshot.m_commands[index]; }
+    public mut Vector<SharedImageSource> images(mut DrawSnapshot snapshot)const{ return snapshot.m_images.m_textureImages; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,54 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_font/asset.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font/asset.adhd.h>
-#include <impl/assets_font/prepared_source.adhd.h>
-
-#include <global/filesystem.h>
-
-NWB_BEGIN
-
-namespace Tests{
-
-template<typename PathArenaT>
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const ::Path<PathArenaT>& fontPath, Core::Assets::AssetArena& arena){
-    auto source = Impl::ReadPreparedFontSource(arena, fontPath, false);
-    if(!source)
-        return MakeUnexpected(source.error());
-    return Core::Assets::AssetBytes(source->fontBytes.begin(), source->fontBytes.end(), arena);
+Expected<Vector<u8>, StringView> ReadBundledFontBytes(in Path fontPath){
+    const auto prepared = ReadPreparedFontSource(fontPath, false);
+    if(!prepared.has_value())
+        return MakeUnexpected(prepared.error());
+    return prepared.value().fontBytes;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 LoadBundledFont(Impl::Font& font, Core::Alloc::GlobalArena& arena, const StringView directory, const StringView filename){
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, directory) / filename;
-    auto bytes = ReadBundledFontBytes(path, arena);
-    if(!bytes)
+b8 LoadBundledFont(mut Font font, in Path directory, in StringView filename){
+    const auto bytes = ReadBundledFontBytes(directory / filename);
+    if(!bytes.has_value())
         return false;
-    font.setFontBytes(Move(*bytes));
+    font.setFontBytes(bytes.value());
     return font.validatePayload();
-}
-
-#if defined(NWB_REPO_ROOT)
-template<typename TestArenaT>
-[[nodiscard]] FOUNDATION_INLINE ::Path<Core::Assets::AssetArena> DefaultBundledFontRoot(TestArenaT& testArena){
-    return ::Path<Core::Assets::AssetArena>(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
-}
-#endif
-
-};
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

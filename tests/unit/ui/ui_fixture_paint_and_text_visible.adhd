@@ -3,351 +3,191 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include "ui_core_and_list_fixtures.adhd"
+#include "ui_fixture_widget_base.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const StringView s_PaintTextSkinPath = "tests/ui/skin";
+const StringView s_PaintTextFontPath = "tests/ui/font";
+const StringView s_DefaultImagePath = "tests/ui/image";
+const u64 s_DefaultAtlasIdentity = 11u;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPaintTextTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-
-inline constexpr AStringView s_PaintTextSkinPath = "tests/ui/skin";
-inline constexpr AStringView s_PaintTextFontPath = "tests/ui/font";
-
-[[nodiscard]] FOUNDATION_INLINE Expected<SharedGlyphPage> MakeTestGlyphPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation = 1u, const u32 index = 0u){
-    GlyphPagePixels pixels(arena);
+Expected<SharedGlyphPage> MakeTestGlyphPage(in SharedPool pool, in u64 identity, in u64 generation, in u32 index){
+    GlyphPagePixels pixels;
     pixels.resize(64u, 0u);
-    pixels[0] = 64u;
+    pixels[0u] = 64u;
     if(generation > 1u)
-        pixels[32] = 192u;
-    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = index, .width = 8u, .height = 8u };
-    return CreateGlyphPage(::NWB::Core::Alloc::SharedPool(arena), binding, pixels);
+        pixels[32u] = 192u;
+    GlyphPageBinding binding;
+    binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+    binding.fontGeneration = 9u;
+    binding.atlasIdentity = identity;
+    binding.generation = generation;
+    binding.index = index;
+    binding.width = 8u;
+    binding.height = 8u;
+    return CreateGlyphPage(pool, binding, pixels);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u){
-    SdfAtlasPixels pixels(arena);
+Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(in SharedPool pool, in u64 identity, in u64 generation, in u32 index, in u8 interior){
+    SdfAtlasPixels pixels;
     pixels.resize(8u * 8u * 4u, 0u);
     pixels[0u] = 32u;
     pixels[1u] = 128u;
     pixels[2u] = interior;
     pixels[3u] = 192u;
-    const SdfAtlasPageBinding binding{
-        .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath),
-        .fontGeneration = 9u,
-        .atlasIdentity = atlasIdentity,
-        .generation = generation,
-        .index = index,
-        .width = 8u,
-        .height = 8u,
-        .spreadPixels = 8u,
-    };
-    return CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(arena), binding, pixels);
+    SdfAtlasPageBinding binding;
+    binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+    binding.fontGeneration = 9u;
+    binding.atlasIdentity = identity;
+    binding.generation = generation;
+    binding.index = index;
+    binding.width = 8u;
+    binding.height = 8u;
+    binding.spreadPixels = 8u;
+    return CreateSdfAtlasPage(pool, binding, pixels);
 }
 
+void ConfigurePaintFixtureSkin(mut UiSkin skin, in AssetRef<Texture> texture){
+    UiSkinRegion sprite;
+    sprite.name = s_UiCaseSprite;
+    sprite.rectangle.width = 8u;
+    sprite.rectangle.height = 8u;
+    sprite.drawMode = UiSkinDrawMode::Sprite;
+    Vector<UiSkinRegion> regions;
+    regions.push_back(sprite);
+    skin.setAtlas(texture, 16u, 16u, 1.0f, regions);
+}
 
-class PaintTextFixture : public testing::Test{
-public:
-    static constexpr u64 s_DefaultAtlasIdentity = 11u;
+[extensible]
+class PaintTextFixture{
+    public UiSkin m_skin = UiSkin(Name("tests/ui/skin"));
+    public PaintBuilder m_builder;
+    public SharedPool pool = SharedPool();
 
-
-public:
-    static void ExpectClippedQuad(const DrawSnapshot& snapshot);
-
-
-public:
-    PaintTextFixture()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintText))
-        , m_skin(m_arena, Name(s_PaintTextSkinPath))
-        , m_builder(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseSprite), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 16u, 16u, 1.0f, Move(regions));
-        begin(7u);
+    public PaintTextFixture(){
+        ConfigurePaintFixtureSkin(this.m_skin, AssetRef<Texture>("tests/ui/texture"));
+        this.begin(7u);
     }
-
-
-public:
-    void begin(u64 generation);
-    [[nodiscard]] Expected<SharedGlyphPage> makeCoverage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u){
-        GlyphPagePixels pixels(m_arena);
+    public void begin(in u64 generation){ BeginPaintTextFixture(this, generation); }
+    public Expected<SharedGlyphPage> makeCoverage(in u64 identity, in u64 generation){
+        GlyphPagePixels pixels;
         pixels.resize(4u, 128u);
-        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .width = 2u, .height = 2u };
-        return CreateGlyphPage(::NWB::Core::Alloc::SharedPool(m_arena), binding, pixels);
+        GlyphPageBinding binding;
+        binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+        binding.fontGeneration = 9u;
+        binding.atlasIdentity = identity;
+        binding.generation = generation;
+        binding.width = 2u;
+        binding.height = 2u;
+        return CreateGlyphPage(this.pool, binding, pixels);
     }
-    [[nodiscard]] Expected<SharedGlyphPage> makeGlyphPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u){
-        return MakeTestGlyphPage(m_arena, atlasIdentity, generation, index);
+    public Expected<SharedGlyphPage> makeGlyphPage(in u64 identity, in u64 generation, in u32 index){
+        return MakeTestGlyphPage(this.pool, identity, generation, index);
     }
-    [[nodiscard]] Expected<SharedSdfAtlasPage> makeDistance(){
-        SdfAtlasPixels pixels(m_arena);
+    public Expected<SharedSdfAtlasPage> makeDistance(){
+        SdfAtlasPixels pixels;
         pixels.resize(4u * 4u * 4u, 128u);
-        const SdfAtlasPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontGeneration = 9u, .atlasIdentity = 22u, .generation = 1u, .width = 4u, .height = 4u, .spreadPixels = 2u };
-        return CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(m_arena), binding, pixels);
+        SdfAtlasPageBinding binding;
+        binding.font = MakeUiFontAssetRef(s_PaintTextFontPath);
+        binding.fontGeneration = 9u;
+        binding.atlasIdentity = 22u;
+        binding.generation = 1u;
+        binding.width = 4u;
+        binding.height = 4u;
+        binding.spreadPixels = 2u;
+        return CreateSdfAtlasPage(this.pool, binding, pixels);
     }
-    [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdfPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u){
-        return MakeTestSdfAtlasPage(m_arena, atlasIdentity, generation, index, interior);
+    public Expected<SharedSdfAtlasPage> makeSdfPage(in u64 identity, in u64 generation, in u32 index, in u8 interior){
+        return MakeTestSdfAtlasPage(this.pool, identity, generation, index, interior);
     }
+    public Expected<SharedGlyphPage> makeCoverage(){ return this.makeCoverage(s_DefaultAtlasIdentity); }
+    public Expected<SharedGlyphPage> makeCoverage(in u64 identity){ return this.makeCoverage(identity, 1u); }
+    public Expected<SharedGlyphPage> makeGlyphPage(){ return this.makeGlyphPage(s_DefaultAtlasIdentity); }
+    public Expected<SharedGlyphPage> makeGlyphPage(in u64 identity){ return this.makeGlyphPage(identity, 1u); }
+    public Expected<SharedGlyphPage> makeGlyphPage(in u64 identity, in u64 generation){ return this.makeGlyphPage(identity, generation, 0u); }
+    public Expected<SharedSdfAtlasPage> makeSdfPage(){ return this.makeSdfPage(s_DefaultAtlasIdentity); }
+    public Expected<SharedSdfAtlasPage> makeSdfPage(in u64 identity){ return this.makeSdfPage(identity, 1u); }
+    public Expected<SharedSdfAtlasPage> makeSdfPage(in u64 identity, in u64 generation){ return this.makeSdfPage(identity, generation, 0u); }
+    public Expected<SharedSdfAtlasPage> makeSdfPage(in u64 identity, in u64 generation, in u32 index){ return this.makeSdfPage(identity, generation, index, 255u); }
+}
 
+[extensible]
+class PaintImageFixture{
+    public UiSkin m_skin = UiSkin(Name("tests/ui/skin"));
+    public PaintBuilder m_builder;
+    public SharedPool pool = SharedPool();
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    UiSkin m_skin;
-    PaintBuilder m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPaintImageTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-using UiWidgetTests::s_TestSkinPath;
-
-inline constexpr AStringView s_DefaultImagePath = "tests/ui/image";
-
-void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class PaintImageFixture : public testing::Test{
-public:
-    PaintImageFixture()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintImage))
-        , m_skin(m_arena, Name(s_TestSkinPath))
-        , m_builder(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseSprite), { 0u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/skin_texture"), 16u, 16u, 1.0f, Move(regions));
-        beginPaint(m_builder);
+    public PaintImageFixture(){
+        ConfigurePaintFixtureSkin(this.m_skin, AssetRef<Texture>("tests/ui/skin_texture"));
+        this.beginPaint(this.m_builder);
     }
-
-
-public:
-    void beginPaint(PaintBuilder& builder, u64 generation = 1u);
-    [[nodiscard]] Expected<SharedGlyphPage> makeGlyph(const u64 atlasIdentity = 11u, const u64 generation = 1u){
-        return UiPaintTextTests::MakeTestGlyphPage(m_arena, atlasIdentity, generation);
-    }
-    [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdf(const u64 atlasIdentity = 22u){
-        return UiPaintTextTests::MakeTestSdfAtlasPage(m_arena, atlasIdentity);
-    }
-    [[nodiscard]] Expected<SharedImageSource> makeImage(const StringView path = s_DefaultImagePath, const u8 seed = 37u, const u32 width = 8u, const u32 height = 4u){
+    public void beginPaint(mut PaintBuilder builder){ this.beginPaint(builder, 1u); }
+    public void beginPaint(mut PaintBuilder builder, in u64 generation){ BeginPaintImageFixture(this, builder, generation); }
+    public Expected<SharedGlyphPage> makeGlyph(in u64 identity, in u64 generation){ return MakeTestGlyphPage(this.pool, identity, generation, 0u); }
+    public Expected<SharedSdfAtlasPage> makeSdf(in u64 identity){ return MakeTestSdfAtlasPage(this.pool, identity, 1u, 0u, 255u); }
+    public Expected<SharedImageSource> makeImage(in StringView path, in u8 seed, in u32 width, in u32 height){
         if(path.empty() || width == 0u || height == 0u)
-            return MakeUnexpected(Failure{});
-        return UiFixtureSupport::MakeSeededImage(path, seed, width, height, m_arena);
+            return MakeUnexpected(Failure());
+        return MakeSeededImage(path, seed, width, height, this.pool);
     }
+    public Expected<SharedGlyphPage> makeGlyph(){ return this.makeGlyph(s_DefaultAtlasIdentity); }
+    public Expected<SharedGlyphPage> makeGlyph(in u64 identity){ return this.makeGlyph(identity, 1u); }
+    public Expected<SharedSdfAtlasPage> makeSdf(){ return this.makeSdf(22u); }
+    public Expected<SharedImageSource> makeImage(){ return this.makeImage(s_DefaultImagePath); }
+    public Expected<SharedImageSource> makeImage(in StringView path){ return this.makeImage(path, 37u); }
+    public Expected<SharedImageSource> makeImage(in StringView path, in u8 seed){ return this.makeImage(path, seed, 8u); }
+    public Expected<SharedImageSource> makeImage(in StringView path, in u8 seed, in u32 width){ return this.makeImage(path, seed, width, 4u); }
+}
 
+[extensible]
+class TextVisibleFixture{
+    public Font m_latin = Font(Name("tests/ui/fonts/latin"));
+    public Font m_korean = Font(Name("tests/ui/fonts/korean"));
+    public TextService m_text;
+    public TextLayout m_layout;
+    public UiSkin m_skin = UiSkin(Name("tests/ui/skin"));
+    public PaintBuilder m_paint;
+    public SharedPool pool = SharedPool();
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    UiSkin m_skin;
-    PaintBuilder m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiTextVisibleTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-using UiPaintAssertions::ExpectSamePaint;
-
-using UiWidgetTests::s_TestKoreanFontPath;
-using UiWidgetTests::s_TestLatinFontPath;
-using UiWidgetTests::s_TestSkinPath;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TextVisibleFixture : public testing::Test{
-public:
-    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, Point origin)noexcept;
-    template<typename Error>
-    [[nodiscard]] static b8 AdoptLayoutInto(Expected<TextLayout, Error>& result, TextLayout& out)noexcept{
-        if(!result)
+    public void setup(){
+        ASSERT_TRUE(this.loadFont("latin.font", this.m_latin));
+        ASSERT_TRUE(this.loadFont("korean.font", this.m_korean));
+        ASSERT_TRUE(this.installCoverageFonts());
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Vector<UiSkinRegion>());
+    }
+    public b8 loadFont(in StringView filename, mut Font font){ return LoadBundledFixtureFont(filename, font); }
+    public b8 installCoverageFonts(){
+        const Array<FontSource, 2u> sources(FontSource(MakeUiFontAssetRef(s_TestLatinFontPath), this.m_latin, 1u), FontSource(MakeUiFontAssetRef(s_TestKoreanFontPath), this.m_korean, 1u));
+        return this.m_text.setFonts(sources);
+    }
+    public b8 adoptLayout<TError>(mut Expected<TextLayout, TError> result){
+        if(!result.has_value())
             return false;
-        out = Move(*result);
+        TestMoveAssign<TextLayout>(this.m_layout, result.value());
         return true;
     }
-
-
-public:
-    TextVisibleFixture()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisible))
-        , m_latin(m_arena, Name(s_TestLatinFontPath))
-        , m_korean(m_arena, Name(s_TestKoreanFontPath))
-        , m_text(m_arena)
-        , m_layout(m_arena)
-        , m_skin(m_arena, Name(s_TestSkinPath))
-        , m_paint(m_arena)
-    {}
-
-
-public:
-    virtual void SetUp()override{
-        ASSERT_TRUE(loadFont("latin.font", m_latin));
-        ASSERT_TRUE(loadFont("korean.font", m_korean));
-        ASSERT_TRUE(installCoverageFonts());
-        UiSkin::RegionVector regions(m_arena);
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
+    public b8 applyLayout(in ShapeRequest request){
+        auto result = this.m_text.layout(request);
+        return this.adoptLayout(result);
     }
-    [[nodiscard]] b8 loadFont(const StringView filename, Font& font){
-        return UiWidgetTests::LoadBundledFixtureFont(m_arena, filename, font);
-    }
-    [[nodiscard]] b8 installCoverageFonts(){
-        const Array<FontSource, 2u> sources = {
-            FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u },
-            FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), m_korean, 1u },
-        };
-        return m_text.setFonts(sources);
-    }
-    template<typename Error>
-    [[nodiscard]] b8 adoptLayout(Expected<TextLayout, Error>& result)noexcept{
-        return AdoptLayoutInto(result, m_layout);
-    }
-    [[nodiscard]] b8 applyLayout(const ShapeRequest& request){
-        auto result = m_text.layout(request);
-        return adoptLayout(result);
-    }
-    void beginPaint(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
-    [[nodiscard]] Expected<SharedGlyphPage> makePage(const u64 atlasIdentity){
-        GlyphPagePixels pixels(m_arena);
+    public void beginPaint(in u64 generation){ this.beginPaint(generation, DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)); }
+    public void beginPaint(in u64 generation, in DisplayMetrics display){ BeginTextVisibleFixturePaint(this, generation, display); }
+    public Expected<SharedGlyphPage> makePage(in u64 identity){
+        GlyphPagePixels pixels;
         pixels.resize(64u, 128u);
-        const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/independent_font"), .fontGeneration = 1u, .atlasIdentity = atlasIdentity, .generation = 1u, .index = 0u, .width = 8u, .height = 8u };
-        return CreateGlyphPage(::NWB::Core::Alloc::SharedPool(m_arena), binding, pixels);
+        GlyphPageBinding binding;
+        binding.font = AssetRef<Font>("tests/ui/independent_font");
+        binding.fontGeneration = 1u;
+        binding.atlasIdentity = identity;
+        binding.generation = 1u;
+        binding.width = 8u;
+        binding.height = 8u;
+        return CreateGlyphPage(this.pool, binding, pixels);
     }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Font m_latin;
-    Font m_korean;
-    TextService m_text;
-    TextLayout m_layout;
-    UiSkin m_skin;
-    PaintBuilder m_paint;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-namespace __hidden_ui_glyph_sdf_tests{
-using PaintImageFixture = ::NWB::UiPaintImageTests::PaintImageFixture;
-using PaintTextFixture = ::NWB::UiPaintTextTests::PaintTextFixture;
-using TextVisibleFixture = ::NWB::UiTextVisibleTests::TextVisibleFixture;
-using ::NWB::UiPaintTextTests::s_PaintTextSkinPath;
-
-void ExpectClippedPaintTextQuad(const DrawSnapshot& snapshot)noexcept;
-Rect ComputePlacedGlyphOutlineRect(const PlacedGlyph& glyph, const Point& origin)noexcept;
-void ExpectUiSameImagePaintSnapshots(const DrawSnapshot& actual, const DrawSnapshot& expected)noexcept;
-void BeginPaintImageFixture(const PaintImageFixture& self, PaintBuilder& builder, u64 generation)noexcept;
-void BeginPaintTextFixture(PaintTextFixture& self, u64 generation)noexcept;
-void BeginTextVisibleFixturePaint(TextVisibleFixture& self, u64 generation, const DisplayMetrics& display)noexcept;
-};
-
-NWB_BEGIN
-namespace UiPaintImageTests{
-FOUNDATION_INLINE void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiSameImagePaintSnapshots(actual, expected);
 }
-FOUNDATION_INLINE void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation){
-    ::__hidden_ui_glyph_sdf_tests::BeginPaintImageFixture(*this, builder, generation);
-}
-};
-namespace UiPaintTextTests{
-FOUNDATION_INLINE void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
-    ::__hidden_ui_glyph_sdf_tests::ExpectClippedPaintTextQuad(snapshot);
-}
-FOUNDATION_INLINE void PaintTextFixture::begin(const u64 generation){
-    ::__hidden_ui_glyph_sdf_tests::BeginPaintTextFixture(*this, generation);
-}
-};
-namespace UiTextVisibleTests{
-FOUNDATION_INLINE Rect TextVisibleFixture::OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::ComputePlacedGlyphOutlineRect(glyph, origin);
-}
-FOUNDATION_INLINE void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& display){
-    ::__hidden_ui_glyph_sdf_tests::BeginTextVisibleFixturePaint(*this, generation, display);
-}
-};
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void ExpectClippedPaintTextQuad(in DrawSnapshot snapshot){

@@ -82,6 +82,18 @@ public:
             return Optional<GpuSubmissionPacket>();
         return Optional<GpuSubmissionPacket>(*plan);
     }
+    [[nodiscard]] b8 hasTasks()const noexcept{ return tasks != nullptr; }
+    [[nodiscard]] Span<const GpuTaskId> tasksSpan()const noexcept{
+        return plan && tasks ? Span<const GpuTaskId>(tasks, plan->taskCount) : Span<const GpuTaskId>();
+    }
+    [[nodiscard]] b8 hasDependencies()const noexcept{ return dependencies != nullptr; }
+    [[nodiscard]] Span<const GpuPacketDependency> dependenciesSpan()const noexcept{
+        return plan && dependencies ? Span<const GpuPacketDependency>(dependencies, plan->dependencyCount) : Span<const GpuPacketDependency>();
+    }
+    [[nodiscard]] b8 hasExternalDependencies()const noexcept{ return externalDependencies != nullptr; }
+    [[nodiscard]] Span<const GpuExternalCompletionId> externalDependenciesSpan()const noexcept{
+        return plan && externalDependencies ? Span<const GpuExternalCompletionId>(externalDependencies, plan->externalDependencyCount) : Span<const GpuExternalCompletionId>();
+    }
 };
 
 // Explains each compiler packetization decision without exposing mutable compiler internals.
@@ -137,6 +149,21 @@ public:
     }
 
     [[nodiscard]] b8 recordsNonCommittingTimingSample()const noexcept{ return plan && plan->recordsNonCommittingTimingSample; }
+    [[nodiscard]] b8 hasPrologueStateSeeds()const noexcept{ return prologueStateSeeds != nullptr; }
+    [[nodiscard]] Span<const GpuPacketStateSeed> prologueStateSeedsSpan()const noexcept{
+        return plan && prologueStateSeeds ? Span<const GpuPacketStateSeed>(prologueStateSeeds, plan->prologueStateSeedCount) : Span<const GpuPacketStateSeed>();
+    }
+    [[nodiscard]] b8 hasPrologueBarriers()const noexcept{ return prologueBarriers != nullptr; }
+    [[nodiscard]] Span<const GpuCompiledBarrier> prologueBarriersSpan()const noexcept{
+        return plan && prologueBarriers ? Span<const GpuCompiledBarrier>(prologueBarriers, plan->prologueBarrierCount) : Span<const GpuCompiledBarrier>();
+    }
+    [[nodiscard]] b8 hasEpilogueBarriers()const noexcept{ return epilogueBarriers != nullptr; }
+    [[nodiscard]] Span<const GpuCompiledBarrier> epilogueBarriersSpan()const noexcept{
+        return plan && epilogueBarriers ? Span<const GpuCompiledBarrier>(epilogueBarriers, plan->epilogueBarrierCount) : Span<const GpuCompiledBarrier>();
+    }
+    [[nodiscard]] Optional<GpuCompiledTask> taskPlan()const noexcept{
+        return plan ? Optional<GpuCompiledTask>(*plan) : Optional<GpuCompiledTask>();
+    }
 };
 
 // One terminal declared range that contributes to an explicit graph-to-external release.
@@ -172,6 +199,13 @@ struct GpuCompiledExternalResourceExportView{
 public:
     [[nodiscard]] b8 valid()const noexcept{
         return plan && plan->sourceCount != 0u && sources;
+    }
+    [[nodiscard]] b8 hasSources()const noexcept{ return sources != nullptr; }
+    [[nodiscard]] Span<const GpuCompiledExternalResourceExportSource> sourcesSpan()const noexcept{
+        return plan && sources ? Span<const GpuCompiledExternalResourceExportSource>(sources, plan->sourceCount) : Span<const GpuCompiledExternalResourceExportSource>();
+    }
+    [[nodiscard]] Optional<GpuCompiledExternalResourceExport> exportPlan()const noexcept{
+        return plan ? Optional<GpuCompiledExternalResourceExport>(*plan) : Optional<GpuCompiledExternalResourceExport>();
     }
 };
 

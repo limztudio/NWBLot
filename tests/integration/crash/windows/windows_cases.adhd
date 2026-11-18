@@ -1,0 +1,280 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../suite.adhd"
+#include "windows_sdk.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+b8 TryInvalidCrashConfiguration(in Path spool, in usize index, in StringView url, in StringView segment, in StringView embedded){
+    PersistentStorage storage(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    TestValueSlot<PersistentCrashConfig> slot;
+    mut PersistentCrashConfig config = slot.constructIn(storage);
+    config.applicationName = s_CrashTests;
+    config.spoolDirectory = spool;
+    if(index == 0u)
+        config.logServerUrl = url;
+    else if(index == 1u){
+        for(u32 part = 0u; part < 12u; ++part)
+            config.spoolDirectory = config.spoolDirectory / segment;
+    }
+    else if(index == 2u)
+        config.applicationName = embedded;
+    else if(index == 3u)
+        config.spoolDirectory = config.spoolDirectory / embedded;
+    else
+        config.handlerExecutablePath = embedded;
+    return InstallCrashHandler(config);
+}
+
+void VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool(){
+    const Array<StringView, 5u> prefixes("crash_install_text_", "crash_install_path_", "crash_install_nul_", "crash_install_path_nul_", "crash_install_handler_nul_");
+    const String longUrl(s_CrashMaxUrlText, 117);
+    const String segment(96u, 112);
+    for(usize index = 0u; index < prefixes.size(); ++index){
+        const String group = FormatProcessGroup(prefixes[index]);
+        const Path root = TestCaseDirectory(group);
+        ExpectIsDirectory(root, false);
+        const b8 installed = TryInvalidCrashConfiguration(SpoolDirectory(group), index, StringView(longUrl), StringView(segment), StringView("a\0b", 3u));
+        if(installed)
+            UninstallCrashHandler();
+        EXPECT_FALSE(installed);
+        ExpectIsDirectory(root, false);
+    }
+}
+
+b8 BlockNextPackage(in StringView group){
+    const u64 sequence = TestCrashState().crashSequence.load(MemoryOrder::relaxed);
+    const String id = TestCrashId(CurrentProcessId(), sequence);
+    return WriteTextFile(PackageDirectory(group, s_PendingBucket, id), "block package directory");
+}
+
+b8 InstallWindowsTestHandler(in Path spool, in StringView build, in StringView version){
+    PersistentStorage storage(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    TestValueSlot<PersistentCrashConfig> slot;
+    mut PersistentCrashConfig config = slot.constructIn(storage);
+    config.applicationName = s_CrashTests;
+    config.version = version;
+    config.buildId = build;
+    config.spoolDirectory = spool;
+    return InstallCrashHandler(config);
+}
+
+void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
+    const String group = FormatProcessGroup("crash_attachment_admission_");
+    ExpectIsDirectory(TestCaseDirectory(group), false);
+    ASSERT_TRUE(InstallWindowsTestHandler(SpoolDirectory(group), "", ""));
+    CrashHandlerCleanup cleanup;
+    const CrashDumpResult noKind = CaptureGpuCrashDump("report", "binary", CrashGpuCrashDumpKind::None);
+    EXPECT_EQ(noKind.status, CrashDumpStatus::RequestFailed);
+    EXPECT_FALSE(noKind.requestAccepted());
+    const CrashDumpResult invalidKind = CaptureGpuCrashDump("report", "binary", cast<CrashGpuCrashDumpKind>(255u));
+    EXPECT_EQ(invalidKind.status, CrashDumpStatus::RequestFailed);
+    EXPECT_FALSE(invalidKind.requestAccepted());
+    const Array<CrashGpuCrashDumpKind, 2u> kinds(CrashGpuCrashDumpKind::Aftermath, CrashGpuCrashDumpKind::RadeonGpuDetective);
+    const Array<StringView, 2u> names(s_AftermathGpuDumpFileName, s_GpuDetectiveCaptureFileName);
+    const Array<u8, 4u> binary(0x61u, 0x00u, 0x62u, 0xffu);
+    const StringView payload = StringView("a\0b\xff", 4u);
+    for(usize index = 0u; index < kinds.size(); ++index){
+        const u64 sequence = TestCrashState().crashSequence.load(MemoryOrder::relaxed);
+        const String id = TestCrashId(CurrentProcessId(), sequence);
+        ASSERT_TRUE(CaptureGpuCrashDump("report", payload, kinds[index]).packageWritten());
+        Vector<u8> data;
+        ASSERT_TRUE(ReadBinaryFile(PackageDirectory(group, s_PendingBucket, id) / names[index], data).has_value());
+        ASSERT_EQ(data.size(), binary.size());
+        for(usize byte = 0u; byte < binary.size(); ++byte)
+            EXPECT_EQ(data[byte], binary[byte]);
+    }
+    ASSERT_TRUE(SetCrashUploadDestination("http://localhost", "token"));
+    const String longUrl(s_CrashMaxUrlText, 117);
+    const String longToken(s_CrashMaxMediumText, 116);
+    ASSERT_TRUE(SetCrashUploadDestination(StringView(longUrl).substr(0u, longUrl.size() - 1u), StringView(longToken).substr(0u, longToken.size() - 1u)));
+    ASSERT_TRUE(SetCrashUploadDestination("http://localhost", "token"));
+    EXPECT_FALSE(SetCrashUploadDestination(StringView(longUrl), "new"));
+    EXPECT_FALSE(SetCrashUploadDestination("new", StringView(longToken)));
+    EXPECT_FALSE(SetCrashUploadDestination(StringView("a\0b", 3u), "new"));
+    const CrashRequest snapshot = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, CrashRequestOptions());
+    EXPECT_EQ(CrashText(snapshot.logServerUrl), "http://localhost");
+    EXPECT_EQ(CrashText(snapshot.crashUploadToken), "token");
+    ASSERT_TRUE(BlockNextPackage(group));
+    const CrashDumpResult attachmentFailure = CaptureGpuCrashDump("gpu report", "", CrashGpuCrashDumpKind::None);
+    EXPECT_EQ(attachmentFailure.status, CrashDumpStatus::AttachmentWriteFailed);
+    EXPECT_FALSE(attachmentFailure.requestAccepted());
+    ASSERT_TRUE(BlockNextPackage(group));
+    const CrashDumpResult handlerFailure = CaptureCrashDump("manual", "blocked handler package");
+    EXPECT_EQ(handlerFailure.status, CrashDumpStatus::PackageWriteFailed);
+    EXPECT_TRUE(handlerFailure.requestAccepted());
+}
+
+void ReportFatalDiagnostic(in StringView category, in StringView message){
+    DiagnosticEventRecord event;
+    event.event = s_DiagnosticEventFatal;
+    event.category = category;
+    event.message = message;
+    event.terminatesProcess = true;
+    CaptureDiagnosticEvent(event);
+}
+
+void VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued(){
+    const String group = FormatProcessGroup("crash_manual_contention_");
+    ExpectIsDirectory(TestCaseDirectory(group), false);
+    ASSERT_TRUE(InstallWindowsTestHandler(SpoolDirectory(group), "", ""));
+    CrashHandlerCleanup cleanup;
+    const WinThread handle = HandlerThread();
+    ASSERT_TRUE(WinIsValid(handle));
+    SuspendedThread suspended(handle);
+    ASSERT_EQ(suspended.previous(), 0u);
+    CrashDumpResult first;
+    TestThread writer(lambda[mut first]() -> void{
+        first = CaptureCrashDump("first", "held in transport");
+    });
+    in CrashRuntimeState state = TestCrashState();
+    for(u32 attempt = 0u; attempt < 2000u && state.transportInFlight.load(MemoryOrder::acquire) == 0u; ++attempt)
+        SleepMS(1u);
+    const b8 active = state.transportInFlight.load(MemoryOrder::acquire) != 0u;
+    CrashDumpResult second;
+    const u32 suppressedBefore = state.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+    if(active){
+        second = CaptureCrashDump("second", "transport already owned");
+        ReportFatalDiagnostic("contention", "not sent");
+    }
+    const u32 suppressedWhileBusy = state.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+    const u32 resumed = suspended.resume();
+    writer.join();
+    ASSERT_NE(resumed, 0xffffffffu);
+    ASSERT_TRUE(active);
+    EXPECT_TRUE(first.packageWritten());
+    EXPECT_EQ(second.status, CrashDumpStatus::RequestFailed);
+    EXPECT_FALSE(second.requestAccepted());
+    ReportFatalDiagnostic("available", "sent");
+    const u32 suppressedAfter = state.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+    EXPECT_EQ(suppressedWhileBusy, suppressedBefore);
+    EXPECT_EQ(suppressedAfter, suppressedBefore + 1u);
+    EXPECT_TRUE(ConsumeSuppressedCapture());
+}
+
+void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceStorageExpires(){
+    const StringView group = "crash_manual_owned_context_test";
+    RemoveTestArtifacts(group);
+    const Path spool = SpoolDirectory(group);
+    String id;
+    {
+        ASSERT_TRUE(InstallWindowsTestHandler(spool, "", ""));
+        CrashHandlerCleanup cleanup;
+        CrashRequest request;
+        u32 capturedFlags = 0u;
+        u64 capturedIp = 0u;
+        {
+            ManualContext source;
+            CrashRequestOptions options;
+            CaptureManualContext(options, source);
+            capturedFlags = SourceContext(source).ContextFlags & ~s_WindowsExtendedContextFlag;
+            capturedIp = options.instructionPointer;
+            CrashRequest original = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, options);
+            request = original;
+            original = CrashRequest();
+            SourceContext(source) = WinContext();
+            SourceException(source) = WinRecord();
+            SourcePointers(source) = WinPointers();
+        }
+        ASSERT_TRUE(IsCurrentCrashRequest(request));
+        EXPECT_EQ(request.exceptionPointers, 0u);
+        EXPECT_EQ(RequestContext(request).ContextFlags, capturedFlags);
+        EXPECT_NE(capturedFlags, 0u);
+        ManualContext handlerStorage(request);
+        EXPECT_EQ(PointerAddress(SourcePointers(handlerStorage).ContextRecord), TestValueAddress(SourceContext(handlerStorage)));
+        EXPECT_EQ(PointerAddress(SourcePointers(handlerStorage).ExceptionRecord), TestValueAddress(SourceException(handlerStorage)));
+        EXPECT_EQ(PointerAddress(SourceException(handlerStorage).ExceptionRecord), 0u);
+        EXPECT_EQ(PointerAddress(SourceException(handlerStorage).ExceptionAddress), capturedIp);
+        const WinThread handle = HandlerThread();
+        ASSERT_TRUE(WinIsValid(handle));
+        SuspendedThread suspended(handle);
+        ASSERT_EQ(suspended.previous(), 0u);
+        EXPECT_EQ(RequestHandler(request, 1u), WinTransportStatus::TimedOut);
+        ASSERT_NE(suspended.resume(), 0xffffffffu);
+        ASSERT_EQ(WaitForHandled(s_ManualCrashDumpWaitMilliseconds), s_WinWaitSignaled);
+        id = CrashText(request.crashId);
+        Vector<u8> dump;
+        ASSERT_TRUE(ReadBinaryFile(spool / s_PendingBucket / StringView(id) / s_ProcessDumpFileName, dump).has_value());
+        Span<u8> bytes(dump);
+        const WinDumpStream stream = ReadDumpStream(dump, s_WinExceptionStream);
+        ASSERT_TRUE(stream.found);
+        ASSERT_NE(stream.address, 0u);
+        ASSERT_GE(stream.size, size_of<WinDumpException>());
+        const usize begin = TestDataAddress(dump);
+        ASSERT_GE(stream.address, begin);
+        usize cursor = stream.address - begin;
+        ASSERT_LE(cursor, dump.size());
+        ASSERT_LE(size_of<WinDumpException>(), dump.size() - cursor);
+        const auto exception = ReadPOD<WinDumpException>(bytes, cursor);
+        ASSERT_TRUE(exception.has_value());
+        EXPECT_EQ(exception.value().ThreadId, request.threadId);
+        EXPECT_EQ(exception.value().ExceptionRecord.ExceptionCode, s_ManualDumpExceptionCode);
+        EXPECT_EQ(exception.value().ExceptionRecord.ExceptionAddress, capturedIp);
+        ASSERT_GE(exception.value().ThreadContext.DataSize, size_of<WinContext>());
+        cursor = exception.value().ThreadContext.Rva;
+        ASSERT_LE(cast<u64>(cursor) + size_of<WinContext>(), dump.size());
+        const auto context = ReadPOD<WinContext>(bytes, cursor);
+        ASSERT_TRUE(context.has_value());
+        EXPECT_EQ(ProgramCounter(context.value()), capturedIp);
+        EXPECT_TRUE(CaptureCrashDump("after_timeout", "handler remains reusable").packageWritten());
+    }
+    const Path directory = PackageDirectory(group, s_PendingBucket, id);
+    EXPECT_TRUE(TextFileContains(directory / "symbolication.txt", "minidump captured;"));
+    EXPECT_TRUE(TextFileContains(directory / s_ManifestFileName, "\"has_exception_context\": true"));
+    RemoveTestArtifacts(group);
+}
+
+void VerifyCrash_ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLinkedRecords(){
+    ManualContext storage;
+    CrashRequestOptions options;
+    CaptureManualContext(options, storage);
+    CrashRequest request = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, options);
+    ASSERT_TRUE(IsCurrentCrashRequest(request));
+    const u32 version = request.version;
+    request.version = 1u;
+    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    request.version = version + 1u;
+    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    request.version = version;
+    --request.manualContextSize;
+    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    request.manualContextSize = size_of<WinContext>();
+    request.manualContextArchitecture ^= 0x00010000u;
+    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    request.manualContextArchitecture = s_WindowsContextArchitecture;
+    LinkException(RequestException(request), SourceException(storage));
+    EXPECT_FALSE(IsCurrentCrashRequest(request));
+    ClearExceptionLink(RequestException(request));
+    RequestContext(request).ContextFlags |= s_WindowsExtendedContextFlag;
+    EXPECT_FALSE(IsCurrentCrashRequest(request));
+}
+
+void VerifyCrash_DesktopHandlerDoesNotRetainUnrelatedInheritableHandles(){
+    const StringView group = "crash_handler_handle_inheritance_test";
+    RemoveTestArtifacts(group);
+    const Path directory = TestCaseDirectory(group);
+    ASSERT_TRUE(EnsureDirectories(directory).has_value());
+    const Path path = directory / "inheritable_handle_sentinel.tmp";
+    WinFile sentinel(path, s_WinRead | s_WinWrite, s_WinShareRead | s_WinShareWrite, true, s_WinCreateAlways, s_WinTemporary);
+    ASSERT_TRUE(sentinel.valid());
+    const b8 installed = InstallWindowsTestHandler(SpoolDirectory(group), "handle-inheritance-test", s_ApplicationVersion);
+    EXPECT_TRUE(sentinel.close());
+    EXPECT_TRUE(DeleteWinFile(path));
+    EXPECT_TRUE(installed);
+    if(installed)
+        UninstallCrashHandler();
+    RemoveTestArtifacts(group);
+}
+
+NWB_ADHD_GTEST(Crash, InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool, VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool)
+NWB_ADHD_GTEST(Crash, AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest, VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest)
+NWB_ADHD_GTEST(Crash, ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued, VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued)
+NWB_ADHD_GTEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceStorageExpires, VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceStorageExpires)
+NWB_ADHD_GTEST(Crash, ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLinkedRecords, VerifyCrash_ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLinkedRecords)
+NWB_ADHD_GTEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles, VerifyCrash_DesktopHandlerDoesNotRetainUnrelatedInheritableHandles)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

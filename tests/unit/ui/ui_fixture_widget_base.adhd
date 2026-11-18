@@ -9,166 +9,116 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <tests/common/font_fixture.adhd>
+#include <tests/common/value_storage.adhd>
+#include <tests/unit/ui/arithmetic_fixture_rows.adhd>
+#include <tests/unit/ui/name_cases.adhd>
+#include <tests/unit/ui/native_input.adhd>
+#include <impl/assets_texture/validation.adhd>
+#include <impl/ecs_ui/toolkit/text/harfbuzz_sdk.adhd>
 
+[cpp_header("<global/containers.h>"), cpp_name("NWB_TEST_FONT_DIRECTORY")]
+extern const StringView s_UiTestFontDirectory;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+const StringView s_TestSkinPath = "tests/ui/skin";
+const StringView s_TestLatinFontPath = "tests/ui/fonts/latin";
+const StringView s_TestKoreanFontPath = "tests/ui/fonts/korean";
+const StringView s_ParentPopupKey = "parent";
+const StringView s_ChildPopupKey = "child";
 
-
-#include <tests/common/font_fixture.adhd.h>
-#include <tests/unit/ui/arithmetic_fixture_rows.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
-
-#include <global/filesystem.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiFixtureSupport{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void PopulateBakedFontTables(Span<const u8> bytes, Core::Alloc::GlobalArena& arena, Impl::FontAtlasPayload& payload);
-[[nodiscard]] Expected<Impl::Ui::SharedImageSource> MakeSeededImage(StringView path, u8 seed, u32 width, u32 height, Core::Alloc::GlobalArena& arena);
-[[nodiscard]] FOUNDATION_INLINE const Core::Assets::AssetRef<Impl::Texture>& ImageSourceIdentity(const Impl::Ui::SharedImageSource& source)noexcept{ return source->identity(); }
-[[nodiscard]] FOUNDATION_INLINE u64 ImageSourceGeneration(const Impl::Ui::SharedImageSource& source)noexcept{ return source->generation(); }
-[[nodiscard]] FOUNDATION_INLINE const Impl::Texture& ImageSourceTexture(const Impl::Ui::SharedImageSource& source)noexcept{ return source->texture(); }
-[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::GlyphPageBinding& GlyphPageBindingOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->binding(); }
-[[nodiscard]] FOUNDATION_INLINE Span<const u8> GlyphPagePixelsOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->pixels(); }
-[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SdfAtlasPageBinding& SdfPageBindingOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->binding(); }
-[[nodiscard]] FOUNDATION_INLINE Span<const u8> SdfPagePixelsOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->pixels(); }
-[[nodiscard]] FOUNDATION_INLINE Name FontFaceIdentityName(const Impl::Ui::SharedFontFace& face)noexcept{ return face->identity().name(); }
-[[nodiscard]] FOUNDATION_INLINE u64 FontFaceGeneration(const Impl::Ui::SharedFontFace& face)noexcept{ return face->generation(); }
-[[nodiscard]] FOUNDATION_INLINE b8 FontFaceValid(const Impl::Ui::SharedFontFace& face)noexcept{ return face->valid(); }
-[[nodiscard]] FOUNDATION_INLINE b8 FontFaceCoverageInkReliable(const Impl::Ui::SharedFontFace& face)noexcept{ return face->coverageInkReliable(); }
-[[nodiscard]] FOUNDATION_INLINE b8 FontFaceHasBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return static_cast<b8>(face->bakedAtlas()); }
-[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SharedBakedFontAtlas& FontFaceBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas(); }
-[[nodiscard]] FOUNDATION_INLINE u32 FontFaceBakedUnitsPerEm(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas()->unitsPerEm(); }
-[[nodiscard]] FOUNDATION_INLINE Impl::FontAtlasGlyph FontFaceBakedGlyph(const Impl::Ui::SharedFontFace& face, const u32 glyphId)noexcept{ return face->bakedAtlas()->glyph(glyphId); }
-[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SharedSdfAtlasPage& FontFaceBakedPage(const Impl::Ui::SharedFontFace& face, const u32 group)noexcept{ return face->bakedAtlas()->page(group); }
-[[nodiscard]] FOUNDATION_INLINE b8 FontFaceRasterize(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize, Impl::Ui::GlyphBitmap& bitmap){ return face->rasterize(glyphId, pixelSize, bitmap); }
-[[nodiscard]] FOUNDATION_INLINE Expected<Impl::Ui::Rect> FontFaceRasterBounds(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize){ return face->rasterBounds(glyphId, pixelSize); }
-[[nodiscard]] FOUNDATION_INLINE b8 HasAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return atlas.find(face, glyphId, size).has_value(); }
-[[nodiscard]] FOUNDATION_INLINE usize AtlasGlyphSlotId(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{
-    const auto slot = atlas.find(face, glyphId, size);
-    return slot ? reinterpret_cast<usize>(slot->get()) : 0u;
-}
-[[nodiscard]] FOUNDATION_INLINE Expected<Impl::Ui::AtlasGlyph> TryFindAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{
-    const auto found = atlas.find(face, glyphId, size);
-    return found ? Expected<Impl::Ui::AtlasGlyph>(**found) : MakeUnexpected(Failure{});
+void PopulateBakedFontTables(in Span<u8> bytes, mut FontAtlasPayload payload){
+    HarfBuzzFont face;
+    ASSERT_TRUE(face.open(bytes, 0u));
+    payload.unitsPerEm = face.unitsPerEm();
+    payload.sourceGlyphCount = face.glyphCount();
+    const Array<u32, 3u> tags(s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag);
+    for(in u32 tag : tags){
+        const u32 size = face.tableLength(tag);
+        if(size == 0u)
+            continue;
+        FontAtlasPositioningTable table;
+        table.tag = tag;
+        table.bytes.resize(size);
+        ASSERT_TRUE(face.copyTable(tag, table.bytes));
+        table.sha256 = ComputeSha256(table.bytes);
+        payload.positioningTables.push_back(table);
+    }
 }
 
+Expected<SharedImageSource> MakeSeededImage(in StringView path, in u8 seed, in u32 width, in u32 height, in SharedPool pool){
+    const auto count = TryComputeCompleteTextureMipCount(cast<u8>(TexturePayloadDimension::Texture2D), width, height, 1u);
+    if(!count.has_value())
+        return MakeUnexpected(count.error());
+    Vector<TextureMipLevel> mips;
+    mips.reserve(count.value());
+    u32 mipWidth = width;
+    u32 mipHeight = height;
+    u64 offset = 0u;
+    for(u32 index = 0u; index < count.value(); ++index){
+        const auto plane = TryComputeTextureMipPlaneBlockLayout(cast<u8>(TexturePayloadFormat::UastcLdr4x4), mipWidth, mipHeight);
+        if(!plane.has_value())
+            return MakeUnexpected(plane.error());
+        TextureMipLevel mip;
+        mip.offsetBytes = offset;
+        mip.sizeBytes = plane.value().planeByteCount;
+        mip.width = mipWidth;
+        mip.height = mipHeight;
+        mip.blockCountX = plane.value().blocksX;
+        mip.blockCountY = plane.value().blocksY;
+        mip.sliceCount = 1u;
+        mips.push_back(mip);
+        offset += mip.sizeBytes;
+        mipWidth = NextTextureMipExtent(mipWidth);
+        mipHeight = NextTextureMipExtent(mipHeight);
+    }
+    if(offset > usize.max)
+        return MakeUnexpected(Failure());
+    Vector<u8> bytes;
+    bytes.resize(cast<usize>(offset));
+    for(usize index = 0u; index < bytes.size(); ++index)
+        bytes[index] = cast<u8>(cast<u32>(seed) + index * 17u);
+    const auto textureName = ParseName(path);
+    if(!textureName.has_value())
+        return MakeUnexpected(Failure());
+    Texture texture(textureName.value());
+    texture.setPayload(width, height, mips, bytes, TexturePayloadDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, s_OpaqueAlphaUnorm8);
+    return MakeImageSource(pool, texture);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+in AssetRef<Texture> ImageSourceIdentity(in SharedImageSource source){ return source.deref().identity(); }
+u64 ImageSourceGeneration(in SharedImageSource source){ return source.deref().generation(); }
+in Texture ImageSourceTexture(in SharedImageSource source){ return source.deref().texture(); }
+in GlyphPageBinding GlyphPageBindingOf(in SharedGlyphPage page){ return page.deref().binding(); }
+Span<u8> GlyphPagePixelsOf(in SharedGlyphPage page){ return page.deref().pixels(); }
+in SdfAtlasPageBinding SdfPageBindingOf(in SharedSdfAtlasPage page){ return page.deref().binding(); }
+Span<u8> SdfPagePixelsOf(in SharedSdfAtlasPage page){ return page.deref().pixels(); }
+Name FontFaceIdentityName(in SharedFontFace face){ return face.deref().identity().name(); }
+u64 FontFaceGeneration(in SharedFontFace face){ return face.deref().generation(); }
+b8 FontFaceValid(in SharedFontFace face){ return face.deref().valid(); }
+b8 FontFaceCoverageInkReliable(in SharedFontFace face){ return face.deref().coverageInkReliable(); }
+b8 FontFaceHasBakedAtlas(in SharedFontFace face){ return cast<b8>(face.deref().bakedAtlas()); }
+in SharedBakedFontAtlas FontFaceBakedAtlas(in SharedFontFace face){ return face.deref().bakedAtlas(); }
+u32 FontFaceBakedUnitsPerEm(in SharedFontFace face){ return face.deref().bakedAtlas().deref().unitsPerEm(); }
+FontAtlasGlyph FontFaceBakedGlyph(in SharedFontFace face, in u32 glyph){ return face.deref().bakedAtlas().deref().glyph(glyph); }
+in SharedSdfAtlasPage FontFaceBakedPage(in SharedFontFace face, in u32 group){ return face.deref().bakedAtlas().deref().page(group); }
+b8 FontFaceRasterize(in SharedFontFace face, in u32 glyph, in u32 size, mut GlyphBitmap bitmap){ return face.deref().rasterize(glyph, size, bitmap); }
+Expected<Rect> FontFaceRasterBounds(in SharedFontFace face, in u32 glyph, in u32 size){ return face.deref().rasterBounds(glyph, size); }
+b8 HasAtlasGlyph(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){ return atlas.find(face, glyph, size).has_value(); }
+usize AtlasGlyphSlotId(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){
+    const auto slot = atlas.find(face, glyph, size);
+    if(slot.has_value())
+        return TestValueAddress<AtlasGlyph>(slot.value());
+    return 0u;
+}
+Expected<AtlasGlyph> TryFindAtlasGlyph(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){
+    const auto slot = atlas.find(face, glyph, size);
+    if(slot.has_value())
+        return slot.value();
+    return MakeUnexpected(Failure());
+}
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPaintAssertions{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ExpectRect(const Impl::Ui::Rect& actual, const Impl::Ui::Rect& expected);
-// Callers validate snapshot sizes before comparing the common geometry fields.
-void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected);
-void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui::DrawCommand& expected);
-void ExpectSamePaint(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiTestSupport{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Assert valid widget IDs and return a fallback ID only after recording a test failure.
-[[nodiscard]] NWB::Impl::Ui::WidgetId RequireRootId(const NWB::Impl::Ui::WidgetRoot& root);
-[[nodiscard]] NWB::Impl::Ui::WidgetId RequireWidgetId(NWB::Impl::Ui::WidgetId parent, AStringView stableKey);
-[[nodiscard]] NWB::Impl::Ui::WidgetId RequireWidgetPartId(NWB::Impl::Ui::WidgetId parent, u64 partKey);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiWidgetTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-
-inline constexpr AStringView s_TestSkinPath = "tests/ui/skin";
-inline constexpr AStringView s_TestLatinFontPath = "tests/ui/fonts/latin";
-inline constexpr AStringView s_TestKoreanFontPath = "tests/ui/fonts/korean";
-
-[[nodiscard]] Point Center(const Rect& bounds)noexcept;
-void ExpectRectExact(const Rect& actual, const Rect& expected);
-void ExpectHitTargetIdentity(const HitTarget& actual, const HitTarget& expected);
-
-template<usize Capacity>
-using AcceptedInputState = ::__hidden_ui_glyph_sdf_tests::UiFixtureAcceptedInputState<Capacity>;
-
-template<usize Capacity, typename Input>
-[[nodiscard]] AcceptedInputState<Capacity> CaptureAcceptedInput(const Input& input)noexcept(
-    noexcept(DeclVal<usize&>() = input.targets().size())
-    && noexcept(DeclVal<usize&>() = input.popupCount())
-    && noexcept(DeclVal<u64&>() = input.layoutGeneration())
-    && noexcept(DeclVal<WidgetId&>() = input.focus())
-    && noexcept(DeclVal<WidgetId&>() = input.capture())
-    && noexcept(DeclVal<HitTarget&>() = input.targets()[DeclVal<usize&>()])
-){
-    AcceptedInputState<Capacity> saved;
+UiFixtureAcceptedInputState<Capacity> CaptureAcceptedInput<const usize Capacity>(in InputRouter input){
+    UiFixtureAcceptedInputState<Capacity> saved;
     saved.count = input.targets().size();
     saved.popupCount = input.popupCount();
     saved.layoutGeneration = input.layoutGeneration();
@@ -179,37 +129,28 @@ template<usize Capacity, typename Input>
     return saved;
 }
 
-template<typename Input>
-void ExpectAcceptedTargets(const Input& input, const Span<const HitTarget> targets, const usize count, const b8 checkOwnerDeclaration = false){
+void ExpectAcceptedTargets(in InputRouter input, in Span<HitTarget> targets, in usize count, in b8 checkOwnerDeclaration){
     ASSERT_EQ(input.targets().size(), count);
     ASSERT_LE(count, targets.size());
     for(usize index = 0u; index < count; ++index)
-        ::__hidden_ui_glyph_sdf_tests::ExpectUiAcceptedTarget(input.targets()[index], targets[index], checkOwnerDeclaration);
+        ExpectUiAcceptedTarget(input.targets()[index], targets[index], checkOwnerDeclaration);
 }
 
-template<usize Capacity, typename Input>
-void ExpectAcceptedInput(
-    const Input& input,
-    const AcceptedInputState<Capacity>& saved,
-    const b8 checkOwnerDeclaration = true,
-    const b8 checkFocus = false,
-    const b8 checkPopupCount = false,
-    const b8 checkCapture = true
-){
+void ExpectAcceptedInput<const usize Capacity>(in InputRouter input, in UiFixtureAcceptedInputState<Capacity> saved,
+    in b8 checkOwner, in b8 checkFocus, in b8 checkPopups, in b8 checkCapture){
     EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
-    if(checkPopupCount)
+    if(checkPopups)
         EXPECT_EQ(input.popupCount(), saved.popupCount);
     if(checkFocus)
         EXPECT_EQ(input.focus(), saved.focus);
     if(checkCapture)
         EXPECT_EQ(input.capture(), saved.capture);
-    ExpectAcceptedTargets(input, saved.targets, saved.count, checkOwnerDeclaration);
+    ExpectAcceptedTargets(input, saved.targets, saved.count, checkOwner);
 }
 
-template<typename VertexVector>
-void CopyGlyphVertices(const DrawSnapshot& snapshot, VertexVector& vertices){
+void CopyGlyphVertices(in DrawSnapshot snapshot, mut Vector<Vertex> vertices){
     vertices.reserve(snapshot.indices().size());
-    for(const DrawCommand& command : snapshot.commands()){
+    for(in DrawCommand command : snapshot.commands()){
         if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
             continue;
         for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index)
@@ -217,126 +158,136 @@ void CopyGlyphVertices(const DrawSnapshot& snapshot, VertexVector& vertices){
     }
 }
 
-inline constexpr AStringView s_ParentPopupKey = "parent";
-inline constexpr AStringView s_ChildPopupKey = "child";
-
-[[nodiscard]] PopupOptions NestedParentOptions()noexcept;
-[[nodiscard]] PopupOptions NestedChildOptions()noexcept;
-[[nodiscard]] PopupOptions LargeLoanParentOptions()noexcept;
-[[nodiscard]] PopupOptions LargeLoanChildOptions()noexcept;
-[[nodiscard]] NWB::Impl::Ui::ListOptions LargeLoanListOptions()noexcept;
-
-using SkinPaintSample = ::__hidden_ui_glyph_sdf_tests::UiFixtureSkinPaintSample;
-
-[[nodiscard]] b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, StringView filename, Font& font);
-[[nodiscard]] b8 InstallLatinFixtureFont(Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class WidgetFixture : public testing::Test{
-public:
-    [[nodiscard]] static ImageOptions Fixed(f32 width = 96.0f, f32 height = 40.0f)noexcept;
-
-
-public:
-    WidgetFixture();
-
-
-public:
-    virtual void SetUp()override;
-    void configureSkin(AStringView omitted = {});
-    [[nodiscard]] b8 begin(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
-    [[nodiscard]] b8 finishWindow(){ return m_builder.endWindow() && m_context.endRoot() && m_context.finishFrame(); }
-    [[nodiscard]] b8 panel(const u64 generation, const AStringView key = "panel", const Rect& bounds = { 10.0f, 10.0f, 360.0f, 400.0f }){ return begin(generation) && m_builder.beginPanel(key, bounds); }
-    [[nodiscard]] b8 finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
-    [[nodiscard]] b8 finishPanel(){ return m_builder.endPanel() && finishRoot(); }
-    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey); }
-    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(parentId(), s_ChildPopupKey); }
-    [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), parent), child); }
-    [[nodiscard]] const HitTarget* target(const WidgetId widget)const noexcept{ return UiTestSupport::FindHitTarget(m_context.input().targets(), widget); }
-    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{ return target(widget) != nullptr; }
-    [[nodiscard]] Expected<HitTarget> tryTarget(const WidgetId widget)const noexcept{
-        const HitTarget* found = target(widget);
-        return found ? Expected<HitTarget>(*found) : MakeUnexpected(Failure{});
-    }
-    void setEditHost(IEditBoxHost& host)noexcept{ m_builder.setEditHost(host); }
-    void clearEditHost()noexcept{ m_builder.clearEditHost(); }
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event);
-    void click(const Point& point);
-    void drag(const Point& origin, const Point& destination);
-    void press(Core::Key::Enum value, b8 repeat = false, b8 shift = false);
-    [[nodiscard]] Expected<SkinPaintSample> sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept;
-    [[nodiscard]] b8 installKoreanFallback();
-    [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, u32 slot)const noexcept;
-    template<usize Capacity>
-    void expectAccepted(const AcceptedInputState<Capacity>& saved)const{
-        ExpectAcceptedInput(m_context.input(), saved);
-    }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Font m_font;
-    TextService m_text;
-    UiSkin m_skin;
-    PaintBuilder m_paint;
-    Context m_context;
-    Builder m_builder;
-    WidgetRoot m_root{ 86u, 2u };
-    u64 m_skinGeneration = 1u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-namespace __hidden_ui_glyph_sdf_tests{
-using WidgetFixture = ::NWB::UiWidgetTests::WidgetFixture;
-using ::NWB::UiFixtureSupport::ImageSourceIdentity;
-using ::NWB::UiFixtureSupport::ImageSourceGeneration;
-using ::NWB::UiFixtureSupport::ImageSourceTexture;
-using ::NWB::UiFixtureSupport::GlyphPageBindingOf;
-using ::NWB::UiFixtureSupport::GlyphPagePixelsOf;
-using ::NWB::UiFixtureSupport::SdfPageBindingOf;
-using ::NWB::UiFixtureSupport::SdfPagePixelsOf;
-using ::NWB::UiFixtureSupport::FontFaceIdentityName;
-using ::NWB::UiFixtureSupport::FontFaceGeneration;
-using ::NWB::UiFixtureSupport::FontFaceValid;
-using ::NWB::UiFixtureSupport::FontFaceCoverageInkReliable;
-using ::NWB::UiFixtureSupport::FontFaceHasBakedAtlas;
-using ::NWB::UiFixtureSupport::FontFaceBakedAtlas;
-using ::NWB::UiFixtureSupport::FontFaceBakedUnitsPerEm;
-using ::NWB::UiFixtureSupport::FontFaceBakedGlyph;
-using ::NWB::UiFixtureSupport::FontFaceBakedPage;
-using ::NWB::UiFixtureSupport::FontFaceRasterize;
-using ::NWB::UiFixtureSupport::FontFaceRasterBounds;
-using ::NWB::UiFixtureSupport::HasAtlasGlyph;
-using ::NWB::UiFixtureSupport::AtlasGlyphSlotId;
-using ::NWB::UiFixtureSupport::TryFindAtlasGlyph;
-using ::NWB::UiWidgetTests::s_TestSkinPath;
-using ::NWB::UiWidgetTests::s_TestLatinFontPath;
-using ::NWB::UiWidgetTests::s_TestKoreanFontPath;
-using ::UiTestSupport::NativeInput;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 LoadBundledFixtureFont(in StringView filename, mut Font font){ return LoadBundledFont(font, Path(s_UiTestFontDirectory), filename); }
+b8 InstallLatinFixtureFont(mut Font font, mut TextService text){
+    if(!LoadBundledFixtureFont("latin.font", font))
+        return false;
+    const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(font.virtualPath()), font, 1u));
+    return text.setFonts(sources);
 }
 
+UiSkinInsets MakeFixtureSkinInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
+    UiSkinInsets result;
+    result.left = left;
+    result.top = top;
+    result.right = right;
+    result.bottom = bottom;
+    return result;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[ordered, extensible]
+class WidgetFixture{
+    public Font m_font = Font(Name("tests/ui/fonts/latin"));
+    public TextService m_text;
+    public SharedPool pool = SharedPool();
+    public UiSkin m_skin = UiSkin(Name("tests/ui/skin"));
+    public PaintBuilder m_paint;
+    public Context m_context;
+    public Builder m_builder;
+    public WidgetRoot m_root;
+    public u64 m_skinGeneration = 1u;
+
+    public WidgetFixture(){
+        this.m_builder = Builder(this.m_context, this.m_paint, this.m_text);
+        this.m_root.value = 86u;
+        this.m_root.generation = 2u;
+    }
+
+    public void setup(){ this.setUpWidgetBase(); }
+    public void setUpWidgetBase(){
+        ASSERT_TRUE(InstallLatinFixtureFont(this.m_font, this.m_text));
+        this.configureSkin();
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_builder.setSkin(this.m_skin);
+        this.m_builder.style().fontSize = 14.0f;
+    }
+
+    public void configureSkin(){ this.configureSkin(""); }
+    public void configureSkin(in StringView omitted){
+        Vector<UiSkinRegion> regions;
+        const Array<StringView, 11u> names("window.normal", "window.title", "window.collapse", "white", "separator", "panel.normal",
+            "button.normal", "button.hover", "button.pressed", "button.disabled", "focus.overlay");
+        for(u32 index = 0u; index < names.size(); ++index){
+            if(names[index] == omitted)
+                continue;
+            UiSkinRegion region;
+            const auto regionName = ParseName(names[index]);
+            ASSERT_TRUE(regionName.has_value());
+            region.name = regionName.value();
+            region.rectangle.x = index * 8u;
+            region.rectangle.width = 8u;
+            region.rectangle.height = 8u;
+            if(index == 0u || index == 5u)
+                region.padding = MakeFixtureSkinInsets(3.0f, 4.0f, 5.0f, 6.0f);
+            else if(index == 1u)
+                region.padding = MakeFixtureSkinInsets(5.0f, 6.0f, 7.0f, 8.0f);
+            else if(index == 4u){
+                region.minimumWidth = 2.0f;
+                region.minimumHeight = 3.0f;
+            }
+            else if(index >= 6u && index <= 9u){
+                region.padding = MakeFixtureSkinInsets(2.0f, 3.0f, 4.0f, 5.0f);
+                region.minimumWidth = 30.0f;
+                region.minimumHeight = 24.0f;
+            }
+            regions.push_back(region);
+        }
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, regions);
+    }
+
+    public b8 begin(in u64 generation){
+        DisplayMetrics display;
+        display.logicalWidth = 800.0f;
+        display.logicalHeight = 600.0f;
+        display.pixelScaleX = 1.0f;
+        display.pixelScaleY = 1.0f;
+        return this.begin(generation, display);
+    }
+    public b8 begin(in u64 generation, in DisplayMetrics display){ return BeginWidgetFixtureFrame(this, generation, display); }
+    public b8 finishWindow(){ return this.m_builder.endWindow() && this.m_context.endRoot() && this.m_context.finishFrame(); }
+    public b8 panel(in u64 generation){ return this.panel(generation, "panel"); }
+    public b8 panel(in u64 generation, in StringView key){ return this.panel(generation, key, Rect(10.0f, 10.0f, 360.0f, 400.0f)); }
+    public b8 panel(in u64 generation, in StringView key, in Rect bounds){ return this.begin(generation) && this.m_builder.beginPanel(key, bounds); }
+    public b8 finishRoot(){ return this.m_context.endRoot() && this.m_context.finishFrame(); }
+    public b8 finishPanel(){ return this.m_builder.endPanel() && this.finishRoot(); }
+    public WidgetId parentId()const{ return RequireUiWidgetId(RequireUiRootId(this.m_root), s_ParentPopupKey); }
+    public WidgetId childId()const{ return RequireUiWidgetId(this.parentId(), s_ChildPopupKey); }
+    public WidgetId id(in StringView child)const{ return this.id(child, "window"); }
+    public WidgetId id(in StringView child, in StringView parent)const{ return RequireUiWidgetId(RequireUiWidgetId(RequireUiRootId(this.m_root), parent), child); }
+    public Optional<in HitTarget> target(in WidgetId widget)const{ return FindHitTarget(this.m_context.input().targets(), widget); }
+    public b8 hasTarget(in WidgetId widget)const{ return this.target(widget).has_value(); }
+    public Expected<HitTarget> tryTarget(in WidgetId widget)const{
+        const auto found = this.target(widget);
+        if(found.has_value())
+            return found.value();
+        return MakeUnexpected(Failure());
+    }
+    public void setEditHost(mut IEditBoxHost host){ this.m_builder.setEditHost(host); }
+    public void clearEditHost(){ this.m_builder.clearEditHost(); }
+    public InputRoutingResult send(in InputEvent event){ return SendWidgetFixtureEvent(this, event); }
+    public void click(in Point point){ ClickWidgetFixturePoint(this, point); }
+    public void drag(in Point origin, in Point destination){ DragWidgetFixturePoints(this, origin, destination); }
+    public void press(in KeyEnum value){ this.press(value, false, false); }
+    public void press(in KeyEnum value, in b8 repeat){ this.press(value, repeat, false); }
+    public void press(in KeyEnum value, in b8 repeat, in b8 shift){ PressWidgetFixtureKey(this, value, repeat, shift); }
+    public Expected<UiFixtureSkinPaintSample> sampleSkinPaint(in DrawSnapshot snapshot, in Name name)const{
+        UiSkinRegion region;
+        if(!this.m_skin.tryFindRegion(name, region))
+            return MakeUnexpected(Failure());
+        return SampleUiSkinRegionPaint(region, this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), snapshot);
+    }
+    public b8 installKoreanFallback(){
+        Font korean(Name("tests/ui/fonts/korean"));
+        if(!LoadBundledFixtureFont("korean.font", korean))
+            return false;
+        const Array<FontSource, 2u> sources(FontSource(MakeUiFontAssetRef(s_TestLatinFontPath), this.m_font, 1u), FontSource(MakeUiFontAssetRef(s_TestKoreanFontPath), korean, 1u));
+        return this.m_text.setFonts(sources);
+    }
+    public Expected<Rect> skinQuad(in DrawSnapshot snapshot, in u32 slot)const{ return FindUiSkinSlotQuad(snapshot, slot); }
+    public void expectAccepted<const usize Capacity>(in UiFixtureAcceptedInputState<Capacity> saved)const{
+        ExpectAcceptedInput<Capacity>(this.m_context.input(), saved, true, false, false, true);
+    }
+}
 
 
 void ExpectUiSamePaintSnapshots(in DrawSnapshot actual, in DrawSnapshot expected){
@@ -436,363 +387,4 @@ void PressWidgetFixtureKey(mut WidgetFixture self, in KeyEnum value, in b8 repea
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/scope_exit.h>
-#include <global/sha256.h>
-
-#include <hb.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiFixtureSupport{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void PopulateBakedFontTables(const Span<const u8> bytes, Core::Alloc::GlobalArena& arena, FontAtlasPayload& payload){
-    hb_blob_t* const blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
-    ScopeExit releaseBlob([blob]()noexcept{ hb_blob_destroy(blob); });
-    hb_face_t* const face = hb_face_create(blob, 0u);
-    ScopeExit releaseFace([face]()noexcept{ hb_face_destroy(face); });
-    payload.unitsPerEm = hb_face_get_upem(face);
-    payload.sourceGlyphCount = hb_face_get_glyph_count(face);
-    const Array<u32, 3u> tags = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
-    for(const u32 tag : tags){
-        hb_blob_t* const tableBlob = hb_face_reference_table(face, tag);
-        ScopeExit releaseTable([tableBlob]()noexcept{ hb_blob_destroy(tableBlob); });
-        u32 size = 0u;
-        const char* data = hb_blob_get_data(tableBlob, &size);
-        if(size != 0u){
-            payload.positioningTables.emplace_back(arena);
-            FontAtlasPositioningTable& table = payload.positioningTables.back();
-            table.tag = tag;
-            table.bytes.assign(reinterpret_cast<const u8*>(data), reinterpret_cast<const u8*>(data) + size);
-            table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
-        }
-    }
-}
-
-Expected<SharedImageSource> MakeSeededImage(const StringView path, const u8 seed, const u32 width, const u32 height, Core::Alloc::GlobalArena& arena){
-    const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u);
-    if(!mipCount)
-        return MakeUnexpected(mipCount.error());
-    Texture::MipLevelVector mips(arena);
-    mips.reserve(*mipCount);
-    u32 mipWidth = width;
-    u32 mipHeight = height;
-    u64 offset = 0u;
-    for(u32 index = 0u; index < *mipCount; ++index){
-        const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight);
-        if(!plane)
-            return MakeUnexpected(plane.error());
-        mips.push_back({ offset, plane->planeByteCount, mipWidth, mipHeight, plane->blocksX, plane->blocksY, 1u });
-        offset += plane->planeByteCount;
-        mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
-        mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
-    }
-    if(offset > Limit<usize>::s_Max)
-        return MakeUnexpected(Failure{});
-    Core::Assets::AssetBytes bytes(arena);
-    bytes.resize(static_cast<usize>(offset));
-    for(usize index = 0u; index < bytes.size(); ++index)
-        bytes[index] = static_cast<u8>(static_cast<u32>(seed) + index * 17u);
-    const auto textureName = Name::FromText(path);
-    if(!textureName)
-        return MakeUnexpected(Failure{});
-    Texture texture(arena, *textureName);
-    texture.setPayload(width, height, Move(mips), Move(bytes), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
-    return MakeImageSource(Core::Alloc::SharedPool(arena), texture);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPaintAssertions{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ExpectRect(const Impl::Ui::Rect& actual, const Impl::Ui::Rect& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiRect(actual, expected);
-}
-
-void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiSameVertices(actual, expected);
-}
-
-void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui::DrawCommand& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiDrawCommandFields(actual, expected);
-}
-
-void ExpectSamePaint(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiSamePaintSnapshots(actual, expected);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiTestSupport{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::Impl::Ui::WidgetId RequireRootId(const NWB::Impl::Ui::WidgetRoot& root){
-    return ::__hidden_ui_glyph_sdf_tests::RequireUiRootId(root);
-}
-
-NWB::Impl::Ui::WidgetId RequireWidgetId(const NWB::Impl::Ui::WidgetId parent, const AStringView stableKey){
-    return ::__hidden_ui_glyph_sdf_tests::RequireUiWidgetId(parent, stableKey);
-}
-
-NWB::Impl::Ui::WidgetId RequireWidgetPartId(const NWB::Impl::Ui::WidgetId parent, const u64 partKey){
-    return ::__hidden_ui_glyph_sdf_tests::RequireUiWidgetPartId(parent, partKey);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiWidgetTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Point Center(const Rect& bounds)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::CenterUiRect(bounds);
-}
-
-void ExpectRectExact(const Rect& actual, const Rect& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiRectExact(actual, expected);
-}
-
-void ExpectHitTargetIdentity(const HitTarget& actual, const HitTarget& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiHitTargetIdentity(actual, expected);
-}
-
-PopupOptions NestedParentOptions()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeNestedParentPopupOptions();
-}
-
-PopupOptions NestedChildOptions()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeNestedChildPopupOptions();
-}
-
-PopupOptions LargeLoanParentOptions()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeLargeLoanParentPopupOptions();
-}
-
-PopupOptions LargeLoanChildOptions()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeLargeLoanChildPopupOptions();
-}
-
-NWB::Impl::Ui::ListOptions LargeLoanListOptions()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeLargeLoanListOptions();
-}
-
-b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, const StringView filename, Font& font){
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, NWB_TEST_FONT_DIRECTORY) / filename;
-    Core::Assets::AssetBytes bytes(arena);
-    auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-    if(!bytesResult)
-        return false;
-    bytes = Move(*bytesResult);
-    font.setFontBytes(Move(bytes));
-    return font.validatePayload();
-}
-
-b8 InstallLatinFixtureFont(Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
-    if(!LoadBundledFixtureFont(arena, "latin.font", font))
-        return false;
-    const FontSource source{ Core::Assets::AssetRef<Font>(font.virtualPath()), font, 1u };
-    return text.setFonts(Span(&source, 1u));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ImageOptions WidgetFixture::Fixed(const f32 width, const f32 height)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeFixedImageFixtureOptions(width, height);
-}
-
-WidgetFixture::WidgetFixture()
-    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgets))
-    , m_font(m_arena, Name(s_TestLatinFontPath))
-    , m_text(m_arena)
-    , m_skin(m_arena, Name(s_TestSkinPath))
-    , m_paint(m_arena)
-    , m_context(m_arena)
-    , m_builder(m_arena, m_context, m_paint, m_text)
-{}
-
-void WidgetFixture::SetUp(){
-    ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
-    configureSkin();
-    ASSERT_TRUE(m_skin.validatePayload());
-    m_builder.setSkin(m_skin);
-    // The synthetic skin's icon minimum determines title height independently of font line metrics.
-    m_builder.style().fontSize = 14.0f;
-}
-
-void WidgetFixture::configureSkin(const AStringView omitted){
-    UiSkin::RegionVector regions(m_arena);
-    constexpr Array<AStringView, 11u> names = {
-        "window.normal",
-        "window.title",
-        "window.collapse",
-        "white",
-        "separator",
-        "panel.normal",
-        "button.normal",
-        "button.hover",
-        "button.pressed",
-        "button.disabled",
-        "focus.overlay",
-    };
-    for(u32 index = 0u; index < static_cast<u32>(names.size()); ++index){
-        if(names[index] == omitted)
-            continue;
-        UiSkinRegion region;
-        const auto regionName = Name::FromText(names[index]);
-        ASSERT_TRUE(regionName);
-        region.name = *regionName;
-        region.rectangle = { index * 8u, 0u, 8u, 8u };
-        if(index == 0u || index == 5u)
-            region.padding = { 3.0f, 4.0f, 5.0f, 6.0f };
-        else if(index == 1u)
-            region.padding = { 5.0f, 6.0f, 7.0f, 8.0f };
-        else if(index == 4u){
-            region.minimumWidth = 2.0f;
-            region.minimumHeight = 3.0f;
-        }
-        else if(index >= 6u && index <= 9u){
-            region.padding = { 2.0f, 3.0f, 4.0f, 5.0f };
-            region.minimumWidth = 30.0f;
-            region.minimumHeight = 24.0f;
-        }
-        regions.push_back(Move(region));
-    }
-    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, Move(regions));
-}
-
-b8 WidgetFixture::begin(const u64 generation, const DisplayMetrics& display){
-    return ::__hidden_ui_glyph_sdf_tests::BeginWidgetFixtureFrame(*this, generation, display);
-}
-
-InputRoutingResult WidgetFixture::send(const InputEvent& event){
-    return ::__hidden_ui_glyph_sdf_tests::SendWidgetFixtureEvent(*this, event);
-}
-
-void WidgetFixture::click(const Point& point){
-    ::__hidden_ui_glyph_sdf_tests::ClickWidgetFixturePoint(*this, point);
-}
-
-void WidgetFixture::drag(const Point& origin, const Point& destination){
-    ::__hidden_ui_glyph_sdf_tests::DragWidgetFixturePoints(*this, origin, destination);
-}
-
-void WidgetFixture::press(const Core::Key::Enum value, const b8 repeat, const b8 shift){
-    ::__hidden_ui_glyph_sdf_tests::PressWidgetFixtureKey(*this, value, repeat, shift);
-}
-
-Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept{
-    UiSkinRegion region{};
-    if(!m_skin.tryFindRegion(name, region))
-        return MakeUnexpected(Failure{});
-    return ::__hidden_ui_glyph_sdf_tests::SampleUiSkinRegionPaint(region, m_skin.atlasWidth(), m_skin.atlasHeight(), snapshot);
-}
-
-b8 WidgetFixture::installKoreanFallback(){
-    Font korean(m_arena, Name(s_TestKoreanFontPath));
-    if(!LoadBundledFixtureFont(m_arena, "korean.font", korean))
-        return false;
-    const Array<FontSource, 2u> sources = {
-        FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u },
-        FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), korean, 1u },
-    };
-    return m_text.setFonts(sources);
-}
-
-Expected<Rect> WidgetFixture::skinQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::FindUiSkinSlotQuad(snapshot, slot);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

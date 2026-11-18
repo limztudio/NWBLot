@@ -3,7 +3,8 @@ option(NWB_BUILD_UI_INPUT_BENCHMARK "Build opt-in public UI input CPU benchmark"
 if(NWB_BUILD_UI_INPUT_BENCHMARK)
     nwb_declare_executable(nwb_ui_input_benchmark)
     nwb_target_adhd_sources(nwb_ui_input_benchmark NAMESPACE "NWB::Tests::UiInputBenchmarkCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/ui_input/*.adhd")
-    target_link_libraries(nwb_ui_input_benchmark PRIVATE nwb_ui_widgets nwb_ecs_ui nwb_ui nwb_common nwb_alloc)
+    target_sources(nwb_ui_input_benchmark PRIVATE "${CMAKE_CURRENT_LIST_DIR}/ui_input/entry.cpp")
+    target_link_libraries(nwb_ui_input_benchmark PRIVATE nwb_ui_widgets nwb_ecs_ui nwb_ui nwb_common nwb_alloc nwb_tool_cli nwb_test_common_names)
 endif()
 
 option(NWB_BUILD_SIMD_BENCHMARKS "Build opt-in SIMD microbenchmarks" OFF)

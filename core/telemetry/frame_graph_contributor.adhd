@@ -37,7 +37,7 @@ extern class FrameGraphPendingNameEdge{
 
 [cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::IFrameGraphContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class IFrameGraphContributor{
-    b8 appendFrameGraph(...);
+    [cpp_flags(unwind)] b8 appendFrameGraph(mut FrameGraphBuilder builder);
 };
 
 
@@ -46,6 +46,10 @@ extern class IFrameGraphContributor{
 
 [cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::s_InvalidFrameGraphNodeIndex")]
 extern const u32 s_InvalidFrameGraphNodeIndex;
+
+
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdges"), cpp_flags(no_copy, no_assign)]
+extern class FrameGraphPendingNameEdges;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

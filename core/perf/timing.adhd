@@ -35,10 +35,10 @@ extern class TimingScopeId{
 
 [cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingSink"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class TimingSink{
-    b8 enabled(...)const;
-    void publishFrame(...);
-    void recordSample(...);
-    Expected<TimingScopeId> registerScope(...);
+    b8 enabled()const;
+    [cpp_flags(unwind)] void publishFrame(in u64 frameIndex);
+    [cpp_flags(unwind)] void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex);
+    [cpp_flags(unwind)] Expected<TimingScopeId> registerScope(in cpp_ref Name scopeName);
 };
 
 [cpp_header("<core/perf/timing.h>"), cpp_name("::NWB::Core::Perf::TimingStats"), cpp_flags(self_defaulted, binary_serializable, brace_init)]

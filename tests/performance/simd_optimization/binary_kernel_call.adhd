@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type BinaryKernelFunction = Func<0u, VectorDouble(in VectorDouble, in VectorDouble)>;
+
+type AxisKernelFunction = Func<0u, VectorDouble(in VectorDouble, in f64)>;
+
+// Evaluate each implementation under its caller's floating-point environment.
+VectorDouble EvaluateBinaryKernel(in BinaryKernelFunction function, in VectorDouble lhs, in VectorDouble rhs){
+    return function(lhs, rhs);
+}
+
+VectorDouble EvaluateAxisKernel(in AxisKernelFunction function, in VectorDouble axis, in f64 angle){
+    return function(axis, angle);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

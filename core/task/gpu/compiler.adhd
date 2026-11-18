@@ -112,6 +112,7 @@ extern class GpuTaskGraphPacketTimingEnvelopeOptions{
 
 [cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentOptions"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphQueueAssignmentOptions{
+    void setQueueLoads(in Span<GpuTaskQueueLoad> values);
     usize queueLoadCount;
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     u64 timingFrameIndex;
@@ -121,6 +122,7 @@ extern class GpuTaskGraphQueueAssignmentOptions{
 
 [cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignments"), cpp_flags(no_copy, no_assign)]
 extern class GpuTaskGraphQueueAssignments{
+    Optional<GpuTaskQueueAssignment> findAssignment(in GpuTaskId task)const;
     GpuTaskQueueAssignmentDiagnostic diagnostic(...)const;
     void reset(...);
     b8 valid(...)const;

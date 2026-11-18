@@ -1,0 +1,101 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HINSTANCE"), cpp_flags(small_value, no_assign)]
+extern class WinInstance;
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HWND"), cpp_flags(small_value, no_assign)]
+extern class WinWindow;
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::WindowClassResult"), cpp_flags(self_defaulted, brace_init)]
+extern class WindowClassResult{
+    b8 registered;
+    u32 error;
+};
+
+[cpp_header("<core/graphics/runtime/render_pass_collection.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::RenderPassCollection"), cpp_flags(no_copy, no_assign)]
+extern class RenderPassCollection{
+    void addToBack(mut IRenderPass pass, in u32 width, in u32 height, in u32 samples);
+    b8 validateResources(in u32 width, in u32 height, in u32 samples);
+    void remove(mut IRenderPass pass);
+};
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::CurrentInstance")]
+extern WinInstance CurrentInstance();
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::HasInstance")]
+extern b8 HasInstance(in WinInstance instance);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::FrameWindow")]
+extern WinWindow FrameWindow(mut Frame frame);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::DeactivateFrame")]
+extern void DeactivateFrame(mut Frame frame);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::HasWindow")]
+extern b8 HasWindow(in WinWindow window);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::PerMonitorDpiEnabled")]
+extern b8 PerMonitorDpiEnabled();
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::EnablePerMonitorDpi")]
+extern b8 EnablePerMonitorDpi();
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::QueryFrameClass")]
+extern WindowClassResult QueryFrameClass(in WinInstance instance);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::RemoveQuitMessage")]
+extern b8 RemoveQuitMessage();
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::PostQuitToThread")]
+extern b8 PostQuitToThread(in u32 thread);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::PostCloseToWindow")]
+extern b8 PostCloseToWindow(in WinWindow window);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::SetFrameUpdateObserver")]
+extern void SetFrameUpdateObserver(mut Frame frame, mut auto observer);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::RenderPassCount")]
+extern usize RenderPassCount(in RenderPassCollection collection);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::FirstRenderPass")]
+extern in IRenderPass FirstRenderPass(in RenderPassCollection collection);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::LastRenderPass")]
+extern in IRenderPass LastRenderPass(in RenderPassCollection collection);
+
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::PrintFrameLog")]
+extern void PrintFrameLog(in StringView message);
+
+[cpp_header("<windows.h>"), cpp_name("::GetSystemMetrics")]
+extern i32 ScreenMetric(in i32 metric);
+
+[cpp_header("<windows.h>"), cpp_name("::GetCurrentThreadId")]
+extern u32 NativeThreadId();
+
+[cpp_header("<windows.h>"), cpp_name("::GetLastError")]
+extern u32 NativeError();
+
+[cpp_header("<windows.h>"), cpp_name("::GetTickCount64")]
+extern u64 TickMilliseconds();
+
+[cpp_header("<windows.h>"), cpp_name("::IsWindowVisible")]
+extern b8 WindowVisible(in WinWindow window);
+
+[cpp_header("<windows.h>"), cpp_name("SM_CXSCREEN")]
+extern const i32 s_ScreenWidthMetric;
+
+[cpp_header("<windows.h>"), cpp_name("SM_CYSCREEN")]
+extern const i32 s_ScreenHeightMetric;
+
+[cpp_header("<windows.h>"), cpp_name("ERROR_CLASS_DOES_NOT_EXIST")]
+extern const u32 s_ClassDoesNotExist;
+
+[cpp_header("<core/frame/frame_detail.h>"), cpp_name("::NWB::Core::FrameDetail::LogicalDimensionForPixels")]
+extern i32 LogicalDimensionForPixels(in u16 pixels, in i32 scale);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

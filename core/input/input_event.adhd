@@ -162,14 +162,14 @@ extern enum MouseButton : u32{
 
 [cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::IInputEventHandler"), cpp_flags(self_defaulted, brace_init, polymorphic_base)]
 extern class IInputEventHandler{
-    b8 keyboardCharInput(...);
-    KeyboardInputResult keyboardUpdate(...);
-    b8 mouseButtonUpdate(...);
-    b8 mousePosUpdate(...);
-    b8 mouseScrollUpdate(...);
-    void pointerCaptureLost(...);
-    void pointerLeave(...);
-    void windowFocusUpdate(...);
+    [cpp_flags(unwind)] b8 keyboardCharInput(in u32 code, in i32 modifiers);
+    [cpp_flags(unwind)] KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers);
+    [cpp_flags(unwind)] b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 modifiers);
+    [cpp_flags(unwind)] b8 mousePosUpdate(in f64 x, in f64 y);
+    [cpp_flags(unwind)] b8 mouseScrollUpdate(in f64 x, in f64 y);
+    [cpp_flags(unwind)] void pointerCaptureLost();
+    [cpp_flags(unwind)] void pointerLeave();
+    [cpp_flags(unwind)] void windowFocusUpdate(in b8 focused);
 };
 
 [cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::KeyboardInputResult"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]

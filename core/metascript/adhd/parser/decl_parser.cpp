@@ -10,6 +10,8 @@
 
 #include "decl_parser.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -96,6 +98,69 @@ b8 DeclParser::tryParseExternAttribute(const ParsedAttribute& attr, MStringView&
     return true;
 }
 
+b8 DeclParser::parseRegistration(TranslationUnit& unit, const MVector<ParsedAttribute>& attributes, const b8 isExtern, const b8 isImported){
+    const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
+    if(!m_cursor.check(TokenType::Identifier) || !IsAsciiIdentifier(m_cursor.current().text)){
+        m_cursor.error("expected a registration name");
+        return false;
+    }
+    const MStringView name = m_cursor.current().text;
+    m_cursor.advance();
+    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after registration name"))
+        return false;
+
+    MVector<MStringView> arguments(m_cursor.arena());
+    if(!m_cursor.check(TokenType::RightParen)){
+        do{
+            if(!m_cursor.check(TokenType::Identifier) || !IsAsciiIdentifier(m_cursor.current().text)){
+                m_cursor.error("registration arguments must be identifiers");
+                return false;
+            }
+            arguments.push_back(m_cursor.current().text);
+            m_cursor.advance();
+        }while(m_cursor.match(TokenType::Comma));
+    }
+    if(!m_cursor.expect(TokenType::RightParen, "expected ')' after registration arguments")
+        || !m_cursor.expect(TokenType::Semicolon, "expected ';' after registration"))
+        return false;
+
+    const RegistrationBinding* const existing = FindIfPointer(unit.registrationBindings, [name](const RegistrationBinding& binding){ return binding.name == name; });
+    if(isExtern){
+        RegistrationBinding binding{ name, {}, {}, arguments.size() };
+        for(const ParsedAttribute& attr : attributes){
+            b8 matched = false;
+            if(!tryParseExternAttribute(attr, binding.cppName, binding.header, true, matched))
+                return false;
+            if(!matched){
+                m_cursor.error(attr.line, attr.column, "unsupported registration attribute");
+                return false;
+            }
+        }
+        if(binding.header.empty() || !IsAsciiIdentifier(binding.cppName)){
+            m_cursor.error(span.line, span.column, "extern registration requires cpp_header and an identifier in cpp_name");
+            return false;
+        }
+        if(existing){
+            if(existing->cppName == binding.cppName && existing->header == binding.header && existing->parameterCount == binding.parameterCount)
+                return true;
+            m_cursor.error(span.line, span.column, "conflicting extern registration declarations");
+            return false;
+        }
+        unit.registrationBindings.push_back(binding);
+        return true;
+    }
+    if(!attributes.empty() || !existing || arguments.size() != existing->parameterCount){
+        m_cursor.error(span.line, span.column, "registration must match a declared registrar and its identifier count");
+        return false;
+    }
+    if(!isImported){
+        if(!FindIfPointer(unit.registrationHeaders, [existing](const MStringView header){ return header == existing->header; }))
+            unit.registrationHeaders.push_back(existing->header);
+        unit.registrationCalls.push_back(RegistrationCall{ existing->cppName, Move(arguments) });
+    }
+    return true;
+}
+
 b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     const b8 isImported = isCurrentTokenImported();
     const MStringView importedNamespace = isImported ? currentTokenImportedNamespace() : MStringView{};
@@ -106,6 +171,9 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
     const b8 isExtern = m_cursor.matchIdentifier(KeywordSemantics::s_Extern);
+
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_Registration))
+        return parseRegistration(outUnit, attributes, isExtern, isImported);
 
     if(m_cursor.matchIdentifier(KeywordSemantics::s_RegisterAsset)){
         if(isExtern || !attributes.empty()){

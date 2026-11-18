@@ -3,429 +3,160 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_text_area.adhd>
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type UiTextAreaBuilderTests = TextAreaFixture;
+type UiTextAreaLoanTests = TextAreaLoanFixture;
+type UiTextAreaReentryTests = TextAreaLoanFixture;
 
+class UiTextAreaOrdinaryHost : IEditBoxHost{
+    public usize ordinaryLoans = 0u;
+    public usize publishes = 0u;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.adhd.h>
-
-#include <global/bit.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_area_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiTextAreaTests;
-
-class OrdinaryAreaHost final : public IEditBoxHost{
-public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel&)noexcept override{
-        ++ordinaryLoans;
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2) override{
+        ++this.ordinaryLoans;
         EditBoxResult result;
         result.valid = true;
         return result;
     }
-
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
-        ++publishes;
+    public EditBoxResult editInPopup(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3) override{ return EditBoxResult(); }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{ return EditBoxResult(); }
+    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6) override{ return EditBoxResult(); }
+    public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3) override{
+        ++this.publishes;
         return true;
     }
+}
 
 
-public:
-    usize ordinaryLoans = 0u;
-    usize publishes = 0u;
-};
+class UiTextAreaInputScrollTests : TextAreaFixture{
+    public String m_document;
 
-class UiTextAreaBuilderTests : public TextAreaFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_area_input_scroll_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiTextAreaTests;
-
-constexpr AStringView s_PopupKey = "popup";
-
-
-class UiTextAreaInputScrollTests : public TextAreaFixture{
-public:
-    [[nodiscard]] static TextAreaOptions ScrollOptions()noexcept;
-
-
-public:
-    UiTextAreaInputScrollTests()
-        : m_document(m_arena)
-    {
-        m_document.reserve(24u * 65u);
+    public UiTextAreaInputScrollTests(){
+        this.m_document.reserve(24u * 65u);
         for(usize row = 0u; row < 24u; ++row){
             if(row != 0u)
-                m_document.push_back('\n');
-            m_document.append(64u, 'a');
+                this.m_document.push_back('\n');
+            this.m_document.append(64u, 'a');
         }
     }
-
-
-public:
-    [[nodiscard]] AStringView documentView()const noexcept{
-        return AStringView(m_document);
+    public StringView documentView()const{
+        return StringView(this.m_document);
     }
-
-    [[nodiscard]] b8 prepareDocument(const Point scroll = {});
-    [[nodiscard]] b8 prepareScroll(const TextAreaOptions& options = ScrollOptions(), const Point scroll = {});
-    [[nodiscard]] b8 wheel(f64 x, f64 y, Point position);
-    [[nodiscard]] b8 wheel(f64 x, f64 y);
-    [[nodiscard]] WidgetId part(AStringView key)const;
-    [[nodiscard]] b8 framePopup(u64 generation, PopupState& popup);
-
-
-public:
-    AString<Core::Alloc::GlobalArena> m_document;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_area_loan_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiTextAreaTests;
-
-
-class AreaMutationSource final : public ComboSource{
-public:
-    explicit AreaMutationSource(const u64 instance = 4301u)noexcept{
-        generation = instance;
-        count = 5u;
+    public b8 prepareDocument(){ return this.prepareDocument(Point()); }
+    public b8 prepareDocument(in Point scroll){
+        return PrepareUiTextAreaScrollDocument(this, scroll);
     }
+    public b8 prepareScroll(){ return this.prepareScroll(MakeUiTextAreaScrollOptions()); }
+    public b8 prepareScroll(in TextAreaOptions options){ return this.prepareScroll(options, Point()); }
+    public b8 prepareScroll(in TextAreaOptions options, in Point scroll){
+        return PrepareUiTextAreaScroll(this, options, scroll);
+    }
+    public b8 wheel(in f64 x, in f64 y, in Point position){
+        return SendUiTextAreaWheelAt(this, x, y, position);
+    }
+    public b8 wheel(in f64 x, in f64 y){
+        return SendUiTextAreaWheel(this, x, y);
+    }
+    public WidgetId part(in StringView key)const{
+        return GetUiTextAreaInputPart(this, key);
+    }
+    public b8 framePopup(in u64 generation, mut PopupState popup){
+        return FrameUiTextAreaPopup(this, generation, popup);
+    }
+}
 
 
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ ++metadataCalls; return generation; }
+class UiTextAreaMutationSource : ComboSource{
+    public TestObserved<UiFixtureHook> rowHook;
+    public TestObserved<UiFixtureHook> metadataHook;
+    public TestObserved<UiFixtureHook> metadataToArm;
+    public TestObserved<Optional<mut UiTextAreaMutationSource>> armMetadataSource;
+    public TestObserved<usize> metadataCalls;
+    public TestObserved<usize> metadataMutations;
+    public TestObserved<usize> rowMutations;
+    public TestObserved<usize> arms;
 
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        ++metadataCalls;
-        if(metadataHook){
-            Function<void()> hook = Move(metadataHook);
-            metadataHook = {};
-            ++metadataMutations;
+    public UiTextAreaMutationSource(){ this.generation = 4301u; this.count = 5u; }
+    public UiTextAreaMutationSource(in u64 instance){ this.generation = instance; this.count = 5u; }
+    public u64 instanceGeneration()const override{ ++this.metadataCalls.value(); return this.generation; }
+    public u64 revision()const override{
+        ++this.metadataCalls.value();
+        if(this.metadataHook.value()){
+            UiFixtureHook hook = this.metadataHook.value();
+            this.metadataHook.value() = UiFixtureHook();
+            ++this.metadataMutations.value();
             hook();
         }
-        return contentRevision;
+        return this.contentRevision;
     }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ ++metadataCalls; return count; }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        const StringView value = ComboSource::text(index);
-        if(rowHook){
-            Function<void()> hook = Move(rowHook);
-            rowHook = {};
-            ++rowMutations;
+    public u64 rowCount()const override{ ++this.metadataCalls.value(); return this.count; }
+    public StringView text(in u64 index)const override{
+        const StringView value = this.baseText(index);
+        if(this.rowHook.value()){
+            UiFixtureHook hook = this.rowHook.value();
+            this.rowHook.value() = UiFixtureHook();
+            ++this.rowMutations.value();
             hook();
         }
-        if(armMetadataSource){
-            AreaMutationSource& source = *MakeNotNull(Exchange(armMetadataSource, nullptr));
-            source.metadataHook = Move(metadataToArm);
-            metadataToArm = {};
-            ++arms;
+        if(this.armMetadataSource.value().has_value()){
+            mut UiTextAreaMutationSource source = this.armMetadataSource.value().value();
+            this.armMetadataSource.value().reset();
+            source.metadataHook.value() = this.metadataToArm.value();
+            this.metadataToArm.value() = UiFixtureHook();
+            ++this.arms.value();
         }
         return value;
     }
-
-    void resetAllCounters()const noexcept{ resetCounters(); metadataCalls = 0u; }
-    void armParentMetadata(AreaMutationSource& source)noexcept{ armMetadataSource = &source; }
-
-
-public:
-    mutable Function<void()> rowHook;
-    mutable Function<void()> metadataHook;
-    mutable Function<void()> metadataToArm;
-    mutable AreaMutationSource* armMetadataSource = nullptr;
-    mutable usize metadataCalls = 0u;
-    mutable usize metadataMutations = 0u;
-    mutable usize rowMutations = 0u;
-    mutable usize arms = 0u;
-};
-
-class UiTextAreaLoanTests : public TextAreaLoanFixture{};
+    public void resetAllCounters()const{ this.resetCounters(); this.metadataCalls.value() = 0u; }
+    public void armParentMetadata(mut UiTextAreaMutationSource source){ this.armMetadataSource.value() = Optional<mut UiTextAreaMutationSource>(source); }
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiTextAreaNavigationTests : WidgetFixture{
+    public EditModel m_model = EditModel(EditLimits(), EditTextMode::Multiline);
+    public TextAreaState m_state;
+    public EditBoxView m_view;
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_area_navigation_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiWidgetTests;
-
-class UiTextAreaNavigationTests : public WidgetFixture{
-public:
-    UiTextAreaNavigationTests()
-        : m_model(m_arena, {}, EditTextMode::Multiline)
-        , m_view(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 shapeCurrent(){
-        return m_view.snapshot(m_model) && m_view.shape(m_text, { .fontSize = 14.0f }) == TextLayoutStatus::Success;
+    public b8 shapeCurrent(){
+        ShapeRequest request;
+        request.fontSize = 14.0f;
+        return this.m_view.snapshot(this.m_model) && this.m_view.shape(this.m_text, request) == TextLayoutStatus::Success;
     }
-
-    [[nodiscard]] Expected<EditNavigationResult> resolve(const EditNavigationDirection::Enum direction, const f32 viewportHeight = 0.0f){
-        TextAreaNavigationResolver resolver(m_arena, m_text, m_context, m_state, 14.0f);
-        return resolver.resolve(m_model, direction, m_state.navigation().snapshot(), viewportHeight);
+    public Expected<EditNavigationResult> resolve(in EditNavigationDirection direction){ return this.resolve(direction, 0.0f); }
+    public Expected<EditNavigationResult> resolve(in EditNavigationDirection direction, in f32 viewportHeight){
+        TextAreaNavigationResolver resolver = TextAreaNavigationResolver(this.m_text, this.m_context, this.m_state, 14.0f);
+        return resolver.resolve(this.m_model, direction, this.m_state.navigation().snapshot(), viewportHeight);
     }
+}
 
 
-public:
-    EditModel m_model;
-    TextAreaState m_state;
-    EditBoxView m_view;
-};
+class UiTextAreaReentrySource : ComboSource{
+    public TestObserved<UiFixtureHook> rowHook;
+    public TestObserved<usize> attempts;
+    public TestObserved<usize> callbacksAfterAttempt;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_area_reentry_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiTextAreaTests;
-
-
-class AreaReentrySource final : public ComboSource{
-public:
-    AreaReentrySource()noexcept{
-        generation = 4401u;
-        count = 5u;
-    }
-
-
-public:
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        const StringView value = ComboSource::text(index);
-        if(rowHook){
-            Function<void()> hook = Move(rowHook);
-            rowHook = {};
-            ++attempts;
+    public UiTextAreaReentrySource(){ this.generation = 4401u; this.count = 5u; }
+    public StringView text(in u64 index)const override{
+        const StringView value = this.baseText(index);
+        if(this.rowHook.value()){
+            UiFixtureHook hook = this.rowHook.value();
+            this.rowHook.value() = UiFixtureHook();
+            ++this.attempts.value();
             hook();
         }
         return value;
     }
-
-
-private:
-    virtual void observeCallback()const noexcept override{
-        if(attempts != 0u)
-            ++callbacksAfterAttempt;
+    public void observeCallback()const override{
+        if(this.attempts.value() != 0u)
+            ++this.callbacksAfterAttempt.value();
     }
-
-
-public:
-    mutable Function<void()> rowHook;
-    mutable usize attempts = 0u;
-    mutable usize callbacksAfterAttempt = 0u;
-};
-
-class UiTextAreaReentryTests : public TextAreaLoanFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiTextAreaBuilderTests = ::__hidden_ui_text_area_builder_tests::UiTextAreaBuilderTests;
-using UiTextAreaOrdinaryHost = ::__hidden_ui_text_area_builder_tests::OrdinaryAreaHost;
-using UiTextAreaInputScrollTests = ::__hidden_ui_text_area_input_scroll_tests::UiTextAreaInputScrollTests;
-using UiTextAreaLoanTests = ::__hidden_ui_text_area_loan_tests::UiTextAreaLoanTests;
-using UiTextAreaMutationSource = ::__hidden_ui_text_area_loan_tests::AreaMutationSource;
-using UiTextAreaNavigationTests = ::NWB::__hidden_ui_text_area_navigation_tests::UiTextAreaNavigationTests;
-using UiTextAreaReentryTests = ::__hidden_ui_text_area_reentry_tests::UiTextAreaReentryTests;
-using UiTextAreaReentrySource = ::__hidden_ui_text_area_reentry_tests::AreaReentrySource;
-using UiTextAreaAcceptedInput16 = ::NWB::UiWidgetTests::AcceptedInputState<16u>;
-using EditModel = ::NWB::Impl::Ui::EditModel;
-using EditLimits = ::NWB::Impl::Ui::EditLimits;
-namespace EditTextMode = ::NWB::Impl::Ui::EditTextMode;
-namespace EditAction = ::NWB::Impl::Ui::EditAction;
-using EditBoxView = ::NWB::Impl::Ui::EditBoxView;
-using EditBoxPlacement = ::NWB::Impl::Ui::EditBoxPlacement;
-using EditBoxResult = ::NWB::Impl::Ui::EditBoxResult;
-using EditNavigationSnapshot = ::NWB::Impl::Ui::EditNavigationSnapshot;
-using EditNavigationResult = ::NWB::Impl::Ui::EditNavigationResult;
-namespace EditNavigationDirection = ::NWB::Impl::Ui::EditNavigationDirection;
-using EditNavigationDirectionEnum = ::NWB::Impl::Ui::EditNavigationDirection::Enum;
-using TextAreaOptions = ::NWB::Impl::Ui::TextAreaOptions;
-using TextAreaState = ::NWB::Impl::Ui::TextAreaState;
-using TextAreaNavigationResolver = ::NWB::Impl::Ui::TextAreaNavigationResolver;
-using ScrollViewportPlacement = ::NWB::Impl::Ui::ScrollViewportPlacement;
-using PopupState = ::NWB::Impl::Ui::PopupState;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using ListState = ::NWB::Impl::Ui::ListState;
-using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
-using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
-using TextService = ::NWB::Impl::Ui::TextService;
-namespace TextLayoutStatus = ::NWB::Impl::Ui::TextLayoutStatus;
-namespace TextDirection = ::NWB::Impl::Ui::TextDirection;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace UiTextAreaKey = ::NWB::Core::Key;
-using ::PackFourCharTag;
-
-[[nodiscard]] FOUNDATION_INLINE TextAreaOptions UiTextAreaScrollOptions()noexcept{
-    return ::__hidden_ui_text_area_input_scroll_tests::UiTextAreaInputScrollTests::ScrollOptions();
-}
-
-[[nodiscard]] FOUNDATION_INLINE TextAreaOptions UiTextAreaLoanOptions()noexcept{
-    return ::NWB::UiTextAreaTests::TextAreaLoanFixture::AreaOptions();
-}
-
-[[nodiscard]] FOUNDATION_INLINE PopupOptions UiTextAreaLargeLoanChildOptions()noexcept{
-    return ::NWB::UiWidgetTests::LargeLoanChildOptions();
-}
-
-[[nodiscard]] FOUNDATION_INLINE ListOptions UiTextAreaLargeLoanListOptions()noexcept{
-    return ::NWB::UiWidgetTests::LargeLoanListOptions();
-}
-
-[[nodiscard]] FOUNDATION_INLINE AStringView UiTextAreaPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
-    return AStringView(item.text);
-}
-
-[[nodiscard]] FOUNDATION_INLINE AStringView UiTextAreaActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
-    return AStringView(text);
-}
-
-[[nodiscard]] FOUNDATION_INLINE AStringView UiTextAreaResolutionText(const ::NWB::UiTextAreaTests::AreaResolution& item)noexcept{
-    return AStringView(item.text);
-}
-
-TextAreaOptions MakeUiTextAreaScrollOptions()noexcept;
-b8 PrepareUiTextAreaScrollDocument(UiTextAreaInputScrollTests& self, const Point& scroll)noexcept;
-b8 PrepareUiTextAreaScroll(UiTextAreaInputScrollTests& self, const TextAreaOptions& options, const Point& scroll)noexcept;
-b8 SendUiTextAreaWheelAt(UiTextAreaInputScrollTests& self, f64 x, f64 y, const Point& position)noexcept;
-b8 SendUiTextAreaWheel(UiTextAreaInputScrollTests& self, f64 x, f64 y)noexcept;
-WidgetId GetUiTextAreaInputPart(const UiTextAreaInputScrollTests& self, StringView key)noexcept;
-b8 FrameUiTextAreaPopup(UiTextAreaInputScrollTests& self, u64 generation, PopupState& popup)noexcept;
-};
-
-namespace __hidden_ui_text_area_input_scroll_tests{
-FOUNDATION_INLINE TextAreaOptions UiTextAreaInputScrollTests::ScrollOptions()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeUiTextAreaScrollOptions();
-}
-FOUNDATION_INLINE b8 UiTextAreaInputScrollTests::prepareDocument(const Point scroll){
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaScrollDocument(*this, scroll);
-}
-FOUNDATION_INLINE b8 UiTextAreaInputScrollTests::prepareScroll(const TextAreaOptions& options, const Point scroll){
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaScroll(*this, options, scroll);
-}
-FOUNDATION_INLINE b8 UiTextAreaInputScrollTests::wheel(const f64 x, const f64 y, const Point position){
-    return ::__hidden_ui_glyph_sdf_tests::SendUiTextAreaWheelAt(*this, x, y, position);
-}
-FOUNDATION_INLINE b8 UiTextAreaInputScrollTests::wheel(const f64 x, const f64 y){
-    return ::__hidden_ui_glyph_sdf_tests::SendUiTextAreaWheel(*this, x, y);
-}
-FOUNDATION_INLINE WidgetId UiTextAreaInputScrollTests::part(const AStringView key)const{
-    return ::__hidden_ui_glyph_sdf_tests::GetUiTextAreaInputPart(*this, key);
-}
-FOUNDATION_INLINE b8 UiTextAreaInputScrollTests::framePopup(const u64 generation, PopupState& popup){
-    return ::__hidden_ui_glyph_sdf_tests::FrameUiTextAreaPopup(*this, generation, popup);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -554,7 +285,7 @@ ShapeRequest MakeUiTextAreaFontSizeShapeRequest(in f32 fontSize){
 
 void VerifyUiTextAreaBuilderTests_SingleLineIsRejectedBeforeBorrowingOrChangingViewport(mut UiTextAreaBuilderTests self){
     self.useHost();
-    EditModel singleLine = EditModel(self.m_arena);
+    EditModel singleLine = EditModel();
     ASSERT_TRUE(singleLine.setText("single"));
     ASSERT_TRUE(self.m_state.scrollTo(Point(13.0f, 17.0f)));
     const u64 revision = self.m_state.revision();
@@ -670,8 +401,8 @@ void VerifyUiTextAreaBuilderTests_AcceptingActionsKeepTextAndHistoryThroughSubmi
     EXPECT_FALSE(self.m_result.focused);
     EXPECT_EQ(self.m_model.text(), "ab\ncdXY");
     ASSERT_EQ(self.m_host.actionTexts.size(), 4u);
-    EXPECT_EQ(UiTextAreaActionText(self.m_host.actionTexts[0u]), "ab\ncdX");
-    EXPECT_EQ(UiTextAreaActionText(self.m_host.actionTexts[3u]), "ab\ncdXY");
+    EXPECT_EQ(StringView(self.m_host.actionTexts[0u]), "ab\ncdX");
+    EXPECT_EQ(StringView(self.m_host.actionTexts[3u]), "ab\ncdXY");
     ASSERT_TRUE(self.m_model.undo());
     EXPECT_EQ(self.m_model.text(), "ab\ncdX");
     ASSERT_TRUE(self.m_model.undo());
@@ -684,18 +415,18 @@ void VerifyUiTextAreaBuilderTests_OrderedHostUsesTheRealResolverAfterEarlierInse
     ASSERT_TRUE(self.m_model.setText("aa\naaaa\nxx"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
     self.m_host.text("a");
-    self.m_host.key(UiTextAreaKey::Down);
+    self.m_host.key(Key::Down);
     self.m_host.text("!");
     ASSERT_TRUE(self.frameArea(1u));
     ASSERT_EQ(self.m_host.resolutions.size(), 1u);
-    EXPECT_EQ(UiTextAreaResolutionText(self.m_host.resolutions[0u]), "aaa\naaaa\nxx");
+    EXPECT_EQ(StringView(self.m_host.resolutions[0u].text), "aaa\naaaa\nxx");
     EXPECT_EQ(self.m_host.resolutions[0u].caret, 2u);
     ASSERT_TRUE(self.m_host.resolutions[0u].result.has_value());
     EXPECT_EQ(self.m_host.resolutions[0u].result.value().committedByte, 6u);
     EXPECT_EQ(self.m_model.text(), "aaa\naa!aa\nxx");
     EXPECT_EQ(self.m_model.caret(), 7u);
     ASSERT_EQ(self.m_host.publications.size(), 1u);
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[0u]), "aaa\naa!aa\nxx");
+    EXPECT_EQ(StringView(self.m_host.publications[0u].text), "aaa\naa!aa\nxx");
     ASSERT_TRUE(self.m_model.undo());
     EXPECT_EQ(self.m_model.text(), "aaa\naaaa\nxx");
     ASSERT_TRUE(self.m_model.undo());
@@ -707,15 +438,15 @@ void VerifyUiTextAreaBuilderTests_BorrowedPreferredColumnSurvivesShortLineThenRe
     self.useHost();
     ASSERT_TRUE(self.m_model.setText("aaaaaa\na\naaaaaa"));
     ASSERT_TRUE(self.m_model.setSelection(5u, 5u));
-    EditBoxView reference = EditBoxView(self.m_arena);
+    EditBoxView reference = EditBoxView();
     ASSERT_TRUE(reference.snapshot(self.m_model));
     ASSERT_EQ(reference.shape(self.m_text, MakeUiTextAreaFontSizeShapeRequest(14.0f)), TextLayoutStatus::Success);
     const auto caret = reference.caretGeometry().caretRect(reference.displayCaret());
     ASSERT_TRUE(caret.has_value());
     self.m_host.seedColumn = true;
     self.m_host.seededColumn = caret.value().x;
-    self.m_host.key(UiTextAreaKey::Down);
-    self.m_host.key(UiTextAreaKey::Down);
+    self.m_host.key(Key::Down);
+    self.m_host.key(Key::Down);
     ASSERT_TRUE(self.frameArea(1u));
     ASSERT_EQ(self.m_host.resolutions.size(), 2u);
     ASSERT_TRUE(self.m_host.resolutions[0u].result.has_value());
@@ -743,7 +474,7 @@ void VerifyUiTextAreaInputScrollTests_InvalidWheelLinesRejectTheCandidateBeforeB
     invalid[2u] = bit_cast<f32>(s_UiTextAreaQuietNaNF32Bits);
     u64 generation = 1u;
     for(in f32 wheelLines : invalid){
-        ASSERT_TRUE(self.frameArea(generation, UiTextAreaScrollOptions()));
+        ASSERT_TRUE(self.frameArea(generation, MakeUiTextAreaScrollOptions()));
         ++generation;
         const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
         const Point scroll = self.m_state.scroll();
@@ -756,7 +487,7 @@ void VerifyUiTextAreaInputScrollTests_InvalidWheelLinesRejectTheCandidateBeforeB
         const auto displayedAccepted = self.tryTarget(self.id("area", "panel"));
         ASSERT_TRUE(displayedAccepted.has_value());
         const HitTarget accepted = displayedAccepted.value();
-        TextAreaOptions options = UiTextAreaScrollOptions();
+        TextAreaOptions options = MakeUiTextAreaScrollOptions();
         options.wheelLines = wheelLines;
         ASSERT_TRUE(self.beginArea(generation));
         const EditBoxResult result = self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, options);
@@ -800,7 +531,7 @@ void VerifyUiTextAreaInputScrollTests_CopiedVerticalWheelAppliesOnlyAtFinalPaint
     ASSERT_EQ(self.m_context.input().controlActions().size(), 1u);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
     ASSERT_TRUE(self.beginArea(2u));
-    self.m_result = self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaScrollOptions());
+    self.m_result = self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeUiTextAreaScrollOptions());
     ASSERT_TRUE(self.m_result.valid);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
     ASSERT_TRUE(self.acceptArea());
@@ -821,18 +552,18 @@ void VerifyUiTextAreaInputScrollTests_LargeWheelDeltasClampBothEndpointsWithoutC
     ASSERT_GT(bars.horizontal.maximum, 0.0);
     ASSERT_GT(bars.vertical.maximum, 0.0);
     ASSERT_TRUE(self.wheel(1000000.0, -1000000.0));
-    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(2u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().x), bars.horizontal.maximum, 0.001);
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), bars.vertical.maximum, 0.001);
     ASSERT_TRUE(self.wheel(-1000000.0, 1000000.0));
-    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(3u, MakeUiTextAreaScrollOptions()));
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
     model.expect(self.m_model);
 }
 
 void VerifyUiTextAreaInputScrollTests_ReadOnlyWheelAndThumbScrollingLeaveUndoAndRedoIntact(mut UiTextAreaInputScrollTests self){
-    TextAreaOptions options = UiTextAreaScrollOptions();
+    TextAreaOptions options = MakeUiTextAreaScrollOptions();
     options.readOnly = true;
     ASSERT_TRUE(self.prepareScroll(options));
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
@@ -856,7 +587,7 @@ void VerifyUiTextAreaInputScrollTests_ReadOnlyWheelAndThumbScrollingLeaveUndoAnd
 }
 
 void VerifyUiTextAreaInputScrollTests_DisabledEditorUsesTheContainingPanelBarrierAndCannotScroll(mut UiTextAreaInputScrollTests self){
-    TextAreaOptions options = UiTextAreaScrollOptions();
+    TextAreaOptions options = MakeUiTextAreaScrollOptions();
     options.enabled = false;
     ASSERT_TRUE(self.prepareScroll(options));
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
@@ -882,17 +613,17 @@ void VerifyUiTextAreaInputScrollTests_WheelViewportPersistsUntilAnAcceptedIdenti
     const u64 revision = self.m_model.revision();
     const u64 selection = self.m_model.selectionGeneration();
     ASSERT_TRUE(self.wheel(1.0, -1.0));
-    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(2u, MakeUiTextAreaScrollOptions()));
     const Point scroll = self.m_state.scroll();
     ASSERT_GT(scroll.x, 0.0f);
     ASSERT_GT(scroll.y, 0.0f);
-    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(3u, MakeUiTextAreaScrollOptions()));
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, scroll.x);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, scroll.y);
     EXPECT_EQ(self.m_model.revision(), revision);
     EXPECT_EQ(self.m_model.selectionGeneration(), selection);
     ASSERT_TRUE(self.m_model.setSelection(self.m_model.anchor(), self.m_model.caret()));
-    ASSERT_TRUE(self.frameArea(4u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(4u, MakeUiTextAreaScrollOptions()));
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
     EXPECT_GT(self.m_model.selectionGeneration(), selection);
@@ -901,7 +632,7 @@ void VerifyUiTextAreaInputScrollTests_WheelViewportPersistsUntilAnAcceptedIdenti
 }
 
 void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndTheBaselineAcrossRepaints(mut UiTextAreaInputScrollTests self){
-    ASSERT_TRUE(self.prepareScroll(UiTextAreaScrollOptions(), Point(30.0f, 50.0f)));
+    ASSERT_TRUE(self.prepareScroll(MakeUiTextAreaScrollOptions(), Point(30.0f, 50.0f)));
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
     const auto foundThumb = self.tryTarget(self.part("scroll.y.thumb"));
     ASSERT_TRUE(foundThumb.has_value());
@@ -915,7 +646,7 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
     EXPECT_EQ(self.m_context.input().capture(), thumb.id);
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiTextAreaWidgetKey, s_UiTextAreaPanelKey));
-    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(2u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 50.0, 0.001);
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().x), 30.0, 0.001);
     const auto foundAfterPress = self.tryTarget(self.part("scroll.y.thumb"));
@@ -927,7 +658,7 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     const VectorDouble expectedScroll = VectorDouble(thumb.gestureMaximum, thumb.gestureMaximum, thumb.gestureMaximum, thumb.gestureMaximum) * VectorDouble(0.25, 0.5, 0.0, 0.0) + VectorDouble(50.0, 50.0, 50.0, 50.0);
     const Point quarter = Point(origin.x, dragY.x);
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, quarter)).pointerConsumed);
-    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(3u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), expectedScroll.x, 0.001);
     const auto foundAfterMove = self.tryTarget(self.part("scroll.y.thumb"));
     ASSERT_TRUE(foundAfterMove.has_value());
@@ -937,7 +668,7 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     const Point half = Point(origin.x, dragY.y);
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, half)).pointerConsumed);
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, half)).pointerConsumed);
-    ASSERT_TRUE(self.frameArea(4u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(4u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), expectedScroll.y, 0.001);
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 30.0f);
     EXPECT_FALSE(self.m_context.input().capture().valid());
@@ -959,14 +690,14 @@ void VerifyUiTextAreaInputScrollTests_CompletedHorizontalThumbDragKeepsOutsideRe
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, outside)).pointerConsumed);
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
-    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(2u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().x), thumb.gestureMaximum, 0.001);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
     model.expect(self.m_model);
 }
 
 void VerifyUiTextAreaInputScrollTests_TrackPagesOnlyOnReleaseByTheAcceptedViewport(mut UiTextAreaInputScrollTests self){
-    ASSERT_TRUE(self.prepareScroll(UiTextAreaScrollOptions(), Point(0.0f, 100.0f)));
+    ASSERT_TRUE(self.prepareScroll(MakeUiTextAreaScrollOptions(), Point(0.0f, 100.0f)));
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
     const f64 page = self.m_state.scrollbars().vertical.viewportExtent;
     const auto foundAfter = self.tryTarget(self.part("scroll.y.after"));
@@ -974,11 +705,11 @@ void VerifyUiTextAreaInputScrollTests_TrackPagesOnlyOnReleaseByTheAcceptedViewpo
     const HitTarget after = foundAfter.value();
     const Point point = CenterUiRect(after.rectangle);
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, point)).pointerConsumed);
-    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(2u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 100.0, 0.001);
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, point)).pointerConsumed);
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 100.0, 0.001);
-    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(3u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 100.0 + page, 0.001);
     model.expect(self.m_model);
 }
@@ -998,7 +729,7 @@ void VerifyUiTextAreaInputScrollTests_LaterCoalescedThumbUpdateRunsAfterAnInterv
     const Point quarter = Point(origin.x, travel * 0.25f + origin.y);
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, quarter)).pointerConsumed);
     ASSERT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, quarter)).pointerConsumed);
-    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
+    ASSERT_TRUE(self.frameArea(2u, MakeUiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), thumb.gestureMaximum * 0.25, 0.001);
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
@@ -1033,9 +764,9 @@ void VerifyUiTextAreaInputScrollTests_PopupWheelUsesTheAcceptedPopupScopeAndDefe
 
 void VerifyUiTextAreaLoanTests_IdenticalScrollIntentRetiresAPreparedLoanWithoutChangingNavigation(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     ASSERT_TRUE(self.beginArea(2u));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     const Point scroll = self.m_state.scroll();
     const u64 revision = self.m_state.revision();
     const EditNavigationSnapshot navigation = self.m_state.navigation().snapshot();
@@ -1051,9 +782,9 @@ void VerifyUiTextAreaLoanTests_IdenticalScrollIntentRetiresAPreparedLoanWithoutC
 
 void VerifyUiTextAreaLoanTests_IdenticalSelectionIntentRetiresAPreparedLoanWithoutATextRevision(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     ASSERT_TRUE(self.beginArea(2u));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     const u64 revision = self.m_model.revision();
     const u64 selection = self.m_model.selectionGeneration();
     ASSERT_TRUE(self.m_model.setSelection(self.m_model.anchor(), self.m_model.caret()));
@@ -1067,9 +798,9 @@ void VerifyUiTextAreaLoanTests_IdenticalSelectionIntentRetiresAPreparedLoanWitho
 
 void VerifyUiTextAreaLoanTests_CancelledCompositionStillRetiresAPreparedLoan(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     ASSERT_TRUE(self.beginArea(2u));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     const u64 revision = self.m_model.revision();
     const u64 composition = self.m_model.compositionGeneration();
     ASSERT_TRUE(self.m_model.beginComposition());
@@ -1086,7 +817,7 @@ void VerifyUiTextAreaLoanTests_CancelledCompositionStillRetiresAPreparedLoan(mut
 
 void VerifyUiTextAreaLoanTests_IdenticalScrollIntentDuringHostLoanRejectsBeforePreparation(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     const u64 revision = self.m_state.revision();
     const Point scroll = self.m_state.scroll();
     usize attempts = 0u;
@@ -1096,7 +827,7 @@ void VerifyUiTextAreaLoanTests_IdenticalScrollIntentDuringHostLoanRejectsBeforeP
     };
     self.m_host.loanHook = loanHook;
     ASSERT_TRUE(self.beginArea(2u));
-    EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_EQ(self.m_host.loans, 1u);
     EXPECT_EQ(self.m_host.ordinaryLoans, 0u);
@@ -1110,13 +841,13 @@ void VerifyUiTextAreaLoanTests_IdenticalScrollIntentDuringHostLoanRejectsBeforeP
 
 void VerifyUiTextAreaLoanTests_FirstPublicationScrollIntentRejectsBeforeTheSecondPublication(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
-    EditModel secondModel = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
+    EditModel secondModel = EditModel(EditLimits(), EditTextMode::Multiline);
     TextAreaState secondState = TextAreaState();
     ASSERT_TRUE(secondModel.setText("second\narea"));
     ASSERT_TRUE(self.beginArea(2u));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
-    ASSERT_TRUE(self.m_builder.textArea("second", secondModel, secondState, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea("second", secondModel, secondState, MakeTextAreaLoanFixtureOptions()).valid);
     Point scroll = Point();
     u64 revision = 0u;
     EditNavigationSnapshot navigation = EditNavigationSnapshot();
@@ -1130,7 +861,7 @@ void VerifyUiTextAreaLoanTests_FirstPublicationScrollIntentRejectsBeforeTheSecon
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_EQ(self.m_host.publishes, 1u);
     ASSERT_EQ(self.m_host.publications.size(), 1u);
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[0u]), "alpha\nbeta");
+    EXPECT_EQ(StringView(self.m_host.publications[0u].text), "alpha\nbeta");
     EXPECT_GT(self.m_state.revision(), revision);
     EXPECT_TRUE(self.m_state.navigation().matches(navigation));
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, scroll.x);
@@ -1141,12 +872,12 @@ void VerifyUiTextAreaLoanTests_FirstPublicationScrollIntentRejectsBeforeTheSecon
 
 void VerifyUiTextAreaLoanTests_EndedChildLoanRejectsLaterStateIntentBeforeAnyPublication(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     self.m_parent.open();
     self.m_child.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     EXPECT_EQ(self.m_host.publishes, 0u);
     const u64 revision = self.m_state.revision();
@@ -1159,14 +890,14 @@ void VerifyUiTextAreaLoanTests_EndedChildLoanRejectsLaterStateIntentBeforeAnyPub
 
 void VerifyUiTextAreaLoanTests_ParentChildModelAliasRejectsBeforeTheSecondHostLoan(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     TextAreaState secondState = TextAreaState();
     self.m_parent.open();
     self.m_child.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.textArea("parentArea", self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    EXPECT_FALSE(self.m_builder.textArea("childArea", self.m_model, secondState, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea("parentArea", self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    EXPECT_FALSE(self.m_builder.textArea("childArea", self.m_model, secondState, MakeTextAreaLoanFixtureOptions()).valid);
     EXPECT_EQ(self.m_host.loans, 1u);
     EXPECT_EQ(self.m_host.publishes, 0u);
     self.expectRejected(before);
@@ -1174,18 +905,18 @@ void VerifyUiTextAreaLoanTests_ParentChildModelAliasRejectsBeforeTheSecondHostLo
 
 void VerifyUiTextAreaLoanTests_EndedChildSiblingStateAliasRejectsBeforeTheSecondHostLoan(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
-    EditModel secondModel = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
+    EditModel secondModel = EditModel(EditLimits(), EditTextMode::Multiline);
     PopupState sibling = PopupState();
     self.m_parent.open();
     self.m_child.open();
     sibling.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
-    ASSERT_TRUE(self.m_builder.beginPopup("sibling", sibling, UiTextAreaLargeLoanChildOptions()));
-    EXPECT_FALSE(self.m_builder.textArea("other", secondModel, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup("sibling", sibling, MakeLargeLoanChildPopupOptions()));
+    EXPECT_FALSE(self.m_builder.textArea("other", secondModel, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     EXPECT_EQ(self.m_host.loans, 1u);
     EXPECT_EQ(self.m_host.publishes, 0u);
     self.expectRejected(before);
@@ -1193,23 +924,23 @@ void VerifyUiTextAreaLoanTests_EndedChildSiblingStateAliasRejectsBeforeTheSecond
 
 void VerifyUiTextAreaLoanTests_ChildSourceSameTextReplacementRejectsTheAlreadyPaintedParent(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     UiTextAreaMutationSource source = UiTextAreaMutationSource();
     ListState list = ListState();
     self.m_parent.open();
     self.m_child.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     const u64 external = self.m_model.externalRevision();
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, UiTextAreaLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, MakeLargeLoanListOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
-    source.rowHook = lambda[mut self]() -> void{
+    source.rowHook.value() = lambda[mut self]() -> void{
         EXPECT_TRUE(self.m_model.setText("alpha\nbeta"));
     };
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_EQ(source.rowMutations, 1u);
-    EXPECT_GT(source.textCalls, 0u);
+    EXPECT_EQ(source.rowMutations.value(), 1u);
+    EXPECT_GT(source.textCalls.value(), 0u);
     EXPECT_GT(self.m_model.externalRevision(), external);
     EXPECT_EQ(self.m_model.text(), "alpha\nbeta");
     EXPECT_EQ(self.m_host.publishes, 1u);
@@ -1218,22 +949,22 @@ void VerifyUiTextAreaLoanTests_ChildSourceSameTextReplacementRejectsTheAlreadyPa
 
 void VerifyUiTextAreaLoanTests_ParentSourceStateIntentRejectsTheEndedChildBeforePublication(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     UiTextAreaMutationSource source = UiTextAreaMutationSource();
     ListState list = ListState();
     self.m_parent.open();
     self.m_child.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, UiTextAreaLargeLoanListOptions()).valid);
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     const u64 revision = self.m_state.revision();
-    source.rowHook = lambda[mut self]() -> void{
+    source.rowHook.value() = lambda[mut self]() -> void{
         EXPECT_TRUE(self.m_state.scrollTo(self.m_state.scroll()));
     };
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_EQ(source.rowMutations, 1u);
+    EXPECT_EQ(source.rowMutations.value(), 1u);
     EXPECT_GT(self.m_state.revision(), revision);
     EXPECT_EQ(self.m_host.publishes, 0u);
     self.expectRejected(before);
@@ -1241,7 +972,7 @@ void VerifyUiTextAreaLoanTests_ParentSourceStateIntentRejectsTheEndedChildBefore
 
 void VerifyUiTextAreaLoanTests_LaterSiblingStateScrollABARetiresAnAlreadyPaintedEndedChild(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     UiTextAreaMutationSource source = UiTextAreaMutationSource();
     ListState list = ListState();
     PopupState sibling = PopupState();
@@ -1249,16 +980,16 @@ void VerifyUiTextAreaLoanTests_LaterSiblingStateScrollABARetiresAnAlreadyPainted
     self.m_child.open();
     sibling.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
-    ASSERT_TRUE(self.m_builder.beginPopup("sibling", sibling, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, UiTextAreaLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup("sibling", sibling, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, MakeLargeLoanListOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     Point scroll = Point();
     u64 revision = 0u;
     EditNavigationSnapshot navigation = EditNavigationSnapshot();
-    source.rowHook = lambda[mut self, mut scroll, mut revision, mut navigation]() -> void{
+    source.rowHook.value() = lambda[mut self, mut scroll, mut revision, mut navigation]() -> void{
         scroll = self.m_state.scroll();
         revision = self.m_state.revision();
         navigation = self.m_state.navigation().snapshot();
@@ -1267,7 +998,7 @@ void VerifyUiTextAreaLoanTests_LaterSiblingStateScrollABARetiresAnAlreadyPainted
         EXPECT_TRUE(self.m_state.scrollTo(scroll));
     };
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_EQ(source.rowMutations, 1u);
+    EXPECT_EQ(source.rowMutations.value(), 1u);
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_EQ(self.m_state.revision(), revision + 2u);
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, scroll.x);
@@ -1278,7 +1009,7 @@ void VerifyUiTextAreaLoanTests_LaterSiblingStateScrollABARetiresAnAlreadyPainted
 
 void VerifyUiTextAreaLoanTests_FinalMetadataScrollIntentRejectsAfterParentAndChildPaint(mut UiTextAreaLoanTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     UiTextAreaMutationSource parentSource = UiTextAreaMutationSource(4301u);
     UiTextAreaMutationSource childSource = UiTextAreaMutationSource(4302u);
     ListState parentList = ListState();
@@ -1286,23 +1017,23 @@ void VerifyUiTextAreaLoanTests_FinalMetadataScrollIntentRejectsAfterParentAndChi
     self.m_parent.open();
     self.m_child.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
-    ASSERT_TRUE(self.m_builder.virtualList("list", parentSource, parentList, UiTextAreaLargeLoanListOptions()).valid);
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.virtualList("list", childSource, childList, UiTextAreaLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
+    ASSERT_TRUE(self.m_builder.virtualList("list", parentSource, parentList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList("list", childSource, childList, MakeLargeLoanListOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     usize publicationsAtMutation = 0u;
     u64 revision = 0u;
     childSource.armParentMetadata(parentSource);
-    childSource.metadataToArm = lambda[mut self, mut publicationsAtMutation, mut revision]() -> void{
+    childSource.metadataToArm.value() = lambda[mut self, mut publicationsAtMutation, mut revision]() -> void{
         publicationsAtMutation = self.m_host.publishes;
         revision = self.m_state.revision();
         EXPECT_TRUE(self.m_state.scrollTo(self.m_state.scroll()));
     };
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_EQ(childSource.arms, 1u);
-    EXPECT_EQ(parentSource.metadataMutations, 1u);
-    EXPECT_GT(childSource.textCalls, 0u);
+    EXPECT_EQ(childSource.arms.value(), 1u);
+    EXPECT_EQ(parentSource.metadataMutations.value(), 1u);
+    EXPECT_GT(childSource.textCalls.value(), 0u);
     EXPECT_EQ(publicationsAtMutation, 1u);
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_GT(self.m_state.revision(), revision);
@@ -1316,12 +1047,12 @@ void VerifyUiTextAreaLoanTests_ReopenedAncestorSuppressesItsOldAreaAndSourceCall
     self.m_parent.open();
     self.m_child.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
-    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, UiTextAreaLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
+    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, MakeLargeLoanListOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     source.resetAllCounters();
-    source.rowHook = lambda[]() -> void{
+    source.rowHook.value() = lambda[]() -> void{
         EXPECT_TRUE(false);
     };
     const usize loans = self.m_host.loans;
@@ -1334,9 +1065,9 @@ void VerifyUiTextAreaLoanTests_ReopenedAncestorSuppressesItsOldAreaAndSourceCall
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_host.loans, loans);
     EXPECT_EQ(self.m_host.publishes, 0u);
-    EXPECT_EQ(source.metadataCalls, 0u);
-    EXPECT_EQ(source.textCalls, 0u);
-    EXPECT_EQ(source.rowMutations, 0u);
+    EXPECT_EQ(source.metadataCalls.value(), 0u);
+    EXPECT_EQ(source.textCalls.value(), 0u);
+    EXPECT_EQ(source.rowMutations.value(), 0u);
     EXPECT_EQ(self.m_model.text(), "external\nreplacement");
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, 13.0f);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 17.0f);
@@ -1347,24 +1078,24 @@ void VerifyUiTextAreaLoanTests_SuccessfulOuterEndReleasesLoansBeforeMutationAndN
     self.m_parent.open();
     self.m_child.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     EXPECT_EQ(self.m_host.publishes, 0u);
     ASSERT_TRUE(self.m_builder.endPopup());
     ASSERT_EQ(self.m_host.publications.size(), 1u);
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[0u]), "alpha\nbeta");
+    EXPECT_EQ(StringView(self.m_host.publications[0u].text), "alpha\nbeta");
     const EditBoxPlacement oldPlacement = self.m_host.publications[0u].placement;
     ASSERT_TRUE(self.m_model.setText("external\nreplacement"));
     ASSERT_TRUE(self.m_state.scrollTo(Point(6.0f, 7.0f)));
     const u64 revision = self.m_state.revision();
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[0u]), "alpha\nbeta");
+    EXPECT_EQ(StringView(self.m_host.publications[0u].text), "alpha\nbeta");
     ExpectUiRect(self.m_host.publications[0u].placement.bounds, oldPlacement.bounds);
     ASSERT_TRUE(self.finishRoot());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     ASSERT_TRUE(self.beginParent(3u));
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     ASSERT_TRUE(self.m_builder.endPopup());
     ASSERT_TRUE(self.finishRoot());
@@ -1372,8 +1103,8 @@ void VerifyUiTextAreaLoanTests_SuccessfulOuterEndReleasesLoansBeforeMutationAndN
     EXPECT_EQ(self.m_host.loans, 2u);
     EXPECT_EQ(self.m_host.publishes, 2u);
     ASSERT_EQ(self.m_host.publications.size(), 2u);
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[1u]), "external\nreplacement");
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[0u]), "alpha\nbeta");
+    EXPECT_EQ(StringView(self.m_host.publications[1u].text), "external\nreplacement");
+    EXPECT_EQ(StringView(self.m_host.publications[0u].text), "alpha\nbeta");
     EXPECT_EQ(self.m_state.revision(), revision);
 }
 
@@ -1384,7 +1115,7 @@ void VerifyUiTextAreaLoanTests_SuccessfulOuterEndReleasesLoansBeforeMutationAndN
 void VerifyUiTextAreaNavigationTests_ResolverReadsReplacedTextInsteadOfStaleLayout(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MMMM\nMMMM"));
     ASSERT_TRUE(self.m_model.setSelection(2u, 2u));
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
     const auto first = resolver.resolve(self.m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(first.has_value());
@@ -1495,12 +1226,12 @@ void VerifyUiTextAreaNavigationTests_PageReachesTheTrailingEmptyLine(mut UiTextA
 }
 
 void VerifyUiTextAreaNavigationTests_EmptyDocumentResolvesEveryDirectionWithoutMoving(mut UiTextAreaNavigationTests self){
-    Array<EditNavigationDirectionEnum, 4u> directions;
+    Array<EditNavigationDirection, 4u> directions;
     directions[0u] = EditNavigationDirection::Up;
     directions[1u] = EditNavigationDirection::Down;
     directions[2u] = EditNavigationDirection::PageUp;
     directions[3u] = EditNavigationDirection::PageDown;
-    for(in EditNavigationDirectionEnum direction : directions){
+    for(in EditNavigationDirection direction : directions){
         const auto result = self.resolve(direction, 160.0f);
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(result.value().committedByte, 0u);
@@ -1539,21 +1270,21 @@ void VerifyUiTextAreaNavigationTests_InvalidViewportValuesPreserveTheBorrowedMod
 
 void VerifyUiTextAreaNavigationTests_InvalidDirectionAndFontParametersFailClosed(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
-    EXPECT_FALSE(self.resolve(cast<EditNavigationDirectionEnum>(255u), 160.0f).has_value());
+    EXPECT_FALSE(self.resolve(cast<EditNavigationDirection>(255u), 160.0f).has_value());
     Array<f32, 4u> sizes;
     sizes[0u] = 0.0f;
     sizes[1u] = -1.0f;
     sizes[2u] = bit_cast<f32>(s_UiTextAreaPosInfF32Bits);
     sizes[3u] = bit_cast<f32>(s_UiTextAreaQuietNaNF32Bits);
     for(in f32 size : sizes){
-        TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, size);
+        TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, size);
         EXPECT_FALSE(resolver.resolve(self.m_model, EditNavigationDirection::Down, self.m_state.navigation().snapshot(), 0.0f).has_value());
     }
 }
 
 void VerifyUiTextAreaNavigationTests_ForeignAndModifiedNavigationSnapshotsAreRejected(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     TextAreaState foreign = TextAreaState();
     EXPECT_FALSE(resolver.resolve(self.m_model, EditNavigationDirection::Down, foreign.navigation().snapshot(), 0.0f).has_value());
     EditNavigationSnapshot copied = self.m_state.navigation().snapshot();
@@ -1585,11 +1316,11 @@ void VerifyUiTextAreaNavigationTests_ActivePreeditIsPreservedAndNotResolved(mut 
 }
 
 void VerifyUiTextAreaNavigationTests_SingleLineModelsAreRejectedWithoutMutation(mut UiTextAreaNavigationTests self){
-    EditModel model = EditModel(self.m_arena);
+    EditModel model = EditModel();
     ASSERT_TRUE(model.setText("plain"));
     ASSERT_TRUE(model.setSelection(2u, 2u));
     const u64 selection = model.selectionGeneration();
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     EXPECT_FALSE(resolver.resolve(model, EditNavigationDirection::Down, self.m_state.navigation().snapshot(), 160.0f).has_value());
     EXPECT_EQ(model.text(), "plain");
     EXPECT_EQ(model.caret(), 2u);
@@ -1598,7 +1329,7 @@ void VerifyUiTextAreaNavigationTests_SingleLineModelsAreRejectedWithoutMutation(
 
 void VerifyUiTextAreaNavigationTests_IdenticalAcceptedScrollIntentRetiresTheResolver(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
     ASSERT_TRUE(self.m_state.scrollTo(Point(0.0f, 0.0f)));
     EXPECT_TRUE(self.m_state.navigation().matches(preferred));
@@ -1609,7 +1340,7 @@ void VerifyUiTextAreaNavigationTests_IdenticalAcceptedScrollIntentRetiresTheReso
 
 void VerifyUiTextAreaNavigationTests_ScrollAwayAndBackCannotReviveTheResolver(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
     ASSERT_TRUE(self.m_state.scrollTo(Point(12.0f, 40.0f)));
     ASSERT_TRUE(self.m_state.scrollTo(Point(0.0f, 0.0f)));
@@ -1620,7 +1351,7 @@ void VerifyUiTextAreaNavigationTests_ScrollAwayAndBackCannotReviveTheResolver(mu
 
 void VerifyUiTextAreaNavigationTests_ResetRetiresAnOtherwiseIdenticalInitialState(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     self.m_state.reset();
     EXPECT_FALSE(resolver.resolve(self.m_model, EditNavigationDirection::Down, self.m_state.navigation().snapshot(), 160.0f).has_value());
     EXPECT_TRUE(self.resolve(EditNavigationDirection::Down).has_value());
@@ -1629,7 +1360,7 @@ void VerifyUiTextAreaNavigationTests_ResetRetiresAnOtherwiseIdenticalInitialStat
 void VerifyUiTextAreaNavigationTests_RejectedScrollIntentPreservesTheResolver(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
     EXPECT_FALSE(self.m_state.scrollTo(Point(-1.0f, 0.0f)));
     const auto result = resolver.resolve(self.m_model, EditNavigationDirection::Down, preferred, 160.0f);
@@ -1639,7 +1370,7 @@ void VerifyUiTextAreaNavigationTests_RejectedScrollIntentPreservesTheResolver(mu
 
 void VerifyUiTextAreaNavigationTests_FailedContextRejectsAnOtherwiseCurrentBorrow(mut UiTextAreaNavigationTests self){
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     const u64 revision = self.m_model.revision();
     const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
     self.m_context.fail();
@@ -1652,8 +1383,8 @@ void VerifyUiTextAreaNavigationTests_ShapeFailurePreservesModelAndViewportIntent
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
     ASSERT_TRUE(self.m_state.scrollTo(Point(5.0f, 20.0f)));
-    TextService empty = TextService(self.m_arena);
-    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(self.m_arena, empty, self.m_context, self.m_state, 14.0f);
+    TextService empty = TextService();
+    TextAreaNavigationResolver resolver = TextAreaNavigationResolver(empty, self.m_context, self.m_state, 14.0f);
     const u64 revision = self.m_state.revision();
     const u64 selection = self.m_model.selectionGeneration();
     const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
@@ -1678,7 +1409,7 @@ void VerifyUiTextAreaNavigationTests_ExplicitHangulPolicyKeepsVerticalTargetAlig
     request.fontSize = 14.0f;
     request.scriptTag = hangulTag;
     request.direction = TextDirection::LeftToRight;
-    EditBoxView visual = EditBoxView(self.m_arena);
+    EditBoxView visual = EditBoxView();
     ASSERT_TRUE(visual.snapshot(self.m_model));
     ASSERT_EQ(visual.shape(self.m_text, request), TextLayoutStatus::Success);
     const auto caret = visual.caretGeometry().caretRect(visual.displayCaret());
@@ -1688,12 +1419,12 @@ void VerifyUiTextAreaNavigationTests_ExplicitHangulPolicyKeepsVerticalTargetAlig
 
     const EditNavigationSnapshot preferred = self.m_state.navigation().snapshot();
     String language = "ko";
-    TextAreaNavigationResolver configured = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f, hangulTag, StringView(language.data(), language.size()));
+    TextAreaNavigationResolver configured = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f, hangulTag, StringView(language.data(), language.size()));
     language.assign("!!", 2u);
     const auto matching = configured.resolve(self.m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(matching.has_value());
     EXPECT_EQ(matching.value().committedByte, expected.value());
-    TextAreaNavigationResolver defaultPolicy = TextAreaNavigationResolver(self.m_arena, self.m_text, self.m_context, self.m_state, 14.0f);
+    TextAreaNavigationResolver defaultPolicy = TextAreaNavigationResolver(self.m_text, self.m_context, self.m_state, 14.0f);
     const auto different = defaultPolicy.resolve(self.m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(different.has_value());
     EXPECT_NE(matching.value().committedByte, different.value().committedByte);
@@ -1705,7 +1436,7 @@ void VerifyUiTextAreaNavigationTests_ExplicitHangulPolicyKeepsVerticalTargetAlig
 
 void VerifyUiTextAreaReentryTests_HostLoanResetRejectsWithoutClearingTheLentModel(mut UiTextAreaReentryTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     usize attempts = 0u;
     b8 failedAtAttempt = false;
     const auto loanHook = lambda[mut self, mut attempts, mut failedAtAttempt]() -> void{
@@ -1716,7 +1447,7 @@ void VerifyUiTextAreaReentryTests_HostLoanResetRejectsWithoutClearingTheLentMode
     };
     self.m_host.loanHook = loanHook;
     ASSERT_TRUE(self.beginArea(2u));
-    EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_TRUE(failedAtAttempt);
     EXPECT_EQ(self.m_host.loans, 1u);
@@ -1729,19 +1460,19 @@ void VerifyUiTextAreaReentryTests_HostLoanResetRejectsWithoutClearingTheLentMode
 
 void VerifyUiTextAreaReentryTests_HostLoanNestedDeclarationRejectsBeforeASecondLoan(mut UiTextAreaReentryTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
-    EditModel otherModel = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
+    EditModel otherModel = EditModel(EditLimits(), EditTextMode::Multiline);
     TextAreaState otherState = TextAreaState();
     ASSERT_TRUE(otherModel.setText("other\narea"));
     usize attempts = 0u;
     EditBoxResult nested = EditBoxResult();
     const auto loanHook = lambda[mut self, mut otherModel, mut otherState, mut attempts, mut nested]() -> void{
         ++attempts;
-        nested = self.m_builder.textArea("reentered", otherModel, otherState, UiTextAreaLoanOptions());
+        nested = self.m_builder.textArea("reentered", otherModel, otherState, MakeTextAreaLoanFixtureOptions());
     };
     self.m_host.loanHook = loanHook;
     ASSERT_TRUE(self.beginArea(2u));
-    EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
+    EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_FALSE(nested.valid);
     EXPECT_EQ(self.m_host.loans, 1u);
@@ -1753,13 +1484,13 @@ void VerifyUiTextAreaReentryTests_HostLoanNestedDeclarationRejectsBeforeASecondL
 
 void VerifyUiTextAreaReentryTests_PublicationResetRejectsBeforeLaterAreaPublication(mut UiTextAreaReentryTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
-    EditModel otherModel = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
+    EditModel otherModel = EditModel(EditLimits(), EditTextMode::Multiline);
     TextAreaState otherState = TextAreaState();
     ASSERT_TRUE(otherModel.setText("other\narea"));
     ASSERT_TRUE(self.beginArea(2u));
-    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
-    ASSERT_TRUE(self.m_builder.textArea("other", otherModel, otherState, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea("other", otherModel, otherState, MakeTextAreaLoanFixtureOptions()).valid);
     usize attempts = 0u;
     b8 failedAtAttempt = false;
     const auto publishHook = lambda[mut self, mut otherModel, mut attempts, mut failedAtAttempt]() -> void{
@@ -1774,7 +1505,7 @@ void VerifyUiTextAreaReentryTests_PublicationResetRejectsBeforeLaterAreaPublicat
     EXPECT_TRUE(failedAtAttempt);
     EXPECT_EQ(self.m_host.publishes, 1u);
     ASSERT_EQ(self.m_host.publications.size(), 1u);
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[0u]), "alpha\nbeta");
+    EXPECT_EQ(StringView(self.m_host.publications[0u].text), "alpha\nbeta");
     EXPECT_EQ(self.m_model.text(), "alpha\nbeta");
     EXPECT_EQ(otherModel.text(), "application\nmutation");
     self.expectRejected(before);
@@ -1782,10 +1513,10 @@ void VerifyUiTextAreaReentryTests_PublicationResetRejectsBeforeLaterAreaPublicat
 
 void VerifyUiTextAreaReentryTests_ChildRowScopeReentryRejectsBeforeSiblingAreaPublication(mut UiTextAreaReentryTests self){
     ASSERT_TRUE(self.acceptBaseline());
-    const UiTextAreaAcceptedInput16 before = self.accepted();
+    const UiFixtureAcceptedInputState<16u> before = self.accepted();
     UiTextAreaReentrySource source = UiTextAreaReentrySource();
     ListState list = ListState();
-    EditModel siblingModel = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    EditModel siblingModel = EditModel(EditLimits(), EditTextMode::Multiline);
     TextAreaState siblingState = TextAreaState();
     PopupState sibling = PopupState();
     ASSERT_TRUE(siblingModel.setText("sibling\narea"));
@@ -1793,17 +1524,17 @@ void VerifyUiTextAreaReentryTests_ChildRowScopeReentryRejectsBeforeSiblingAreaPu
     self.m_child.open();
     sibling.open();
     ASSERT_TRUE(self.beginParent(2u));
-    ASSERT_TRUE(self.m_builder.textArea("parentArea", self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
-    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, UiTextAreaLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.textArea("parentArea", self.m_model, self.m_state, MakeTextAreaLoanFixtureOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList("list", source, list, MakeLargeLoanListOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
-    ASSERT_TRUE(self.m_builder.beginPopup("sibling", sibling, UiTextAreaLargeLoanChildOptions()));
-    ASSERT_TRUE(self.m_builder.textArea("siblingArea", siblingModel, siblingState, UiTextAreaLoanOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup("sibling", sibling, MakeLargeLoanChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.textArea("siblingArea", siblingModel, siblingState, MakeTextAreaLoanFixtureOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     b8 beginAccepted = true;
     b8 endAccepted = true;
     b8 failedAtAttempt = false;
-    source.rowHook = lambda[mut self, mut beginAccepted, mut endAccepted, mut failedAtAttempt]() -> void{
+    source.rowHook.value() = lambda[mut self, mut beginAccepted, mut endAccepted, mut failedAtAttempt]() -> void{
         Rect bounds = Rect();
         bounds.x = 0.0f;
         bounds.y = 0.0f;
@@ -1814,15 +1545,15 @@ void VerifyUiTextAreaReentryTests_ChildRowScopeReentryRejectsBeforeSiblingAreaPu
         failedAtAttempt = self.m_builder.failed();
     };
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_EQ(source.attempts, 1u);
-    EXPECT_EQ(source.callbacksAfterAttempt, 0u);
+    EXPECT_EQ(source.attempts.value(), 1u);
+    EXPECT_EQ(source.callbacksAfterAttempt.value(), 0u);
     EXPECT_FALSE(beginAccepted);
     EXPECT_FALSE(endAccepted);
     EXPECT_TRUE(failedAtAttempt);
     EXPECT_EQ(self.m_host.loans, 2u);
     EXPECT_EQ(self.m_host.publishes, 1u);
     ASSERT_EQ(self.m_host.publications.size(), 1u);
-    EXPECT_EQ(UiTextAreaPublicationText(self.m_host.publications[0u]), "alpha\nbeta");
+    EXPECT_EQ(StringView(self.m_host.publications[0u].text), "alpha\nbeta");
     EXPECT_EQ(siblingModel.text(), "sibling\narea");
     self.expectRejected(before);
 }

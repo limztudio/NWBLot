@@ -3,445 +3,217 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+#include <tests/unit/ui/native_input.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+enum<u8> UiComboLoanMutationKind{ None, RevisionSelect, KeySelect, TextSelect, EnabledOpen, TextRevision }
+type UiComboLoanAcceptedState = UiFixtureAcceptedInputState<32u>;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_combo_loan_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiComboTests;
-
-namespace MutationKind{
-    enum Enum : u8{ None, RevisionSelect, KeySelect, TextSelect, EnabledOpen, TextRevision };
-};
-
-
-// Reentrant combo source that mutates host selection during callbacks.
-class CallbackSource final : public ComboSource{
-public:
-    explicit CallbackSource(ComboState& state)noexcept
-        : m_state(state)
-    {}
-
-
-public:
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        mutate(MutationKind::RevisionSelect);
-        return ComboSource::revision() + m_revisionDelta;
-    }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        mutate(MutationKind::KeySelect);
-        return ComboSource::key(index);
-    }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        mutate(MutationKind::TextSelect);
-        if(m_kind == MutationKind::TextRevision){
-            m_kind = MutationKind::None;
-            ++m_mutations;
-            ++m_revisionDelta;
-        }
-        return ComboSource::text(index);
-    }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        mutate(MutationKind::EnabledOpen);
-        return ComboSource::enabled(index);
-    }
-
-    void arm(const MutationKind::Enum kind, const u64 key = 8u)noexcept{
-        m_kind = kind;
-        m_key = key;
-    }
-
-    [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
-
-
-private:
-    void mutate(const MutationKind::Enum kind)const noexcept{
-        if(m_kind != kind)
-            return;
-        m_kind = MutationKind::None;
-        ++m_mutations;
-        if(kind == MutationKind::EnabledOpen)
-            m_state.open();
-        else
-            m_state.select(m_key);
-    }
-
-
-private:
-    ComboState& m_state;
-    mutable MutationKind::Enum m_kind = MutationKind::None;
-    u64 m_key = 8u;
-    mutable u64 m_mutations = 0u;
-    mutable u64 m_revisionDelta = 0u;
-};
-
-using AcceptedState = UiWidgetTests::AcceptedInputState<32u>;
-
-class ForeignRevisionSource final : public ComboSource{
-public:
-    explicit ForeignRevisionSource(ComboSource& source)noexcept
-        : m_foreign(source)
-    {}
-
-
-public:
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        if(m_armed){
-            m_armed = false;
-            ++m_foreign.contentRevision;
-            ++m_mutations;
-        }
-        return ComboSource::text(index);
-    }
-
-    void arm()noexcept{ m_armed = true; }
-
-    [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
-
-
-private:
-    ComboSource& m_foreign;
-    mutable b8 m_armed = false;
-    mutable u64 m_mutations = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiComboLoanTests : public ComboFixture{
-public:
-    UiComboLoanTests()
-        : m_callbacks(m_state)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declareCallbacks(const u64 generation){
-        return declareSource(generation, m_callbacks, m_state);
-    }
-
-    [[nodiscard]] b8 acceptCallbacks(const u64 generation){
-        return declareCallbacks(generation) && finishPanel() && m_context.commitFrame(generation);
-    }
-
-    [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<32u>(m_context.input()); }
-
-
-public:
-    CallbackSource m_callbacks;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_command_input_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-struct RoutedInput{
-    InputRoutingResult routing;
-    InputEvent event;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiCommandInputTests : public testing::Test{
-public:
-    UiCommandInputTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiCommandInput))
-        , m_router(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] RoutedInput send(const InputEvent& event){
-        const auto resolved = m_router.queue(UiTestSupport::NativeInput(event));
-        EXPECT_TRUE(resolved);
-        if(!resolved)
-            return {};
-        return { m_router.process(), *resolved };
-    }
-
-    [[nodiscard]] Expected<InputEvent> queueNative(const InputEvent& event){
-        return m_router.queue(UiTestSupport::NativeInput(event));
-    }
-
-    [[nodiscard]] Expected<ControlAction> take(const HitTarget& host)noexcept{
-        return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
-    }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_command_owner_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget MakeEditor()noexcept{
+HitTarget MakeCommandOwnerEditor(){
     HitTarget target;
-    target.id = { 1u };
+    target.id = WidgetId(1u);
     target.declarationGeneration = 7u;
-    target.rectangle = { 0.0f, 0.0f, 120.0f, 24.0f };
-    target.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
+    target.rectangle = Rect(0.0f, 0.0f, 120.0f, 24.0f);
+    target.clip = Rect(0.0f, 0.0f, 300.0f, 200.0f);
     target.focusable = true;
     target.textEditable = true;
-    target.control = { 101u, 102u, 103u };
+    target.control = ControlToken(101u, 102u, 103u);
     return target;
 }
 
-[[nodiscard]] FOUNDATION_INLINE HitTarget MakeList(const u64 id = 2u, const f32 x = 0.0f)noexcept{
+HitTarget MakeCommandOwnerList(in u64 id, in f32 x){
     HitTarget target;
-    target.id = { id };
+    target.id = WidgetId(id);
     target.declarationGeneration = 11u;
-    target.rectangle = { x, 40.0f, 120.0f, 120.0f };
-    target.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
+    target.rectangle = Rect(x, 40.0f, 120.0f, 120.0f);
+    target.clip = Rect(0.0f, 0.0f, 300.0f, 200.0f);
     target.focusable = true;
     target.navigable = true;
-    target.control = { 31u, 41u, 51u };
+    target.control = ControlToken(31u, 41u, 51u);
     target.pageRows = 5u;
     return target;
 }
 
-using UiTestSupport::Key;
+class ComboLoanCallbackSource : ComboSource{
+    public mut ComboState m_state;
+    public TestObserved<UiComboLoanMutationKind> m_kind = TestObserved<UiComboLoanMutationKind>(UiComboLoanMutationKind::None);
+    public u64 m_key = 8u;
+    public TestObserved<u64> m_mutations;
+    public TestObserved<u64> m_revisionDelta;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiCommandOwnerTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiCommandOwnerTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiKeyboardOwner))
-    {
-        m_targets = { MakeEditor(), MakeList(), MakeList(3u, 140.0f) };
-        m_targets[2u].control.instanceGeneration = 32u;
-        bind(m_targets[1u]);
+    public ComboLoanCallbackSource(mut ComboState state){ this.m_state = state; }
+    public u64 revision()const override{
+        this.mutate(UiComboLoanMutationKind::RevisionSelect);
+        return this.baseRevision() + this.m_revisionDelta.value();
     }
-
-
-public:
-    void bind(const HitTarget& owner)noexcept{
-        m_targets[0u].commandOwner = owner.id;
-        m_targets[0u].commandOwnerDeclarationGeneration = owner.declarationGeneration;
-        m_targets[0u].commandControl = owner.control;
+    public u64 key(in u64 index)const override{
+        this.mutate(UiComboLoanMutationKind::KeySelect);
+        return this.baseKey(index);
     }
-
-    void clearBinding()noexcept{
-        m_targets[0u].commandOwner = {};
-        m_targets[0u].commandOwnerDeclarationGeneration = 0u;
-        m_targets[0u].commandControl = {};
+    public StringView text(in u64 index)const override{
+        this.mutate(UiComboLoanMutationKind::TextSelect);
+        if(this.m_kind.value() == UiComboLoanMutationKind::TextRevision){
+            this.m_kind.value() = UiComboLoanMutationKind::None;
+            ++this.m_mutations.value();
+            ++this.m_revisionDelta.value();
+        }
+        return this.baseText(index);
     }
-
-    void press(const Core::Key::Enum key){
-        EXPECT_TRUE(send(Key(InputEventType::KeyDown, key)).commandConsumed);
-        EXPECT_TRUE(send(Key(InputEventType::KeyUp, key)).commandConsumed);
+    public b8 enabled(in u64 index)const override{
+        this.mutate(UiComboLoanMutationKind::EnabledOpen);
+        return this.baseEnabled(index);
     }
+    public void arm(in UiComboLoanMutationKind kind){ this.arm(kind, 8u); }
+    public void arm(in UiComboLoanMutationKind kind, in u64 key){
+        this.m_kind.value() = kind;
+        this.m_key = key;
+    }
+    public u64 mutations()const{ return this.m_mutations.value(); }
+    public void mutate(in UiComboLoanMutationKind kind)const{
+        if(this.m_kind.value() != kind)
+            return;
+        this.m_kind.value() = UiComboLoanMutationKind::None;
+        ++this.m_mutations.value();
+        if(kind == UiComboLoanMutationKind::EnabledOpen)
+            this.m_state.open();
+        else
+            this.m_state.select(this.m_key);
+    }
+}
 
-    void focus(){
+
+class UiComboLoanForeignRevisionSource : ComboSource{
+    public mut ComboSource m_foreign;
+    public TestObserved<b8> m_armed;
+    public TestObserved<u64> m_mutations;
+
+    public UiComboLoanForeignRevisionSource(mut ComboSource source){ this.m_foreign = source; }
+    public StringView text(in u64 index)const override{
+        if(this.m_armed.value()){
+            this.m_armed.value() = false;
+            ++this.m_foreign.contentRevision;
+            ++this.m_mutations.value();
+        }
+        return this.baseText(index);
+    }
+    public void arm(){ this.m_armed.value() = true; }
+    public u64 mutations()const{ return this.m_mutations.value(); }
+}
+
+
+class UiComboLoanTests : ComboFixture{
+    public ComboLoanCallbackSource m_callbacks;
+
+    public UiComboLoanTests(){ this.m_callbacks = ComboLoanCallbackSource(this.m_state); }
+    public b8 declareCallbacks(in u64 generation){
+        return this.declareSource(generation, this.m_callbacks, this.m_state);
+    }
+    public b8 acceptCallbacks(in u64 generation){
+        return this.declareCallbacks(generation) && this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+    public UiComboLoanAcceptedState accepted()const{ return CaptureAcceptedInput<32u>(this.m_context.input()); }
+}
+
+
+class UiCommandInputRouted{
+    public InputRoutingResult routing;
+    public InputEvent event;
+
+
+}
+
+
+class UiCommandInputTests{
+    public InputRouter m_router;
+
+    public UiCommandInputRouted send(in InputEvent event){
+        const auto resolved = this.m_router.queue(NativeInput(event));
+        EXPECT_TRUE(resolved.has_value());
+        UiCommandInputRouted result;
+        if(resolved.has_value()){
+            result.routing = this.m_router.process();
+            result.event = resolved.value();
+        }
+        return result;
+    }
+    public Expected<InputEvent> queueNative(in InputEvent event){
+        return this.m_router.queue(NativeInput(event));
+    }
+    public Expected<ControlAction> take(in HitTarget host){
+        return this.m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
+    }
+}
+
+
+class UiCommandOwnerTests : RouterTestFixture{
+    public Array<HitTarget, 3u> m_targets;
+
+    public UiCommandOwnerTests(){
+        this.m_targets[0u] = MakeCommandOwnerEditor();
+        this.m_targets[1u] = MakeCommandOwnerList(2u, 0.0f);
+        this.m_targets[2u] = MakeCommandOwnerList(3u, 140.0f);
+        this.m_targets[2u].control.instanceGeneration = 32u;
+        this.bind(this.m_targets[1u]);
+    }
+    public void bind(in HitTarget owner){
+        this.m_targets[0u].commandOwner = owner.id;
+        this.m_targets[0u].commandOwnerDeclarationGeneration = owner.declarationGeneration;
+        this.m_targets[0u].commandControl = owner.control;
+    }
+    public void clearBinding(){
+        this.m_targets[0u].commandOwner = WidgetId();
+        this.m_targets[0u].commandOwnerDeclarationGeneration = 0u;
+        this.m_targets[0u].commandControl = ControlToken();
+    }
+    public void press(in Key key){
+        EXPECT_TRUE(this.send(Key(InputEventType::KeyDown, key)).commandConsumed);
+        EXPECT_TRUE(this.send(Key(InputEventType::KeyUp, key)).commandConsumed);
+    }
+    public void focus(){
         InputEvent event;
         event.type = InputEventType::PrimaryDown;
-        event.position = { 10.0f, 10.0f };
-        EXPECT_TRUE(send(event).pointerConsumed);
+        event.position = Point(10.0f, 10.0f);
+        EXPECT_TRUE(this.send(event).pointerConsumed);
         event.type = InputEventType::PrimaryUp;
-        EXPECT_TRUE(send(event).pointerConsumed);
-        EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+        EXPECT_TRUE(this.send(event).pointerConsumed);
+        EXPECT_EQ(this.m_router.focus(), this.m_targets[0u].id);
     }
-
-    [[nodiscard]] Expected<ControlAction> take(const usize owner = 1u)noexcept{
-        const HitTarget& target = m_targets[owner];
-        return m_router.consumeControlAction(target.id, target.declarationGeneration, target.control);
+    public Expected<ControlAction> take(){ return this.take(1u); }
+    public Expected<ControlAction> take(in usize owner){
+        in HitTarget target = this.m_targets[owner];
+        return this.m_router.consumeControlAction(target.id, target.declarationGeneration, target.control);
     }
-
-    [[nodiscard]] PopupScope popup()noexcept{
+    public PopupScope popup(){
         PopupScope scope;
-        scope.token = { { 10u }, 12u, 13u, 14u };
-        scope.bounds = { 0.0f, 0.0f, 300.0f, 200.0f };
+        scope.token = PopupToken(WidgetId(10u), 12u, 13u, 14u);
+        scope.bounds = Rect(0.0f, 0.0f, 300.0f, 200.0f);
         scope.viewport = scope.bounds;
         scope.layer = 1u;
         return scope;
     }
-
-
-public:
-    Array<HitTarget, 3u> m_targets;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_context_claim_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-class UiContextClaimTests : public testing::Test{
-public:
-    UiContextClaimTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContextClaim))
-        , m_context(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 begin(const u64 generation){
-        return m_context.beginFrame(generation) && m_context.beginRoot({ 17u, 1u });
-    }
-
-    [[nodiscard]] b8 commit(const u64 generation){
-        return m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
-    }
-
-    [[nodiscard]] Expected<WidgetState> declareState(const AStringView stableKey, const WidgetKind::Enum kind){
-        const auto declared = m_context.declare(stableKey, kind);
-        if(!declared)
-            return MakeUnexpected(Failure{});
-        return **declared;
-    }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Context m_context;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiComboLoanTests = __hidden_ui_combo_loan_tests::UiComboLoanTests;
-using UiComboLoanAcceptedState = __hidden_ui_combo_loan_tests::AcceptedState;
-using UiComboLoanForeignRevisionSource = __hidden_ui_combo_loan_tests::ForeignRevisionSource;
-namespace UiComboLoanMutationKind = __hidden_ui_combo_loan_tests::MutationKind;
-using UiCommandInputTests = __hidden_ui_command_input_tests::UiCommandInputTests;
-using UiCommandInputRouted = __hidden_ui_command_input_tests::RoutedInput;
-using UiCommandOwnerTests = __hidden_ui_command_owner_tests::UiCommandOwnerTests;
-using UiContextClaimTests = __hidden_ui_context_claim_tests::UiContextClaimTests;
-
-using ComboOptions = ::NWB::Impl::Ui::ComboOptions;
-using ComboResult = ::NWB::Impl::Ui::ComboResult;
-using ComboState = ::NWB::Impl::Ui::ComboState;
-using ContextMenuAction = ::NWB::Impl::Ui::ContextMenuAction;
-using ControlAction = ::NWB::Impl::Ui::ControlAction;
-using ControlToken = ::NWB::Impl::Ui::ControlToken;
-using IListDataSource = ::NWB::Impl::Ui::IListDataSource;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-using InputKeyBinding = ::NWB::Impl::Ui::InputKeyBinding;
-using InputSource = ::NWB::Impl::Ui::InputSource;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-using PopupState = ::NWB::Impl::Ui::PopupState;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using WidgetState = ::NWB::Impl::Ui::WidgetState;
-
-namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
-namespace InputActionSource = ::NWB::Impl::Ui::InputActionSource;
-namespace InputCommand = ::NWB::Impl::Ui::InputCommand;
-using InputCommandEnum = ::NWB::Impl::Ui::InputCommand::Enum;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace InputSelectionPolicy = ::NWB::Impl::Ui::InputSelectionPolicy;
-namespace WidgetKind = ::NWB::Impl::Ui::WidgetKind;
-namespace CoreKey = ::NWB::Core::Key;
-namespace CoreInputModifier = ::NWB::Core::InputModifier;
-
-using ::NWB::Impl::Ui::s_InputMaxEvents;
-using ::NWB::Impl::Ui::s_InputMaxSources;
-using ::NWB::Impl::Ui::s_InputMaxTargets;
-
-[[nodiscard]] FOUNDATION_INLINE ComboOptions MakeUiComboLoanDefaultOptions()noexcept{ return ::NWB::UiComboTests::Options(); }
-[[nodiscard]] FOUNDATION_INLINE InputCommandEnum MakeUiInvalidInputCommand()noexcept{ return static_cast<InputCommandEnum>(255u); }
-[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiCommandOwnerKeyEvent(const InputEventTypeEnum type, const ::NWB::Core::Key::Enum key, const b8 repeat = false)noexcept{
-    return ::UiTestSupport::Key(type, key, repeat);
 }
-};
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiContextClaimTests{
+    public Context m_context;
 
-
+    public b8 begin(in u64 generation){
+        return this.m_context.beginFrame(generation) && this.m_context.beginRoot(WidgetRoot(17u, 1u));
+    }
+    public b8 commit(in u64 generation){
+        return this.m_context.endRoot() && this.m_context.finishFrame() && this.m_context.commitFrame(generation);
+    }
+    public Expected<WidgetState> declareState(in StringView stableKey, in WidgetKind kind){
+        const auto declared = this.m_context.declare(stableKey, kind);
+        if(!declared.has_value())
+            return MakeUnexpected(Failure());
+        return declared.value();
+    }
 }
 
 
@@ -480,7 +252,7 @@ HitTarget MakeUiCommandInputControl(in u64 id){
     return target;
 }
 
-InputEvent MakeUiCommandInputCommand(in InputEventTypeEnum type, in InputSource source, in InputCommandEnum command, in b8 repeat){
+InputEvent MakeUiCommandInputCommand(in InputEventType type, in InputSource source, in InputCommand command, in b8 repeat){
     InputEvent event = InputEvent();
     event.type = type;
     event.source = source;
@@ -489,10 +261,10 @@ InputEvent MakeUiCommandInputCommand(in InputEventTypeEnum type, in InputSource 
     return event;
 }
 
-InputEvent MakeUiCommandInputKey(in InputEventTypeEnum type, in b8 shift, in b8 repeat){
+InputEvent MakeUiCommandInputKey(in InputEventType type, in b8 shift, in b8 repeat){
     InputEvent event = InputEvent();
     event.type = type;
-    event.key = CoreKey::W;
+    event.key = Key::W;
     event.shift = shift;
     event.repeat = repeat;
     return event;
@@ -507,7 +279,7 @@ Array<InputKeyBinding, 1u> MakeUiSingleKeyBindingArray(in InputKeyBinding bindin
 b8 DeclareUiComboLoanPair(mut UiComboLoanTests self, in u64 generation, in IListDataSource secondSource, mut ComboState secondState){
     if(!self.begin(generation) || !self.m_builder.beginPanel(s_UiComboLoanPanelKey, Rect(10.0f, 10.0f, 320.0f, 240.0f)))
         return false;
-    const ComboOptions options = MakeUiComboLoanDefaultOptions();
+    const ComboOptions options = MakeComboFixtureOptions();
     return self.m_builder.comboBox(s_UiComboLoanKey, self.m_source, self.m_state, options).valid
         && self.m_builder.comboBox(s_UiComboLoanSecondKey, secondSource, secondState, options).valid;
 }
@@ -685,7 +457,7 @@ void VerifyUiComboLoanTests_ClosedUserPopupSuppressesLaterComboBeforeSourceOrMod
     ASSERT_TRUE(self.m_builder.beginPopup("owner", popupState, options));
     popupState.close();
     self.m_callbacks.arm(UiComboLoanMutationKind::RevisionSelect, 8u);
-    const ComboResult result = self.m_builder.comboBox(s_UiComboLoanKey, self.m_callbacks, self.m_state, MakeUiComboLoanDefaultOptions());
+    const ComboResult result = self.m_builder.comboBox(s_UiComboLoanKey, self.m_callbacks, self.m_state, MakeComboFixtureOptions());
     EXPECT_TRUE(result.valid);
     EXPECT_FALSE(self.m_context.failed());
     EXPECT_EQ(self.m_callbacks.mutations(), 0u);
@@ -804,9 +576,9 @@ void VerifyUiCommandInputTests_HeldPhysicalPressPinsCommandSelectionAndEditAdmis
     const HitTarget host = MakeUiCommandInputControl(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(host), 1u));
     InputKeyBinding initial = InputKeyBinding();
-    initial.key = CoreKey::W;
+    initial.key = Key::W;
     initial.modifiers = 0;
-    initial.ignoredModifiers = CoreInputModifier::Shift;
+    initial.ignoredModifiers = InputModifier::Shift;
     initial.command = InputCommand::Down;
     initial.selection = InputSelectionPolicy::Shift;
     initial.edit = true;
@@ -820,7 +592,7 @@ void VerifyUiCommandInputTests_HeldPhysicalPressPinsCommandSelectionAndEditAdmis
     EXPECT_TRUE(resolved.edit);
     EXPECT_TRUE(resolved.allowText);
     InputKeyBinding replacement = InputKeyBinding();
-    replacement.key = CoreKey::W;
+    replacement.key = Key::W;
     replacement.modifiers = 0;
     replacement.ignoredModifiers = 0;
     replacement.command = InputCommand::Up;
@@ -836,13 +608,13 @@ void VerifyUiCommandInputTests_HeldPhysicalPressPinsCommandSelectionAndEditAdmis
     EXPECT_TRUE(resolved.extend);
     EXPECT_TRUE(resolved.edit);
     EXPECT_TRUE(resolved.allowText);
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::W));
+    EXPECT_TRUE(self.m_router.ownsKey(Key::W));
     const UiCommandInputRouted dispatchResult3 = self.send(MakeUiCommandInputKey(InputEventType::KeyUp, false, false));
     EXPECT_TRUE(dispatchResult3.routing.commandConsumed);
     resolved = dispatchResult3.event;
     EXPECT_EQ(resolved.command, InputCommand::Down);
     EXPECT_TRUE(resolved.allowText);
-    EXPECT_FALSE(self.m_router.ownsKey(CoreKey::W));
+    EXPECT_FALSE(self.m_router.ownsKey(Key::W));
     const Expected<ControlAction> actionResult1 = self.take(host);
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().kind, ControlActionKind::Down);
@@ -1024,13 +796,13 @@ void VerifyUiCommandInputTests_QueuedReleaseSeparatesOldAndNewBindingSnapshotsBe
     const HitTarget host = MakeUiCommandInputControl(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(host), 1u));
     InputKeyBinding initial = InputKeyBinding();
-    initial.key = CoreKey::W;
+    initial.key = Key::W;
     initial.command = InputCommand::Left;
     ASSERT_TRUE(self.m_router.setBindings(MakeUiSingleKeyBindingArray(initial)));
     const Expected<InputEvent> firstResult = self.queueNative(MakeUiCommandInputKey(InputEventType::KeyDown, false, false));
     ASSERT_TRUE(firstResult.has_value());
     InputKeyBinding replacement = InputKeyBinding();
-    replacement.key = CoreKey::W;
+    replacement.key = Key::W;
     replacement.command = InputCommand::Right;
     ASSERT_TRUE(self.m_router.setBindings(MakeUiSingleKeyBindingArray(replacement)));
     const Expected<InputEvent> releaseResult = self.queueNative(MakeUiCommandInputKey(InputEventType::KeyUp, false, false));
@@ -1049,7 +821,7 @@ void VerifyUiCommandInputTests_QueuedReleaseSeparatesOldAndNewBindingSnapshotsBe
     ASSERT_TRUE(actionResult2.has_value());
     EXPECT_EQ(actionResult2.value().kind, ControlActionKind::Right);
     EXPECT_GT(actionResult2.value().id.sequence, sequence);
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::W));
+    EXPECT_TRUE(self.m_router.ownsKey(Key::W));
 }
 
 void VerifyUiCommandInputTests_OrphanRepeatsAfterNativeLossAndResetNeedReleaseBeforeEditingOrNavigation(mut UiCommandInputTests self){
@@ -1111,7 +883,7 @@ void VerifyUiCommandInputTests_MalformedCommandSourcesRejectWithoutChangingExist
     invalidSources[1u] = MakeUiInputSource(1u, 0u);
     for(in InputSource source : invalidSources)
         EXPECT_FALSE(self.queueNative(MakeUiCommandInputCommand(InputEventType::CommandDown, source, InputCommand::Activate, false)).has_value());
-    EXPECT_FALSE(self.queueNative(MakeUiCommandInputCommand(InputEventType::CommandDown, MakeUiInputSource(1u, 1u), MakeUiInvalidInputCommand(), false)).has_value());
+    EXPECT_FALSE(self.queueNative(MakeUiCommandInputCommand(InputEventType::CommandDown, MakeUiInputSource(1u, 1u), cast<InputCommand>(255u), false)).has_value());
     EXPECT_FALSE(self.m_router.process().commandConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     InputEvent strayRelease = MakeUiCommandInputCommand(InputEventType::CommandUp, MakeUiInputSource(2u, 2u), InputCommand::None, false);
@@ -1285,14 +1057,14 @@ void VerifyUiCommandInputTests_CustomSubmitBindingPinsItsReleaseAcrossModifierAn
     const HitTarget target = MakeUiCommandInputTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     InputKeyBinding initial = InputKeyBinding();
-    initial.key = CoreKey::W;
+    initial.key = Key::W;
     initial.modifiers = 0;
-    initial.ignoredModifiers = CoreInputModifier::Shift;
+    initial.ignoredModifiers = InputModifier::Shift;
     initial.command = InputCommand::Activate;
     ASSERT_TRUE(self.m_router.setBindings(MakeUiSingleKeyBindingArray(initial)));
     EXPECT_TRUE(self.send(MakeUiCommandInputKey(InputEventType::KeyDown, true, false)).routing.commandConsumed);
     InputKeyBinding replacement = InputKeyBinding();
-    replacement.key = CoreKey::W;
+    replacement.key = Key::W;
     replacement.command = InputCommand::FocusNext;
     ASSERT_TRUE(self.m_router.setBindings(MakeUiSingleKeyBindingArray(replacement)));
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
@@ -1335,9 +1107,9 @@ void VerifyUiCommandInputTests_QueuedReleaseDiscardedByResetRetiresOnlyTheReleas
 void VerifyUiCommandOwnerTests_EnterIntentionSharesNavigationSequenceWithoutAnActivation(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    self.press(CoreKey::Down);
-    self.press(CoreKey::Enter);
-    self.press(CoreKey::Up);
+    self.press(Key::Down);
+    self.press(Key::Enter);
+    self.press(Key::Up);
     const Expected<ControlAction> downResult = self.take();
     ASSERT_TRUE(downResult.has_value());
     const ControlAction down = downResult.value();
@@ -1361,12 +1133,12 @@ void VerifyUiCommandOwnerTests_AcceptedOwnerGeometryAndPageRowsRemainUntilTheCan
     self.focus();
     self.m_targets[1u].pageRows = 17u;
     self.m_targets[1u].rectangle.height = 180.0f;
-    self.press(CoreKey::PageDown);
+    self.press(Key::PageDown);
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().pageRows, 5u);
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
-    self.press(CoreKey::PageDown);
+    self.press(Key::PageDown);
     const Expected<ControlAction> actionResult2 = self.take();
     ASSERT_TRUE(actionResult2.has_value());
     EXPECT_EQ(actionResult2.value().pageRows, 17u);
@@ -1400,7 +1172,7 @@ void VerifyUiCommandOwnerTests_PartialBindingAndWrongOwnerEpochRejectRatherThanS
     self.bind(owner);
     self.m_targets[0u].commandOwner = WidgetId();
     EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().id.layoutGeneration, 1u);
@@ -1435,7 +1207,7 @@ void VerifyUiCommandOwnerTests_SelfDelegationAndCompetingNavigationHostsAreRejec
 void VerifyUiCommandOwnerTests_RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, false)).commandConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     const HitTarget secondOwner = self.m_targets[2u];
     self.bind(secondOwner);
@@ -1444,10 +1216,10 @@ void VerifyUiCommandOwnerTests_RebindingEditorRetiresQueuedActionsAndTheHeldInit
     const HitTarget firstOwner = self.m_targets[1u];
     self.bind(firstOwner);
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyUp, CoreKey::Down, false)).commandConsumed);
-    self.press(CoreKey::Down);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down, false)).commandConsumed);
+    self.press(Key::Down);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
 }
@@ -1455,7 +1227,7 @@ void VerifyUiCommandOwnerTests_RebindingEditorRetiresQueuedActionsAndTheHeldInit
 void VerifyUiCommandOwnerTests_RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     const HitTarget secondOwner = self.m_targets[2u];
     self.bind(secondOwner);
@@ -1463,10 +1235,10 @@ void VerifyUiCommandOwnerTests_RebindingEditorWhileSubmitIsHeldCannotRedirectOrR
     const HitTarget firstOwner = self.m_targets[1u];
     self.bind(firstOwner);
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
     EXPECT_FALSE(self.take(2u).has_value());
-    self.press(CoreKey::Enter);
+    self.press(Key::Enter);
     const Expected<ControlAction> submitted = self.take();
     ASSERT_TRUE(submitted.has_value());
     EXPECT_EQ(submitted.value().kind, ControlActionKind::Submit);
@@ -1476,7 +1248,7 @@ void VerifyUiCommandOwnerTests_RebindingEditorWhileSubmitIsHeldCannotRedirectOrR
 void VerifyUiCommandOwnerTests_OmittedEditorRetiresItsActionsEvenWhenTheListSurvives(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, false)).commandConsumed);
     Array<HitTarget, 2u> remaining = Array<HitTarget, 2u>();
     remaining[0u] = self.m_targets[1u];
     remaining[1u] = self.m_targets[2u];
@@ -1486,37 +1258,37 @@ void VerifyUiCommandOwnerTests_OmittedEditorRetiresItsActionsEvenWhenTheListSurv
     remaining[0u] = self.m_targets[1u];
     ASSERT_TRUE(self.m_router.commitTargets(remaining, 3u));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[1u].id);
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyUp, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down, false)).commandConsumed);
 }
 
 void VerifyUiCommandOwnerTests_RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, false)).commandConsumed);
     self.clearBinding();
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    self.press(CoreKey::Left);
+    self.press(Key::Left);
     const HitTarget firstOwner = self.m_targets[1u];
     self.bind(firstOwner);
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyUp, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down, false)).commandConsumed);
 }
 
 void VerifyUiCommandOwnerTests_ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ++self.m_targets[0u].declarationGeneration;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.focus();
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ++self.m_targets[0u].control.instanceGeneration;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -1525,15 +1297,15 @@ void VerifyUiCommandOwnerTests_ReplacedEditorDeclarationOrModelTokenRetiresCopie
 void VerifyUiCommandOwnerTests_FenceControlRetiresTheDelegateWithoutStealingEditorFocus(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, false)).commandConsumed);
     ControlToken replacement = self.m_targets[1u].control;
     ++replacement.contentRevision;
     self.m_router.fenceControl(self.m_targets[1u].id, self.m_targets[1u].declarationGeneration, replacement);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyUp, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down, false)).commandConsumed);
 }
 
 void VerifyUiCommandOwnerTests_PopupDelegationRetainsItsAcceptedScopeAndCannotCrossLayers(mut UiCommandOwnerTests self){
@@ -1556,7 +1328,7 @@ void VerifyUiCommandOwnerTests_PopupDelegationRetainsItsAcceptedScopeAndCannotCr
     targets[3u] = self.m_targets[2u];
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(scope)));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().popup, scope.token);
@@ -1570,16 +1342,16 @@ void VerifyUiCommandOwnerTests_PopupDelegationRetainsItsAcceptedScopeAndCannotCr
 void VerifyUiCommandOwnerTests_HeldEnterCannotSubmitAgainUntilItsConsumedRelease(mut UiCommandOwnerTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyDown, CoreKey::Enter, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter, true)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiCommandOwnerKeyEvent(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().kind, ControlActionKind::Submit);
     EXPECT_FALSE(self.take().has_value());
-    self.press(CoreKey::Enter);
+    self.press(Key::Enter);
     const Expected<ControlAction> actionResult2 = self.take();
     ASSERT_TRUE(actionResult2.has_value());
 }

@@ -22,7 +22,9 @@ const Name s_CpuProfilingNameTestsCpuCanceledScope = "tests.cpu.canceled_scope";
 
 
 class InlineRangeFailure{
-    public i32 code = 0;
+    public i32 code;
+    public InlineRangeFailure(){ this.code = 0; }
+    public InlineRangeFailure(in i32 value){ this.code = value; }
 }
 
 class TaskGate{

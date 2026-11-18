@@ -9,138 +9,65 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_GpuTelemetryNameHashLaneCount = s_NameHashLaneCount;
-
-[[nodiscard]] FOUNDATION_INLINE Name MakeGpuTelemetryFlippedHashName(const Name& base, const u32 lane)noexcept{
+Name MakeGpuTelemetryFlippedHashName(in Name base, in u32 lane){
     NameHash hash = base.hash();
     hash.qwords[lane] ^= 1u;
     return Name(hash);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPhysicalQueueInfo> FindTimingFeedbackQueueValue(
-    const Core::GpuTaskGraph::DeclarationReadView& declarations,
-    const Core::GpuTaskGraphAnalysis& analysis,
-    const AssignmentGraphicsVector& assignments,
-    const U32GraphicsVector& assignmentIndices,
-    const Core::GpuPhysicalQueueTopology& topology,
-    const Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability& reachability,
-    const Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoringData& scoringData,
-    const Core::GpuTaskGraphTaskView& task,
-    const Core::GpuPhysicalQueueInfo& incumbent,
-    const Core::GpuTaskTimingAssignmentKey& assignmentKey,
-    const Core::GpuTaskTimingHistorySnapshot& snapshot,
-    const Core::GpuTaskTimingFeedbackPolicy& policy,
-    const u64 frameIndex
-)noexcept{
-    if(const Core::GpuPhysicalQueueInfo* const selected = Core::GpuTaskGraphCompilerDetail::FindTimingFeedbackQueue(
-        declarations,
-        analysis,
-        assignments,
-        assignmentIndices,
-        topology,
-        reachability,
-        scoringData,
-        task,
-        incumbent,
-        assignmentKey,
-        snapshot,
-        policy,
-        frameIndex
-    ))
-        return *selected;
-    return {};
+Optional<GpuPhysicalQueueInfo> FindTimingFeedbackQueueValue(
+    in GpuTaskGraphDeclarationReadView declarations, in GpuTaskGraphAnalysis analysis, in Span<GpuTaskQueueAssignment> assignments,
+    in Span<u32> assignmentIndices, in GpuPhysicalQueueTopology topology, in GpuTaskSchedulingReachability reachability,
+    in GpuTaskQueueScoringData scoring, in GpuTaskGraphTaskView task, in GpuPhysicalQueueInfo incumbent,
+    in GpuTaskTimingAssignmentKey key, in GpuTaskTimingHistorySnapshot snapshot, in GpuTaskTimingFeedbackPolicy policy, in u64 frameIndex
+){
+    const Optional<in GpuPhysicalQueueInfo> found = BorrowTimingFeedbackQueue(declarations, analysis, assignments, assignmentIndices, topology, reachability,
+        scoring, task, incumbent, key, snapshot, policy, frameIndex);
+    if(found.has_value()){
+        in GpuPhysicalQueueInfo value = found.value();
+        return value;
+    }
+    return Optional<GpuPhysicalQueueInfo>();
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingHistory> FindStoreTimingHistoryValue(
-    const Core::GpuTaskTimingHistoryStore& store,
-    const Core::GpuTaskTimingKey& key,
-    const Core::GpuPhysicalQueueId& queue
-)noexcept{
-    if(const Core::GpuTaskTimingHistory* const found = store.find(key, queue))
-        return *found;
-    return {};
+Optional<GpuTaskTimingHistory> FindStoreTimingHistoryValue(in GpuTaskTimingHistoryStore source, in GpuTaskTimingKey key, in GpuPhysicalQueueId queue){
+    const Optional<in GpuTaskTimingHistory> found = BorrowStoreTimingHistory(source, key, queue);
+    if(found.has_value()){
+        in GpuTaskTimingHistory value = found.value();
+        return value;
+    }
+    return Optional<GpuTaskTimingHistory>();
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindStoreTimingAssignmentValue(
-    const Core::GpuTaskTimingHistoryStore& store,
-    const Core::GpuTaskTimingAssignmentKey& key
-)noexcept{
-    if(const Core::GpuTaskTimingAssignmentState* const found = store.findAssignment(key))
-        return *found;
-    return {};
+Optional<GpuTaskTimingAssignmentState> FindStoreTimingAssignmentValue(in GpuTaskTimingHistoryStore source, in GpuTaskTimingAssignmentKey key){
+    const Optional<in GpuTaskTimingAssignmentState> found = BorrowStoreTimingAssignment(source, key);
+    if(found.has_value()){
+        in GpuTaskTimingAssignmentState value = found.value();
+        return value;
+    }
+    return Optional<GpuTaskTimingAssignmentState>();
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingHistory> FindSnapshotTimingHistoryValue(
-    const Core::GpuTaskTimingHistorySnapshot& snapshot,
-    const Core::GpuTaskTimingKey& key,
-    const Core::GpuPhysicalQueueId& queue
-)noexcept{
-    if(const Core::GpuTaskTimingHistory* const found = snapshot.find(key, queue))
-        return *found;
-    return {};
+Optional<GpuTaskTimingHistory> FindSnapshotTimingHistoryValue(in GpuTaskTimingHistorySnapshot source, in GpuTaskTimingKey key, in GpuPhysicalQueueId queue){
+    const Optional<in GpuTaskTimingHistory> found = BorrowSnapshotTimingHistory(source, key, queue);
+    if(found.has_value()){
+        in GpuTaskTimingHistory value = found.value();
+        return value;
+    }
+    return Optional<GpuTaskTimingHistory>();
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindSnapshotTimingAssignmentValue(
-    const Core::GpuTaskTimingHistorySnapshot& snapshot,
-    const Core::GpuTaskTimingAssignmentKey& key
-)noexcept{
-    if(const Core::GpuTaskTimingAssignmentState* const found = snapshot.findAssignment(key))
-        return *found;
-    return {};
+Optional<GpuTaskTimingAssignmentState> FindSnapshotTimingAssignmentValue(in GpuTaskTimingHistorySnapshot source, in GpuTaskTimingAssignmentKey key){
+    const Optional<in GpuTaskTimingAssignmentState> found = BorrowSnapshotTimingAssignment(source, key);
+    if(found.has_value()){
+        in GpuTaskTimingAssignmentState value = found.value();
+        return value;
+    }
+    return Optional<GpuTaskTimingAssignmentState>();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 enum<u8> GpuTelemetryScenario{
     Explicit = 0,
@@ -1177,7 +1104,7 @@ void VerifyGpuTelemetry_PreservesEveryRouteKeyFieldAndFullNameIdentity(){
     inputs[2u].key.resolutionClass = 1u;
     inputs[3u].key.queue = CommandQueue::Compute;
     inputs[4u].queue.index = 1u;
-    for(u32 lane = 0u; lane < s_GpuTelemetryNameHashLaneCount; ++lane)
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
         inputs[5u + cast<usize>(lane)].key.task = MakeGpuTelemetryFlippedHashName(base.key.task, lane);
 
     for(usize index = 0u; index < inputs.size(); ++index)

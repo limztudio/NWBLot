@@ -100,7 +100,8 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     out.append("class ");
     __hidden_adhd_header_emitter_class::EmitRecordAlignment(out, decl);
     out.append(decl.name.data(), decl.name.size());
-    out.append(" final");
+    if(!decl.isExtensible)
+        out.append(" final");
 
     const b8 isAssetClass = !decl.assetTypeName.empty();
     const b8 isSystemClass = !decl.systemTypeName.empty();
@@ -271,7 +272,8 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     __hidden_adhd_header_emitter_class::EmitRecordAlignment(out, decl);
     out.append(decl.name.data(), decl.name.size());
     m_typeEmitter.emitTypeArgListCpp(out, inst.templateArgs);
-    out.append(" final");
+    if(!decl.isExtensible)
+        out.append(" final");
 
     if(!decl.implementedInterfaces.empty()){
         out.append(" : ");
@@ -363,7 +365,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 
 void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields, const b8 forceInlineBody, const b8 classNeedsArena)const{
     const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
-    b8 hasNoCopyBase = false;
+    b8 hasNoCopyBase = decl.isExtensible || decl.concreteBase;
     for(const TypeRef* implIface : decl.implementedInterfaces){
         if(implIface && layoutAnalyzer.interfaceInheritsNoCopy(*implIface)){
             hasNoCopyBase = true;
@@ -372,11 +374,13 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
     }
 
     b8 hasUserConstructor = false;
+    b8 hasUserDestructor = false;
     b8 hasUserArenaCopyCtor = false;
     b8 hasUserAssignOp = false;
     for(const MethodDecl* m : decl.methods){
         if(!m)
             continue;
+        hasUserDestructor |= m->isDestructor;
         if(m->isConstructor){
             hasUserConstructor = true;
             if(m->params.size() == 1u && m->params[0].type && m->params[0].mode == ParamPassingMode::In && m_symbols.resolveBaseTypeName(m->params[0].type->name) == decl.name)
@@ -385,6 +389,9 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
         if(m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
             hasUserAssignOp = true;
     }
+
+    if(decl.isExtensible && !hasUserDestructor)
+        out.append("public:\r\n    virtual ~").append(decl.name).append("() = default;\r\n");
 
     const auto emitDeletedSpecialMembers = [&](const b8 emitCopy, const b8 emitMove, const b8 isAssign){
         const MStringView opPrefix = isAssign ? "& operator=(" : "(";
@@ -432,6 +439,8 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 out.append("(::ArenaBase& ");
                 out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
                 out.append(")noexcept : ");
+                if(decl.concreteBase && decl.concreteBase->canBorrowMotherArena() && decl.concreteBase->needsClassArena)
+                    out.append(decl.concreteBase->name).append("(").append(CodegenSymbols::s_MotherArenaVar).append("), ");
                 if(!decl.systemTypeName.empty()){
                     if(const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System)){
                         out.append(sysContract->cppBaseTypeOrTemplate.data(), sysContract->cppBaseTypeOrTemplate.size());
@@ -710,7 +719,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const ClassDecl& decl, cons
         const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
         if(field->defaultExpr){
             if(fieldRefMode != ParamPassingMode::None){
-                out.append(" = ::MakeNotNull(&(");
+                out.append(" = ::MakeNotNull(::AddressOf(");
                 m_sourceEmitter.emitExpr(out, *field->defaultExpr);
                 out.append("))");
             }

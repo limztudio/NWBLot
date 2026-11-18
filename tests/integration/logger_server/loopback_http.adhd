@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/integration/logger_server/loopback_http.h>"), cpp_name("::NWB::Tests::LoopbackHttp::Request"), cpp_flags(no_copy, no_assign, abstract)]
+extern class TestHttpRequest{
+    StringView method()const;
+    StringView path()const;
+    b8 begin();
+    Span<u8> body()const;
+    void consume();
+    b8 respond(in u32 status);
+};
+
+[cpp_header("<tests/integration/logger_server/loopback_http.h>"), cpp_name("::NWB::Tests::LoopbackHttp::Server"), cpp_flags(no_copy, no_assign)]
+extern class TestHttpServer{
+    b8 start(in Func<64u, b8(mut TestHttpRequest)> handler, mut u16 port);
+    void stop();
+};
+
+[cpp_header("<microhttpd.h>"), cpp_name("MHD_HTTP_OK")]
+extern const u32 s_HttpOk;
+[cpp_header("<microhttpd.h>"), cpp_name("MHD_HTTP_BAD_REQUEST")]
+extern const u32 s_HttpBadRequest;
+[cpp_header("<microhttpd.h>"), cpp_name("MHD_HTTP_SERVICE_UNAVAILABLE")]
+extern const u32 s_HttpServiceUnavailable;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

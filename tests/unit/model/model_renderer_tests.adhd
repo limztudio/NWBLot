@@ -6,52 +6,16 @@
 #include <tests/common/gtest_macros.adhd>
 #include "name_cases.adhd"
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
+#include <impl/ecs_model_renderer/model_renderer.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_model_renderer/model_renderer.adhd.h>
-
-#include <core/ecs/entity.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::ModelCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Entity = Core::ECS::Entity;
-using World = Core::ECS::World;
-using Material = Impl::Material;
-using RendererComponent = Impl::RendererComponent;
-using MaterialInstanceComponent = Impl::MaterialInstanceComponent;
-using MaterialInstanceParameter = Impl::MaterialInstanceParameter;
-
-[[nodiscard]] FOUNDATION_INLINE usize MaterialInstanceComponentAddress(const World& world, const Core::ECS::EntityID entity)noexcept{
-    return reinterpret_cast<usize>(world.tryGetComponent<MaterialInstanceComponent>(entity));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+usize MaterialInstanceComponentAddress(mut World world, in EntityID entity){
+    if(!world.hasComponent<MaterialInstanceComponent>(entity))
+        return 0u;
+    return ObjectAddressKey(world.getComponent<MaterialInstanceComponent>(entity));
 }
 
 
@@ -76,7 +40,7 @@ void VerifyModelRendererOwnerOverridesSurvivePoolGrowth(){
         ASSERT_NE(beforeAddress, 0u);
 
         Entity child = context.world.createEntity();
-        Impl::ApplyModelObjectRenderer(owner.id(), AssetRef<Material>(), context.world, child);
+        ApplyModelObjectRenderer(owner.id(), AssetRef<Material>(), context.world, child);
 
         const usize afterAddress = MaterialInstanceComponentAddress(context.world, owner.id());
         const usize copiedAddress = MaterialInstanceComponentAddress(context.world, child.id());

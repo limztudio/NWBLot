@@ -1,0 +1,178 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "global_text_access.adhd"
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ContainerInstance")]
+extern class ContainerInstance<T, Item>{
+    usize size()const;
+    b8 empty()const;
+    void assign(...);
+    void append(...);
+    void push_back(in Item value);
+    void swap(mut ContainerInstance<T, Item> other);
+    in Item operator[](in usize index)const;
+    in Item back()const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::RegularAllocator")]
+extern class RegularAllocator;
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::AlignedAllocator")]
+extern class AlignedAllocator;
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::DefaultAllocator")]
+extern class DefaultAllocator;
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::RegularVector")]
+extern class RegularVector{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut RegularVector other);
+    void assign(...);
+    void push_back(in u32 value);
+    in u32 operator[](in usize index)const;
+    in u32 back()const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ConcurrentVector")]
+extern class ConcurrentVector{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut ConcurrentVector other);
+    void assign(...);
+    void push_back(in u32 value);
+    in u32 operator[](in usize index)const;
+    in u32 back()const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::DefaultVector")]
+extern class DefaultVector{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut DefaultVector other);
+    void assign(...);
+    void push_back(in u32 value);
+    in u32 operator[](in usize index)const;
+    in u32 back()const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::RegularText")]
+extern class RegularText{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut RegularText other);
+    void assign(...);
+    void push_back(in NarrowChar value);
+    in NarrowChar operator[](in usize index)const;
+    in NarrowChar back()const;
+    void append(...);
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::DefaultText")]
+extern class DefaultText{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut DefaultText other);
+    void assign(...);
+    void push_back(in NarrowChar value);
+    in NarrowChar operator[](in usize index)const;
+    in NarrowChar back()const;
+    void append(...);
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OwnerMap")]
+extern class OwnerMap{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut OwnerMap other);
+    in u32 at(in u32 key)const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OwnerHashMap")]
+extern class OwnerHashMap{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut OwnerHashMap other);
+    in u32 at(in u32 key)const;
+    void reserve(in usize count);
+    usize count(in u32 key)const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OwnerHashSet")]
+extern class OwnerHashSet{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void swap(mut OwnerHashSet other);
+    void reserve(in usize count);
+    usize count(in u32 key)const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::RegistrationQueue")]
+extern class RegistrationQueue{
+    void appendUnique(in u32 value, in auto equal);
+    void copyTo(mut auto values)const;
+};
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::PropagationDefault")]
+extern mut HeapStorage PropagationDefault();
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::SelectStorage")]
+extern mut HeapStorage SelectStorage(in b8 foreign, mut HeapStorage first, mut HeapStorage other);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::AllocatorUsesStorage")]
+extern b8 AllocatorUsesStorage(in auto allocator, in HeapStorage storage);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::MakeContainer")]
+extern T MakeContainer<T>(mut HeapStorage owner);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::MoveContainer")]
+extern T MoveContainer<T>(mut T source);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::MoveContainerTo")]
+extern T MoveContainerTo<T>(mut T source, mut HeapStorage owner);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::InsertEntry")]
+extern b8 InsertEntry(mut auto container, in u32 key, in u32 value);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::InsertKey")]
+extern b8 InsertKey(mut auto container, in u32 key);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::MappedValue")]
+extern in u32 MappedValue(in auto values, in u32 key);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::FoundKey")]
+extern in u32 FoundKey(in auto values, in u32 key);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::Swap")]
+extern void SwapContainers(mut auto lhs, mut auto rhs);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CopyBounded")]
+extern i32 CopyBounded(mut auto outText, in auto source);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("::NWB::Tests::GlobalCases::AppendBounded")]
+extern i32 AppendBounded(mut auto outText, in auto source);
+
+[cpp_header("<tests/unit/global/global_container_access.h>"), cpp_name("NWB_GLOBAL_PORTABLE_CRT_CASE")]
+extern registration PortableCrtCase(suite, caseName, verifier);
+
+[cpp_header("<global/text_trim_parse.h>"), cpp_name("::EncodeUtf8CodePoint")]
+extern Expected<usize> EncodeFixedUtf8(in u32 codePoint, mut Array<NarrowChar, 4u> bytes);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

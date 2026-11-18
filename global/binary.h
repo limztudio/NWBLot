@@ -209,6 +209,8 @@ public:
 
 
 public:
+    [[nodiscard]] static constexpr BinaryByteView FromBytes(const Span<const u8> data)noexcept{ return { data.data(), data.size() }; }
+
     [[nodiscard]] u8 operator[](const usize index)const noexcept{ return bytes[index]; }
 
 

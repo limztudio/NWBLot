@@ -4,6 +4,7 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/unit/graphics/resource_suite.adhd>
 #include "gpu_timing_test_names.adhd"
 
@@ -11,276 +12,139 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkOffset2D")]
+extern class VkOffset2D{ i32 x; i32 y; };
 
+[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkExtent2D")]
+extern class VkViewportExtent2D{ u32 width; u32 height; };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::VkRect2D")]
+extern class VkRect2D{ VkOffset2D offset; VkViewportExtent2D extent; };
 
+[cpp_header("<core/graphics/vulkan/vulkan_viewport_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanViewportPolicy::BuildImplicitScissor")]
+extern Expected<VkRect2D> BuildImplicitScissor(in Viewport viewport);
 
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/gpu_timing_metric_correlator.h>
-#include <core/graphics/gpu_timing_metrics.h>
-#include <core/graphics/rhi/resource.h>
-#include <core/graphics/vulkan/vulkan_viewport_policy.h>
-#include <core/perf/timing.h>
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueSharing::IsValid")]
+extern b8 IsValidResourceQueueSharing(in ResourceQueueSharing value);
 
+[cpp_header("<core/graphics/gpu_timing_metrics.h>"), cpp_name("::NWB::Core::TryAggregateGpuPacketEnvelopeMetrics")]
+extern Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(in Span<GpuComparableTimestampRange> ranges, mut ScratchStorage scratch, mut ScratchStorageVector<GpuQueuePacketEnvelopeMetrics> metrics);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+type GpuPacketEnvelopeMetricScopeScratchVector = ScratchStorageVector<GpuPacketEnvelopeMetricScope>;
+type GpuTimingSinkSampleVector = ScratchStorageVector<GpuTimingSinkSample>;
+type GpuQueuePacketEnvelopeMetricsVector = ScratchStorageVector<GpuQueuePacketEnvelopeMetrics>;
 
+static_assert(TestNothrowDestructible<GpuTimingMeasure>(), "GPU timing measures stored in Optional must unwind without throwing");
+static_assert(!IsValidResourceQueueSharing(cast<ResourceQueueSharing>(1u << 7u)));
 
-NWB_BEGIN
+class RegistrationSentinel{}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::GraphicsTimingCasesDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct GpuTimingMetricCorrelatorTestsTag;
-struct GpuTimingRecorderTestsTag;
-struct GpuTimingTestsTag;
-
-using CorrelatorTestArena = Tests::TestArena<GpuTimingMetricCorrelatorTestsTag>;
-using RecorderTestArena = Tests::TestArena<GpuTimingRecorderTestsTag>;
-using TimingTestArena = Tests::TestArena<GpuTimingTestsTag>;
-
-static_assert(IsNothrowDestructible_V<Core::GpuTimingFrameTransaction>, "GPU timing frame transactions must unwind without throwing");
-static_assert(IsNothrowDestructible_V<Core::GpuTimingMeasure>, "GPU timing measures stored in Optional must unwind without throwing");
-static_assert(!Core::ResourceQueueSharing::IsValid(static_cast<Core::ResourceQueueSharing::Mask>(1u << 7u)));
-static_assert(noexcept(DeclVal<Core::GpuTimingRecorder&>().unsubscribeSampleListener(DeclVal<const Core::GpuTimingSampleSubscription&>())));
-
-struct RegistrationSentinel{};
-
-class ThrowOnceTimingSink final : public Core::Perf::TimingSink, NoCopy{
-public:
-    explicit ThrowOnceTimingSink(Core::Perf::TimingRecorder& timing)noexcept
-        : m_timing(timing)
-    {}
-
-
-public:
-    [[nodiscard]] virtual b8 enabled()const noexcept override{ return true; }
-
-    [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope(const Name& scopeName)override{
-        ++m_registrationAttempt;
-        if(m_registrationAttempt == 3u)
-            throw RegistrationSentinel{};
-        return m_timing.registerScope(scopeName);
+class ThrowOnceTimingSink : TimingSink{
+    private mut TimingRecorder m_timing;
+    private usize m_registrationAttempt = 0u;
+    public ThrowOnceTimingSink(mut TimingRecorder timing){ this.m_timing = timing; }
+    public b8 enabled()const override{ return true; }
+    [cpp_unwind]
+    public Expected<TimingScopeId> registerScope(in Name scopeName) override{
+        ++this.m_registrationAttempt;
+        if(this.m_registrationAttempt == 3u)
+            ThrowTestException<RegistrationSentinel>(RegistrationSentinel());
+        return this.m_timing.registerScope(scopeName);
     }
-
-    virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)noexcept override{
-        m_timing.recordSample(scope, seconds, sampleFrameIndex);
+    public void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex) override{
+        this.m_timing.recordSample(scope, seconds, frameIndex);
     }
-
-    virtual void publishFrame(const u64 publishFrameIndex)noexcept override{ m_timing.publishFrame(publishFrameIndex); }
-
-
-private:
-    Core::Perf::TimingRecorder& m_timing;
-    usize m_registrationAttempt = 0u;
-};
-
-class FailOnceTimingSink final : public Core::Perf::TimingSink, NoCopy{
-public:
-    explicit FailOnceTimingSink(const usize failureAttempt)noexcept
-        : m_failureAttempt(failureAttempt)
-    {}
-
-
-public:
-    [[nodiscard]] virtual b8 enabled()const noexcept override{ return true; }
-
-    [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope([[maybe_unused]] const Name& scopeName)noexcept override{
-        const usize attempt = m_registrationAttempt;
-        ++m_registrationAttempt;
-        if(attempt == m_failureAttempt)
-            return MakeUnexpected(Failure{});
-
-        const u32 index = m_nextScopeIndex;
-        ++m_nextScopeIndex;
-        return Core::Perf::TimingScopeId{ .index = index, .generation = 1u };
-    }
-
-    virtual void recordSample([[maybe_unused]] const Core::Perf::TimingScopeId scope, [[maybe_unused]] const f64 seconds, [[maybe_unused]] const u64 sampleFrameIndex)noexcept override{}
-
-    virtual void publishFrame([[maybe_unused]] const u64 publishFrameIndex)noexcept override{}
-
-
-private:
-    usize m_failureAttempt = 0u;
-    usize m_registrationAttempt = 0u;
-    u32 m_nextScopeIndex = 0u;
-};
-
-struct CorrelatorContext{
-    CorrelatorTestArena testArena;
-    Core::Perf::TimingRecorder timing{ testArena.arena };
-    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, timing };
-    Core::Alloc::ScratchArena scratchArena{ NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingMetricCorrelatorScratch };
-};
-
-struct ThrowOnceCorrelatorContext{
-    CorrelatorTestArena testArena;
-    Core::Perf::TimingRecorder timing{ testArena.arena };
-    ThrowOnceTimingSink sink{ timing };
-    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, sink };
-    Core::Alloc::ScratchArena scratchArena{ NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingMetricCorrelatorScratch };
-};
-
-struct TimingMetricContext{
-    TimingTestArena testArena;
-    Core::Perf::TimingRecorder timing{ testArena.arena };
-    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, timing };
-    Core::Alloc::ScratchArena scratchArena{ NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingMetricScratch };
-};
-
-struct FailOnceTimingContext{
-    TimingTestArena testArena;
-    FailOnceTimingSink timing;
-    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, timing };
-
-
-public:
-    explicit FailOnceTimingContext(const usize failureAttempt)noexcept
-        : timing(failureAttempt)
-    {}
-};
-
-struct RecorderPairContext{
-    RecorderTestArena testArena;
-    Core::Perf::TimingRecorder firstSink{ testArena.arena };
-    Core::Perf::TimingRecorder secondSink{ testArena.arena };
-    Core::GpuTimingRecorder firstRecorder{ testArena.arena, firstSink };
-    Core::GpuTimingRecorder secondRecorder{ testArena.arena, secondSink };
-};
-
-struct PacketMetricsScratchContext{
-    Core::Alloc::ScratchArena scratchArena;
-    Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics;
-
-
-public:
-    explicit PacketMetricsScratchContext(const Name& arenaName)noexcept
-        : scratchArena(arenaName)
-        , queueMetrics(scratchArena)
-    {}
-};
-
-struct GpuTimingSubscriptionCapture{
-    u32 sampleCount = 0u;
-
-
-public:
-    static void Invoke(void* const context, const Core::GpuTimingSample&)noexcept{
-        GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
-        if(!capture)
-            return;
-        ++capture->sampleCount;
-    }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept{
-    return Core::GpuTimingSampleListener{
-        .context = &capture,
-        .invoke = &GpuTimingSubscriptionCapture::Invoke,
-    };
+    public void publishFrame(in u64 frameIndex) override{ this.m_timing.publishFrame(frameIndex); }
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Name> DeriveIndexedScopeName(const Name& prefix, const usize scopeIndex)noexcept{
-    Array<char, 32u> scopeIndexBuffer = {};
-    return DeriveName(prefix, FormatDecimal(scopeIndex, scopeIndexBuffer));
+class FailOnceTimingSink : TimingSink{
+    private usize m_failureAttempt;
+    private usize m_registrationAttempt = 0u;
+    private u32 m_nextScopeIndex = 0u;
+    public FailOnceTimingSink(in usize failureAttempt){ this.m_failureAttempt = failureAttempt; }
+    public b8 enabled()const override{ return true; }
+    public Expected<TimingScopeId> registerScope(in Name scopeName) override{
+        const usize attempt = this.m_registrationAttempt;
+        ++this.m_registrationAttempt;
+        if(attempt == this.m_failureAttempt)
+            return MakeUnexpected(Failure());
+        TimingScopeId scope;
+        scope.index = this.m_nextScopeIndex;
+        ++this.m_nextScopeIndex;
+        scope.generation = 1u;
+        return scope;
+    }
+    public void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex) override{}
+    public void publishFrame(in u64 frameIndex) override{}
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::GraphicsTimingCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using CorrelatorContext = Tests::GraphicsTimingCasesDetail::CorrelatorContext;
-using ThrowOnceCorrelatorContext = Tests::GraphicsTimingCasesDetail::ThrowOnceCorrelatorContext;
-using TimingMetricContext = Tests::GraphicsTimingCasesDetail::TimingMetricContext;
-using FailOnceTimingContext = Tests::GraphicsTimingCasesDetail::FailOnceTimingContext;
-using RecorderPairContext = Tests::GraphicsTimingCasesDetail::RecorderPairContext;
-using PacketMetricsScratchContext = Tests::GraphicsTimingCasesDetail::PacketMetricsScratchContext;
-using RegistrationSentinel = Tests::GraphicsTimingCasesDetail::RegistrationSentinel;
-using GpuTimingSubscriptionCapture = Tests::GraphicsTimingCasesDetail::GpuTimingSubscriptionCapture;
-using Tests::GraphicsTimingCasesDetail::MakeSubscriptionListener;
-using Tests::GraphicsTimingCasesDetail::DeriveIndexedScopeName;
-
-using ScratchArena = Core::Alloc::ScratchArena;
-using TimingRecorder = Core::Perf::TimingRecorder;
-using TimingScopeId = Core::Perf::TimingScopeId;
-using TimingStats = Core::Perf::TimingStats;
-
-using GpuPhysicalQueueId = Core::GpuPhysicalQueueId;
-using GpuComparableTimestampRange = Core::GpuComparableTimestampRange;
-using GpuPacketEnvelopeMetricScope = Core::GpuPacketEnvelopeMetricScope;
-using GpuPacketEnvelopeMetricQueueOutput = Core::GpuPacketEnvelopeMetricQueueOutput;
-using GpuPacketEnvelopeMetricScopeScratchVector = Vector<Core::GpuPacketEnvelopeMetricScope, Core::Alloc::ScratchArena>;
-using GpuTimingSinkSample = Core::GpuTimingSinkSample;
-using GpuTimingSinkSampleVector = Core::GpuTimingSinkSampleVector;
-using GpuTimingMetricCorrelator = Core::GpuTimingMetricCorrelator;
-using GpuPacketEnvelopeMetrics = Core::GpuPacketEnvelopeMetrics;
-using GpuQueuePacketEnvelopeMetrics = Core::GpuQueuePacketEnvelopeMetrics;
-using GpuQueuePacketEnvelopeMetricsVector = Core::GpuQueuePacketEnvelopeMetricsVector;
-using GpuTimingRecorder = Core::GpuTimingRecorder;
-using GpuTimingSampleSubscription = Core::GpuTimingSampleSubscription;
-using GpuTimingSampleAttribution = Core::GpuTimingSampleAttribution;
-using TimerQueryResult = Core::TimerQueryResult;
-using Viewport = Core::Viewport;
-using VulkanViewportPolicy = Core::GraphicsBackend::VulkanViewportPolicy;
-
-using Core::TryComputeGpuTimestampOverlap;
-using Core::TryAggregateGpuPacketEnvelopeMetrics;
-
-FOUNDATION_INLINE void RecordCorrelatorTimestampRange(
-    GpuTimingMetricCorrelator& correlator,
-    const Name& scopeName,
-    const u64 frameIndex,
-    const GpuComparableTimestampRange& range,
-    Core::Alloc::ScratchArena& scratchArena,
-    GpuTimingSinkSampleVector& samples
-){
-    correlator.recordTimestampRange(scopeName, frameIndex, range, scratchArena, samples);
+[ordered]
+class CorrelatorContext{
+    public HeapStorage testArena;
+    public TimingRecorder timing = TimingRecorder(this.testArena);
+    public GpuTimingMetricCorrelator correlator = GpuTimingMetricCorrelator(this.testArena, this.timing);
+    public ScratchStorage scratchArena = ScratchStorage(s_GpuTimingNameTestsTimingMetricCorrelatorScratch);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[ordered]
+class ThrowOnceCorrelatorContext{
+    public HeapStorage testArena;
+    public TimingRecorder timing = TimingRecorder(this.testArena);
+    public ThrowOnceTimingSink sink = ThrowOnceTimingSink(this.timing);
+    public GpuTimingMetricCorrelator correlator = GpuTimingMetricCorrelator(this.testArena, this.sink);
+    public ScratchStorage scratchArena = ScratchStorage(s_GpuTimingNameTestsTimingMetricCorrelatorScratch);
 }
 
+[ordered]
+class TimingMetricContext{
+    public HeapStorage testArena;
+    public TimingRecorder timing = TimingRecorder(this.testArena);
+    public GpuTimingMetricCorrelator correlator = GpuTimingMetricCorrelator(this.testArena, this.timing);
+    public ScratchStorage scratchArena = ScratchStorage(s_GpuTimingNameTestsGpuTimingMetricScratch);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[ordered]
+class FailOnceTimingContext{
+    public HeapStorage testArena;
+    public FailOnceTimingSink timing;
+    public GpuTimingMetricCorrelator correlator = GpuTimingMetricCorrelator(this.testArena, this.timing);
+    public FailOnceTimingContext(in usize failureAttempt){ this.timing = FailOnceTimingSink(failureAttempt); }
+}
 
+[ordered]
+class RecorderPairContext{
+    public HeapStorage testArena;
+    public TimingRecorder firstSink = TimingRecorder(this.testArena);
+    public TimingRecorder secondSink = TimingRecorder(this.testArena);
+    public GpuTimingRecorder firstRecorder = GpuTimingRecorder(this.testArena, this.firstSink);
+    public GpuTimingRecorder secondRecorder = GpuTimingRecorder(this.testArena, this.secondSink);
+}
+
+[ordered]
+class PacketMetricsScratchContext{
+    public ScratchStorage scratchArena;
+    public ScratchStorageVector<GpuQueuePacketEnvelopeMetrics> queueMetrics;
+    public PacketMetricsScratchContext(in Name arenaName){
+        this.scratchArena = ScratchStorage(arenaName);
+        this.queueMetrics = ScratchStorageVector<GpuQueuePacketEnvelopeMetrics>(this.scratchArena);
+    }
+}
+
+class GpuTimingSubscriptionCapture{
+    public u32 sampleCount = 0u;
+    public void onSample(in GpuTimingSample sample){ ++this.sampleCount; }
+}
+
+Expected<Name> DeriveIndexedScopeName(in Name prefix, in usize scopeIndex){
+    String suffix;
+    AppendUnsignedU64Text(suffix, scopeIndex);
+    return DeriveName(prefix, suffix);
+}
+
+void RecordCorrelatorTimestampRange(mut GpuTimingMetricCorrelator correlator, in Name name, in u64 frameIndex, in GpuComparableTimestampRange range,
+    mut ScratchStorage scratch, mut GpuTimingSinkSampleVector samples){
+    correlator.recordTimestampRange(name, frameIndex, range, scratch, samples);
+}
 
 type ResourceQueueSharingMask = ResourceQueueSharing;
 
@@ -333,7 +197,7 @@ Expected<GpuPacketEnvelopeMetrics> AggregateEnvelopeMetrics(in Span<GpuComparabl
 }
 
 Expected<GpuTimingSampleSubscription> SubscribeCaptureListener(mut GpuTimingRecorder recorder, mut GpuTimingSubscriptionCapture capture){
-    return recorder.subscribeSampleListener(MakeSubscriptionListener(capture));
+    return recorder.subscribeSampleListener(MakeGpuTimingSampleListener(capture));
 }
 
 void RecordAndPublishTimestampRange(in Name scopeName, in u64 frameIndex, in GpuComparableTimestampRange range, mut TimingMetricContext context){
@@ -506,6 +370,7 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PreservesPartialFramesAcrossGrowthReje
     }
 }
 
+[cpp_unwind]
 void VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegistrationThrows(){
     ThrowOnceCorrelatorContext context = ThrowOnceCorrelatorContext();
     context.timing.setEnabled(true);
@@ -518,9 +383,9 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegis
     Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
     outputs[0u] = MakeEnvelopeOutput(firstQueue, s_GpuTimingCaseThrowingIdle0);
     outputs[1u] = MakeEnvelopeOutput(secondQueue, s_GpuTimingCaseThrowingIdle1);
-    native(mut context, in scopes, in overlapScope, in outputs){
-        EXPECT_THROW(EXPECT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs)), RegistrationSentinel);
-    }
+    EXPECT_TRUE(ThrowsException<RegistrationSentinel>(lambda[mut context, in scopes, in overlapScope, in outputs]() -> void{
+        EXPECT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
+    }));
     EXPECT_TRUE(context.correlator.hasOutputRole(overlapScope));
     EXPECT_TRUE(context.correlator.hasOutputRole(outputs[0u].internalIdleScopeName));
     EXPECT_FALSE(context.correlator.hasOutputRole(outputs[1u].internalIdleScopeName));
@@ -720,6 +585,7 @@ void VerifyGpuTimingSampleSubscriptions_ScopedDemandsReplaceAtomicallyAndRemainS
     EXPECT_TRUE(recorder.collectionActive());
 
     ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, singleFirstScope));
+    RequireNothrowExpression(recorder.unsubscribeSampleListener(second));
     recorder.unsubscribeSampleListener(second);
     EXPECT_TRUE(recorder.collectionActive());
     EXPECT_FALSE(recorder.setFeedbackCollectionScopes(second, singleSecondScope));
@@ -1203,13 +1069,13 @@ void VerifyGpuTimingPacketEnvelopeMetrics_IsolatesFramesRejectsWrongQueuesPrunes
 
 void VerifyVulkanViewportPolicy_FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected(){
     const Viewport viewport = Viewport(1.2f, 10.2f, 2.1f, 8.7f, 0.0f, 1.0f);
-    const Expected<VkRect2D> rect = VulkanViewportPolicy::BuildImplicitScissor(viewport);
+    const Expected<VkRect2D> rect = BuildImplicitScissor(viewport);
     ASSERT_TRUE(rect.has_value());
     EXPECT_EQ(rect.value().offset.x, 1);
     EXPECT_EQ(rect.value().offset.y, 2);
     EXPECT_EQ(rect.value().extent.width, 10u);
     EXPECT_EQ(rect.value().extent.height, 7u);
-    EXPECT_FALSE(VulkanViewportPolicy::BuildImplicitScissor(Viewport(-0.1f, 10.0f, 0.0f, 8.0f, 0.0f, 1.0f)).has_value());
+    EXPECT_FALSE(BuildImplicitScissor(Viewport(-0.1f, 10.0f, 0.0f, 8.0f, 0.0f, 1.0f)).has_value());
 }
 
 void VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit(){
@@ -1218,7 +1084,7 @@ void VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit(){
     for(u32 rawValue = maxValidValue; rawValue <= maxByteValue; ++rawValue){
         ScopedTestTrace trace(rawValue);
         const ResourceQueueSharingMask sharing = cast<ResourceQueueSharingMask>(cast<u8>(rawValue));
-        EXPECT_EQ(ResourceQueueSharing::IsValid(sharing), rawValue <= maxValidValue);
+        EXPECT_EQ(IsValidResourceQueueSharing(sharing), rawValue <= maxValidValue);
     }
 }
 

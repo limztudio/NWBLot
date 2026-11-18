@@ -3,496 +3,256 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+#include <tests/unit/ui/native_input.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+enum<u8> UiComboBehaviorCallbackStage{ None, Generation, Revision, RowCount, Lookup, Key, Enabled }
+enum<u8> UiComboBehaviorCallbackMutation{ Select, Open, Close, Generation, Revision, RowCount }
+type UiComboBuilderTests = ComboFixture;
+
+class UiBuilderSkinPaletteTests : WidgetFixture{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/font_fixture.adhd.h>
-#include <tests/unit/ui/arithmetic_fixture_rows.adhd.h>
-
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
-
-#include <global/bit.h>
-#include <global/filesystem.h>
-#include <global/limit.h>
-#include <global/sha256.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_builder_skin_palette_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-class UiBuilderSkinPaletteTests : public WidgetFixture{
-public:
-    void configureReplacementSkin(UiSkin& replacement, const UiSkinPalette& palette, const f32 defaultFontSize){
-        UiSkin::RegionVector regions(m_skin.regions().begin(), m_skin.regions().end(), m_arena);
-        replacement.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+    public void configureReplacementSkin(mut UiSkin replacement, in UiSkinPalette palette, in f32 defaultFontSize){
+        Vector<UiSkinRegion> regions;
+        for(in UiSkinRegion region : this.m_skin.regions())
+            regions.push_back(region);
+        replacement.setAtlas(this.m_skin.texture(), this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), this.m_skin.referenceDensity(), regions);
         replacement.setPalette(palette);
-        replacement.setTypography({ defaultFontSize });
+        replacement.setTypography(UiSkinTypography(defaultFontSize));
     }
-};
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[ordered]
+class UiBuilderTests : ContextTestFixture{
+    public WidgetRoot m_root;
+    public Font m_font = Font(Name("tests/ui/fonts/latin"));
+    public TextService m_text;
+    public UiSkin m_skin = UiSkin(Name("tests/ui/skin"));
+    public PaintBuilder m_paint;
+    public Builder m_builder;
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-constexpr AStringView s_PanelKey = "panel";
-constexpr AStringView s_CaptionKey = "caption";
-constexpr AStringView s_ApplyKey = "apply";
-
-class UiBuilderTests : public UiTestSupport::ContextTestFixture{
-public:
-    UiBuilderTests()
-        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiBuilder))
-        , m_font(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
-        , m_text(m_arena)
-        , m_skin(m_arena, Name(UiWidgetTests::s_TestSkinPath))
-        , m_paint(m_arena)
-        , m_builder(m_arena, m_context, m_paint, m_text)
-    {}
-
-
-public:
-    virtual void SetUp()override{
-        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
-        configureSkin();
-        ASSERT_TRUE(m_skin.validatePayload());
-        m_builder.setSkin(m_skin);
+    public UiBuilderTests(){
+        this.m_builder = Builder(this.m_context, this.m_paint, this.m_text);
+        this.m_root = WidgetRoot(55u, 3u);
     }
-
-    void configureSkin(const b8 includePanel = true, const b8 includeButton = true){
-        UiSkin::RegionVector regions(m_arena);
+    public void setup(){
+        ASSERT_TRUE(InstallLatinFixtureFont( this.m_font, this.m_text));
+        this.configureSkin();
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_builder.setSkin(this.m_skin);
+    }
+    public void configureSkin(){ this.configureSkin(true); }
+    public void configureSkin(in b8 includePanel){ this.configureSkin(includePanel, true); }
+    public void configureSkin(in b8 includePanel, in b8 includeButton){
+        Vector<UiSkinRegion> regions;
         if(includePanel)
-            regions.push_back({ Name(NWB::Tests::UiCases::s_UiCasePanelNormal), { 0u, 0u, 8u, 8u }, {}, { 4.0f, 6.0f, 8.0f, 10.0f } });
+            regions.push_back(UiSkinRegion(Name(s_UiCasePanelNormal), UiSkinRect(0u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(4.0f, 6.0f, 8.0f, 10.0f), 0.0f, 0.0f, UiSkinDrawMode::Sprite));
         if(includeButton)
-            regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal), { 8u, 0u, 8u, 8u }, {}, { 1.0f, 2.0f, 3.0f, 4.0f }, 20.0f, 20.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonHover), { 16u, 0u, 8u, 8u }, {}, { 7.0f, 1.0f, 2.0f, 3.0f }, 40.0f, 30.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonPressed), { 24u, 0u, 8u, 8u }, {}, { 2.0f, 9.0f, 5.0f, 1.0f }, 30.0f, 35.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseButtonDisabled), { 32u, 0u, 8u, 8u }, {}, { 3.0f, 4.0f, 11.0f, 12.0f }, 70.0f, 50.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxNormal), { 40u, 0u, 8u, 8u }, {}, {}, 10.0f, 10.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxHover), { 48u, 0u, 8u, 8u }, {}, {}, 20.0f, 24.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxChecked), { 56u, 0u, 8u, 8u }, {}, {}, 28.0f, 30.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxDisabled), { 64u, 0u, 8u, 8u }, {}, {}, 34.0f, 32.0f });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseCheckboxMark), { 72u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseFocusOverlay), { 80u, 0u, 8u, 8u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, Move(regions));
+            regions.push_back(UiSkinRegion(Name(s_UiCaseNameButtonNormal), UiSkinRect(8u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(1.0f, 2.0f, 3.0f, 4.0f), 20.0f, 20.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseButtonHover), UiSkinRect(16u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(7.0f, 1.0f, 2.0f, 3.0f), 40.0f, 30.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseButtonPressed), UiSkinRect(24u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(2.0f, 9.0f, 5.0f, 1.0f), 30.0f, 35.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseButtonDisabled), UiSkinRect(32u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(3.0f, 4.0f, 11.0f, 12.0f), 70.0f, 50.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseCheckboxNormal), UiSkinRect(40u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(), 10.0f, 10.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseCheckboxHover), UiSkinRect(48u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(), 20.0f, 24.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseCheckboxChecked), UiSkinRect(56u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(), 28.0f, 30.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseCheckboxDisabled), UiSkinRect(64u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(), 34.0f, 32.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseCheckboxMark), UiSkinRect(72u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(), 0.0f, 0.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name(s_UiCaseFocusOverlay), UiSkinRect(80u, 0u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(), 0.0f, 0.0f, UiSkinDrawMode::Sprite));
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, regions);
     }
-
-    [[nodiscard]] b8 begin(const u64 generation, const Rect& bounds = { 0.0f, 0.0f, 300.0f, 200.0f }){
-        if(!m_context.beginFrame(generation))
+    public b8 begin(in u64 generation){ return this.begin(generation, Rect(0.0f, 0.0f, 300.0f, 200.0f)); }
+    public b8 begin(in u64 generation, in Rect bounds){
+        if(!this.m_context.beginFrame(generation))
             return false;
-        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(UiWidgetTests::s_TestSkinPath), m_skin);
-        return m_context.beginRoot(m_root) && m_builder.beginPanel(s_PanelKey, bounds);
+        this.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
+        return this.m_context.beginRoot(this.m_root) && this.m_builder.beginPanel(s_UiBuilderPanelKey, bounds);
     }
-
-    void beginPaintFrame(const u64 generation){
-        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(UiWidgetTests::s_TestSkinPath), m_skin);
+    public void beginPaintFrame(in u64 generation){
+        this.m_paint.begin(DisplayMetrics(300.0f, 200.0f, 1.0f, 1.0f), generation, 1u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
     }
-
-    [[nodiscard]] b8 finish(){
-        return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
+    public b8 finish(){
+        return this.m_builder.endPanel() && this.m_context.endRoot() && this.m_context.finishFrame();
     }
-
-    [[nodiscard]] WidgetId id(const AStringView stableKey)const{
-        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_PanelKey), stableKey);
+    public WidgetId id(in StringView stableKey)const{
+        return RequireUiWidgetId(RequireUiWidgetId(RequireUiRootId(this.m_root), s_UiBuilderPanelKey), stableKey);
     }
-
-    [[nodiscard]] Expected<Rect> regionQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
-        // Lanes are first U, last U, first V, last V.
-        const SIMDVectorSingle expected = VectorSetW(VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f)), 0.5f);
-        for(const DrawCommand& command : snapshot.commands()){
+    public Expected<Rect> regionQuad(in DrawSnapshot snapshot, in u32 slot)const{
+        const f32 firstU = cast<f32>(slot) / 16.0f;
+        const f32 lastU = cast<f32>(slot + 1u) / 16.0f;
+        for(in DrawCommand command : snapshot.commands()){
             if(command.material != PaintMaterial::Skin)
                 continue;
             for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
-                const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
-                const Vertex& last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-                const SIMDVectorSingle error = VectorAbs(VectorSubtract(VectorSet(first.texCoord.x, last.texCoord.x, first.texCoord.y, last.texCoord.y), expected));
-                if(Vector4Less(error, VectorReplicate(1e-6f)))
-                    return Rect{ first.position.x, first.position.y, last.position.x - first.position.x, last.position.y - first.position.y };
+                in Vertex first = snapshot.vertices()[snapshot.indices()[index]];
+                in Vertex last = snapshot.vertices()[snapshot.indices()[index + 2u]];
+                if(Abs(first.texCoord.x - firstU) < 1e-6f && Abs(last.texCoord.x - lastU) < 1e-6f &&
+                    Abs(first.texCoord.y) < 1e-6f && Abs(last.texCoord.y - 0.5f) < 1e-6f)
+                    return Rect(first.position.x, first.position.y, last.position.x - first.position.x, last.position.y - first.position.y);
             }
         }
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     }
-
-public:
-    Font m_font;
-    TextService m_text;
-    UiSkin m_skin;
-    PaintBuilder m_paint;
-    Builder m_builder;
-    WidgetRoot m_root{ 55u, 3u };
-};
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiBuilderTextShapingTests : WidgetFixture{
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_builder_text_shaping_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-class UiBuilderTextShapingTests : public WidgetFixture{
-public:
-    void addEditRegion(){
-        UiSkin::RegionVector regions(m_arena);
-        for(const UiSkinRegion& region : m_skin.regions())
+    public void addEditRegion(){
+        Vector<UiSkinRegion> regions;
+        for(in UiSkinRegion region : this.m_skin.regions())
             regions.push_back(region);
         UiSkinRegion edit;
-        edit.name = Name(NWB::Tests::UiCases::s_UiCaseEditNormal);
-        edit.rectangle = { 88u, 0u, 8u, 8u };
+        edit.name = Name(s_UiCaseEditNormal);
+        edit.rectangle = UiSkinRect(88u, 0u, 8u, 8u);
         regions.push_back(edit);
-        m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-        m_builder.setSkin(m_skin);
+        this.m_skin.setAtlas(this.m_skin.texture(), this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), this.m_skin.referenceDensity(), regions);
+        this.m_builder.setSkin(this.m_skin);
     }
-};
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiComboBehaviorSource : IListDataSource{
+    public TestObserved<u64> generation = TestObserved<u64>(51u);
+    public TestObserved<u64> revisionValue = TestObserved<u64>(1u);
+    public TestObserved<u64> count = TestObserved<u64>(10u);
+    public u64 disabledKey = 0u;
+    public b8 reversed = false;
+    public b8 badLookup = false;
+    public b8 wrongLookup = false;
+    public Optional<mut ComboState> m_state;
+    public u64 m_selected = 8u;
+    public TestObserved<UiComboBehaviorCallbackStage> m_stage = TestObserved<UiComboBehaviorCallbackStage>(UiComboBehaviorCallbackStage::None);
+    public UiComboBehaviorCallbackMutation m_mutation = UiComboBehaviorCallbackMutation::Select;
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_combo_behavior_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-namespace CallbackStage{
-    enum Enum : u8{ None, Generation, Revision, Count, Lookup, Key, Enabled };
-};
-
-namespace CallbackMutation{
-    enum Enum : u8{ Select, Open, Close, Generation, Revision, Count };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ComboSource final : public IListDataSource{
-public:
-    ComboSource()noexcept = default;
-
-    explicit ComboSource(ComboState& state)noexcept
-        : m_state(&state)
-    {}
-
-
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
-        mutate(CallbackStage::Generation);
-        return generation;
+    public UiComboBehaviorSource(){ }
+    public UiComboBehaviorSource(mut ComboState state){ this.m_state = Optional<mut ComboState>(state); }
+    public u64 instanceGeneration()const override{
+        this.mutate(UiComboBehaviorCallbackStage::Generation);
+        return this.generation.value();
     }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        mutate(CallbackStage::Revision);
-        return revisionValue;
+    public u64 revision()const override{
+        this.mutate(UiComboBehaviorCallbackStage::Revision);
+        return this.revisionValue.value();
     }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{
-        mutate(CallbackStage::Count);
-        return count;
+    public u64 rowCount()const override{
+        this.mutate(UiComboBehaviorCallbackStage::RowCount);
+        return this.count.value();
     }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        mutate(CallbackStage::Key);
-        return index < count ? UiWidgetTests::ArithmeticFixtureRowKey(count, 0u, reversed, index) : 0u;
+    public u64 key(in u64 index)const override{
+        this.mutate(UiComboBehaviorCallbackStage::Key);
+        if(index >= this.count.value())
+            return 0u;
+        return ArithmeticFixtureRowKey(this.count.value(), 0u, this.reversed, index);
     }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
-        mutate(CallbackStage::Lookup);
-        const auto index = UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, reversed, keyValue);
-        if(!index)
+    public Expected<u64> indexOf(in u64 keyValue)const override{
+        this.mutate(UiComboBehaviorCallbackStage::Lookup);
+        const auto index = FindArithmeticFixtureRowIndex(this.count.value(), 0u, this.reversed, keyValue);
+        if(!index.has_value())
             return index;
-        return badLookup ? count : wrongLookup ? 0u : *index;
+        if(this.badLookup)
+            return this.count.value();
+        if(this.wrongLookup)
+            return 0u;
+        return index.value();
     }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        return UiWidgetTests::FindSingleDisabledFixtureRow(count, 0u, false, start, reverse, disabledKey);
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
+        return FindSingleDisabledFixtureRow(this.count.value(), 0u, false, start, reverse, this.disabledKey);
     }
-
-    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        mutate(CallbackStage::Enabled);
-        const u64 keyValue = reversed ? count - index : index + 1u;
-        return index < count && keyValue != disabledKey;
+    public StringView text(in u64 arg0)const override{ return "row"; }
+    public b8 enabled(in u64 index)const override{
+        this.mutate(UiComboBehaviorCallbackStage::Enabled);
+        u64 keyValue = index + 1u;
+        if(this.reversed)
+            keyValue = this.count.value() - index;
+        return index < this.count.value() && keyValue != this.disabledKey;
     }
-
-    void arm(const CallbackStage::Enum stage, const CallbackMutation::Enum mutation, const u64 selected = 8u)noexcept{
-        m_stage = stage;
-        m_mutation = mutation;
-        m_selected = selected;
+    public void arm(in UiComboBehaviorCallbackStage stage, in UiComboBehaviorCallbackMutation mutation){ this.arm(stage, mutation, 8u); }
+    public void arm(in UiComboBehaviorCallbackStage stage, in UiComboBehaviorCallbackMutation mutation, in u64 selected){
+        this.m_stage.value() = stage;
+        this.m_mutation = mutation;
+        this.m_selected = selected;
     }
-
-
-private:
-    void mutate(const CallbackStage::Enum stage)const noexcept{
-        if(m_stage != stage)
+    public void mutate(in UiComboBehaviorCallbackStage stage)const{
+        if(this.m_stage.value() != stage)
             return;
-        m_stage = CallbackStage::None;
-        switch(m_mutation){
-        case CallbackMutation::Select:
-            if(m_state)
-                m_state->select(m_selected);
+        this.m_stage.value() = UiComboBehaviorCallbackStage::None;
+        switch(this.m_mutation){
+        case UiComboBehaviorCallbackMutation::Select:
+            if(this.m_state.has_value())
+                this.m_state.value().select(this.m_selected);
             break;
-        case CallbackMutation::Open:
-            if(m_state)
-                m_state->open();
+        case UiComboBehaviorCallbackMutation::Open:
+            if(this.m_state.has_value())
+                this.m_state.value().open();
             break;
-        case CallbackMutation::Close:
-            if(m_state)
-                m_state->close();
+        case UiComboBehaviorCallbackMutation::Close:
+            if(this.m_state.has_value())
+                this.m_state.value().close();
             break;
-        case CallbackMutation::Generation:
-            ++generation;
+        case UiComboBehaviorCallbackMutation::Generation:
+            ++this.generation.value();
             break;
-        case CallbackMutation::Revision:
-            ++revisionValue;
+        case UiComboBehaviorCallbackMutation::Revision:
+            ++this.revisionValue.value();
             break;
-        case CallbackMutation::Count:
-            if(count != 0u)
-                --count;
+        case UiComboBehaviorCallbackMutation::RowCount:
+            if(this.count.value() != 0u)
+                --this.count.value();
             break;
         }
     }
+}
 
 
-public:
-    mutable u64 generation = 51u;
-    mutable u64 revisionValue = 1u;
-    mutable u64 count = 10u;
-    u64 disabledKey = 0u;
-    b8 reversed = false;
-    b8 badLookup = false;
-    b8 wrongLookup = false;
+class UiComboBuilderLabelLookupSource : ComboSource{
 
 
-private:
-    ComboState* m_state = nullptr;
-    u64 m_selected = 8u;
-    mutable CallbackStage::Enum m_stage = CallbackStage::None;
-    CallbackMutation::Enum m_mutation = CallbackMutation::Select;
-};
+    public Expected<u64> indexOf(in u64 key)const override{
+        auto found = this.baseIndexOf(key);
+        if(found.has_value() && this.lookupCalls.value() >= 4u)
+            found.value() = (found.value() + 1u) % this.count;
+        return found;
+    }
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE b8 Navigate(const ComboSource& source, const ControlActionKind::Enum kind, ComboState& state)noexcept{
-    ListState& preview = state.listState();
+b8 UiComboBehaviorNavigate(in UiComboBehaviorSource source, in ControlActionKind kind, mut ComboState state){
+    mut ListState preview = state.listState();
     if(!ReconcileListState(preview, source))
         return false;
     ListOptions options;
     options.selectOnNavigate = false;
     ControlAction action;
     action.kind = kind;
-    action.control = { preview.inputGeneration(), source.instanceGeneration(), source.revision() };
+    action.control = ControlToken(preview.inputGeneration(), source.instanceGeneration(), source.revision());
     ListResult result;
     return ApplyListControlAction(source, options, action, preview, result);
 }
 
+b8 UiComboBehaviorReconcilePreview(mut ComboState state, in IListDataSource source){ return ReconcileListState(state.listState(), source); }
+b8 UiComboBehaviorScrollPreviewTo(mut ComboState state, in f64 offset){ return state.listState().scrollTo(offset); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_combo_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiComboTests;
-
-class UiComboBuilderTests : public ComboFixture{
-public:
-};
-
-// Source fixture that breaks stable-key lookup on the post-selection label read.
-class LabelLookupSource final : public ComboSource{
-public:
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
-        auto found = ComboSource::indexOf(key);
-        if(found && lookupCalls >= 4u)
-            *found = (*found + 1u) % count;
-        return found;
+Sha256Digest ComputeUiBuilderFirstGlyphPageHash(in DrawSnapshot snapshot){ return ComputeSha256(snapshot.glyphPages().front().deref().pixels()); }
+u64 ReadUiBuilderFirstGlyphPageFontGeneration(in DrawSnapshot snapshot){ return snapshot.glyphPages().front().deref().binding().fontGeneration; }
+b8 EqualUiBuilderVertexBytes(in Span<Vertex> lhs, in Span<Vertex> rhs){
+    if(lhs.size() != rhs.size())
+        return false;
+    const Span<u8> left = PodArrayBytes<Vertex>(lhs);
+    const Span<u8> right = PodArrayBytes<Vertex>(rhs);
+    for(usize index = 0u; index < left.size(); ++index){
+        if(left[index] != right[index])
+            return false;
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiBuilderSkinPaletteTests = __hidden_ui_builder_skin_palette_tests::UiBuilderSkinPaletteTests;
-using UiBuilderTests = __hidden_ui_builder_tests::UiBuilderTests;
-using UiBuilderTextShapingTests = __hidden_ui_builder_text_shaping_tests::UiBuilderTextShapingTests;
-using UiComboBehaviorSource = __hidden_ui_combo_behavior_tests::ComboSource;
-namespace UiComboBehaviorCallbackStage = __hidden_ui_combo_behavior_tests::CallbackStage;
-using UiComboBehaviorCallbackStageEnum = __hidden_ui_combo_behavior_tests::CallbackStage::Enum;
-namespace UiComboBehaviorCallbackMutation = __hidden_ui_combo_behavior_tests::CallbackMutation;
-using UiComboBehaviorCallbackMutationEnum = __hidden_ui_combo_behavior_tests::CallbackMutation::Enum;
-using UiComboBuilderTests = __hidden_ui_combo_builder_tests::UiComboBuilderTests;
-using UiComboBuilderLabelLookupSource = __hidden_ui_combo_builder_tests::LabelLookupSource;
-using UiComboBuilderSource = ::NWB::UiComboTests::ComboSource;
-
-using Builder = ::NWB::Impl::Ui::Builder;
-using Color = ::NWB::Impl::Ui::Color;
-using ComboOptions = ::NWB::Impl::Ui::ComboOptions;
-using ComboResult = ::NWB::Impl::Ui::ComboResult;
-using ComboState = ::NWB::Impl::Ui::ComboState;
-using ContainerOptions = ::NWB::Impl::Ui::ContainerOptions;
-using EditBoxState = ::NWB::Impl::Ui::EditBoxState;
-using EditModel = ::NWB::Impl::Ui::EditModel;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
-using UiSkin = ::NWB::Impl::UiSkin;
-using UiSkinColor = ::NWB::Impl::UiSkinColor;
-using UiSkinPalette = ::NWB::Impl::UiSkinPalette;
-using UiSkinTypography = ::NWB::Impl::UiSkinTypography;
-using WidgetOptions = ::NWB::Impl::Ui::WidgetOptions;
-using WidgetState = ::NWB::Impl::Ui::WidgetState;
-using WidgetStyle = ::NWB::Impl::Ui::WidgetStyle;
-using Sha256Digest = ::Sha256Digest;
-
-namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
-using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-namespace UiSkinColorRole = ::NWB::Impl::UiSkinColorRole;
-namespace CoreKey = ::NWB::Core::Key;
-
-using ::NWB::Impl::Ui::AdvanceCaretPhase;
-using ::NWB::Tests::UiCases::s_UiCaseButtonHover;
-using ::NWB::Tests::UiCases::s_UiCaseNameButtonNormal;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiReplacementSkin;
-
-[[nodiscard]] FOUNDATION_INLINE u32 MakeUiBuilderHangScriptTag()noexcept{ return ::PackFourCharTag('H', 'a', 'n', 'g'); }
-[[nodiscard]] FOUNDATION_INLINE u32 MakeUiBuilderLatnScriptTag()noexcept{ return ::PackFourCharTag('L', 'a', 't', 'n'); }
-[[nodiscard]] FOUNDATION_INLINE f64 UiCaretClockInfinity()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f64 UiCaretClockQuietNaN()noexcept{ return ::Limit<f64>::s_QuietNaN; }
-[[nodiscard]] FOUNDATION_INLINE ComboOptions MakeUiComboBuilderDefaultOptions()noexcept{ return ::NWB::UiComboTests::Options(); }
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorBind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
-    return ::NWB::Impl::Ui::BindComboState(state, owner, declarationGeneration);
+    return true;
 }
-[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorReconcile(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ReconcileComboState(state, source);
-}
-FOUNDATION_INLINE void UiComboBehaviorOpen(ComboState& state)noexcept{
-    ::NWB::Impl::Ui::OpenComboState(state);
-}
-FOUNDATION_INLINE void UiComboBehaviorClose(ComboState& state)noexcept{
-    ::NWB::Impl::Ui::CloseComboState(state);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorCommit(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source, const u64 key){
-    return ::NWB::Impl::Ui::CommitComboSelection(state, source, key);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorNavigate(const UiComboBehaviorSource& source, const ControlActionKindEnum kind, ComboState& state)noexcept{
-    return __hidden_ui_combo_behavior_tests::Navigate(source, kind, state);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorReconcilePreview(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ReconcileListState(state.listState(), source);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorScrollPreviewTo(ComboState& state, const f64 offset)noexcept{
-    return state.listState().scrollTo(offset);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Sha256Digest ComputeUiBuilderFirstGlyphPageHash(const DrawSnapshot& snapshot)noexcept{
-    const auto& page = snapshot.glyphPages().front();
-    return ::ComputeSha256({ page->pixels().data(), page->pixels().size() });
-}
-[[nodiscard]] FOUNDATION_INLINE u64 ReadUiBuilderFirstGlyphPageFontGeneration(const DrawSnapshot& snapshot)noexcept{
-    return snapshot.glyphPages().front()->binding().fontGeneration;
-}
-[[nodiscard]] FOUNDATION_INLINE b8 EqualUiBuilderVertexBytes(const Span<const Vertex> lhs, const Span<const Vertex> rhs)noexcept{
-    return lhs.size() == rhs.size() && FOUNDATION_MEMCMP(lhs.data(), rhs.data(), lhs.size() * sizeof(Vertex)) == 0;
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -509,7 +269,7 @@ const StringView s_UiComboBuilderSecondKey = "other";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-InputEvent MakeUiBuilderKeyEvent(in InputEventTypeEnum type, in i32 key, in b8 shift, in b8 repeat){
+InputEvent MakeUiBuilderKeyEvent(in InputEventType type, in i32 key, in b8 shift, in b8 repeat){
     InputEvent event = InputEvent();
     event.type = type;
     event.key = key;
@@ -555,7 +315,7 @@ b8 AcceptUiComboBuilderNeighbors(mut UiComboBuilderTests self, in u64 generation
         return false;
     if(self.m_builder.button("before", "Before"))
         return false;
-    self.m_result = self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeUiComboBuilderDefaultOptions());
+    self.m_result = self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeComboFixtureOptions());
     if(self.m_builder.button("after", "After"))
         return false;
     return self.m_result.valid && self.finishPanel() && self.m_context.commitFrame(generation);
@@ -576,7 +336,7 @@ void VerifyUiBuilderSkinPaletteTests_SkinChangeInsidePanelFailsWithoutReplacingA
     self.m_builder.setSkin(self.m_skin);
     ASSERT_FLOAT_EQ(self.m_builder.style().fontSize, 20.0f);
 
-    UiSkin replacement = UiSkin(self.m_arena, s_UiCaseTestsUiReplacementSkin);
+    UiSkin replacement = UiSkin(Name(s_UiCaseTestsUiReplacementSkin));
     self.configureReplacementSkin(replacement, MakeUiBuilderSkinPalette(0.3f), 22.0f);
     ASSERT_TRUE(replacement.validatePayload());
 
@@ -693,7 +453,7 @@ void VerifyUiBuilderTests_MissingSkinRejectsDeclarationsWithoutPublishingCandida
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const WidgetId accepted = self.id(s_UiBuilderApplyKey);
     ASSERT_EQ(self.m_context.input().targets().size(), 2u);
-    Builder noSkin = Builder(self.m_arena, self.m_context, self.m_paint, self.m_text);
+    Builder noSkin = Builder(self.m_context, self.m_paint, self.m_text);
     ASSERT_TRUE(self.m_context.beginFrame(2u));
     self.beginPaintFrame(2u);
     ASSERT_TRUE(self.m_context.beginRoot(self.m_root));
@@ -827,16 +587,16 @@ void VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubm
     const Point point = CenterUiRect(target.value().rectangle);
     u64 generation = 1u;
     Array<i32, 3u> keys = Array<i32, 3u>();
-    keys[0u] = CoreKey::Unknown;
-    keys[1u] = CoreKey::Enter;
-    keys[2u] = CoreKey::Space;
+    keys[0u] = Key::Unknown;
+    keys[1u] = Key::Enter;
+    keys[2u] = Key::Space;
     for(in i32 key : keys){
         if(!self.m_context.input().focus().valid()){
-            EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Tab, false, false)).commandConsumed);
-            EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Tab, false, false)).commandConsumed);
+            EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
+            EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
         }
         ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiBuilderApplyKey));
-        const b8 pointer = key == CoreKey::Unknown;
+        const b8 pointer = key == Key::Unknown;
         InputEvent down = InputEvent();
         down.position = point;
         down.key = key;
@@ -861,8 +621,8 @@ void VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubm
         EXPECT_FALSE(self.m_builder.button(s_UiBuilderApplyKey, "Apply"));
         ASSERT_TRUE(self.finish());
         ASSERT_TRUE(self.m_context.commitFrame(generation));
-        EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Escape, false, false)).commandConsumed);
-        EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Escape, false, false)).commandConsumed);
+        EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Escape, false, false)).commandConsumed);
+        EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Escape, false, false)).commandConsumed);
         const InputRoutingResult released = self.send(up);
         if(pointer)
             EXPECT_TRUE(released.pointerConsumed);
@@ -875,11 +635,11 @@ void VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubm
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         EXPECT_TRUE(self.m_context.input().actions().empty());
     }
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Tab, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
     ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiBuilderApplyKey));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
     ++generation;
     ASSERT_TRUE(self.begin(generation));
     EXPECT_TRUE(self.m_builder.button(s_UiBuilderApplyKey, "Apply"));
@@ -893,21 +653,21 @@ void VerifyUiBuilderTests_FocusTransferWhileButtonSubmitIsHeldCannotActivateEith
     EXPECT_FALSE(self.m_builder.button("second", "Second"));
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Tab, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
     ASSERT_EQ(self.m_context.input().focus(), self.id("first"));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Tab, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
     ASSERT_EQ(self.m_context.input().focus(), self.id("second"));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
     ASSERT_TRUE(self.begin(2u));
     EXPECT_FALSE(self.m_builder.button("first", "First"));
     EXPECT_FALSE(self.m_builder.button("second", "Second"));
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
     ASSERT_TRUE(self.begin(3u));
     EXPECT_FALSE(self.m_builder.button("first", "First"));
     EXPECT_TRUE(self.m_builder.button("second", "Second"));
@@ -961,11 +721,11 @@ void VerifyUiBuilderTextShapingTests_InvalidPolicyPreservesPreviousShapingAndOpe
     ASSERT_TRUE(self.installKoreanFallback());
     self.addEditRegion();
     ASSERT_TRUE(self.m_skin.validatePayload());
-    ASSERT_TRUE(self.m_builder.setTextShaping(MakeUiBuilderHangScriptTag(), "ko"));
+    ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('H', 'a', 'n', 'g'), "ko"));
     EXPECT_FALSE(self.m_builder.setTextShaping(0u, "ko"));
-    EXPECT_FALSE(self.m_builder.setTextShaping(MakeUiBuilderLatnScriptTag(), "ko!"));
+    EXPECT_FALSE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko!"));
     ASSERT_FALSE(self.m_builder.failed());
-    EditModel model = EditModel(self.m_arena);
+    EditModel model = EditModel();
     ASSERT_TRUE(model.setText(s_UiBuilderTextShapingJamo));
     EditBoxState state = EditBoxState();
 
@@ -980,7 +740,7 @@ void VerifyUiBuilderTextShapingTests_InvalidPolicyPreservesPreviousShapingAndOpe
 
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 100.0f)));
-    EXPECT_FALSE(self.m_builder.setTextShaping(MakeUiBuilderLatnScriptTag(), "en"));
+    EXPECT_FALSE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
     EXPECT_TRUE(self.m_builder.failed());
     EXPECT_FALSE(self.m_builder.endPanel());
 }
@@ -998,15 +758,15 @@ void VerifyUiCaretClockTests_InvalidAndNonpositiveDeltasKeepCurrentPhase(){
     Array<f64, 5u> invalid = Array<f64, 5u>();
     invalid[0u] = 0.0;
     invalid[1u] = -0.25;
-    invalid[2u] = UiCaretClockInfinity();
-    invalid[3u] = -UiCaretClockInfinity();
-    invalid[4u] = UiCaretClockQuietNaN();
+    invalid[2u] = bit_cast<f64>(cast<u64>(0x7ff0000000000000u));
+    invalid[3u] = -bit_cast<f64>(cast<u64>(0x7ff0000000000000u));
+    invalid[4u] = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
     for(in f64 delta : invalid)
         EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.375, delta), 0.375);
 }
 
 void VerifyUiCaretClockTests_InvalidPhaseStartsAtZeroAndFinitePhaseIsNormalized(){
-    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(UiCaretClockQuietNaN(), 2.25), 0.25);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(bit_cast<f64>(cast<u64>(0x7ff8000000000000u)), 2.25), 0.25);
     EXPECT_DOUBLE_EQ(AdvanceCaretPhase(-1.0, 0.25), 0.25);
     EXPECT_DOUBLE_EQ(AdvanceCaretPhase(1.25, 2.5), 0.75);
 }
@@ -1021,12 +781,12 @@ void VerifyUiComboBehaviorTests_FirstBindingPreservesAnExplicitlyOpenStateAndSam
     state.open();
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 17u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 17u));
     EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.inputGeneration(), inputGeneration);
     EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 17u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 17u));
     EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
 }
@@ -1035,13 +795,13 @@ void VerifyUiComboBehaviorTests_ARecreatedDeclarationCancelsPreviewAndPreservesT
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 17u));
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 17u));
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     ASSERT_TRUE(UiComboBehaviorNavigate(source, ControlActionKind::Down, state));
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 18u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 18u));
     EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
@@ -1052,16 +812,16 @@ void VerifyUiComboBehaviorTests_ARecreatedDeclarationCancelsPreviewAndPreservesT
 void VerifyUiComboBehaviorTests_MovingStateToAnotherOwnerClosesAndEachOwnerSwitchRetiresThePreviewLifetime(){
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 17u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 17u));
     state.open();
     const u64 previewGeneration = state.listState().inputGeneration();
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(202u), 17u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(202u), 17u));
     EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
     state.open();
     const u64 returnedPreview = state.listState().inputGeneration();
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 17u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 17u));
     EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_NE(state.listState().inputGeneration(), returnedPreview);
@@ -1070,12 +830,12 @@ void VerifyUiComboBehaviorTests_MovingStateToAnotherOwnerClosesAndEachOwnerSwitc
 void VerifyUiComboBehaviorTests_InvalidBindingFailsAtomicallyAndDoesNotReplaceTheExistingOwner(){
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 17u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 17u));
     state.open();
     const u64 previewGeneration = state.listState().inputGeneration();
-    EXPECT_FALSE(UiComboBehaviorBind(state, WidgetId(), 18u));
-    EXPECT_FALSE(UiComboBehaviorBind(state, WidgetId(202u), 0u));
-    ASSERT_TRUE(UiComboBehaviorBind(state, WidgetId(201u), 17u));
+    EXPECT_FALSE(BindComboState(state, WidgetId(), 18u));
+    EXPECT_FALSE(BindComboState(state, WidgetId(202u), 0u));
+    ASSERT_TRUE(BindComboState(state, WidgetId(201u), 17u));
     EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
@@ -1085,12 +845,12 @@ void VerifyUiComboBehaviorTests_MissingAndDisabledInitialSelectionClearWithoutCh
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState missing = ComboState();
     missing.select(99u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(missing, source));
+    ASSERT_TRUE(ReconcileComboState(missing, source));
     EXPECT_EQ(missing.selectedKey(), 0u);
     ComboState disabled = ComboState();
     disabled.select(5u);
     source.disabledKey = 5u;
-    ASSERT_TRUE(UiComboBehaviorReconcile(disabled, source));
+    ASSERT_TRUE(ReconcileComboState(disabled, source));
     EXPECT_EQ(disabled.selectedKey(), 0u);
 }
 
@@ -1098,13 +858,13 @@ void VerifyUiComboBehaviorTests_ReorderPreservesCommittedSelectionAndOpenPreview
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     ASSERT_TRUE(UiComboBehaviorNavigate(source, ControlActionKind::Down, state));
     ASSERT_EQ(state.listState().cursorKey(), 5u);
     source.reversed = true;
-    ++source.revisionValue;
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
+    ++source.revisionValue.value();
+    ASSERT_TRUE(ReconcileComboState(state, source));
     ASSERT_TRUE(UiComboBehaviorReconcilePreview(state, source));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 5u);
@@ -1115,9 +875,9 @@ void VerifyUiComboBehaviorTests_CommittingTheCurrentSelectionIsStillAnActivation
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
-    EXPECT_TRUE(UiComboBehaviorCommit(state, source, 4u));
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
+    EXPECT_TRUE(CommitComboSelection(state, source, 4u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_FALSE(state.isOpen());
 }
@@ -1126,12 +886,12 @@ void VerifyUiComboBehaviorTests_ZeroMissingAndDisabledCommitFailWithoutClosingOr
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     source.disabledKey = 5u;
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 0u));
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 99u));
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+    EXPECT_FALSE(CommitComboSelection(state, source, 0u));
+    EXPECT_FALSE(CommitComboSelection(state, source, 99u));
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
     EXPECT_TRUE(state.isOpen());
@@ -1141,12 +901,12 @@ void VerifyUiComboBehaviorTests_ClosedAndUnboundStateRejectCommit(){
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
-    UiComboBehaviorOpen(state);
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorClose(state);
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
+    OpenComboState(state);
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    CloseComboState(state);
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
 }
 
@@ -1154,8 +914,8 @@ void VerifyUiComboBehaviorTests_ExplicitSelectRenewsInputEvenWhenUnchangedAndCan
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     ASSERT_TRUE(UiComboBehaviorNavigate(source, ControlActionKind::Down, state));
     const u64 inputGeneration = state.inputGeneration();
     state.select(4u);
@@ -1192,12 +952,12 @@ void VerifyUiComboBehaviorTests_ReopenRestoresCommittedCursorAndRetiresPreviousP
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     ASSERT_TRUE(UiComboBehaviorNavigate(source, ControlActionKind::Down, state));
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
-    UiComboBehaviorOpen(state);
+    OpenComboState(state);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
     EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
     EXPECT_EQ(state.inputGeneration(), inputGeneration);
@@ -1208,22 +968,22 @@ void VerifyUiComboBehaviorTests_RemovedOrDisabledCommittedKeyClearsOnRevisionWit
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     ASSERT_TRUE(UiComboBehaviorNavigate(source, ControlActionKind::Down, state));
     source.disabledKey = 4u;
-    ++source.revisionValue;
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
+    ++source.revisionValue.value();
+    ASSERT_TRUE(ReconcileComboState(state, source));
     ASSERT_TRUE(UiComboBehaviorReconcilePreview(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.listState().cursorKey(), 5u);
     EXPECT_TRUE(state.isOpen());
-    UiComboBehaviorClose(state);
+    CloseComboState(state);
     EXPECT_EQ(state.listState().cursorKey(), 0u);
     state.select(5u);
-    source.count = 4u;
-    ++source.revisionValue;
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
+    source.count.value() = 4u;
+    ++source.revisionValue.value();
+    ASSERT_TRUE(ReconcileComboState(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
 }
 
@@ -1231,14 +991,14 @@ void VerifyUiComboBehaviorTests_ReplacingEstablishedSourceClosesAndClearsSelecti
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(10u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     ASSERT_TRUE(UiComboBehaviorReconcilePreview(state, source));
     ASSERT_TRUE(UiComboBehaviorScrollPreviewTo(state, 120.0));
     ASSERT_GT(state.listState().scrollOffset(), 0.0);
     const u64 inputGeneration = state.inputGeneration();
-    ++source.generation;
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
+    ++source.generation.value();
+    ASSERT_TRUE(ReconcileComboState(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.listState().selectedKey(), 0u);
     EXPECT_EQ(state.listState().cursorKey(), 0u);
@@ -1251,15 +1011,15 @@ void VerifyUiComboBehaviorTests_EmptyDatasetClearsSelectionAndDoesNotInventAComm
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
-    source.count = 0u;
-    ++source.revisionValue;
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
+    source.count.value() = 0u;
+    ++source.revisionValue.value();
+    ASSERT_TRUE(ReconcileComboState(state, source));
     ASSERT_TRUE(UiComboBehaviorNavigate(source, ControlActionKind::Down, state));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.listState().cursorKey(), 0u);
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 0u));
+    EXPECT_FALSE(CommitComboSelection(state, source, 0u));
     EXPECT_TRUE(state.isOpen());
 }
 
@@ -1267,21 +1027,21 @@ void VerifyUiComboBehaviorTests_InvalidIdentitiesAndMalformedLookupLeaveExisting
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
-    source.generation = 0u;
-    EXPECT_FALSE(UiComboBehaviorReconcile(state, source));
-    source.generation = 51u;
-    source.revisionValue = 0u;
-    EXPECT_FALSE(UiComboBehaviorReconcile(state, source));
-    source.revisionValue = 1u;
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
+    source.generation.value() = 0u;
+    EXPECT_FALSE(ReconcileComboState(state, source));
+    source.generation.value() = 51u;
+    source.revisionValue.value() = 0u;
+    EXPECT_FALSE(ReconcileComboState(state, source));
+    source.revisionValue.value() = 1u;
     source.badLookup = true;
-    EXPECT_FALSE(UiComboBehaviorReconcile(state, source));
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+    EXPECT_FALSE(ReconcileComboState(state, source));
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
     source.badLookup = false;
     source.wrongLookup = true;
-    EXPECT_FALSE(UiComboBehaviorReconcile(state, source));
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+    EXPECT_FALSE(ReconcileComboState(state, source));
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
     EXPECT_TRUE(state.isOpen());
@@ -1291,29 +1051,29 @@ void VerifyUiComboBehaviorTests_CommitRequiresReconciledRevisionAndRejectsSource
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
-    ++source.revisionValue;
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    ++source.generation;
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
+    ++source.revisionValue.value();
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    ++source.generation.value();
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_TRUE(state.isOpen());
 }
 
 void VerifyUiComboBehaviorTests_RevisionAndGenerationChangingDuringReconcileFailWithoutPartialMutation(){
-    Array<UiComboBehaviorCallbackMutationEnum, 2u> mutations = Array<UiComboBehaviorCallbackMutationEnum, 2u>();
+    Array<UiComboBehaviorCallbackMutation, 2u> mutations = Array<UiComboBehaviorCallbackMutation, 2u>();
     mutations[0u] = UiComboBehaviorCallbackMutation::Revision;
     mutations[1u] = UiComboBehaviorCallbackMutation::Generation;
-    for(in UiComboBehaviorCallbackMutationEnum mutation : mutations){
+    for(in UiComboBehaviorCallbackMutation mutation : mutations){
         UiComboBehaviorSource source = UiComboBehaviorSource();
         ComboState state = ComboState();
         state.select(4u);
-        ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-        UiComboBehaviorOpen(state);
+        ASSERT_TRUE(ReconcileComboState(state, source));
+        OpenComboState(state);
         source.arm(UiComboBehaviorCallbackStage::Lookup, mutation);
-        EXPECT_FALSE(UiComboBehaviorReconcile(state, source));
+        EXPECT_FALSE(ReconcileComboState(state, source));
         EXPECT_EQ(state.selectedKey(), 4u);
         EXPECT_TRUE(state.isOpen());
     }
@@ -1323,27 +1083,27 @@ void VerifyUiComboBehaviorTests_RowCountChangingWithoutRevisionDuringReconcileFa
     UiComboBehaviorSource source = UiComboBehaviorSource();
     ComboState state = ComboState();
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
-    source.arm(UiComboBehaviorCallbackStage::Lookup, UiComboBehaviorCallbackMutation::Count);
-    EXPECT_FALSE(UiComboBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
+    source.arm(UiComboBehaviorCallbackStage::Lookup, UiComboBehaviorCallbackMutation::RowCount);
+    EXPECT_FALSE(ReconcileComboState(state, source));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_TRUE(state.isOpen());
 }
 
 void VerifyUiComboBehaviorTests_SourceChangesDuringCommitLeaveThePopupAndCommittedKeyUnchanged(){
-    Array<UiComboBehaviorCallbackMutationEnum, 3u> mutations = Array<UiComboBehaviorCallbackMutationEnum, 3u>();
+    Array<UiComboBehaviorCallbackMutation, 3u> mutations = Array<UiComboBehaviorCallbackMutation, 3u>();
     mutations[0u] = UiComboBehaviorCallbackMutation::Revision;
     mutations[1u] = UiComboBehaviorCallbackMutation::Generation;
-    mutations[2u] = UiComboBehaviorCallbackMutation::Count;
-    for(in UiComboBehaviorCallbackMutationEnum mutation : mutations){
+    mutations[2u] = UiComboBehaviorCallbackMutation::RowCount;
+    for(in UiComboBehaviorCallbackMutation mutation : mutations){
         UiComboBehaviorSource source = UiComboBehaviorSource();
         ComboState state = ComboState();
         state.select(4u);
-        ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-        UiComboBehaviorOpen(state);
+        ASSERT_TRUE(ReconcileComboState(state, source));
+        OpenComboState(state);
         source.arm(UiComboBehaviorCallbackStage::Lookup, mutation);
-        EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+        EXPECT_FALSE(CommitComboSelection(state, source, 5u));
         EXPECT_EQ(state.selectedKey(), 4u);
         EXPECT_EQ(state.listState().cursorKey(), 4u);
         EXPECT_TRUE(state.isOpen());
@@ -1351,21 +1111,21 @@ void VerifyUiComboBehaviorTests_SourceChangesDuringCommitLeaveThePopupAndCommitt
 }
 
 void VerifyUiComboBehaviorTests_ReconcileCannotOverwriteAnExplicitSelectionFromAnySourceLoan(){
-    Array<UiComboBehaviorCallbackStageEnum, 6u> stages = Array<UiComboBehaviorCallbackStageEnum, 6u>();
+    Array<UiComboBehaviorCallbackStage, 6u> stages = Array<UiComboBehaviorCallbackStage, 6u>();
     stages[0u] = UiComboBehaviorCallbackStage::Generation;
     stages[1u] = UiComboBehaviorCallbackStage::Revision;
-    stages[2u] = UiComboBehaviorCallbackStage::Count;
+    stages[2u] = UiComboBehaviorCallbackStage::RowCount;
     stages[3u] = UiComboBehaviorCallbackStage::Lookup;
     stages[4u] = UiComboBehaviorCallbackStage::Key;
     stages[5u] = UiComboBehaviorCallbackStage::Enabled;
-    for(in UiComboBehaviorCallbackStageEnum stage : stages){
+    for(in UiComboBehaviorCallbackStage stage : stages){
         ComboState state = ComboState();
         UiComboBehaviorSource source = UiComboBehaviorSource(state);
         state.select(4u);
-        ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-        UiComboBehaviorOpen(state);
+        ASSERT_TRUE(ReconcileComboState(state, source));
+        OpenComboState(state);
         source.arm(stage, UiComboBehaviorCallbackMutation::Select, 8u);
-        EXPECT_FALSE(UiComboBehaviorReconcile(state, source));
+        EXPECT_FALSE(ReconcileComboState(state, source));
         EXPECT_EQ(state.selectedKey(), 8u);
         EXPECT_EQ(state.listState().cursorKey(), 8u);
         EXPECT_FALSE(state.isOpen());
@@ -1373,21 +1133,21 @@ void VerifyUiComboBehaviorTests_ReconcileCannotOverwriteAnExplicitSelectionFromA
 }
 
 void VerifyUiComboBehaviorTests_CommitCannotOverwriteAnExplicitSelectionFromAnySourceLoan(){
-    Array<UiComboBehaviorCallbackStageEnum, 6u> stages = Array<UiComboBehaviorCallbackStageEnum, 6u>();
+    Array<UiComboBehaviorCallbackStage, 6u> stages = Array<UiComboBehaviorCallbackStage, 6u>();
     stages[0u] = UiComboBehaviorCallbackStage::Generation;
     stages[1u] = UiComboBehaviorCallbackStage::Revision;
-    stages[2u] = UiComboBehaviorCallbackStage::Count;
+    stages[2u] = UiComboBehaviorCallbackStage::RowCount;
     stages[3u] = UiComboBehaviorCallbackStage::Lookup;
     stages[4u] = UiComboBehaviorCallbackStage::Key;
     stages[5u] = UiComboBehaviorCallbackStage::Enabled;
-    for(in UiComboBehaviorCallbackStageEnum stage : stages){
+    for(in UiComboBehaviorCallbackStage stage : stages){
         ComboState state = ComboState();
         UiComboBehaviorSource source = UiComboBehaviorSource(state);
         state.select(4u);
-        ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-        UiComboBehaviorOpen(state);
+        ASSERT_TRUE(ReconcileComboState(state, source));
+        OpenComboState(state);
         source.arm(stage, UiComboBehaviorCallbackMutation::Select, 8u);
-        EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+        EXPECT_FALSE(CommitComboSelection(state, source, 5u));
         EXPECT_EQ(state.selectedKey(), 8u);
         EXPECT_EQ(state.listState().cursorKey(), 8u);
         EXPECT_FALSE(state.isOpen());
@@ -1395,18 +1155,18 @@ void VerifyUiComboBehaviorTests_CommitCannotOverwriteAnExplicitSelectionFromAnyS
 }
 
 void VerifyUiComboBehaviorTests_CallbackCloseAndReopenPreserveTheExplicitPopupLifetime(){
-    Array<UiComboBehaviorCallbackMutationEnum, 2u> mutations = Array<UiComboBehaviorCallbackMutationEnum, 2u>();
+    Array<UiComboBehaviorCallbackMutation, 2u> mutations = Array<UiComboBehaviorCallbackMutation, 2u>();
     mutations[0u] = UiComboBehaviorCallbackMutation::Open;
     mutations[1u] = UiComboBehaviorCallbackMutation::Close;
-    for(in UiComboBehaviorCallbackMutationEnum mutation : mutations){
+    for(in UiComboBehaviorCallbackMutation mutation : mutations){
         ComboState state = ComboState();
         UiComboBehaviorSource source = UiComboBehaviorSource(state);
         state.select(4u);
-        ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-        UiComboBehaviorOpen(state);
+        ASSERT_TRUE(ReconcileComboState(state, source));
+        OpenComboState(state);
         const u64 inputGeneration = state.inputGeneration();
         source.arm(UiComboBehaviorCallbackStage::Enabled, mutation);
-        EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+        EXPECT_FALSE(CommitComboSelection(state, source, 5u));
         EXPECT_NE(state.inputGeneration(), inputGeneration);
         EXPECT_EQ(state.selectedKey(), 4u);
         EXPECT_EQ(state.listState().cursorKey(), 4u);
@@ -1418,11 +1178,11 @@ void VerifyUiComboBehaviorTests_SameValueCallbackSelectionStillRejectsTheOutstan
     ComboState state = ComboState();
     UiComboBehaviorSource source = UiComboBehaviorSource(state);
     state.select(4u);
-    ASSERT_TRUE(UiComboBehaviorReconcile(state, source));
-    UiComboBehaviorOpen(state);
+    ASSERT_TRUE(ReconcileComboState(state, source));
+    OpenComboState(state);
     const u64 inputGeneration = state.inputGeneration();
     source.arm(UiComboBehaviorCallbackStage::Key, UiComboBehaviorCallbackMutation::Select, 4u);
-    EXPECT_FALSE(UiComboBehaviorCommit(state, source, 5u));
+    EXPECT_FALSE(CommitComboSelection(state, source, 5u));
     EXPECT_NE(state.inputGeneration(), inputGeneration);
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_FALSE(state.isOpen());
@@ -1438,9 +1198,9 @@ void VerifyUiComboBuilderTests_SiblingComboFieldsPaintTheirOwnDeclarationStyles(
     ASSERT_TRUE(self.begin(1u));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiComboBuilderPanelKey, Rect(10.0f, 10.0f, 320.0f, 240.0f)));
     self.m_builder.comboStyle().normal = s_UiCaseNameButtonNormal;
-    ASSERT_TRUE(self.m_builder.comboBox("first", self.m_source, self.m_state, MakeUiComboBuilderDefaultOptions()).valid);
+    ASSERT_TRUE(self.m_builder.comboBox("first", self.m_source, self.m_state, MakeComboFixtureOptions()).valid);
     self.m_builder.comboStyle().normal = s_UiCaseButtonHover;
-    ASSERT_TRUE(self.m_builder.comboBox("second", self.m_source, secondState, MakeUiComboBuilderDefaultOptions()).valid);
+    ASSERT_TRUE(self.m_builder.comboBox("second", self.m_source, secondState, MakeComboFixtureOptions()).valid);
     ASSERT_TRUE(self.finishPanel());
     const DrawSnapshot snapshot = self.m_paint.freeze();
     const Expected<Rect> first = self.skinQuad(snapshot, 6u);
@@ -1456,10 +1216,10 @@ void VerifyUiComboBuilderTests_TabExitsAnExplicitlyOpenedComboRelativeToItsField
     self.m_state.open();
     ASSERT_TRUE(AcceptUiComboBuilderNeighbors(self, 1u));
     ASSERT_EQ(self.m_context.input().focus(), self.list());
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(AcceptUiComboBuilderNeighbors(self, 2u));
     ASSERT_EQ(self.m_state.listState().cursorKey(), 2u);
-    self.press(CoreKey::Tab);
+    self.press(Key::Tab);
     ASSERT_TRUE(AcceptUiComboBuilderNeighbors(self, 3u));
     EXPECT_TRUE(self.m_result.closed);
     EXPECT_FALSE(self.m_result.committed);
@@ -1469,8 +1229,8 @@ void VerifyUiComboBuilderTests_TabExitsAnExplicitlyOpenedComboRelativeToItsField
     self.m_state.open();
     ASSERT_TRUE(AcceptUiComboBuilderNeighbors(self, 4u));
     ASSERT_EQ(self.m_context.input().focus(), self.list());
-    const InputEvent reverseDown = MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Tab, true, false);
-    const InputEvent reverseUp = MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Tab, true, false);
+    const InputEvent reverseDown = MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, true, false);
+    const InputEvent reverseUp = MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, true, false);
     EXPECT_TRUE(self.send(reverseDown).commandConsumed);
     EXPECT_TRUE(self.send(reverseUp).commandConsumed);
     ASSERT_TRUE(AcceptUiComboBuilderNeighbors(self, 5u));
@@ -1484,7 +1244,7 @@ void VerifyUiComboBuilderTests_TabExitsAnEmptyComboWithoutASelectionOrActivation
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
     ASSERT_EQ(self.m_state.selectedKey(), 0u);
-    self.press(CoreKey::Tab);
+    self.press(Key::Tab);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_TRUE(self.m_result.closed);
     EXPECT_FALSE(self.m_result.committed);
@@ -1512,8 +1272,8 @@ void VerifyUiComboBuilderTests_OutsideDismissalConsumesTheWholePointerSequence(m
 void VerifyUiComboBuilderTests_HeldOpeningSubmitWaitsForReleaseBeforeTransferringFocus(mut UiComboBuilderTests self){
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
-    self.press(CoreKey::Tab);
-    InputEvent event = MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false, false);
+    self.press(Key::Tab);
+    InputEvent event = MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false);
     EXPECT_TRUE(self.send(event).commandConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_state.isOpen());
@@ -1534,7 +1294,7 @@ void VerifyUiComboBuilderTests_HeldOpeningSubmitWaitsForReleaseBeforeTransferrin
     EXPECT_TRUE(self.m_result.opened);
     EXPECT_FALSE(self.m_result.committed);
     EXPECT_EQ(self.m_context.input().focus(), self.list());
-    self.press(CoreKey::Enter);
+    self.press(Key::Enter);
     ASSERT_TRUE(self.accept(5u));
     EXPECT_TRUE(self.m_result.committed);
     EXPECT_FALSE(self.m_result.selectionChanged);
@@ -1545,35 +1305,35 @@ void VerifyUiComboBuilderTests_EscapeBeforeReleaseCancelsFieldOpeningAndPopupSub
     self.m_source.count = 4u;
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
-    self.press(CoreKey::Tab);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false, false)).commandConsumed);
+    self.press(Key::Tab);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_state.isOpen());
-    self.press(CoreKey::Escape);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Enter, false, false)).commandConsumed);
+    self.press(Key::Escape);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_FALSE(self.m_state.isOpen());
     EXPECT_FALSE(self.m_result.opened);
     EXPECT_FALSE(self.m_result.committed);
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
-    self.press(CoreKey::Tab);
+    self.press(Key::Tab);
     ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
-    self.press(CoreKey::Enter);
+    self.press(Key::Enter);
     ASSERT_TRUE(self.accept(4u));
     ASSERT_TRUE(self.m_state.isOpen());
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.accept(5u));
     ASSERT_EQ(self.m_state.listState().cursorKey(), 2u);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
     ASSERT_TRUE(self.accept(6u));
     EXPECT_FALSE(self.m_result.committed);
-    self.press(CoreKey::Escape);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, CoreKey::Enter, false, false)).commandConsumed);
+    self.press(Key::Escape);
+    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
     ASSERT_TRUE(self.accept(7u));
     EXPECT_FALSE(self.m_state.isOpen());
     EXPECT_FALSE(self.m_result.committed);
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
-    self.press(CoreKey::Enter);
+    self.press(Key::Enter);
     ASSERT_TRUE(self.accept(8u));
     EXPECT_TRUE(self.m_state.isOpen());
     EXPECT_FALSE(self.m_result.committed);
@@ -1585,7 +1345,7 @@ void VerifyUiComboBuilderTests_DisabledFieldFencesQueuedOpeningAndHasNoTabStop(m
     const Expected<HitTarget> initialField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(initialField.has_value());
     self.click(CenterUiRect(initialField.value().rectangle));
-    ComboOptions options = MakeUiComboBuilderDefaultOptions();
+    ComboOptions options = MakeComboFixtureOptions();
     options.enabled = false;
     ASSERT_TRUE(self.accept(2u, options));
     EXPECT_FALSE(self.m_state.isOpen());
@@ -1602,12 +1362,12 @@ void VerifyUiComboBuilderTests_DisabledFieldFencesQueuedOpeningAndHasNoTabStop(m
 void VerifyUiComboBuilderTests_EmptySourceShowsPlaceholderAndSubmitCannotCommitAKey(mut UiComboBuilderTests self){
     self.m_source.count = 0u;
     ASSERT_TRUE(self.accept(1u));
-    EXPECT_EQ(self.m_source.textCalls, 0u);
+    EXPECT_EQ(self.m_source.textCalls.value(), 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
     ASSERT_TRUE(self.openByPointer(2u));
-    EXPECT_EQ(self.m_source.textCalls, 0u);
+    EXPECT_EQ(self.m_source.textCalls.value(), 0u);
     EXPECT_EQ(self.m_state.listState().cursorKey(), 0u);
-    self.press(CoreKey::Enter);
+    self.press(Key::Enter);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_FALSE(self.m_result.committed);
     EXPECT_FALSE(self.m_result.selectionChanged);
@@ -1620,17 +1380,17 @@ void VerifyUiComboBuilderTests_NavigationSkipsDisabledRowsAndCannotWrapTheBounda
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.listState().cursorKey(), 3u);
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.accept(4u));
     EXPECT_EQ(self.m_state.listState().cursorKey(), 3u);
-    self.press(CoreKey::Up);
+    self.press(Key::Up);
     ASSERT_TRUE(self.accept(5u));
     EXPECT_EQ(self.m_state.listState().cursorKey(), 1u);
-    self.press(CoreKey::Up);
+    self.press(Key::Up);
     ASSERT_TRUE(self.accept(6u));
     EXPECT_EQ(self.m_state.listState().cursorKey(), 1u);
 }
@@ -1649,7 +1409,7 @@ void VerifyUiComboBuilderTests_ReorderPreservesCommittedKeyAndRemovalClearsIt(mu
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
     EXPECT_TRUE(self.m_result.selectionChanged);
-    EXPECT_EQ(self.m_source.textCalls, 2u);
+    EXPECT_EQ(self.m_source.textCalls.value(), 2u);
 }
 
 void VerifyUiComboBuilderTests_SourceRevisionFencesAcceptedRowActivationBeforeTheNewLayout(mut UiComboBuilderTests self){
@@ -1674,7 +1434,7 @@ void VerifyUiComboBuilderTests_ReplacementSourceCannotBorrowThePreviousSelection
     const Expected<HitTarget> rowTarget = self.tryTarget(self.row(2u));
     ASSERT_TRUE(rowTarget.has_value());
     self.click(CenterUiRect(rowTarget.value().rectangle));
-    UiComboBuilderSource replacement = UiComboBuilderSource();
+    ComboSource replacement = ComboSource();
     replacement.generation = self.m_source.generation + 1u;
     ASSERT_TRUE(self.declareSource(3u, replacement, self.m_state));
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
@@ -1699,7 +1459,7 @@ void VerifyUiComboBuilderTests_APreparedMoveKeepsAcceptedFieldAndPopupGeometryUn
     ASSERT_TRUE(popupBefore.has_value());
     const Rect acceptedField = fieldBefore.value().rectangle;
     const Rect acceptedPopup = popupBefore.value().rectangle;
-    ASSERT_TRUE(self.prepare(3u, MakeUiComboBuilderDefaultOptions(), Rect(300.0f, 300.0f, 320.0f, 240.0f)));
+    ASSERT_TRUE(self.prepare(3u, MakeComboFixtureOptions(), Rect(300.0f, 300.0f, 320.0f, 240.0f)));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 2u);
     const Expected<HitTarget> fieldPrepared = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     const Expected<HitTarget> popupPrepared = self.tryTarget(self.popup());
@@ -1725,8 +1485,8 @@ void VerifyUiComboBuilderTests_MultipleFieldsHaveIndependentStableInternalIdsAnd
     other.select(2u);
     ASSERT_TRUE(self.begin(1u));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiComboBuilderPanelKey, Rect(10.0f, 10.0f, 320.0f, 240.0f)));
-    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeUiComboBuilderDefaultOptions()).valid);
-    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderSecondKey, self.m_source, other, MakeUiComboBuilderDefaultOptions()).valid);
+    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeComboFixtureOptions()).valid);
+    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderSecondKey, self.m_source, other, MakeComboFixtureOptions()).valid);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const Expected<HitTarget> firstTarget = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
@@ -1736,8 +1496,8 @@ void VerifyUiComboBuilderTests_MultipleFieldsHaveIndependentStableInternalIdsAnd
     self.click(CenterUiRect(secondTarget.value().rectangle));
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiComboBuilderPanelKey, Rect(10.0f, 10.0f, 320.0f, 240.0f)));
-    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeUiComboBuilderDefaultOptions()).valid);
-    const ComboResult result = self.m_builder.comboBox(s_UiComboBuilderSecondKey, self.m_source, other, MakeUiComboBuilderDefaultOptions());
+    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeComboFixtureOptions()).valid);
+    const ComboResult result = self.m_builder.comboBox(s_UiComboBuilderSecondKey, self.m_source, other, MakeComboFixtureOptions());
     EXPECT_TRUE(result.valid);
     EXPECT_TRUE(result.opened);
     ASSERT_TRUE(self.finishPanel());
@@ -1755,7 +1515,7 @@ void VerifyUiComboBuilderTests_NativeFocusLossCancelsPreviewAndDoesNotRestoreFoc
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.openByPointer(2u));
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.accept(3u));
     InputEvent focusLost = InputEvent();
     focusLost.type = InputEventType::FocusLost;
@@ -1776,7 +1536,7 @@ void VerifyUiComboBuilderTests_FullyClippedFieldCannotPublishItsPopupAboveThePar
     filler.height.policy = LayoutSizePolicy::Fixed;
     filler.height.value = 100.0f;
     ASSERT_TRUE(self.m_builder.label("filler", "Clipped combo below", filler));
-    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeUiComboBuilderDefaultOptions()).valid);
+    ASSERT_TRUE(self.m_builder.comboBox(s_UiComboBuilderKey, self.m_source, self.m_state, MakeComboFixtureOptions()).valid);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const Expected<HitTarget> fieldTarget = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
@@ -1797,12 +1557,12 @@ void VerifyUiComboBuilderTests_SharingOneStateAcrossSequentialPanelsRejectsTheSe
     const u64 inputGeneration = self.m_state.inputGeneration();
     self.m_source.resetCounters();
     ASSERT_TRUE(self.m_builder.beginPanel("later", Rect(400.0f, 10.0f, 300.0f, 200.0f)));
-    const ComboResult result = self.m_builder.comboBox(s_UiComboBuilderSecondKey, self.m_source, self.m_state, MakeUiComboBuilderDefaultOptions());
+    const ComboResult result = self.m_builder.comboBox(s_UiComboBuilderSecondKey, self.m_source, self.m_state, MakeComboFixtureOptions());
     EXPECT_FALSE(result.valid);
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_state.inputGeneration(), inputGeneration);
-    EXPECT_EQ(self.m_source.textCalls, 0u);
-    EXPECT_EQ(self.m_source.keyCalls, 0u);
+    EXPECT_EQ(self.m_source.textCalls.value(), 0u);
+    EXPECT_EQ(self.m_source.keyCalls.value(), 0u);
     EXPECT_FALSE(self.m_context.commitFrame(1u));
 }
 
@@ -1816,14 +1576,14 @@ void VerifyUiComboBuilderTests_SharingOneStateAcrossRootsRejectsBeforeLendingThe
     later.generation = 2u;
     ASSERT_TRUE(self.m_context.beginRoot(later));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiComboBuilderPanelKey, Rect(400.0f, 10.0f, 300.0f, 200.0f)));
-    UiComboBuilderSource replacement = UiComboBuilderSource();
+    ComboSource replacement = ComboSource();
     replacement.generation = 703u;
-    const ComboResult result = self.m_builder.comboBox(s_UiComboBuilderKey, replacement, self.m_state, MakeUiComboBuilderDefaultOptions());
+    const ComboResult result = self.m_builder.comboBox(s_UiComboBuilderKey, replacement, self.m_state, MakeComboFixtureOptions());
     EXPECT_FALSE(result.valid);
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
-    EXPECT_EQ(replacement.textCalls, 0u);
-    EXPECT_EQ(replacement.keyCalls, 0u);
+    EXPECT_EQ(replacement.textCalls.value(), 0u);
+    EXPECT_EQ(replacement.keyCalls.value(), 0u);
     EXPECT_FALSE(self.m_context.commitFrame(1u));
 }
 
@@ -1834,7 +1594,7 @@ void VerifyUiComboBuilderTests_OmissionRetiresThePopupAndHeldNavigationCannotOpe
     const Expected<HitTarget> initialField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(initialField.has_value());
     const u64 oldDeclaration = initialField.value().declarationGeneration;
-    InputEvent held = MakeUiBuilderKeyEvent(InputEventType::KeyDown, CoreKey::Down, false, false);
+    InputEvent held = MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Down, false, false);
     EXPECT_TRUE(self.send(held).commandConsumed);
     ASSERT_TRUE(self.begin(3u));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiComboBuilderPanelKey, Rect(10.0f, 10.0f, 320.0f, 240.0f)));
@@ -1853,7 +1613,7 @@ void VerifyUiComboBuilderTests_OmissionRetiresThePopupAndHeldNavigationCannotOpe
     const Expected<HitTarget> recreatedField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(recreatedField.has_value());
     EXPECT_NE(recreatedField.value().declarationGeneration, oldDeclaration);
-    self.press(CoreKey::Tab);
+    self.press(Key::Tab);
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     held.repeat = true;
     EXPECT_TRUE(self.send(held).commandConsumed);
@@ -1863,7 +1623,7 @@ void VerifyUiComboBuilderTests_OmissionRetiresThePopupAndHeldNavigationCannotOpe
     held.type = InputEventType::KeyUp;
     held.repeat = false;
     EXPECT_TRUE(self.send(held).commandConsumed);
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.accept(6u));
     EXPECT_TRUE(self.m_state.isOpen());
     EXPECT_TRUE(self.m_result.opened);
@@ -1899,7 +1659,7 @@ void VerifyUiComboBuilderTests_SelectedLabelLookupMustRoundTripItsStableKeyBefor
     EXPECT_FALSE(self.m_result.valid);
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
-    EXPECT_EQ(source.textCalls, 0u);
+    EXPECT_EQ(source.textCalls.value(), 0u);
     EXPECT_FALSE(self.m_context.commitFrame(1u));
 }
 

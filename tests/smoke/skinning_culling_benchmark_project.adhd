@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/skinning/system.adhd>
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
 #include "smoke_skinned_scene_helpers.adhd"
@@ -13,104 +16,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-
-namespace NWB::Tests::Smoke{
-
-enum class BenchmarkMode : u8{
+enum<u8> BenchmarkMode{
     NoCulling,
     FrustumOnly,
-    FrustumCone,
-};
+    FrustumCone
+}
 
-class BenchmarkRuntimeMeshProvider final : public Impl::IRuntimeMeshProvider{
-public:
-    BenchmarkRuntimeMeshProvider() = default;
-    ~BenchmarkRuntimeMeshProvider()override{
-        uninstall();
+class BenchmarkRuntimeMeshProvider : IRuntimeMeshProvider{
+    private Optional<mut MeshSystem> m_meshSystem;
+    private Optional<mut MeshSkinningSystem> m_meshSkinningSystem;
+    private BenchmarkMode m_mode = BenchmarkMode::FrustumCone;
+
+    public ~BenchmarkRuntimeMeshProvider(){
+        this.uninstall();
     }
 
-    void install(Impl::MeshSystem& meshSystem, Impl::MeshSkinningSystem& meshSkinningSystem){
-        if(m_registered)
+    public void install(mut MeshSystem meshSystem, mut MeshSkinningSystem meshSkinningSystem){
+        if(this.m_meshSystem.has_value())
             return;
-        m_meshSystem = &meshSystem;
-        m_meshSkinningSystem = &meshSkinningSystem;
-        m_meshSystem->unregisterRuntimeMeshProvider(*m_meshSkinningSystem);
-        m_meshSystem->registerRuntimeMeshProvider(*this);
-        m_registered = true;
+        this.m_meshSystem = Optional<mut MeshSystem>(meshSystem);
+        this.m_meshSkinningSystem = Optional<mut MeshSkinningSystem>(meshSkinningSystem);
+        meshSystem.unregisterRuntimeMeshProvider(meshSkinningSystem);
+        meshSystem.registerRuntimeMeshProvider(this);
     }
 
-    void uninstall(){
-        if(!m_registered || !m_meshSystem || !m_meshSkinningSystem)
+    public void uninstall(){
+        if(!this.m_meshSystem.has_value())
             return;
-        m_meshSystem->unregisterRuntimeMeshProvider(*this);
-        m_meshSystem->registerRuntimeMeshProvider(*m_meshSkinningSystem);
-        m_meshSystem = nullptr;
-        m_meshSkinningSystem = nullptr;
-        m_registered = false;
+        this.m_meshSystem.value().unregisterRuntimeMeshProvider(this);
+        this.m_meshSystem.value().registerRuntimeMeshProvider(this.m_meshSkinningSystem.value());
+        this.m_meshSystem.reset();
+        this.m_meshSkinningSystem.reset();
     }
 
-    void setMode(const BenchmarkMode mode){
-        m_mode = mode;
+    public void setMode(in BenchmarkMode mode){
+        this.m_mode = mode;
     }
 
-    virtual Expected<Impl::RuntimeMeshDesc> resolveRuntimeMesh(const Core::ECS::EntityID entity)noexcept override{
-        if(!m_meshSkinningSystem)
-            return MakeUnexpected(Failure{});
-        auto mesh = m_meshSkinningSystem->resolveRuntimeMesh(entity);
-        if(!mesh)
-            return mesh;
-        switch(m_mode){
-        case BenchmarkMode::NoCulling:
-            mesh->dynamicMeshletBoundsFresh = false;
-            mesh->dynamicMeshletConesFresh = false;
-            break;
-        case BenchmarkMode::FrustumOnly:
-            mesh->dynamicMeshletBoundsFresh = true;
-            mesh->dynamicMeshletConesFresh = false;
-            break;
-        case BenchmarkMode::FrustumCone:
-        default:
-            mesh->dynamicMeshletBoundsFresh = true;
-            mesh->dynamicMeshletConesFresh = true;
-            break;
+    public Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity)override{
+        if(!this.m_meshSkinningSystem.has_value())
+            return MakeUnexpected(Failure());
+        auto mesh = this.m_meshSkinningSystem.value().resolveRuntimeMesh(entity);
+        if(mesh.has_value()){
+            mesh.value().dynamicMeshletBoundsFresh = this.m_mode != BenchmarkMode::NoCulling;
+            mesh.value().dynamicMeshletConesFresh = this.m_mode != BenchmarkMode::NoCulling && this.m_mode != BenchmarkMode::FrustumOnly;
         }
         return mesh;
     }
 
-    virtual void markLiveRuntimeMeshes(Impl::RuntimeMeshRequestSet& requests)noexcept override{
-        if(m_meshSkinningSystem)
-            m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
+    public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests)override{
+        if(this.m_meshSkinningSystem.has_value())
+            this.m_meshSkinningSystem.value().markLiveRuntimeMeshes(requests);
     }
 
-    virtual b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept override{
-        return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
+    public b8 hasRuntimeMeshBinding(in EntityID entity)const override{
+        return this.m_meshSkinningSystem.has_value() && this.m_meshSkinningSystem.value().hasRuntimeMeshBinding(entity);
     }
-
-private:
-    Impl::MeshSystem* m_meshSystem = nullptr;
-    Impl::MeshSkinningSystem* m_meshSkinningSystem = nullptr;
-    BenchmarkMode m_mode = BenchmarkMode::FrustumCone;
-    b8 m_registered = false;
-};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -253,9 +214,9 @@ b8 PopulateSkinningBenchmarkScene(
 
 [arena]
 class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
-    public SkinningCullingBenchmarkProject(mut ProjectRuntimeContext context){
+    public SkinningCullingBenchmarkProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_SkinningBenchmarkProjectName, SmokeRenderQualitySettings(), context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(s_SkinningBenchmarkProjectName);
         this.m_staticPreview = ReadSmokeEnvironmentFlag(s_StaticPreviewEnv);
         this.m_fastSmoke = !this.m_staticPreview && ReadSmokeEnvironmentFlag(s_FastSmokeEnv);
@@ -513,29 +474,21 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Skinning Culling Benchmark");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB Skinning Culling Benchmark");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::SkinningCullingBenchmarkProject>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateSmokeSkinnedRenderWorld(s_SkinningBenchmarkProjectName, SmokeRenderQualitySettings(), context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<SkinningCullingBenchmarkProject>(owner, context);
 }
 
 

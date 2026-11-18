@@ -201,7 +201,7 @@ QueueSubmissionToken MakeGpuSubmissionToken(
     return token;
 }
 
-Expected<GpuTaskId> AddGpuEmptyTask(in Name identity, in AStringView label, mut GpuTaskGraph graph){
+Expected<GpuTaskId> AddGpuEmptyTask(in Name identity, in StringView label, mut GpuTaskGraph graph){
     const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
     const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
     const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
@@ -210,7 +210,7 @@ Expected<GpuTaskId> AddGpuEmptyTask(in Name identity, in AStringView label, mut 
     return AddTask(identity, label, emptyDeps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
 }
 
-Expected<GpuTaskId> AddGpuDepTask(in Name identity, in AStringView label, in Span<GpuTaskId> deps, mut GpuTaskGraph graph){
+Expected<GpuTaskId> AddGpuDepTask(in Name identity, in StringView label, in Span<GpuTaskId> deps, mut GpuTaskGraph graph){
     const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
     const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
     const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
@@ -218,7 +218,7 @@ Expected<GpuTaskId> AddGpuDepTask(in Name identity, in AStringView label, in Spa
     return AddTask(identity, label, deps, emptyUses, emptySets, emptyVersions, emptyExternals, graph);
 }
 
-Expected<GpuTaskId> AddGpuUseTask(in Name identity, in AStringView label, in Span<GpuTaskResourceUse> uses, mut GpuTaskGraph graph){
+Expected<GpuTaskId> AddGpuUseTask(in Name identity, in StringView label, in Span<GpuTaskResourceUse> uses, mut GpuTaskGraph graph){
     const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
     const Span<GpuTaskResourceSetUse> emptySets = Span<GpuTaskResourceSetUse>();
     const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();

@@ -10,27 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <global/simd/frame.h>
-
-namespace NWB::Tests::Smoke{
-static_assert(static_cast<usize>(CsgVisibleShapeSlot::kCount) == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+static_assert(cast<usize>(CsgVisibleShapeSlot::kCount) == s_CsgVisibleShapeCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,13 +67,13 @@ void ApplyCsgVisibleCutterTransform(in EntityID cutterEntity, in VectorSingle re
 EntityID CreateCsgVisibleCutter(in usize shapeSlot, in Name receiverGroup, in VectorSingle center, mut World world){
     const VectorSingle identityRotation = QuaternionIdentity();
     if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Plane))
-        return CreateSmokeCsgPlaneCutter(receiverGroup, s_CsgPlaneShapeName, true, f32x4(0.0f, 0.0f, 1.0f, 0.0f), center, identityRotation, world);
+        return CreateSmokeCsgPlaneCutter(receiverGroup, s_CsgPlaneShapeName, true, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), center, identityRotation, world);
     if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Box))
-        return CreateSmokeCsgBoxCutter(receiverGroup, s_CsgBoxShapeName, true, f32x4(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f), center, identityRotation, world);
+        return CreateSmokeCsgBoxCutter(receiverGroup, s_CsgBoxShapeName, true, VectorSingle(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f), center, identityRotation, world);
     if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Sphere))
-        return CreateSmokeCsgSphereCutter(receiverGroup, s_CsgSphereShapeName, true, f32x4(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f), center, identityRotation, world);
+        return CreateSmokeCsgSphereCutter(receiverGroup, s_CsgSphereShapeName, true, VectorSingle(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f), center, identityRotation, world);
     if(shapeSlot == cast<usize>(CsgVisibleShapeSlot::Capsule))
-        return CreateSmokeCsgCapsuleCutter(receiverGroup, s_CsgCapsuleShapeName, true, f32x4(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f), center, identityRotation, world);
+        return CreateSmokeCsgCapsuleCutter(receiverGroup, s_CsgCapsuleShapeName, true, VectorSingle(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f), center, identityRotation, world);
 
     Entity cutterEntity = world.createEntity();
     mut CsgCutterComponent cutter = cutterEntity.addComponent<CsgCutterComponent>();

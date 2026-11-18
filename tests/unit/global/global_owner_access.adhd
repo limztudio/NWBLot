@@ -1,0 +1,20 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_owner_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OwnerRecordRef"), cpp_flags(self_defaulted, small_value)]
+extern class OwnerRecordRef{
+    b8 present()const;
+    OwnerRecordRef readIdentity(mut ArenaMemoryOwnerIdentity identity)const;
+    OwnerRecordRef readStats(mut ArenaMemoryOwnerSnapshot snapshot)const;
+};
+
+[cpp_header("<tests/unit/global/global_owner_access.h>"), cpp_name("::NWB::Tests::GlobalCases::FirstOwnerRecord")]
+extern OwnerRecordRef FirstOwnerRecord();
+
+[cpp_header("<core/alloc/persistent.h>"), cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
+extern usize PoolAllocationSize(in usize size);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -39,6 +39,7 @@ NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookQuiet, "quiet")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookLogFailure, "log_failure")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(RegistrationUsing, "using")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(RegisterAsset, "register_asset")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Registration, "registration")
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

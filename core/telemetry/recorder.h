@@ -63,6 +63,11 @@ public:
     // Individual reads are serialized, but callers should not clear the recorder while iterating a view.
     [[nodiscard]] usize eventCount()const noexcept;
     [[nodiscard]] const EventRecord* eventAt(usize index)const noexcept;
+    [[nodiscard]] Optional<NotNull<const EventRecord*>> borrowEventAt(const usize index)const noexcept{
+        if(const EventRecord* const event = eventAt(index))
+            return MakeNotNull(event);
+        return {};
+    }
 
 
 private:
@@ -142,6 +147,8 @@ public:
     void setCaptureOptions(const CaptureOptions& options);
     // Enabled capture retains slots and payload capacity for the next frame. Disabling capture releases them.
     void clear()noexcept;
+    [[nodiscard]] TelemetryBytes createByteBuffer(){ return TelemetryBytes(m_arena); }
+
     [[nodiscard]] TelemetryArena& arena()noexcept{ return m_arena; }
 
     [[nodiscard]] const TelemetryArena& arena()const noexcept{ return m_arena; }

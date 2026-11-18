@@ -4,649 +4,10 @@
 
 #include <impl/ecs_ui/toolkit/text/layout.adhd>
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
-#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/label.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <global/algorithm.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_region_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-constexpr AStringView s_OrdinaryRowText = "Next";
-constexpr AStringView s_StackedAccentText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
-constexpr AStringView s_CheckboxNormalRegion = "checkbox.normal";
-constexpr AStringView s_ButtonNormalRegion = "button.normal";
-constexpr AStringView s_ButtonHoverRegion = "button.hover";
-constexpr AStringView s_ButtonPressedRegion = "button.pressed";
-constexpr AStringView s_ButtonDisabledRegion = "button.disabled";
-constexpr AStringView s_PanelKey = "panel";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Compare nonzero native raster coverage rather than transparent atlas borders that may legitimately be clipped.
-[[nodiscard]] static Expected<f64> GlyphCoverageArea(const DrawSnapshot& snapshot)noexcept{
-    f64 area = 0.0;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material == PaintMaterial::SdfGlyph)
-            return MakeUnexpected(Failure{});
-        if(command.material != PaintMaterial::Glyph)
-            continue;
-        if(command.glyphPageIndex >= snapshot.glyphPages().size() || command.indexCount % 6u != 0u || static_cast<usize>(command.firstIndex) + command.indexCount > snapshot.indices().size())
-            return MakeUnexpected(Failure{});
-        const GlyphPage& page = *snapshot.glyphPages()[command.glyphPageIndex];
-        const GlyphPageBinding& binding = page.binding();
-        if(page.pixels().size() != static_cast<usize>(binding.width) * binding.height)
-            return MakeUnexpected(Failure{});
-        const SIMDVectorDouble textureSize = VectorDoubleSet(static_cast<f64>(binding.width), static_cast<f64>(binding.height), static_cast<f64>(binding.width), static_cast<f64>(binding.height));
-        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
-            if(snapshot.indices()[index] >= snapshot.vertices().size() || snapshot.indices()[index + 2u] >= snapshot.vertices().size())
-                return MakeUnexpected(Failure{});
-            const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
-            const Vertex& last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            // Lanes are left, top, right, bottom in texels.
-            const SIMDVectorDouble texel = VectorDoubleMultiply(VectorDoubleSet(first.texCoord.x, first.texCoord.y, last.texCoord.x, last.texCoord.y), textureSize);
-            const f64 left = VectorDoubleGetX(texel);
-            const f64 top = VectorDoubleGetY(texel);
-            const f64 right = VectorDoubleGetZ(texel);
-            const f64 bottom = VectorDoubleGetW(texel);
-            if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < 0.0 || top < 0.0 || right > binding.width || bottom > binding.height || right <= left || bottom <= top)
-                return MakeUnexpected(Failure{});
-            const f64 width = static_cast<f64>(last.position.x) - static_cast<f64>(first.position.x);
-            const f64 height = static_cast<f64>(last.position.y) - static_cast<f64>(first.position.y);
-            if(!IsFinite(width) || !IsFinite(height) || width <= 0.0 || height <= 0.0)
-                return MakeUnexpected(Failure{});
-            const f64 texelArea = (width / (right - left)) * (height / (bottom - top));
-            const SIMDVectorDouble firstTexel = VectorDoubleFloor(texel);
-            const SIMDVectorDouble endTexel = VectorDoubleCeiling(texel);
-            const u32 endX = static_cast<u32>(VectorDoubleGetZ(endTexel));
-            const u32 endY = static_cast<u32>(VectorDoubleGetW(endTexel));
-            for(u32 y = static_cast<u32>(VectorDoubleGetY(firstTexel)); y < endY; ++y){
-                const f64 row = static_cast<f64>(y);
-                const f64 visibleHeight = Min(bottom, row + 1.0) - Max(top, row);
-                for(u32 x = static_cast<u32>(VectorDoubleGetX(firstTexel)); x < endX; ++x){
-                    const u8 coverage = page.pixels()[static_cast<usize>(y) * binding.width + x];
-                    if(coverage == 0u)
-                        continue;
-                    const f64 column = static_cast<f64>(x);
-                    const f64 visibleWidth = Min(right, column + 1.0) - Max(left, column);
-                    area += (static_cast<f64>(coverage) / 255.0) * visibleWidth * visibleHeight * texelArea;
-                }
-            }
-        }
-    }
-    return area;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class IntrinsicRowSource final : public UiComboTests::ComboSource{
-public:
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        ++textCalls;
-        return index == specialIndex ? specialText : ordinaryText;
-    }
-
-
-public:
-    StringView ordinaryText = s_OrdinaryRowText;
-    StringView specialText = s_StackedAccentText;
-    u64 specialIndex = 1u;
-};
-
-
-class UiTextRegionTests : public WidgetFixture{
-public:
-    virtual void SetUp()override{
-        WidgetFixture::SetUp();
-        if(HasFatalFailure())
-            return;
-        UiSkin::RegionVector regions(m_arena);
-        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-        const Array<AStringView, 4> names{ s_CheckboxNormalRegion, "checkbox.hover", "checkbox.checked", "checkbox.disabled" };
-        for(u32 index = 0u; index < LengthOf(names); ++index){
-            const auto regionName = Name::FromText(names[index]);
-            ASSERT_TRUE(regionName);
-            regions.push_back({ *regionName, { 88u + index * 8u, 0u, 8u, 8u }, {}, {}, 24.0f, 24.0f });
-        }
-        m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-        ASSERT_TRUE(m_skin.validatePayload());
-        m_builder.setSkin(m_skin);
-    }
-
-    void useDefaultButtonPadding(){
-        UiSkin::RegionVector regions(m_arena);
-        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-        for(UiSkinRegion& region : regions){
-            if(region.name == Name(s_ButtonNormalRegion) || region.name == Name(s_ButtonHoverRegion) || region.name == Name(s_ButtonPressedRegion) || region.name == Name(s_ButtonDisabledRegion)){
-                region.padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-                region.minimumHeight = 32.0f;
-            }
-        }
-        m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-        ASSERT_TRUE(m_skin.validatePayload());
-        m_builder.setSkin(m_skin);
-    }
-
-    void useAsymmetricSelectableButtons(){
-        UiSkin::RegionVector regions(m_arena);
-        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-        for(UiSkinRegion& region : regions){
-            if(region.name == Name("button.normal"))
-                region.padding = { 9.0f, 1.0f, 2.0f, 3.0f };
-            else if(region.name == Name("button.hover"))
-                region.padding = { 1.0f, 11.0f, 2.0f, 3.0f };
-            else if(region.name == Name("button.pressed")){
-                region.padding = { 1.0f, 2.0f, 13.0f, 3.0f };
-                region.minimumHeight = 55.0f;
-            }
-            else if(region.name == Name("button.disabled")){
-                region.padding = { 1.0f, 2.0f, 3.0f, 15.0f };
-                region.minimumWidth = 100.0f;
-            }
-        }
-        m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-        ASSERT_TRUE(m_skin.validatePayload());
-        m_builder.setSkin(m_skin);
-    }
-
-    void checkIntrinsicRowCoverage(const b8 popup, const f32 fontSize, const DisplayMetrics& display, const u64 generation, IntrinsicRowSource& source, ListState& list, ComboState& combo){
-        SCOPED_TRACE(testing::Message() << "popup=" << popup << ", fontSize=" << fontSize << ", scale=" << display.pixelScaleX << "/" << display.pixelScaleY);
-        m_builder.style().fontSize = fontSize;
-        const auto rowMetrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
-        ASSERT_TRUE(rowMetrics);
-        ASSERT_TRUE(begin(generation, display));
-        ASSERT_TRUE(m_builder.beginPanel("rows_panel", { 10.0f, 20.0f, 600.0f, 540.0f }));
-        const WidgetId owner = id(popup ? "combo" : "list", "rows_panel");
-        if(popup){
-            ASSERT_TRUE(ReconcileComboState(combo, source));
-            if(!combo.isOpen())
-                combo.open();
-            ComboOptions options;
-            options.width = { LayoutSizePolicy::Fixed, 400.0f };
-            options.popupHeight = 320.0f;
-            options.placeholder = "";
-            ASSERT_TRUE(m_builder.comboBox("combo", source, combo, options).valid);
-        }
-        else{
-            ListOptions options;
-            options.width = { LayoutSizePolicy::Fixed, 400.0f };
-            options.height = { LayoutSizePolicy::Fixed, 320.0f };
-            ASSERT_TRUE(m_builder.virtualList("list", source, list, options).valid);
-        }
-        ASSERT_TRUE(finishPanel());
-        const DrawSnapshot actual = m_paint.freeze();
-        ASSERT_TRUE(m_context.commitFrame(generation));
-        const ListState& state = popup ? combo.listState() : list;
-        const ScrollPlacement& placement = state.placement();
-        ASSERT_GT(placement.endRow, placement.firstRow);
-        const WidgetId listOwner = popup ? UiTestSupport::RequireWidgetId(owner, UiComboTests::s_ComboRowsKey) : owner;
-        const WidgetId rows = UiTestSupport::RequireWidgetId(listOwner, UiComboTests::s_ListRowsKey);
-        const HitTarget* first = target(UiTestSupport::RequireWidgetPartId(rows, placement.firstRow + 1u));
-        ASSERT_NE(first, nullptr);
-        const f32 rowHeight = first->rectangle.height;
-        f32 expectedHeight = rowMetrics->minimum.y;
-        for(const StringView label : { StringView{}, source.ordinaryText, source.specialText }){
-            const auto layout = m_text.layout({ .text = label, .fontSize = fontSize });
-            ASSERT_TRUE(layout);
-            const auto visual = m_text.measure(*layout, display);
-            ASSERT_TRUE(visual);
-            expectedHeight = Max(expectedHeight, visual->height + rowMetrics->padding.top + rowMetrics->padding.bottom);
-        }
-        EXPECT_FLOAT_EQ(rowHeight, expectedHeight);
-        const f64 rowHeight64 = static_cast<f64>(rowHeight);
-        EXPECT_DOUBLE_EQ(placement.contentHeight, rowHeight64 * static_cast<f64>(source.count));
-        const HitTarget* host = target(listOwner);
-        ASSERT_NE(host, nullptr);
-        EXPECT_DOUBLE_EQ(host->scrollStep, rowHeight64 * 3.0);
-        PaintBuilder reference(m_arena);
-        reference.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        reference.pushClip(placement.contentClip);
-        for(u64 index = placement.firstRow; index < placement.endRow; ++index){
-            const HitTarget* row = target(UiTestSupport::RequireWidgetPartId(rows, index + 1u));
-            ASSERT_NE(row, nullptr);
-            EXPECT_FLOAT_EQ(row->rectangle.height, rowHeight);
-            const StringView label = index == source.specialIndex ? source.specialText : source.ordinaryText;
-            const auto layout = m_text.layout({ .text = label, .fontSize = fontSize });
-            ASSERT_TRUE(layout);
-            const auto visual = m_text.measure(*layout, display);
-            ASSERT_TRUE(visual);
-            const Insets& padding = rowMetrics->padding;
-            const f32 paddedHeight = visual->height + padding.top + padding.bottom;
-            EXPECT_GE(rowHeight + 0.0001f, paddedHeight);
-            const f32 contentHeight = rowHeight - padding.top - padding.bottom;
-            const f32 centering = Max(0.0f, (contentHeight - visual->height) * 0.5f);
-            const Point origin{ row->rectangle.x + padding.left - visual->x, row->rectangle.y + padding.top + centering - visual->y };
-            ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
-        }
-        ASSERT_TRUE(reference.popClip());
-        const auto expectedCoverage = GlyphCoverageArea(reference.freeze());
-        const auto actualCoverage = GlyphCoverageArea(actual);
-        ASSERT_TRUE(expectedCoverage);
-        ASSERT_TRUE(actualCoverage);
-        ASSERT_GT(*expectedCoverage, 0.0);
-        EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
-    }
-
-    void checkContentButtonRow(const StringView firstText, const StringView secondText, const f32 fontSize, const f32 scale, const u64 generation, const b8 fixedHeight = false){
-        SCOPED_TRACE(testing::Message() << "fontSize=" << fontSize << ", scale=" << scale << ", fixedHeight=" << fixedHeight);
-        m_builder.style().fontSize = fontSize;
-        const DisplayMetrics display{ 800.0f, 600.0f, scale, scale };
-        auto firstLayout = m_text.layout({ .text = firstText, .fontSize = fontSize });
-        auto secondLayout = m_text.layout({ .text = secondText, .fontSize = fontSize });
-        ASSERT_TRUE(firstLayout);
-        ASSERT_TRUE(secondLayout);
-        const Point firstLogical = firstLayout->measure();
-        const Point secondLogical = secondLayout->measure();
-        const auto firstMeasured = m_text.measure(*firstLayout, display);
-        const auto secondMeasured = m_text.measure(*secondLayout, display);
-        ASSERT_TRUE(firstMeasured);
-        ASSERT_TRUE(secondMeasured);
-        EXPECT_FLOAT_EQ(firstLayout->measure().y, firstLogical.y);
-        EXPECT_FLOAT_EQ(secondLayout->measure().y, secondLogical.y);
-        EXPECT_GE(firstMeasured->height, firstLogical.y);
-        EXPECT_GE(secondMeasured->height, secondLogical.y);
-        const f32 firstHeight = fixedHeight ? 32.0f : Max(32.0f, firstMeasured->height + 8.0f + 8.0f);
-        const f32 secondHeight = fixedHeight ? 32.0f : Max(32.0f, secondMeasured->height + 8.0f + 8.0f);
-        ASSERT_TRUE(begin(generation, display));
-        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 740.0f, 480.0f }));
-        ContainerOptions row;
-        if(fixedHeight)
-            row.height = { LayoutSizePolicy::Fixed, 32.0f };
-        ASSERT_TRUE(m_builder.beginRow("navigation", row));
-        WidgetOptions navigation;
-        navigation.width = { LayoutSizePolicy::Fixed, Max(100.0f, Max(firstMeasured->width, secondMeasured->width) + 16.0f) };
-        if(fixedHeight)
-            navigation.height = { LayoutSizePolicy::Fixed, 32.0f };
-        EXPECT_FALSE(m_builder.button("previous", firstText, navigation));
-        EXPECT_FALSE(m_builder.button("next", secondText, navigation));
-        ASSERT_TRUE(m_builder.endContainer());
-        WidgetOptions marker;
-        marker.width = { LayoutSizePolicy::Fixed, 40.0f };
-        marker.height = { LayoutSizePolicy::Fixed, 24.0f };
-        EXPECT_FALSE(m_builder.button("after", "", marker));
-        ASSERT_TRUE(finishPanel());
-        const DrawSnapshot actual = m_paint.freeze();
-        ASSERT_TRUE(m_context.commitFrame(generation));
-        const WidgetId rowId = id("navigation", s_PanelKey);
-        const HitTarget* first = target(UiTestSupport::RequireWidgetId(rowId, "previous"));
-        const HitTarget* second = target(UiTestSupport::RequireWidgetId(rowId, "next"));
-        const HitTarget* after = target(id("after", s_PanelKey));
-        ASSERT_NE(first, nullptr);
-        ASSERT_NE(second, nullptr);
-        ASSERT_NE(after, nullptr);
-        EXPECT_FLOAT_EQ(first->rectangle.height, firstHeight);
-        EXPECT_FLOAT_EQ(second->rectangle.height, secondHeight);
-        EXPECT_FLOAT_EQ(second->rectangle.y, first->rectangle.y);
-        EXPECT_FLOAT_EQ(after->rectangle.y, first->rectangle.y + Max(firstHeight, secondHeight) + m_builder.style().gap);
-        UiPaintAssertions::ExpectRect(first->clip, first->rectangle);
-        UiPaintAssertions::ExpectRect(second->clip, second->rectangle);
-        PaintBuilder reference(m_arena);
-        reference.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        const Array<Rect, 2> controls{ first->rectangle, second->rectangle };
-        const Array<Rect, 2> measured{ *firstMeasured, *secondMeasured };
-        const Array<NotNull<const TextLayout*>, 2> layouts{ MakeNotNull(&*firstLayout), MakeNotNull(&*secondLayout) };
-        for(u32 index = 0u; index < 2u; ++index){
-            const Rect& bounds = controls[index];
-            const Rect& visual = measured[index];
-            const f32 slackX = (bounds.width - 16.0f) - visual.width;
-            const f32 slackY = (bounds.height - 16.0f) - visual.height;
-            const f32 centeredX = bounds.x + 8.0f + Max(0.0f, slackX * 0.5f);
-            const f32 centeredY = bounds.y + 8.0f + Max(0.0f, slackY * 0.5f);
-            ASSERT_TRUE(m_text.paint(reference, *layouts[index], { centeredX - visual.x, centeredY - visual.y }, m_builder.style().text));
-        }
-        const DrawSnapshot expected = reference.freeze();
-        const auto actualCoverage = GlyphCoverageArea(actual);
-        const auto expectedCoverage = GlyphCoverageArea(expected);
-        ASSERT_TRUE(actualCoverage);
-        ASSERT_TRUE(expectedCoverage);
-        ASSERT_GT(*expectedCoverage, 0.0);
-        if(fixedHeight)
-            EXPECT_LT(*actualCoverage, *expectedCoverage * 0.999);
-        else
-            EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_visible_baked_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiTextVisibleTests;
-
-class TextVisibleBakedTests : public TextVisibleFixture{
-public:
-    TextVisibleBakedTests()
-        : m_baked(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsVisibleAtlas))
-    {}
-
-
-public:
-    [[nodiscard]] b8 installBaked(const StringView text){
-        if(!installCoverageFonts())
-            return false;
-        auto layout = m_text.layout({ .text = text, .fontSize = 32.0f });
-        if(!layout)
-            return false;
-        m_layout = Move(*layout);
-        FontAtlasPayload payload(m_arena);
-        payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
-        const auto& bytes = m_latin.fontBytes();
-        payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
-        UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
-        payload.bakePpem = 32u;
-        payload.ascenderUnits = 1000.0f;
-        payload.descenderUnits = -250.0f;
-        payload.glyphs.resize(payload.sourceGlyphCount);
-        for(u32 id = 0u; id < payload.sourceGlyphCount; ++id)
-            payload.glyphs[id].glyphId = id;
-        const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / 32.0f;
-        for(const PlacedGlyph& placed : m_layout.glyphs()){
-            if(placed.face->identity() != payload.font || placed.glyphId >= payload.glyphs.size())
-                return false;
-            FontAtlasGlyph& glyph = payload.glyphs[placed.glyphId];
-            if(glyph.drawable != 0u || placed.ink.width <= 0.0f || placed.ink.height <= 0.0f)
-                continue;
-            if(payload.groups.size() == s_FontAtlasMaxGroupCount)
-                return false;
-            const f32 startX = Floor(placed.ink.x) - 8.0f;
-            const f32 startY = Floor(placed.ink.y) - 8.0f;
-            const f32 extentX = Ceil(placed.ink.x + placed.ink.width) - startX + 8.0f;
-            const f32 extentY = Ceil(placed.ink.y + placed.ink.height) - startY + 8.0f;
-            const u32 width = static_cast<u32>(extentX);
-            const u32 height = static_cast<u32>(extentY);
-            if(width > 62u || height > 62u)
-                return false;
-            glyph.group = static_cast<u32>(payload.groups.size());
-            glyph.drawable = 1u;
-            glyph.x = 1u;
-            glyph.y = 1u;
-            glyph.width = width;
-            glyph.height = height;
-            glyph.planeLeft = startX * unitsPerPixel;
-            glyph.planeTop = startY * unitsPerPixel;
-            glyph.planeRight = glyph.planeLeft + extentX * unitsPerPixel;
-            glyph.planeBottom = glyph.planeTop + extentY * unitsPerPixel;
-            payload.groups.emplace_back(m_arena);
-            FontAtlasGroup& group = payload.groups.back();
-            group.width = 64u;
-            group.height = 64u;
-            group.pixels.resize(64u * 64u * 4u, 192u);
-            group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
-        }
-        m_baked.setPayload(Move(payload));
-        if(!m_baked.validatePayload())
-            return false;
-        const Array<FontSource, 2> sources{
-            FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, m_baked },
-            FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), m_korean, 1u },
-        };
-        if(!m_text.setFonts(Span(sources.data(), 2u)))
-            return false;
-        layout = m_text.layout({ .text = text, .fontSize = 32.0f });
-        if(!layout)
-            return false;
-        m_layout = Move(*layout);
-        return true;
-    }
-
-
-public:
-    FontAtlas m_baked;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_visible_coverage_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiTextVisibleTests;
-
-// Lanes are texel x and y.
-[[nodiscard]] static f32 SampleSdfDistance(const SdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
-    const SdfAtlasPageBinding& binding = page.binding();
-    const auto& pixels = page.pixels();
-    const SIMDVectorSingle position = VectorSubtract(texel, VectorReplicate(0.5f));
-    const SIMDVectorSingle firstTexel = VectorFloor(position);
-    const i32 firstX = static_cast<i32>(VectorGetX(firstTexel));
-    const i32 firstY = static_cast<i32>(VectorGetY(firstTexel));
-    const SIMDVectorSingle fraction = VectorSubtract(position, firstTexel);
-    const SIMDVectorSingle remainder = VectorSubtract(VectorSplatOne(), fraction);
-    const auto sample = [&](const i32 column, const i32 row)noexcept -> f32{
-        const u32 clampedX = static_cast<u32>(Clamp(column, 0, static_cast<i32>(binding.width) - 1));
-        const u32 clampedY = static_cast<u32>(Clamp(row, 0, static_cast<i32>(binding.height) - 1));
-        return static_cast<f32>(pixels[(static_cast<usize>(clampedY) * binding.width + clampedX) * binding.channelCount + channel]);
-    };
-    // Lanes are top left, bottom left, top right, bottom right.
-    const SIMDVectorSingle samples = VectorDivide(VectorSet(sample(firstX, firstY), sample(firstX, firstY + 1), sample(firstX + 1, firstY), sample(firstX + 1, firstY + 1)), VectorReplicate(255.0f));
-    // Lanes are the top and bottom rows.
-    const SIMDVectorSingle rows = VectorMultiplyAddExpression(samples, VectorSplatX(remainder), VectorMultiply(VectorSwizzle<2, 3, 2, 3>(samples), VectorSplatX(fraction)));
-    const f32 encoded = VectorGetX(rows) * VectorGetY(remainder) + VectorGetY(rows) * VectorGetY(fraction);
-    return ((encoded * 255.0f - 128.0f) * static_cast<f32>(binding.spreadPixels)) / 128.0f;
-}
-
-
-class TextVisibleCoverageTests : public TextVisibleFixture{
-public:
-    TextVisibleCoverageTests()
-        : m_bitmap(m_arena)
-        , m_measuredBaked(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsMeasuredSdf))
-    {}
-
-
-public:
-    [[nodiscard]] b8 paintClipped(const TextLayout& layout, const Rect& clip, Point origin = { 20.0f, 20.0f });
-    [[nodiscard]] Expected<Rect> rasterRectangle(const PlacedGlyph& glyph, f32 fontSize, const DisplayMetrics& display, Point origin);
-
-    [[nodiscard]] b8 installMeasuredSdfAtlas(const u32 targetGlyphId){
-        FontAtlasPayload payload(m_arena);
-        payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
-        const auto& bytes = m_latin.fontBytes();
-        payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
-        UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
-        payload.bakePpem = 32u;
-        payload.ascenderUnits = 1069.0f;
-        payload.descenderUnits = -293.0f;
-        payload.glyphs.resize(payload.sourceGlyphCount);
-        for(u32 index = 0u; index < payload.sourceGlyphCount; ++index)
-            payload.glyphs[index].glyphId = index;
-        FontAtlasGlyph& glyph = payload.glyphs[targetGlyphId];
-        glyph.drawable = 1u;
-        glyph.channel = 3u;
-        glyph.x = 1u;
-        glyph.y = 1u;
-        glyph.width = 48u;
-        glyph.height = 48u;
-        glyph.planeLeft = -1000.0f;
-        glyph.planeTop = -2000.0f;
-        const f32 bakeScale = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
-        glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width) * bakeScale;
-        glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height) * bakeScale;
-        payload.groups.emplace_back(m_arena);
-        FontAtlasGroup& group = payload.groups.back();
-        group.width = 64u;
-        group.height = 64u;
-        // Other channels are fully opaque: measurement must follow the selected glyph channel.
-        group.pixels.resize(64u * 64u * 4u, 255u);
-        for(u32 y = 0u; y < group.height; ++y){
-            for(u32 x = 0u; x < group.width; ++x){
-                const i32 localX = static_cast<i32>(x) - static_cast<i32>(glyph.x);
-                const i32 localY = static_cast<i32>(y) - static_cast<i32>(glyph.y);
-                const i32 distance = Min(Min(localX - 15, 25 - localX), Min(localY - 13, 23 - localY));
-                group.pixels[(static_cast<usize>(y) * group.width + x) * 4u + glyph.channel] = static_cast<u8>(Clamp(128 + 16 * distance, 0, 255));
-            }
-        }
-        group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
-        m_measuredBaked.setPayload(Move(payload));
-        if(!m_measuredBaked.validatePayload())
-            return false;
-        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, m_measuredBaked };
-        return m_text.setFonts(Span(&source, 1u));
-    }
-
-
-public:
-    GlyphBitmap m_bitmap;
-    FontAtlas m_measuredBaked;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiTextRegionIntrinsicRowSource = ::__hidden_ui_text_region_tests::IntrinsicRowSource;
-using UiTextRegionTests = ::__hidden_ui_text_region_tests::UiTextRegionTests;
-using TextVisibleBakedTests = ::__hidden_ui_text_visible_baked_tests::TextVisibleBakedTests;
-using TextVisibleCoverageTests = ::__hidden_ui_text_visible_coverage_tests::TextVisibleCoverageTests;
-using Label = ::NWB::Impl::Ui::Label;
-using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
-using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
-using WidgetOptions = ::NWB::Impl::Ui::WidgetOptions;
-using WindowState = ::NWB::Impl::Ui::WindowState;
-using WindowOptions = ::NWB::Impl::Ui::WindowOptions;
-using EditModel = ::NWB::Impl::Ui::EditModel;
-using EditBoxState = ::NWB::Impl::Ui::EditBoxState;
-using EditBoxOptions = ::NWB::Impl::Ui::EditBoxOptions;
-using ListState = ::NWB::Impl::Ui::ListState;
-using ComboState = ::NWB::Impl::Ui::ComboState;
-using SelectableStyle = ::NWB::Impl::Ui::SelectableStyle;
-using SelectablePaintFlags = ::NWB::Impl::Ui::SelectablePaintFlags;
-using Color = ::NWB::Impl::Ui::Color;
-using Insets = ::NWB::Impl::Ui::Insets;
-using TextLayout = ::NWB::Impl::Ui::TextLayout;
-using PaintBuilder = ::NWB::Impl::Ui::PaintBuilder;
-using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
-using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-namespace TextLayoutStatus = ::NWB::Impl::Ui::TextLayoutStatus;
-
-using ::NWB::UiWidgetTests::CopyGlyphVertices;
-using ::NWB::Impl::Ui::MeasureSelectable;
-using ::NWB::Impl::Ui::PaintSelectable;
-using ::NWB::Impl::Ui::s_PaintMaxImages;
-using ::NWB::Impl::Ui::s_GlyphAtlasMaxGlyphs;
-using ::NWB::Tests::UiCases::s_UiCaseWindowTitle;
-
-[[nodiscard]] FOUNDATION_INLINE Expected<f64> UiTextRegionGlyphCoverageArea(const ::NWB::Impl::Ui::DrawSnapshot& snapshot)noexcept{
-    return ::__hidden_ui_text_region_tests::GlyphCoverageArea(snapshot);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Rect> UiTextVisibleAtlasRect(const ::NWB::Impl::Ui::PlacedGlyph& glyph, const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas, const f32 fontSize, const ::NWB::Impl::Ui::Point& origin)noexcept{
-    return ::NWB::Impl::Ui::TextGlyphVisibility::AtlasRectangle(glyph, *atlas, fontSize, origin);
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 SampleUiMeasuredSdfDistance(const ::NWB::Impl::Ui::SharedSdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
-    return ::__hidden_ui_text_visible_coverage_tests::SampleSdfDistance(*page, channel, texel);
-}
-
-template<typename StringT>
-[[nodiscard]] FOUNDATION_INLINE b8 AppendUiUtf8CodePoint(StringT& out, const u32 codePoint){
-    Array<char, s_Utf8MaxSequenceBytes> encoded{};
-    const auto encodedLength = EncodeUtf8CodePoint(codePoint, encoded);
-    if(!encodedLength)
-        return false;
-    out.append(encoded.data(), *encodedLength);
-    return true;
-}
-
-template<typename VectorT>
-FOUNDATION_INLINE void SortUiGlyphIds(VectorT& ids)noexcept{
-    Sort(ids.begin(), ids.end());
-}
-
-FOUNDATION_INLINE void ExpectUiTextVisibleSamePaint(const ::NWB::Impl::Ui::DrawSnapshot& actual, const ::NWB::Impl::Ui::DrawSnapshot& expected){
-    ::NWB::UiPaintAssertions::ExpectSamePaint(actual, expected);
-}
-
-b8 PaintUiTextVisibleClipped(TextVisibleCoverageTests& self, const ::NWB::Impl::Ui::TextLayout& layout, const ::NWB::Impl::Ui::Rect& clip, const ::NWB::Impl::Ui::Point& origin)noexcept;
-Expected<Rect> ComputeUiTextVisibleRasterRect(TextVisibleCoverageTests& self, const ::NWB::Impl::Ui::PlacedGlyph& glyph, f32 fontSize, const ::NWB::Impl::Ui::DisplayMetrics& display, const ::NWB::Impl::Ui::Point& origin)noexcept;
-};
-
-namespace __hidden_ui_text_visible_coverage_tests{
-FOUNDATION_INLINE b8 TextVisibleCoverageTests::paintClipped(const TextLayout& layout, const Rect& clip, const Point origin){
-    return ::__hidden_ui_glyph_sdf_tests::PaintUiTextVisibleClipped(*this, layout, clip, origin);
-}
-FOUNDATION_INLINE Expected<Rect> TextVisibleCoverageTests::rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize, const DisplayMetrics& display, const Point origin){
-    return ::__hidden_ui_glyph_sdf_tests::ComputeUiTextVisibleRasterRect(*this, glyph, fontSize, display, origin);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd>
+#include <impl/ecs_ui/toolkit/widgets/label.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -662,6 +23,483 @@ const AStringView s_UiTextRegionPanelKey = "panel";
 const StringView s_UiTextRegionOverflowText = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
 const AStringView s_UiTextVisibleSampleGlyphText = "A";
 const AStringView s_UiTextVisibleWideGlyphText = "W";
+
+
+Expected<f64> UiTextRegionGlyphCoverageArea(in DrawSnapshot snapshot){
+    f64 area = 0.0;
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material == PaintMaterial::SdfGlyph)
+            return MakeUnexpected(Failure());
+        if(command.material != PaintMaterial::Glyph)
+            continue;
+        if(command.glyphPageIndex >= snapshot.glyphPages().size() || command.indexCount % 6u != 0u || cast<usize>(command.firstIndex) + command.indexCount > snapshot.indices().size())
+            return MakeUnexpected(Failure());
+        in GlyphPage page = snapshot.glyphPages()[command.glyphPageIndex].deref();
+        in GlyphPageBinding binding = page.binding();
+        if(page.pixels().size() != cast<usize>(binding.width) * binding.height)
+            return MakeUnexpected(Failure());
+        const VectorDouble textureSize = VectorDouble(cast<f64>(binding.width), cast<f64>(binding.height), cast<f64>(binding.width), cast<f64>(binding.height));
+        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
+            if(snapshot.indices()[index] >= snapshot.vertices().size() || snapshot.indices()[index + 2u] >= snapshot.vertices().size())
+                return MakeUnexpected(Failure());
+            in Vertex first = snapshot.vertices()[snapshot.indices()[index]];
+            in Vertex last = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            // Lanes are left, top, right, bottom in texels.
+            const VectorDouble texel = VectorDouble(first.texCoord.x, first.texCoord.y, last.texCoord.x, last.texCoord.y) * textureSize;
+            const f64 left = texel.x;
+            const f64 top = texel.y;
+            const f64 right = texel.z;
+            const f64 bottom = texel.w;
+            if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < 0.0 || top < 0.0 || right > binding.width || bottom > binding.height || right <= left || bottom <= top)
+                return MakeUnexpected(Failure());
+            const f64 width = cast<f64>(last.position.x) - cast<f64>(first.position.x);
+            const f64 height = cast<f64>(last.position.y) - cast<f64>(first.position.y);
+            if(!IsFinite(width) || !IsFinite(height) || width <= 0.0 || height <= 0.0)
+                return MakeUnexpected(Failure());
+            const f64 texelArea = (width / (right - left)) * (height / (bottom - top));
+            const u32 endX = cast<u32>(Ceil(texel.z));
+            const u32 endY = cast<u32>(Ceil(texel.w));
+            for(u32 y = cast<u32>(Floor(texel.y)); y < endY; ++y){
+                const f64 row = cast<f64>(y);
+                const f64 visibleHeight = Min(bottom, row + 1.0) - Max(top, row);
+                for(u32 x = cast<u32>(Floor(texel.x)); x < endX; ++x){
+                    const u8 coverage = page.pixels()[cast<usize>(y) * binding.width + x];
+                    if(coverage == 0u)
+                        continue;
+                    const f64 column = cast<f64>(x);
+                    const f64 visibleWidth = Min(right, column + 1.0) - Max(left, column);
+                    area += (cast<f64>(coverage) / 255.0) * visibleWidth * visibleHeight * texelArea;
+                }
+            }
+        }
+    }
+    return area;
+}
+
+f32 SampleUiSdfChannel(in SdfAtlasPage page, in u32 channel, in i32 column, in i32 row){
+    in SdfAtlasPageBinding binding = page.binding();
+    const u32 x = cast<u32>(Clamp(column, 0, cast<i32>(binding.width) - 1));
+    const u32 y = cast<u32>(Clamp(row, 0, cast<i32>(binding.height) - 1));
+    return cast<f32>(page.pixels()[(cast<usize>(y) * binding.width + x) * binding.channelCount + channel]);
+}
+
+f32 SampleUiMeasuredSdfDistance(in SharedSdfAtlasPage handle, in u32 channel, in VectorSingle texel){
+    in SdfAtlasPage page = handle.deref();
+    const VectorSingle position = texel - VectorSingle(0.5f);
+    const i32 x = cast<i32>(Floor(position.x));
+    const i32 y = cast<i32>(Floor(position.y));
+    const VectorSingle fraction = position - VectorSingle(cast<f32>(x), cast<f32>(y), 0.0f, 0.0f);
+    const VectorSingle remainder = VectorSingle(1.0f) - fraction;
+    const VectorSingle samples = VectorSingle(SampleUiSdfChannel(page, channel, x, y), SampleUiSdfChannel(page, channel, x, y + 1),
+        SampleUiSdfChannel(page, channel, x + 1, y), SampleUiSdfChannel(page, channel, x + 1, y + 1)) / VectorSingle(255.0f);
+    const VectorSingle rows = samples * VectorSingle(remainder.x) + samples.zwzw * VectorSingle(fraction.x);
+    const f32 encoded = rows.x * remainder.y + rows.y * fraction.y;
+    return ((encoded * 255.0f - 128.0f) * cast<f32>(page.binding().spreadPixels)) / 128.0f;
+}
+
+Expected<Rect> UiTextVisibleAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
+    return AtlasRectangle(glyph, atlas.deref(), size, origin);
+}
+
+void SortUiGlyphIds(mut Vector<u32> ids){
+    for(usize i = 1u; i < ids.size(); ++i){
+        const u32 id = ids[i];
+        usize pos = i;
+        while(pos > 0u && ids[pos - 1u] > id){
+            ids[pos] = ids[pos - 1u];
+            --pos;
+        }
+        ids[pos] = id;
+    }
+}
+
+class UiTextRegionIntrinsicRowSource : ComboSource{
+    public StringView ordinaryText = s_UiTextRegionOrdinaryRowText;
+    public StringView specialText = s_UiTextRegionStackedAccentText;
+    public u64 specialIndex = 1u;
+
+    public StringView text(in u64 index)const override{
+        ++this.textCalls.value();
+        if(index == this.specialIndex)
+            return this.specialText;
+        return this.ordinaryText;
+    }
+}
+
+
+class UiTextRegionTests : WidgetFixture{
+
+
+    public void setup(){
+        this.setUpWidgetBase();
+        if(HasFatalTestFailure())
+            return;
+        RegionVector regions;
+        for(in UiSkinRegion existing : this.m_skin.regions())
+            regions.push_back(existing);
+        const Array<StringView, 4u> names(s_UiTextRegionCheckboxNormalRegion, "checkbox.hover", "checkbox.checked", "checkbox.disabled");
+        for(u32 index = 0u; index < names.size(); ++index){
+            const auto regionName = ParseName(names[index]);
+            ASSERT_TRUE(regionName.has_value());
+            UiSkinRegion region;
+            region.name = regionName.value();
+            region.rectangle.x = 88u + index * 8u;
+            region.rectangle.width = 8u;
+            region.rectangle.height = 8u;
+            region.minimumWidth = 24.0f;
+            region.minimumHeight = 24.0f;
+            regions.push_back(region);
+        }
+        this.m_skin.setAtlas(this.m_skin.texture(), this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), this.m_skin.referenceDensity(), regions);
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_builder.setSkin(this.m_skin);
+    }
+    public void useDefaultButtonPadding(){
+        RegionVector regions;
+        for(in UiSkinRegion existing : this.m_skin.regions())
+            regions.push_back(existing);
+        for(mut UiSkinRegion region : regions){
+            if(region.name == Name("button.normal") || region.name == Name("button.hover") || region.name == Name("button.pressed") || region.name == Name("button.disabled")){
+                region.padding = MakeFixtureSkinInsets(8.0f, 8.0f, 8.0f, 8.0f);
+                region.minimumHeight = 32.0f;
+            }
+        }
+        this.m_skin.setAtlas(this.m_skin.texture(), this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), this.m_skin.referenceDensity(), regions);
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_builder.setSkin(this.m_skin);
+    }
+    public void useAsymmetricSelectableButtons(){
+        RegionVector regions;
+        for(in UiSkinRegion existing : this.m_skin.regions())
+            regions.push_back(existing);
+        for(mut UiSkinRegion region : regions){
+            if(region.name == Name("button.normal"))
+                region.padding = MakeFixtureSkinInsets(9.0f, 1.0f, 2.0f, 3.0f);
+            else if(region.name == Name("button.hover"))
+                region.padding = MakeFixtureSkinInsets(1.0f, 11.0f, 2.0f, 3.0f);
+            else if(region.name == Name("button.pressed")){
+                region.padding = MakeFixtureSkinInsets(1.0f, 2.0f, 13.0f, 3.0f);
+                region.minimumHeight = 55.0f;
+            }
+            else if(region.name == Name("button.disabled")){
+                region.padding = MakeFixtureSkinInsets(1.0f, 2.0f, 3.0f, 15.0f);
+                region.minimumWidth = 100.0f;
+            }
+        }
+        this.m_skin.setAtlas(this.m_skin.texture(), this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), this.m_skin.referenceDensity(), regions);
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_builder.setSkin(this.m_skin);
+    }
+    public void checkIntrinsicRowCoverage(in b8 popup, in f32 fontSize, in DisplayMetrics display, in u64 generation, mut UiTextRegionIntrinsicRowSource source, mut ListState list, mut ComboState combo){
+        const ScopedTestTrace popupTrace(popup);
+        const ScopedTestTrace sizeTrace(fontSize);
+        const ScopedTestTrace scaleXTrace(display.pixelScaleX);
+        const ScopedTestTrace scaleYTrace(display.pixelScaleY);
+        this.m_builder.style().fontSize = fontSize;
+        const auto rowMetrics = MeasureSelectable(this.m_skin, this.m_builder.listStyle().row);
+        ASSERT_TRUE(rowMetrics.has_value());
+        ASSERT_TRUE(this.begin(generation, display));
+        ASSERT_TRUE(this.m_builder.beginPanel("rows_panel", Rect(10.0f, 20.0f, 600.0f, 540.0f)));
+        StringView ownerKey = "list";
+        if(popup)
+            ownerKey = "combo";
+        const WidgetId owner = this.id(ownerKey, "rows_panel");
+        if(popup){
+            ASSERT_TRUE(ReconcileComboState(combo, source));
+            if(!combo.isOpen())
+                combo.open();
+            ComboOptions options;
+            options.width = LayoutSize(LayoutSizePolicy::Fixed, 400.0f);
+            options.popupHeight = 320.0f;
+            options.placeholder = "";
+            ASSERT_TRUE(this.m_builder.comboBox("combo", source, combo, options).valid);
+        }
+        else{
+            ListOptions options;
+            options.width = LayoutSize(LayoutSizePolicy::Fixed, 400.0f);
+            options.height = LayoutSize(LayoutSizePolicy::Fixed, 320.0f);
+            ASSERT_TRUE(this.m_builder.virtualList("list", source, list, options).valid);
+        }
+        ASSERT_TRUE(this.finishPanel());
+        const DrawSnapshot actual = this.m_paint.freeze();
+        ASSERT_TRUE(this.m_context.commitFrame(generation));
+        ScrollPlacement placement = list.placement();
+        if(popup)
+            placement = combo.listState().placement();
+        ASSERT_GT(placement.endRow, placement.firstRow);
+        WidgetId listOwner = owner;
+        if(popup)
+            listOwner = RequireUiWidgetId(owner, "rows");
+        const WidgetId rows = RequireUiWidgetId(listOwner, "rows");
+        const Optional<in HitTarget> first = this.target(RequireUiWidgetPartId(rows, placement.firstRow + 1u));
+        ASSERT_TRUE(first.has_value());
+        const f32 rowHeight = first.value().rectangle.height;
+        f32 expectedHeight = rowMetrics.value().minimum.y;
+        const Array<StringView, 3u> labels(StringView(), source.ordinaryText, source.specialText);
+        for(in StringView label : labels){
+            const auto layout = this.m_text.layout(MakeUiShapeRequest(label, fontSize));
+            ASSERT_TRUE(layout.has_value());
+            const auto visual = this.m_text.measure(layout.value(), display);
+            ASSERT_TRUE(visual.has_value());
+            expectedHeight = Max(expectedHeight, visual.value().height + rowMetrics.value().padding.top + rowMetrics.value().padding.bottom);
+        }
+        EXPECT_FLOAT_EQ(rowHeight, expectedHeight);
+        const f64 rowHeight64 = cast<f64>(rowHeight);
+        EXPECT_DOUBLE_EQ(placement.contentHeight, rowHeight64 * cast<f64>(source.count));
+        const Optional<in HitTarget> host = this.target(listOwner);
+        ASSERT_TRUE(host.has_value());
+        EXPECT_DOUBLE_EQ(host.value().scrollStep, rowHeight64 * 3.0);
+        PaintBuilder reference;
+        reference.begin(display, generation, this.m_skinGeneration, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
+        reference.pushClip(placement.contentClip);
+        for(u64 index = placement.firstRow; index < placement.endRow; ++index){
+            const Optional<in HitTarget> row = this.target(RequireUiWidgetPartId(rows, index + 1u));
+            ASSERT_TRUE(row.has_value());
+            EXPECT_FLOAT_EQ(row.value().rectangle.height, rowHeight);
+            StringView label = source.ordinaryText;
+            if(index == source.specialIndex)
+                label = source.specialText;
+            const auto layout = this.m_text.layout(MakeUiShapeRequest(label, fontSize));
+            ASSERT_TRUE(layout.has_value());
+            const auto visual = this.m_text.measure(layout.value(), display);
+            ASSERT_TRUE(visual.has_value());
+            in Insets padding = rowMetrics.value().padding;
+            const f32 paddedHeight = visual.value().height + padding.top + padding.bottom;
+            EXPECT_GE(rowHeight + 0.0001f, paddedHeight);
+            const f32 contentHeight = rowHeight - padding.top - padding.bottom;
+            const f32 centering = Max(0.0f, (contentHeight - visual.value().height) * 0.5f);
+            const Point origin(row.value().rectangle.x + padding.left - visual.value().x, row.value().rectangle.y + padding.top + centering - visual.value().y);
+            ASSERT_TRUE(this.m_text.paint(reference, layout.value(), origin, this.m_builder.style().text));
+        }
+        ASSERT_TRUE(reference.popClip());
+        const auto expectedCoverage = UiTextRegionGlyphCoverageArea(reference.freeze());
+        const auto actualCoverage = UiTextRegionGlyphCoverageArea(actual);
+        ASSERT_TRUE(expectedCoverage.has_value());
+        ASSERT_TRUE(actualCoverage.has_value());
+        ASSERT_GT(expectedCoverage.value(), 0.0);
+        EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), Max(0.00001, expectedCoverage.value() * 0.000002));
+    }
+    public void checkContentButtonRow(in StringView firstText, in StringView secondText, in f32 fontSize, in f32 scale, in u64 generation){ this.checkContentButtonRow(firstText, secondText, fontSize, scale, generation, false); }
+    public void checkContentButtonRow(in StringView firstText, in StringView secondText, in f32 fontSize, in f32 scale, in u64 generation, in b8 fixedHeight){
+        const ScopedTestTrace sizeTrace(fontSize);
+        const ScopedTestTrace scaleTrace(scale);
+        const ScopedTestTrace heightTrace(fixedHeight);
+        this.m_builder.style().fontSize = fontSize;
+        const DisplayMetrics display(800.0f, 600.0f, scale, scale);
+        auto firstLayout = this.m_text.layout(MakeUiShapeRequest(firstText, fontSize));
+        auto secondLayout = this.m_text.layout(MakeUiShapeRequest(secondText, fontSize));
+        ASSERT_TRUE(firstLayout.has_value());
+        ASSERT_TRUE(secondLayout.has_value());
+        const Point firstLogical = firstLayout.value().measure();
+        const Point secondLogical = secondLayout.value().measure();
+        const auto firstMeasured = this.m_text.measure(firstLayout.value(), display);
+        const auto secondMeasured = this.m_text.measure(secondLayout.value(), display);
+        ASSERT_TRUE(firstMeasured.has_value());
+        ASSERT_TRUE(secondMeasured.has_value());
+        EXPECT_FLOAT_EQ(firstLayout.value().measure().y, firstLogical.y);
+        EXPECT_FLOAT_EQ(secondLayout.value().measure().y, secondLogical.y);
+        EXPECT_GE(firstMeasured.value().height, firstLogical.y);
+        EXPECT_GE(secondMeasured.value().height, secondLogical.y);
+        f32 firstHeight = 32.0f;
+        f32 secondHeight = 32.0f;
+        if(!fixedHeight){
+            firstHeight = Max(32.0f, firstMeasured.value().height + 8.0f + 8.0f);
+            secondHeight = Max(32.0f, secondMeasured.value().height + 8.0f + 8.0f);
+        }
+        ASSERT_TRUE(this.begin(generation, display));
+        ASSERT_TRUE(this.m_builder.beginPanel(s_UiTextRegionPanelKey, Rect(10.0f, 20.0f, 740.0f, 480.0f)));
+        ContainerOptions row;
+        if(fixedHeight)
+            row.height = LayoutSize(LayoutSizePolicy::Fixed, 32.0f);
+        ASSERT_TRUE(this.m_builder.beginRow("navigation", row));
+        WidgetOptions navigation;
+        navigation.width = LayoutSize(LayoutSizePolicy::Fixed, Max(100.0f, Max(firstMeasured.value().width, secondMeasured.value().width) + 16.0f));
+        if(fixedHeight)
+            navigation.height = LayoutSize(LayoutSizePolicy::Fixed, 32.0f);
+        EXPECT_FALSE(this.m_builder.button("previous", firstText, navigation));
+        EXPECT_FALSE(this.m_builder.button("next", secondText, navigation));
+        ASSERT_TRUE(this.m_builder.endContainer());
+        WidgetOptions marker;
+        marker.width = LayoutSize(LayoutSizePolicy::Fixed, 40.0f);
+        marker.height = LayoutSize(LayoutSizePolicy::Fixed, 24.0f);
+        EXPECT_FALSE(this.m_builder.button("after", "", marker));
+        ASSERT_TRUE(this.finishPanel());
+        const DrawSnapshot actual = this.m_paint.freeze();
+        ASSERT_TRUE(this.m_context.commitFrame(generation));
+        const WidgetId rowId = this.id("navigation", s_UiTextRegionPanelKey);
+        const Optional<in HitTarget> first = this.target(RequireUiWidgetId(rowId, "previous"));
+        const Optional<in HitTarget> second = this.target(RequireUiWidgetId(rowId, "next"));
+        const Optional<in HitTarget> after = this.target(this.id("after", s_UiTextRegionPanelKey));
+        ASSERT_TRUE(first.has_value());
+        ASSERT_TRUE(second.has_value());
+        ASSERT_TRUE(after.has_value());
+        EXPECT_FLOAT_EQ(first.value().rectangle.height, firstHeight);
+        EXPECT_FLOAT_EQ(second.value().rectangle.height, secondHeight);
+        EXPECT_FLOAT_EQ(second.value().rectangle.y, first.value().rectangle.y);
+        EXPECT_FLOAT_EQ(after.value().rectangle.y, first.value().rectangle.y + Max(firstHeight, secondHeight) + this.m_builder.style().gap);
+        ExpectUiRect(first.value().clip, first.value().rectangle);
+        ExpectUiRect(second.value().clip, second.value().rectangle);
+        PaintBuilder reference;
+        reference.begin(display, generation, 1u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
+        const Array<Rect, 2u> controls(first.value().rectangle, second.value().rectangle);
+        const Array<Rect, 2u> measured(firstMeasured.value(), secondMeasured.value());
+        for(u32 index = 0u; index < 2u; ++index){
+            in Rect bounds = controls[index];
+            in Rect visual = measured[index];
+            const f32 slackX = (bounds.width - 16.0f) - visual.width;
+            const f32 slackY = (bounds.height - 16.0f) - visual.height;
+            const f32 centeredX = bounds.x + 8.0f + Max(0.0f, slackX * 0.5f);
+            const f32 centeredY = bounds.y + 8.0f + Max(0.0f, slackY * 0.5f);
+            const Point origin(centeredX - visual.x, centeredY - visual.y);
+            if(index == 0u)
+                ASSERT_TRUE(this.m_text.paint(reference, firstLayout.value(), origin, this.m_builder.style().text));
+            else
+                ASSERT_TRUE(this.m_text.paint(reference, secondLayout.value(), origin, this.m_builder.style().text));
+        }
+        const DrawSnapshot expected = reference.freeze();
+        const auto actualCoverage = UiTextRegionGlyphCoverageArea(actual);
+        const auto expectedCoverage = UiTextRegionGlyphCoverageArea(expected);
+        ASSERT_TRUE(actualCoverage.has_value());
+        ASSERT_TRUE(expectedCoverage.has_value());
+        ASSERT_GT(expectedCoverage.value(), 0.0);
+        if(fixedHeight)
+            EXPECT_LT(actualCoverage.value(), expectedCoverage.value() * 0.999);
+        else
+            EXPECT_NEAR(actualCoverage.value(), expectedCoverage.value(), Max(0.00001, expectedCoverage.value() * 0.000002));
+    }
+}
+
+
+class TextVisibleBakedTests : TextVisibleFixture{
+    public FontAtlas m_baked = FontAtlas(Name(s_UiCaseTestsUiFontsVisibleAtlas));
+
+    public b8 installBaked(in StringView text){
+        if(!this.installCoverageFonts())
+            return false;
+        auto layout = this.m_text.layout(MakeUiShapeRequest(text, 32.0f));
+        if(!layout.has_value())
+            return false;
+        TestMoveAssign<TextLayout>(this.m_layout, layout.value());
+        FontAtlasPayload payload;
+        payload.font = AssetRef<Font>(s_TestLatinFontPath);
+        in Vector<u8> bytes = this.m_latin.fontBytes();
+        payload.fontSha256 = ComputeSha256(bytes);
+        PopulateBakedFontTables(bytes, payload);
+        payload.bakePpem = 32u;
+        payload.ascenderUnits = 1000.0f;
+        payload.descenderUnits = -250.0f;
+        payload.glyphs.resize(payload.sourceGlyphCount);
+        for(u32 glyphIndex = 0u; glyphIndex < payload.sourceGlyphCount; ++glyphIndex)
+            payload.glyphs[glyphIndex].glyphId = glyphIndex;
+        const f32 unitsPerPixel = cast<f32>(payload.unitsPerEm) / 32.0f;
+        for(in PlacedGlyph placed : this.m_layout.glyphs()){
+            if(placed.face.deref().identity() != payload.font || placed.glyphId >= payload.glyphs.size())
+                return false;
+            mut FontAtlasGlyph glyph = payload.glyphs[placed.glyphId];
+            if(glyph.drawable != 0u || placed.ink.width <= 0.0f || placed.ink.height <= 0.0f)
+                continue;
+            if(payload.groups.size() == s_FontAtlasMaxGroupCount)
+                return false;
+            const f32 startX = Floor(placed.ink.x) - 8.0f;
+            const f32 startY = Floor(placed.ink.y) - 8.0f;
+            const f32 extentX = Ceil(placed.ink.x + placed.ink.width) - startX + 8.0f;
+            const f32 extentY = Ceil(placed.ink.y + placed.ink.height) - startY + 8.0f;
+            const u32 width = cast<u32>(extentX);
+            const u32 height = cast<u32>(extentY);
+            if(width > 62u || height > 62u)
+                return false;
+            glyph.group = cast<u32>(payload.groups.size());
+            glyph.drawable = 1u;
+            glyph.x = 1u;
+            glyph.y = 1u;
+            glyph.width = width;
+            glyph.height = height;
+            glyph.planeLeft = startX * unitsPerPixel;
+            glyph.planeTop = startY * unitsPerPixel;
+            glyph.planeRight = glyph.planeLeft + extentX * unitsPerPixel;
+            glyph.planeBottom = glyph.planeTop + extentY * unitsPerPixel;
+            AppendArenaElement<FontAtlasGroup>(payload.groups);
+            mut FontAtlasGroup group = payload.groups.back();
+            group.width = 64u;
+            group.height = 64u;
+            group.pixels.resize(64u * 64u * 4u, 192u);
+            group.sha256 = ComputeSha256(group.pixels);
+        }
+        this.m_baked.setPayload(payload);
+        if(!this.m_baked.validatePayload())
+            return false;
+        const Array<FontSource, 2u> sources(FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, 1u, this.m_baked), FontSource(AssetRef<Font>(s_TestKoreanFontPath), this.m_korean, 1u));
+        if(!this.m_text.setFonts(sources))
+            return false;
+        layout = this.m_text.layout(MakeUiShapeRequest(text, 32.0f));
+        if(!layout.has_value())
+            return false;
+        TestMoveAssign<TextLayout>(this.m_layout, layout.value());
+        return true;
+    }
+}
+
+
+class TextVisibleCoverageTests : TextVisibleFixture{
+    public GlyphBitmap m_bitmap;
+    public FontAtlas m_measuredBaked = FontAtlas(Name(s_UiCaseTestsUiFontsMeasuredSdf));
+
+    public b8 paintClipped(in TextLayout layout, in Rect clip){ return this.paintClipped(layout, clip, Point(20.0f, 20.0f)); }
+    public b8 paintClipped(in TextLayout layout, in Rect clip, in Point origin){
+        return PaintUiTextVisibleClipped(this, layout, clip, origin);
+    }
+    public Expected<Rect> rasterRectangle(in PlacedGlyph glyph, in f32 fontSize, in DisplayMetrics display, in Point origin){
+        return ComputeUiTextVisibleRasterRect(this, glyph, fontSize, display, origin);
+    }
+    public b8 installMeasuredSdfAtlas(in u32 targetGlyphId){
+        FontAtlasPayload payload;
+        payload.font = AssetRef<Font>(s_TestLatinFontPath);
+        in Vector<u8> bytes = this.m_latin.fontBytes();
+        payload.fontSha256 = ComputeSha256(bytes);
+        PopulateBakedFontTables(bytes, payload);
+        payload.bakePpem = 32u;
+        payload.ascenderUnits = 1069.0f;
+        payload.descenderUnits = -293.0f;
+        payload.glyphs.resize(payload.sourceGlyphCount);
+        for(u32 index = 0u; index < payload.sourceGlyphCount; ++index)
+            payload.glyphs[index].glyphId = index;
+        mut FontAtlasGlyph glyph = payload.glyphs[targetGlyphId];
+        glyph.drawable = 1u;
+        glyph.channel = 3u;
+        glyph.x = 1u;
+        glyph.y = 1u;
+        glyph.width = 48u;
+        glyph.height = 48u;
+        glyph.planeLeft = -1000.0f;
+        glyph.planeTop = -2000.0f;
+        const f32 bakeScale = cast<f32>(payload.unitsPerEm) / cast<f32>(payload.bakePpem);
+        glyph.planeRight = glyph.planeLeft + cast<f32>(glyph.width) * bakeScale;
+        glyph.planeBottom = glyph.planeTop + cast<f32>(glyph.height) * bakeScale;
+        AppendArenaElement<FontAtlasGroup>(payload.groups);
+        mut FontAtlasGroup group = payload.groups.back();
+        group.width = 64u;
+        group.height = 64u;
+        // Other channels are fully opaque: measurement must follow the selected glyph channel.
+        group.pixels.resize(64u * 64u * 4u, 255u);
+        for(u32 y = 0u; y < group.height; ++y){
+            for(u32 x = 0u; x < group.width; ++x){
+                const i32 localX = cast<i32>(x) - cast<i32>(glyph.x);
+                const i32 localY = cast<i32>(y) - cast<i32>(glyph.y);
+                const i32 distance = Min(Min(localX - 15, 25 - localX), Min(localY - 13, 23 - localY));
+                group.pixels[(cast<usize>(y) * group.width + x) * 4u + glyph.channel] = cast<u8>(Clamp(128 + 16 * distance, 0, 255));
+            }
+        }
+        group.sha256 = ComputeSha256(group.pixels);
+        this.m_measuredBaked.setPayload(payload);
+        if(!this.m_measuredBaked.validatePayload())
+            return false;
+        const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, 1u, this.m_measuredBaked));
+        return this.m_text.setFonts(sources);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 usize CountUiTextRegionGlyphIndices(in DrawSnapshot snapshot){
@@ -772,7 +610,7 @@ Rect ComputeUiTextVisibleRasterFringe(in Rect raster, in Rect outline){
 
 
 void VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales(mut UiTextRegionTests self){
-    Label label = Label(self.m_arena);
+    Label label = Label();
     ASSERT_EQ(label.setText(MakeUiShapeRequest(s_UiTextRegionOverflowText, 16.0f)), TextLayoutStatus::Success);
     u64 generation = 1u;
     Array<f32, 3u> scales;
@@ -810,7 +648,7 @@ void VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResiz
 }
 
 void VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling(mut UiTextRegionTests self){
-    Label label = Label(self.m_arena);
+    Label label = Label();
     ASSERT_EQ(label.setText(MakeUiDefaultShapeRequest(s_UiTextRegionOverflowText)), TextLayoutStatus::Success);
     const Rect inherited = Rect(10.0f, 10.0f, 180.0f, 120.0f);
     u64 generation = 1u;
@@ -971,7 +809,7 @@ void VerifyUiTextRegionTests_SelectableCentersWithinAsymmetricVerticalPaddingIns
     const auto measured = self.m_text.measure(layout.value(), display);
     ASSERT_TRUE(measured.has_value());
     ASSERT_LT(measured.value().height, content.height);
-    PaintBuilder reference = PaintBuilder(self.m_arena);
+    PaintBuilder reference = PaintBuilder();
     reference.begin(display, 2u, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
     reference.pushClip(content);
     const f32 centeredY = (content.height - measured.value().height) * 0.5f + content.y;
@@ -1135,7 +973,7 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
         for(usize scaleIndex = 0u; scaleIndex < scales.size(); ++scaleIndex){
             const f32 scale = scales[scaleIndex];
             const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, scale, scale);
-            EditModel model = EditModel(self.m_arena);
+            EditModel model = EditModel();
             ASSERT_TRUE(model.setText(sample));
             EditBoxState state = EditBoxState();
             auto layout = self.m_text.layout(MakeUiShapeRequest(sample, 16.0f));
@@ -1158,7 +996,7 @@ void VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsid
             const f32 contentBottom = state.placement.content.y + state.placement.content.height;
             EXPECT_GE(inkTop, state.placement.content.y - 0.0001f);
             EXPECT_LE(inkTop + measured.value().height, contentBottom + 0.0001f);
-            PaintBuilder reference = PaintBuilder(self.m_arena);
+            PaintBuilder reference = PaintBuilder();
             reference.begin(display, generation, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
             ++generation;
             ASSERT_TRUE(self.m_text.paint(reference, layout.value(), state.placement.textOrigin, self.m_builder.editStyle().text));
@@ -1454,7 +1292,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     ASSERT_TRUE(self.m_paint.prepareGlyphPages(prior));
     self.m_paint.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
     ASSERT_TRUE(self.m_paint.drawGlyph(oldPage, Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
-    PaintBuilder reference = PaintBuilder(self.m_arena);
+    PaintBuilder reference = PaintBuilder();
     reference.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), 2u, 1u, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
     ASSERT_TRUE(reference.prepareGlyphPages(prior));
     reference.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
@@ -1462,7 +1300,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     const DrawSnapshot expected = reference.freeze();
     EXPECT_FALSE(self.m_text.paint(self.m_paint, self.m_layout, Point(80.0f, 80.0f)));
     const DrawSnapshot rejected = self.m_paint.freeze();
-    ExpectUiTextVisibleSamePaint(rejected, expected);
+    ExpectUiSamePaintSnapshots(rejected, expected);
     EXPECT_TRUE(rejected.sdfPages().empty());
     ASSERT_EQ(rejected.glyphPages().size(), s_PaintMaxImages);
     EXPECT_EQ(rejected.glyphPages()[0u], oldPage);
@@ -1487,9 +1325,12 @@ void VerifyTextVisibleCoverageTests_MoreThan4096DistinctHiddenHangulDoNotExhaust
     String text = "A\n";
     text.reserve(2u + hiddenCount * 3u);
     const u32 s_HangulSyllableBase = 0xac00u;
-    for(u32 index = 0u; index < cast<u32>(hiddenCount); ++index)
-        ASSERT_TRUE(AppendUiUtf8CodePoint(text, s_HangulSyllableBase + index));
-    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(StringView(text.data(), text.size()))));
+    String encoded;
+    for(u32 index = 0u; index < cast<u32>(hiddenCount); ++index){
+        ASSERT_TRUE(EncodeUtf8CodePoint(s_HangulSyllableBase + index, encoded));
+        text.append(encoded);
+    }
+    ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(StringView(text))));
     ASSERT_EQ(self.m_layout.lines().size(), 2u);
     ASSERT_EQ(self.m_layout.glyphs().size(), hiddenCount + 1u);
     ASSERT_TRUE(self.m_text.measure(self.m_layout, DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)).has_value());
@@ -1551,7 +1392,7 @@ void VerifyTextVisibleCoverageTests_HiddenGlyphKeepsTheWarmPageExactUntilItIsRev
     self.beginPaint(2u);
     ASSERT_TRUE(self.paintClipped(self.m_layout, clip));
     const DrawSnapshot hidden = self.m_paint.freeze();
-    ExpectUiTextVisibleSamePaint(hidden, first);
+    ExpectUiSamePaintSnapshots(hidden, first);
     self.beginPaint(3u);
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     const DrawSnapshot revealed = self.m_paint.freeze();
@@ -1569,7 +1410,8 @@ void VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePri
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextVisibleSampleGlyphText)));
     TextLayout oversized;
     auto oversizedLayoutResult = self.m_text.layout(MakeUiShapeRequest(s_UiTextVisibleWideGlyphText, 1024.0f));
-    ASSERT_TRUE(TextVisibleFixture::AdoptLayoutInto(oversizedLayoutResult, oversized));
+    ASSERT_TRUE(oversizedLayoutResult.has_value());
+    TestMoveAssign<TextLayout>(oversized, oversizedLayoutResult.value());
     self.beginPaint(1u);
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     const DrawSnapshot before = self.m_paint.freeze();
@@ -1577,7 +1419,7 @@ void VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePri
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     ASSERT_TRUE(self.m_text.paint(self.m_paint, oversized, Point(10000.0f, 10000.0f)));
     const DrawSnapshot hidden = self.m_paint.freeze();
-    ExpectUiTextVisibleSamePaint(hidden, before);
+    ExpectUiSamePaintSnapshots(hidden, before);
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
     self.beginPaint(3u);
     ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));

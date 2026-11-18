@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include <impl/ecs_scene/module.adhd>
 #include "csg_shadow_probes_and_atlas.adhd"
 
@@ -9,51 +11,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/simd/frame.h>
-#include <global/simdmath.h>
-
-namespace NWB::Tests::Smoke{
-[[nodiscard]] FOUNDATION_INLINE AStringView CsgShadowProjectName()noexcept{
+StringView CsgShadowProjectName(){
     return "CsgShadowSmokeProject";
 }
 
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<World> CreateCsgShadowWorldOrDie(ProjectRuntimeContext& context){
-    auto world = CreateSmokeWorldOrDie(CsgShadowProjectName(), context);
-    auto& renderer = AddSmokeRenderSystems(*world, context);
-    Impl::ReflectionSettings reflection;
-    reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
-    FOUNDATION_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), FOUNDATION_TEXT("Invalid CSG shadow reflection settings"));
+[cpp_unwind]
+Expected<NotNullUniquePtr<World>> CreateCsgShadowWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(CsgShadowProjectName(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
+    mut RendererSystem renderer = AddSmokeRenderSystems(SmokeWorldRef(world), context);
+    ReflectionSettings reflection = ReflectionSettings();
+    reflection.traceMode = ReflectionTraceMode::Disabled;
+    [essential] assert(renderer.setReflectionSettings(reflection), "Invalid CSG shadow reflection settings");
     renderer.setRefractionEnabled(false);
-    Impl::PresentationSettings presentation;
-    presentation.toneMap = Impl::PresentationToneMap::LinearClamp;
-    FOUNDATION_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), FOUNDATION_TEXT("Invalid CSG shadow presentation settings"));
-    return world;
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    PresentationSettings presentation = PresentationSettings();
+    presentation.toneMap = PresentationToneMap::LinearClamp;
+    [essential] assert(renderer.setPresentationSettings(presentation), "Invalid CSG shadow presentation settings");
+    return TakeSmokeWorld(world);
 }
 
 
@@ -68,9 +44,9 @@ const SmokeMeshRef s_CsgShadowPlaneMesh = "project/meshes/shadow_plane";
 
 [arena]
 class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
-    public CsgShadowSmokeProjectImpl(mut ProjectRuntimeContext context){
+    public CsgShadowSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateCsgShadowWorldOrDie(context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_timing = CsgCausticTimingProbe(context);
     }
 
@@ -206,14 +182,10 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
 
         const b8 rayTracing = this.m_context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct);
         const b8 rayQuery = this.m_context.graphics.queryFeatureSupport(Feature::RayQuery);
-        b8 hasCapture = false;
-        usize receivers = 0u;
-        usize cutters = 0u;
-        native(in capture = this.m_capture, in world = this.m_world, mut hasCapture, mut receivers, mut cutters){
-            hasCapture = static_cast<b8>(capture);
-            receivers = world->view<Impl::StaticCsgMeshComponent>().candidateCount() + world->view<Impl::SkinnedCsgMeshComponent>().candidateCount();
-            cutters = world->view<Impl::CsgCutterComponent>().candidateCount();
-        }
+        const b8 hasCapture = this.m_capture.valid();
+        mut World world = SmokeWorldRef(this.m_world);
+        const usize receivers = world.view<StaticCsgMeshComponent>().candidateCount() + world.view<SkinnedCsgMeshComponent>().candidateCount();
+        const usize cutters = world.view<CsgCutterComponent>().candidateCount();
         const b8 hasCaptureOrMissingQuit = hasCapture || !SmokeContextHasQuitCallback(this.m_context);
 
         if(
@@ -307,29 +279,21 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 960, 720 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(960, 720);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB CSG Shadow Smoke");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB CSG Shadow Smoke");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::CsgShadowSmokeProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateCsgShadowWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<CsgShadowSmokeProjectImpl>(owner, context);
 }
 
 

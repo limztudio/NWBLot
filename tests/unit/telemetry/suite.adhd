@@ -3,596 +3,199 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/unit/telemetry/perf_case_types.adhd>
+#include <tests/unit/telemetry/telemetry_sdk.adhd>
+#include <logger/telemetry/report.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-
-#include <logger/telemetry/report.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/name_symbols.h>
-#include <core/telemetry/codec.h>
-#include <core/telemetry/diagnostic.h>
-#include <core/telemetry/event.h>
-#include <core/telemetry/frame_graph.h>
-#include <core/telemetry/perf.h>
-#include <core/telemetry/recorder.h>
-#include <core/telemetry/session.h>
-#include <core/telemetry/text_log.h>
-
-#include <global/arena_memory.h>
-#include <global/atomic.h>
-#include <global/name_hash_text.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::TelemetryCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct TelemetryTestsTag{};
-
-struct TestArena : Tests::TestArena<TelemetryTestsTag>{
-    Core::Alloc::ScratchArena scratchArena{ s_TelemetryScratch };
-
-
-public:
-    TestArena() = default;
-    explicit TestArena(const Name& scopeName)
-        : Tests::TestArena<TelemetryTestsTag>(scopeName)
-    {}
-};
-
-struct TelemetryOwnedArenaTag{};
-using TelemetryOwnedArena = Tests::TestArena<TelemetryOwnedArenaTag>;
-
-struct TelemetryScratchArena{
-    Core::Alloc::ScratchArena scratchArena;
-
-
-public:
-    explicit TelemetryScratchArena(const Name& scopeName = s_TelemetryScratch)
-        : scratchArena(scopeName)
-    {}
-};
-
-struct OwnedAllocation{
-    Core::Alloc::GlobalArena* arena = nullptr;
-    void* pointer = nullptr;
-    usize requestedBytes = 0u;
-
-
-public:
-    OwnedAllocation()noexcept = default;
-    OwnedAllocation(Core::Alloc::GlobalArena& owner, const usize size)noexcept
-        : arena(&owner)
-        , pointer(owner.allocate(1u, size))
-        , requestedBytes(size)
-    {}
-    OwnedAllocation(const OwnedAllocation&) = delete;
-    OwnedAllocation& operator=(const OwnedAllocation&) = delete;
-    OwnedAllocation(OwnedAllocation&& other)noexcept
-        : arena(other.arena)
-        , pointer(other.pointer)
-        , requestedBytes(other.requestedBytes)
-    {
-        other.arena = nullptr;
-        other.pointer = nullptr;
-        other.requestedBytes = 0u;
+class TelemetryTestArena{
+    public HeapStorage arena;
+    public ScratchStorage scratchArena = ScratchStorage(s_TelemetryScratch);
+}
+class TelemetryOwnedArena{
+    public HeapStorage arena;
+    public TelemetryOwnedArena(in Name scopeName){ this.arena = HeapStorage(scopeName); }
+}
+class TelemetryScratchArena{
+    public ScratchStorage scratchArena;
+    public TelemetryScratchArena(in Name scopeName){ this.scratchArena = ScratchStorage(scopeName); }
+}
+class OwnedAllocation : NoCopy{
+    private mut HeapStorage m_owner;
+    private RawAllocation m_block;
+    public usize requestedBytes;
+    public OwnedAllocation(mut HeapStorage owner, in usize size){
+        this.m_owner = owner;
+        this.m_block = AllocateBytes(owner, 1u, size);
+        this.requestedBytes = size;
     }
-    OwnedAllocation& operator=(OwnedAllocation&& other)noexcept{
-        if(this != &other){
-            releaseNow();
-            arena = other.arena;
-            pointer = other.pointer;
-            requestedBytes = other.requestedBytes;
-            other.arena = nullptr;
-            other.pointer = nullptr;
-            other.requestedBytes = 0u;
-        }
-        return *this;
+    public ~OwnedAllocation(){ this.releaseNow(); }
+    public b8 valid()const{ return this.m_block.address() != 0u; }
+    public u64 usableBytes()const{
+        if(this.valid())
+            return BackendSize(this.m_block);
+        return 0u;
     }
-    ~OwnedAllocation()noexcept{
-        releaseNow();
-    }
-
-    [[nodiscard]] b8 valid()const noexcept{ return pointer != nullptr; }
-    [[nodiscard]] u64 usableBytes()const noexcept{ return pointer ? static_cast<u64>(Core::Alloc::CoreMsize(pointer)) : 0u; }
-
-    b8 resizeTo(const usize newBytes)noexcept{
-        if(!arena)
+    public b8 resizeTo(in usize size){
+        RawAllocation resized = ResizeBytes(this.m_owner, this.m_block, 1u, size);
+        if(resized.address() == 0u)
             return false;
-        void* const resized = arena->reallocate(pointer, 1u, newBytes);
-        if(!resized)
-            return false;
-        pointer = resized;
-        requestedBytes = newBytes;
+        this.m_block = resized;
+        this.requestedBytes = size;
         return true;
     }
-
-    void releaseNow()noexcept{
-        if(pointer && arena){
-            arena->deallocate(pointer, 1u, requestedBytes);
-            pointer = nullptr;
+    public void releaseNow(){
+        if(this.valid()){
+            FreeBytes(this.m_owner, this.m_block, 1u, this.requestedBytes);
+            this.m_block = RawAllocation();
         }
     }
-};
-
-using GlobalArena = Core::Alloc::GlobalArena;
-using ScratchArena = Core::Alloc::ScratchArena;
-using TelemetryArena = Core::Telemetry::TelemetryArena;
-using MemorySnapshot = Core::Perf::MemorySnapshot;
-using MemoryDelta = Core::Perf::MemoryDelta;
-using MemoryRecorder = Core::Perf::MemoryRecorder;
-using MemoryView = Core::Perf::MemoryView;
-using MemoryScopeId = Core::Perf::MemoryScopeId;
-using MemorySourceEnum = Core::Perf::MemorySource::Enum;
-namespace MemorySource = Core::Perf::MemorySource;
-using TimingStats = Core::Perf::TimingStats;
-using TimingRecorder = Core::Perf::TimingRecorder;
-using TimingView = Core::Perf::TimingView;
-using TimingScopeId = Core::Perf::TimingScopeId;
-using TelemetryBytes = Core::Telemetry::TelemetryBytes;
-using TelemetryRecorder = Core::Telemetry::Recorder;
-using CaptureSessionCaptureScope = Core::Telemetry::CaptureSessionCaptureScope;
-using PerfSessionRecordResult = Core::Telemetry::PerfSessionRecordResult;
-using PerfTimingPayload = Core::Telemetry::PerfTimingPayload;
-using PerfMemoryPayload = Core::Telemetry::PerfMemoryPayload;
-using EncodedPerfTimingPayloadHeader = Core::Telemetry::EncodedPerfTimingPayloadHeader;
-using EncodedPerfMemoryPayloadHeader = Core::Telemetry::EncodedPerfMemoryPayloadHeader;
-using DiagnosticPayload = Core::Telemetry::DiagnosticPayload;
-using EncodedDiagnosticPayloadHeader = Core::Telemetry::EncodedDiagnosticPayloadHeader;
-using DiagnosticCaptureGuard = Core::Telemetry::DiagnosticCaptureGuard;
-namespace DiagnosticPayloadFlag = Core::Telemetry::DiagnosticPayloadFlag;
-namespace DiagnosticEventName = ::DiagnosticEventName;
-namespace DiagnosticEventCategory = ::DiagnosticEventCategory;
-namespace LogType = Core::Common::LogType;
-using LogTypeEnum = Core::Common::LogType::Enum;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-using TextLogPayload = Core::Telemetry::TextLogPayload;
-using EncodedTextLogPayloadHeader = Core::Telemetry::EncodedTextLogPayloadHeader;
-using TextLogCaptureLogger = Core::Telemetry::TextLogCaptureLogger;
-using EventView = Core::Telemetry::EventView;
-using EventRecord = Core::Telemetry::EventRecord;
-using EventHeader = Core::Telemetry::EventHeader;
-using EventKindEnum = Core::Telemetry::EventKind::Enum;
-using CaptureFlagMask = Core::Telemetry::CaptureFlag::Mask;
-using EncodedStreamHeader = Core::Telemetry::EncodedStreamHeader;
-using EncodedEventHeader = Core::Telemetry::EncodedEventHeader;
-using DecodeResult = Core::Telemetry::DecodeResult;
-using DecodedEvent = Core::Telemetry::DecodedEvent;
-namespace EventKind = Core::Telemetry::EventKind;
-namespace CaptureFlag = Core::Telemetry::CaptureFlag;
-namespace DecodeStatus = Core::Telemetry::DecodeStatus;
-namespace PerfTimingSource = Core::Telemetry::PerfTimingSource;
-using PerfTimingSourceEnum = Core::Telemetry::PerfTimingSource::Enum;
-namespace FrameGraphNodeKind = Core::Telemetry::FrameGraphNodeKind;
-namespace FrameGraphEdgeKind = Core::Telemetry::FrameGraphEdgeKind;
-namespace FrameGraphQueueClass = Core::Telemetry::FrameGraphQueueClass;
-namespace FrameGraphQueueAssignmentReason = Core::Telemetry::FrameGraphQueueAssignmentReason;
-namespace FrameGraphQueueAssignmentModifier = Core::Telemetry::FrameGraphQueueAssignmentModifier;
-namespace FrameGraphQueueAssignmentAcceptance = Core::Telemetry::FrameGraphQueueAssignmentAcceptance;
-namespace FrameGraphTaskPacketizationDecision = Core::Telemetry::FrameGraphTaskPacketizationDecision;
-using FrameGraphNodeKindEnum = Core::Telemetry::FrameGraphNodeKind::Enum;
-using FrameGraphEdgeKindEnum = Core::Telemetry::FrameGraphEdgeKind::Enum;
-using FrameGraphQueueClassEnum = Core::Telemetry::FrameGraphQueueClass::Enum;
-using FrameGraphQueueAssignmentReasonEnum = Core::Telemetry::FrameGraphQueueAssignmentReason::Enum;
-using FrameGraphQueueAssignmentModifierMask = Core::Telemetry::FrameGraphQueueAssignmentModifier::Mask;
-using FrameGraphQueueAssignmentAcceptanceEnum = Core::Telemetry::FrameGraphQueueAssignmentAcceptance::Enum;
-using FrameGraphTaskPacketizationDecisionEnum = Core::Telemetry::FrameGraphTaskPacketizationDecision::Enum;
-using FrameGraphPhysicalQueueId = Core::Telemetry::FrameGraphPhysicalQueueId;
-using FrameGraphQueueAssignmentScore = Core::Telemetry::FrameGraphQueueAssignmentScore;
-using FrameGraphQueueAssignment = Core::Telemetry::FrameGraphQueueAssignment;
-using FrameGraphCompiledTask = Core::Telemetry::FrameGraphCompiledTask;
-using FrameGraphSubmissionRuntimeStatistics = Core::Telemetry::FrameGraphSubmissionRuntimeStatistics;
-using FrameGraphRuntimeStatistics = Core::Telemetry::FrameGraphRuntimeStatistics;
-using FrameGraphPhysicalQueueRuntimeStatistics = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics;
-using FrameGraphPhysicalQueueRuntimeStatisticsRecord = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord;
-using FrameGraphPacketSubmissionStatisticsRecord = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord;
-using FrameGraphNodeDesc = Core::Telemetry::FrameGraphNodeDesc;
-using FrameGraphEdgeDesc = Core::Telemetry::FrameGraphEdgeDesc;
-using FrameGraphNodeDescs = Core::Telemetry::FrameGraphNodeDescs;
-using FrameGraphEdgeDescs = Core::Telemetry::FrameGraphEdgeDescs;
-using FrameGraphPhysicalQueueRuntimeStatisticsRecords = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords;
-using FrameGraphPacketSubmissionStatisticsRecords = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords;
-using FrameGraphPayload = Core::Telemetry::FrameGraphPayload;
-using FrameGraphNodePayload = Core::Telemetry::FrameGraphNodePayload;
-using FrameGraphEdgePayload = Core::Telemetry::FrameGraphEdgePayload;
-using EncodedFrameGraphPayloadHeader = Core::Telemetry::EncodedFrameGraphPayloadHeader;
-using EncodedFrameGraphNode = Core::Telemetry::EncodedFrameGraphNode;
-using EncodedFrameGraphEdge = Core::Telemetry::EncodedFrameGraphEdge;
-using EncodedFrameGraphPhysicalQueueId = Core::Telemetry::EncodedFrameGraphPhysicalQueueId;
-using EncodedFrameGraphQueueAssignment = Core::Telemetry::EncodedFrameGraphQueueAssignment;
-using EncodedFrameGraphCompiledTask = Core::Telemetry::EncodedFrameGraphCompiledTask;
-using EncodedFrameGraphCompileRuntimeStatistics = Core::Telemetry::EncodedFrameGraphCompileRuntimeStatistics;
-using EncodedFrameGraphRecordingRuntimeStatistics = Core::Telemetry::EncodedFrameGraphRecordingRuntimeStatistics;
-using EncodedFrameGraphSubmissionRuntimeStatistics = Core::Telemetry::EncodedFrameGraphSubmissionRuntimeStatistics;
-using EncodedFrameGraphRuntimeStatistics = Core::Telemetry::EncodedFrameGraphRuntimeStatistics;
-using EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics;
-using EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics;
-using EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics;
-using EncodedFrameGraphPhysicalQueueRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics;
-using EncodedFrameGraphPacketSubmissionStatistics = Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics;
-using TelemetryReport = Log::TelemetryReport;
-using TelemetryMemorySummary = Log::TelemetryMemorySummary;
-using ScopedTestTrace = Tests::ScopedTestTrace;
-
-using Core::Telemetry::s_TelemetryFormatVersion;
-using Core::Telemetry::s_EventMagic;
-using Core::Telemetry::s_StreamMagic;
-using Core::Telemetry::s_EncodedStreamHeaderByteSize;
-using Core::Telemetry::s_EncodedEventHeaderByteSize;
-using Core::Telemetry::s_DiagnosticPayloadVersion;
-using Core::Telemetry::s_DiagnosticPayloadMagic;
-using Core::Telemetry::s_EncodedDiagnosticPayloadHeaderByteSize;
-using Core::Telemetry::s_DiagnosticCaptureEventCapacity;
-using Core::Telemetry::s_DiagnosticCapturePayloadCapacity;
-using Core::Telemetry::s_TextLogPayloadVersion;
-using Core::Telemetry::s_TextLogPayloadMagic;
-using Core::Telemetry::s_EncodedTextLogPayloadHeaderByteSize;
-using Core::Telemetry::s_PerfTimingPayloadVersion;
-using Core::Telemetry::s_PerfTimingPayloadMagic;
-using Core::Telemetry::s_PerfMemoryPayloadVersion;
-using Core::Telemetry::s_PerfMemoryPayloadMagic;
-using Core::Telemetry::s_EncodedPerfTimingPayloadHeaderByteSize;
-using Core::Telemetry::s_EncodedPerfMemoryPayloadHeaderByteSize;
-using Core::Telemetry::s_FrameGraphPayloadVersion;
-using Core::Telemetry::s_FrameGraphPayloadMagic;
-using Core::Telemetry::s_EncodedFrameGraphPayloadHeaderByteSize;
-using Core::Telemetry::s_EncodedFrameGraphNodeByteSize;
-using Core::Telemetry::s_EncodedFrameGraphEdgeByteSize;
-using Core::Telemetry::s_EncodedFrameGraphQueueAssignmentByteSize;
-using Core::Telemetry::s_EncodedFrameGraphCompiledTaskByteSize;
-using Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize;
-using Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsByteSize;
-
-using ::CaptureDiagnosticEvent;
-using ::ConvertString;
-using Tests::CountText;
-using Core::Perf::Difference;
-using Core::Telemetry::EncodeEvent;
-using Core::Telemetry::EncodeEventStream;
-using Core::Telemetry::DecodeEvent;
-using Core::Telemetry::DecodeEventStream;
-using Core::Telemetry::BuildDiagnosticPayload;
-using Core::Telemetry::ParseDiagnosticPayload;
-using Core::Telemetry::RecordDiagnostic;
-using Core::Telemetry::BuildTextLogPayload;
-using Core::Telemetry::ParseTextLogPayload;
-using Core::Telemetry::RecordTextLog;
-using Core::Telemetry::BuildPerfTimingPayload;
-using Core::Telemetry::ParsePerfTimingPayload;
-using Core::Telemetry::RecordPerfTiming;
-using Core::Telemetry::BuildPerfMemoryPayload;
-using Core::Telemetry::ParsePerfMemoryPayload;
-using Core::Telemetry::RecordPerfMemory;
-using Core::Telemetry::RecordPerfSessionReport;
-using Core::Telemetry::BuildFrameGraphPayload;
-using Core::Telemetry::ParseFrameGraphPayload;
-using Core::Telemetry::RecordFrameGraph;
-using Core::Telemetry::IsValidFrameGraphQueueAssignment;
-using Core::Telemetry::IsValidFrameGraphCompiledTask;
-using Core::Telemetry::IsValidFrameGraphRuntimeStatistics;
-using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics;
-using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner;
-using Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics;
-using Log::BuildTelemetryReport;
-using Core::Common::NameSymbols::InstallRuntimeRegistry;
-using Core::Common::NameSymbols::ClearRuntimeSymbols;
-using Core::Common::NameSymbols::LoadFromMemory;
-using Core::Common::NameSymbols::s_FileHeader;
-
-template<typename PodT>
-FOUNDATION_INLINE void ReadTelemetryPod(const TelemetryBytes& payload, const usize byteOffset, PodT& outValue)noexcept{
-    FOUNDATION_MEMCPY(&outValue, sizeof(outValue), payload.data() + byteOffset, sizeof(outValue));
 }
+type MemorySourceEnum = MemorySource;
+type LogTypeEnum = LogType;
+type EventKindEnum = EventKind;
+type CaptureFlagMask = TelemetryCaptureFlag;
+type PerfTimingSourceEnum = PerfTimingSource;
+type FrameGraphNodeKindEnum = FrameGraphNodeKind;
+type FrameGraphEdgeKindEnum = FrameGraphEdgeKind;
+type FrameGraphQueueClassEnum = FrameGraphQueueClass;
+type FrameGraphQueueAssignmentReasonEnum = FrameGraphQueueAssignmentReason;
+type FrameGraphQueueAssignmentModifierMask = FrameGraphQueueAssignmentModifier;
+type FrameGraphQueueAssignmentAcceptanceEnum = FrameGraphQueueAssignmentAcceptance;
+type FrameGraphTaskPacketizationDecisionEnum = FrameGraphTaskPacketizationDecision;
+type TelemetryRecorder = Recorder;
+type CaptureFlag = TelemetryCaptureFlag;
 
-template<typename PodT>
-FOUNDATION_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffset, const PodT& value)noexcept{
-    FOUNDATION_MEMCPY(payload.data() + byteOffset, payload.size() - byteOffset, &value, sizeof(value));
+void ReadTelemetryPod<T>(in TelemetryBytes payload, in usize byteOffset, mut T outValue){
+    usize offset = byteOffset;
+    outValue = ReadPOD<T>(ByteOutputView(payload), offset).value();
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 RecordBinarySpan(
-    TelemetryRecorder& recorder,
-    const EventKindEnum kind,
-    const u64 frameIndex,
-    const Span<const u8> payload,
-    const usize byteCount,
-    const u32 streamId
-){
-    return recorder.recordBinary(kind, frameIndex, payload.data(), byteCount, streamId);
+void WriteTelemetryPod<T>(mut TelemetryBytes payload, in usize offset, in T value){
+    const Span<u8> bytes = PodBytes(value);
+    for(usize i = 0u; i < bytes.size(); ++i)
+        payload[offset + i] = bytes[i];
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 RecordMovedPayloadImpl(
-    TelemetryRecorder& recorder,
-    const EventKindEnum kind,
-    const u64 frameIndex,
-    TelemetryBytes& payload,
-    const u32 streamId
-){
-    return recorder.recordPayload(kind, frameIndex, Move(payload), streamId);
+b8 RecordBinarySpan(mut TelemetryRecorder recorder, in EventKind kind, in u64 frameIndex, in Span<u8> payload, in usize byteCount, in u32 streamId){
+    return recorder.recordBinary(kind, frameIndex, TestArrayData<u8>(payload), byteCount, streamId);
 }
-
-[[nodiscard]] FOUNDATION_INLINE Optional<EventHeader> EventHeaderAtOpt(const EventView& events, const usize eventIndex)noexcept{
-    if(const EventRecord* const event = events.eventAt(eventIndex))
-        return event->header;
-    return {};
+Optional<EventHeader> EventHeaderAtOpt(in EventView events, in usize index){
+    const auto record = events.borrowEventAt(index);
+    if(record.has_value())
+        return record.value().header;
+    return Optional<EventHeader>();
 }
-
-[[nodiscard]] FOUNDATION_INLINE usize EventRecordAddressAtValue(const EventView& events, const usize eventIndex)noexcept{
-    if(const EventRecord* const event = events.eventAt(eventIndex))
-        return reinterpret_cast<usize>(event);
+usize EventRecordAddressAtValue(in EventView events, in usize index){
+    const auto record = events.borrowEventAt(index);
+    if(record.has_value())
+        return ObjectAddressKey(record.value());
     return 0u;
 }
-
-[[nodiscard]] FOUNDATION_INLINE Optional<usize> EventPayloadCapacityAtOpt(const EventView& events, const usize eventIndex)noexcept{
-    if(const EventRecord* const event = events.eventAt(eventIndex))
-        return event->payload.capacity();
-    return {};
+Optional<usize> EventPayloadCapacityAtOpt(in EventView events, in usize index){
+    const auto record = events.borrowEventAt(index);
+    if(record.has_value())
+        return record.value().payload.capacity();
+    return Optional<usize>();
+}
+Optional<Span<u8>> EventPayloadSpanAtOpt(in EventView events, in usize index){
+    const auto record = events.borrowEventAt(index);
+    if(record.has_value())
+        return Optional<Span<u8>>(ByteOutputView(record.value().payload));
+    return Optional<Span<u8>>();
+}
+Expected<PerfMemoryPayload> ParsePerfMemorySpan(in Span<u8> bytes, in usize count){
+    return ParsePerfMemoryPayloadData(TestArrayData<u8>(bytes), count);
+}
+Expected<PerfTimingPayload> ParsePerfTimingSpan(in Span<u8> bytes, in usize count){
+    return ParsePerfTimingPayloadData(TestArrayData<u8>(bytes), count);
+}
+Expected<DiagnosticPayload> ParseDiagnosticSpan(in Span<u8> bytes, in usize count){
+    return ParseDiagnosticPayloadData(TestArrayData<u8>(bytes), count);
+}
+Expected<TextLogPayload> ParseTextLogSpan(in Span<u8> bytes, in usize count){
+    return ParseTextLogPayloadData(TestArrayData<u8>(bytes), count);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<Span<const u8>> EventPayloadSpanAtOpt(const EventView& events, const usize eventIndex)noexcept{
-    if(const EventRecord* const event = events.eventAt(eventIndex))
-        return Span<const u8>(event->payload.data(), event->payload.size());
-    return {};
+Expected<FrameGraphPayload> ParseFrameGraphSpan(mut HeapStorage arena, mut ScratchStorage scratch, in Span<u8> payload, in usize byteCount){
+    return ParseFrameGraphPayloadData(arena, scratch, TestArrayData<u8>(payload), byteCount);
 }
-
-[[nodiscard]] FOUNDATION_INLINE Expected<PerfMemoryPayload> ParsePerfMemorySpan(const Span<const u8> payload, const usize byteCount){
-    return ParsePerfMemoryPayload(payload.data(), byteCount);
+Expected<DecodedEvent, DecodeResult> DecodeEventSpan(mut HeapStorage arena, in Span<u8> bytes, in usize byteCount){
+    return DecodeEventData(arena, TestArrayData<u8>(bytes), byteCount);
 }
-
-[[nodiscard]] FOUNDATION_INLINE Expected<PerfTimingPayload> ParsePerfTimingSpan(const Span<const u8> payload, const usize byteCount){
-    return ParsePerfTimingPayload(payload.data(), byteCount);
+Expected<usize, DecodeResult> DecodeEventStreamSpan(in Span<u8> bytes, in usize byteCount, mut HeapStorage arena, mut TelemetryRecorder recorder){
+    return DecodeEventStreamData(TestArrayData<u8>(bytes), byteCount, arena, recorder);
 }
-
-[[nodiscard]] FOUNDATION_INLINE Expected<DiagnosticPayload> ParseDiagnosticSpan(const Span<const u8> payload, const usize byteCount){
-    return ParseDiagnosticPayload(payload.data(), byteCount);
+b8 BuildTestTextLogPayload(in LogType type, in StringView message, mut ScratchStorage scratch, mut TelemetryBytes output){
+    const PlatformOwnedString converted = AppendPlatformText(PlatformTextLiteral(""), message);
+    return BuildPlatformTextPayload(type, PlatformStringView(converted), scratch, output);
 }
-
-[[nodiscard]] FOUNDATION_INLINE Expected<TextLogPayload> ParseTextLogSpan(const Span<const u8> payload, const usize byteCount){
-    return ParseTextLogPayload(payload.data(), byteCount);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseFrameGraphSpan(
-    TelemetryArena& arena,
-    ScratchArena& scratchArena,
-    const Span<const u8> payload,
-    const usize byteCount
-){
-    return ParseFrameGraphPayload(arena, scratchArena, payload.data(), byteCount);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<DecodedEvent, DecodeResult> DecodeEventSpan(
-    TelemetryArena& arena,
-    const Span<const u8> bytes,
-    const usize byteCount
-){
-    return DecodeEvent(arena, bytes.data(), byteCount);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<usize, DecodeResult> DecodeEventStreamSpan(
-    const Span<const u8> bytes,
-    const usize byteCount,
-    TelemetryArena& arena,
-    TelemetryRecorder& recorder
-){
-    return DecodeEventStream(bytes.data(), byteCount, arena, recorder);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ScratchAllocateNonNull(ScratchArena& arena, const usize alignment, const usize bytes){
-    return arena.allocate(alignment, bytes) != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<TelemetryReport> BuildTestTelemetryReport(const EventView& events, TelemetryArena& arena, ScratchArena& scratchArena){
-    return BuildTelemetryReport(events, arena, scratchArena);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 BuildTestTextLogPayload(const LogTypeEnum type, const AStringView message, ScratchArena& scratchArena, TelemetryBytes& outPayload){
-#if defined(FOUNDATION_UNICODE)
-    const auto converted = ConvertString(scratchArena, message);
-    return Core::Telemetry::BuildTextLogPayload(type, TStringView(converted), scratchArena, outPayload);
-#else
-    return Core::Telemetry::BuildTextLogPayload(type, TStringView(message), scratchArena, outPayload);
-#endif
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 BuildTestDiagnosticPayload(const DiagnosticEventRecord& record, TelemetryArena& arena, TelemetryBytes& outPayload){
+b8 BuildTestDiagnosticPayload(in DiagnosticEventRecord record, mut HeapStorage arena, mut TelemetryBytes outPayload){
     return BuildDiagnosticPayload(record, arena, outPayload);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 BuildTestFrameGraphPayload(
-    const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    ScratchArena& scratchArena,
-    TelemetryBytes& outPayload
-){
+b8 BuildTestFrameGraphPayload(in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, mut ScratchStorage scratchArena, mut TelemetryBytes outPayload){
     return BuildFrameGraphPayload(frameIndex, nodes, edges, scratchArena, outPayload);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 BuildTestFrameGraphPayload(
-    const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    ScratchArena& scratchArena,
-    TelemetryBytes& outPayload
-){
+b8 BuildTestFrameGraphPayload(in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics, mut ScratchStorage scratchArena, mut TelemetryBytes outPayload){
     return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, scratchArena, outPayload);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 BuildTestFrameGraphPayload(
-    const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
-    ScratchArena& scratchArena,
-    TelemetryBytes& outPayload
-){
+b8 BuildTestFrameGraphPayload(in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics, in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics, mut ScratchStorage scratchArena, mut TelemetryBytes outPayload){
     return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, scratchArena, outPayload);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 RecordTestFrameGraph(
-    TelemetryRecorder& recorder,
-    ScratchArena& scratchArena,
-    const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const u32 streamId = 0u
-){
+b8 RecordTestFrameGraph(mut TelemetryRecorder recorder, mut ScratchStorage scratchArena, in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, in u32 streamId){
     return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, streamId);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 RecordTestFrameGraph(
-    TelemetryRecorder& recorder,
-    ScratchArena& scratchArena,
-    const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
-    const u32 streamId = 0u
-){
+b8 RecordTestFrameGraph(mut TelemetryRecorder recorder, mut ScratchStorage scratchArena, in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics, in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics, in u32 streamId){
     return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, streamId);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 RecordSessionFrameGraph(
-    Core::Telemetry::CaptureSession& session,
-    ScratchArena& scratchArena,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
-){
+b8 RecordSessionFrameGraph(mut CaptureSession session, mut ScratchStorage scratchArena, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics, in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics){
     return session.recordFrameGraph(scratchArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseTestFrameGraphPayload(
-    TelemetryArena& arena,
-    ScratchArena& scratchArena,
-    const TelemetryBytes& payload,
-    const usize byteCount
-){
+Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut HeapStorage arena, mut ScratchStorage scratchArena, in TelemetryBytes payload, in usize byteCount){
     return ParseFrameGraphSpan(arena, scratchArena, payload, byteCount);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseTestFrameGraphPayload(
-    TelemetryArena& arena,
-    ScratchArena& scratchArena,
-    const TelemetryBytes& payload
-){
+Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut HeapStorage arena, mut ScratchStorage scratchArena, in TelemetryBytes payload){
     return ParseTestFrameGraphPayload(arena, scratchArena, payload, payload.size());
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseFrameGraphEventAt(
-    TelemetryArena& arena,
-    ScratchArena& scratchArena,
-    const EventView& events,
-    const usize eventIndex
-){
-    const Optional<Span<const u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+Expected<FrameGraphPayload> ParseFrameGraphEventAt(mut HeapStorage arena, mut ScratchStorage scratchArena, in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
     if(!payload.has_value())
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     return ParseFrameGraphSpan(arena, scratchArena, payload.value(), payload.value().size());
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(
-    TelemetryArena& arena,
-    const TelemetryBytes& bytes,
-    const usize byteCount
-){
+Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut HeapStorage arena, in TelemetryBytes bytes, in usize byteCount){
     return DecodeEventSpan(arena, bytes, byteCount);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(
-    TelemetryArena& arena,
-    const TelemetryBytes& bytes
-){
+Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut HeapStorage arena, in TelemetryBytes bytes){
     return DecodeTestEventBytes(arena, bytes, bytes.size());
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<usize, DecodeResult> DecodeTestEventStreamBytes(
-    const TelemetryBytes& bytes,
-    const usize byteCount,
-    TelemetryArena& arena,
-    TelemetryRecorder& recorder
-){
+Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, in usize byteCount, mut HeapStorage arena, mut TelemetryRecorder recorder){
     return DecodeEventStreamSpan(bytes, byteCount, arena, recorder);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<usize, DecodeResult> DecodeTestEventStreamBytes(
-    const TelemetryBytes& bytes,
-    TelemetryArena& arena,
-    TelemetryRecorder& recorder
-){
+Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, mut HeapStorage arena, mut TelemetryRecorder recorder){
     return DecodeTestEventStreamBytes(bytes, bytes.size(), arena, recorder);
 }
-
-[[nodiscard]] FOUNDATION_INLINE OwnedAllocation Suite_MakeOwnedAllocation(GlobalArena& owner, const usize size){
-    return OwnedAllocation(owner, size);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 Suite_LoadNameSymbolsFromMemory(const AStringView text, ScratchArena& scratchArena){
-    return LoadFromMemory(text, scratchArena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 type PerfSession = Session;
 type PerfSessionReport = SessionReport;
 type TelemetryCaptureSession = CaptureSession;
-type TelemetryTestArena = TestArena;
+
 
 const StringView s_SuiteArenaSourceRecord = "\"source\": \"arena\"";
 const StringView s_SuiteHeapBackingSourceRecord = "\"source\": \"heapBacking\"";
@@ -673,15 +276,8 @@ DiagnosticEventRecord MakeDiagnosticEvent(in StringView event, in StringView cat
 }
 
 b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message, in u64 frameIndex, in u32 streamId){
-    native(in type, in message, in frameIndex, in streamId, mut recorder){
-#if defined(FOUNDATION_UNICODE)
-        Core::Alloc::ScratchArena scratchArena{ s_TelemetryScratch };
-        const auto converted = ConvertString(scratchArena, message);
-        return Core::Telemetry::RecordTextLog(recorder, type, TStringView(converted), frameIndex, streamId);
-#else
-        return Core::Telemetry::RecordTextLog(recorder, type, TStringView(message), frameIndex, streamId);
-#endif
-    }
+    const PlatformOwnedString converted = AppendPlatformText(PlatformTextLiteral(""), message);
+    return RecordPlatformText(recorder, type, PlatformStringView(converted), frameIndex, streamId);
 }
 
 b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message, in u64 frameIndex){
@@ -763,13 +359,9 @@ b8 RecordBinaryBytes(mut TelemetryRecorder recorder, in EventKindEnum kind, in u
 }
 
 b8 RecordFilledPayload(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, in usize byteCount, in u8 fillValue, in u32 streamId){
-    b8 recorded = false;
-    native(mut recorder, in kind, in frameIndex, in byteCount, in fillValue, in streamId, mut recorded){
-        TelemetryBytes payload(recorder.arena());
-        payload.resize(byteCount, fillValue);
-        recorded = RecordBinarySpan(recorder, kind, frameIndex, payload, byteCount, streamId);
-    }
-    return recorded;
+    TelemetryBytes payload = recorder.createByteBuffer();
+    payload.resize(byteCount, fillValue);
+    return RecordBinarySpan(recorder, kind, frameIndex, ByteOutputView(payload), byteCount, streamId);
 }
 
 b8 RecordMovedPayload(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, mut TelemetryBytes payload, in u32 streamId){
@@ -1492,13 +1084,10 @@ void BuildTestPacketSubmissionFrameGraph(
 }
 
 Expected<ArenaMemoryStats> SampleTemporaryScratchStats(in Name scratchName){
-    Expected<ArenaMemoryStats> stats = MakeUnexpected(Failure());
-    native(in scratchName, mut stats){
-        Core::Alloc::ScratchArena temporary(scratchName);
-        if(ScratchAllocateNonNull(temporary, 1u, 97u))
-            stats = temporary.memoryStats();
-    }
-    return stats;
+    ScratchStorage temporary = ScratchStorage(scratchName);
+    if(AllocateBytes(temporary, 1u, 97u).address() == 0u)
+        return MakeUnexpected(Failure());
+    return temporary.memoryStats();
 }
 
 Expected<PerfMemoryPayload> TryParseMemoryEventAt(in EventView events, in usize eventIndex, mut EventHeader outHeader){
@@ -1749,7 +1338,7 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     const Name scratchName = scratchNameResult.value();
 
     TelemetryOwnedArena owner = TelemetryOwnedArena(ownerName);
-    OwnedAllocation allocation = Suite_MakeOwnedAllocation(owner.arena, 53u);
+    OwnedAllocation allocation = OwnedAllocation(owner.arena, 53u);
     ASSERT_TRUE(allocation.valid());
     const u64 firstBytes = allocation.usableBytes();
     EXPECT_GE(firstBytes, allocation.requestedBytes);
@@ -1894,13 +1483,13 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
     PerfSession perfSession = PerfSession(testArena.arena);
     perfSession.setCaptureOptions(MakePerfMemoryCaptureOptions());
     TelemetryOwnedArena firstArena = TelemetryOwnedArena(ownerName);
-    OwnedAllocation firstAllocation = Suite_MakeOwnedAllocation(firstArena.arena, 53u);
+    OwnedAllocation firstAllocation = OwnedAllocation(firstArena.arena, 53u);
     ASSERT_TRUE(firstAllocation.valid());
     const u64 firstBytes = firstAllocation.usableBytes();
     u64 secondBytes = 0u;
     {
         TelemetryOwnedArena secondArena = TelemetryOwnedArena(ownerName);
-        OwnedAllocation secondAllocation = Suite_MakeOwnedAllocation(secondArena.arena, 101u);
+        OwnedAllocation secondAllocation = OwnedAllocation(secondArena.arena, 101u);
         ASSERT_TRUE(secondAllocation.valid());
         secondBytes = secondAllocation.usableBytes();
         perfSession.beginFrame(71u);
@@ -2045,7 +1634,7 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
         firstHashText,
         secondHashText
     );
-    ASSERT_TRUE(Suite_LoadNameSymbolsFromMemory(StringView(namesymText), reportScratch.scratchArena));
+    ASSERT_TRUE(LoadFromMemory(StringView(namesymText), reportScratch.scratchArena));
     const Expected<TelemetryReport> afterReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(afterReportResult.has_value());
     const TelemetryReport afterReport = afterReportResult.value();

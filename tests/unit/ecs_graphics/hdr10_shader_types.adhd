@@ -1,0 +1,31 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShaderFloat3{
+    public f64 x;
+    public f64 y;
+    public f64 z;
+    public ShaderFloat3(in f64 value){ this.x = value; this.y = value; this.z = value; }
+    public ShaderFloat3(in f64 red, in f64 green, in f64 blue){ this.x = red; this.y = green; this.z = blue; }
+}
+VectorDouble HdrLanes(in ShaderFloat3 color, in f64 w){ return VectorDouble(color.x, color.y, color.z, w); }
+ShaderFloat3 HdrColor(in VectorDouble value){ return ShaderFloat3(value.x, value.y, value.z); }
+ShaderFloat3 HdrAdd(in ShaderFloat3 a, in ShaderFloat3 b){ return HdrColor(HdrLanes(a, 0.0) + HdrLanes(b, 0.0)); }
+ShaderFloat3 HdrMultiply(in ShaderFloat3 a, in ShaderFloat3 b){ return HdrColor(HdrLanes(a, 0.0) * HdrLanes(b, 0.0)); }
+ShaderFloat3 HdrDivide(in ShaderFloat3 a, in ShaderFloat3 b){ return HdrColor(HdrLanes(a, 0.0) / HdrLanes(b, 1.0)); }
+f64 HdrDot(in ShaderFloat3 a, in ShaderFloat3 b){ return (a.x * b.x + a.y * b.y) + a.z * b.z; }
+ShaderFloat3 HdrMax(in ShaderFloat3 a, in ShaderFloat3 b){ return HdrColor(Max(HdrLanes(a, 0.0), HdrLanes(b, 0.0))); }
+f32 HdrSaturateScalar(in f32 a){
+    if(a > 0.0f)
+        return Min(1.0f, a);
+    return 0.0f;
+}
+ShaderFloat3 HdrSaturate(in ShaderFloat3 a){
+    const VectorDouble lower = Max(HdrLanes(a, 0.0), VectorDouble(0.0));
+    return HdrColor(Min(VectorDouble(1.0), lower));
+}
+ShaderFloat3 HdrPow(in ShaderFloat3 a, in f64 exponent){ return HdrColor(VectorDoublePow(HdrLanes(a, 1.0), VectorDouble(exponent))); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

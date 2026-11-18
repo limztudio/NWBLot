@@ -3,588 +3,308 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_search.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+enum<u8> UiSearchComboBehaviorMutation{
+    None, Query, SameQuery, QuerySelection, Selection, Open, Close, PreviewScroll,
+    CompositionBegin, CompositionUpdate, CompositionCancel, CompositionCycle
+}
+enum<u8> UiSearchSelectionMutation{ None, Identical, AwayAndBack }
+type UiSearchComboBuilderTests = SearchFixture;
+type UiSeparatorTests = WidgetFixture;
 
+class SearchBehaviorFilteredView : IListDataSource{
+    public u64 generation = 97u;
+    public u64 revisionValue = 1u;
+    public u64 start = 0u;
+    public u64 count = 0u;
+    public TestObserved<b8> changeQueryOnCount;
+    public mut SearchComboState m_state;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_search_combo_behavior_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-constexpr AStringView s_CallbackQuery = "callback";
-constexpr AStringView s_PreeditText = "preedit";
-
-namespace Mutation{
-    enum Enum : u8{
-        None, Query, SameQuery, QuerySelection, Selection, Open, Close, PreviewScroll,
-        CompositionBegin, CompositionUpdate, CompositionCancel, CompositionCycle
-    };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class FilteredView final : public IListDataSource{
-public:
-    explicit FilteredView(SearchComboState& state)noexcept
-        : m_state(state)
-    {}
-
-
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{
-        if(changeQueryOnCount){
-            changeQueryOnCount = false;
-            if(!m_state.query().setText(s_CallbackQuery))
-                ADD_FAILURE() << "query callback failed";
+    public SearchBehaviorFilteredView(mut SearchComboState state){ this.m_state = state; }
+    public u64 instanceGeneration()const override{ return this.generation; }
+    public u64 revision()const override{ return this.revisionValue; }
+    public u64 rowCount()const override{
+        if(this.changeQueryOnCount.value()){
+            this.changeQueryOnCount.value() = false;
+            EXPECT_TRUE(this.m_state.query().setText(s_CallbackQuery));
         }
-        return count;
+        return this.count;
     }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? start + index + 1u : 0u; }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
+    public u64 key(in u64 index)const override{
+        if(index < this.count)
+            return this.start + index + 1u;
+        return 0u;
+    }
+    public Expected<u64> indexOf(in u64 keyValue)const override{
         u64 index = 0u;
-        if(keyValue <= start || keyValue - start > count)
-            return MakeUnexpected(Failure{});
-        index = keyValue - start - 1u;
+        if(keyValue <= this.start || keyValue - this.start > this.count)
+            return MakeUnexpected(Failure());
+        index = keyValue - this.start - 1u;
         return index;
     }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 first, b8)const noexcept override{
+    public Expected<u64> findEnabled(in u64 first, in b8 arg1)const override{
         u64 index = 0u;
-        if(first >= count)
-            return MakeUnexpected(Failure{});
+        if(first >= this.count)
+            return MakeUnexpected(Failure());
         index = first;
         return index;
     }
-
-    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "match"; }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count; }
-
-
-public:
-    u64 generation = 97u;
-    u64 revisionValue = 1u;
-    u64 start = 0u;
-    u64 count = 0u;
-    mutable b8 changeQueryOnCount = false;
+    public StringView text(in u64 arg0)const override{ return "match"; }
+    public b8 enabled(in u64 index)const override{ return index < this.count; }
+}
 
 
-private:
-    SearchComboState& m_state;
-};
+class UiSearchComboBehaviorSource : ISearchableListDataSource{
+    public SearchBehaviorFilteredView view;
+    public String queryBytes;
+    public u64 generation = 71u;
+    public u64 revisionValue = 1u;
+    public u64 count = 100000u;
+    public u64 filterCalls = 0u;
+    public u64 rebuilds = 0u;
+    public b8 failFilter = false;
+    public b8 changeFullGeneration = false;
+    public b8 changeFullRevision = false;
+    public b8 changeFullCount = false;
+    public b8 invalidViewIdentity = false;
+    public b8 oversizedView = false;
+    public TestObserved<b8> changeQueryOnGeneration;
+    public UiSearchComboBehaviorMutation onFilter = UiSearchComboBehaviorMutation::None;
+    public mut SearchComboState m_state;
+    public u64 m_generation = 0u;
+    public u64 m_revision = 0u;
+    public u64 m_count = 0u;
+    public b8 m_valid = false;
 
-class SearchSource final : public ISearchableListDataSource{
-public:
-    SearchSource(Core::Alloc::GlobalArena& arena, SearchComboState& state)noexcept
-        : view(state)
-        , queryBytes(arena)
-        , m_state(state)
-    {}
-
-
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
-        if(changeQueryOnGeneration){
-            changeQueryOnGeneration = false;
-            if(!m_state.query().setText(s_CallbackQuery))
-                ADD_FAILURE() << "query callback failed";
+    public UiSearchComboBehaviorSource(mut SearchComboState state){
+        this.view = SearchBehaviorFilteredView(state);
+        this.m_state = state;
+    }
+    public u64 instanceGeneration()const override{
+        if(this.changeQueryOnGeneration.value()){
+            this.changeQueryOnGeneration.value() = false;
+            EXPECT_TRUE(this.m_state.query().setText(s_CallbackQuery));
         }
-        return generation;
+        return this.generation;
     }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        return index < count ? index + 1u : 0u;
+    public u64 revision()const override{ return this.revisionValue; }
+    public u64 rowCount()const override{ return this.count; }
+    public u64 key(in u64 index)const override{
+        if(index < this.count)
+            return index + 1u;
+        return 0u;
     }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
+    public Expected<u64> indexOf(in u64 keyValue)const override{
         u64 index = 0u;
-        if(keyValue == 0u || keyValue > count)
-            return MakeUnexpected(Failure{});
+        if(keyValue == 0u || keyValue > this.count)
+            return MakeUnexpected(Failure());
         index = keyValue - 1u;
         return index;
     }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, b8)const noexcept override{
+    public Expected<u64> findEnabled(in u64 start, in b8 arg1)const override{
         u64 index = 0u;
-        if(start >= count)
-            return MakeUnexpected(Failure{});
+        if(start >= this.count)
+            return MakeUnexpected(Failure());
         index = start;
         return index;
     }
-
-    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "full row"; }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count; }
-
-    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{
-        ++filterCalls;
-        if(failFilter)
+    public StringView text(in u64 arg0)const override{ return "full row"; }
+    public b8 enabled(in u64 index)const override{ return index < this.count; }
+    public b8 filter(in StringView query) override{
+        ++this.filterCalls;
+        if(this.failFilter)
             return false;
-        const AStringView old{ queryBytes.data(), queryBytes.size() };
-        if(!m_valid || old != query || m_generation != generation || m_revision != revisionValue || m_count != count){
-            queryBytes.clear();
+        const StringView old = StringView(this.queryBytes);
+        if(!this.m_valid || old != query || this.m_generation != this.generation || this.m_revision != this.revisionValue || this.m_count != this.count){
+            this.queryBytes.clear();
             if(!query.empty())
-                queryBytes.assign(query.data(), query.size());
-            view.start = query == "tail" ? count - Min<u64>(3u, count) : 0u;
-            view.count = query == "none" ? 0u : count - view.start;
-            ++view.revisionValue;
-            ++rebuilds;
-            m_generation = generation;
-            m_revision = revisionValue;
-            m_count = count;
-            m_valid = true;
+                this.queryBytes.assign(query);
+            this.view.start = 0u;
+            if(query == "tail")
+                this.view.start = this.count - Min<u64>(3u, this.count);
+            this.view.count = this.count - this.view.start;
+            if(query == "none")
+                this.view.count = 0u;
+            ++this.view.revisionValue;
+            ++this.rebuilds;
+            this.m_generation = this.generation;
+            this.m_revision = this.revisionValue;
+            this.m_count = this.count;
+            this.m_valid = true;
         }
-        if(changeFullGeneration)
-            ++generation;
-        if(changeFullRevision)
-            ++revisionValue;
-        if(changeFullCount)
-            ++count;
-        if(invalidViewIdentity)
-            view.revisionValue = 0u;
-        if(oversizedView)
-            view.count = count + 1u;
-        mutate();
+        if(this.changeFullGeneration)
+            ++this.generation;
+        if(this.changeFullRevision)
+            ++this.revisionValue;
+        if(this.changeFullCount)
+            ++this.count;
+        if(this.invalidViewIdentity)
+            this.view.revisionValue = 0u;
+        if(this.oversizedView)
+            this.view.count = this.count + 1u;
+        this.mutate();
         return true;
     }
-
-    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return view; }
-
-    [[nodiscard]] AStringView queryView()const noexcept{ return AStringView(queryBytes); }
-
-
-private:
-    void mutate(){
-        const Mutation::Enum mutation = onFilter;
-        onFilter = Mutation::None;
+    public in IListDataSource filtered()const override{ return this.view; }
+    public StringView queryView()const{ return StringView(this.queryBytes); }
+    public void mutate(){
+        const UiSearchComboBehaviorMutation mutation = this.onFilter;
+        this.onFilter = UiSearchComboBehaviorMutation::None;
         switch(mutation){
-        case Mutation::None:
+        case UiSearchComboBehaviorMutation::None:
             break;
-        case Mutation::Query:
-            if(!m_state.query().setText(s_CallbackQuery))
-                ADD_FAILURE() << "query callback failed";
+        case UiSearchComboBehaviorMutation::Query:
+            EXPECT_TRUE(this.m_state.query().setText(s_CallbackQuery));
             break;
-        case Mutation::SameQuery:
-            if(!m_state.query().setText(m_state.query().text()))
-                ADD_FAILURE() << "query callback failed";
+        case UiSearchComboBehaviorMutation::SameQuery:
+            EXPECT_TRUE(this.m_state.query().setText(this.m_state.query().text()));
             break;
-        case Mutation::QuerySelection:
-            if(!m_state.query().selectAll())
-                ADD_FAILURE() << "query selection callback failed";
+        case UiSearchComboBehaviorMutation::QuerySelection:
+            EXPECT_TRUE(this.m_state.query().selectAll());
             break;
-        case Mutation::Selection:
-            m_state.combo().select(8u);
+        case UiSearchComboBehaviorMutation::Selection:
+            this.m_state.combo().select(8u);
             break;
-        case Mutation::Open:
-            m_state.combo().open();
+        case UiSearchComboBehaviorMutation::Open:
+            this.m_state.combo().open();
             break;
-        case Mutation::Close:
-            m_state.combo().close();
+        case UiSearchComboBehaviorMutation::Close:
+            this.m_state.combo().close();
             break;
-        case Mutation::PreviewScroll:
-            if(!m_state.combo().listState().scrollTo(64.0))
-                ADD_FAILURE() << "preview callback failed";
+        case UiSearchComboBehaviorMutation::PreviewScroll:
+            EXPECT_TRUE(this.m_state.combo().listState().scrollTo(64.0));
             break;
-        case Mutation::CompositionBegin:
-            if(!m_state.query().beginComposition())
-                ADD_FAILURE() << "composition callback failed";
+        case UiSearchComboBehaviorMutation::CompositionBegin:
+            EXPECT_TRUE(this.m_state.query().beginComposition());
             break;
-        case Mutation::CompositionUpdate:
-            if(!m_state.query().updateComposition(s_PreeditText, 0u, 7u))
-                ADD_FAILURE() << "composition callback failed";
+        case UiSearchComboBehaviorMutation::CompositionUpdate:
+            EXPECT_TRUE(this.m_state.query().updateComposition(s_PreeditText, 0u, 7u));
             break;
-        case Mutation::CompositionCancel:
-            m_state.query().cancelComposition();
+        case UiSearchComboBehaviorMutation::CompositionCancel:
+            this.m_state.query().cancelComposition();
             break;
-        case Mutation::CompositionCycle:
-            if(!m_state.query().beginComposition() || !m_state.query().updateComposition(s_PreeditText, 0u, 7u))
-                ADD_FAILURE() << "composition callback failed";
-            m_state.query().cancelComposition();
+        case UiSearchComboBehaviorMutation::CompositionCycle:
+            EXPECT_TRUE(this.m_state.query().beginComposition() && this.m_state.query().updateComposition(s_PreeditText, 0u, 7u));
+            this.m_state.query().cancelComposition();
             break;
         }
     }
+}
 
 
-public:
-    FilteredView view;
-    AString<Core::Alloc::GlobalArena> queryBytes;
-    u64 generation = 71u;
-    u64 revisionValue = 1u;
-    u64 count = 100000u;
-    u64 filterCalls = 0u;
-    u64 rebuilds = 0u;
-    b8 failFilter = false;
-    b8 changeFullGeneration = false;
-    b8 changeFullRevision = false;
-    b8 changeFullCount = false;
-    b8 invalidViewIdentity = false;
-    b8 oversizedView = false;
-    mutable b8 changeQueryOnGeneration = false;
-    Mutation::Enum onFilter = Mutation::None;
+[ordered]
+class UiSearchComboBehaviorTests{
+    public SearchComboState m_state;
+    public UiSearchComboBehaviorSource m_source;
+
+    public UiSearchComboBehaviorTests(){ this.m_source = UiSearchComboBehaviorSource(this.m_state); }
+
+}
 
 
-private:
-    SearchComboState& m_state;
-    u64 m_generation = 0u;
-    u64 m_revision = 0u;
-    u64 m_count = 0u;
-    b8 m_valid = false;
-};
+class SelectionProbe{
+    public mut EditModel m_query;
+    public TestObserved<UiSearchSelectionMutation> m_mutation = TestObserved<UiSearchSelectionMutation>(UiSearchSelectionMutation::None);
+    public usize m_anchor = 0u;
+    public usize m_caret = 0u;
+    public TestObserved<u64> m_calls;
 
-class UiSearchComboBehaviorTests : public testing::Test{
-public:
-    UiSearchComboBehaviorTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiSearchCombo))
-        , m_state(m_arena)
-        , m_source(m_arena, m_state)
-    {}
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    SearchComboState m_state;
-    SearchSource m_source;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_search_combo_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiSearchComboTests;
-
-class UiSearchComboBuilderTests : public SearchFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_search_selection_epoch_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiSearchComboTests;
-
-namespace SelectionMutation{
-    enum Enum : u8{ None, Identical, AwayAndBack };
-};
-
-class SelectionProbe final{
-public:
-    explicit SelectionProbe(EditModel& query)noexcept
-        : m_query(query)
-    {}
-
-
-public:
-    void arm(const SelectionMutation::Enum mutation)noexcept{
-        m_mutation = mutation;
-        m_anchor = m_query.anchor();
-        m_caret = m_query.caret();
+    public SelectionProbe(mut EditModel query){ this.m_query = query; }
+    public void arm(in UiSearchSelectionMutation mutation){
+        this.m_mutation.value() = mutation;
+        this.m_anchor = this.m_query.anchor();
+        this.m_caret = this.m_query.caret();
     }
-
-    [[nodiscard]] b8 apply()noexcept{
-        const SelectionMutation::Enum mutation = m_mutation;
-        m_mutation = SelectionMutation::None;
-        if(mutation == SelectionMutation::None)
+    public b8 apply()const{
+        const UiSearchSelectionMutation mutation = this.m_mutation.value();
+        this.m_mutation.value() = UiSearchSelectionMutation::None;
+        if(mutation == UiSearchSelectionMutation::None)
             return true;
-        ++m_calls;
-        if(mutation == SelectionMutation::AwayAndBack && !m_query.setSelection(0u, 0u))
+        ++this.m_calls.value();
+        if(mutation == UiSearchSelectionMutation::AwayAndBack && !this.m_query.setSelection(0u, 0u))
             return false;
-        return m_query.setSelection(m_anchor, m_caret);
+        return this.m_query.setSelection(this.m_anchor, this.m_caret);
     }
-
-    [[nodiscard]] u64 calls()const noexcept{ return m_calls; }
-
-
-private:
-    EditModel& m_query;
-    SelectionMutation::Enum m_mutation = SelectionMutation::None;
-    usize m_anchor = 0u;
-    usize m_caret = 0u;
-    u64 m_calls = 0u;
-};
-
-class SelectionView final : public IListDataSource{
-public:
-    SelectionView(const IListDataSource& source, EditModel& query)noexcept
-        : m_source(source)
-        , m_probe(query)
-    {}
+    public u64 calls()const{ return this.m_calls.value(); }
+}
 
 
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_source.instanceGeneration(); }
+class SelectionView : IListDataSource{
+    public in IListDataSource m_source;
+    public SelectionProbe m_probe;
+    public TestObserved<u64> m_textCalls;
 
-    [[nodiscard]] virtual u64 revision()const noexcept override{ return m_source.revision(); }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_source.rowCount(); }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_source.key(index); }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_source.indexOf(key); }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        return m_source.findEnabled(start, reverse);
+    public SelectionView(in borrow IListDataSource source, mut EditModel query){ this.m_source = source; this.m_probe = SelectionProbe(query); }
+    public u64 instanceGeneration()const override{ return this.m_source.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_source.revision(); }
+    public u64 rowCount()const override{ return this.m_source.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_source.key(index); }
+    public Expected<u64> indexOf(in u64 key)const override{ return this.m_source.indexOf(key); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
+        return this.m_source.findEnabled(start, reverse);
     }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        ++m_textCalls;
-        if(!m_probe.apply())
-            ADD_FAILURE() << "row callback selection change failed";
-        return m_source.text(index);
+    public StringView text(in u64 index)const override{
+        ++this.m_textCalls.value();
+        EXPECT_TRUE(this.m_probe.apply());
+        return this.m_source.text(index);
     }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_source.enabled(index); }
-
-    void arm(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
-
-    [[nodiscard]] u64 mutationCalls()const noexcept{ return m_probe.calls(); }
-
-    [[nodiscard]] u64 textCalls()const noexcept{ return m_textCalls; }
+    public b8 enabled(in u64 index)const override{ return this.m_source.enabled(index); }
+    public void arm(in UiSearchSelectionMutation mutation){ this.m_probe.arm(mutation); }
+    public u64 mutationCalls()const{ return this.m_probe.calls(); }
+    public u64 textCalls()const{ return this.m_textCalls.value(); }
+}
 
 
-private:
-    const IListDataSource& m_source;
-    mutable SelectionProbe m_probe;
-    mutable u64 m_textCalls = 0u;
-};
+class SelectionSource : ISearchableListDataSource{
+    public mut SearchSource m_source;
+    public SelectionProbe m_probe;
+    public SelectionView m_view;
 
-class SelectionSource final : public ISearchableListDataSource{
-public:
-    SelectionSource(SearchSource& source, EditModel& query)noexcept
-        : m_source(source)
-        , m_probe(query)
-        , m_view(source.filtered(), query)
-    {}
-
-
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_source.instanceGeneration(); }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{ return m_source.revision(); }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_source.rowCount(); }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_source.key(index); }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_source.indexOf(key); }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        return m_source.findEnabled(start, reverse);
+    public SelectionSource(mut SearchSource source, mut EditModel query){ this.m_source = source; this.m_probe = SelectionProbe(query); this.m_view = SelectionView(source.filtered(), query); }
+    public u64 instanceGeneration()const override{ return this.m_source.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_source.revision(); }
+    public u64 rowCount()const override{ return this.m_source.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_source.key(index); }
+    public Expected<u64> indexOf(in u64 key)const override{ return this.m_source.indexOf(key); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
+        return this.m_source.findEnabled(start, reverse);
     }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return m_source.text(index); }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_source.enabled(index); }
-
-    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{
-        return m_probe.apply() && m_source.filter(query);
+    public StringView text(in u64 index)const override{ return this.m_source.text(index); }
+    public b8 enabled(in u64 index)const override{ return this.m_source.enabled(index); }
+    public b8 filter(in StringView query) override{
+        return this.m_probe.apply() && this.m_source.filter(query);
     }
-
-    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return m_view; }
-
-    void armFilter(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
-
-    [[nodiscard]] u64 filterMutationCalls()const noexcept{ return m_probe.calls(); }
-
-    [[nodiscard]] SelectionView& view()noexcept{ return m_view; }
-
-
-private:
-    SearchSource& m_source;
-    SelectionProbe m_probe;
-    SelectionView m_view;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiSearchSelectionEpochTests : public SearchFixture{
-public:
-    UiSearchSelectionEpochTests()
-        : m_epochSource(m_searchSource, m_search.query())
-    {}
-
-
-public:
-    [[nodiscard]] b8 declareEpochSearch(u64 generation);
-
-
-public:
-    SelectionSource m_epochSource;
-    Rect m_displayedEditor;
-    WidgetId m_displayedFocus;
-    u64 m_queryRevision = 0u;
-    u64 m_queryExternalRevision = 0u;
-    u64 m_compositionGeneration = 0u;
-    u64 m_selectionGeneration = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_separator_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-class UiSeparatorTests : public WidgetFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiSearchComboBehaviorTests = ::__hidden_ui_search_combo_behavior_tests::UiSearchComboBehaviorTests;
-using UiSearchComboBehaviorSource = ::__hidden_ui_search_combo_behavior_tests::SearchSource;
-namespace UiSearchComboBehaviorMutation = ::__hidden_ui_search_combo_behavior_tests::Mutation;
-using UiSearchComboBehaviorMutationEnum = ::__hidden_ui_search_combo_behavior_tests::Mutation::Enum;
-using UiSearchComboBuilderTests = ::__hidden_ui_search_combo_builder_tests::UiSearchComboBuilderTests;
-using UiSearchSelectionEpochTests = ::NWB::__hidden_ui_search_selection_epoch_tests::UiSearchSelectionEpochTests;
-namespace UiSearchSelectionMutation = ::NWB::__hidden_ui_search_selection_epoch_tests::SelectionMutation;
-using UiSearchSelectionMutationEnum = ::NWB::__hidden_ui_search_selection_epoch_tests::SelectionMutation::Enum;
-using UiSeparatorTests = ::__hidden_ui_separator_tests::UiSeparatorTests;
-using SearchComboState = ::NWB::Impl::Ui::SearchComboState;
-using SearchComboOptions = ::NWB::Impl::Ui::SearchComboOptions;
-using ComboResult = ::NWB::Impl::Ui::ComboResult;
-using ControlToken = ::NWB::Impl::Ui::ControlToken;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using SeparatorOptions = ::NWB::Impl::Ui::SeparatorOptions;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-namespace UiSearchComboKey = ::NWB::Core::Key;
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboReconcileCombo(::NWB::Impl::Ui::ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ReconcileComboState(state, source);
+    public in IListDataSource filtered()const override{ return this.m_view; }
+    public void armFilter(in UiSearchSelectionMutation mutation){ this.m_probe.arm(mutation); }
+    public u64 filterMutationCalls()const{ return this.m_probe.calls(); }
+    public mut SelectionView view(){ return this.m_view; }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboFilterState(::NWB::Impl::Ui::SearchComboState& state, ::NWB::Impl::Ui::ISearchableListDataSource& source){
-    return ::NWB::Impl::Ui::FilterSearchCombo(state, source);
+
+class UiSearchSelectionEpochTests : SearchFixture{
+    public SelectionSource m_epochSource;
+    public Rect m_displayedEditor;
+    public WidgetId m_displayedFocus;
+    public u64 m_queryRevision = 0u;
+    public u64 m_queryExternalRevision = 0u;
+    public u64 m_compositionGeneration = 0u;
+    public u64 m_selectionGeneration = 0u;
+
+    public UiSearchSelectionEpochTests(){ this.m_epochSource = SelectionSource(this.m_searchSource, this.m_search.query()); }
+    public b8 declareEpochSearch(in u64 generation){
+        return DeclareUiSearchSelectionEpoch(this, generation);
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboReconcilePreview(::NWB::Impl::Ui::SearchComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ReconcileListState(state.combo().listState(), source);
-}
 
-FOUNDATION_INLINE void UiSearchComboSelectPreview(::NWB::Impl::Ui::SearchComboState& state, const u64 keyValue)noexcept{
-    state.combo().listState().select(keyValue);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboScrollPreview(::NWB::Impl::Ui::SearchComboState& state, const f64 offset)noexcept{
-    return state.combo().listState().scrollTo(offset);
-}
-
-[[nodiscard]] FOUNDATION_INLINE SearchComboOptions UiSearchComboFixtureOptions()noexcept{
-    return ::NWB::UiSearchComboTests::SearchFixture::Options();
-}
-
-b8 DeclareUiSearchSelectionEpoch(UiSearchSelectionEpochTests& self, u64 generation)noexcept;
-};
-
-NWB_BEGIN
-namespace __hidden_ui_search_selection_epoch_tests{
-FOUNDATION_INLINE b8 UiSearchSelectionEpochTests::declareEpochSearch(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::DeclareUiSearchSelectionEpoch(*this, generation);
-}
-};
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
+b8 UiSearchComboReconcilePreview(mut SearchComboState state, in IListDataSource source){ return ReconcileListState(state.combo().listState(), source); }
+void UiSearchComboSelectPreview(mut SearchComboState state, in u64 key){ state.combo().listState().select(key); }
+b8 UiSearchComboScrollPreview(mut SearchComboState state, in f64 offset){ return state.combo().listState().scrollTo(offset); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -597,7 +317,7 @@ b8 DeclareUiSearchSelectionEpoch(mut UiSearchSelectionEpochTests self, in u64 ge
     bounds.height = 280.0f;
     if(!self.begin(generation) || !self.m_builder.beginPanel("panel", bounds))
         return false;
-    self.m_searchResult = self.m_builder.searchComboBox("combo", self.m_epochSource, self.m_search, UiSearchComboFixtureOptions());
+    self.m_searchResult = self.m_builder.searchComboBox("combo", self.m_epochSource, self.m_search, MakeSearchComboFixtureOptions());
     return self.m_searchResult.combo.valid;
 }
 
@@ -652,7 +372,7 @@ void ExpectUiSearchSelectionEpochPreservedState(mut UiSearchSelectionEpochTests 
     ExpectUiRect(actualEditor, self.m_displayedEditor);
 }
 
-void VerifyUiSearchSelectionEpochFilterRejection(mut UiSearchSelectionEpochTests self, in UiSearchSelectionMutationEnum mutation){
+void VerifyUiSearchSelectionEpochFilterRejection(mut UiSearchSelectionEpochTests self, in UiSearchSelectionMutation mutation){
     ASSERT_TRUE(AcceptUiSearchSelectionEpochInitial(self));
     const u64 loans = self.m_host.loans;
     const u64 rowCalls = self.m_epochSource.view().textCalls();
@@ -666,7 +386,7 @@ void VerifyUiSearchSelectionEpochFilterRejection(mut UiSearchSelectionEpochTests
     ExpectUiSearchSelectionEpochPreservedState(self, false);
 }
 
-void VerifyUiSearchSelectionEpochDeferredPaintRejection(mut UiSearchSelectionEpochTests self, in UiSearchSelectionMutationEnum mutation){
+void VerifyUiSearchSelectionEpochDeferredPaintRejection(mut UiSearchSelectionEpochTests self, in UiSearchSelectionMutation mutation){
     ASSERT_TRUE(AcceptUiSearchSelectionEpochInitial(self));
     ASSERT_TRUE(self.declareEpochSearch(2u));
     const u64 rowCalls = self.m_epochSource.view().textCalls();
@@ -683,14 +403,14 @@ void VerifyUiSearchSelectionEpochDeferredPaintRejection(mut UiSearchSelectionEpo
 
 void VerifyUiSearchComboBehaviorTests_QueryChangeRetiresPreviewAndScrollWithoutChangingCommittedSelection(mut UiSearchComboBehaviorTests self){
     self.m_state.combo().select(5u);
-    ASSERT_TRUE(UiSearchComboReconcileCombo(self.m_state.combo(), self.m_source));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(ReconcileComboState(self.m_state.combo(), self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     ASSERT_TRUE(UiSearchComboReconcilePreview(self.m_state, self.m_source.filtered()));
     UiSearchComboSelectPreview(self.m_state, 10u);
     ASSERT_TRUE(UiSearchComboScrollPreview(self.m_state, 96.0));
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     ASSERT_TRUE(self.m_state.query().setText("tail"));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.combo().selectedKey(), 5u);
     EXPECT_NE(self.m_state.combo().listState().inputGeneration(), previewGeneration);
     EXPECT_DOUBLE_EQ(self.m_state.combo().listState().scrollOffset(), 0.0);
@@ -703,10 +423,10 @@ void VerifyUiSearchComboBehaviorTests_QueryChangeRetiresPreviewAndScrollWithoutC
 
 void VerifyUiSearchComboBehaviorTests_NoResultsPreserveTheFullSourceSelectionAndOpenPopup(mut UiSearchComboBehaviorTests self){
     self.m_state.combo().select(5u);
-    ASSERT_TRUE(UiSearchComboReconcileCombo(self.m_state.combo(), self.m_source));
+    ASSERT_TRUE(ReconcileComboState(self.m_state.combo(), self.m_source));
     self.m_state.combo().open();
     ASSERT_TRUE(self.m_state.query().setText("none"));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     ASSERT_TRUE(UiSearchComboReconcilePreview(self.m_state, self.m_source.filtered()));
     EXPECT_EQ(self.m_state.combo().selectedKey(), 5u);
     EXPECT_TRUE(self.m_state.combo().isOpen());
@@ -715,12 +435,12 @@ void VerifyUiSearchComboBehaviorTests_NoResultsPreserveTheFullSourceSelectionAnd
 }
 
 void VerifyUiSearchComboBehaviorTests_FullSourceRevisionChangeRebuildsAndRetiresPreviewWithSameQuery(mut UiSearchComboBehaviorTests self){
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     UiSearchComboSelectPreview(self.m_state, 8u);
     ASSERT_TRUE(UiSearchComboScrollPreview(self.m_state, 96.0));
     const u64 inputGeneration = self.m_state.combo().listState().inputGeneration();
     ++self.m_source.revisionValue;
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 2u);
     EXPECT_EQ(self.m_source.rebuilds, 2u);
     EXPECT_NE(self.m_state.combo().listState().inputGeneration(), inputGeneration);
@@ -729,21 +449,21 @@ void VerifyUiSearchComboBehaviorTests_FullSourceRevisionChangeRebuildsAndRetires
 }
 
 void VerifyUiSearchComboBehaviorTests_FullDatasetShrinkRebuildsAStaleLargerView(mut UiSearchComboBehaviorTests self){
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     ASSERT_EQ(self.m_source.view.count, 100000u);
     self.m_source.count = 10u;
     ++self.m_source.revisionValue;
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.view.count, 10u);
     EXPECT_EQ(self.m_source.filterCalls, 2u);
 }
 
 void VerifyUiSearchComboBehaviorTests_FullSourceReplacementRebuildsWithoutHoldingAnySourcePointer(mut UiSearchComboBehaviorTests self){
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
-    UiSearchComboBehaviorSource replacement = UiSearchComboBehaviorSource(self.m_arena, self.m_state);
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
+    UiSearchComboBehaviorSource replacement = UiSearchComboBehaviorSource(self.m_state);
     replacement.generation = 72u;
     replacement.count = 12u;
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, replacement));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, replacement));
     EXPECT_EQ(replacement.filterCalls, 1u);
     EXPECT_EQ(replacement.view.count, 12u);
     EXPECT_EQ(self.m_source.filterCalls, 1u);
@@ -751,10 +471,10 @@ void VerifyUiSearchComboBehaviorTests_FullSourceReplacementRebuildsWithoutHoldin
 
 void VerifyUiSearchComboBehaviorTests_SameTextApplicationAssignmentFencesPreviewWithoutRebuildingSource(mut UiSearchComboBehaviorTests self){
     ASSERT_TRUE(self.m_state.query().setText("tail"));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     ASSERT_TRUE(self.m_state.query().setText("tail"));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_NE(self.m_state.combo().listState().inputGeneration(), previewGeneration);
     EXPECT_EQ(self.m_source.filterCalls, 1u);
     EXPECT_EQ(self.m_source.rebuilds, 1u);
@@ -762,28 +482,28 @@ void VerifyUiSearchComboBehaviorTests_SameTextApplicationAssignmentFencesPreview
 
 void VerifyUiSearchComboBehaviorTests_SelectionAndPreeditUpdatesDoNotFilterOrResetPreview(mut UiSearchComboBehaviorTests self){
     ASSERT_TRUE(self.m_state.query().setText("all"));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     ASSERT_TRUE(self.m_state.query().selectAll());
     ASSERT_TRUE(self.m_state.query().beginComposition());
     ASSERT_TRUE(self.m_state.query().updateComposition("tail", 0u, 4u));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.queryView(), "all");
     EXPECT_EQ(self.m_state.combo().listState().inputGeneration(), previewGeneration);
     EXPECT_EQ(self.m_source.filterCalls, 1u);
     self.m_state.query().cancelComposition();
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 1u);
 }
 
 void VerifyUiSearchComboBehaviorTests_OnlyCommittedImeTextChangesTheFilteredQuery(mut UiSearchComboBehaviorTests self){
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     ASSERT_TRUE(self.m_state.query().beginComposition());
     ASSERT_TRUE(self.m_state.query().updateComposition("tail", 0u, 4u));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 1u);
     ASSERT_TRUE(self.m_state.query().commitComposition("tail"));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 2u);
     EXPECT_EQ(self.m_source.queryView(), "tail");
     EXPECT_EQ(self.m_source.view.count, 3u);
@@ -791,51 +511,51 @@ void VerifyUiSearchComboBehaviorTests_OnlyCommittedImeTextChangesTheFilteredQuer
 
 void VerifyUiSearchComboBehaviorTests_IndependentViewInvalidationReassertsTheCachedQuery(mut UiSearchComboBehaviorTests self){
     ASSERT_TRUE(self.m_state.query().setText("tail"));
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     ++self.m_source.view.revisionValue;
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 2u);
     EXPECT_EQ(self.m_source.rebuilds, 1u);
     EXPECT_NE(self.m_state.combo().listState().inputGeneration(), previewGeneration);
 }
 
 void VerifyUiSearchComboBehaviorTests_FailedFilterDoesNotPublishCacheOrResetPreviewAndCanRetry(mut UiSearchComboBehaviorTests self){
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     UiSearchComboSelectPreview(self.m_state, 8u);
     ASSERT_TRUE(UiSearchComboScrollPreview(self.m_state, 96.0));
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     ASSERT_TRUE(self.m_state.query().setText("tail"));
     self.m_source.failFilter = true;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.combo().listState().inputGeneration(), previewGeneration);
     EXPECT_EQ(self.m_state.combo().listState().cursorKey(), 8u);
     EXPECT_DOUBLE_EQ(self.m_state.combo().listState().scrollOffset(), 96.0);
     self.m_source.failFilter = false;
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 3u);
     EXPECT_EQ(self.m_source.view.count, 3u);
 }
 
 void VerifyUiSearchComboBehaviorTests_InvalidFullIdentityRejectsWithoutCallingFilter(mut UiSearchComboBehaviorTests self){
     self.m_source.generation = 0u;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     self.m_source.generation = 71u;
     self.m_source.revisionValue = 0u;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 0u);
 }
 
 void VerifyUiSearchComboBehaviorTests_FilterMayNotChangeFullGenerationRevisionOrCount(mut UiSearchComboBehaviorTests self){
     for(u32 change = 0u; change < 3u; ++change){
-        SearchComboState state = SearchComboState(self.m_arena);
-        UiSearchComboBehaviorSource source = UiSearchComboBehaviorSource(self.m_arena, state);
+        SearchComboState state = SearchComboState();
+        UiSearchComboBehaviorSource source = UiSearchComboBehaviorSource(state);
         state.combo().select(5u);
         const u64 previewGeneration = state.combo().listState().inputGeneration();
         source.changeFullGeneration = change == 0u;
         source.changeFullRevision = change == 1u;
         source.changeFullCount = change == 2u;
-        EXPECT_FALSE(UiSearchComboFilterState(state, source));
+        EXPECT_FALSE(FilterSearchCombo(state, source));
         EXPECT_EQ(state.combo().selectedKey(), 5u);
         EXPECT_EQ(state.combo().listState().inputGeneration(), previewGeneration);
     }
@@ -844,28 +564,28 @@ void VerifyUiSearchComboBehaviorTests_FilterMayNotChangeFullGenerationRevisionOr
 void VerifyUiSearchComboBehaviorTests_ResultingViewMustHaveValidIdentityAndBeBoundedByTheFullDataset(mut UiSearchComboBehaviorTests self){
     self.m_source.invalidViewIdentity = true;
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.combo().listState().inputGeneration(), previewGeneration);
     self.m_source.invalidViewIdentity = false;
     self.m_source.view.revisionValue = 1u;
     self.m_source.oversizedView = true;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.combo().listState().inputGeneration(), previewGeneration);
 }
 
 void VerifyUiSearchComboBehaviorTests_ReentrantQueryAssignmentPreservesTheCallbackQueryAndExistingPreview(mut UiSearchComboBehaviorTests self){
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     UiSearchComboSelectPreview(self.m_state, 8u);
     ASSERT_TRUE(UiSearchComboScrollPreview(self.m_state, 96.0));
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     ASSERT_TRUE(self.m_state.query().setText("tail"));
     self.m_source.onFilter = UiSearchComboBehaviorMutation::Query;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.query().text(), s_UiSearchComboCallbackQuery);
     EXPECT_EQ(self.m_state.combo().listState().inputGeneration(), previewGeneration);
     EXPECT_EQ(self.m_state.combo().listState().cursorKey(), 8u);
     EXPECT_DOUBLE_EQ(self.m_state.combo().listState().scrollOffset(), 96.0);
-    ASSERT_TRUE(UiSearchComboFilterState(self.m_state, self.m_source));
+    ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.queryView(), s_UiSearchComboCallbackQuery);
 }
 
@@ -874,20 +594,20 @@ void VerifyUiSearchComboBehaviorTests_SameQueryCallbackAssignmentStillInvalidate
     const u64 externalRevision = self.m_state.query().externalRevision();
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     self.m_source.onFilter = UiSearchComboBehaviorMutation::SameQuery;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_GT(self.m_state.query().externalRevision(), externalRevision);
     EXPECT_EQ(self.m_state.query().text(), "tail");
     EXPECT_EQ(self.m_state.combo().listState().inputGeneration(), previewGeneration);
 }
 
 void VerifyUiSearchComboBehaviorTests_CompositionCallbacksInvalidateTheLoanWithoutChangingCommittedQuery(mut UiSearchComboBehaviorTests self){
-    Array<UiSearchComboBehaviorMutationEnum, 3u> mutations;
+    Array<UiSearchComboBehaviorMutation, 3u> mutations;
     mutations[0u] = UiSearchComboBehaviorMutation::CompositionBegin;
     mutations[1u] = UiSearchComboBehaviorMutation::CompositionUpdate;
     mutations[2u] = UiSearchComboBehaviorMutation::CompositionCancel;
-    for(in UiSearchComboBehaviorMutationEnum mutation : mutations){
-        SearchComboState state = SearchComboState(self.m_arena);
-        UiSearchComboBehaviorSource source = UiSearchComboBehaviorSource(self.m_arena, state);
+    for(in UiSearchComboBehaviorMutation mutation : mutations){
+        SearchComboState state = SearchComboState();
+        UiSearchComboBehaviorSource source = UiSearchComboBehaviorSource(state);
         ASSERT_TRUE(state.query().setText("tail"));
         if(mutation != UiSearchComboBehaviorMutation::CompositionBegin)
             ASSERT_TRUE(state.query().beginComposition());
@@ -896,7 +616,7 @@ void VerifyUiSearchComboBehaviorTests_CompositionCallbacksInvalidateTheLoanWitho
         const u64 compositionGeneration = state.query().compositionGeneration();
         const u64 previewGeneration = state.combo().listState().inputGeneration();
         source.onFilter = mutation;
-        EXPECT_FALSE(UiSearchComboFilterState(state, source));
+        EXPECT_FALSE(FilterSearchCombo(state, source));
         EXPECT_EQ(state.query().text(), "tail");
         EXPECT_EQ(state.query().revision(), revision);
         EXPECT_EQ(state.query().externalRevision(), externalRevision);
@@ -912,7 +632,7 @@ void VerifyUiSearchComboBehaviorTests_ReentrantQuerySelectionRejectsTheLoanAndKe
     const u64 externalRevision = self.m_state.query().externalRevision();
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     self.m_source.onFilter = UiSearchComboBehaviorMutation::QuerySelection;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.query().text(), "tail");
     EXPECT_EQ(self.m_state.query().revision(), revision);
     EXPECT_EQ(self.m_state.query().externalRevision(), externalRevision);
@@ -926,7 +646,7 @@ void VerifyUiSearchComboBehaviorTests_CompositionBeginCancelCycleCannotRestoreAn
     const u64 compositionGeneration = self.m_state.query().compositionGeneration();
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     self.m_source.onFilter = UiSearchComboBehaviorMutation::CompositionCycle;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_FALSE(self.m_state.query().composition().active);
     EXPECT_EQ(self.m_state.query().text(), "tail");
     EXPECT_NE(self.m_state.query().compositionGeneration(), compositionGeneration);
@@ -934,18 +654,18 @@ void VerifyUiSearchComboBehaviorTests_CompositionBeginCancelCycleCannotRestoreAn
 }
 
 void VerifyUiSearchComboBehaviorTests_ReentrantComboSelectionAndPopupChangesRemainAuthoritative(mut UiSearchComboBehaviorTests self){
-    Array<UiSearchComboBehaviorMutationEnum, 3u> mutations;
+    Array<UiSearchComboBehaviorMutation, 3u> mutations;
     mutations[0u] = UiSearchComboBehaviorMutation::Selection;
     mutations[1u] = UiSearchComboBehaviorMutation::Open;
     mutations[2u] = UiSearchComboBehaviorMutation::Close;
-    for(in UiSearchComboBehaviorMutationEnum mutation : mutations){
-        SearchComboState state = SearchComboState(self.m_arena);
-        UiSearchComboBehaviorSource source = UiSearchComboBehaviorSource(self.m_arena, state);
+    for(in UiSearchComboBehaviorMutation mutation : mutations){
+        SearchComboState state = SearchComboState();
+        UiSearchComboBehaviorSource source = UiSearchComboBehaviorSource(state);
         state.combo().select(5u);
         state.combo().open();
         const u64 inputGeneration = state.combo().inputGeneration();
         source.onFilter = mutation;
-        EXPECT_FALSE(UiSearchComboFilterState(state, source));
+        EXPECT_FALSE(FilterSearchCombo(state, source));
         EXPECT_NE(state.combo().inputGeneration(), inputGeneration);
         u64 expectedSelected = 5u;
         if(mutation == UiSearchComboBehaviorMutation::Selection)
@@ -957,18 +677,18 @@ void VerifyUiSearchComboBehaviorTests_ReentrantComboSelectionAndPopupChangesRema
 
 void VerifyUiSearchComboBehaviorTests_ReentrantPreviewScrollCannotBeOverwrittenByFilterReset(mut UiSearchComboBehaviorTests self){
     self.m_source.onFilter = UiSearchComboBehaviorMutation::PreviewScroll;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_DOUBLE_EQ(self.m_state.combo().listState().scrollOffset(), 64.0);
 }
 
 void VerifyUiSearchComboBehaviorTests_FullAndViewMetadataCallbacksAreIncludedInTheQueryFence(mut UiSearchComboBehaviorTests self){
-    self.m_source.changeQueryOnGeneration = true;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    self.m_source.changeQueryOnGeneration.value() = true;
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.query().text(), s_UiSearchComboCallbackQuery);
     EXPECT_EQ(self.m_source.filterCalls, 0u);
     ASSERT_TRUE(self.m_state.query().setText("tail"));
-    self.m_source.view.changeQueryOnCount = true;
-    EXPECT_FALSE(UiSearchComboFilterState(self.m_state, self.m_source));
+    self.m_source.view.changeQueryOnCount.value() = true;
+    EXPECT_FALSE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_state.query().text(), s_UiSearchComboCallbackQuery);
     EXPECT_EQ(self.m_source.filterCalls, 0u);
 }
@@ -982,7 +702,7 @@ void VerifyUiSearchComboBuilderTests_ClosedFieldUsesFullSelectionWithoutBorrowin
     ASSERT_TRUE(self.m_search.query().setText(s_UiSearchComboSecondHalfQuery));
     ASSERT_TRUE(self.acceptSearch(1u));
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
-    EXPECT_EQ(self.m_searchSource.full.textCalls, 1u);
+    EXPECT_EQ(self.m_searchSource.full.textCalls.value(), 1u);
     EXPECT_EQ(self.m_host.loans, 0u);
     EXPECT_EQ(self.m_host.publications, 0u);
     EXPECT_FALSE(self.hasTarget(self.query()));
@@ -993,13 +713,13 @@ void VerifyUiSearchComboBuilderTests_TabMovesFromQueryToResultsThenExitsWithoutC
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.acceptSearch(3u));
     ASSERT_EQ(self.m_search.combo().listState().cursorKey(), 2u);
     ASSERT_EQ(self.m_context.input().focus(), self.query());
-    self.press(UiSearchComboKey::Tab);
+    self.press(Key::Tab);
     EXPECT_EQ(self.m_context.input().focus(), self.list());
-    self.press(UiSearchComboKey::Tab);
+    self.press(Key::Tab);
     ASSERT_TRUE(self.acceptSearch(4u));
     EXPECT_TRUE(self.m_searchResult.combo.closed);
     EXPECT_FALSE(self.m_searchResult.combo.committed);
@@ -1016,11 +736,11 @@ void VerifyUiSearchComboBuilderTests_ReverseTabFromQueryCancelsPreeditAndKeepsTh
     ASSERT_TRUE(self.m_search.query().updateComposition(s_UiSearchComboPreeditText, 0u, 7u));
     ASSERT_TRUE(self.m_search.query().composition().active);
     InputEvent reverseDown = InputEvent();
-    reverseDown.key = UiSearchComboKey::Tab;
+    reverseDown.key = Key::Tab;
     reverseDown.type = InputEventType::KeyDown;
     reverseDown.shift = true;
     InputEvent reverseUp = InputEvent();
-    reverseUp.key = UiSearchComboKey::Tab;
+    reverseUp.key = Key::Tab;
     reverseUp.type = InputEventType::KeyUp;
     reverseUp.shift = true;
     EXPECT_TRUE(self.send(reverseDown).commandConsumed);
@@ -1038,8 +758,8 @@ void VerifyUiSearchComboBuilderTests_ClosedArrowOpensUsingTheFilteredLifetimeAnd
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.m_search.query().setText(s_UiSearchComboSecondHalfQuery));
     ASSERT_TRUE(self.acceptSearch(1u));
-    self.press(UiSearchComboKey::Tab);
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Tab);
+    self.press(Key::Down);
     ASSERT_TRUE(self.acceptSearch(2u));
     EXPECT_TRUE(self.m_searchResult.combo.opened);
     EXPECT_FALSE(self.m_searchResult.combo.committed);
@@ -1052,15 +772,15 @@ void VerifyUiSearchComboBuilderTests_EnterIntentionRequiresTheNativeEditHostSubm
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.acceptSearch(3u));
-    self.press(UiSearchComboKey::Enter);
+    self.press(Key::Enter);
     ASSERT_TRUE(self.acceptSearch(4u));
     EXPECT_FALSE(self.m_searchResult.combo.committed);
     EXPECT_TRUE(self.m_search.combo().isOpen());
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
     self.m_host.submitted = true;
-    self.press(UiSearchComboKey::Enter);
+    self.press(Key::Enter);
     ASSERT_TRUE(self.acceptSearch(5u));
     EXPECT_TRUE(self.m_searchResult.combo.committed);
     EXPECT_TRUE(self.m_searchResult.combo.selectionChanged);
@@ -1073,9 +793,9 @@ void VerifyUiSearchComboBuilderTests_DownEnterDownCommitsAtTheAcceptedEnterPosit
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    self.press(UiSearchComboKey::Down);
-    self.press(UiSearchComboKey::Enter);
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
+    self.press(Key::Enter);
+    self.press(Key::Down);
     self.m_host.submitted = true;
     ASSERT_TRUE(self.acceptSearch(3u));
     EXPECT_TRUE(self.m_searchResult.combo.committed);
@@ -1088,8 +808,8 @@ void VerifyUiSearchComboBuilderTests_EnterThenDownCannotMoveTheSelectionPastTheS
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    self.press(UiSearchComboKey::Enter);
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Enter);
+    self.press(Key::Down);
     self.m_host.submitted = true;
     ASSERT_TRUE(self.acceptSearch(3u));
     EXPECT_TRUE(self.m_searchResult.combo.committed);
@@ -1105,7 +825,7 @@ void VerifyUiSearchComboBuilderTests_ChangedQueryFiltersRowsAndDiscardsNavigatio
     const auto previousList = self.tryTarget(self.list());
     ASSERT_TRUE(previousList.has_value());
     const ControlToken previous = previousList.value().control;
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
     self.m_host.text(s_UiSearchComboSecondHalfQuery);
     ASSERT_TRUE(self.acceptSearch(3u));
     EXPECT_TRUE(self.m_searchResult.queryChanged);
@@ -1119,10 +839,10 @@ void VerifyUiSearchComboBuilderTests_ChangedQueryFiltersRowsAndDiscardsNavigatio
     EXPECT_TRUE(self.hasTarget(self.row(2u)));
     EXPECT_FALSE(self.m_searchResult.combo.committed);
     EXPECT_EQ(self.m_context.input().focus(), self.query());
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.acceptSearch(4u));
     EXPECT_EQ(self.m_search.combo().listState().cursorKey(), 2u);
-    self.press(UiSearchComboKey::Enter);
+    self.press(Key::Enter);
     self.m_host.submitted = true;
     ASSERT_TRUE(self.acceptSearch(5u));
     EXPECT_TRUE(self.m_searchResult.combo.committed);
@@ -1136,7 +856,7 @@ void VerifyUiSearchComboBuilderTests_EmptyFilteredViewCannotCommitAndDoesNotClea
     ASSERT_TRUE(self.openSearch(2u));
     EXPECT_EQ(self.m_search.combo().listState().cursorKey(), 0u);
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
-    self.press(UiSearchComboKey::Enter);
+    self.press(Key::Enter);
     self.m_host.submitted = true;
     ASSERT_TRUE(self.acceptSearch(3u));
     EXPECT_FALSE(self.m_searchResult.combo.committed);
@@ -1148,8 +868,8 @@ void VerifyUiSearchComboBuilderTests_PreeditDisablesDelegationAndCannotCommitQue
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    self.press(UiSearchComboKey::Down);
-    self.press(UiSearchComboKey::Enter);
+    self.press(Key::Down);
+    self.press(Key::Enter);
     self.m_host.preedit = true;
     self.m_host.submitted = true;
     ASSERT_TRUE(self.acceptSearch(3u));
@@ -1163,8 +883,8 @@ void VerifyUiSearchComboBuilderTests_PreeditDisablesDelegationAndCannotCommitQue
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(self.m_search.combo().listState().cursorKey(), 1u);
     EXPECT_EQ(self.m_context.input().focus(), self.query());
-    self.press(UiSearchComboKey::Down);
-    self.press(UiSearchComboKey::Enter);
+    self.press(Key::Down);
+    self.press(Key::Enter);
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
 }
 
@@ -1186,7 +906,7 @@ void VerifyUiSearchComboBuilderTests_HostCancellationClosesThePopupWithoutSelect
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.acceptSearch(3u));
     self.m_host.cancelled = true;
     ASSERT_TRUE(self.acceptSearch(4u));
@@ -1317,7 +1037,7 @@ void VerifyUiSearchComboBuilderTests_FullSourceReconcileQueryMutationRejectsBefo
     EXPECT_EQ(self.m_search.query().text(), s_UiSearchComboEmptyResultQuery);
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(self.m_searchSource.filterCalls, 0u);
-    EXPECT_EQ(self.m_searchSource.full.textCalls, 0u);
+    EXPECT_EQ(self.m_searchSource.full.textCalls.value(), 0u);
     EXPECT_EQ(self.m_host.loans, 0u);
     EXPECT_FALSE(self.m_context.commitFrame(1u));
 }
@@ -1340,7 +1060,7 @@ void VerifyUiSearchComboBuilderTests_FilteredViewReplacementRejectsEvenWithCopie
     self.m_search.combo().open();
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.declareSearch(2u));
-    self.m_searchSource.alternate = self.m_searchSource.view;
+    self.m_searchSource.alternate.copyMetadataFrom(self.m_searchSource.view);
     self.m_searchSource.alternateView = true;
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
@@ -1353,7 +1073,7 @@ void VerifyUiSearchComboBuilderTests_OmissionRetiresTheQueryAndCannotReopenItsOl
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.begin(3u));
     ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 280.0f)));
     ASSERT_TRUE(self.m_builder.label("label", "Search hidden"));
@@ -1373,7 +1093,7 @@ void VerifyUiSearchComboBuilderTests_PlainToSearchSwitchRetiresTheOldPopupAndReo
     self.m_search.combo().open();
     ASSERT_TRUE(self.begin(1u));
     ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 280.0f)));
-    ASSERT_TRUE(self.m_builder.comboBox(s_UiSearchComboKey, self.m_searchSource, self.m_search.combo(), UiSearchComboFixtureOptions().combo).valid);
+    ASSERT_TRUE(self.m_builder.comboBox(s_UiSearchComboKey, self.m_searchSource, self.m_search.combo(), MakeSearchComboFixtureOptions().combo).valid);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     ASSERT_TRUE(self.hasTarget(self.list()));
@@ -1384,7 +1104,7 @@ void VerifyUiSearchComboBuilderTests_PlainToSearchSwitchRetiresTheOldPopupAndReo
     const PopupToken oldPopup = oldPopupTarget.value().popup;
     const u64 oldDeclaration = oldComboTarget.value().declarationGeneration;
     EXPECT_EQ(self.m_context.input().focus(), self.list());
-    self.press(UiSearchComboKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.acceptSearch(2u));
     EXPECT_TRUE(self.m_searchResult.combo.closed);
     EXPECT_FALSE(self.m_searchResult.combo.committed);
@@ -1412,12 +1132,12 @@ void VerifyUiSearchComboBuilderTests_SearchToPlainSwitchRetiresTheEditorAndCanno
     const auto oldPopupTarget = self.tryTarget(self.popup());
     ASSERT_TRUE(oldPopupTarget.has_value());
     const PopupToken oldPopup = oldPopupTarget.value().popup;
-    self.press(UiSearchComboKey::Down);
-    self.press(UiSearchComboKey::Enter);
+    self.press(Key::Down);
+    self.press(Key::Enter);
     ASSERT_FALSE(self.m_context.input().controlActions().empty());
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 280.0f)));
-    const ComboResult switched = self.m_builder.comboBox(s_UiSearchComboKey, self.m_searchSource, self.m_search.combo(), UiSearchComboFixtureOptions().combo);
+    const ComboResult switched = self.m_builder.comboBox(s_UiSearchComboKey, self.m_searchSource, self.m_search.combo(), MakeSearchComboFixtureOptions().combo);
     EXPECT_TRUE(switched.valid);
     EXPECT_TRUE(switched.closed);
     EXPECT_FALSE(switched.committed);
@@ -1434,7 +1154,7 @@ void VerifyUiSearchComboBuilderTests_SearchToPlainSwitchRetiresTheEditorAndCanno
     self.click(CenterUiRect(comboRect));
     ASSERT_TRUE(self.begin(3u));
     ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 280.0f)));
-    const ComboResult reopened = self.m_builder.comboBox(s_UiSearchComboKey, self.m_searchSource, self.m_search.combo(), UiSearchComboFixtureOptions().combo);
+    const ComboResult reopened = self.m_builder.comboBox(s_UiSearchComboKey, self.m_searchSource, self.m_search.combo(), MakeSearchComboFixtureOptions().combo);
     EXPECT_TRUE(reopened.valid);
     EXPECT_TRUE(reopened.opened);
     EXPECT_FALSE(reopened.committed);

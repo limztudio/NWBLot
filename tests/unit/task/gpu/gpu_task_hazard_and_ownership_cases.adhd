@@ -3,130 +3,64 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/memory.adhd>
 #include <tests/unit/task/gpu/suite.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[ordered]
+class GpuHazardImportIndexRig{
+    public HeapStorage storage;
+    public HeapStorageVector<GpuGraphResourceNode> resources;
+    public GpuGraphResourceImportIndex index;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GpuHazardImportPublication = Core::GpuGraphResourceImportIndex::Publication;
-using GpuHazardResourcePointerKey = Core::GpuTaskGraphDetail::ResourcePointerKey;
-
-struct GpuHazardImportIndexRig{
-    Core::Alloc::GlobalArena arena{ s_TaskGraphImportPartialPublication };
-    Vector<Core::GpuTaskGraphDetail::GpuGraphResourceNode, Core::Alloc::GlobalArena> resources{ arena };
-    Core::GpuGraphResourceImportIndex index{ arena };
-};
-
-struct GpuHazardOwnerImportContext{
-    Core::Alloc::GlobalArena inputArena{ s_GpuCaseGraphImportIndexInputs };
-    Core::Alloc::GlobalArena graphArena{ s_GpuCaseGraphImportIndexGraph };
-    Core::GpuTaskGraph graph{ graphArena };
-    Vector<Core::GpuGraphResourceDesc, Core::Alloc::GlobalArena> genericDescriptions{ inputArena };
-    Vector<Core::GpuGraphResourceSetDesc, Core::Alloc::GlobalArena> setDescriptions{ inputArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena> resources{ inputArena };
-    Vector<Core::GpuGraphResourceSetId, Core::Alloc::GlobalArena> sets{ inputArena };
-
-
-public:
-    [[nodiscard]] Span<const Core::GpuGraphResourceId> singleResourceSpan(const usize index)const noexcept{
-        return Span<const Core::GpuGraphResourceId>(&resources[index], 1u);
+    public GpuHazardImportIndexRig(){
+        this.storage = HeapStorage(s_TaskGraphImportPartialPublication);
+        this.resources = HeapStorageVector<GpuGraphResourceNode>(this.storage);
+        this.index = GpuGraphResourceImportIndex(this.storage);
     }
-};
-
-[[nodiscard]] FOUNDATION_INLINE GpuHazardResourcePointerKey MakeNonNullBufferPointerKey()noexcept{
-    return GpuHazardResourcePointerKey{ reinterpret_cast<const void*>(1u), Core::GpuGraphResourceType::Buffer };
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphDetail::ResourceImportMatch FindNullIdentityResourceImportMatch(
-    const GpuHazardImportIndexRig& rig,
-    const GpuHazardResourcePointerKey& pointer
-)noexcept{
-    return rig.index.findResourceImportMatch(rig.resources, nullptr, pointer);
+[ordered]
+class GpuHazardOwnerImportContext{
+    public HeapStorage inputStorage;
+    public HeapStorage graphStorage;
+    public GpuTaskGraph graph;
+    public HeapStorageVector<GpuGraphResourceDesc> genericDescriptions;
+    public HeapStorageVector<GpuGraphResourceSetDesc> setDescriptions;
+    public HeapStorageVector<GpuGraphResourceId> resources;
+    public HeapStorageVector<GpuGraphResourceSetId> sets;
+
+    public GpuHazardOwnerImportContext(){
+        this.inputStorage = HeapStorage(s_GpuCaseGraphImportIndexInputs);
+        this.graphStorage = HeapStorage(s_GpuCaseGraphImportIndexGraph);
+        this.graph = GpuTaskGraph(this.graphStorage);
+        this.genericDescriptions = HeapStorageVector<GpuGraphResourceDesc>(this.inputStorage);
+        this.setDescriptions = HeapStorageVector<GpuGraphResourceSetDesc>(this.inputStorage);
+        this.resources = HeapStorageVector<GpuGraphResourceId>(this.inputStorage);
+        this.sets = HeapStorageVector<GpuGraphResourceSetId>(this.inputStorage);
+    }
+
+    public Span<GpuGraphResourceId> singleResourceSpan(in usize index)const{
+        const Span<GpuGraphResourceId> all = Span<GpuGraphResourceId>(this.resources);
+        return all.subspan(index, 1u);
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(
-    const Core::GpuTaskResourceRange& range,
-    const Core::GpuPhysicalQueueId& sourceQueue,
-    const Core::GpuPhysicalQueueId& destinationQueue,
-    const Core::GpuExternalCompletionId& completion,
-    const Core::QueueSubmissionToken& minimumCompletionToken,
-    const Core::CommandListResourceStateHandoff& stateSource
-)noexcept{
-    return Core::GpuGraphInitialOwnerHandoffSourceDesc{
-        .range = range,
-        .sourceQueue = sourceQueue,
-        .destinationQueue = destinationQueue,
-        .completion = completion,
-        .minimumCompletionToken = minimumCompletionToken,
-        .stateSource = &stateSource,
-    };
+GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(in GpuTaskResourceRange range, in GpuPhysicalQueueId sourceQueue,
+    in GpuPhysicalQueueId destinationQueue, in GpuExternalCompletionId completion, in QueueSubmissionToken minimumCompletionToken, in borrow CommandListResourceStateHandoff stateSource){
+    GpuGraphInitialOwnerHandoffSourceDesc source;
+    source.range = range;
+    source.sourceQueue = sourceQueue;
+    source.destinationQueue = destinationQueue;
+    source.completion = completion;
+    source.minimumCompletionToken = minimumCompletionToken;
+    source.setStateSource(stateSource);
+    return source;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddNativeRecordProbeTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    u32& recordCount
-){
-    return graph.addTask<NativeRecordProbeTask>(desc, NativeRecordProbeTask::Payload{ .recordCount = &recordCount });
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    const Core::GpuQueueCapability::Mask requiredCapabilities
-){
-    return graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .requiredCapabilities = requiredCapabilities });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -455,20 +389,20 @@ void VerifyGpuHazardOwner_DuplicatePointerRollsBackOnlyNewIdentity(){
         ASSERT_TRUE(name.has_value());
         rig.resources[idx].identity = name.value();
     }
-    const GpuHazardResourcePointerKey pointer = MakeNonNullBufferPointerKey();
-    rig.index.prepareResourceIndexes(rig.resources, pointer);
+    const GpuResourcePointerKey pointer = GpuResourcePointerKeyFromObject(rig, GpuGraphResourceType::Buffer);
+    rig.index.prepareResourceIndexes(Span<GpuGraphResourceNode>(rig.resources), pointer);
     const Name first = Name(s_TaskGraphImportFirstPointer);
     const Name second = Name(s_TaskGraphImportRejectedPointer);
-    GpuHazardImportPublication accepted = GpuHazardImportPublication();
+    GpuResourceImportPublication accepted = GpuResourceImportPublication();
     ASSERT_TRUE(rig.index.publishResource(first.identityHash(), pointer, 32u, accepted));
-    GpuHazardImportPublication rejected = GpuHazardImportPublication();
+    GpuResourceImportPublication rejected = GpuResourceImportPublication();
     EXPECT_FALSE(rig.index.publishResource(second.identityHash(), pointer, 33u, rejected));
     EXPECT_TRUE(rejected.identity);
     EXPECT_FALSE(rejected.pointer);
     rig.index.rollbackResource(second.identityHash(), pointer, rejected);
-    EXPECT_EQ(rig.index.findResourceIdentity(rig.resources, second), u32.max);
-    EXPECT_EQ(rig.index.findResourceIdentity(rig.resources, first), 32u);
-    const auto match = FindNullIdentityResourceImportMatch(rig, pointer);
+    EXPECT_EQ(rig.index.findResourceIdentity(Span<GpuGraphResourceNode>(rig.resources), second), u32.max);
+    EXPECT_EQ(rig.index.findResourceIdentity(Span<GpuGraphResourceNode>(rig.resources), first), 32u);
+    const auto match = rig.index.findPointerMatch(Span<GpuGraphResourceNode>(rig.resources), pointer);
     EXPECT_TRUE(match.samePointer);
     EXPECT_EQ(match.index, 32u);
 }
@@ -622,7 +556,7 @@ Expected<GpuTaskId> GpuHazardOwner_AddFirstUse(
     mut GpuTaskGraph graph,
     in GpuGraphResourceId resource,
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in GpuTaskCommandRequirements commands
 ){
     Array<GpuTaskResourceUse, 1> uses = Array<GpuTaskResourceUse, 1>();
@@ -639,7 +573,7 @@ Expected<GpuTaskId> GpuHazardOwner_AddFirstUse(
 Expected<GpuGraphResourceId> GpuHazardOwner_AddOwnerBuffer(
     mut GpuTaskGraph graph,
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in GpuPhysicalQueueId owner,
     in ResourceQueueSharingMask queueSharing
 ){
@@ -952,7 +886,7 @@ void GpuHazardOwner_ExpectMissingTypedImport(
     mut TestArena testArena,
     in GpuPhysicalQueueTopology topology,
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in GpuGraphResourceTypeEnum resourceType,
     in ResourceStatesMask requiredState
 ){

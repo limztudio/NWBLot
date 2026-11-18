@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::InvokeOutOfLine<&::SdfTests::BoxNormal>")]
+extern VectorSingle EvaluateSingleBoxNormal(in VectorSingle position, in VectorSingle extents, in VectorSingle fallback, in f32 threshold);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::ReadFrustumCorners")]
+extern void ReadFrustumCorners(in auto frustum, mut auto output);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::ReadFrustumPlanes")]
+extern void ReadFrustumPlanes(in BoundingFrustum frustum, mut Array<f32x4, 6u> planes);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::MakeDoubleConstant")]
+extern SIMDVectorDoubleConstF MakeDoubleConstant(in f64 x, in f64 y, in f64 z, in f64 w);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::DoubleConstantComponents")]
+extern f64x4 DoubleConstantComponents(in SIMDVectorDoubleConstF constant);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::DoubleConstantVector")]
+extern VectorDouble DoubleConstantVector(in SIMDVectorDoubleConstF constant);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::InvertWithDeterminant")]
+extern MatrixDouble InvertWithDeterminant(mut VectorDouble determinant, in MatrixDouble matrix);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::DoubleMatrixRow")]
+extern mut VectorDouble DoubleMatrixRow(mut MatrixDouble matrix, in usize row);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::ConvertFloatsToHalves")]
+extern usize ConvertFloatsToHalves(mut auto packed, in auto source);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::ConvertHalvesToFloats")]
+extern usize ConvertHalvesToFloats(mut auto values, in auto packed);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::s_HasAvx2")]
+extern const b8 s_HasAvx2;
+
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("NWB_GTEST_LINUX_AVX2_CASE")]
+extern registration GoogleTestLinuxAvx2Case(suite, caseName, verifier);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::InstallFloatingTrap")]
+extern b8 InstallFloatingTrap(in auto callback);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::EnableFloatingTraps")]
+extern b8 EnableFloatingTraps();
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::RunDoubleComparison")]
+extern b8 RunDoubleComparison(in auto compare, in VectorDouble left, in VectorDouble right);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::CompareRegisters<&::VectorDouble3Equal>")]
+extern b8 CompareDouble3Floats(in VectorDouble left, in VectorDouble right);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::CompareRegisters<&::VectorDouble3EqualInt>")]
+extern b8 CompareDouble3Bits(in VectorDouble left, in VectorDouble right);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::CompareRegisters<&::VectorDouble4Equal>")]
+extern b8 CompareDouble4Floats(in VectorDouble left, in VectorDouble right);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::CompareRegisters<&::VectorDouble4EqualInt>")]
+extern b8 CompareDouble4Bits(in VectorDouble left, in VectorDouble right);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::CompareRegisters<&::Vector4Equal>")]
+extern b8 CompareSingle4Floats(in VectorSingle left, in VectorSingle right);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::CompareRegisters<&::Vector4EqualInt>")]
+extern b8 CompareSingle4Bits(in VectorSingle left, in VectorSingle right);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::InvokeOutOfLine<&::VectorDoubleMoveMask>")]
+extern u32 ExtractMask(in VectorDouble value);
+
+[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::BaselineLaneMask")]
+extern u32 BaselineLaneMask(in VectorDouble comparison);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

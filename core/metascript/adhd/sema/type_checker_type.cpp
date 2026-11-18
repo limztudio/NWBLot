@@ -122,7 +122,12 @@ b8 TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* im
         return false;
 
     const MStringView reqBaseName = m_symbols.resolveBaseTypeName(unwrappedReq->name);
+    if(cls.concreteBase && classImplementsInterface(*cls.concreteBase, nullptr, requiredIface))
+        return true;
     const ClassRoleContractInfo* assetContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset);
+    const ClassRoleContractInfo* subsystemContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Subsystem);
+    if(!cls.subsystemTypeName.empty() && subsystemContract && reqBaseName == subsystemContract->implicitInterfaceAdhdName)
+        return true;
     const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);
     if((!cls.assetTypeName.empty() || !cls.subsystemTypeName.empty()) && assetContract && reqBaseName == assetContract->implicitInterfaceAdhdName)
         return true;

@@ -2,29 +2,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/push_constants.adhd>
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "transparent_multi_scene_and_setup.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::Smoke{
-[[nodiscard]] FOUNDATION_INLINE AStringView TransparentMultiProjectName()noexcept{
+StringView TransparentMultiProjectName(){
     return "TransparentMultiSmokeProject";
 }
 
-[[nodiscard]] FOUNDATION_INLINE AStringView CausticSphereProjectName()noexcept{
+StringView CausticSphereProjectName(){
     return "CausticSphereSmokeProject";
 }
 
-[[nodiscard]] FOUNDATION_INLINE AStringView TransparentMultiFpsLabel()noexcept{
+StringView TransparentMultiFpsLabel(){
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     return "FrameLaggedAsyncLightingSmokeProject";
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
@@ -36,14 +31,7 @@ namespace NWB::Tests::Smoke{
 #endif
 }
 
-inline constexpr u32 s_CausticSphereTemporalPhaseCount = Impl::s_CausticTemporalPhaseCount;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+const u32 s_CausticSphereTemporalPhaseCount = s_CausticTemporalPhaseCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,9 +66,9 @@ class FrameLaggedAsyncLightingToggleInputHandler : IInputEventHandler{
 
 [arena]
 class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
-    public TransparentMultiSmokeProjectImpl(mut ProjectRuntimeContext context){
+    public TransparentMultiSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateTransparentMultiWorldOrDie(context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_timingRenderPass = AvboitTimingRenderPass(context.graphics);
         this.m_fpsProbe = FpsProbe(TransparentMultiFpsLabel());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(TransparentMultiFpsLabel());
@@ -91,7 +79,8 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
 
     public ~TransparentMultiSmokeProjectImpl(){
         this.m_timingRenderPass.stop();
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         if(s_TransparentMultiFrameLaggedAsyncLighting){
             this.m_context.input.removeHandler(this.m_frameLaggedAsyncLightingToggleInput);
             this.removeFrameLaggedAsyncLightingUnfocusedPass();
@@ -168,7 +157,8 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
     public void onShutdown()override{
         this.m_timingRenderPass.stop();
         this.m_context.graphics.setFrameSubmissionSuspended(false);
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         if(s_TransparentMultiFrameLaggedAsyncLighting){
             this.m_context.input.removeHandler(this.m_frameLaggedAsyncLightingToggleInput);
             this.removeFrameLaggedAsyncLightingUnfocusedPass();
@@ -227,7 +217,7 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
         );
         const f32 currentYaw = this.m_sceneYaw.yaw();
         this.m_sceneTransforms.update(currentYaw, SmokeWorldRef(this.m_world));
-        SetSmokeWindowTitleSuffix(this.m_context, FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_sceneYaw.manualControl(), s_TransparentMultiTwoPi));
+        SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_sceneYaw.manualControl(), s_TransparentMultiTwoPi));
 
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
@@ -280,10 +270,13 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NotNullUniquePtr<World> CreateTransparentMultiWorldOrDie(mut ProjectRuntimeContext context){
-    NotNullUniquePtr<World> world = CreateSmokeWorldOrDie(TransparentMultiProjectName(), context);
+Expected<NotNullUniquePtr<World>> CreateTransparentMultiWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(TransparentMultiProjectName(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
     ConfigureTransparentMultiRenderer(SmokeWorldRef(world), context);
-    return world;
+    return TakeSmokeWorld(world);
 }
 
 f32 DefaultTransparentMultiRotationSpeed(){
@@ -316,37 +309,29 @@ f32 ParseTransparentMultiFrozenAngle(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
+PlatformStringView GetProjectWindowTitle(){
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return FOUNDATION_TEXT("NWB Frame Lagged Async Lighting Smoke");
+    return PlatformTextLiteral("NWB Frame Lagged Async Lighting Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return FOUNDATION_TEXT("NWB Transparent CSG Smoke");
+    return PlatformTextLiteral("NWB Transparent CSG Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    return FOUNDATION_TEXT("NWB Caustic Sphere Smoke");
+    return PlatformTextLiteral("NWB Caustic Sphere Smoke");
 #else
-    return FOUNDATION_TEXT("NWB Transparent Multi Smoke");
+    return PlatformTextLiteral("NWB Transparent Multi Smoke");
 #endif
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::TransparentMultiSmokeProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateTransparentMultiWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<TransparentMultiSmokeProjectImpl>(owner, context);
 }
 
 

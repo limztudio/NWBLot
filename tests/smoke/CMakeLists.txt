@@ -1,3 +1,13 @@
+function(nwb_smoke_project_entry target_name entry_header entry_namespace)
+    set(configure_header "${entry_header}")
+    if(ARGC GREATER 3)
+        set(configure_header "${ARGV3}")
+    endif()
+    set(_entry_source "${CMAKE_CURRENT_BINARY_DIR}/${target_name}_project_entry.cpp")
+    configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/project_entry.cpp.in" "${_entry_source}" @ONLY)
+    target_sources(${target_name} PRIVATE "${_entry_source}")
+endfunction()
+
 find_package(Python3 COMPONENTS Interpreter)
 
 if(TARGET nwb_logserver AND Python3_Interpreter_FOUND)
@@ -111,6 +121,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     nwb_target_adhd_sources(nwb_smoke_runtime_helpers NAMESPACE "NWB::Tests::Smoke" SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/bitmap_capture_writer.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/frame_graph_observation.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/gpu_probe_resources.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/smoke_project_helpers.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/smoke_scene_helpers.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/smoke_skinned_scene_helpers.adhd"
@@ -138,7 +150,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_alloc
     )
 
-    function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT)
+    function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT ENTRY_MODULE)
+        nwb_smoke_project_entry("${TARGET_NAME}" "tests/smoke/${ENTRY_MODULE}.adhd.h" "NWB::Tests::Smoke" "tests/smoke/graphics_abi.adhd.h")
         nwb_target_adhd_sources("${TARGET_NAME}" NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/graphics_abi.adhd"
         )
@@ -178,7 +191,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}")
+        nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}" transparent_multi_runtime)
 
         # F1 exercises frame-lagged lighting teardown and re-bootstrap on the shared scene.
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
@@ -187,8 +200,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
-        target_compile_definitions(nwb_frame_lagged_async_lighting_smoke PRIVATE NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE=1)
-        nwb_configure_runtime_smoke_target(nwb_frame_lagged_async_lighting_smoke "${_nwb_transparent_multi_runtime_root}")
+        nwb_target_adhd_definitions(nwb_frame_lagged_async_lighting_smoke NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE=1)
+        nwb_configure_runtime_smoke_target(nwb_frame_lagged_async_lighting_smoke "${_nwb_transparent_multi_runtime_root}" transparent_multi_runtime)
 
         file(GLOB_RECURSE _nwb_transparent_multi_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*" "${CMAKE_CURRENT_LIST_DIR}/shared_assets/*")
 
@@ -209,7 +222,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe_interop.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_avboit_depth_warp_probe_smoke "${_nwb_transparent_multi_runtime_root}")
+        nwb_configure_runtime_smoke_target(nwb_avboit_depth_warp_probe_smoke "${_nwb_transparent_multi_runtime_root}" avboit_depth_warp_probe)
         add_dependencies(nwb_avboit_depth_warp_probe_smoke nwb_transparent_multi_smoke_assets)
         if(TARGET nwb_logserver)
             add_test(NAME nwb_avboit_depth_warp_probe_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe_smoke.py" --executable "$<TARGET_FILE:nwb_avboit_depth_warp_probe_smoke>"
@@ -229,8 +242,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
-        target_compile_definitions(nwb_transparent_csg_smoke PRIVATE NWB_TRANSPARENT_MULTI_ENABLE_CSG=1)
-        nwb_configure_runtime_smoke_target(nwb_transparent_csg_smoke "${_nwb_transparent_multi_runtime_root}" nwb_ecs_csg)
+        nwb_target_adhd_definitions(nwb_transparent_csg_smoke NWB_TRANSPARENT_MULTI_ENABLE_CSG=1)
+        nwb_configure_runtime_smoke_target(nwb_transparent_csg_smoke "${_nwb_transparent_multi_runtime_root}" transparent_multi_runtime nwb_ecs_csg)
         add_dependencies(nwb_transparent_csg_smoke nwb_transparent_multi_smoke_assets)
 
         nwb_add_window_capture_smoke(nwb_transparent_multi_capture_smoke transparent_multi_capture.bmp "$<TARGET_FILE:nwb_transparent_multi_smoke>" "${_nwb_transparent_multi_runtime_root}" "NWB Transparent Multi Smoke" "--expect-transparent-multi"
@@ -268,8 +281,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.adhd"
         )
-        target_compile_definitions(nwb_caustic_sphere_smoke PRIVATE NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
-        nwb_configure_runtime_smoke_target(nwb_caustic_sphere_smoke "${_nwb_transparent_multi_runtime_root}")
+        nwb_target_adhd_definitions(nwb_caustic_sphere_smoke NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+        nwb_configure_runtime_smoke_target(nwb_caustic_sphere_smoke "${_nwb_transparent_multi_runtime_root}" transparent_multi_runtime)
         add_dependencies(nwb_caustic_sphere_smoke nwb_transparent_multi_smoke_assets)
 
         add_test(NAME nwb_caustic_optical_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--executable" "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
@@ -290,8 +303,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_project.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/csg_ray_runtime_probe.adhd"
         )
-        target_compile_definitions(nwb_csg_visible_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
-        nwb_configure_runtime_smoke_target(nwb_csg_visible_smoke "${_nwb_csg_visible_runtime_root}" nwb_ecs_csg)
+        nwb_target_adhd_definitions(nwb_csg_visible_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+        nwb_configure_runtime_smoke_target(nwb_csg_visible_smoke "${_nwb_csg_visible_runtime_root}" csg_visible_project nwb_ecs_csg)
 
         nwb_declare_gtest_executable(nwb_csg_visible_scene_tests)
         nwb_target_adhd_sources(nwb_csg_visible_scene_tests NAMESPACE "NWB::Tests::Smoke" SOURCES
@@ -347,7 +360,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_target_adhd_sources(nwb_csg_skinned_visible_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_visible_project.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_csg_skinned_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_configure_runtime_smoke_target(nwb_csg_skinned_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" csg_skinned_visible_project nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
 
         file(GLOB_RECURSE _nwb_csg_skinned_visible_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*" "${CMAKE_CURRENT_LIST_DIR}/shared_assets/*")
 
@@ -364,16 +377,16 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_target_adhd_sources(nwb_csg_skinned_sphere_visible_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_visible_project.adhd"
         )
-        target_compile_definitions(nwb_csg_skinned_sphere_visible_smoke PRIVATE NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER=1)
-        nwb_configure_runtime_smoke_target(nwb_csg_skinned_sphere_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_target_adhd_definitions(nwb_csg_skinned_sphere_visible_smoke NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER=1)
+        nwb_configure_runtime_smoke_target(nwb_csg_skinned_sphere_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" csg_skinned_visible_project nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_csg_skinned_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
         nwb_declare_executable(nwb_csg_skinned_transparent_sphere_visible_smoke)
         nwb_target_adhd_sources(nwb_csg_skinned_transparent_sphere_visible_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_visible_project.adhd"
         )
-        target_compile_definitions(nwb_csg_skinned_transparent_sphere_visible_smoke PRIVATE NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER=1 NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER=1)
-        nwb_configure_runtime_smoke_target(nwb_csg_skinned_transparent_sphere_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_target_adhd_definitions(nwb_csg_skinned_transparent_sphere_visible_smoke NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER=1 NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER=1)
+        nwb_configure_runtime_smoke_target(nwb_csg_skinned_transparent_sphere_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" csg_skinned_visible_project nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_csg_skinned_transparent_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
         unset(_nwb_csg_skinned_visible_asset_stamp)
@@ -396,7 +409,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_target_adhd_sources(nwb_skinning_culling_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/skinning_culling_benchmark_project.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_skinning_culling_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_configure_runtime_smoke_target(nwb_skinning_culling_benchmark "${_nwb_skinning_culling_runtime_root}" skinning_culling_benchmark_project nwb_ecs_model nwb_ecs_mesh_skinning)
 
         file(GLOB_RECURSE _nwb_skinning_culling_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
 
@@ -419,8 +432,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.adhd"
         )
-        target_compile_definitions(nwb_skinned_caustic_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
-        nwb_configure_runtime_smoke_target(nwb_skinned_caustic_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_target_adhd_definitions(nwb_skinned_caustic_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+        nwb_configure_runtime_smoke_target(nwb_skinned_caustic_smoke "${_nwb_skinning_culling_runtime_root}" skinned_caustic_runtime nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_skinned_caustic_smoke nwb_skinning_culling_benchmark_assets)
 
         nwb_add_window_capture_smoke(nwb_skinned_caustic_capture_late_smoke skinned_caustic_capture_late.bmp "$<TARGET_FILE:nwb_skinned_caustic_smoke>" "${_nwb_skinning_culling_runtime_root}" "NWB Skinned Caustic Smoke"
@@ -439,7 +452,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_stress_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_configure_runtime_smoke_target(nwb_stress_test_smoke "${_nwb_skinning_culling_runtime_root}" stress_test_runtime nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_stress_test_smoke nwb_skinning_culling_benchmark_assets)
 
         if(TARGET nwb_logserver)
@@ -455,8 +468,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
-        target_compile_definitions(nwb_hardware_shadow_boundary_healthy_benchmark PRIVATE NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK=1)
-        nwb_configure_runtime_smoke_target(nwb_hardware_shadow_boundary_healthy_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_target_adhd_definitions(nwb_hardware_shadow_boundary_healthy_benchmark NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK=1)
+        nwb_configure_runtime_smoke_target(nwb_hardware_shadow_boundary_healthy_benchmark "${_nwb_skinning_culling_runtime_root}" stress_test_runtime nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_hardware_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
 
         # Both M4 arms share assets while the async arm requires a dedicated Compute queue.
@@ -466,8 +479,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
-        target_compile_definitions(nwb_async_shadow_m4_sync_benchmark PRIVATE NWB_ASYNC_SHADOW_M4_BENCHMARK=1 NWB_SMOKE_DISABLE_ASYNC_COMPUTE=1)
-        nwb_configure_runtime_smoke_target(nwb_async_shadow_m4_sync_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_target_adhd_definitions(nwb_async_shadow_m4_sync_benchmark NWB_ASYNC_SHADOW_M4_BENCHMARK=1 NWB_SMOKE_DISABLE_ASYNC_COMPUTE=1)
+        nwb_configure_runtime_smoke_target(nwb_async_shadow_m4_sync_benchmark "${_nwb_skinning_culling_runtime_root}" stress_test_runtime nwb_ecs_model nwb_ecs_mesh_skinning)
         target_link_libraries(nwb_async_shadow_m4_sync_benchmark PRIVATE nwb_telemetry)
         add_dependencies(nwb_async_shadow_m4_sync_benchmark nwb_skinning_culling_benchmark_assets)
 
@@ -477,8 +490,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.adhd"
         )
-        target_compile_definitions(nwb_async_shadow_m4_async_benchmark PRIVATE NWB_ASYNC_SHADOW_M4_BENCHMARK=1)
-        nwb_configure_runtime_smoke_target(nwb_async_shadow_m4_async_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_target_adhd_definitions(nwb_async_shadow_m4_async_benchmark NWB_ASYNC_SHADOW_M4_BENCHMARK=1)
+        nwb_configure_runtime_smoke_target(nwb_async_shadow_m4_async_benchmark "${_nwb_skinning_culling_runtime_root}" stress_test_runtime nwb_ecs_model nwb_ecs_mesh_skinning)
         target_link_libraries(nwb_async_shadow_m4_async_benchmark PRIVATE nwb_telemetry)
         add_dependencies(nwb_async_shadow_m4_async_benchmark nwb_skinning_culling_benchmark_assets)
 
@@ -486,27 +499,27 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_target_adhd_sources(nwb_flicker_test_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/flicker_test_project.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_flicker_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_configure_runtime_smoke_target(nwb_flicker_test_smoke "${_nwb_skinning_culling_runtime_root}" flicker_test_project nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_flicker_test_smoke nwb_skinning_culling_benchmark_assets)
 
         nwb_declare_executable(nwb_soft_shadow_test_smoke)
         nwb_target_adhd_sources(nwb_soft_shadow_test_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_soft_shadow_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+        nwb_configure_runtime_smoke_target(nwb_soft_shadow_test_smoke "${_nwb_skinning_culling_runtime_root}" soft_shadow_test_project nwb_ecs_model nwb_ecs_mesh_skinning)
         # Cook private timing materials for NWB_SOFT_SHADOW_TEST_TIMING=1 A/B runs.
         nwb_add_fixture_smoke_assets(nwb_soft_shadow_timing_smoke_assets soft_shadow_timing "${CMAKE_BINARY_DIR}/Testing/soft_shadow_timing_smoke_runtime/$<CONFIG>" "soft shadow timing" soft_shadow_timing_assets)
         add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets nwb_soft_shadow_timing_smoke_assets)
 
         # Default GI smoke uses the open-top box while NWB_GI_SMOKE_COMPLEX_SCENE selects the skylight maze.
         nwb_declare_executable(nwb_gi_test_smoke)
-        target_compile_definitions(nwb_gi_test_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+        nwb_target_adhd_definitions(nwb_gi_test_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_target_adhd_sources(nwb_gi_test_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_scenes.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.adhd"
         )
-        nwb_configure_runtime_smoke_target(nwb_gi_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_csg)
+        nwb_configure_runtime_smoke_target(nwb_gi_test_smoke "${_nwb_skinning_culling_runtime_root}" gi_test_runtime nwb_ecs_csg)
         # Coverage, complex, and CSG GI scenes cook private GI material families.
         set(_nwb_gi_runtime_root "${CMAKE_BINARY_DIR}/Testing/gi_smoke_runtime/$<CONFIG>")
         nwb_add_fixture_smoke_assets(nwb_gi_smoke_assets gi "${_nwb_gi_runtime_root}" "GI" gi_assets)

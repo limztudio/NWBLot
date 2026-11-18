@@ -3,185 +3,11 @@
 
 
 #include <impl/assets_scene/asset.adhd>
+#include <impl/ecs_render/avboit/avboit_pass_and_geometry_reuse.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
+#include "gpu_probe_resources.adhd"
 #include "avboit_integration_and_refraction_tile_probes.adhd"
 #include "optical_bounds_runtime_probe.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::Smoke{
-inline constexpr u32 s_DepthWarpGuardWords = 4u;
-inline constexpr u32 s_DepthWarpWords = s_AvboitMaxVirtualCount + s_DepthWarpGuardWords;
-inline constexpr u32 s_DepthWarpControlWords = NWB_AVBOIT_CONTROL_WORD_COUNT + s_DepthWarpGuardWords;
-inline constexpr u32 s_DepthWarpResultWords = s_DepthWarpWords + s_DepthWarpControlWords;
-inline constexpr u32 s_DepthWarpSentinel = 0xa5f07c39u;
-
-[[nodiscard]] FOUNDATION_INLINE Impl::RendererAvboitPushConstants BuildAvboitDepthWarpPush(const AvboitDepthWarpCase& probe, const u32 ordinal, const u32 slots)noexcept{
-    Impl::RendererAvboitPushConstants push;
-    push.frame[0] = 1000u + ordinal % 997u;
-    push.frame[1] = 300u + ordinal % 251u;
-    push.frame[2] = (push.frame[0] + 2u) / 3u;
-    push.frame[3] = (push.frame[1] + 3u) / 4u;
-    push.volume[0] = probe.virtualCount;
-    push.volume[1] = probe.physicalCount;
-    push.volume[3] = (probe.virtualCount + 31u) / 32u;
-    push.heapSlots[0] = slots;
-    return push;
-}
-
-struct DepthWarpProbeBatchTask{
-    struct Payload{
-        Core::BufferHandle coverage;
-        Core::BufferHandle warp;
-        Core::BufferHandle control;
-        Core::BufferHandle slots;
-        Core::BufferHandle readback;
-        Core::ComputePipelineHandle pipeline;
-        Core::GpuDescriptorHeap& heap;
-        // The project keeps this case storage immutable until the accepted batch token completes.
-        const AvboitDepthWarpCase* cases = nullptr;
-        u32 firstCase = 0u;
-        u32 caseCount = 0u;
-        u32 slotsIndex = 0u;
-    };
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        for(u32 index = 0u; index < payload.caseCount; ++index){
-            const AvboitDepthWarpCase& probe = payload.cases[index];
-            commandList.setBufferState(payload.coverage.get(), Core::ResourceStates::CopyDest);
-            commandList.setBufferState(payload.warp.get(), Core::ResourceStates::CopyDest);
-            commandList.setBufferState(payload.control.get(), Core::ResourceStates::CopyDest);
-            commandList.commitBarriers();
-            if(!commandList.tryWriteBuffer(*payload.coverage, probe.coverage.data(), sizeof(probe.coverage))){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: coverage upload failed at case {}"), payload.firstCase + index);
-                return false;
-            }
-            commandList.clearBufferUInt(*payload.warp, s_DepthWarpSentinel);
-            commandList.clearBufferUInt(*payload.control, s_DepthWarpSentinel);
-            commandList.setBufferState(payload.coverage.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(payload.warp.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(payload.control.get(), Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
-
-            Core::ComputeState state;
-            state.setPipeline(payload.pipeline.get());
-            commandList.setComputeState(state);
-            payload.heap.bindCompute(commandList, *payload.pipeline);
-            const auto push = BuildAvboitDepthWarpPush(probe, payload.firstCase + index, payload.slotsIndex);
-            commandList.setPushConstants(&push, sizeof(push));
-            commandList.dispatch(NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X, 1u, 1u);
-
-            commandList.setBufferState(payload.warp.get(), Core::ResourceStates::CopySource);
-            commandList.setBufferState(payload.control.get(), Core::ResourceStates::CopySource);
-            commandList.commitBarriers();
-            const u64 offset = static_cast<u64>(index) * s_DepthWarpResultWords * sizeof(u32);
-            commandList.copyBuffer(*payload.readback, offset, *payload.warp, 0u, s_DepthWarpWords * sizeof(u32));
-            commandList.copyBuffer(*payload.readback, offset + s_DepthWarpWords * sizeof(u32), *payload.control, 0u, s_DepthWarpControlWords * sizeof(u32));
-            if(commandList.commandRecordingFailed()){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: command recording failed at case {}"), payload.firstCase + index);
-                return false;
-            }
-        }
-        commandList.setBufferState(payload.coverage.get(), Core::ResourceStates::CopyDest);
-        commandList.setBufferState(payload.warp.get(), Core::ResourceStates::CopyDest);
-        commandList.setBufferState(payload.control.get(), Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        return !commandList.commandRecordingFailed();
-    }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> DeclareDepthWarpBatch(void* userData, Core::GpuTaskGraph& graph){
-    const auto& payload = *MakeNotNull(static_cast<const DepthWarpProbeBatchTask::Payload*>(userData));
-    const Name probeName = Name(s_SmokeNameAvboitDepthWarpProbe);
-    const auto importBuf = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
-        Core::GpuGraphResourceDesc desc;
-        desc.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state);
-        return graph.importBuffer(buffer, desc);
-    };
-    const Array<Expected<Core::GpuGraphResourceId>, 5u> imported{
-        importBuf(payload.coverage, "Depth warp probe coverage", Core::ResourceStates::CopyDest),
-        importBuf(payload.warp, "Depth warp probe LUT", Core::ResourceStates::CopyDest),
-        importBuf(payload.control, "Depth warp probe control", Core::ResourceStates::CopyDest),
-        importBuf(payload.slots, "Depth warp probe heap slots", Core::ResourceStates::ConstantBuffer),
-        importBuf(payload.readback, "Depth warp probe readback", Core::ResourceStates::CopyDest),
-    };
-    for(u32 index = 0u; index < imported.size(); ++index){
-        if(!imported[index]){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: graph buffer import failed at index {}"), index);
-            return MakeUnexpected(Failure{});
-        }
-    }
-    // One task owns the transfer/compute transitions within its batch and restores the declared external states.
-    const Array<Core::GpuTaskResourceUse, 5u> uses{
-        Core::GpuTaskResourceUse{ .resource = *imported[0u], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
-        Core::GpuTaskResourceUse{ .resource = *imported[1u], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
-        Core::GpuTaskResourceUse{ .resource = *imported[2u], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
-        Core::GpuTaskResourceUse{ .resource = *imported[3u], .range = {}, .requiredState = Core::ResourceStates::ConstantBuffer, .access = Core::GpuTaskResourceAccess::Read },
-        Core::GpuTaskResourceUse{ .resource = *imported[4u], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-    };
-    for(u32 index = 0u; index < uses.size(); ++index){
-        if(!uses[index].resource.valid()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: graph buffer import failed at index {}"), index);
-            return MakeUnexpected(Failure{});
-        }
-    }
-    Core::GpuTaskDesc desc;
-    desc.setIdentity(probeName).setMarkerLabel("AVBOIT depth warp boundary probe").setResourceUses(uses);
-    const auto taskResult = graph.addTask<DepthWarpProbeBatchTask>(desc, DepthWarpProbeBatchTask::Payload(payload));
-    if(!taskResult || !taskResult->valid()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: graph task declaration failed at case {}"), payload.firstCase);
-        return MakeUnexpected(Failure{});
-    }
-    return *taskResult;
-}
-
-using GlobalProbeCaseVector = Vector<AvboitDepthWarpCase, Core::Alloc::GlobalArena>;
-using DescriptorHandleArray4 = Array<Core::GpuDescriptorHandle, 4u>;
-using ProbeBatchTaskPayload = DepthWarpProbeBatchTask::Payload;
-using Core::ShaderHandle;
-using Core::BindingLayoutHandle;
-using Core::ComputePipelineHandle;
-using Core::BufferHandle;
-using Core::GraphicsRuntime;
-
-class DepthWarpUnfocusedPass final : public Core::IRenderPass{
-public:
-    explicit DepthWarpUnfocusedPass(Core::GraphicsRuntime& graphics)noexcept : Core::IRenderPass(graphics){}
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::BufferHandle> CreateDepthWarpProbeBuffer(const Name name, const u32 words, const b8 readback, Core::GraphicsRuntime& graphics){
-    Core::BufferDesc desc;
-    desc.setDebugName(name)
-        .setByteSize(words * sizeof(u32))
-        .setStructStride(sizeof(u32))
-        .setCanHaveUAVs(!readback)
-        .setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None)
-        .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
-    ;
-    return graphics.createBuffer(desc);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,7 +17,7 @@ const u32 s_AvboitDepthWarpGuardWords = 4u;
 const u32 s_AvboitDepthWarpBatchSize = 64u;
 const u32 s_AvboitDepthWarpSentinel = 0xa5f07c39u;
 const u32 s_AvboitDepthWarpWarpWords = s_AvboitMaxVirtualCount + s_AvboitDepthWarpGuardWords;
-const u32 s_AvboitDepthWarpControlWords = s_AvboitControlWordCount + s_AvboitDepthWarpGuardWords;
+const u32 s_AvboitDepthWarpControlWords = s_AvboitProbeControlWordCount + s_AvboitDepthWarpGuardWords;
 const u32 s_AvboitDepthWarpResultWords = s_AvboitDepthWarpWarpWords + s_AvboitDepthWarpControlWords;
 
 
@@ -214,7 +40,7 @@ b8 VerifyDepthWarpProbeCaseWords(in AvboitDepthWarpCase probe, in u32 ordinal, i
         u32 expected = s_AvboitDepthWarpSentinel;
         if(word < probe.virtualCount)
             expected = oracle.warp[word];
-        else if(word >= s_AvboitDepthWarpWarpWords && word < s_AvboitDepthWarpWarpWords + s_AvboitControlWordCount)
+        else if(word >= s_AvboitDepthWarpWarpWords && word < s_AvboitDepthWarpWarpWords + s_AvboitProbeControlWordCount)
             expected = oracle.control[word - s_AvboitDepthWarpWarpWords];
         if(resultWords[word] != expected){
             error(
@@ -233,10 +59,139 @@ b8 VerifyDepthWarpProbeCaseWords(in AvboitDepthWarpCase probe, in u32 ordinal, i
     return true;
 }
 
+RendererAvboitPushConstants BuildAvboitDepthWarpPush(in AvboitDepthWarpCase probe, in u32 ordinal, in u32 slots){
+    RendererAvboitPushConstants push;
+    push.frame = BuildAvboitDepthWarpFrameDims(ordinal);
+    push.volume[0u] = probe.virtualCount;
+    push.volume[1u] = probe.physicalCount;
+    push.volume[3u] = (probe.virtualCount + 31u) / 32u;
+    push.heapSlots[0u] = slots;
+    return push;
+}
+
+class DepthWarpProbeBatchTask{
+    public BufferHandle coverage = BufferHandle();
+    public BufferHandle warp = BufferHandle();
+    public BufferHandle control = BufferHandle();
+    public BufferHandle slots = BufferHandle();
+    public BufferHandle readback = BufferHandle();
+    public ComputePipelineHandle pipeline = ComputePipelineHandle();
+    public mut GpuDescriptorHeap heap;
+    public Span<AvboitDepthWarpCase> cases;
+    public u32 firstCase = 0u;
+    public u32 slotsIndex = 0u;
+
+    public DepthWarpProbeBatchTask(mut GpuDescriptorHeap heap, in Span<AvboitDepthWarpCase> cases){
+        this.heap = heap;
+        this.cases = cases;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        for(u32 index = 0u; index < this.cases.size(); ++index){
+            in AvboitDepthWarpCase probe = this.cases[index];
+            commandList.setBufferState(this.coverage.deref(), ResourceStates::CopyDest);
+            commandList.setBufferState(this.warp.deref(), ResourceStates::CopyDest);
+            commandList.setBufferState(this.control.deref(), ResourceStates::CopyDest);
+            commandList.commitBarriers();
+            if(!commandList.tryWriteBuffer(this.coverage.deref(), probe.coverage)){
+                error("AvboitDepthWarpProbe: coverage upload failed at case {}", this.firstCase + index);
+                return false;
+            }
+            commandList.clearBufferUInt(this.warp.deref(), s_AvboitDepthWarpSentinel);
+            commandList.clearBufferUInt(this.control.deref(), s_AvboitDepthWarpSentinel);
+            commandList.setBufferState(this.coverage.deref(), ResourceStates::UnorderedAccess);
+            commandList.setBufferState(this.warp.deref(), ResourceStates::UnorderedAccess);
+            commandList.setBufferState(this.control.deref(), ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+
+            ComputeState state;
+            state.setPipeline(this.pipeline.deref());
+            commandList.setComputeState(state);
+            this.heap.bindCompute(commandList, this.pipeline.deref());
+            const auto push = BuildAvboitDepthWarpPush(probe, this.firstCase + index, this.slotsIndex);
+            commandList.setPushConstants(push);
+            commandList.dispatch(s_AvboitDepthWarpDispatchGroupCountX, 1u, 1u);
+
+            commandList.setBufferState(this.warp.deref(), ResourceStates::CopySource);
+            commandList.setBufferState(this.control.deref(), ResourceStates::CopySource);
+            commandList.commitBarriers();
+            const u64 offset = cast<u64>(index) * s_AvboitDepthWarpResultWords * size_of<u32>();
+            commandList.copyBuffer(this.readback.deref(), offset, this.warp.deref(), 0u, s_AvboitDepthWarpWarpWords * size_of<u32>());
+            commandList.copyBuffer(this.readback.deref(), offset + s_AvboitDepthWarpWarpWords * size_of<u32>(), this.control.deref(), 0u, s_AvboitDepthWarpControlWords * size_of<u32>());
+            if(commandList.commandRecordingFailed()){
+                error("AvboitDepthWarpProbe: command recording failed at case {}", this.firstCase + index);
+                return false;
+            }
+        }
+        commandList.setBufferState(this.coverage.deref(), ResourceStates::CopyDest);
+        commandList.setBufferState(this.warp.deref(), ResourceStates::CopyDest);
+        commandList.setBufferState(this.control.deref(), ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        return !commandList.commandRecordingFailed();
+    }
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareDepthWarpBatch(in DepthWarpProbeBatchTask payload, mut GpuTaskGraph graph){
+    const Array<BufferHandle, 5u> buffers(payload.coverage, payload.warp, payload.control, payload.slots, payload.readback);
+    const Array<StringView, 5u> labels("Depth warp probe coverage", "Depth warp probe LUT", "Depth warp probe control", "Depth warp probe heap slots", "Depth warp probe readback");
+    Array<GpuTaskResourceUse, 5u> uses;
+    for(u32 index = 0u; index < buffers.size(); ++index){
+        ResourceStates state = ResourceStates::CopyDest;
+        GpuTaskResourceAccess access = GpuTaskResourceAccess::ReadWrite;
+        if(index == 3u){
+            state = ResourceStates::ConstantBuffer;
+            access = GpuTaskResourceAccess::Read;
+        }
+        if(index == 4u)
+            access = GpuTaskResourceAccess::Write;
+        GpuGraphResourceDesc desc;
+        desc.setIdentity(buffers[index].deref().getCreationDescription().debugName).setMarkerLabel(labels[index]).setType(GpuGraphResourceType::Buffer)
+            .setInitialState(state).setExternalFinalState(state);
+        const auto imported = graph.importBuffer(buffers[index], desc);
+        if(!imported.has_value()){
+            error("AvboitDepthWarpProbe: graph buffer import failed at index {}", index);
+            return MakeUnexpected(Failure());
+        }
+        if(!imported.value().valid()){
+            error("AvboitDepthWarpProbe: invalid graph resource at index {}", index);
+            return MakeUnexpected(Failure());
+        }
+        uses[index].resource = imported.value();
+        uses[index].requiredState = state;
+        uses[index].access = access;
+    }
+    GpuTaskDesc desc;
+    desc.setIdentity(s_SmokeNameAvboitDepthWarpProbe).setMarkerLabel("AVBOIT depth warp boundary probe").setResourceUses(uses);
+    DepthWarpProbeBatchTask recorded = payload;
+    const auto task = graph.addPayloadTask(desc, recorded);
+    if(!task.has_value() || !task.value().valid()){
+        error("AvboitDepthWarpProbe: graph task declaration failed at case {}", payload.firstCase);
+        return MakeUnexpected(Failure());
+    }
+    return task;
+}
+
+class DepthWarpUnfocusedPass : IRenderPass{
+    public DepthWarpUnfocusedPass(mut GraphicsRuntime graphics){}
+    public b8 shouldRenderUnfocused()override{ return true; }
+}
+
+Expected<BufferHandle> CreateDepthWarpProbeBuffer(in Name name, in u32 words, in b8 readback, mut GraphicsRuntime graphics){
+    BufferDesc desc;
+    desc.setDebugName(name).setByteSize(words * size_of<u32>()).setStructStride(size_of<u32>()).setCanHaveUAVs(!readback).enableAutomaticStateTracking(ResourceStates::CopyDest);
+    if(readback)
+        desc.setCpuAccess(CpuAccessMode::Read);
+    return graphics.createBuffer(desc);
+}
+
 b8 InitializeDepthWarpProbeProject(
     mut ProjectRuntimeContext context,
     mut ActiveSceneSubsystems sceneSubsystems,
-    mut GlobalProbeCaseVector cases,
+    mut Vector<AvboitDepthWarpCase> cases,
     mut ShaderHandle outShader,
     mut BindingLayoutHandle outPushLayout,
     mut ComputePipelineHandle outPipeline,
@@ -245,120 +200,77 @@ b8 InitializeDepthWarpProbeProject(
     mut BufferHandle outControl,
     mut BufferHandle outSlots,
     mut BufferHandle outReadback,
-    mut DescriptorHandleArray4 outDescriptors,
+    mut Array<GpuDescriptorHandle, 4u> outDescriptors,
     mut DepthWarpUnfocusedPass unfocusedPass,
     mut b8 outUnfocusedPassRegistered
 ){
-    Vector<AvboitDepthWarpCase> builtCases;
-    BuildAvboitDepthWarpCases(builtCases);
-    if(builtCases.size() != cast<usize>(s_AvboitTotalCaseCount)){
-        error("AvboitDepthWarpProbe: case manifest count mismatch {}", builtCases.size());
+    BuildAvboitDepthWarpCases(cases);
+    if(cases.size() != cast<usize>(s_AvboitTotalCaseCount)){
+        error("AvboitDepthWarpProbe: case manifest count mismatch {}", cases.size());
         return false;
     }
-
-    b8 initialized = false;
-    native(
-        in builtCases,
-        mut context,
-        mut sceneSubsystems,
-        mut cases,
-        mut outShader,
-        mut outPushLayout,
-        mut outPipeline,
-        mut outCoverage,
-        mut outWarp,
-        mut outControl,
-        mut outSlots,
-        mut outReadback,
-        mut outDescriptors,
-        mut unfocusedPass,
-        mut initialized
-    ){
-        cases.assign(builtCases.begin(), builtCases.end());
-        auto& graphics = context.graphics;
-        auto& device = graphics.getDevice();
-        auto& heap = device.getDescriptorHeap();
-        if(!heap.isInitialized()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: bindless heap is unavailable"));
-            return false;
-        }
-        if(!sceneSubsystems.loadProjectStartScene(context.assetManager))
-            return false;
-        const auto transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
-        const auto depthWarpShaderRef = transparentSubsystem ? (*transparentSubsystem)->avboitDepthWarpCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
-        if(!depthWarpShaderRef.valid())
-            return false;
-        if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(
-            depthWarpShaderRef.name(),
-            Core::ShaderArchive::s_DefaultVariant,
-            Name(s_SmokeNameAvboitDepthWarpProbe),
-            "AvboitDepthWarpProbe",
-            graphics,
-            context.assetManager,
-            context.shaderPathResolver,
-            {},
-            outShader
-        ))
-            return false;
-        Core::BindingLayoutDesc layoutDesc(context.objectArena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
-        auto pushLayoutResult = device.createBindingLayout(layoutDesc);
-        if(!pushLayoutResult){
-            outPushLayout.reset();
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: push layout creation failed"));
-            return false;
-        }
-        outPushLayout = Move(*pushLayoutResult);
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc.setComputeShader(outShader).addBindingLayout(outPushLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto pipelineResult = device.createComputePipeline(pipelineDesc);
-        outPipeline = pipelineResult ? Move(*pipelineResult) : Core::ComputePipelineHandle{};
-        auto coverageResult = CreateDepthWarpProbeBuffer(Name(s_SmokeNameDepthWarpProbeCoverage), s_AvboitCoverageWords, false, graphics);
-        outCoverage = coverageResult ? Move(*coverageResult) : Core::BufferHandle{};
-        auto warpResult = CreateDepthWarpProbeBuffer(Name(s_SmokeNameDepthWarpProbeWarp), s_AvboitDepthWarpWarpWords, false, graphics);
-        outWarp = warpResult ? Move(*warpResult) : Core::BufferHandle{};
-        auto controlResult = CreateDepthWarpProbeBuffer(Name(s_SmokeNameDepthWarpProbeControl), s_AvboitDepthWarpControlWords, false, graphics);
-        outControl = controlResult ? Move(*controlResult) : Core::BufferHandle{};
-        auto readbackResult = CreateDepthWarpProbeBuffer(Name(s_SmokeNameDepthWarpProbeReadback), s_AvboitDepthWarpBatchSize * s_AvboitDepthWarpResultWords, true, graphics);
-        outReadback = readbackResult ? Move(*readbackResult) : Core::BufferHandle{};
-        if(!pipelineResult || !coverageResult || !warpResult || !controlResult || !readbackResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: pipeline or buffer creation failed"));
-            return false;
-        }
-        const Array<Core::BufferHandle, 3u> buffers{ outCoverage, outWarp, outControl };
-        for(u32 index = 0u; index < buffers.size(); ++index){
-            const Expected<Core::GpuDescriptorHandle> descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-            if(descriptor)
-                outDescriptors[index] = *descriptor;
-            if(!descriptor || !heap.write(outDescriptors[index], Core::DescriptorWriteItem::StructuredBufferUav(0u, buffers[index].get()))){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: storage descriptor setup failed at index {}"), index);
-                return false;
-            }
-        }
-        Impl::DeferredBindlessResourceSlots slots;
-        slots.avboitCoverage = outDescriptors[0].slot();
-        slots.avboitDepthWarp = outDescriptors[1].slot();
-        slots.avboitControl = outDescriptors[2].slot();
-        Core::GraphicsStandaloneService::BufferSetupDesc slotsDesc;
-        slotsDesc.bufferDesc.setDebugName(Name(s_SmokeNameDepthWarpProbeSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
-        slotsDesc.data = &slots;
-        slotsDesc.dataSize = sizeof(slots);
-        slotsDesc.queue = Core::CommandQueue::Graphics;
-        auto slotsResult = graphics.standaloneGraph().setupBuffer(slotsDesc);
-        outSlots = slotsResult ? Move(*slotsResult) : Core::BufferHandle{};
-        const Expected<Core::GpuDescriptorHandle> slotsDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-        if(slotsDescriptor)
-            outDescriptors[3] = *slotsDescriptor;
-        if(!slotsResult || !slotsDescriptor || !heap.write(outDescriptors[3], Core::DescriptorWriteItem::ConstantBuffer(0u, outSlots.get()))){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: slot payload setup failed"));
-            return false;
-        }
-        context.graphics.addRenderPassToBack(unfocusedPass);
-        initialized = true;
-    }
-    if(!initialized)
+    mut GraphicsRuntime graphics = context.graphics;
+    mut Device device = graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        error("AvboitDepthWarpProbe: bindless heap is unavailable");
         return false;
-
+    }
+    if(!sceneSubsystems.loadProjectStartScene(context.assetManager))
+        return false;
+    const auto transparent = sceneSubsystems.findSubsystem<TransparentSubsystem>();
+    if(!transparent.has_value() || !transparent.value().avboitDepthWarpCs.valid())
+        return false;
+    if(!Load<ComputeShader, ShaderArchivePathResolver>(transparent.value().avboitDepthWarpCs.name(), s_DefaultVariant,
+        s_SmokeNameAvboitDepthWarpProbe, "AvboitDepthWarpProbe", graphics, context.assetManager, context.shaderPathResolver, Optional<Name>(), outShader))
+        return false;
+    if(!EnsurePushConstantBindingLayout(device, size_of<RendererAvboitPushConstants>(), ShaderTypeMask::Compute, outPushLayout)){
+        error("AvboitDepthWarpProbe: push layout creation failed");
+        return false;
+    }
+    const b8 pipelineReady = CreateHeapComputePipeline(device, outShader, outPushLayout, false, outPipeline);
+    const auto coverage = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeCoverage, s_AvboitCoverageWords, false, graphics);
+    const auto warp = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeWarp, s_AvboitDepthWarpWarpWords, false, graphics);
+    const auto control = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeControl, s_AvboitDepthWarpControlWords, false, graphics);
+    const auto readback = CreateDepthWarpProbeBuffer(s_SmokeNameDepthWarpProbeReadback, s_AvboitDepthWarpBatchSize * s_AvboitDepthWarpResultWords, true, graphics);
+    if(!pipelineReady || !coverage.has_value() || !warp.has_value() || !control.has_value() || !readback.has_value()){
+        error("AvboitDepthWarpProbe: pipeline or buffer creation failed");
+        return false;
+    }
+    outCoverage = coverage.value();
+    outWarp = warp.value();
+    outControl = control.value();
+    outReadback = readback.value();
+    const Array<BufferHandle, 3u> buffers(outCoverage, outWarp, outControl);
+    for(u32 index = 0u; index < buffers.size(); ++index){
+        const auto descriptor = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        if(descriptor.has_value())
+            outDescriptors[index] = descriptor.value();
+        if(!descriptor.has_value() || !heap.write(outDescriptors[index], DescriptorWriteItemStructuredBufferUav(0u, buffers[index].deref()))){
+            error("AvboitDepthWarpProbe: storage descriptor setup failed at index {}", index);
+            return false;
+        }
+    }
+    Array<DeferredBindlessResourceSlots, 1u> slots;
+    slots[0u].avboitCoverage = outDescriptors[0u].slot();
+    slots[0u].avboitDepthWarp = outDescriptors[1u].slot();
+    slots[0u].avboitControl = outDescriptors[2u].slot();
+    StandaloneBufferSetupDesc setup;
+    setup.bufferDesc.setDebugName(s_SmokeNameDepthWarpProbeSlots).setByteSize(size_of<DeferredBindlessResourceSlots>()).setIsConstantBuffer(true)
+        .enableAutomaticStateTracking(ResourceStates::ConstantBuffer);
+    setup.queue = CommandQueue::Graphics;
+    setup.setData<DeferredBindlessResourceSlots>(Span<DeferredBindlessResourceSlots>(slots));
+    const auto slotsBuffer = graphics.standaloneGraph().setupBuffer(setup);
+    if(slotsBuffer.has_value())
+        outSlots = slotsBuffer.value();
+    const auto uniform = heap.allocate(GpuDescriptorClass::UniformBuffer);
+    if(uniform.has_value())
+        outDescriptors[3u] = uniform.value();
+    if(!slotsBuffer.has_value() || !uniform.has_value() || !heap.write(outDescriptors[3u], DescriptorWriteItemConstantBuffer(0u, outSlots.deref()))){
+        error("AvboitDepthWarpProbe: slot payload setup failed");
+        return false;
+    }
+    graphics.addRenderPassToBack(unfocusedPass);
     [essential] info(
         "AvboitDepthWarpProbe: manifest boundary={} exhaustive={} randomized={} total={} seed=0x6b47c2d1"
         , s_AvboitBoundaryCaseCount
@@ -370,72 +282,62 @@ b8 InitializeDepthWarpProbeProject(
     return true;
 }
 
-b8 CompareDepthWarpProbeBatch(mut ProjectRuntimeContext context, in BufferHandle readback, in ProbeBatchTaskPayload payload){
-    b8 passed = true;
-    native(mut context, in readback, in payload, mut passed){
-        auto& device = context.graphics.getDevice();
-        const Expected<void*> mappedResult = device.mapBuffer(*readback, Core::CpuAccessMode::Read);
-        if(!mappedResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: readback mapping failed at case {}"), payload.firstCase);
-            return false;
-        }
-        ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*readback); });
-        const auto mapped = MakeNotNull(static_cast<const u32*>(*mappedResult));
-        for(u32 index = 0u; passed && index < payload.caseCount; ++index){
-            const Span<const u32> caseWords(mapped.get() + index * s_AvboitDepthWarpResultWords, s_AvboitDepthWarpResultWords);
-            passed = VerifyDepthWarpProbeCaseWords(payload.cases[index], payload.firstCase + index, caseWords);
-        }
+b8 CompareDepthWarpProbeBatch(mut Device device, in DepthWarpProbeBatchTask payload){
+    Vector<u32> words;
+    words.resize(payload.cases.size() * s_AvboitDepthWarpResultWords);
+    if(!device.readMappedBuffer(payload.readback.deref(), words)){
+        error("AvboitDepthWarpProbe: readback map failed at case {}", payload.firstCase);
+        return false;
     }
-    return passed;
+    const Span<u32> result = Span<u32>(words);
+    for(u32 index = 0u; index < payload.cases.size(); ++index){
+        if(!VerifyDepthWarpProbeCaseWords(payload.cases[index], payload.firstCase + index,
+            result.subspan(index * s_AvboitDepthWarpResultWords, s_AvboitDepthWarpResultWords)))
+            return false;
+    }
+    return true;
 }
 
 b8 RunDepthWarpProbeProjectUpdate(
     mut ProjectRuntimeContext context,
     in ActiveSceneSubsystems sceneSubsystems,
-    in GlobalProbeCaseVector cases,
+    in Vector<AvboitDepthWarpCase> cases,
     in BufferHandle coverage,
     in BufferHandle warp,
     in BufferHandle control,
     in BufferHandle slots,
     in BufferHandle readback,
     in ComputePipelineHandle pipeline,
-    in DescriptorHandleArray4 descriptors,
+    in Array<GpuDescriptorHandle, 4u> descriptors,
     mut b8 outCompleted
 ){
-    b8 batchesOk = false;
-    native(
-        mut context,
-        in cases,
-        in coverage,
-        in warp,
-        in control,
-        in slots,
-        in readback,
-        in pipeline,
-        in descriptors,
-        mut batchesOk
-    ){
-        DepthWarpProbeBatchTask::Payload payload{ coverage, warp, control, slots, readback, pipeline, context.graphics.getDevice().getDescriptorHeap(), nullptr, 0u, 0u, descriptors[3].slot() };
-        for(u32 firstCase = 0u; firstCase < cases.size(); firstCase += s_AvboitDepthWarpBatchSize){
-            payload.cases = cases.data() + firstCase;
-            payload.firstCase = firstCase;
-            payload.caseCount = Min(s_AvboitDepthWarpBatchSize, static_cast<u32>(cases.size()) - firstCase);
-            const auto token = context.graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareDepthWarpBatch);
-            if(!token){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: batch submission failed at case {}"), firstCase);
-                return false;
-            }
-            if(!context.graphics.getDevice().waitForSubmissionToken(*token)){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: batch completion wait failed at case {}"), firstCase);
-                return false;
-            }
-            if(!CompareDepthWarpProbeBatch(context, readback, payload))
-                return false;
+    mut GraphicsRuntime graphics = context.graphics;
+    mut Device device = graphics.getDevice();
+    const Span<AvboitDepthWarpCase> allCases = Span<AvboitDepthWarpCase>(cases);
+    for(u32 firstCase = 0u; firstCase < cases.size(); firstCase += s_AvboitDepthWarpBatchSize){
+        const u32 count = Min(s_AvboitDepthWarpBatchSize, cast<u32>(cases.size()) - firstCase);
+        DepthWarpProbeBatchTask payload(device.getDescriptorHeap(), allCases.subspan(firstCase, count));
+        payload.coverage = coverage;
+        payload.warp = warp;
+        payload.control = control;
+        payload.slots = slots;
+        payload.readback = readback;
+        payload.pipeline = pipeline;
+        payload.firstCase = firstCase;
+        payload.slotsIndex = descriptors[3u].slot();
+        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(
+            lambda[in payload](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{ return DeclareDepthWarpBatch(payload, graph); }, GpuPhysicalQueueId());
+        if(!token.has_value()){
+            error("AvboitDepthWarpProbe: batch submission failed at case {}", firstCase);
+            return false;
         }
-        batchesOk = true;
+        if(!device.waitForSubmissionToken(token.value())){
+            error("AvboitDepthWarpProbe: batch completion wait failed at case {}", firstCase);
+            return false;
+        }
+        if(!CompareDepthWarpProbeBatch(device, payload))
+            return false;
     }
-    if(!batchesOk)
-        return false;
     if(!RunAvboitIntegrationProbe(sceneSubsystems, context) || !RunRefractionTileProbe(sceneSubsystems, context) || !RunOpticalBoundsProbe(sceneSubsystems, context))
         return false;
     outCompleted = true;
@@ -444,7 +346,7 @@ b8 RunDepthWarpProbeProjectUpdate(
     return true;
 }
 
-void FreeDepthWarpProbeDescriptors(mut ProjectRuntimeContext context, mut DescriptorHandleArray4 descriptors){
+void FreeDepthWarpProbeDescriptors(mut ProjectRuntimeContext context, mut Array<GpuDescriptorHandle, 4u> descriptors){
     for(usize i = 0u; i < descriptors.size(); ++i){
         if(descriptors[i].valid()){
             context.graphics.getDevice().getDescriptorHeap().free(descriptors[i]);

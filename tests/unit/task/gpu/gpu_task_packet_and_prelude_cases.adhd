@@ -9,316 +9,169 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class GpuPacketResetDiscardFailure{}
+class GpuPacketResetOriginalFailure{}
 
+class GpuPacketThrowingResetTask : NoCopy{
+    private mut u32 m_destructions;
+    private mut u32 m_discards;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/scope_exit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GpuPayloadLifetimeScope = Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope;
-
-struct GpuPacketResetDiscardFailure{};
-struct GpuPacketResetOriginalFailure{};
-
-struct GpuPacketThrowingResetTask{
-public:
-    struct Payload{
-        u32& destructionCount;
-        u32& discardCount;
-        b8 owned = true;
-
-
-    public:
-        Payload(u32& destructions, u32& discards)noexcept
-            : destructionCount(destructions)
-            , discardCount(discards)
-        {}
-        Payload(Payload&& other)noexcept
-            : destructionCount(other.destructionCount)
-            , discardCount(other.discardCount)
-            , owned(other.owned)
-        { other.owned = false; }
-        ~Payload()noexcept{
-            if(owned)
-                ++destructionCount;
-        }
-    };
-
-
-public:
-    static void Discarded(Payload& payload){
-        ++payload.discardCount;
-        throw GpuPacketResetDiscardFailure{};
+    public GpuPacketThrowingResetTask(mut u32 destructions, mut u32 discards){
+        this.m_destructions = destructions;
+        this.m_discards = discards;
     }
-};
+    public ~GpuPacketThrowingResetTask(){ ++this.m_destructions; }
 
-struct GpuPacketBorrowedPayloadLifetimeTask{
-public:
-    struct Payload{
-        b8& ownerAlive;
-        u32& destructionCount;
-        u32& discardCount;
-        u32& lateUseCount;
-        b8 throwOnDiscard = false;
-        b8 owned = true;
-
-
-    public:
-        Payload(b8& alive, u32& destructions, u32& discards, u32& lateUses, const b8 throws)noexcept
-            : ownerAlive(alive)
-            , destructionCount(destructions)
-            , discardCount(discards)
-            , lateUseCount(lateUses)
-            , throwOnDiscard(throws)
-        {}
-        Payload(Payload&& other)noexcept
-            : ownerAlive(other.ownerAlive)
-            , destructionCount(other.destructionCount)
-            , discardCount(other.discardCount)
-            , lateUseCount(other.lateUseCount)
-            , throwOnDiscard(other.throwOnDiscard)
-            , owned(other.owned)
-        { other.owned = false; }
-        ~Payload()noexcept{
-            if(!owned)
-                return;
-            if(!ownerAlive)
-                ++lateUseCount;
-            ++destructionCount;
-        }
-    };
-
-
-public:
-    static void Discarded(Payload& payload){
-        if(!payload.ownerAlive)
-            ++payload.lateUseCount;
-        ++payload.discardCount;
-        if(payload.throwOnDiscard)
-            throw GpuPacketResetDiscardFailure{};
-    }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskExternalStateSource MakeGpuPacketExternalStateSource(
-    const Core::CommandListResourceStateHandoff& stateHandoff
-)noexcept{
-    return Core::GpuTaskExternalStateSource{ .states = &stateHandoff };
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    u32& acceptedCount,
-    u32& discardedCount
-){
-    return graph.addTask<PacketLifecycleTask>(
-        desc,
-        PacketLifecycleTask::Payload{ .acceptedCount = &acceptedCount, .discardedCount = &discardedCount }
-    );
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddMalformedLifecycleTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    u32& recordCount,
-    u32& acceptedCount,
-    u32& discardedCount
-){
-    return graph.addTask<MalformedLifecycleTask>(
-        desc,
-        MalformedLifecycleTask::Payload{ .recordCount = &recordCount, .acceptedCount = &acceptedCount, .discardedCount = &discardedCount }
-    );
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddThrowingResetTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    u32& destructionCount,
-    u32& discardCount
-){
-    return graph.addTask<GpuPacketThrowingResetTask>(
-        desc,
-        GpuPacketThrowingResetTask::Payload(destructionCount, discardCount)
-    );
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddBorrowedPayloadLifetimeTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    b8& ownerAlive,
-    u32& destructionCount,
-    u32& discardCount,
-    u32& lateUseCount,
-    const b8 throwOnDiscard
-){
-    return graph.addTask<GpuPacketBorrowedPayloadLifetimeTask>(
-        desc,
-        GpuPacketBorrowedPayloadLifetimeTask::Payload(ownerAlive, destructionCount, discardCount, lateUseCount, throwOnDiscard)
-    );
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ResetThrowsDiscardFailure(Core::GpuTaskGraph& graph){
-    try{
-        graph.reset();
-        return false;
-    }
-    catch(const GpuPacketResetDiscardFailure&){
-        return true;
+    [cpp_unwind]
+    public void discarded(){
+        ++this.m_discards;
+        ThrowTestException<GpuPacketResetDiscardFailure>(GpuPacketResetDiscardFailure());
     }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 UnwindWithScopeExitResetPreservesOriginalFailure(Core::GpuTaskGraph& graph){
-    try{
-        ScopeExit resetOnUnwind([&]()noexcept{ graph.reset(); });
-        throw GpuPacketResetOriginalFailure{};
+class GpuPacketBorrowedPayloadLifetimeTask : NoCopy{
+    private mut b8 m_alive;
+    private mut u32 m_destructions;
+    private mut u32 m_discards;
+    private mut u32 m_lateUses;
+    private b8 m_throwOnDiscard;
+
+    public GpuPacketBorrowedPayloadLifetimeTask(mut b8 alive, mut u32 destructions, mut u32 discards, mut u32 lateUses, in b8 throwOnDiscard){
+        this.m_alive = alive;
+        this.m_destructions = destructions;
+        this.m_discards = discards;
+        this.m_lateUses = lateUses;
+        this.m_throwOnDiscard = throwOnDiscard;
     }
-    catch(const GpuPacketResetOriginalFailure&){
-        return true;
+
+    public ~GpuPacketBorrowedPayloadLifetimeTask(){
+        if(!this.m_alive)
+            ++this.m_lateUses;
+        ++this.m_destructions;
+    }
+
+    [cpp_unwind]
+    public void discarded(){
+        if(!this.m_alive)
+            ++this.m_lateUses;
+        ++this.m_discards;
+        if(this.m_throwOnDiscard)
+            ThrowTestException<GpuPacketResetDiscardFailure>(GpuPacketResetDiscardFailure());
     }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(
-    Core::GpuGraphSubmissionTransaction& transaction,
-    Core::GpuTaskGraph& graph,
-    Core::GpuCompiledGraph& compiledGraph,
-    b8& ownerAlive,
-    u32& destructionCount,
-    u32& discardCount,
-    u32& lateUseCount
-){
+GpuTaskExternalStateSource MakeGpuPacketExternalStateSource(in borrow CommandListResourceStateHandoff state){
+    GpuTaskExternalStateSource source;
+    source.setState(state);
+    return source;
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> AddThrowingResetTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut u32 destructions, mut u32 discards){
+    return graph.addPayloadTaskFrom<GpuPacketThrowingResetTask>(desc,
+        lambda[mut destructions, mut discards]() -> GpuPacketThrowingResetTask{ return GpuPacketThrowingResetTask(destructions, discards); });
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> AddBorrowedPayloadLifetimeTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut b8 alive, mut u32 destructions, mut u32 discards, mut u32 lateUses, in b8 throwOnDiscard){
+    return graph.addPayloadTaskFrom<GpuPacketBorrowedPayloadLifetimeTask>(desc,
+        lambda[mut alive, mut destructions, mut discards, mut lateUses, in throwOnDiscard]() -> GpuPacketBorrowedPayloadLifetimeTask{
+            return GpuPacketBorrowedPayloadLifetimeTask(alive, destructions, discards, lateUses, throwOnDiscard);
+        });
+}
+
+class GpuResetOnUnwind : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    public GpuResetOnUnwind(mut GpuTaskGraph graph){ this.m_graph = graph; }
+    public ~GpuResetOnUnwind(){ this.m_graph.reset(); }
+}
+
+[cpp_unwind]
+b8 ResetThrowsDiscardFailure(mut GpuTaskGraph graph){
+    return ThrowsException<GpuPacketResetDiscardFailure>(lambda[mut graph]() -> void{ graph.reset(); });
+}
+
+[cpp_unwind]
+b8 UnwindWithScopeExitResetPreservesOriginalFailure(mut GpuTaskGraph graph){
+    return ThrowsException<GpuPacketResetOriginalFailure>(lambda[mut graph]() -> void{
+        GpuResetOnUnwind reset(graph);
+        ThrowTestException<GpuPacketResetOriginalFailure>(GpuPacketResetOriginalFailure());
+    });
+}
+
+[cpp_unwind]
+b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(mut GpuGraphSubmissionTransaction transaction, mut GpuTaskGraph graph, mut GpuCompiledGraph compiledGraph,
+    mut b8 alive, mut u32 destructions, mut u32 discards, mut u32 lateUses){
     b8 bothAdded = false;
-    try{
-        GpuPayloadLifetimeScope payloadLifetime(transaction, graph, compiledGraph);
-        Core::GpuTaskDesc firstDesc;
-        firstDesc.setIdentity(s_GpuCaseTaskGraphRetireThrowFirst).setMarkerLabel("Retire Throw First");
-        const auto first = AddBorrowedPayloadLifetimeTask(graph, firstDesc, ownerAlive, destructionCount, discardCount, lateUseCount, true);
-        if(!first)
-            return false;
-        Core::GpuTaskDesc secondDesc;
-        secondDesc.setIdentity(s_GpuCaseTaskGraphRetireThrowSecond).setMarkerLabel("Retire Throw Second");
-        const auto second = AddBorrowedPayloadLifetimeTask(graph, secondDesc, ownerAlive, destructionCount, discardCount, lateUseCount, false);
-        bothAdded = second.has_value();
-    }
-    catch(const GpuPacketResetDiscardFailure&){
-        return bothAdded;
-    }
-    return false;
+    const b8 caught = ThrowsException<GpuPacketResetDiscardFailure>(
+        lambda[mut transaction, mut graph, mut compiledGraph, mut alive, mut destructions, mut discards, mut lateUses, mut bothAdded]() -> void{
+            GpuGraphPayloadLifetimeScope lifetime(transaction, graph, compiledGraph);
+            GpuTaskDesc firstDesc;
+            firstDesc.setIdentity(s_GpuCaseTaskGraphRetireThrowFirst).setMarkerLabel("Retire Throw First");
+            if(!AddBorrowedPayloadLifetimeTask(graph, firstDesc, alive, destructions, discards, lateUses, true).has_value())
+                return;
+            GpuTaskDesc secondDesc;
+            secondDesc.setIdentity(s_GpuCaseTaskGraphRetireThrowSecond).setMarkerLabel("Retire Throw Second");
+            bothAdded = AddBorrowedPayloadLifetimeTask(graph, secondDesc, alive, destructions, discards, lateUses, false).has_value();
+        });
+    return caught && bothAdded;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 UnwindBorrowedPayloadLifetimeCatchesOriginalFailure(
-    Core::GpuGraphSubmissionTransaction& transaction,
-    Core::GpuTaskGraph& graph,
-    Core::GpuCompiledGraph& compiledGraph,
-    b8& ownerAlive,
-    u32& destructionCount,
-    u32& discardCount,
-    u32& lateUseCount
-){
-    try{
-        GpuPayloadLifetimeScope payloadLifetime(transaction, graph, compiledGraph);
-        Core::GpuTaskDesc desc;
-        desc.setIdentity(s_GpuCaseTaskGraphRetirementUnwind).setMarkerLabel("Retirement Unwind");
-        const auto task = AddBorrowedPayloadLifetimeTask(graph, desc, ownerAlive, destructionCount, discardCount, lateUseCount, true);
-        if(!task)
-            return false;
-        throw GpuPacketResetOriginalFailure{};
-    }
-    catch(const GpuPacketResetOriginalFailure&){
-        return true;
-    }
+[cpp_unwind]
+b8 UnwindBorrowedPayloadLifetimeCatchesOriginalFailure(mut GpuGraphSubmissionTransaction transaction, mut GpuTaskGraph graph, mut GpuCompiledGraph compiledGraph,
+    mut b8 alive, mut u32 destructions, mut u32 discards, mut u32 lateUses){
+    return ThrowsException<GpuPacketResetOriginalFailure>(
+        lambda[mut transaction, mut graph, mut compiledGraph, mut alive, mut destructions, mut discards, mut lateUses]() -> void{
+            GpuGraphPayloadLifetimeScope lifetime(transaction, graph, compiledGraph);
+            GpuTaskDesc desc;
+            desc.setIdentity(s_GpuCaseTaskGraphRetirementUnwind).setMarkerLabel("Retirement Unwind");
+            if(AddBorrowedPayloadLifetimeTask(graph, desc, alive, destructions, discards, lateUses, true).has_value())
+                ThrowTestException<GpuPacketResetOriginalFailure>(GpuPacketResetOriginalFailure());
+        });
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuCopyBufferTaskDesc MakeCopyBufferDescWithToken(Core::QueueSubmissionToken& token)noexcept{
-    Core::GpuCopyBufferTaskDesc desc{};
-    desc.acceptedToken = &token;
+GpuCopyBufferTaskDesc MakeCopyBufferDescWithToken(mut QueueSubmissionToken token){
+    GpuCopyBufferTaskDesc desc;
+    desc.publishAcceptedToken(token);
     return desc;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuCopyTextureTaskDesc MakeCopyTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
-    Core::GpuCopyTextureTaskDesc desc{};
-    desc.acceptedToken = &token;
+GpuCopyTextureTaskDesc MakeCopyTextureDescWithToken(mut QueueSubmissionToken token){
+    GpuCopyTextureTaskDesc desc;
+    desc.publishAcceptedToken(token);
     return desc;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuResolveTextureTaskDesc MakeResolveTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
-    Core::GpuResolveTextureTaskDesc desc{};
-    desc.acceptedToken = &token;
+GpuResolveTextureTaskDesc MakeResolveTextureDescWithToken(mut QueueSubmissionToken token){
+    GpuResolveTextureTaskDesc desc;
+    desc.publishAcceptedToken(token);
     return desc;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuClearBufferTaskDesc MakeClearBufferDescWithToken(Core::QueueSubmissionToken& token)noexcept{
-    Core::GpuClearBufferTaskDesc desc{};
-    desc.acceptedToken = &token;
+GpuClearBufferTaskDesc MakeClearBufferDescWithToken(mut QueueSubmissionToken token){
+    GpuClearBufferTaskDesc desc;
+    desc.publishAcceptedToken(token);
     return desc;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuClearTextureTaskDesc MakeClearTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
-    Core::GpuClearTextureTaskDesc desc{};
-    desc.acceptedToken = &token;
+GpuClearTextureTaskDesc MakeClearTextureDescWithToken(mut QueueSubmissionToken token){
+    GpuClearTextureTaskDesc desc;
+    desc.publishAcceptedToken(token);
     return desc;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuClearTextureRectUIntTaskDesc MakeClearTextureRectDescWithToken(Core::QueueSubmissionToken& token)noexcept{
-    Core::GpuClearTextureRectUIntTaskDesc desc{};
-    desc.acceptedToken = &token;
+GpuClearTextureRectUIntTaskDesc MakeClearTextureRectDescWithToken(mut QueueSubmissionToken token){
+    GpuClearTextureRectUIntTaskDesc desc;
+    desc.publishAcceptedToken(token);
     return desc;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuCopyBufferTaskDesc MakeCopyBufferDescWithRegions(const Span<const Core::GpuCopyBufferTaskRegion> regions)noexcept{
-    Core::GpuCopyBufferTaskDesc desc{};
-    desc.regions = regions.data();
-    desc.regionCount = regions.size();
+GpuCopyBufferTaskDesc MakeCopyBufferDescWithRegions(in Span<GpuCopyBufferTaskRegion> regions){
+    GpuCopyBufferTaskDesc desc;
+    desc.setRegions(regions);
     return desc;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1144,7 +997,7 @@ void VerifyGpuPacket_RetiresOperationPayloadsBeforeBorrowedStateExpiresAndPreser
     u64 declarationRevision = 0u;
     usize payloadObjectSize = 0u;
     {
-        const GpuPayloadLifetimeScope payloadLifetime = GpuPayloadLifetimeScope(transaction, graph, compiledGraph);
+        const GpuGraphPayloadLifetimeScope payloadLifetime = GpuGraphPayloadLifetimeScope(transaction, graph, compiledGraph);
         GpuTaskDesc desc = GpuTaskDesc();
         desc.setIdentity(s_GpuCaseTaskGraphOperationPayload);
         desc.setMarkerLabel("Operation Payload");
@@ -1168,7 +1021,7 @@ void VerifyGpuPacket_RetiresOperationPayloadsBeforeBorrowedStateExpiresAndPreser
         EXPECT_TRUE(declarations.validTask(task));
         const GpuTaskGraphTaskView view = declarations.taskAt(task.index);
         EXPECT_EQ(view.identity, Name("tests/task_graph/operation_payload"));
-        EXPECT_EQ(view.markerLabel, AStringView("Operation Payload"));
+        EXPECT_EQ(view.markerLabel, StringView("Operation Payload"));
         EXPECT_EQ(view.payloadObjectSize, payloadObjectSize);
         EXPECT_FALSE(view.hasPayload);
     }

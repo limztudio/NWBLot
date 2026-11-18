@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include <impl/ecs_scene/module.adhd>
 #include "csg_smoke_helpers.adhd"
 #include "presentation_types.adhd"
@@ -13,74 +15,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets_model/asset.adhd.h>
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/assets_skeleton/asset.adhd.h>
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_model_renderer/model_renderer.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/assert.h>
-#include <global/simd/frame.h>
-
-namespace NWB::Tests::Smoke{
-inline constexpr AStringView s_CsgSkinnedProjectName = "CsgSkinnedVisibleSmokeProject";
-
-using CsgSkinnedMaterialRef = Core::Assets::AssetRef<Impl::Material>;
+const StringView s_CsgSkinnedProjectName = "CsgSkinnedVisibleSmokeProject";
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-inline constexpr CsgSkinnedMaterialRef s_CsgSkinnedReceiverMaterial{"project/smoke/transparent_multi/materials/shared"};
+const SmokeMaterialRef s_CsgSkinnedReceiverMaterial = "project/smoke/transparent_multi/materials/shared";
 #else
-inline constexpr CsgSkinnedMaterialRef s_CsgSkinnedReceiverMaterial{"project/smoke/csg_visible/materials/solid"};
+const SmokeMaterialRef s_CsgSkinnedReceiverMaterial = "project/smoke/csg_visible/materials/solid";
 #endif
-inline constexpr f32 s_CsgSkinnedCameraDistance = 1.75f;
-inline constexpr f32 s_CsgSkinnedCameraHeight = 0.92f;
-inline constexpr f32 s_CsgSkinnedDefaultDirectionalLightPitch = -0.62f;
-inline constexpr f32 s_CsgSkinnedDefaultDirectionalLightYaw = 0.54f;
-inline constexpr f32 s_CsgSkinnedDefaultDirectionalLightIntensity = 3.0f;
-inline constexpr f32 s_CsgSkinnedCutterAnimationSpeed = 0.18f;
-inline constexpr f32 s_CsgSkinnedReceiverYawSpeed = 0.92f;
-inline constexpr f32 s_CsgSkinnedMaxAnimationDelta = s_SmokeSpinMaxDelta;
-inline constexpr f32 s_CsgSkinnedInitialAnimationTime = s_PIDIV2 / s_CsgSkinnedReceiverYawSpeed;
+const f32 s_CsgSkinnedCameraDistance = 1.75f;
+const f32 s_CsgSkinnedCameraHeight = 0.92f;
+const f32 s_CsgSkinnedDefaultDirectionalLightPitch = -0.62f;
+const f32 s_CsgSkinnedDefaultDirectionalLightYaw = 0.54f;
+const f32 s_CsgSkinnedDefaultDirectionalLightIntensity = 3.0f;
+const f32 s_CsgSkinnedCutterAnimationSpeed = 0.18f;
+const f32 s_CsgSkinnedReceiverYawSpeed = 0.92f;
+const f32 s_CsgSkinnedMaxAnimationDelta = s_SmokeSpinMaxDelta;
+const f32 s_CsgSkinnedInitialAnimationTime = s_PIDIV2 / s_CsgSkinnedReceiverYawSpeed;
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-inline constexpr f32 s_CsgSkinnedTransparentReceiverAlpha = 0.44f;
+const f32 s_CsgSkinnedTransparentReceiverAlpha = 0.44f;
 #endif
-inline constexpr f32 s_CsgSkinnedReceiverOffsetX = 0.48f;
-inline constexpr f32 s_CsgSkinnedCutterGentleRollSpeed = 0.18f;
-inline constexpr f32 s_CsgSkinnedCutterAnchorFallbackY = 0.90f;
+const f32 s_CsgSkinnedReceiverOffsetX = 0.48f;
+const f32 s_CsgSkinnedCutterGentleRollSpeed = 0.18f;
+const f32 s_CsgSkinnedCutterAnchorFallbackY = 0.90f;
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-inline constexpr b8 s_CsgSkinnedSphereCutter = true;
-inline constexpr f32 s_CsgSkinnedSphereCutterRadius = 0.18f;
-inline constexpr f32 s_CsgSkinnedCapsuleCutterRadius = 0.0f;
-inline constexpr f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.0f;
+const b8 s_CsgSkinnedSphereCutter = true;
+const f32 s_CsgSkinnedSphereCutterRadius = 0.18f;
+const f32 s_CsgSkinnedCapsuleCutterRadius = 0.0f;
+const f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.0f;
 #else
-inline constexpr b8 s_CsgSkinnedSphereCutter = false;
-inline constexpr f32 s_CsgSkinnedSphereCutterRadius = 0.0f;
-inline constexpr f32 s_CsgSkinnedCapsuleCutterRadius = 0.105f;
-inline constexpr f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.27f;
+const b8 s_CsgSkinnedSphereCutter = false;
+const f32 s_CsgSkinnedSphereCutterRadius = 0.0f;
+const f32 s_CsgSkinnedCapsuleCutterRadius = 0.105f;
+const f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.27f;
 #endif
 
-[[nodiscard]] FOUNDATION_INLINE AStringView CsgSkinnedVisibleFpsLabel()noexcept{
+StringView CsgSkinnedVisibleFpsLabel(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
     return "CsgSkinnedTransparentSphereVisibleSmokeProject";
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
@@ -92,7 +61,7 @@ inline constexpr f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.27f;
 #endif
 }
 
-[[nodiscard]] FOUNDATION_INLINE f32 CsgSkinnedReceiverAlpha()noexcept{
+f32 CsgSkinnedReceiverAlpha(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
     return s_CsgSkinnedTransparentReceiverAlpha;
 #else
@@ -101,29 +70,21 @@ inline constexpr f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.27f;
 }
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-inline constexpr b8 s_CsgSkinnedTransparentReceiver = true;
+const b8 s_CsgSkinnedTransparentReceiver = true;
 #else
-inline constexpr b8 s_CsgSkinnedTransparentReceiver = false;
+const b8 s_CsgSkinnedTransparentReceiver = false;
 #endif
 
-[[nodiscard]] FOUNDATION_INLINE TStringView CsgSkinnedStartupSummary()noexcept{
+PlatformStringView CsgSkinnedStartupSummary(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created");
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created");
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created");
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created");
 #else
-    return FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created");
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created");
 #endif
-}
-namespace ModelObjectKind = Impl::ModelObjectKind;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -171,9 +132,9 @@ VectorSingle BuildCsgSkinnedCutterWorldRotation(in f32 animationTime, in VectorS
 
 [arena]
 class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
-    public CsgSkinnedVisibleSmokeProject(mut ProjectRuntimeContext context){
+    public CsgSkinnedVisibleSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_CsgSkinnedProjectName, SmokeRenderQualitySettings(), context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_fpsProbe = FpsProbe(CsgSkinnedVisibleFpsLabel());
     }
 
@@ -293,44 +254,37 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
     }
 
     private VectorSingle loadCutterAnchorLocalCenter()const{
-        VectorSingle result = 0.0f;
-        native(mut result){
-            const SIMDVectorSingle fallback = VectorSet(0.0f, s_CsgSkinnedCutterAnchorFallbackY, 0.0f, 0.0f);
-            result = fallback;
-            const auto modelAsset = this->m_context->assetManager.loadSync(Impl::Model::AssetTypeName(), s_CsgSkinnedModel.name());
-            if(!modelAsset){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
-            }
-            else{
-                FOUNDATION_ASSERT(*modelAsset);
-                const auto* model = Core::Assets::CastAsset<Impl::Model>(modelAsset->get());
-                if(model && !model->skeletonObjects().empty()){
-                    const auto skeletonAsset = this->m_context->assetManager.loadSync(Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name());
-                    if(!skeletonAsset){
-                        NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
-                    }
-                    else{
-                        FOUNDATION_ASSERT(*skeletonAsset);
-                        const auto* skeleton = Core::Assets::CastAsset<Impl::Skeleton>(skeletonAsset->get());
-                        if(skeleton){
-                            const u32 jointCount = skeleton->jointCount();
-                            const u32 anchorIndex = skeleton->findJointIndex(s_CsgSkinnedCutterAnchorBoneName);
-                            if(anchorIndex == Impl::s_SkeletonInvalidJointIndex || anchorIndex >= jointCount){
-                                NWB_LOGGER_ERROR(FOUNDATION_TEXT("CsgSkinnedVisibleSmokeProject: skeleton has no '{}' bone for cutter anchor"), ConvertString(s_CsgSkinnedCutterAnchorBoneName.resolvedText()));
-                            }
-                            else{
-                                SIMDMatrix boneToModel = LoadFloat(skeleton->joints()[anchorIndex].localBindPose);
-                                for(u32 parentIndex = skeleton->joints()[anchorIndex].parentIndex; parentIndex != Impl::s_SkeletonInvalidJointIndex && parentIndex < jointCount; parentIndex = skeleton->joints()[parentIndex].parentIndex)
-                                    boneToModel = MatrixMultiply(LoadFloat(skeleton->joints()[parentIndex].localBindPose), boneToModel);
-                                // Bone origin in model space is the matrix translation column.
-                                result = VectorMergeX(VectorSplatW(boneToModel.v[0]), VectorSplatW(boneToModel.v[1]), VectorSplatW(boneToModel.v[2]), VectorZero());
-                            }
-                        }
-                    }
-                }
-            }
+        const VectorSingle fallback = VectorSingle(0.0f, s_CsgSkinnedCutterAnchorFallbackY, 0.0f, 0.0f);
+        mut AssetManager assets = this.m_context.assetManager;
+        const auto loadedModel = assets.loadSync(Model::AssetTypeName(), s_CsgSkinnedModel.name());
+        if(!loadedModel.has_value()){
+            error("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor");
+            return fallback;
         }
-        return result;
+        assert(loadedModel.value().valid());
+        const Optional<in Model> model = BorrowTypedAsset<Model>(loadedModel.value().deref());
+        if(!model.has_value() || model.value().skeletonObjects().empty())
+            return fallback;
+        const auto loadedSkeleton = assets.loadSync(Skeleton::AssetTypeName(), model.value().skeletonObjects().front().skeleton.name());
+        if(!loadedSkeleton.has_value()){
+            error("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor");
+            return fallback;
+        }
+        assert(loadedSkeleton.value().valid());
+        const Optional<in Skeleton> skeleton = BorrowTypedAsset<Skeleton>(loadedSkeleton.value().deref());
+        if(!skeleton.has_value())
+            return fallback;
+        const u32 count = skeleton.value().jointCount();
+        const u32 anchor = skeleton.value().findJointIndex(s_CsgSkinnedCutterAnchorBoneName);
+        if(anchor == s_SkeletonInvalidJointIndex || anchor >= count){
+            error("CsgSkinnedVisibleSmokeProject: skeleton has no '{}' bone for cutter anchor", s_CsgSkinnedCutterAnchorBoneName.resolvedText());
+            return fallback;
+        }
+        in JointVector joints = skeleton.value().joints();
+        MatrixSingle boneToModel = MatrixSingle(joints[anchor].localBindPose);
+        for(u32 parent = joints[anchor].parentIndex; parent != s_SkeletonInvalidJointIndex && parent < count; parent = joints[parent].parentIndex)
+            boneToModel = MatrixSingle(joints[parent].localBindPose) * boneToModel;
+        return VectorSingle(boneToModel[0u].w, boneToModel[1u].w, boneToModel[2u].w, 0.0f);
     }
 
     private void createCutter(in VectorSingle cutterLocalCenter){
@@ -343,7 +297,7 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
                 s_CsgSkinnedReceiverGroup,
                 s_CsgSphereShapeName,
                 true,
-                f32x4(s_CsgSkinnedSphereCutterRadius, 0.0f, 0.0f, 0.0f),
+                VectorSingle(s_CsgSkinnedSphereCutterRadius, 0.0f, 0.0f, 0.0f),
                 worldCenter,
                 worldRotation,
                 world
@@ -354,7 +308,7 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
             s_CsgSkinnedReceiverGroup,
             s_CsgCapsuleShapeName,
             true,
-            f32x4(s_CsgSkinnedCapsuleCutterRadius, s_CsgSkinnedCapsuleCutterHalfHeight, 0.0f, 0.0f),
+            VectorSingle(s_CsgSkinnedCapsuleCutterRadius, s_CsgSkinnedCapsuleCutterHalfHeight, 0.0f, 0.0f),
             worldCenter,
             worldRotation,
             world
@@ -387,37 +341,29 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { NWB::Tests::Smoke::s_CsgSkinnedFrameClientWidth, NWB::Tests::Smoke::s_CsgSkinnedFrameClientHeight };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(s_CsgSkinnedFrameClientWidth, s_CsgSkinnedFrameClientHeight);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
+PlatformStringView GetProjectWindowTitle(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return FOUNDATION_TEXT("NWB Transparent Skinned Sphere CSG Smoke");
+    return PlatformTextLiteral("NWB Transparent Skinned Sphere CSG Smoke");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return FOUNDATION_TEXT("NWB Transparent Skinned CSG Smoke");
+    return PlatformTextLiteral("NWB Transparent Skinned CSG Smoke");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return FOUNDATION_TEXT("NWB Skinned Sphere CSG Smoke");
+    return PlatformTextLiteral("NWB Skinned Sphere CSG Smoke");
 #else
-    return FOUNDATION_TEXT("NWB Skinned CSG Smoke");
+    return PlatformTextLiteral("NWB Skinned CSG Smoke");
 #endif
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::CsgSkinnedVisibleSmokeProject>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateSmokeSkinnedRenderWorld(s_CsgSkinnedProjectName, SmokeRenderQualitySettings(), context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<CsgSkinnedVisibleSmokeProject>(owner, context);
 }
 
 

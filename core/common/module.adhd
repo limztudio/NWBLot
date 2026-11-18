@@ -18,7 +18,10 @@ extern class InitializerGuard{
 };
 
 [cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::Initializerable"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
-extern class Initializerable;
+extern class Initializerable{
+    [cpp_flags(unwind)] b8 initialize();
+    void finalize();
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

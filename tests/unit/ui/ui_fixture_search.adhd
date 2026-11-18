@@ -1,0 +1,257 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_CallbackQuery = "callback";
+const StringView s_EmptyResultQuery = "None";
+const StringView s_SecondHalfQuery = "Second";
+const StringView s_PreeditText = "preedit";
+
+class FilterView : IListDataSource{
+    public Optional<in ComboSource> full;
+    public u64 generation = 1701u;
+    public u64 contentRevision = 1u;
+    public TestObserved<Optional<mut EditModel>> textMutation;
+    public TestObserved<Optional<mut EditModel>> enabledMutation;
+    public UiFixtureSearchFilterMode mode = UiFixtureSearchFilterMode::All;
+
+    public u64 instanceGeneration()const override{ return this.generation; }
+    public u64 revision()const override{ return this.contentRevision; }
+    public u64 rowCount()const override{ return ComputeSearchFilterRowCount(this.mode, this.full.value().count); }
+    public u64 key(in u64 index)const override{ return ComputeSearchFilterRowKey(this.mode, index); }
+    public Expected<u64> indexOf(in u64 value)const override{ return FindSearchFilterRowIndex(this.mode, this.full.value().count, value); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
+        return FindSingleDisabledFixtureRowByKey(this.rowCount(), start, reverse, this.key(start), this.full.value().disabled);
+    }
+    public StringView text(in u64 index)const override{
+        if(this.textMutation.value().has_value()){
+            mut EditModel query = this.textMutation.value().value();
+            this.textMutation.value().reset();
+            EXPECT_TRUE(query.setText(s_CallbackQuery));
+        }
+        return this.full.value().text(this.key(index) - 1u);
+    }
+    public b8 enabled(in u64 index)const override{
+        if(this.enabledMutation.value().has_value()){
+            mut EditModel query = this.enabledMutation.value().value();
+            this.enabledMutation.value().reset();
+            EXPECT_TRUE(query.setText(s_EmptyResultQuery));
+        }
+        return index < this.rowCount() && this.full.value().enabled(this.key(index) - 1u);
+    }
+    public void copyMetadataFrom(in FilterView view){
+        this.generation = view.generation;
+        this.contentRevision = view.contentRevision;
+        this.mode = view.mode;
+    }
+    public void armTextMutation(mut EditModel model){ this.textMutation.value() = Optional<mut EditModel>(model); }
+    public void armEnabledMutation(mut EditModel model){ this.enabledMutation.value() = Optional<mut EditModel>(model); }
+}
+
+[ordered]
+class SearchSource : ISearchableListDataSource{
+    public ComboSource full;
+    public FilterView view;
+    public FilterView alternate;
+    public Optional<mut EditModel> filterMutation;
+    public TestObserved<Optional<mut EditModel>> fullMutation;
+    public u64 filterCalls = 0u;
+    public b8 alternateView = false;
+    public String m_query;
+
+    public SearchSource(){
+        this.view.full = Optional<in ComboSource>(this.full);
+        this.alternate.full = Optional<in ComboSource>(this.full);
+    }
+    public u64 instanceGeneration()const override{ return this.full.instanceGeneration(); }
+    public u64 revision()const override{ return this.full.revision(); }
+    public u64 rowCount()const override{ return this.full.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.full.key(index); }
+    public Expected<u64> indexOf(in u64 key)const override{ return this.full.indexOf(key); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.full.findEnabled(start, reverse); }
+    public StringView text(in u64 index)const override{ return this.full.text(index); }
+    public b8 enabled(in u64 index)const override{
+        if(this.fullMutation.value().has_value()){
+            mut EditModel query = this.fullMutation.value().value();
+            this.fullMutation.value().reset();
+            EXPECT_TRUE(query.setText(s_EmptyResultQuery));
+        }
+        return this.full.enabled(index);
+    }
+    public b8 filter(in StringView query) override{
+        ++this.filterCalls;
+        if(this.filterMutation.has_value()){
+            mut EditModel model = this.filterMutation.value();
+            this.filterMutation.reset();
+            if(!model.setText(s_CallbackQuery))
+                return false;
+        }
+        if(StringView(this.m_query) != query){
+            this.m_query.assign(query);
+            ++this.view.contentRevision;
+        }
+        this.view.mode = ResolveSearchFilterMode(query, s_SecondHalfQuery, s_EmptyResultQuery);
+        return true;
+    }
+    public in IListDataSource filtered()const override{
+        if(this.alternateView)
+            return this.alternate;
+        return this.view;
+    }
+    public void armFilterMutation(mut EditModel model){ this.filterMutation = Optional<mut EditModel>(model); }
+    public void armFullMutation(mut EditModel model){ this.fullMutation.value() = Optional<mut EditModel>(model); }
+}
+
+class SearchEditHost : IEditBoxHost{
+    public PopupToken lastPopup;
+    public PopupToken loanContextPopup;
+    public PopupToken publishContextPopup;
+    public Optional<mut EditModel> publishMutation;
+    public u64 loans = 0u;
+    public u64 contextScopedLoans = 0u;
+    public u64 publications = 0u;
+    public b8 submitted = false;
+    public b8 cancelled = false;
+    public b8 preedit = false;
+    public b8 publishedComposing = false;
+    public mut Context m_context;
+    public String m_nextText;
+    public b8 m_changeText = false;
+
+    public SearchEditHost(mut Context context){ this.m_context = context; }
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2) override{
+        ++this.contextScopedLoans;
+        return EditBoxResult();
+    }
+    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model) override{
+        return EditSearchHostInPopup(this, widget, options, popup, model);
+    }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{ return EditBoxResult(); }
+    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6) override{ return EditBoxResult(); }
+    public b8 publish(in WidgetState arg0, in EditBoxView view, in EditBoxPlacement arg2, in EditBoxOptions arg3) override{
+        ++this.publications;
+        this.publishContextPopup = this.m_context.popupToken();
+        this.publishedComposing = view.composing();
+        if(this.publishMutation.has_value()){
+            mut EditModel query = this.publishMutation.value();
+            this.publishMutation.reset();
+            return query.setText("published");
+        }
+        return true;
+    }
+    public void text(in StringView value){ SetSearchHostNextText(this, value); }
+    public void armPublishMutation(mut EditModel model){ this.publishMutation = Optional<mut EditModel>(model); }
+}
+
+[ordered, extensible]
+class SearchFixture : ComboFixture{
+    public SearchSource m_searchSource;
+    public SearchComboState m_search;
+    public SearchEditHost m_host;
+    public SearchComboResult m_searchResult;
+
+    public SearchFixture(){ this.m_host = SearchEditHost(this.m_context); }
+    public void setup(){ SetUpSearchFixture(this); }
+    public b8 declareSearch(in u64 generation){ return DeclareSearchFixture(this, generation); }
+    public b8 prepareSearch(in u64 generation){ return this.declareSearch(generation) && this.finishPanel(); }
+    public b8 acceptSearch(in u64 generation){ return this.prepareSearch(generation) && this.m_context.commitFrame(generation); }
+    public WidgetId query()const{ return this.query(s_ComboKey); }
+    public WidgetId query(in StringView key)const{ return RequireUiWidgetId(this.id(key, s_ComboPanelKey), "query"); }
+    public b8 openSearch(in u64 generation){ return OpenSearchFixture(this, generation); }
+}
+
+SearchComboOptions MakeSearchComboFixtureOptions(){
+    SearchComboOptions value = SearchComboOptions();
+    value.combo = MakeComboFixtureOptions();
+    value.combo.popupHeight = 220.0f;
+    return value;
+}
+
+u64 ComputeSearchFilterRowCount(in UiFixtureSearchFilterMode mode, in u64 fullCount){
+    if(mode == UiFixtureSearchFilterMode::Empty)
+        return 0u;
+    if(mode == UiFixtureSearchFilterMode::Second)
+        return fullCount / 2u;
+    return fullCount;
+}
+
+u64 ComputeSearchFilterRowKey(in UiFixtureSearchFilterMode mode, in u64 index){
+    if(mode == UiFixtureSearchFilterMode::Second)
+        return index * 2u + 2u;
+    return index + 1u;
+}
+
+Expected<u64> FindSearchFilterRowIndex(in UiFixtureSearchFilterMode mode, in u64 fullCount, in u64 value){
+    if(value == 0u || value > fullCount || mode == UiFixtureSearchFilterMode::Empty)
+        return MakeUnexpected(Failure());
+    if(mode == UiFixtureSearchFilterMode::Second){
+        if(value % 2u != 0u)
+            return MakeUnexpected(Failure());
+        return value / 2u - 1u;
+    }
+    return value - 1u;
+}
+
+UiFixtureSearchFilterMode ResolveSearchFilterMode(in StringView query, in StringView secondHalfQuery, in StringView emptyResultQuery){
+    if(query == secondHalfQuery)
+        return UiFixtureSearchFilterMode::Second;
+    if(query == emptyResultQuery)
+        return UiFixtureSearchFilterMode::Empty;
+    return UiFixtureSearchFilterMode::All;
+}
+
+EditBoxResult EditSearchHostInPopup(mut SearchEditHost self, in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model){
+    ++self.loans;
+    self.lastPopup = popup;
+    self.loanContextPopup = self.m_context.popupToken();
+    EditBoxResult result = EditBoxResult();
+    result.valid = true;
+    result.focused = options.enabled && (self.m_context.input().focus() == widget.id);
+    result.submitted = self.submitted;
+    result.cancelled = self.cancelled;
+    self.submitted = false;
+    self.cancelled = false;
+    if(self.m_changeText){
+        result.valid = model.setText(self.m_nextText);
+        result.textChanged = result.valid;
+        self.m_changeText = false;
+    }
+    if(self.preedit){
+        result.valid = result.valid && model.beginComposition() && model.updateComposition(s_PreeditText, 0u, 7u);
+        self.preedit = false;
+    }
+    return result;
+}
+
+void SetSearchHostNextText(mut SearchEditHost self, in StringView value){
+    self.m_nextText.assign(value);
+    self.m_changeText = true;
+}
+
+void SetUpSearchFixture(mut SearchFixture self){
+    self.setUpWidgetBase();
+    self.setEditHost(self.m_host);
+}
+
+b8 DeclareSearchFixture(mut SearchFixture self, in u64 generation){
+    if(!self.begin(generation) || !self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 280.0f)))
+        return false;
+    self.m_searchResult = self.m_builder.searchComboBox(s_ComboKey, self.m_searchSource, self.m_search, MakeSearchComboFixtureOptions());
+    return self.m_searchResult.combo.valid;
+}
+
+b8 OpenSearchFixture(mut SearchFixture self, in u64 generation){
+    const Expected<HitTarget> field = self.tryTarget(self.id(s_ComboKey, s_ComboPanelKey));
+    if(!field.has_value())
+        return false;
+    self.click(CenterUiRect(field.value().rectangle));
+    return self.acceptSearch(generation) && self.m_search.combo().isOpen();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::HeldFile")]
+extern class HeldFile{
+    b8 open()const;
+    b8 close();
+};
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::WindowsSymlink")]
+extern i32 WindowsSymlink(in Path link, in Path target, in b8 directory);
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::s_NoLinkPrivilege")]
+extern const i32 s_NoLinkPrivilege;
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::s_FileSharingViolation")]
+extern const i32 s_FileSharingViolation;
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::s_LinkLoop")]
+extern const i32 s_LinkLoop;
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::s_PathMax")]
+extern const usize s_PathMax;
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::OpenDirectoryFd")]
+extern i32 OpenDirectoryFd(in Path path);
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::MakeDirectoryAt")]
+extern i32 MakeDirectoryAt(in i32 parent, in auto child);
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::OpenChildDirectory")]
+extern i32 OpenChildDirectory(in i32 parent, in auto child);
+
+[cpp_header("<tests/common/filesystem_platform.h>"), cpp_name("::NWB::Tests::CreateChildFile")]
+extern i32 CreateChildFile(in i32 parent, in auto child);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "fixture_sources.adhd"
+#include "case_types.adhd"
+#include "cook_tool_sdk.adhd"
+#include "path_sdk.adhd"
+#include <tests/common/test_context.adhd>
+#include <pipeline/asset_builder/build.adhd>
+#include <pipeline/asset_gatherer/gather.adhd>
+#include <impl/assets_graphics/gather.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsMerge{
+    public b8 merge(in Name name, in BinaryByteView bytes, mut BinaryUpdateContext context){
+        return MergeGatheredGraphicsAsset(name, bytes, context);
+    }
+}
+
+Path GraphicsRepoPath(){
+    return RepoRootOf(s_GraphicsFixtureSource);
+}
+
+[cpp_unwind]
+b8 BuildGraphicsRoots(in Path root, in Path output, in Span<Path> assetRoots, in u32 workers){
+    CpuTaskScheduler scheduler(workers);
+    AssetBuildOptions options(scheduler);
+    const Path normal = root.lexicallyNormal();
+    const auto material = GraphicsFileExists(root / s_AssetsDirectory / s_ShadersDirectory / "material_mesh.nwb");
+    if(!material.has_value())
+        return false;
+    b8 useCaseRoot = !material.value();
+    for(in Path assetRoot : assetRoots){
+        const Path normalized = assetRoot.lexicallyNormal();
+        if(normalized != normal && !PathHasDirectoryAncestor(normalized, normal)){
+            useCaseRoot = false;
+            break;
+        }
+    }
+    if(useCaseRoot)
+        options.repoRoot = root;
+    else
+        options.repoRoot = GraphicsRepoPath();
+    options.assetRoots.reserve(assetRoots.size());
+    ScratchStorage scratch(s_BuildScratchArena);
+    for(in Path assetRoot : assetRoots){
+        const Path parent = assetRoot.lexicallyNormal().parentPath();
+        StringView virtualRoot = s_ProjectVirtualRoot;
+        if(CanonicalGraphicsNativeText(parent.filenameView(), s_EngineDirectory, scratch))
+            virtualRoot = s_EngineVirtualRoot;
+        options.assetRoots.emplace_back(assetRoot, virtualRoot);
+    }
+    options.outputDirectory = output;
+    if(!options.configuration.assign(s_TestsConfiguration) || !options.assetType.assign(s_GraphicsDirectory))
+        return false;
+    return BuildAssets(options);
+}
+
+[cpp_unwind]
+b8 CookGraphicsRoots(in Path root, in Path output, in Span<Path> assetRoots, in u32 workers){
+    const Path built = root / "built";
+    if(!BuildGraphicsRoots(root, built, assetRoots, workers))
+        return false;
+    AssetGatherOptions options;
+    options.inputs.emplace_back(PathToString(built));
+    options.outputDirectory = PathToString(output);
+    options.configuration = CompactString(s_TestsConfiguration);
+    options.mergePayloads = BindGatherMerge<GraphicsMerge>();
+    return GatherAssets(options);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

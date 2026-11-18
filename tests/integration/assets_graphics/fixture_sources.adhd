@@ -66,5 +66,47 @@ const Name s_CodecScratchArena = s_IntegrationAssetsGraphicsCodec;
 const Name s_BuildScratchArena = s_IntegrationAssetsGraphicsBuild;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+const StringView s_UnboundProbeBody = "struct NwbUnboundMaterialPixelOutput{\n    [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;\n    [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] float4 normal : SV_Target1;\n    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;\n    };\n\n    NwbUnboundMaterialPixelOutput main(){\n    NwbUnboundMaterialPixelOutput output;\n    output.baseColor = float4(1.0, 1.0, 1.0, 0.0);\n    output.normal = float4(0.5, 0.5, 1.0, 0.0);\n    output.worldPosition = float4(0.0, 0.0, 0.0, 0.0);\n    return output;\n    }\n\n    ";
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_BASE_COLOR_LOCATION")]
+extern const u32 s_ProbeBaseLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_NORMAL_LOCATION")]
+extern const u32 s_ProbeNormalLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION")]
+extern const u32 s_ProbePositionLocation;
+
+const StringView s_StandaloneShaderProbeSource = "struct NwbStandalonePixelOutput{\n    float4 color : SV_Target0;\n};\n\nNwbStandalonePixelOutput main(){\n    NwbStandalonePixelOutput output;\n    output.color = float4(1.0, 1.0, 1.0, 1.0);\n    return output;\n}\n\n";
+
+const StringView s_BomCompilerProbeIncludeSource = "\xEF\xBB\xBF\x66loat4 nwbBomCompilerProbeColor(){\n    return float4(0.1, 0.2, 0.3, 1.0);\n}\n\n";
+
+const StringView s_BomCompilerProbeSource = "\xEF\xBB\xBF#include \"bom_compiler_probe_include.slangi\"\n\nstruct NwbBomCompilerProbeOutput{\n    float4 color : SV_Target0;\n};\n\nNwbBomCompilerProbeOutput main(){\n    NwbBomCompilerProbeOutput output;\n    output.color = nwbBomCompilerProbeColor();\n    return output;\n}\n\n";
+
+const StringView s_ExactEntryPointShaderProbeSource = "struct NwbExactEntryPointPixelOutput{\n    float4 color : SV_Target0;\n};\n\nNwbExactEntryPointPixelOutput MainCase(){\n    NwbExactEntryPointPixelOutput output;\n    output.color = float4(1.0, 1.0, 1.0, 1.0);\n    return output;\n}\n\n";
+
+const StringView s_BomCleanupRegressionSource = "\xEF\xBB\xBF#error BOM_CLEANUP_REGRESSION\n";
+
+const StringView s_MaterialPixelShaderPath = "project/shaders/material_ps";
+
+const StringView s_GeneratedAvboitAccumulatePsProjectM = "generated/avboit_accumulate_ps/project/materials/test_material";
+
+const StringView s_GeneratedAvboitOccupancyPsProjectMa = "generated/avboit_occupancy_ps/project/materials/test_material";
+
+const StringView s_GeneratedAvboitExtinctionPsProjectM = "generated/avboit_extinction_ps/project/materials/test_material";
+
+const StringView s_FirstMetadataName = "tests/metadata_extension/first";
+const usize s_AvboitPixelShaderEntryBytes = size_of<u32>() + size_of<NameHash>();
+
+const StringView s_MovedSlotMetadataName = "tests/metadata_extension/moved_slot";
+
+const StringView s_ConstructorUnwindMetadataName = "tests/metadata_extension/constructor_unwind";
+
+const StringView s_CallerUnwindMetadataName = "tests/metadata_extension/caller_unwind";
+
+const StringView s_ReentrantMetadataName = "tests/metadata_extension/reentrant";
+
+const StringView s_RegistryLifetimeMetadataName = "tests/metadata_extension/registry_lifetime";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

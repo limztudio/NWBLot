@@ -1,0 +1,191 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/test_context.adhd>
+#include <tests/common/value_storage.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::MString")]
+extern class MString{
+    usize size()const;
+    b8 empty()const;
+    void append(...);
+    void assign(...);
+    void push_back(...);
+    usize find(...)const;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::MetaArena"), cpp_flags(no_copy, no_assign)]
+extern class CompilerStorage;
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::IIncludeResolver"), cpp_flags(no_copy, no_assign, polymorphic_base, abstract)]
+extern class CompilerIncludeResolver{
+    b8 resolveInclude(in StringView path, in b8 system, mut CompilerStorage storage, mut MString key, mut MString source);
+    StringView resolveIncludeNamespace(in StringView key)const;
+    void popIncludeScope();
+};
+
+type MStringView = StringView;
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::FieldDecl")]
+extern class CompilerFieldDecl{
+    StringView name;
+    usize resolvedAlign;
+    usize resolvedOffset;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::MethodDecl")]
+extern class CompilerMethodDecl{
+    StringView name;
+    HeapStorageVector<CompilerTemplateParam> templateParams;
+    HeapStorageVector<CompilerParam> params;
+    b8 isConstructor;
+    b8 hasDefaultArgs;
+    usize minArgCount;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::EnumDecl")]
+extern class CompilerEnumDecl{
+    StringView name;
+    StringView cppExportName;
+    b8 isExtern;
+    b8 isDirectCppEnum;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TypeAliasDecl")]
+extern class CompilerTypeAliasDecl{
+    StringView name;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ClassDecl")]
+extern class CompilerClassDecl{
+    StringView name;
+    StringView cppExportName;
+    b8 isExtern;
+    b8 isSerialize;
+    b8 isCopyConstructible;
+    b8 isAbstract;
+    usize totalAlign;
+    usize totalSize;
+    AstPointerList<CompilerFieldDecl> orderedFields;
+    AstPointerList<CompilerMethodDecl> methods;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ClassTemplateInstantiation")]
+extern class CompilerClassTemplateInstantiation{
+    AstPointerList<CompilerFieldDecl> orderedFields;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TranslationUnit")]
+extern class CompilerTranslationUnit{
+    AstPointerList<CompilerClassDecl> classes;
+    AstPointerList<CompilerEnumDecl> enums;
+    AstPointerList<CompilerTypeAliasDecl> typeAliases;
+    AstPointerList<CompilerClassTemplateInstantiation> templateInstantiations;
+    HeapStorageVector<MString> includedAdhdFiles;
+    HeapStorageVector<MString> resolvedIncludedFiles;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TypeArg"), cpp_flags(self_defaulted, brace_init)]
+extern class CompilerTypeArg{
+    StringView constantText;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TypeRef")]
+extern class CompilerTypeRef{
+    StringView name;
+    HeapStorageVector<CompilerTypeArg> templateArgs;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SymbolTable")]
+extern class CompilerSymbolTable;
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SourceSpan"), cpp_flags(self_defaulted, brace_init)]
+extern class CompilerSourceSpan{
+    u32 line;
+    u32 column;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ImportedCppHeader"), cpp_flags(self_defaulted, brace_init)]
+extern class CompilerImportedCppHeader{
+    StringView headerPath;
+    b8 isSystemHeader;
+    CompilerSourceSpan span;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CppHeaderImportOptions"), cpp_flags(self_defaulted, brace_init)]
+extern class CompilerCppHeaderImportOptions{
+    Span<CompilerImportedCppHeader> headers;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TemplateParamDecl")]
+extern class CompilerTemplateParam{
+    StringView name;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ParamDecl")]
+extern class CompilerParam;
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::AstPointerList")]
+extern class AstPointerList<T>{
+    usize size()const;
+    b8 empty()const;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::BorrowAstNode")]
+extern Optional<in T> BorrowAstNode<T>(in AstPointerList<T> list, in usize index);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CompileResult"), cpp_flags(no_copy, no_assign)]
+extern class CompileResult{
+    CompilerTranslationUnit unit;
+    CompilerSymbolTable symbols;
+    MString generatedHeader;
+    MString generatedSource;
+    HeapStorageVector<MetascriptParseError> errors;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::Compiler::CompileOptions")]
+extern class CompilerOptions{
+    StringView source;
+    StringView virtualFilePath;
+    StringView customNamespace;
+};
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::SetCompilerResolver")]
+extern void SetCompilerResolver(mut CompilerOptions options, mut CompilerIncludeResolver resolver);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::SetExternOutput")]
+extern void SetExternOutput(mut CompilerOptions options, mut MString output);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::Compiler::Compile")]
+extern b8 Compile(in StringView source, in StringView path, mut HeapStorage arena, mut CompileResult result);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::Compiler::Compile")]
+extern b8 CompileOptionsResult(in CompilerOptions options, mut HeapStorage arena, mut CompileResult result);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath")]
+extern MString DeriveNamespaceFromPath(in StringView path, mut HeapStorage arena);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CppHeaderImporter::ImportHeaders")]
+extern b8 ImportCompilerHeaders(in CompilerCppHeaderImportOptions options, mut HeapStorage arena, mut CompilerTranslationUnit unit, mut HeapStorageVector<MetascriptParseError> errors);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CppHeaderImporter::FormatExternAdhd")]
+extern MString FormatExternAdhd(in CompilerTranslationUnit unit, mut HeapStorage arena);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::SetConstantType")]
+extern void SetConstantType(mut CompilerTemplateParam param, mut CompilerTypeRef type);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::BorrowSubstitutedType")]
+extern Optional<in CompilerTypeRef> BorrowSubstitutedType(in CompilerSymbolTable symbols, in CompilerTypeRef original, in CompilerTemplateParam param, in CompilerTypeArg argument);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::MacroMap"), cpp_flags(no_copy, no_assign)]
+extern class CompilerMacroMap{
+    void store(mut MString key, mut MetascriptPreprocessorMacro macro);
+    Optional<mut MetascriptPreprocessorMacro> borrow(in StringView name);
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

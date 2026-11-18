@@ -3,121 +3,266 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_helpers.adhd>
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <tests/unit/metascript/generated/simd_ieee.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const Array<i32, 4u> s_MetascriptRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/floating_point_environment.h>
-#include <tests/common/floating_point_environment_guard.adhd.h>
-#include <tests/unit/metascript/generated/simd_ieee.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+T SelectIeeeOperandBits<T>(in usize sample, in T first, in T second, in T nan, in T ordinary){
+    if(sample == 0u) return first;
+    if(sample == 1u) return second;
+    if(sample == 6u || sample == 7u) return nan;
+    return ordinary;
 }
 
+[cpp_name("::Min")]
+extern T ScalarReferenceMin<T>(in T a, in T b);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_name("::Max")]
+extern T ScalarReferenceMax<T>(in T a, in T b);
 
+[cpp_name("::Abs")]
+extern T ScalarReferenceAbs<T>(in T a);
 
-[source]
-native{
+[cpp_name("::Clamp")]
+extern T ScalarReferenceClamp<T>(in T a, in T b, in T c);
 
+[cpp_name("::Saturate")]
+extern T ScalarReferenceSaturate<T>(in T a);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_name("::Sqrt")]
+extern T ScalarReferenceSqrt<T>(in T a);
 
+[cpp_header("<tests/unit/metascript/scalar_reference.h>"), cpp_name("::NWB::Tests::Metascript::ScalarMultiplyReference")]
+extern T ScalarMultiplyReference<T>(in T a, in T b);
 
-NWB_BEGIN
+[cpp_header("<tests/unit/metascript/scalar_reference.h>"), cpp_name("::NWB::Tests::Metascript::ScalarNegateReference")]
+extern T ScalarNegateReference<T>(in T a);
 
+[cpp_header("<tests/unit/metascript/scalar_reference.h>"), cpp_name("::NWB::Tests::Metascript::ScalarPostIncrementReference")]
+extern T ScalarPostIncrementReference<T>(in T a);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<tests/unit/metascript/scalar_reference.h>"), cpp_name("::NWB::Tests::Metascript::ScalarPreIncrementReference")]
+extern T ScalarPreIncrementReference<T>(in T a);
 
+[cpp_header("<tests/unit/metascript/scalar_reference.h>"), cpp_name("::NWB::Tests::Metascript::ScalarPostDecrementReference")]
+extern T ScalarPostDecrementReference<T>(in T a);
 
-namespace Tests::Metascript{
+[cpp_header("<tests/unit/metascript/scalar_reference.h>"), cpp_name("::NWB::Tests::Metascript::ScalarPreDecrementReference")]
+extern T ScalarPreDecrementReference<T>(in T a);
 
+f32 ReferenceScalar32(in f32 first, in f32 second, in f64 wider, in u32 operation){
+    switch(operation){
+    case 0u: return ScalarAddReference<f32>(first, second);
+    case 1u: return ScalarSubtractReference<f32>(first, second);
+    case 2u: return ScalarMultiplyReference<f32>(first, second);
+    case 3u: return ScalarDivideReference<f32>(first, second);
+    case 4u: return ScalarMultiplyAddReference<f32>(first, second, 1.0f);
+    case 5u: return ScalarNegateReference<f32>(first);
+    case 6u: return cast<f32>(ScalarAddReference<f64>(cast<f64>(first), wider));
+    case 7u: return cast<f32>(ScalarSubtractReference<f64>(ScalarAddReference<f64>(cast<f64>(first), wider), wider));
+    case 8u: return ScalarAddReference<f32>(first, second);
+    case 9u: return ScalarSubtractReference<f32>(first, second);
+    case 10u: return ScalarMultiplyReference<f32>(first, second);
+    case 11u: return ScalarDivideReference<f32>(first, second);
+    case 12u: return cast<f32>(ScalarAddReference<f64>(cast<f64>(first), wider));
+    case 13u: return ScalarPostIncrementReference<f32>(first);
+    case 14u: return ScalarPreIncrementReference<f32>(first);
+    case 15u: return ScalarPostDecrementReference<f32>(first);
+    case 16u: return ScalarPreDecrementReference<f32>(first);
+    case 17u: return ScalarReferenceMin<f32>(first, second);
+    case 18u: return ScalarReferenceMax<f32>(first, second);
+    case 19u: return ScalarReferenceAbs<f32>(first);
+    case 20u: return ScalarReferenceClamp<f32>(first, -0.0f, second);
+    case 21u: return ScalarReferenceSaturate<f32>(first);
+    case 22u: return ScalarAddReference<f32>(first, ScalarMultiplyReference<f32>(ScalarSubtractReference<f32>(second, first), 0.0f));
+    case 23u: return ScalarAddReference<f32>(first, ScalarMultiplyReference<f32>(ScalarSubtractReference<f32>(second, first), 1.0f));
+    case 24u: return cast<f32>(ScalarAddReference<f64>(cast<f64>(first), ScalarMultiplyReference<f64>(cast<f64>(ScalarSubtractReference<f32>(second, first)), wider)));
+    case 25u: return ScalarDivideReference<f32>(1.0f, ScalarReferenceSqrt<f32>(first));
+    case 26u: return cast<f32>(ScalarReferenceMin<f64>(cast<f64>(first), wider));
+    case 27u: return cast<f32>(ScalarSubtractReference<f64>(ScalarAddReference<f64>(cast<f64>(first), ScalarMultiplyReference<f64>(ScalarSubtractReference<f64>(wider, cast<f64>(first)), cast<f64>(second))), wider));
+    case 28u: return cast<f32>(ScalarSubtractReference<f64>(ScalarAddReference<f64>(cast<f64>(first), wider), wider));
+    default: return cast<f32>(ScalarSubtractReference<f64>(ScalarAddReference<f64>(cast<f64>(first), ScalarMultiplyReference<f64>(ScalarSubtractReference<f64>(wider, cast<f64>(first)), cast<f64>(second))), wider));
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+f64 ReferenceScalar64(in f64 first, in f64 second, in u32 operation){
+    switch(operation){
+    case 0u: return ScalarAddReference<f64>(first, second);
+    case 1u: return ScalarSubtractReference<f64>(first, second);
+    case 2u: return ScalarMultiplyReference<f64>(first, second);
+    case 3u: return ScalarDivideReference<f64>(first, second);
+    case 4u: return ScalarMultiplyAddReference<f64>(first, second, 1.0);
+    case 5u: return ScalarNegateReference<f64>(first);
+    case 6u: return ScalarAddReference<f64>(first, second);
+    case 7u: return ScalarSubtractReference<f64>(first, second);
+    case 8u: return ScalarMultiplyReference<f64>(first, second);
+    case 9u: return ScalarDivideReference<f64>(first, second);
+    case 10u: return ScalarPostIncrementReference<f64>(first);
+    case 11u: return ScalarPreIncrementReference<f64>(first);
+    case 12u: return ScalarPostDecrementReference<f64>(first);
+    case 13u: return ScalarPreDecrementReference<f64>(first);
+    case 14u: return ScalarReferenceMin<f64>(first, second);
+    case 15u: return ScalarReferenceMax<f64>(first, second);
+    case 16u: return ScalarReferenceAbs<f64>(first);
+    case 17u: return ScalarReferenceClamp<f64>(first, -0.0, second);
+    case 18u: return ScalarReferenceSaturate<f64>(first);
+    case 19u: return ScalarAddReference<f64>(first, ScalarMultiplyReference<f64>(ScalarSubtractReference<f64>(second, first), 0.0));
+    case 20u: return ScalarAddReference<f64>(first, ScalarMultiplyReference<f64>(ScalarSubtractReference<f64>(second, first), 1.0));
+    default: return ScalarDivideReference<f64>(1.0, ScalarReferenceSqrt<f64>(first));
+    }
+}
 
-
-TEST(AdhdCompiler, SimdArithmeticPreservesExceptionalValuesRoundingAndContraction){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdArithmeticPreservesExceptionalValuesRoundingAndContraction(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    volatile u32 values32[] = { 0u, 0x80000000u, 0x3f800001u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0x7fc00123u, 1u, 0x7f7fffffu };
-    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x3ff0000000000001ull, 0xbff0000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0x7ff8000000000123ull, 1ull, 0x7fefffffffffffffull };
-    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    const Array<u32, 10u> values32(0u, 0x80000000u, 0x3f800001u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0x7fc00123u, 1u, 0x7f7fffffu);
+    const Array<u64, 10u> values64(0ull, 0x8000000000000000ull, 0x3ff0000000000001ull, 0xbff0000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0x7ff8000000000123ull, 1ull, 0x7fefffffffffffffull);
+    for(in i32 rounding : s_MetascriptRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
         for(usize sample = 0u; sample < 10u; ++sample){
-            const SIMDVectorSingle a32 = VectorSetInt(values32[sample], values32[sample], values32[sample], values32[sample]);
-            const SIMDVectorDouble a64 = VectorDoubleSetInt(values64[sample], values64[sample], values64[sample], values64[sample]);
-            const SIMDVectorSingle b32 = VectorSetInt(0x3f7ffffeu, 0xbf800000u, 0x7f800123u, 0u);
-            const SIMDVectorDouble b64 = VectorDoubleSetInt(0x3feffffffffffffeull, 0xbff0000000000000ull, 0x7ff0000000000123ull, 0ull);
-            const auto apply32 = [&](const u32 operation, const b8 reference)noexcept -> SIMDVectorSingle{
-                const SIMDVectorSingle a = a32;
-                const SIMDVectorSingle b = b32;
+            const VectorSingle a32 = VectorSetInt(ObserveValue<u32>(values32[sample]), ObserveValue<u32>(values32[sample]), ObserveValue<u32>(values32[sample]), ObserveValue<u32>(values32[sample]));
+            const VectorDouble a64 = VectorDoubleSetInt(ObserveValue<u64>(values64[sample]), ObserveValue<u64>(values64[sample]), ObserveValue<u64>(values64[sample]), ObserveValue<u64>(values64[sample]));
+            const VectorSingle b32 = VectorSetInt(0x3f7ffffeu, 0xbf800000u, 0x7f800123u, 0u);
+            const VectorDouble b64 = VectorDoubleSetInt(0x3feffffffffffffeull, 0xbff0000000000000ull, 0x7ff0000000000123ull, 0ull);
+            const auto apply32 = lambda[in a32, in b32](in u32 operation, in b8 reference) -> VectorSingle{
+                const VectorSingle a = a32;
+                const VectorSingle b = b32;
                 switch(operation){
-                case 0u: return reference ? VectorMultiply(a, VectorReplicate(1.0)) : ::NWB::Tests::IeeeMulOneSingle(a, b);
-                case 1u: return reference ? VectorMultiply(VectorReplicate(1.0), a) : ::NWB::Tests::IeeeOneMulSingle(a, b);
-                case 2u: return reference ? VectorMultiply(a, VectorNegate(VectorReplicate(1.0))) : ::NWB::Tests::IeeeMulNegativeOneSingle(a, b);
-                case 3u: return reference ? VectorMultiply(VectorNegate(VectorReplicate(1.0)), a) : ::NWB::Tests::IeeeNegativeOneMulSingle(a, b);
-                case 4u: return reference ? VectorDivide(a, VectorReplicate(1.0)) : ::NWB::Tests::IeeeDivideOneSingle(a, b);
-                case 5u: return reference ? VectorDivide(a, VectorNegate(VectorReplicate(1.0))) : ::NWB::Tests::IeeeDivideNegativeOneSingle(a, b);
-                case 6u: return reference ? VectorNegate(VectorMultiply(a, VectorNegate(VectorReplicate(1.0)))) : ::NWB::Tests::IeeeNestedMulSingle(a, b);
-                case 7u: return reference ? VectorNegate(VectorDivide(a, VectorNegate(VectorReplicate(1.0)))) : ::NWB::Tests::IeeeNestedDivideSingle(a, b);
-                case 8u: return reference ? VectorAdd(VectorMultiply(a, b), VectorNegate(VectorReplicate(1.0))) : ::NWB::Tests::IeeeSeparateProductSingle(a, b);
-                case 9u: return reference ? VectorLerp(a, b, 0.0) : ::NWB::Tests::IeeeLerpZeroSingle(a, b);
-                case 10u: return reference ? VectorLerp(a, b, 1.0) : ::NWB::Tests::IeeeLerpOneSingle(a, b);
-                case 11u: return reference ? VectorMin(VectorMax(a, VectorZero()), VectorReplicate(1.0)) : ::NWB::Tests::IeeeMinMaxSingle(a, b);
-                case 12u: return reference ? VectorMin(VectorReplicate(1.0), VectorMax(VectorZero(), a)) : ::NWB::Tests::IeeeOrderedMinMaxSingle(a, b);
-                case 13u: return reference ? VectorMax(VectorMin(a, VectorReplicate(1.0)), VectorZero()) : ::NWB::Tests::IeeeMaxMinSingle(a, b);
-                case 14u: return reference ? VectorMax(VectorZero(), VectorMin(VectorReplicate(1.0), a)) : ::NWB::Tests::IeeeOrderedMaxMinSingle(a, b);
-                case 15u: return reference ? VectorClamp(a, VectorNegate(VectorZero()), VectorReplicate(1.0)) : ::NWB::Tests::IeeeNegativeZeroClampSingle(a, b);
-                case 16u: return reference ? VectorSet(VectorGetX(a) / VectorGetX(b), VectorGetY(a) / VectorGetY(b), 0.0, 0.0) : ::NWB::Tests::IeeePartialDivideSingle(a, b);
-                case 17u: return reference ? VectorSet(VectorGetX(a) + VectorGetX(b), VectorGetY(a) - VectorGetY(b), VectorGetZ(a) + VectorGetZ(b), VectorGetW(a) - VectorGetW(b)) : ::NWB::Tests::IeeeMixedAddSubSingle(a, b);
-                case 18u: return reference ? Vector4Dot(a, VectorSet(1.0, 1.0, 1.0, 0.0)) : ::NWB::Tests::IeeeDotZeroTailSingle(a, b);
+                case 0u:
+                    if(reference) return VectorMultiply(a, VectorReplicate(1.0));
+                    return IeeeMulOneSingle(a, b);
+                case 1u:
+                    if(reference) return VectorMultiply(VectorReplicate(1.0), a);
+                    return IeeeOneMulSingle(a, b);
+                case 2u:
+                    if(reference) return VectorMultiply(a, VectorNegate(VectorReplicate(1.0)));
+                    return IeeeMulNegativeOneSingle(a, b);
+                case 3u:
+                    if(reference) return VectorMultiply(VectorNegate(VectorReplicate(1.0)), a);
+                    return IeeeNegativeOneMulSingle(a, b);
+                case 4u:
+                    if(reference) return VectorDivide(a, VectorReplicate(1.0));
+                    return IeeeDivideOneSingle(a, b);
+                case 5u:
+                    if(reference) return VectorDivide(a, VectorNegate(VectorReplicate(1.0)));
+                    return IeeeDivideNegativeOneSingle(a, b);
+                case 6u:
+                    if(reference) return VectorNegate(VectorMultiply(a, VectorNegate(VectorReplicate(1.0))));
+                    return IeeeNestedMulSingle(a, b);
+                case 7u:
+                    if(reference) return VectorNegate(VectorDivide(a, VectorNegate(VectorReplicate(1.0))));
+                    return IeeeNestedDivideSingle(a, b);
+                case 8u:
+                    if(reference) return VectorAdd(VectorMultiply(a, b), VectorNegate(VectorReplicate(1.0)));
+                    return IeeeSeparateProductSingle(a, b);
+                case 9u:
+                    if(reference) return VectorLerp(a, b, 0.0);
+                    return IeeeLerpZeroSingle(a, b);
+                case 10u:
+                    if(reference) return VectorLerp(a, b, 1.0);
+                    return IeeeLerpOneSingle(a, b);
+                case 11u:
+                    if(reference) return VectorMin(VectorMax(a, VectorZero()), VectorReplicate(1.0));
+                    return IeeeMinMaxSingle(a, b);
+                case 12u:
+                    if(reference) return VectorMin(VectorReplicate(1.0), VectorMax(VectorZero(), a));
+                    return IeeeOrderedMinMaxSingle(a, b);
+                case 13u:
+                    if(reference) return VectorMax(VectorMin(a, VectorReplicate(1.0)), VectorZero());
+                    return IeeeMaxMinSingle(a, b);
+                case 14u:
+                    if(reference) return VectorMax(VectorZero(), VectorMin(VectorReplicate(1.0), a));
+                    return IeeeOrderedMaxMinSingle(a, b);
+                case 15u:
+                    if(reference) return VectorClamp(a, VectorNegate(VectorZero()), VectorReplicate(1.0));
+                    return IeeeNegativeZeroClampSingle(a, b);
+                case 16u:
+                    if(reference) return VectorSet(ScalarDivideReference<f32>(VectorGetX(a), VectorGetX(b)), ScalarDivideReference<f32>(VectorGetY(a), VectorGetY(b)), 0.0, 0.0);
+                    return IeeePartialDivideSingle(a, b);
+                case 17u:
+                    if(reference) return VectorSet(ScalarAddReference<f32>(VectorGetX(a), VectorGetX(b)), ScalarSubtractReference<f32>(VectorGetY(a), VectorGetY(b)), ScalarAddReference<f32>(VectorGetZ(a), VectorGetZ(b)), ScalarSubtractReference<f32>(VectorGetW(a), VectorGetW(b)));
+                    return IeeeMixedAddSubSingle(a, b);
+                case 18u:
+                    if(reference) return Vector4Dot(a, VectorSet(1.0, 1.0, 1.0, 0.0));
+                    return IeeeDotZeroTailSingle(a, b);
                 default: return a;
                 }
             };
-            const auto apply64 = [&](const u32 operation, const b8 reference)noexcept -> SIMDVectorDouble{
-                const SIMDVectorDouble a = a64;
-                const SIMDVectorDouble b = b64;
+            const auto apply64 = lambda[in a64, in b64](in u32 operation, in b8 reference) -> VectorDouble{
+                const VectorDouble a = a64;
+                const VectorDouble b = b64;
                 switch(operation){
-                case 0u: return reference ? VectorDoubleMultiply(a, VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeMulOneDouble(a, b);
-                case 1u: return reference ? VectorDoubleMultiply(VectorDoubleReplicate(1.0), a) : ::NWB::Tests::IeeeOneMulDouble(a, b);
-                case 2u: return reference ? VectorDoubleMultiply(a, VectorDoubleNegate(VectorDoubleReplicate(1.0))) : ::NWB::Tests::IeeeMulNegativeOneDouble(a, b);
-                case 3u: return reference ? VectorDoubleMultiply(VectorDoubleNegate(VectorDoubleReplicate(1.0)), a) : ::NWB::Tests::IeeeNegativeOneMulDouble(a, b);
-                case 4u: return reference ? VectorDoubleDivide(a, VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeDivideOneDouble(a, b);
-                case 5u: return reference ? VectorDoubleDivide(a, VectorDoubleNegate(VectorDoubleReplicate(1.0))) : ::NWB::Tests::IeeeDivideNegativeOneDouble(a, b);
-                case 6u: return reference ? VectorDoubleNegate(VectorDoubleMultiply(a, VectorDoubleNegate(VectorDoubleReplicate(1.0)))) : ::NWB::Tests::IeeeNestedMulDouble(a, b);
-                case 7u: return reference ? VectorDoubleNegate(VectorDoubleDivide(a, VectorDoubleNegate(VectorDoubleReplicate(1.0)))) : ::NWB::Tests::IeeeNestedDivideDouble(a, b);
-                case 8u: return reference ? VectorDoubleAdd(VectorDoubleMultiply(a, b), VectorDoubleNegate(VectorDoubleReplicate(1.0))) : ::NWB::Tests::IeeeSeparateProductDouble(a, b);
-                case 9u: return reference ? VectorDoubleLerp(a, b, 0.0) : ::NWB::Tests::IeeeLerpZeroDouble(a, b);
-                case 10u: return reference ? VectorDoubleLerp(a, b, 1.0) : ::NWB::Tests::IeeeLerpOneDouble(a, b);
-                case 11u: return reference ? VectorDoubleMin(VectorDoubleMax(a, VectorDoubleZero()), VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeMinMaxDouble(a, b);
-                case 12u: return reference ? VectorDoubleMin(VectorDoubleReplicate(1.0), VectorDoubleMax(VectorDoubleZero(), a)) : ::NWB::Tests::IeeeOrderedMinMaxDouble(a, b);
-                case 13u: return reference ? VectorDoubleMax(VectorDoubleMin(a, VectorDoubleReplicate(1.0)), VectorDoubleZero()) : ::NWB::Tests::IeeeMaxMinDouble(a, b);
-                case 14u: return reference ? VectorDoubleMax(VectorDoubleZero(), VectorDoubleMin(VectorDoubleReplicate(1.0), a)) : ::NWB::Tests::IeeeOrderedMaxMinDouble(a, b);
-                case 15u: return reference ? VectorDoubleClamp(a, VectorDoubleNegate(VectorDoubleZero()), VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeNegativeZeroClampDouble(a, b);
-                case 16u: return reference ? VectorDoubleSet(VectorDoubleGetX(a) / VectorDoubleGetX(b), VectorDoubleGetY(a) / VectorDoubleGetY(b), 0.0, 0.0) : ::NWB::Tests::IeeePartialDivideDouble(a, b);
-                case 17u: return reference ? VectorDoubleSet(VectorDoubleGetX(a) + VectorDoubleGetX(b), VectorDoubleGetY(a) - VectorDoubleGetY(b), VectorDoubleGetZ(a) + VectorDoubleGetZ(b), VectorDoubleGetW(a) - VectorDoubleGetW(b)) : ::NWB::Tests::IeeeMixedAddSubDouble(a, b);
-                case 18u: return reference ? VectorDouble4Dot(a, VectorDoubleSet(1.0, 1.0, 1.0, 0.0)) : ::NWB::Tests::IeeeDotZeroTailDouble(a, b);
+                case 0u:
+                    if(reference) return VectorDoubleMultiply(a, VectorDoubleReplicate(1.0));
+                    return IeeeMulOneDouble(a, b);
+                case 1u:
+                    if(reference) return VectorDoubleMultiply(VectorDoubleReplicate(1.0), a);
+                    return IeeeOneMulDouble(a, b);
+                case 2u:
+                    if(reference) return VectorDoubleMultiply(a, VectorDoubleNegate(VectorDoubleReplicate(1.0)));
+                    return IeeeMulNegativeOneDouble(a, b);
+                case 3u:
+                    if(reference) return VectorDoubleMultiply(VectorDoubleNegate(VectorDoubleReplicate(1.0)), a);
+                    return IeeeNegativeOneMulDouble(a, b);
+                case 4u:
+                    if(reference) return VectorDoubleDivide(a, VectorDoubleReplicate(1.0));
+                    return IeeeDivideOneDouble(a, b);
+                case 5u:
+                    if(reference) return VectorDoubleDivide(a, VectorDoubleNegate(VectorDoubleReplicate(1.0)));
+                    return IeeeDivideNegativeOneDouble(a, b);
+                case 6u:
+                    if(reference) return VectorDoubleNegate(VectorDoubleMultiply(a, VectorDoubleNegate(VectorDoubleReplicate(1.0))));
+                    return IeeeNestedMulDouble(a, b);
+                case 7u:
+                    if(reference) return VectorDoubleNegate(VectorDoubleDivide(a, VectorDoubleNegate(VectorDoubleReplicate(1.0))));
+                    return IeeeNestedDivideDouble(a, b);
+                case 8u:
+                    if(reference) return VectorDoubleAdd(VectorDoubleMultiply(a, b), VectorDoubleNegate(VectorDoubleReplicate(1.0)));
+                    return IeeeSeparateProductDouble(a, b);
+                case 9u:
+                    if(reference) return VectorDoubleLerp(a, b, 0.0);
+                    return IeeeLerpZeroDouble(a, b);
+                case 10u:
+                    if(reference) return VectorDoubleLerp(a, b, 1.0);
+                    return IeeeLerpOneDouble(a, b);
+                case 11u:
+                    if(reference) return VectorDoubleMin(VectorDoubleMax(a, VectorDoubleZero()), VectorDoubleReplicate(1.0));
+                    return IeeeMinMaxDouble(a, b);
+                case 12u:
+                    if(reference) return VectorDoubleMin(VectorDoubleReplicate(1.0), VectorDoubleMax(VectorDoubleZero(), a));
+                    return IeeeOrderedMinMaxDouble(a, b);
+                case 13u:
+                    if(reference) return VectorDoubleMax(VectorDoubleMin(a, VectorDoubleReplicate(1.0)), VectorDoubleZero());
+                    return IeeeMaxMinDouble(a, b);
+                case 14u:
+                    if(reference) return VectorDoubleMax(VectorDoubleZero(), VectorDoubleMin(VectorDoubleReplicate(1.0), a));
+                    return IeeeOrderedMaxMinDouble(a, b);
+                case 15u:
+                    if(reference) return VectorDoubleClamp(a, VectorDoubleNegate(VectorDoubleZero()), VectorDoubleReplicate(1.0));
+                    return IeeeNegativeZeroClampDouble(a, b);
+                case 16u:
+                    if(reference) return VectorDoubleSet(ScalarDivideReference<f64>(VectorDoubleGetX(a), VectorDoubleGetX(b)), ScalarDivideReference<f64>(VectorDoubleGetY(a), VectorDoubleGetY(b)), 0.0, 0.0);
+                    return IeeePartialDivideDouble(a, b);
+                case 17u:
+                    if(reference) return VectorDoubleSet(ScalarAddReference<f64>(VectorDoubleGetX(a), VectorDoubleGetX(b)), ScalarSubtractReference<f64>(VectorDoubleGetY(a), VectorDoubleGetY(b)), ScalarAddReference<f64>(VectorDoubleGetZ(a), VectorDoubleGetZ(b)), ScalarSubtractReference<f64>(VectorDoubleGetW(a), VectorDoubleGetW(b)));
+                    return IeeeMixedAddSubDouble(a, b);
+                case 18u:
+                    if(reference) return VectorDouble4Dot(a, VectorDoubleSet(1.0, 1.0, 1.0, 0.0));
+                    return IeeeDotZeroTailDouble(a, b);
                 default: return a;
                 }
             };
             for(u32 operation = 0u; operation < 19u; ++operation){
-                SCOPED_TRACE(operation);
-                SCOPED_TRACE(sample);
-                SCOPED_TRACE(rounding);
+                ScopedTestTrace trace_operation(operation);
+                ScopedTestTrace trace_sample(sample);
+                ScopedTestTrace trace_rounding(rounding);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
                 const auto expected32 = apply32(operation, true);
                 const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
@@ -138,107 +283,47 @@ TEST(AdhdCompiler, SimdArithmeticPreservesExceptionalValuesRoundingAndContractio
                 EXPECT_EQ(actualFlags64, expectedFlags64);
             }
             ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_EQ(VectorGetIntW(::NWB::Tests::IeeeZeroTailSingle(a32)), 0u);
-            EXPECT_EQ(VectorDoubleGetIntW(::NWB::Tests::IeeeZeroTailDouble(a64)), 0ull);
+            EXPECT_EQ(VectorGetIntW(IeeeZeroTailSingle(a32)), 0u);
+            EXPECT_EQ(VectorDoubleGetIntW(IeeeZeroTailDouble(a64)), 0ull);
         }
     }
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdArithmeticPreservesExceptionalValuesRoundingAndContraction, VerifySimdArithmeticPreservesExceptionalValuesRoundingAndContraction)
 
-TEST(AdhdCompiler, ScalarSimdArithmeticRetainsPromotionsAssignmentResultsAndExceptionFlags){
-#pragma STDC FENV_ACCESS ON
-    EXPECT_EQ(::NWB::Tests::IeeeScalarGeneratedNameIsolation(2.0f, 4.0f), 6.0f);
-    Array<f32, 2> targets{ 100.0f, 10.0f };
+void VerifyScalarSimdArithmeticRetainsPromotionsAssignmentResultsAndExceptionFlags(){
+    EXPECT_EQ(IeeeScalarGeneratedNameIsolation(2.0f, 4.0f), 6.0f);
+    Array<f32, 2u> targets(100.0f, 10.0f);
     u32 targetIndex = 0u;
-    EXPECT_EQ(::NWB::Tests::IeeeScalarAssignmentTargetOrder(targets, targetIndex, 5.0f), 15.0f);
+    EXPECT_EQ(IeeeScalarAssignmentTargetOrder(targets, targetIndex, 5.0f), 15.0f);
     EXPECT_EQ(targetIndex, 2u);
     EXPECT_EQ(targets[0], 100.0f);
     EXPECT_EQ(targets[1], 15.0f);
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restore(*originalEnvironment);
-    volatile u32 values32[] = { 0u, 0x80000000u, 0x3f800001u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0x7fc00123u, 1u, 0x7f7fffffu };
-    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x3ff0000000000001ull, 0xbff0000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0x7ff8000000000123ull, 1ull, 0x7fefffffffffffffull };
-    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+    FloatingPointEnvironmentGuard restore(originalEnvironment.value());
+    const Array<u32, 10u> values32(0u, 0x80000000u, 0x3f800001u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0x7fc00123u, 1u, 0x7f7fffffu);
+    const Array<u64, 10u> values64(0ull, 0x8000000000000000ull, 0x3ff0000000000001ull, 0xbff0000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0x7ff8000000000123ull, 1ull, 0x7fefffffffffffffull);
+    for(in i32 rounding : s_MetascriptRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
         for(usize sample = 0u; sample < 10u; ++sample){
-            volatile f32 a32 = BitCast<f32>(values32[sample]);
-            volatile f32 b32 = BitCast<f32>(sample == 0u ? 0x80000000u : (sample == 1u ? 0u : ((sample == 6u || sample == 7u) ? 0x7fc00456u : values32[(sample + 3u) % 10u])));
-            volatile f64 wider = 16777216.0;
-            volatile f64 a64 = BitCast<f64>(values64[sample]);
-            volatile f64 b64 = BitCast<f64>(sample == 0u ? 0x8000000000000000ull : (sample == 1u ? 0ull : ((sample == 6u || sample == 7u) ? 0x7ff8000000000456ull : values64[(sample + 3u) % 10u])));
-            const auto reference32 = [&](const u32 operation)noexcept -> f32{
-                f32 value = a32;
-                switch(operation){
-                case 0u: return a32 + b32;
-                case 1u: return a32 - b32;
-                case 2u: return a32 * b32;
-                case 3u: return a32 / b32;
-                case 4u: return a32 * b32 + 1.0f;
-                case 5u: return -a32;
-                case 6u: return static_cast<f32>(a32 + wider);
-                case 7u: return static_cast<f32>((a32 + wider) - wider);
-                case 8u: value += b32; return value;
-                case 9u: value -= b32; return value;
-                case 10u: value *= b32; return value;
-                case 11u: value /= b32; return value;
-                case 12u: value += wider; return value;
-                case 13u: return value++;
-                case 14u: return ++value;
-                case 15u: return value--;
-                case 16u: return --value;
-                case 17u: return ::Min<f32>(static_cast<f32>(a32), static_cast<f32>(b32));
-                case 18u: return ::Max<f32>(static_cast<f32>(a32), static_cast<f32>(b32));
-                case 19u: return ::Abs<f32>(a32);
-                case 20u: return ::Clamp<f32>(a32, -0.0f, b32);
-                case 21u: return ::Saturate<f32>(a32);
-                case 22u: return a32 + ((b32 - a32) * 0.0f);
-                case 23u: return a32 + ((b32 - a32) * 1.0f);
-                case 24u: return static_cast<f32>(a32 + ((b32 - a32) * wider));
-                case 25u: return 1.0f / ::Sqrt<f32>(a32);
-                case 26u: return static_cast<f32>(::Min<f64>(static_cast<f64>(a32), static_cast<f64>(wider)));
-                case 27u: return static_cast<f32>((a32 + ((wider - a32) * b32)) - wider);
-                case 28u:{ const auto temporary = a32 + wider; return static_cast<f32>(temporary - wider); }
-                default:{ const auto temporary = a32 + ((wider - a32) * b32); return static_cast<f32>(temporary - wider); }
-                }
-            };
-            const auto reference64 = [&](const u32 operation)noexcept -> f64{
-                f64 value = a64;
-                switch(operation){
-                case 0u: return a64 + b64;
-                case 1u: return a64 - b64;
-                case 2u: return a64 * b64;
-                case 3u: return a64 / b64;
-                case 4u: return a64 * b64 + 1.0;
-                case 5u: return -a64;
-                case 6u: value += b64; return value;
-                case 7u: value -= b64; return value;
-                case 8u: value *= b64; return value;
-                case 9u: value /= b64; return value;
-                case 10u: return value++;
-                case 11u: return ++value;
-                case 12u: return value--;
-                case 13u: return --value;
-                case 14u: return ::Min<f64>(static_cast<f64>(a64), static_cast<f64>(b64));
-                case 15u: return ::Max<f64>(static_cast<f64>(a64), static_cast<f64>(b64));
-                case 16u: return ::Abs<f64>(a64);
-                case 17u: return ::Clamp<f64>(a64, -0.0, b64);
-                case 18u: return ::Saturate<f64>(a64);
-                case 19u: return a64 + ((b64 - a64) * 0.0);
-                case 20u: return a64 + ((b64 - a64) * 1.0);
-                default: return 1.0 / ::Sqrt<f64>(a64);
-                }
-            };
+            const f32 a32 = ObserveValue<f32>(bit_cast<f32>(ObserveValue<u32>(values32[sample])));
+            const f32 b32 = bit_cast<f32>(SelectIeeeOperandBits<u32>(sample, 0x80000000u, 0u, 0x7fc00456u, ObserveValue<u32>(values32[(sample + 3u) % 10u])));
+            const f64 wider = ObserveValue<f64>(16777216.0);
+            const f64 a64 = ObserveValue<f64>(bit_cast<f64>(ObserveValue<u64>(values64[sample])));
+            const f64 b64 = bit_cast<f64>(SelectIeeeOperandBits<u64>(sample, 0x8000000000000000ull, 0ull, 0x7ff8000000000456ull, ObserveValue<u64>(values64[(sample + 3u) % 10u])));
+
+
             for(u32 operation = 0u; operation < 30u; ++operation){
-                SCOPED_TRACE(rounding);
-                SCOPED_TRACE(sample);
-                SCOPED_TRACE(operation);
+                ScopedTestTrace trace_rounding(rounding);
+                ScopedTestTrace trace_sample(sample);
+                ScopedTestTrace trace_operation(operation);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const f32 expected = reference32(operation);
+                const f32 expected = ReferenceScalar32(a32, b32, wider, operation);
                 const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const f32 actual = ::NWB::Tests::IeeeScalarArithmeticSingle(a32, b32, wider, operation);
-                const u32 actualBits = BitCast<u32>(actual);
-                const u32 expectedBits = BitCast<u32>(expected);
+                const f32 actual = IeeeScalarArithmeticSingle(a32, b32, wider, operation);
+                const u32 actualBits = bit_cast<u32>(actual);
+                const u32 expectedBits = bit_cast<u32>(expected);
                 const b8 arithmetic = operation != 5u && operation != 13u && operation != 15u && !(operation >= 17u && operation <= 21u) && operation != 26u;
                 if(arithmetic && (actualBits & 0x7fffffffu) > 0x7f800000u && (expectedBits & 0x7fffffffu) > 0x7f800000u){
                     EXPECT_NE(actualBits & 0x00400000u, 0u);
@@ -249,16 +334,16 @@ TEST(AdhdCompiler, ScalarSimdArithmeticRetainsPromotionsAssignmentResultsAndExce
                 EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), flags);
             }
             for(u32 operation = 0u; operation < 22u; ++operation){
-                SCOPED_TRACE(rounding);
-                SCOPED_TRACE(sample);
-                SCOPED_TRACE(operation);
+                ScopedTestTrace trace_rounding(rounding);
+                ScopedTestTrace trace_sample(sample);
+                ScopedTestTrace trace_operation(operation);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const f64 expected = reference64(operation);
+                const f64 expected = ReferenceScalar64(a64, b64, operation);
                 const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const f64 actual = ::NWB::Tests::IeeeScalarArithmeticDouble(a64, b64, operation);
-                const u64 actualBits = BitCast<u64>(actual);
-                const u64 expectedBits = BitCast<u64>(expected);
+                const f64 actual = IeeeScalarArithmeticDouble(a64, b64, operation);
+                const u64 actualBits = bit_cast<u64>(actual);
+                const u64 expectedBits = bit_cast<u64>(expected);
                 const b8 arithmetic = operation != 5u && operation != 10u && operation != 12u && !(operation >= 14u && operation <= 18u);
                 if(arithmetic && (actualBits & 0x7fffffffffffffffull) > 0x7ff0000000000000ull && (expectedBits & 0x7fffffffffffffffull) > 0x7ff0000000000000ull){
                     EXPECT_NE(actualBits & 0x0008000000000000ull, 0ull);
@@ -271,90 +356,72 @@ TEST(AdhdCompiler, ScalarSimdArithmeticRetainsPromotionsAssignmentResultsAndExce
         }
     }
 }
+NWB_ADHD_GTEST(AdhdCompiler, ScalarSimdArithmeticRetainsPromotionsAssignmentResultsAndExceptionFlags, VerifyScalarSimdArithmeticRetainsPromotionsAssignmentResultsAndExceptionFlags)
 
-TEST(AdhdCompiler, SimdLanePackingPreservesIntegerAndWiderScalarArithmetic){
-#pragma STDC FENV_ACCESS ON
-    volatile i32 numerator = 3;
-    volatile i32 denominator = 2;
-    EXPECT_EQ(VectorGetX(::NWB::Tests::IeeeIntegerQuotient(numerator, denominator)), 1.0f);
-    volatile f64 wider = 16777217.0;
-    const SIMDVectorSingle value = VectorReplicate(-16777216.0f);
-    const SIMDVectorSingle result = ::NWB::Tests::IeeeWiderCancellation(value, wider);
+void VerifySimdLanePackingPreservesIntegerAndWiderScalarArithmetic(){
+    const i32 numerator = ObserveValue<i32>(3);
+    const i32 denominator = ObserveValue<i32>(2);
+    EXPECT_EQ(VectorGetX(IeeeIntegerQuotient(numerator, denominator)), 1.0f);
+    const f64 wider = ObserveValue<f64>(16777217.0);
+    const VectorSingle value = VectorReplicate(-16777216.0f);
+    const VectorSingle result = IeeeWiderCancellation(value, wider);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetByIndex(result, lane), 1.0f);
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdLanePackingPreservesIntegerAndWiderScalarArithmetic, VerifySimdLanePackingPreservesIntegerAndWiderScalarArithmetic)
 
-TEST(AdhdCompiler, SimdNegativeZeroProductTailDoesNotReplaceAuthoredPositiveZero){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdNegativeZeroProductTailDoesNotReplaceAuthoredPositiveZero(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    for(in i32 rounding : s_MetascriptRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
-        EXPECT_EQ(VectorGetIntW(::NWB::Tests::IeeeNegativeZeroTailSingle(VectorReplicate(1.0f))), 0u);
-        EXPECT_EQ(VectorDoubleGetIntW(::NWB::Tests::IeeeNegativeZeroTailDouble(VectorDoubleReplicate(1.0))), 0ull);
+        EXPECT_EQ(VectorGetIntW(IeeeNegativeZeroTailSingle(VectorReplicate(1.0f))), 0u);
+        EXPECT_EQ(VectorDoubleGetIntW(IeeeNegativeZeroTailDouble(VectorDoubleReplicate(1.0))), 0ull);
     }
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdNegativeZeroProductTailDoesNotReplaceAuthoredPositiveZero, VerifySimdNegativeZeroProductTailDoesNotReplaceAuthoredPositiveZero)
 
-TEST(AdhdCompiler, SimdNarrowingDoesNotEvaluateUnselectedExceptionalLanes){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdNarrowingDoesNotEvaluateUnselectedExceptionalLanes(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    volatile u64 hidden[] = { 0x7ff0000000000123ull, 0x7fefffffffffffffull };
-    for(const u64 bits : hidden){
-        const SIMDVectorDouble value = VectorDoubleSetInt(0x3ff0000000000000ull, 0x4000000000000000ull, 0x4008000000000000ull, bits);
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    const Array<u64, 2u> hidden(0x7ff0000000000123ull, 0x7fefffffffffffffull);
+    for(in u64 bits : hidden){
+        const VectorDouble value = VectorDoubleSetInt(0x3ff0000000000000ull, 0x4000000000000000ull, 0x4008000000000000ull, ObserveValue<u64>(bits));
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const SIMDVectorSingle partial = ::NWB::Tests::IeeeNarrowPartial(value);
+        const VectorSingle partial = IeeeNarrowPartial(value);
         EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
         EXPECT_EQ(VectorGetIntX(partial), 0x3f800000u);
         EXPECT_EQ(VectorGetIntY(partial), 0x40000000u);
         EXPECT_EQ(VectorGetIntZ(partial), 0u);
         EXPECT_EQ(VectorGetIntW(partial), 0u);
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const SIMDVectorSingle swizzled = ::NWB::Tests::IeeeNarrowSwizzle(value);
+        const VectorSingle swizzled = IeeeNarrowSwizzle(value);
         EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
         EXPECT_EQ(VectorGetIntX(swizzled), 0x40400000u);
         EXPECT_EQ(VectorGetIntW(swizzled), 0x40400000u);
     }
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdNarrowingDoesNotEvaluateUnselectedExceptionalLanes, VerifySimdNarrowingDoesNotEvaluateUnselectedExceptionalLanes)
 
-TEST(AdhdCompiler, SimdIdentityTransformRetainsExceptionalMatrixArithmetic){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdIdentityTransformRetainsExceptionalMatrixArithmetic(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    volatile u32 signalingNan = 0x7f800123u;
-    SIMDMatrix matrix = MatrixIdentity();
-    matrix.v[3] = VectorSetInt(signalingNan, signalingNan, signalingNan, signalingNan);
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    const u32 signalingNan = ObserveValue<u32>(0x7f800123u);
+    const f32 exceptional = bit_cast<f32>(signalingNan);
+    const MatrixSingle matrix = MatrixSet(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, exceptional, exceptional, exceptional, exceptional);
     ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorSingle expected = Vector4Transform(VectorSet(1.0f, 0.0f, 0.0f, 0.0f), MatrixTranspose(matrix));
+    const VectorSingle expected = Vector4Transform(VectorSet(1.0f, 0.0f, 0.0f, 0.0f), MatrixTranspose(matrix));
     const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorSingle actual = ::NWB::Tests::IeeeIdentityRow(matrix);
+    const VectorSingle actual = IeeeIdentityRow(matrix);
     EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), expectedFlags);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(actual, lane), VectorGetIntByIndex(expected, lane));
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdIdentityTransformRetainsExceptionalMatrixArithmetic, VerifySimdIdentityTransformRetainsExceptionalMatrixArithmetic)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

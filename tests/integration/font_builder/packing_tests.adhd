@@ -6,78 +6,7 @@
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include "bake_name_cases.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <utilities/font_builder/bake.adhd.h>
-
-#include <impl/assets_font_atlas/model.adhd.h>
-#include <impl/assets_font_atlas/positioning_validation.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::FontBakeCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using AssetArena = Core::Assets::AssetArena;
-using ScratchArena = Core::Alloc::ScratchArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-using Impl::FontAtlasGlyph;
-using Impl::FontAtlasGroup;
-using Impl::FontAtlasPayload;
-using Impl::FontAtlasPositioningTable;
-using Impl::ValidateFontAtlasPositioningTableBytes;
-using Impl::s_FontAtlasMinBakePpem;
-using Impl::s_FontAtlasKernTag;
-using Impl::s_FontAtlasGposTag;
-using Impl::s_FontAtlasGdefTag;
-using FontBuilderUtility::BakeOptions;
-using FontBuilderUtility::RasterGlyph;
-using FontBuilderUtility::RasterGlyphs;
-using FontBuilderUtility::ValidateOptions;
-using FontBuilderUtility::ComputeBakePixelCapacity;
-using FontBuilderUtility::PackGlyphs;
-inline constexpr auto s_BreakOnFatal = Core::Common::LoggerBreakPolicy::BreakOnFatal;
-inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
-
-struct FontBakeTestArena{
-    AssetArena arena;
-    ScratchArena scratchArena;
-    explicit FontBakeTestArena(const Name& scopeName)
-        : arena(scopeName)
-        , scratchArena(scopeName)
-    {}
-    FontBakeTestArena(const Name& scopeName, const Name& scratchName)
-        : arena(scopeName)
-        , scratchArena(scratchName)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <utilities/font_builder/bake.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,8 +22,8 @@ void Append32(in u32 value, mut Vector<u8> bytes){
     Append16(cast<u16>(value), bytes);
 }
 
-FontAtlasPositioningTable ClassPairFixture(mut FontBakeTestArena testArena){
-    FontAtlasPositioningTable table(testArena.arena);
+FontAtlasPositioningTable ClassPairFixture(){
+    FontAtlasPositioningTable table;
     table.tag = s_FontAtlasGposTag;
     Append32(0x00010000u, table.bytes);
     Append16(10u, table.bytes);
@@ -141,9 +70,8 @@ FontAtlasPositioningTable ClassPairFixture(mut FontBakeTestArena testArena){
 
 void VerifyFontAtlasPacking_RejectsInvalidBakeBoundsAndMissingPaths(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasOptions));
-    BakeOptions options(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
+    BakeOptions options;
     options.source = StringView("font.ttf");
     options.output = StringView("font.nwb");
     options.ppem = s_FontAtlasMinBakePpem - 1u;
@@ -160,15 +88,14 @@ void VerifyFontAtlasPacking_RejectsInvalidBakeBoundsAndMissingPaths(){
 
 void VerifyFontAtlasPacking_TightRectanglesAndAllChannelCountsPreserveGuardedPixels(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasPacking), Name(s_FontBakeNameTestsFontAtlasPackingScratch));
-    BakeOptions options(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    BakeOptions options;
     options.extent = 32u;
     options.maxGroups = 2u;
     for(u32 tailChannels = 1u; tailChannels <= 4u; ++tailChannels){
-        RasterGlyphs glyphs(testArena.arena);
+        Vector<RasterGlyph> glyphs;
         for(u32 index = 0u; index < 4u + tailChannels; ++index){
-            glyphs.emplace_back(testArena.arena);
+            glyphs.emplace_back();
             mut RasterGlyph glyph = glyphs.back();
             glyph.record.glyphId = index;
             glyph.record.drawable = 1u;
@@ -176,7 +103,7 @@ void VerifyFontAtlasPacking_TightRectanglesAndAllChannelCountsPreserveGuardedPix
             glyph.record.height = 29u;
             glyph.pixels.resize(28u * 29u, cast<u8>((index + 1u) * 17u));
         }
-        FontAtlasPayload payload(testArena.arena);
+        FontAtlasPayload payload;
         ASSERT_TRUE(PackGlyphs(options, glyphs, payload));
         ASSERT_EQ(payload.groups.size(), 2u);
         EXPECT_EQ(payload.groups[0u].channelCount, 4u);
@@ -209,14 +136,13 @@ void VerifyFontAtlasPacking_TightRectanglesAndAllChannelCountsPreserveGuardedPix
 
 void VerifyFontAtlasPacking_RejectsCapacityWithoutDroppingGlyphs(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasCapacity), Name(s_FontBakeNameTestsFontAtlasCapacityScratch));
-    BakeOptions options(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    BakeOptions options;
     options.extent = 32u;
     options.maxGroups = 1u;
-    RasterGlyphs glyphs(testArena.arena);
+    Vector<RasterGlyph> glyphs;
     for(u32 index = 0u; index < 5u; ++index){
-        glyphs.emplace_back(testArena.arena);
+        glyphs.emplace_back();
         mut RasterGlyph glyph = glyphs.back();
         glyph.record.glyphId = index;
         glyph.record.drawable = 1u;
@@ -224,15 +150,14 @@ void VerifyFontAtlasPacking_RejectsCapacityWithoutDroppingGlyphs(){
         glyph.record.height = 28u;
         glyph.pixels.resize(28u * 28u, 128u);
     }
-    FontAtlasPayload payload(testArena.arena);
+    FontAtlasPayload payload;
     EXPECT_FALSE(PackGlyphs(options, glyphs, payload));
 }
 
 void VerifyFontAtlasPositioning_LegacyPairsStayBoundedAndSorted(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasKern));
-    FontAtlasPositioningTable table(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    FontAtlasPositioningTable table;
     table.tag = s_FontAtlasKernTag;
     Append16(0u, table.bytes);
     Append16(1u, table.bytes);
@@ -254,9 +179,8 @@ void VerifyFontAtlasPositioning_LegacyPairsStayBoundedAndSorted(){
 
 void VerifyFontAtlasPositioning_GposClassZeroAndExplicitClassMatrixPreserved(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasGpos));
-    FontAtlasPositioningTable table = ClassPairFixture(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    FontAtlasPositioningTable table = ClassPairFixture();
     ASSERT_EQ(table.bytes.size(), 84u);
     EXPECT_TRUE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
     table.bytes[75u] = 2u;
@@ -268,9 +192,8 @@ void VerifyFontAtlasPositioning_GposClassZeroAndExplicitClassMatrixPreserved(){
 
 void VerifyFontAtlasPositioning_TruncatedGdefMarkGlyphSetsAreRejected(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasGdefTruncated));
-    FontAtlasPositioningTable table(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    FontAtlasPositioningTable table;
     table.tag = s_FontAtlasGdefTag;
     for(u16 minor = 2u; minor <= 3u; ++minor){
         table.bytes.clear();
@@ -287,21 +210,19 @@ void VerifyFontAtlasPositioning_TruncatedGdefMarkGlyphSetsAreRejected(){
 
 void VerifyFontAtlasPositioning_MalformedTopOffsetsAndExtensionTypeRejected(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasGposMalformed));
-    FontAtlasPositioningTable table = ClassPairFixture(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    FontAtlasPositioningTable table = ClassPairFixture();
     table.bytes[8u] = 255u;
     EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
-    table = ClassPairFixture(testArena);
+    table = ClassPairFixture();
     table.bytes[31u] = 9u;
     EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
 }
 
 void VerifyFontAtlasPositioning_PairSetDeviceOffsetsUseImmediateParent(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontBakeTestArena testArena = FontBakeTestArena(Name(s_FontBakeNameTestsFontAtlasGposDevice));
-    FontAtlasPositioningTable table = ClassPairFixture(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    FontAtlasPositioningTable table = ClassPairFixture();
     table.bytes.resize(38u);
     Append16(1u, table.bytes);
     Append16(28u, table.bytes);

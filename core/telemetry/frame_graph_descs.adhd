@@ -97,5 +97,58 @@ extern b8 IsValidFrameGraphTaskPacketizationDecision(in auto a0);
 extern b8 RecordFrameGraph(mut auto a0, mut auto a1, in isize a2, in auto a3, in auto a4, in auto a5 = {}, in auto a6 = {}, in auto a7 = {});
 
 
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeDescs"), cpp_flags(no_copy, no_assign)]
+extern class FrameGraphNodeDescs{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void reserve(in usize count);
+    void resize(in usize count);
+    void push_back(in FrameGraphNodeDesc value);
+    mut FrameGraphNodeDesc operator[](in usize index);
+    in FrameGraphNodeDesc operator[](in usize index)const;
+};
+
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgeDescs"), cpp_flags(no_copy, no_assign)]
+extern class FrameGraphEdgeDescs{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void reserve(in usize count);
+    void resize(in usize count);
+    void push_back(in FrameGraphEdgeDesc value);
+    mut FrameGraphEdgeDesc operator[](in usize index);
+    in FrameGraphEdgeDesc operator[](in usize index)const;
+};
+
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords"), cpp_flags(no_copy, no_assign)]
+extern class FrameGraphPhysicalQueueRuntimeStatisticsRecords{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void reserve(in usize count);
+    void resize(in usize count);
+    void push_back(in FrameGraphPhysicalQueueRuntimeStatisticsRecord value);
+    mut FrameGraphPhysicalQueueRuntimeStatisticsRecord operator[](in usize index);
+    in FrameGraphPhysicalQueueRuntimeStatisticsRecord operator[](in usize index)const;
+};
+
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords"), cpp_flags(no_copy, no_assign)]
+extern class FrameGraphPacketSubmissionStatisticsRecords{
+    usize size()const;
+    b8 empty()const;
+    void clear();
+    void reserve(in usize count);
+    void resize(in usize count);
+    void push_back(in FrameGraphPacketSubmissionStatisticsRecord value);
+    mut FrameGraphPacketSubmissionStatisticsRecord operator[](in usize index);
+    in FrameGraphPacketSubmissionStatisticsRecord operator[](in usize index)const;
+};
+
+
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::ParseFrameGraphPayload")]
+extern Expected<FrameGraphPayload> ParseFrameGraphPayload(mut auto storage, mut auto scratch, in Span<u8> payload);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,0 +1,322 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RadioPanelKey = "panel";
+const StringView s_RadioGroupKey = "radio";
+
+enum<u8> RadioCallbackSite{ None, Instance, Revision, RowCount, Key, Text, Enabled }
+
+class RadioSource : IListDataSource{
+    public TestObserved<u64> m_generation = TestObserved<u64>(1801u);
+    public TestObserved<u64> m_contentRevision = TestObserved<u64>(1u);
+    public u64 m_count = 5u;
+    public u64 m_removed = 0u;
+    public u64 m_disabled = 30u;
+    public TestObserved<u64> m_calls;
+    public TestObserved<u64> m_textCalls;
+    public TestObserved<u64> m_mutations;
+    public TestObserved<u64> m_callbacksAfterMutation;
+    public b8 m_reverse = false;
+    public b8 m_duplicate = false;
+    public b8 m_allDisabled = false;
+    public TestObserved<b8> m_beginAccepted;
+    public TestObserved<b8> m_endAccepted;
+    public u64 m_selected = 0u;
+    public TestObserved<String> m_label;
+    public Optional<mut RadioGroupState> m_state;
+    public Optional<mut Builder> m_builder;
+    public Optional<mut PopupState> m_popup;
+    public TestObserved<RadioCallbackSite> m_site = TestObserved<RadioCallbackSite>(RadioCallbackSite::None);
+    public UiFixtureRadioMutation m_mutation = UiFixtureRadioMutation::None;
+
+    public u64 instanceGeneration()const override{ this.callback(RadioCallbackSite::Instance); return this.m_generation.value(); }
+    public u64 revision()const override{ this.callback(RadioCallbackSite::Revision); return this.m_contentRevision.value(); }
+    public u64 rowCount()const override{ this.callback(RadioCallbackSite::RowCount); return this.rawCount(); }
+    public u64 key(in u64 index)const override{ this.callback(RadioCallbackSite::Key); return this.rawKey(index); }
+    public Expected<u64> indexOf(in u64 value)const override{
+        this.callback(RadioCallbackSite::None);
+        return FindRadioFixtureIndexOf(this.m_count, this.m_removed, this.m_reverse, this.m_duplicate, value);
+    }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
+        this.callback(RadioCallbackSite::None);
+        return FindRadioFixtureEnabledIndex(this.m_count, this.m_removed, this.m_reverse, this.m_duplicate, this.m_allDisabled, this.m_disabled, start, reverse);
+    }
+    public StringView text(in u64 index)const override{
+        this.callback(RadioCallbackSite::Text);
+        return FormatRadioSourceLabel(this, index);
+    }
+    public b8 enabled(in u64 index)const override{
+        this.callback(RadioCallbackSite::Enabled);
+        return index < this.rawCount() && !this.m_allDisabled && this.rawKey(index) != this.m_disabled;
+    }
+    public void resetCounters()const{ ResetRadioSourceCounters(this); }
+    public void armSelection(mut RadioGroupState state, in RadioCallbackSite site, in u64 keyValue){ this.armSelection(state, site, keyValue, false); }
+    public void armSelection(mut RadioGroupState state, in RadioCallbackSite site, in u64 keyValue, in b8 awayAndBack){
+        this.m_state = Optional<mut RadioGroupState>(state);
+        this.m_selected = keyValue;
+        this.m_site.value() = site;
+        if(awayAndBack)
+            this.m_mutation = UiFixtureRadioMutation::SelectAwayBack;
+        else
+            this.m_mutation = UiFixtureRadioMutation::Select;
+    }
+    public void armSource(in RadioCallbackSite site){ this.armSource(site, false); }
+    public void armSource(in RadioCallbackSite site, in b8 replacement){
+        this.m_site.value() = site;
+        if(replacement)
+            this.m_mutation = UiFixtureRadioMutation::Replacement;
+        else
+            this.m_mutation = UiFixtureRadioMutation::Revision;
+    }
+    public void armReentry(mut Builder builder, in RadioCallbackSite site){ this.armReentry(builder, site, false); }
+    public void armReentry(mut Builder builder, in RadioCallbackSite site, in b8 panel){
+        this.m_builder = Optional<mut Builder>(builder);
+        this.m_site.value() = site;
+        if(panel)
+            this.m_mutation = UiFixtureRadioMutation::PanelBuilder;
+        else
+            this.m_mutation = UiFixtureRadioMutation::ResetBuilder;
+    }
+    public void armClose(mut PopupState popup, in RadioCallbackSite site){
+        this.m_popup = Optional<mut PopupState>(popup);
+        this.m_site.value() = site;
+        this.m_mutation = UiFixtureRadioMutation::ClosePopup;
+    }
+    public u64 rawCount()const{ return ComputeRadioFixtureRawCount(this.m_count, this.m_removed); }
+    public u64 rawKey(in u64 index)const{
+        return ComputeRadioFixtureRawKey(this.m_count, this.m_removed, this.m_reverse, this.m_duplicate, index);
+    }
+    public void callback(in RadioCallbackSite site)const{
+        ++this.m_calls.value();
+        this.m_label.value().assign(4u, '?');
+        if(this.m_mutations.value() != 0u)
+            ++this.m_callbacksAfterMutation.value();
+        if(this.m_site.value() == RadioCallbackSite::None || this.m_site.value() != site)
+            return;
+        this.m_site.value() = RadioCallbackSite::None;
+        ++this.m_mutations.value();
+        if(this.m_mutation == UiFixtureRadioMutation::Select || this.m_mutation == UiFixtureRadioMutation::SelectAwayBack)
+            ApplyRadioSourceStateMutation(this.m_mutation, this.m_selected, this.m_state.value());
+        else if(this.m_mutation == UiFixtureRadioMutation::Revision)
+            ++this.m_contentRevision.value();
+        else if(this.m_mutation == UiFixtureRadioMutation::Replacement)
+            ++this.m_generation.value();
+        else if(this.m_mutation == UiFixtureRadioMutation::ResetBuilder || this.m_mutation == UiFixtureRadioMutation::PanelBuilder)
+            ApplyRadioSourceBuilderMutation(this.m_mutation, this, this.m_builder.value());
+        else if(this.m_mutation == UiFixtureRadioMutation::ClosePopup)
+            this.m_popup.value().close();
+    }
+}
+
+[extensible]
+class RadioGroupFixture : WidgetFixture{
+    public RadioSource m_source;
+    public RadioGroupState m_state;
+    public RadioGroupResult m_result;
+
+    public void setup(){ SetUpRadioGroupFixture(this); }
+    public void configureRadioSkin(){ this.configureRadioSkin(false); }
+    public void configureRadioSkin(in b8 fallbackOnly){
+        this.configureSkin();
+        RegionVector regions;
+        for(in UiSkinRegion existing : this.m_skin.regions())
+            regions.push_back(existing);
+        const Array<StringView, 6u> names("radio.normal", "radio.checked", "radio.mark", "checkbox.normal", "checkbox.checked", "checkbox.mark");
+        for(u32 index = 0u; index < names.size(); ++index){
+            if(fallbackOnly && index < 3u)
+                continue;
+            UiSkinRegion region;
+            const auto name = ParseName(names[index]);
+            ASSERT_TRUE(name.has_value());
+            region.name = name.value();
+            region.rectangle.x = 88u + index * 8u;
+            region.rectangle.width = 8u;
+            region.rectangle.height = 8u;
+            if(index % 3u != 2u){
+                region.minimumWidth = 24.0f;
+                region.minimumHeight = 24.0f;
+            }
+            regions.push_back(region);
+        }
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 144u, 16u, 1.0f, regions);
+    }
+    public b8 declare(in u64 generation){ return this.declare(generation, RadioGroupOptions()); }
+    public b8 declare(in u64 generation, in RadioGroupOptions options){ return this.declare(generation, options, Rect(10.0f, 10.0f, 340.0f, 320.0f)); }
+    public b8 declare(in u64 generation, in RadioGroupOptions options, in Rect bounds){
+        return DeclareRadioGroupFixture(this, generation, options, bounds);
+    }
+    public b8 declareSource(in u64 generation, in IListDataSource source, mut RadioGroupState state){ return this.declareSource(generation, source, state, RadioGroupOptions()); }
+    public b8 declareSource(in u64 generation, in IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options){ return this.declareSource(generation, source, state, options, Rect(10.0f, 10.0f, 340.0f, 320.0f)); }
+    public b8 declareSource(in u64 generation, in IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options, in Rect bounds){
+        return DeclareRadioGroupFixtureSource(this, generation, source, state, options, bounds);
+    }
+    public b8 prepare(in u64 generation){ return this.prepare(generation, RadioGroupOptions()); }
+    public b8 prepare(in u64 generation, in RadioGroupOptions options){ return this.prepare(generation, options, Rect(10.0f, 10.0f, 340.0f, 320.0f)); }
+    public b8 prepare(in u64 generation, in RadioGroupOptions options, in Rect bounds){
+        return PrepareRadioGroupFixture(this, generation, options, bounds);
+    }
+    public b8 accept(in u64 generation){ return this.accept(generation, RadioGroupOptions()); }
+    public b8 accept(in u64 generation, in RadioGroupOptions options){ return this.accept(generation, options, Rect(10.0f, 10.0f, 340.0f, 320.0f)); }
+    public b8 accept(in u64 generation, in RadioGroupOptions options, in Rect bounds){
+        return AcceptRadioGroupFixture(this, generation, options, bounds);
+    }
+    public WidgetId host()const{ return RadioGroupFixtureHost(this); }
+    public b8 hasChoice(in u64 keyValue, in RadioGroupState state)const{ return this.tryChoice(keyValue, state).has_value(); }
+    public Expected<RadioGroupChoicePlacement> tryChoice(in u64 keyValue, in RadioGroupState state)const{
+        return TryFindRadioGroupChoice(keyValue, state);
+    }
+    public Point choicePoint(in u64 keyValue)const{
+        return ComputeRadioGroupChoicePoint(keyValue, this.m_state);
+    }
+    public UiFixtureAcceptedInputState<128u> accepted()const{ return CaptureAcceptedInput<128u>(this.m_context.input()); }
+    public void expectAccepted(in UiFixtureAcceptedInputState<128u> saved)const{ this.expectAccepted(saved, true); }
+    public void expectAccepted(in UiFixtureAcceptedInputState<128u> saved, in b8 focus)const{ this.expectAccepted(saved, focus, true); }
+    public void expectAccepted(in UiFixtureAcceptedInputState<128u> saved, in b8 focus, in b8 popupScopes)const{
+        ExpectAcceptedInput<128u>(this.m_context.input(), saved, false, focus, popupScopes, true);
+    }
+    public usize regionQuads(in DrawSnapshot snapshot, in Name name)const{
+        UiSkinRegion region;
+        if(this.m_skin.tryFindRegion(name, region))
+            return CountUiSkinRegionQuads(region, this.m_skin.atlasWidth(), snapshot);
+        return 0u;
+    }
+}
+
+u64 ComputeRadioFixtureRawCount(in u64 count, in u64 removed){
+    if(removed != 0u)
+        return count - 1u;
+    return count;
+}
+
+u64 ComputeRadioFixtureRawKey(in u64 count, in u64 removed, in b8 reverse, in b8 duplicate, in u64 index){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    if(index >= activeCount)
+        return 0u;
+    if(duplicate)
+        return 10u;
+    u64 forward = index;
+    if(reverse)
+        forward = activeCount - 1u - index;
+    const u64 value = (forward + 1u) * 10u;
+    if(removed != 0u && value >= removed)
+        return value + 10u;
+    return value;
+}
+
+b8 DeclareRadioGroupFixture(mut RadioGroupFixture self, in u64 generation, in RadioGroupOptions options, in Rect bounds){
+    return self.declareSource(generation, self.m_source, self.m_state, options, bounds);
+}
+
+b8 PrepareRadioGroupFixture(mut RadioGroupFixture self, in u64 generation, in RadioGroupOptions options, in Rect bounds){
+    return self.declare(generation, options, bounds) && self.finishPanel();
+}
+
+b8 AcceptRadioGroupFixture(mut RadioGroupFixture self, in u64 generation, in RadioGroupOptions options, in Rect bounds){
+    return self.prepare(generation, options, bounds) && self.m_context.commitFrame(generation);
+}
+
+WidgetId RadioGroupFixtureHost(in RadioGroupFixture self){
+    return self.id(s_RadioGroupKey, s_RadioPanelKey);
+}
+
+Expected<u64> FindRadioFixtureIndexOf(in u64 count, in u64 removed, in b8 reverseFlag, in b8 duplicate, in u64 value){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    for(u64 cursor = 0u; cursor < activeCount; ++cursor){
+        if(value != 0u && ComputeRadioFixtureRawKey(count, removed, reverseFlag, duplicate, cursor) == value)
+            return cursor;
+    }
+    return MakeUnexpected(Failure());
+}
+
+Expected<u64> FindRadioFixtureEnabledIndex(in u64 count, in u64 removed, in b8 reverseFlag, in b8 duplicate, in b8 allDisabled, in u64 disabledKey, in u64 start, in b8 backwards){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    if(start >= activeCount || allDisabled)
+        return MakeUnexpected(Failure());
+    u64 cursor = start;
+    while(cursor < activeCount){
+        if(ComputeRadioFixtureRawKey(count, removed, reverseFlag, duplicate, cursor) != disabledKey)
+            return cursor;
+        if(backwards){
+            if(cursor == 0u)
+                break;
+            --cursor;
+        }
+        else
+            ++cursor;
+    }
+    return MakeUnexpected(Failure());
+}
+
+void ResetRadioSourceCounters(in RadioSource self){
+    self.m_calls.value() = 0u;
+    self.m_textCalls.value() = 0u;
+    self.m_mutations.value() = 0u;
+    self.m_callbacksAfterMutation.value() = 0u;
+    self.m_beginAccepted.value() = false;
+    self.m_endAccepted.value() = false;
+}
+
+StringView FormatRadioSourceLabel(in RadioSource self, in u64 index){
+    const StringView letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    ++self.m_textCalls.value();
+    self.m_label.value()[0u] = letters[cast<usize>(index % 26u)];
+    self.m_label.value()[1u] = 'b';
+    self.m_label.value()[2u] = 'c';
+    self.m_label.value()[3u] = 'd';
+    return StringView(self.m_label.value());
+}
+
+void ApplyRadioSourceStateMutation(in UiFixtureRadioMutation mutation, in u64 selected, mut RadioGroupState state){
+    if(mutation == UiFixtureRadioMutation::SelectAwayBack)
+        state.select(selected + 10u);
+    state.select(selected);
+}
+
+void ApplyRadioSourceBuilderMutation(in UiFixtureRadioMutation mutation, in RadioSource self, mut Builder builder){
+    if(mutation == UiFixtureRadioMutation::ResetBuilder){
+        builder.reset();
+        return;
+    }
+    self.m_beginAccepted.value() = builder.beginPanel("reentered", Rect(0.0f, 0.0f, 100.0f, 80.0f));
+    self.m_endAccepted.value() = builder.endPanel();
+}
+
+void SetUpRadioGroupFixture(mut RadioGroupFixture self){
+    self.setUpWidgetBase();
+    self.configureRadioSkin();
+    ASSERT_TRUE(self.m_skin.validatePayload());
+    self.m_builder.setSkin(self.m_skin);
+    self.m_state.select(10u);
+}
+
+b8 DeclareRadioGroupFixtureSource(mut RadioGroupFixture self, in u64 generation, in IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options, in Rect bounds){
+    if(!self.begin(generation) || !self.m_builder.beginPanel(s_RadioPanelKey, bounds))
+        return false;
+    self.m_result = self.m_builder.radioGroup(s_RadioGroupKey, source, state, options);
+    return self.m_result.valid;
+}
+
+Expected<RadioGroupChoicePlacement> TryFindRadioGroupChoice(in u64 keyValue, in RadioGroupState state){
+    const RadioGroupPlacement placement = state.placement();
+    for(u32 index = 0u; index < placement.count; ++index){
+        if(placement.rows[cast<usize>(index)].key == keyValue)
+            return placement.rows[cast<usize>(index)];
+    }
+    return MakeUnexpected(Failure());
+}
+
+Point ComputeRadioGroupChoicePoint(in u64 keyValue, in RadioGroupState state){
+    const Expected<RadioGroupChoicePlacement> item = TryFindRadioGroupChoice(keyValue, state);
+    if(item.has_value())
+        return CenterUiRect(item.value().rectangle);
+    return Point();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

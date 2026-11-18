@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/integration/assets_graphics/path_sdk.h>"), cpp_name("::NWB::Tests::GraphicsPathSdk::NativeUnits"), cpp_flags(arena_first_ctor)]
+extern class NativeUnits{
+    PlatformStringView view()const;
+};
+
+[cpp_header("<tests/integration/assets_graphics/path_sdk.h>"), cpp_name("::NWB::Tests::GraphicsPathSdk::ToUtf8")]
+extern void ConvertGraphicsNativeText(in PlatformStringView text, mut String output);
+[cpp_header("<tests/integration/assets_graphics/path_sdk.h>"), cpp_name("::NWB::Tests::GraphicsPathSdk::s_WideNativeChars")]
+extern const b8 s_WideNativeChars;
+[cpp_header("<tests/integration/assets_graphics/path_sdk.h>"), cpp_name("::NWB::Tests::GraphicsPathSdk::s_NativeCharSize")]
+extern const usize s_NativeCharSize;
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::BuildDerivedAssetVirtualPath")]
+extern Expected<Name> DeriveTestAssetPath(in auto root, in StringView virtualRoot, in auto source, mut auto scratch);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals")]
+extern b8 CanonicalGraphicsNativeText(in PlatformStringView text, in StringView expected, mut ScratchStorage scratch);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::AString<::NWB::Core::Alloc::ScratchArena>")]
+extern class PathScratchString{
+    void append(...);
+    void assign(...);
+    void reserve(in usize count);
+    void clear();
+    b8 empty()const;
+    usize size()const;
+    usize capacity()const;
+    u8 operator[](in usize index)const;
+};
+[cpp_header("<core/assets/paths.h>"), cpp_name("::Path<::NWB::Core::Alloc::ScratchArena>")]
+extern class ScratchPath{
+    ScratchPath operator/(in auto child)const;
+    ScratchPath lexicallyNormal()const;
+    ScratchPath lexicallyRelative(in auto base)const;
+    ScratchPath stem()const;
+    ScratchPath extension()const;
+    b8 empty()const;
+    PlatformStringView native()const;
+};
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::AssetPathsDetail::NativeTextView")]
+extern StringView GraphicsNativeText(in PlatformStringView source, mut PathScratchString converted);
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::GenericNativeTextView")]
+extern StringView GraphicsGenericNativeText(in PlatformStringView source, mut PathScratchString converted);
+
+[cpp_header("<global/basic_string.h>"), cpp_name("::WriteConvertedText<char>")]
+extern void WriteConvertedBytes(mut CountingByteOutput counter, in StringView text);
+
+[cpp_header("<core/assets/volume/asset_file_publisher.h>"), cpp_name("::Vector<u8, ::NWB::Core::Alloc::ScratchArena>")]
+extern class PublicationBuffer{
+    void resize(in usize count, in u8 value);
+};
+
+[cpp_header("<core/assets/volume/asset_file_publisher.h>"), cpp_name("::NWB::Core::Assets::AssetFilePublisher::Write")]
+extern b8 WritePublication(in auto path, in auto bytes, in b8 replaceDifferent, mut PublicationBuffer existing);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

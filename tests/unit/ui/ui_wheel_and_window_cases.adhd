@@ -3,256 +3,78 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<tests/unit/ui/glyph_shader_host.h>"), cpp_name("::NWB::Tests::UiShaderHost::nwbUiSdfDistance")]
+extern f32 UiGlyphSdfDistance(in f32 encoded, in u32 spreadPixels);
 
+[cpp_header("<tests/unit/ui/glyph_shader_host.h>"), cpp_name("::NWB::Tests::UiShaderHost::nwbUiSdfCoverage")]
+extern f32 UiGlyphSdfCoverage(in f32 distance, in f32 pixelWidth);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+type UiWindowTests = WidgetFixture;
 
+class UiWheelInputTests{
+    public InputRouter m_router;
+    public Array<HitTarget, 2u> m_targets;
 
-#include <tests/common/floating_point_environment_guard.adhd.h>
-
-#include <tests/unit/ui/glyph_shader_case_types.adhd.h>
-#include <tests/unit/ui/native_input.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/assets_font_atlas/model.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/window_style.adhd.h>
-
-#include <global/bit.h>
-#include <global/simd/vector.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_slang_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ShaderFloat4 = ::__hidden_ui_glyph_sdf_tests::ShaderFloat4;
-using float4 = ShaderFloat4;
-using uint = u32;
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
-    const SIMDVectorSingle scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
-    return { .x = VectorGetX(scaled), .y = VectorGetY(scaled), .z = VectorGetZ(scaled), .w = VectorGetW(scaled) };
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 saturate(const f32 value)noexcept{
-    return value > 0.0f ? Min(1.0f, value) : 0.0f;
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 max(const f32 first, const f32 second)noexcept{
-    return Max(first, second);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Compile the production glyph SDF shader helpers in C++.
-#include <impl/assets/graphics/ui/glyph_sdf.slangi>
-#include <impl/assets/graphics/ui/glyph_coverage.slangi>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-::NWB::Impl::Ui::HitTarget MakeUiWheelHost()noexcept;
-::NWB::Impl::Ui::HitTarget MakeUiWheelPart(const ::NWB::Impl::Ui::HitTarget& host)noexcept;
-};
-
-namespace __hidden_ui_wheel_input_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-class UiWheelInputTests : public testing::Test{
-public:
-    UiWheelInputTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWheelInput))
-        , m_router(m_arena)
-    {
-        m_targets[0u] = ::__hidden_ui_glyph_sdf_tests::MakeUiWheelHost();
-        m_targets[1u] = ::__hidden_ui_glyph_sdf_tests::MakeUiWheelPart(m_targets[0u]);
+    public UiWheelInputTests(){
+        this.m_targets[0u] = MakeUiWheelHost();
+        this.m_targets[1u] = MakeUiWheelPart(this.m_targets[0u]);
     }
+    public InputRoutingResult wheel(in f64 deltaX, in f64 deltaY){ return this.wheel(deltaX, deltaY, Point(10.0f, 10.0f)); }
+    public InputRoutingResult wheel(in f64 deltaX, in f64 deltaY, in Point position){
+        return SendUiWheelInput(this, deltaX, deltaY, position);
+    }
+    public b8 queuePointer(in Point position, in InputEventType type){
+        return QueueUiWheelPointer(this, position, type);
+    }
+}
 
 
-public:
-    [[nodiscard]] InputRoutingResult wheel(f64 deltaX, f64 deltaY, Point position = { 10.0f, 10.0f });
-    [[nodiscard]] b8 queuePointer(const Point& position, InputEventType::Enum type);
+class UiWindowSkinTests : WidgetFixture{
 
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
-    Array<HitTarget, 2u> m_targets;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_window_skin_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-class UiWindowSkinTests : public WidgetFixture{
-public:
-    void configureAlternateTheme(){
-        UiSkin::RegionVector regions(m_arena);
-        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-        for(UiSkinRegion& region : regions){
+    public void configureAlternateTheme(){
+        RegionVector regions;
+        for(in UiSkinRegion region : this.m_skin.regions())
+            regions.push_back(region);
+        for(mut UiSkinRegion region : regions){
             region.rectangle.x += 128u;
             region.rectangle.y = 8u;
-            if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowNormal)){
-                region.padding = { 11.0f, 12.0f, 13.0f, 14.0f };
+            if(region.name == Name(s_UiInputNameWindowNormal)){
+                region.padding = UiSkinInsets(11.0f, 12.0f, 13.0f, 14.0f);
                 region.minimumWidth = 280.0f;
                 region.minimumHeight = 200.0f;
             }
-            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowTitle)){
-                region.padding = { 7.0f, 9.0f, 11.0f, 13.0f };
+            else if(region.name == Name(s_UiInputNameWindowTitle)){
+                region.padding = UiSkinInsets(7.0f, 9.0f, 11.0f, 13.0f);
                 region.minimumHeight = 44.0f;
             }
-            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowCollapse)){
+            else if(region.name == Name(s_UiInputNameWindowCollapse)){
                 region.minimumWidth = 26.0f;
                 region.minimumHeight = 28.0f;
             }
-            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonNormal)
-                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonHover)
-                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonPressed)
-                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonDisabled)){
-                region.padding = { 13.0f, 14.0f, 15.0f, 16.0f };
+            else if(region.name == Name(s_UiInputNameButtonNormal)
+                || region.name == Name(s_UiInputNameButtonHover)
+                || region.name == Name(s_UiInputNameButtonPressed)
+                || region.name == Name(s_UiInputNameButtonDisabled)){
+                region.padding = UiSkinInsets(13.0f, 14.0f, 15.0f, 16.0f);
                 region.minimumWidth = 120.0f;
                 region.minimumHeight = 60.0f;
             }
         }
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiInputNameWindowResize), { 224u, 8u, 8u, 8u }, {}, {}, 18.0f, 22.0f, UiSkinDrawMode::Sprite });
-        const Core::Assets::AssetRef<Texture> replacementTexture("tests/ui/alternate_texture");
-        m_skin.setAtlas(replacementTexture, 256u, 32u, 2.0f, Move(regions));
-        ASSERT_TRUE(m_skin.validatePayload());
-        m_skinGeneration = 2u;
+        regions.push_back(UiSkinRegion(Name(s_UiInputNameWindowResize), UiSkinRect(224u, 8u, 8u, 8u), UiSkinSliceInsets(), UiSkinInsets(), 18.0f, 22.0f, UiSkinDrawMode::Sprite));
+        const AssetRef<Texture> replacementTexture = AssetRef<Texture>("tests/ui/alternate_texture");
+        this.m_skin.setAtlas(replacementTexture, 256u, 32u, 2.0f, regions);
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_skinGeneration = 2u;
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_window_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-class UiWindowTests : public WidgetFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiWheelInputTests = ::__hidden_ui_wheel_input_tests::UiWheelInputTests;
-using UiWindowSkinTests = ::__hidden_ui_window_skin_tests::UiWindowSkinTests;
-using UiWindowTests = ::__hidden_ui_window_tests::UiWindowTests;
-using ControlAction = ::NWB::Impl::Ui::ControlAction;
-using PointerGesture = ::NWB::Impl::Ui::PointerGesture;
-using InputActionId = ::NWB::Impl::Ui::InputActionId;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
-using WindowState = ::NWB::Impl::Ui::WindowState;
-using WindowOptions = ::NWB::Impl::Ui::WindowOptions;
-using WindowMetrics = ::NWB::Impl::Ui::WindowMetrics;
-namespace UiWindowKey = ::NWB::Core::Key;
-using UiWindowKeyEnum = ::NWB::Core::Key::Enum;
-using ::NWB::Impl::s_FontAtlasMinSpreadPixels;
-using ::NWB::Impl::s_FontAtlasMaxSpreadPixels;
-using ::NWB::Impl::Ui::TryInitializeWindow;
-using ::NWB::Impl::Ui::TryApplyWindowMove;
-using ::NWB::Impl::Ui::TryApplyWindowResize;
-
-[[nodiscard]] FOUNDATION_INLINE f32 UiGlyphSdfDistance(const f32 encoded, const u32 spreadPixels)noexcept{
-    return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfDistance(encoded, spreadPixels);
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 UiGlyphSdfCoverage(const f32 distance, const f32 pixelWidth)noexcept{
-    return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfCoverage(distance, pixelWidth);
-}
-
-::NWB::Impl::Ui::InputRoutingResult SendUiWheelInput(UiWheelInputTests& self, f64 deltaX, f64 deltaY, const ::NWB::Impl::Ui::Point& position)noexcept;
-b8 QueueUiWheelPointer(UiWheelInputTests& self, const ::NWB::Impl::Ui::Point& position, const ::NWB::Impl::Ui::InputEventType::Enum& eventType)noexcept;
-};
-
-namespace __hidden_ui_wheel_input_tests{
-FOUNDATION_INLINE InputRoutingResult UiWheelInputTests::wheel(const f64 deltaX, const f64 deltaY, const Point position){
-    return ::__hidden_ui_glyph_sdf_tests::SendUiWheelInput(*this, deltaX, deltaY, position);
-}
-FOUNDATION_INLINE b8 UiWheelInputTests::queuePointer(const Point& position, const InputEventType::Enum type){
-    return ::__hidden_ui_glyph_sdf_tests::QueueUiWheelPointer(*this, position, type);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -310,7 +132,7 @@ InputRoutingResult SendUiWheelInput(mut UiWheelInputTests self, in f64 deltaX, i
     return self.m_router.process();
 }
 
-b8 QueueUiWheelPointer(mut UiWheelInputTests self, in Point position, in InputEventTypeEnum eventType){
+b8 QueueUiWheelPointer(mut UiWheelInputTests self, in Point position, in InputEventType eventType){
     InputEvent event = InputEvent();
     event.position = position;
     event.type = eventType;
@@ -760,25 +582,25 @@ void VerifyUiWindowTests_KeyboardCollapseUsesTabFocusAndSuppressesRepeat(mut UiW
     EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Tab, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, UiWindowKey::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
     EXPECT_EQ(self.m_context.input().focus(), self.id("@window.collapse"));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Enter, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Enter, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Enter, true)).commandConsumed);
     ASSERT_TRUE(self.begin(2u));
     EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
     EXPECT_FALSE(state.collapsed);
     EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, UiWindowKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     ASSERT_TRUE(self.begin(3u));
     EXPECT_FALSE(self.m_builder.beginWindow("window", "Keyboard", state));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_TRUE(state.collapsed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, UiWindowKey::Space, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, UiWindowKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     ASSERT_TRUE(self.begin(4u));
     EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
     EXPECT_FALSE(state.collapsed);
@@ -1005,40 +827,24 @@ NWB_ADHD_GTEST_F(UiWindowTests, InvalidOptionsAndWrongEndRejectCandidatePublicat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_window_fenv_tests{
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-TEST(UiWindowBehaviorTests, PairedGeometryPreservesSignedZeroAndFloatingPointExceptions){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
-    const f32 negativeZero = BitCast<f32>(s_F32SignBitMask);
-    const f32 infinity = BitCast<f32>(s_F32InfinityBits);
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const Point measured = ResolvePaddedIntrinsicSize({ infinity, negativeZero }, { -infinity, negativeZero, 0.0f, negativeZero }, { 0.0f, negativeZero });
+void VerifyUiWindowBehaviorTests_PairedGeometryPreservesSignedZeroAndFloatingPointExceptions(){
+    const auto original = HoldFloatingPointExceptions();
+    ASSERT_TRUE(original.has_value());
+    FloatingPointEnvironmentGuard restore = FloatingPointEnvironmentGuard(original.value());
+    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST).has_value());
+    const f32 negativeZero = bit_cast<f32>(s_F32SignBitMask);
+    const f32 infinity = bit_cast<f32>(s_F32InfinityBits);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value());
+    const Point measured = ResolvePaddedIntrinsicSize(Point(infinity, negativeZero), Insets(-infinity, negativeZero, 0.0f, negativeZero), Point(0.0f, negativeZero));
     const i32 invalidExceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
     EXPECT_TRUE(IsNaN(measured.x));
     EXPECT_TRUE(SignBit(measured.y));
     EXPECT_EQ(invalidExceptions, FE_INVALID);
-
     WindowState state;
-    state.bounds = { Limit<f32>::s_Max, negativeZero, Limit<f32>::s_Max, negativeZero };
+    state.bounds = Rect(f32.max, negativeZero, f32.max, negativeZero);
     WindowMetrics metrics;
     metrics.resizeExtent = negativeZero;
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value());
     const Rect corner = ResolveWindowResizeBounds(state, metrics);
     const i32 overflowExceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
     EXPECT_FALSE(IsFinite(corner.x));
@@ -1046,15 +852,7 @@ TEST(UiWindowBehaviorTests, PairedGeometryPreservesSignedZeroAndFloatingPointExc
     EXPECT_EQ(overflowExceptions, FE_OVERFLOW);
 }
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+NWB_ADHD_GTEST(UiWindowBehaviorTests, PairedGeometryPreservesSignedZeroAndFloatingPointExceptions, VerifyUiWindowBehaviorTests_PairedGeometryPreservesSignedZeroAndFloatingPointExceptions)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

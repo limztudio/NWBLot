@@ -3,483 +3,174 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd>
+#include <tests/unit/ui/ui_fixture_search.adhd>
+#include <tests/unit/ui/ui_fixture_numeric_and_popup_tools.adhd>
+#include <tests/unit/ui/ui_fixture_edit_and_navigation.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <global/limit.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_multiline_text_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-inline constexpr AStringView s_EmbeddedNulShort("a\0b", 3u);
-inline constexpr AStringView s_EmbeddedNulTail("prefix\r\n\0tail", 13u);
-inline constexpr AStringView s_EmbeddedNulBorrowed("prefix a\r\nb\0tail", 16u);
-
-struct AsciiSandwich{
-    Array<char, 3u> bytes{};
-
-    [[nodiscard]] AStringView view()const noexcept{
-        return AStringView(bytes);
-    }
-};
-
-struct C1Sandwich{
-    Array<char, 4u> bytes{};
-
-    [[nodiscard]] AStringView view()const noexcept{
-        return AStringView(bytes);
-    }
-};
-
-[[nodiscard]] FOUNDATION_INLINE AsciiSandwich MakeAsciiSandwich(const u32 scalar)noexcept{
-    return { { 'a', static_cast<char>(scalar), 'b' } };
+class UiMultilineTextBytes<const usize Count>{
+    public Array<u8, Count> bytes;
+    public StringView view()const{ return ReadBinaryTextSlice(this.bytes, 0u, cast<isize>(Count)).value(); }
 }
 
-[[nodiscard]] FOUNDATION_INLINE C1Sandwich MakeC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
-    return { { 'a', static_cast<char>(leadByte), static_cast<char>(scalar), 'b' } };
+UiMultilineTextBytes<3u> MakeUiMultilineTextAsciiSandwich(in u32 scalar){
+    UiMultilineTextBytes<3u> result;
+    result.bytes = Array<u8, 3u>('a', cast<u8>(scalar), 'b');
+    return result;
 }
 
+UiMultilineTextBytes<4u> MakeUiMultilineTextC1Sandwich(in u32 leadByte, in u32 scalar){
+    UiMultilineTextBytes<4u> result;
+    result.bytes = Array<u8, 4u>('a', cast<u8>(leadByte), cast<u8>(scalar), 'b');
+    return result;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
+class UiMultilineViewTests : MultilineViewFixture{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_multiline_view_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-using namespace UiMultilineViewTests;
-
-class UiMultilineViewTests : public MultilineViewFixture{
-public:
-    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> buildLayout(const StringView text){
-        return m_layoutBuilder.layout({ text });
+    public Expected<TextLayout, TextLayoutStatus> buildLayout(in StringView text){
+        ShapeRequest request;
+        request.text = text;
+        return this.m_layoutBuilder.layout(request);
     }
-
-    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> buildDirectionalLayout(const StringView text, const TextDirection::Enum direction){
-        ShapeRequest request{ text };
+    public Expected<TextLayout, TextLayoutStatus> buildDirectionalLayout(in StringView text, in TextDirection direction){
+        ShapeRequest request;
+        request.text = text;
         request.direction = direction;
-        return m_layoutBuilder.layout(request);
+        return this.m_layoutBuilder.layout(request);
     }
+    public b8 adoptBuiltLayout(mut Expected<TextLayout, TextLayoutStatus> layout){ return this.m_view.adoptLayout(layout.value()); }
+}
 
-    [[nodiscard]] b8 adoptBuiltLayout(Expected<TextLayout, TextLayoutStatus::Enum>& layout){
-        return m_view.adoptLayout(*layout);
+
+class UiNestedPopupBuilderTests : WidgetFixture{
+    public PopupState m_parent;
+    public PopupState m_child;
+    public b8 m_beforeActivated = false;
+    public b8 m_afterActivated = false;
+    public b8 m_childActivated = false;
+
+    public void setup(){
+        this.setUpWidgetBase();
+        this.m_parent.open();
+        this.m_child.open();
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_nested_popup_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-inline constexpr AStringView s_BeforeKey = "before";
-inline constexpr AStringView s_ApplyKey = "apply";
-inline constexpr AStringView s_AfterKey = "after";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiNestedPopupBuilderTests : public WidgetFixture{
-public:
-    [[nodiscard]] static WidgetOptions Control(f32 width = 120.0f)noexcept;
-
-
-public:
-    virtual void SetUp()override{
-        WidgetFixture::SetUp();
-        m_parent.open();
-        m_child.open();
+    public WidgetOptions controlOptions()const{ return this.controlOptions(120.0f); }
+    public WidgetOptions controlOptions(in f32 width)const{ return MakeUiNestedPopupControlOptions(width); }
+    public b8 beginParent(in u64 generation){
+        return BeginUiNestedPopupBuilderParent(this, generation);
     }
-
-    [[nodiscard]] WidgetOptions controlOptions(const f32 width = 120.0f)const noexcept{
-        return Control(width);
+    public b8 prepareButtons(in u64 generation){
+        return PrepareUiNestedPopupBuilderButtons(this, generation);
     }
-
-    [[nodiscard]] b8 beginParent(u64 generation);
-    [[nodiscard]] b8 prepareButtons(u64 generation);
-    [[nodiscard]] b8 acceptButtons(u64 generation);
-
-
-public:
-    PopupState m_parent;
-    PopupState m_child;
-    b8 m_beforeActivated = false;
-    b8 m_afterActivated = false;
-    b8 m_childActivated = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_nested_popup_context_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-inline constexpr AStringView s_ParentPopupKey = "parent";
-inline constexpr AStringView s_ChildPopupKey = "child";
-
-struct PopupDeclaration{
-    WidgetState owner;
-    WidgetState action;
-    PopupScope scope;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiNestedPopupContextTests : public UiTestSupport::ContextTestFixture{
-public:
-    UiNestedPopupContextTests()
-        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiNestedPopupContext))
-    {}
-
-
-public:
-    [[nodiscard]] b8 begin(const u64 generation){
-        return m_context.beginFrame(generation) && m_context.beginRoot({ 1401u, 1u });
+    public b8 acceptButtons(in u64 generation){
+        return AcceptUiNestedPopupBuilderButtons(this, generation);
     }
+}
 
-    [[nodiscard]] Expected<WidgetState> declareState(const AStringView key, const WidgetKind::Enum kind){
-        const auto declared = m_context.declare(key, kind);
-        EXPECT_TRUE(declared);
-        if(!declared)
-            return MakeUnexpected(Failure{});
-        return **declared;
+
+class UiNestedPopupContextPopupDeclaration{
+    public WidgetState owner;
+    public WidgetState action;
+    public PopupScope scope;
+
+
+}
+
+
+class UiNestedPopupContextTests : ContextTestFixture{
+
+
+    public b8 begin(in u64 generation){
+        return this.m_context.beginFrame(generation) && this.m_context.beginRoot(WidgetRoot(1401u, 1u));
     }
-
-    [[nodiscard]] Expected<PopupDeclaration> reserve(const AStringView key, const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }){
-        PopupDeclaration result;
-        const auto owner = m_context.declare(key, WidgetKind::Popup);
-        EXPECT_TRUE(owner);
-        if(!owner)
+    public Expected<WidgetState> declareState(in StringView key, in WidgetKind kind){
+        const auto declared = this.m_context.declare(key, kind);
+        EXPECT_TRUE(declared.has_value());
+        if(!declared.has_value())
+            return MakeUnexpected(Failure());
+        return declared.value();
+    }
+    public Expected<UiNestedPopupContextPopupDeclaration> reserve(in StringView key){ return this.reserve(key, Rect(60.0f, 40.0f, 120.0f, 80.0f)); }
+    public Expected<UiNestedPopupContextPopupDeclaration> reserve(in StringView key, in Rect bounds){
+        UiNestedPopupContextPopupDeclaration result;
+        const auto owner = this.m_context.declare(key, WidgetKind::Popup);
+        EXPECT_TRUE(owner.has_value());
+        if(!owner.has_value())
             return MakeUnexpected(owner.error());
-        result.owner = **owner;
-        result.scope.token = { (*owner)->id, (*owner)->declarationGeneration, 900u, 1u };
+        result.owner = owner.value();
+        result.scope.token = PopupToken(owner.value().id, owner.value().declarationGeneration, 900u, 1u);
         result.scope.bounds = bounds;
-        result.scope.viewport = { 0.0f, 0.0f, 400.0f, 300.0f };
-        result.scope.parent = m_context.popupToken();
-        EXPECT_TRUE(m_context.registerPopupScope(result.owner, result.scope));
-        const auto action = m_context.declarePart(result.owner, "action", WidgetKind::Button);
-        EXPECT_TRUE(action);
-        if(!action)
+        result.scope.viewport = Rect(0.0f, 0.0f, 400.0f, 300.0f);
+        result.scope.parent = this.m_context.popupToken();
+        EXPECT_TRUE(this.m_context.registerPopupScope(result.owner, result.scope));
+        const auto action = this.m_context.declarePart(result.owner, "action", WidgetKind::Button);
+        EXPECT_TRUE(action.has_value());
+        if(!action.has_value())
             return MakeUnexpected(action.error());
-        result.action = **action;
+        result.action = action.value();
         return result;
     }
-
-    [[nodiscard]] b8 publish(const PopupDeclaration& popup);
-
-    [[nodiscard]] b8 finish(){
-        return m_context.endRoot() && m_context.finishFrame();
+    public b8 publish(in UiNestedPopupContextPopupDeclaration popup){
+        return PublishUiNestedPopupDeclaration(this, popup);
     }
-};
+    public b8 finish(){
+        return this.m_context.endRoot() && this.m_context.finishFrame();
+    }
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiNestedPopupLifetimeTests : SearchFixture{
+    public PopupState m_parent;
+    public PopupState m_child;
+    public Array<PopupState, 4u> m_deeper;
+    public ComboState m_childCombo;
+    public ContextMenuState m_menu;
+    public PopupToolsSource m_menuSource;
+    public ContextMenuResult m_menuResult;
+    public b8 m_childVisible = false;
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_nested_popup_lifetime_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiPopupToolsTests;
-using namespace NWB::UiSearchComboTests;
-
-inline constexpr AStringView s_MenuRowsKey = "rows";
-inline constexpr AStringView s_BeforeKey = "before";
-inline constexpr AStringView s_AfterKey = "after";
-inline constexpr AStringView s_DeepPopupKey = "deep";
-inline constexpr AStringView s_LeafKey = "leaf";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiNestedPopupLifetimeTests : public SearchFixture{
-public:
-    virtual void SetUp()override{
-        SearchFixture::SetUp();
-        m_source.count = 5u;
-        m_searchSource.full.count = 5u;
-        m_parent.open();
-        m_child.open();
-        for(PopupState& state : m_deeper)
+    public void setup(){
+        SetUpSearchFixture(this);
+        this.m_source.count = 5u;
+        this.m_searchSource.full.count = 5u;
+        this.m_parent.open();
+        this.m_child.open();
+        for(mut PopupState state : this.m_deeper)
             state.open();
     }
-
-    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(parentId(), s_ComboKey); }
-
-    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(parentId(), s_MenuKey), s_MenuRowsKey); }
-
-    [[nodiscard]] b8 beginParent(u64 generation);
-    [[nodiscard]] b8 finishParent(u64 generation);
-    [[nodiscard]] b8 acceptPlain(u64 generation);
-    [[nodiscard]] b8 acceptCombo(u64 generation);
-    [[nodiscard]] b8 acceptSearch(u64 generation);
-    [[nodiscard]] b8 acceptMenu(u64 generation);
-    [[nodiscard]] b8 declareReserved(u64 generation, b8 overflow);
-
-    void reopenParent()noexcept{ m_parent.close(); m_parent.open(); }
-
-    void expectParentControls()const;
-
-
-public:
-    PopupState m_parent;
-    PopupState m_child;
-    Array<PopupState, 4u> m_deeper;
-    ComboState m_childCombo;
-    ContextMenuState m_menu;
-    PopupToolsSource m_menuSource;
-    ContextMenuResult m_menuResult;
-    b8 m_childVisible = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiMultilineTextArena = ::NWB::Tests::TestArena<>;
-using UiMultilineTextGlobalString = ::AString<::ArenaBase>;
-using UiMultilineTextAsciiSandwich = __hidden_ui_multiline_text_tests::AsciiSandwich;
-using UiMultilineTextC1Sandwich = __hidden_ui_multiline_text_tests::C1Sandwich;
-using UiMultilineViewTests = ::NWB::__hidden_ui_multiline_view_tests::UiMultilineViewTests;
-using UiMultilineViewRectVector = ::NWB::Impl::Ui::PaintVector<::NWB::Impl::Ui::Rect>;
-using UiNestedPopupBuilderTests = __hidden_ui_nested_popup_builder_tests::UiNestedPopupBuilderTests;
-using UiNestedPopupContextPopupDeclaration = __hidden_ui_nested_popup_context_tests::PopupDeclaration;
-using UiNestedPopupContextTests = __hidden_ui_nested_popup_context_tests::UiNestedPopupContextTests;
-using UiNestedPopupLifetimeTests = __hidden_ui_nested_popup_lifetime_tests::UiNestedPopupLifetimeTests;
-
-using Color = ::NWB::Impl::Ui::Color;
-using ContainerOptions = ::NWB::Impl::Ui::ContainerOptions;
-using EditBoxPaintFlags = ::NWB::Impl::Ui::EditBoxPaintFlags;
-using EditBoxPlacement = ::NWB::Impl::Ui::EditBoxPlacement;
-using EditBoxStyle = ::NWB::Impl::Ui::EditBoxStyle;
-using EditBoxView = ::NWB::Impl::Ui::EditBoxView;
-using EditCaretLine = ::NWB::Impl::Ui::EditCaretLine;
-using EditModel = ::NWB::Impl::Ui::EditModel;
-using Insets = ::NWB::Impl::Ui::Insets;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-using PopupState = ::NWB::Impl::Ui::PopupState;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using WidgetOptions = ::NWB::Impl::Ui::WidgetOptions;
-using WidgetState = ::NWB::Impl::Ui::WidgetState;
-
-namespace EditMove = ::NWB::Impl::Ui::EditMove;
-namespace EditTextStatus = ::NWB::Impl::Ui::EditTextStatus;
-using EditTextStatusEnum = ::NWB::Impl::Ui::EditTextStatus::Enum;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace TextDirection = ::NWB::Impl::Ui::TextDirection;
-namespace TextLayoutStatus = ::NWB::Impl::Ui::TextLayoutStatus;
-namespace WidgetKind = ::NWB::Impl::Ui::WidgetKind;
-
-using ::NWB::Impl::Ui::NormalizeMultilineText;
-using ::NWB::Impl::Ui::ValidateMultilineText;
-using ::NWB::Impl::Ui::s_InputMaxPopups;
-
-inline constexpr AStringView s_UiMultilineTextEmbeddedNulBorrowed = __hidden_ui_multiline_text_tests::s_EmbeddedNulBorrowed;
-inline constexpr AStringView s_UiMultilineTextEmbeddedNulShort = __hidden_ui_multiline_text_tests::s_EmbeddedNulShort;
-inline constexpr AStringView s_UiMultilineTextEmbeddedNulTail = __hidden_ui_multiline_text_tests::s_EmbeddedNulTail;
-
-[[nodiscard]] FOUNDATION_INLINE UiMultilineTextAsciiSandwich MakeUiMultilineTextAsciiSandwich(const u32 scalar)noexcept{
-    return __hidden_ui_multiline_text_tests::MakeAsciiSandwich(scalar);
-}
-[[nodiscard]] FOUNDATION_INLINE UiMultilineTextC1Sandwich MakeUiMultilineTextC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
-    return __hidden_ui_multiline_text_tests::MakeC1Sandwich(leadByte, scalar);
-}
-[[nodiscard]] FOUNDATION_INLINE usize UiMultilineTextStorageAddress(const UiMultilineTextGlobalString& text)noexcept{
-    return reinterpret_cast<usize>(text.data());
-}
-FOUNDATION_INLINE void UiMultilineTextTakeNormalized(
-    UiMultilineTextGlobalString& dst,
-    ::Expected<UiMultilineTextGlobalString, EditTextStatusEnum>& src
-)noexcept{
-    dst = ::Move(*src);
-}
-FOUNDATION_INLINE void UiMultilineTextTakeNormalized(
-    UiMultilineTextGlobalString& dst,
-    ::Expected<UiMultilineTextGlobalString, EditTextStatusEnum>&& src
-)noexcept{
-    dst = ::Move(*src);
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 UiMultilineViewQuietNaN()noexcept{
-    return ::Limit<f32>::s_QuietNaN;
-}
-FOUNDATION_INLINE void ExpectUiMultilineViewPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
-    ::NWB::UiMultilineViewTests::ExpectPlacement(actual, expected);
-}
-FOUNDATION_INLINE void CollectUiMultilineViewSolidRects(const DrawSnapshot& snapshot, const Color& color, UiMultilineViewRectVector& output){
-    ::NWB::UiMultilineViewTests::CollectSolidRects(snapshot, color, output);
-}
-
-WidgetOptions MakeUiNestedPopupControlOptions(f32 width)noexcept;
-b8 BeginUiNestedPopupBuilderParent(UiNestedPopupBuilderTests& self, u64 generation)noexcept;
-b8 PrepareUiNestedPopupBuilderButtons(UiNestedPopupBuilderTests& self, u64 generation)noexcept;
-b8 AcceptUiNestedPopupBuilderButtons(UiNestedPopupBuilderTests& self, u64 generation)noexcept;
-b8 PublishUiNestedPopupDeclaration(UiNestedPopupContextTests& self, const UiNestedPopupContextPopupDeclaration& popup)noexcept;
-b8 BeginUiNestedPopupLifetimeParent(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
-b8 FinishUiNestedPopupLifetimeParent(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
-b8 AcceptUiNestedPopupLifetimePlain(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
-b8 AcceptUiNestedPopupLifetimeCombo(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
-b8 AcceptUiNestedPopupLifetimeSearch(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
-b8 AcceptUiNestedPopupLifetimeMenu(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
-b8 DeclareUiNestedPopupLifetimeReserved(UiNestedPopupLifetimeTests& self, u64 generation, b8 overflow)noexcept;
-void ExpectUiNestedPopupLifetimeParentControls(const UiNestedPopupLifetimeTests& self)noexcept;
-};
-
-namespace __hidden_ui_nested_popup_builder_tests{
-FOUNDATION_INLINE WidgetOptions UiNestedPopupBuilderTests::Control(const f32 width)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeUiNestedPopupControlOptions(width);
-}
-FOUNDATION_INLINE b8 UiNestedPopupBuilderTests::beginParent(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::BeginUiNestedPopupBuilderParent(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupBuilderTests::prepareButtons(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiNestedPopupBuilderButtons(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupBuilderTests::acceptButtons(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupBuilderButtons(*this, generation);
-}
-};
-
-namespace __hidden_ui_nested_popup_context_tests{
-FOUNDATION_INLINE b8 UiNestedPopupContextTests::publish(const PopupDeclaration& popup){
-    return ::__hidden_ui_glyph_sdf_tests::PublishUiNestedPopupDeclaration(*this, popup);
-}
-};
-
-namespace __hidden_ui_nested_popup_lifetime_tests{
-FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::beginParent(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::BeginUiNestedPopupLifetimeParent(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::finishParent(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::FinishUiNestedPopupLifetimeParent(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptPlain(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimePlain(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptCombo(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeCombo(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptSearch(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeSearch(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptMenu(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeMenu(*this, generation);
-}
-FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::declareReserved(const u64 generation, const b8 overflow){
-    return ::__hidden_ui_glyph_sdf_tests::DeclareUiNestedPopupLifetimeReserved(*this, generation, overflow);
-}
-FOUNDATION_INLINE void UiNestedPopupLifetimeTests::expectParentControls()const{
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiNestedPopupLifetimeParentControls(*this);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public WidgetId fieldId()const{ return RequireUiWidgetId(this.parentId(), s_ComboKey); }
+    public WidgetId menuRows()const{ return RequireUiWidgetId(RequireUiWidgetId(this.parentId(), s_MenuKey), "rows"); }
+    public b8 beginParent(in u64 generation){
+        return BeginUiNestedPopupLifetimeParent(this, generation);
+    }
+    public b8 finishParent(in u64 generation){
+        return FinishUiNestedPopupLifetimeParent(this, generation);
+    }
+    public b8 acceptPlain(in u64 generation){
+        return AcceptUiNestedPopupLifetimePlain(this, generation);
+    }
+    public b8 acceptCombo(in u64 generation){
+        return AcceptUiNestedPopupLifetimeCombo(this, generation);
+    }
+    public b8 acceptSearch(in u64 generation){
+        return AcceptUiNestedPopupLifetimeSearch(this, generation);
+    }
+    public b8 acceptMenu(in u64 generation){
+        return AcceptUiNestedPopupLifetimeMenu(this, generation);
+    }
+    public b8 declareReserved(in u64 generation, in b8 overflow){
+        return DeclareUiNestedPopupLifetimeReserved(this, generation, overflow);
+    }
+    public void reopenParent(){ this.m_parent.close(); this.m_parent.open(); }
+    public void expectParentControls()const{
+        ExpectUiNestedPopupLifetimeParentControls(this);
+    }
 }
 
 
@@ -676,8 +367,8 @@ class UiMultilineTextExpectationCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectUiMultilineTextNormalizedError(mut UiMultilineTextArena arena, in StringView text, in usize maxBytes, in EditTextStatusEnum status){
-    const auto normalized = NormalizeMultilineText(arena.arena, text, maxBytes);
+void ExpectUiMultilineTextNormalizedError(in StringView text, in usize maxBytes, in EditTextStatus status){
+    const auto normalized = NormalizeMultilineText(text, maxBytes);
     EXPECT_FALSE(normalized.has_value());
     if(!normalized.has_value())
         EXPECT_EQ(normalized.error(), status);
@@ -688,7 +379,6 @@ void ExpectUiMultilineTextNormalizedError(mut UiMultilineTextArena arena, in Str
 
 
 void VerifyUiMultilineText_AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes(){
-    UiMultilineTextArena arena = UiMultilineTextArena();
     Array<StringView, 5u> cases = Array<StringView, 5u>();
     cases[0u] = "";
     cases[1u] = "\n";
@@ -698,7 +388,7 @@ void VerifyUiMultilineText_AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes()
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
         EXPECT_TRUE(ValidateMultilineText(text));
-        const auto normalized = NormalizeMultilineText(arena.arena, text, text.size());
+        const auto normalized = NormalizeMultilineText(text, text.size());
         ASSERT_TRUE(normalized.has_value());
         const StringView outputView = StringView(normalized.value().data(), normalized.value().size());
         EXPECT_EQ(outputView, text);
@@ -707,28 +397,27 @@ void VerifyUiMultilineText_AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes()
 }
 
 void VerifyUiMultilineText_ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNormalization(){
-    UiMultilineTextArena arena = UiMultilineTextArena();
     for(u32 scalar = 0u; scalar < s_UiMultilineTextUtf8OneByteMaxExclusive; ++scalar){
         if(scalar > s_UiMultilineTextUnicodeSpace && scalar < s_UiMultilineTextAsciiTilde)
             continue;
         const ScopedTestTrace trace = ScopedTestTrace(scalar);
-        const UiMultilineTextAsciiSandwich bytes = MakeUiMultilineTextAsciiSandwich(scalar);
+        const UiMultilineTextBytes<3u> bytes = MakeUiMultilineTextAsciiSandwich(scalar);
         const StringView text = bytes.view();
         const b8 canonical = scalar == s_UiMultilineTextUnicodeLineFeed || (scalar >= s_UiMultilineTextUnicodeSpace && scalar < s_UiMultilineTextUnicodeDelete);
         EXPECT_EQ(ValidateMultilineText(text), canonical);
         const b8 normalizable = canonical || scalar == s_UiMultilineTextUnicodeTab || scalar == s_UiMultilineTextUnicodeCarriageReturn;
-        auto normalized = NormalizeMultilineText(arena.arena, text, 3u);
+        auto normalized = NormalizeMultilineText(text, 3u);
         EXPECT_EQ(normalized.has_value(), normalizable);
         if(normalizable){
             ASSERT_TRUE(normalized.has_value());
-            UiMultilineTextGlobalString output = UiMultilineTextGlobalString(arena.arena);
-            UiMultilineTextTakeNormalized(output, normalized);
+            String output = String();
+            TestMoveAssign<String>(output, normalized.value());
             u32 replacement = scalar;
             if(scalar == s_UiMultilineTextUnicodeTab)
                 replacement = s_UiMultilineTextUnicodeSpace;
             else if(scalar == s_UiMultilineTextUnicodeCarriageReturn)
                 replacement = s_UiMultilineTextUnicodeLineFeed;
-            const UiMultilineTextAsciiSandwich expected = MakeUiMultilineTextAsciiSandwich(replacement);
+            const UiMultilineTextBytes<3u> expected = MakeUiMultilineTextAsciiSandwich(replacement);
             const StringView outputView = StringView(output.data(), output.size());
             EXPECT_EQ(outputView, expected.view());
             EXPECT_TRUE(ValidateMultilineText(outputView));
@@ -741,19 +430,18 @@ void VerifyUiMultilineText_ControlsAndPrintableAsciiBoundariesRespectCanonicalLf
 }
 
 void VerifyUiMultilineText_RejectsEveryC1ControlExceptNelDuringNormalization(){
-    UiMultilineTextArena arena = UiMultilineTextArena();
     for(u32 scalar = s_UiMultilineTextUtf8OneByteMaxExclusive; scalar <= s_UiMultilineTextUnicodeC1Last; ++scalar){
         const ScopedTestTrace trace = ScopedTestTrace(scalar);
-        const UiMultilineTextC1Sandwich bytes = MakeUiMultilineTextC1Sandwich(s_UiMultilineTextUtf8C1LeadByte, scalar);
+        const UiMultilineTextBytes<4u> bytes = MakeUiMultilineTextC1Sandwich(s_UiMultilineTextUtf8C1LeadByte, scalar);
         const StringView text = bytes.view();
         EXPECT_FALSE(ValidateMultilineText(text));
         if(scalar == s_UiMultilineTextUnicodeNextLine){
-            const auto normalized = NormalizeMultilineText(arena.arena, text, 4u);
+            const auto normalized = NormalizeMultilineText(text, 4u);
             ASSERT_TRUE(normalized.has_value());
             EXPECT_EQ(normalized.value(), "a\nb");
         }
         else{
-            ExpectUiMultilineTextNormalizedError(arena, text, 4u, EditTextStatus::InvalidText);
+            ExpectUiMultilineTextNormalizedError(text, 4u, EditTextStatus::InvalidText);
         }
     }
 }
@@ -766,11 +454,10 @@ void VerifyUiMultilineText_RequiresNormalizationForTabsAndEveryNoncanonicalLineS
     cases[3u] = UiMultilineTextExpectationCase(s_UiMultilineTextNextLine, "\n");
     cases[4u] = UiMultilineTextExpectationCase(s_UiMultilineTextLineSeparator, "\n");
     cases[5u] = UiMultilineTextExpectationCase(s_UiMultilineTextParagraphSeparator, "\n");
-    UiMultilineTextArena arena = UiMultilineTextArena();
     for(in UiMultilineTextExpectationCase test : cases){
         const ScopedTestTrace trace = ScopedTestTrace(test.source);
         EXPECT_FALSE(ValidateMultilineText(test.source));
-        const auto normalized = NormalizeMultilineText(arena.arena, test.source, 1u);
+        const auto normalized = NormalizeMultilineText(test.source, 1u);
         ASSERT_TRUE(normalized.has_value());
         const StringView outputView = StringView(normalized.value().data(), normalized.value().size());
         EXPECT_EQ(outputView, test.expected);
@@ -787,13 +474,12 @@ void VerifyUiMultilineText_PreservesConsecutiveLeadingAndTrailingLinesWhileNorma
     cases[4u] = UiMultilineTextExpectationCase("\r\nfirst\r\n\r\nlast\r", "\nfirst\n\nlast\n");
     cases[5u] = UiMultilineTextExpectationCase("\xC2\x85\xE2\x80\xA8\xE2\x80\xA9", "\n\n\n");
     cases[6u] = UiMultilineTextExpectationCase("last\r\n", "last\n");
-    UiMultilineTextArena arena = UiMultilineTextArena();
-    UiMultilineTextGlobalString output = UiMultilineTextGlobalString(arena.arena);
+    String output = String();
     for(in UiMultilineTextExpectationCase test : cases){
         const ScopedTestTrace trace = ScopedTestTrace(test.source);
-        auto normalized = NormalizeMultilineText(arena.arena, test.source, test.expected.size());
+        auto normalized = NormalizeMultilineText(test.source, test.expected.size());
         ASSERT_TRUE(normalized.has_value());
-        UiMultilineTextTakeNormalized(output, normalized);
+        TestMoveAssign<String>(output, normalized.value());
         const StringView outputView = StringView(output.data(), output.size());
         EXPECT_EQ(outputView, test.expected);
         EXPECT_TRUE(ValidateMultilineText(outputView));
@@ -814,14 +500,13 @@ void VerifyUiMultilineText_UnicodeScalarAndSeparatorAdjacentBoundariesPreserveEx
     cases[9u] = "\xE2\x80\xAA";
     cases[10u] = "\xE2\x80\x8B";
     cases[11u] = "\xE2\x80\x8D";
-    UiMultilineTextArena arena = UiMultilineTextArena();
-    UiMultilineTextGlobalString output = UiMultilineTextGlobalString(arena.arena);
+    String output = String();
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
         EXPECT_TRUE(ValidateMultilineText(text));
-        auto normalized = NormalizeMultilineText(arena.arena, text, text.size());
+        auto normalized = NormalizeMultilineText(text, text.size());
         ASSERT_TRUE(normalized.has_value());
-        UiMultilineTextTakeNormalized(output, normalized);
+        TestMoveAssign<String>(output, normalized.value());
         EXPECT_EQ(StringView(output.data(), output.size()), text);
     }
 }
@@ -853,12 +538,11 @@ void VerifyUiMultilineText_RejectsMalformedUtf8AndNonScalarSequences(){
     cases[22u] = "\xE2\x82x";
     cases[23u] = "\xF8\x88\x80\x80\x80";
     cases[24u] = "valid\r\n\xED\xA0\x80";
-    cases[25u] = s_UiMultilineTextEmbeddedNulShort;
-    UiMultilineTextArena arena = UiMultilineTextArena();
+    cases[25u] = StringView("a\0b", 3u);
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
         EXPECT_FALSE(ValidateMultilineText(text));
-        ExpectUiMultilineTextNormalizedError(arena, text, 128u, EditTextStatus::InvalidText);
+        ExpectUiMultilineTextNormalizedError(text, 128u, EditTextStatus::InvalidText);
     }
 }
 
@@ -870,11 +554,10 @@ void VerifyUiMultilineText_RejectedControlsAfterNormalizedPrefixesFailWithInvali
     cases[3u] = "prefix\xC2\x85\x7F";
     cases[4u] = "prefix\xE2\x80\xA8\xC2\x80";
     cases[5u] = "prefix\xE2\x80\xA9\xC2\x9F";
-    cases[6u] = s_UiMultilineTextEmbeddedNulTail;
-    UiMultilineTextArena arena = UiMultilineTextArena();
+    cases[6u] = StringView("prefix\r\n\0tail", 13u);
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
-        ExpectUiMultilineTextNormalizedError(arena, text, 64u, EditTextStatus::InvalidText);
+        ExpectUiMultilineTextNormalizedError(text, 64u, EditTextStatus::InvalidText);
     }
 }
 
@@ -887,20 +570,18 @@ void VerifyUiMultilineText_LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars(){
     cases[4u] = UiMultilineTextExpectationCase(s_UiMultilineTextThreeByteScalar, s_UiMultilineTextThreeByteScalar);
     cases[5u] = UiMultilineTextExpectationCase(s_UiMultilineTextFourByteScalar, s_UiMultilineTextFourByteScalar);
     cases[6u] = UiMultilineTextExpectationCase("\xED\x95\x9C\r\n\xE2\x80\xA8\t", "\xED\x95\x9C\n\n ");
-    UiMultilineTextArena arena = UiMultilineTextArena();
     for(in UiMultilineTextExpectationCase test : cases){
         const ScopedTestTrace trace = ScopedTestTrace(test.source);
-        const auto normalized = NormalizeMultilineText(arena.arena, test.source, test.expected.size());
+        const auto normalized = NormalizeMultilineText(test.source, test.expected.size());
         ASSERT_TRUE(normalized.has_value());
         const StringView outputView = StringView(normalized.value().data(), normalized.value().size());
         EXPECT_EQ(outputView, test.expected);
-        ExpectUiMultilineTextNormalizedError(arena, test.source, test.expected.size() - 1u, EditTextStatus::TooLarge);
+        ExpectUiMultilineTextNormalizedError(test.source, test.expected.size() - 1u, EditTextStatus::TooLarge);
         EXPECT_TRUE(ValidateMultilineText(outputView));
     }
 }
 
 void VerifyUiMultilineText_ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNormalizedOutput(){
-    UiMultilineTextArena arena = UiMultilineTextArena();
     Array<StringView, 7u> cases = Array<StringView, 7u>();
     cases[0u] = "a";
     cases[1u] = "\n";
@@ -911,78 +592,76 @@ void VerifyUiMultilineText_ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNor
     cases[6u] = s_UiMultilineTextParagraphSeparator;
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
-        ExpectUiMultilineTextNormalizedError(arena, text, 0u, EditTextStatus::TooLarge);
+        ExpectUiMultilineTextNormalizedError(text, 0u, EditTextStatus::TooLarge);
     }
-    const auto nullText = NormalizeMultilineText(arena.arena, StringView(), 0u);
+    const auto nullText = NormalizeMultilineText(StringView(), 0u);
     ASSERT_TRUE(nullText.has_value());
     EXPECT_TRUE(nullText.value().empty());
     EXPECT_TRUE(ValidateMultilineText(StringView()));
-    const auto emptyText = NormalizeMultilineText(arena.arena, "", 0u);
+    const auto emptyText = NormalizeMultilineText("", 0u);
     ASSERT_TRUE(emptyText.has_value());
     EXPECT_TRUE(emptyText.value().empty());
 }
 
 void VerifyUiMultilineText_SupportsBorrowedWholeAndSubviewSourcesAtExactBudgets(){
-    UiMultilineTextArena arena = UiMultilineTextArena();
-    UiMultilineTextGlobalString output = UiMultilineTextGlobalString("a\r\nb\t\xED\x95\x9C\xE2\x80\xA9", arena.arena);
+    String output = String("a\r\nb\t\xED\x95\x9C\xE2\x80\xA9");
     const StringView whole = StringView(output.data(), output.size());
-    auto normalizedWhole = NormalizeMultilineText(arena.arena, whole, 8u);
+    auto normalizedWhole = NormalizeMultilineText(whole, 8u);
     ASSERT_TRUE(normalizedWhole.has_value());
-    UiMultilineTextTakeNormalized(output, normalizedWhole);
+    TestMoveAssign<String>(output, normalizedWhole.value());
     EXPECT_EQ(output, "a\nb \xED\x95\x9C\n");
 
     output.assign(s_UiMultilineTextBorrowedSourceText);
     const StringView middle = StringView(output.data(), output.size()).substr(7u, 6u);
-    auto normalizedMiddle = NormalizeMultilineText(arena.arena, middle, 5u);
+    auto normalizedMiddle = NormalizeMultilineText(middle, 5u);
     ASSERT_TRUE(normalizedMiddle.has_value());
-    UiMultilineTextTakeNormalized(output, normalizedMiddle);
+    TestMoveAssign<String>(output, normalizedMiddle.value());
     EXPECT_EQ(output, "a\nb z");
 
     output.assign("prefix\xE2\x80\xA8");
     const StringView trailing = StringView(output.data(), output.size()).substr(6u, 3u);
-    auto normalizedTrailing = NormalizeMultilineText(arena.arena, trailing, 1u);
+    auto normalizedTrailing = NormalizeMultilineText(trailing, 1u);
     ASSERT_TRUE(normalizedTrailing.has_value());
-    UiMultilineTextTakeNormalized(output, normalizedTrailing);
+    TestMoveAssign<String>(output, normalizedTrailing.value());
     EXPECT_EQ(output, "\n");
 
     const StringView empty = StringView(output.data(), output.size()).substr(output.size(), 0u);
-    auto normalizedEmpty = NormalizeMultilineText(arena.arena, empty, 0u);
+    auto normalizedEmpty = NormalizeMultilineText(empty, 0u);
     ASSERT_TRUE(normalizedEmpty.has_value());
-    UiMultilineTextTakeNormalized(output, normalizedEmpty);
+    TestMoveAssign<String>(output, normalizedEmpty.value());
     EXPECT_TRUE(output.empty());
 }
 
 void VerifyUiMultilineText_RejectedBorrowedViewsPreserveSourceBytesAndStorage(){
-    UiMultilineTextArena arena = UiMultilineTextArena();
-    UiMultilineTextGlobalString output = UiMultilineTextGlobalString(s_UiMultilineTextBorrowedSourceText, arena.arena);
+    String output = String(s_UiMultilineTextBorrowedSourceText);
     output.reserve(128u);
-    const UiMultilineTextGlobalString savedAlias = UiMultilineTextGlobalString(output, arena.arena);
-    const usize storage = UiMultilineTextStorageAddress(output);
+    const String savedAlias = String(output);
+    const usize storage = TestDataAddress(output);
     const usize aliasCapacity = output.capacity();
     const StringView whole = StringView(output.data(), output.size());
-    ExpectUiMultilineTextNormalizedError(arena, whole, 1u, EditTextStatus::TooLarge);
+    ExpectUiMultilineTextNormalizedError(whole, 1u, EditTextStatus::TooLarge);
     EXPECT_EQ(output, savedAlias);
-    EXPECT_EQ(UiMultilineTextStorageAddress(output), storage);
+    EXPECT_EQ(TestDataAddress(output), storage);
     EXPECT_EQ(output.capacity(), aliasCapacity);
     const StringView middle = StringView(output.data(), output.size()).substr(7u, 6u);
-    ExpectUiMultilineTextNormalizedError(arena, middle, 4u, EditTextStatus::TooLarge);
+    ExpectUiMultilineTextNormalizedError(middle, 4u, EditTextStatus::TooLarge);
     EXPECT_EQ(output, savedAlias);
-    EXPECT_EQ(UiMultilineTextStorageAddress(output), storage);
+    EXPECT_EQ(TestDataAddress(output), storage);
     EXPECT_EQ(output.capacity(), aliasCapacity);
 
     Array<StringView, 3u> invalidAlias = Array<StringView, 3u>();
     invalidAlias[0u] = "prefix a\r\nb\x01";
     invalidAlias[1u] = "prefix a\r\nb\xE2\x82";
-    invalidAlias[2u] = s_UiMultilineTextEmbeddedNulBorrowed;
+    invalidAlias[2u] = StringView("prefix a\r\nb\0tail", 16u);
     for(in StringView text : invalidAlias){
-        output.assign(text.data(), text.size());
-        const UiMultilineTextGlobalString savedInvalid = UiMultilineTextGlobalString(output, arena.arena);
-        const usize invalidStorage = UiMultilineTextStorageAddress(output);
+        output.assign(text);
+        const String savedInvalid = String(output);
+        const usize invalidStorage = TestDataAddress(output);
         const usize invalidCapacity = output.capacity();
         const StringView source = StringView(output.data(), output.size()).substr(7u, output.size() - 7u);
-        ExpectUiMultilineTextNormalizedError(arena, source, 64u, EditTextStatus::InvalidText);
+        ExpectUiMultilineTextNormalizedError(source, 64u, EditTextStatus::InvalidText);
         EXPECT_EQ(output, savedInvalid);
-        EXPECT_EQ(UiMultilineTextStorageAddress(output), invalidStorage);
+        EXPECT_EQ(TestDataAddress(output), invalidStorage);
         EXPECT_EQ(output.capacity(), invalidCapacity);
     }
 }
@@ -1019,7 +698,7 @@ void VerifyUiMultilineViewTests_NewSnapshotRequiresMatchingLayoutBeforePlacement
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
     EXPECT_FALSE(self.m_view.ready());
     EXPECT_FALSE(self.place());
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.m_view.hitTest(Point(10.0f, 20.0f), previous).has_value());
     auto layout = self.buildLayout(self.m_view.displayText());
     ASSERT_TRUE(layout.has_value());
@@ -1145,7 +824,7 @@ void VerifyUiMultilineViewTests_PaddingAndOuterClipIntersectWithoutChangingLogic
         Insets(8.0f, 4.0f, 8.0f, 4.0f),
         Rect(30.0f, 22.0f, 20.0f, 40.0f),
         Point()
-    );
+   );
     ASSERT_TRUE(arranged.has_value());
     self.m_placement = arranged.value();
     ExpectUiRect(self.m_placement.frameClip, Rect(30.0f, 22.0f, 20.0f, 38.0f));
@@ -1172,17 +851,17 @@ void VerifyUiMultilineViewTests_FailedPlacementPreservesStateAndInvalidHitsAreRe
     ASSERT_TRUE(self.shapeView());
     ASSERT_TRUE(self.place(20.0f, 12.0f));
     const EditBoxPlacement previous = self.m_placement;
-    const f32 nan = UiMultilineViewQuietNaN();
+    const f32 nan = bit_cast<f32>(0x7fc00000u);
     EXPECT_FALSE(self.place(20.0f, 12.0f, Point(0.0f, nan)));
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.place(20.0f, 12.0f, Point(0.0f, -1.0f)));
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.m_view.arrange(Rect(10.0f, 20.0f, -1.0f, 20.0f), Insets(), Rect(), Point()).has_value());
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.m_view.arrange(previous.bounds, Insets(0.0f, -1.0f, 0.0f, 0.0f), previous.clip, Point()).has_value());
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.m_view.arrange(previous.bounds, Insets(), previous.clip, Point(), 0.0f).has_value());
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.m_view.hitTest(Point(10.0f, nan), previous).has_value());
     EditBoxPlacement malformed = previous;
     malformed.textOrigin.y = nan;
@@ -1204,10 +883,10 @@ void VerifyUiMultilineViewTests_FailedLayoutAdoptionRetainsMultilineGeometryAndP
     EXPECT_EQ(self.m_view.caretGeometry().lines().size(), 2u);
     EXPECT_TRUE(self.m_view.ready());
     ASSERT_TRUE(self.place());
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_NE(self.m_view.shape(self.m_text), TextLayoutStatus::Success);
     ASSERT_TRUE(self.place());
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
 }
 
 void VerifyUiMultilineViewTests_MovingTheViewRetainsOwnedPreeditLineMappingsAndReadyGeometry(mut UiMultilineViewTests self){
@@ -1218,10 +897,11 @@ void VerifyUiMultilineViewTests_MovingTheViewRetainsOwnedPreeditLineMappingsAndR
     ASSERT_TRUE(self.shapeView());
     ASSERT_TRUE(self.place());
     const EditBoxPlacement previous = self.m_placement;
-    EditBoxView assigned = EditBoxView(self.m_arena);
-    native(mut view = self.m_view, mut assigned){
-        EditBoxView moved = ::Move(view);
-        assigned = ::Move(moved);
+    EditBoxView assigned = EditBoxView();
+    {
+        TestValueSlot<EditBoxView> slot;
+        mut EditBoxView moved = slot.take(self.m_view);
+        TestMoveAssign<EditBoxView>(assigned, moved);
     }
     self.m_model.cancelComposition();
     ASSERT_TRUE(self.m_model.setText("replacement"));
@@ -1232,7 +912,7 @@ void VerifyUiMultilineViewTests_MovingTheViewRetainsOwnedPreeditLineMappingsAndR
     const auto arranged = assigned.arrange(previous.bounds, Insets(), previous.clip, Point());
     ASSERT_TRUE(arranged.has_value());
     self.m_placement = arranged.value();
-    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    ExpectUiEditBoxPlacement(self.m_placement, previous);
     const Expected<usize> hit = assigned.hitTest(Point(30.0f, 38.0f), self.m_placement);
     ASSERT_TRUE(hit.has_value());
     EXPECT_EQ(hit.value(), 5u);
@@ -1253,8 +933,8 @@ void VerifyUiMultilineViewTests_PaintOwnsSelectionSegmentsIncludingAnEmptySelect
     flags.caretVisible = false;
     const auto snapshot = self.paintView(style, flags);
     ASSERT_TRUE(snapshot.has_value());
-    UiMultilineViewRectVector selected = UiMultilineViewRectVector(self.m_arena);
-    CollectUiMultilineViewSolidRects(snapshot.value(), style.selection, selected);
+    PaintVector<Rect> selected = PaintVector<Rect>();
+    CollectUiSolidRects(snapshot.value(), style.selection, selected);
     ASSERT_EQ(selected.size(), 3u);
     for(u32 line = 0u; line < 3u; ++line){
         EXPECT_FLOAT_EQ(selected[line].y, self.m_placement.textOrigin.y + self.m_view.caretGeometry().lines()[line].top);
@@ -1286,8 +966,8 @@ void VerifyUiMultilineViewTests_PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLi
     flags.preeditCaretVisible = false;
     const auto snapshot = self.paintView(style, flags);
     ASSERT_TRUE(snapshot.has_value());
-    UiMultilineViewRectVector underlines = UiMultilineViewRectVector(self.m_arena);
-    CollectUiMultilineViewSolidRects(snapshot.value(), style.preedit, underlines);
+    PaintVector<Rect> underlines = PaintVector<Rect>();
+    CollectUiSolidRects(snapshot.value(), style.preedit, underlines);
     ASSERT_EQ(underlines.size(), 3u);
     for(u32 index = 0u; index < 3u; ++index){
         const EditCaretLine line = self.m_view.caretGeometry().lines()[index + 1u];
@@ -1300,7 +980,7 @@ void VerifyUiMultilineViewTests_PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLi
 void VerifyUiMultilineViewTests_SingleLineCenteringRejectsVerticalScrollInfluence(mut UiMultilineViewTests self){
     ASSERT_TRUE(self.m_model.setText("abc\ndef"));
     ASSERT_TRUE(self.shapeView());
-    EditModel single = EditModel(self.m_arena);
+    EditModel single = EditModel();
     ASSERT_TRUE(single.setText("abc"));
     ASSERT_TRUE(self.m_view.snapshot(single));
     auto layout = self.buildLayout(self.m_view.displayText());

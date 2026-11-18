@@ -1,0 +1,208 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_SliderPanelKey = "panel";
+const StringView s_SliderKey = "slider";
+const StringView s_LaterCallbackText = "Later callback";
+
+class SliderCallbackSource : ComboSource{
+    public TestObserved<u32> m_calls;
+    public TestObserved<u32> m_mutations;
+    public TestObserved<b8> m_beginAccepted;
+    public TestObserved<b8> m_endAccepted;
+    public Optional<mut SliderState> m_state;
+    public Optional<mut Builder> m_builder;
+    public Optional<mut PopupState> m_popup;
+    public TestObserved<UiFixtureSliderCallbackMutation> m_mutation = TestObserved<UiFixtureSliderCallbackMutation>(UiFixtureSliderCallbackMutation::None);
+
+    public SliderCallbackSource(){ this.count = 1u; this.generation = 2501u; }
+    public StringView text(in u64 index)const override{
+        ++this.m_calls.value();
+        if(this.m_mutation.value() == UiFixtureSliderCallbackMutation::None)
+            return s_LaterCallbackText;
+        const UiFixtureSliderCallbackMutation mutation = this.m_mutation.value();
+        this.m_mutation.value() = UiFixtureSliderCallbackMutation::None;
+        ++this.m_mutations.value();
+        if(mutation == UiFixtureSliderCallbackMutation::SameValue || mutation == UiFixtureSliderCallbackMutation::AwayAndBack || mutation == UiFixtureSliderCallbackMutation::SetValue)
+            ApplySliderCallbackStateMutation(mutation, this.m_state.value());
+        else if(mutation == UiFixtureSliderCallbackMutation::ResetBuilder || mutation == UiFixtureSliderCallbackMutation::PanelBuilder)
+            ApplySliderCallbackBuilderMutation(mutation, this, this.m_builder.value());
+        else if(mutation == UiFixtureSliderCallbackMutation::ClosePopup)
+            this.m_popup.value().close();
+        return s_LaterCallbackText;
+    }
+    public void armState(in UiFixtureSliderCallbackMutation mutation, mut SliderState state){ this.arm(mutation, Optional<mut SliderState>(state), Optional<mut Builder>(), Optional<mut PopupState>()); }
+    public void armBuilder(in UiFixtureSliderCallbackMutation mutation, mut Builder builder){ this.arm(mutation, Optional<mut SliderState>(), Optional<mut Builder>(builder), Optional<mut PopupState>()); }
+    public void armPopup(in UiFixtureSliderCallbackMutation mutation, mut PopupState popup){ this.arm(mutation, Optional<mut SliderState>(), Optional<mut Builder>(), Optional<mut PopupState>(popup)); }
+    public void clearCounters()const{ ClearSliderCallbackCounters(this); }
+    public void arm(in UiFixtureSliderCallbackMutation mutation){ this.arm(mutation, Optional<mut SliderState>(), Optional<mut Builder>(), Optional<mut PopupState>()); }
+    public void arm(in UiFixtureSliderCallbackMutation mutation, in Optional<mut SliderState> state, in Optional<mut Builder> builder, in Optional<mut PopupState> popup){
+        this.m_mutation.value() = mutation;
+        this.m_state = state;
+        this.m_builder = builder;
+        this.m_popup = popup;
+        this.clearCounters();
+    }
+}
+
+[extensible]
+class SliderFixture : WidgetFixture{
+    public SliderState m_state;
+    public SliderCallbackSource m_laterSource;
+    public ListState m_laterState;
+
+    public void setup(){ SetUpSliderFixture(this); }
+    public void configureSliderSkin(){
+        this.configureSkin();
+        RegionVector regions;
+        for(in UiSkinRegion existing : this.m_skin.regions())
+            regions.push_back(existing);
+        const Array<StringView, 3u> names("slider.track", "slider.thumb.normal", "slider.thumb.hover");
+        for(u32 index = 0u; index < names.size(); ++index){
+            UiSkinRegion region;
+            const auto name = ParseName(names[index]);
+            ASSERT_TRUE(name.has_value());
+            region.name = name.value();
+            region.rectangle.x = 96u + index * 32u;
+            region.rectangle.width = 24u;
+            region.rectangle.height = 24u;
+            region.drawMode = UiSkinDrawMode::NineSlice;
+            region.sliceInsets = UiSkinSliceInsets(6u, 6u, 6u, 6u);
+            region.minimumWidth = 12.0f;
+            region.minimumHeight = 12.0f;
+            regions.push_back(region);
+        }
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 192u, 32u, 1.0f, regions);
+    }
+    public b8 declare(in u64 generation){ return this.declare(generation, MakeSliderFixtureOptions()); }
+    public b8 declare(in u64 generation, in SliderOptions settings){ return this.declare(generation, settings, Rect(10.0f, 10.0f, 360.0f, 240.0f)); }
+    public b8 declare(in u64 generation, in SliderOptions settings, in Rect bounds){
+        return DeclareSliderFixture(this, generation, settings, bounds);
+    }
+    public b8 prepare(in u64 generation){ return this.prepare(generation, MakeSliderFixtureOptions()); }
+    public b8 prepare(in u64 generation, in SliderOptions settings){ return this.prepare(generation, settings, Rect(10.0f, 10.0f, 360.0f, 240.0f)); }
+    public b8 prepare(in u64 generation, in SliderOptions settings, in Rect bounds){
+        return PrepareSliderFixture(this, generation, settings, bounds);
+    }
+    public b8 accept(in u64 generation){ return this.accept(generation, MakeSliderFixtureOptions()); }
+    public b8 accept(in u64 generation, in SliderOptions settings){ return this.accept(generation, settings, Rect(10.0f, 10.0f, 360.0f, 240.0f)); }
+    public b8 accept(in u64 generation, in SliderOptions settings, in Rect bounds){
+        return AcceptSliderFixture(this, generation, settings, bounds);
+    }
+    public b8 sibling(){ return this.sibling("later"); }
+    public b8 sibling(in StringView key){ return DeclareSliderSibling(this, key); }
+    public WidgetId host()const{ return SliderFixtureHost(this); }
+    public WidgetId track()const{ return SliderFixtureTrack(this); }
+    public WidgetId thumb()const{ return SliderFixtureThumb(this); }
+    public Point trackPoint(in f64 normalized, in SliderState state)const{
+        return ComputeSliderTrackPoint(state.placement(), normalized);
+    }
+    public Point thumbPoint()const{ return ComputeSliderFixtureThumbPoint(this); }
+    public UiFixtureAcceptedInputState<64u> accepted()const{ return CaptureAcceptedInput<64u>(this.m_context.input()); }
+    public void expectAccepted(in UiFixtureAcceptedInputState<64u> saved)const{ this.expectAccepted(saved, true); }
+    public void expectAccepted(in UiFixtureAcceptedInputState<64u> saved, in b8 popupFocus)const{
+        ExpectAcceptedInput<64u>(this.m_context.input(), saved, false, popupFocus, popupFocus, true);
+    }
+}
+
+SliderOptions MakeSliderFixtureOptions(){
+    SliderOptions settings = SliderOptions();
+    settings.width.policy = LayoutSizePolicy::Fixed;
+    settings.width.value = 280.0f;
+    settings.keyStep = 0.125;
+    return settings;
+}
+
+ListOptions MakeSliderSiblingListOptions(){
+    ListOptions settings = ListOptions();
+    settings.width.policy = LayoutSizePolicy::Fixed;
+    settings.width.value = 280.0f;
+    settings.height.policy = LayoutSizePolicy::Fixed;
+    settings.height.value = 48.0f;
+    return settings;
+}
+
+Point ComputeSliderTrackPoint(in SliderPlacement placement, in f64 normalized){
+    const VectorSingle point = VectorMultiplyAddExpression(VectorSingle(cast<f32>(normalized), placement.track.height, cast<f32>(normalized), placement.track.height), VectorSingle(placement.centerTravel.width, 0.5f, placement.centerTravel.width, 0.5f), VectorSingle(placement.centerTravel.x, placement.track.y, placement.centerTravel.x, placement.track.y));
+    return Point(point.x, point.y);
+}
+
+b8 DeclareSliderFixture(mut SliderFixture self, in u64 generation, in SliderOptions settings, in Rect bounds){
+    return self.begin(generation) && self.m_builder.beginPanel(s_SliderPanelKey, bounds) && self.m_builder.slider(s_SliderKey, self.m_state, settings);
+}
+
+b8 PrepareSliderFixture(mut SliderFixture self, in u64 generation, in SliderOptions settings, in Rect bounds){
+    return self.declare(generation, settings, bounds) && self.finishPanel();
+}
+
+b8 AcceptSliderFixture(mut SliderFixture self, in u64 generation, in SliderOptions settings, in Rect bounds){
+    return self.prepare(generation, settings, bounds) && self.m_context.commitFrame(generation);
+}
+
+b8 DeclareSliderSibling(mut SliderFixture self, in StringView key){
+    return self.m_builder.virtualList(key, self.m_laterSource, self.m_laterState, MakeSliderSiblingListOptions()).valid;
+}
+
+WidgetId SliderFixtureHost(in SliderFixture self){
+    return self.id(s_SliderKey, s_SliderPanelKey);
+}
+
+WidgetId SliderFixtureTrack(in SliderFixture self){
+    return RequireUiWidgetId(SliderFixtureHost(self), "track");
+}
+
+WidgetId SliderFixtureThumb(in SliderFixture self){
+    return RequireUiWidgetId(SliderFixtureHost(self), "thumb");
+}
+
+Point ComputeSliderFixtureThumbPoint(in SliderFixture self){
+    return CenterUiRect(self.m_state.placement().thumb);
+}
+
+void ClearSliderCallbackCounters(in SliderCallbackSource self){
+    self.m_calls.value() = 0u;
+    self.m_mutations.value() = 0u;
+    self.m_beginAccepted.value() = false;
+    self.m_endAccepted.value() = false;
+}
+
+void ApplySliderCallbackStateMutation(in UiFixtureSliderCallbackMutation mutation, mut SliderState state){
+    if(mutation == UiFixtureSliderCallbackMutation::SameValue){
+        EXPECT_TRUE(state.setValue(state.value()));
+        return;
+    }
+    if(mutation == UiFixtureSliderCallbackMutation::AwayAndBack){
+        const f64 value = state.value();
+        EXPECT_TRUE(state.setValue(0.9));
+        EXPECT_TRUE(state.setValue(value));
+        return;
+    }
+    if(mutation == UiFixtureSliderCallbackMutation::SetValue)
+        EXPECT_TRUE(state.setValue(0.9));
+}
+
+void ApplySliderCallbackBuilderMutation(in UiFixtureSliderCallbackMutation mutation, in SliderCallbackSource self, mut Builder builder){
+    if(mutation == UiFixtureSliderCallbackMutation::ResetBuilder){
+        builder.reset();
+        return;
+    }
+    self.m_beginAccepted.value() = builder.beginPanel("reentered", Rect(0.0f, 0.0f, 100.0f, 80.0f));
+    self.m_endAccepted.value() = builder.endPanel();
+}
+
+void SetUpSliderFixture(mut SliderFixture self){
+    self.setUpWidgetBase();
+    self.configureSliderSkin();
+    ASSERT_TRUE(self.m_skin.validatePayload());
+    self.m_builder.setSkin(self.m_skin);
+    ASSERT_TRUE(self.m_state.setValue(0.25));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

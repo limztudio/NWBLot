@@ -71,6 +71,10 @@ public:
         return update(declarations, assignments, compiledPlan, transaction, scratch);
     }
 
+    [[nodiscard]] b8 updateWithScratch(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments,
+        const GpuCompiledGraph::ReadView& compiledPlan, const GpuGraphSubmissionTransaction& transaction, Alloc::ScratchArena& scratch){
+        return update(declarations, assignments, compiledPlan, transaction, scratch);
+    }
     [[nodiscard]] b8 updateForFrameGraph(
         const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments,
         const GpuCompiledGraph::ReadView& compiledPlan, const GpuGraphSubmissionTransaction& transaction, Telemetry::FrameGraphBuilder& builder

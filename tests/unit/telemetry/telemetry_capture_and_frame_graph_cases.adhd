@@ -10,125 +10,59 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <tests/common/threads.adhd>
 
+static_assert(s_TelemetryGuardCaptureIsNothrow);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class ExistingCallbackObservations{ public u32 calls = 0u; }
 
-
-#include <core/perf/cpu_task_profile.h>
-#include <core/task/cpu/scheduler.h>
-
-#include <global/scope_exit.h>
-#include <global/thread.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::TelemetryCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u32 g_ExistingDiagnosticCallbackCount = 0u;
-
-FOUNDATION_INLINE void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
-    ++g_ExistingDiagnosticCallbackCount;
+void ExistingDiagnosticCallback(in borrow DiagnosticEventRecord record){
+    ++TestProcessValue<ExistingCallbackObservations>().calls;
+}
+class TelemetryUnwindMarker{}
+class CaptureOnUnwind{
+    public ~CaptureOnUnwind(){ CaptureDiagnosticEvent(MakeDiagnosticEvent("warning", "unwind", "cleanup failed", "", 0u)); }
 }
 
-class OwnerThreadTimingSink final : public Core::Perf::TimingSink{
-public:
-    OwnerThreadTimingSink(Core::CpuTaskScheduler& scheduler, Core::Perf::TimingRecorder& recorder, const b8 injectTasks = false)noexcept
-        : m_scheduler(scheduler)
-        , m_recorder(recorder)
-        , m_owner(QueryCurrentThreadId())
-        , m_injectTasks(injectTasks)
-    {}
+class OwnerThreadTimingSink : TimingSink{
+    private mut CpuTaskScheduler m_scheduler;
+    private mut TimingRecorder m_recorder;
+    private ThreadId m_owner;
+    private b8 m_injectTasks;
+    private usize m_injectionBudget = 64u;
+    public usize recordedSamples = 0u;
 
-
-public:
-    [[nodiscard]] virtual b8 enabled()const noexcept override{ return m_recorder.enabled(); }
-
-    [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope(const Name& name)override{
-        EXPECT_EQ(QueryCurrentThreadId(), m_owner);
-        return m_recorder.registerScope(name);
+    public OwnerThreadTimingSink(mut CpuTaskScheduler scheduler, mut TimingRecorder recorder, in b8 injectTasks){
+        this.m_scheduler = scheduler;
+        this.m_recorder = recorder;
+        this.m_owner = QueryCurrentThreadId();
+        this.m_injectTasks = injectTasks;
     }
-
-    virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 frameIndex)override{
-        EXPECT_EQ(QueryCurrentThreadId(), m_owner);
-        ++recordedSamples;
-        m_recorder.recordSample(scope, seconds, frameIndex);
-        if(m_injectTasks && m_injectionBudget != 0u){
-            --m_injectionBudget;
-            const auto taskAdmission = m_scheduler.submit([]()noexcept{});
-            ASSERT_TRUE(taskAdmission);
-            const Core::CpuTaskHandle task = *taskAdmission;
+    public b8 enabled()const override{ return this.m_recorder.enabled(); }
+    public Expected<TimingScopeId> registerScope(in Name name)override{
+        EXPECT_EQ(QueryCurrentThreadId(), this.m_owner);
+        return this.m_recorder.registerScope(name);
+    }
+    public void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex)override{
+        EXPECT_EQ(QueryCurrentThreadId(), this.m_owner);
+        ++this.recordedSamples;
+        this.m_recorder.recordSample(scope, seconds, frameIndex);
+        if(this.m_injectTasks && this.m_injectionBudget != 0u){
+            --this.m_injectionBudget;
+            const auto taskAdmission = this.m_scheduler.submit(lambda[]() -> void{});
+            ASSERT_TRUE(taskAdmission.has_value());
+            const auto task = taskAdmission.value();
             ASSERT_TRUE(task.valid());
-            m_scheduler.wait(task);
+            this.m_scheduler.wait(task);
         }
     }
-
-    virtual void publishFrame(const u64 frameIndex)override{
-        EXPECT_EQ(QueryCurrentThreadId(), m_owner);
-        m_recorder.publishFrame(frameIndex);
+    public void publishFrame(in u64 frameIndex)override{
+        EXPECT_EQ(QueryCurrentThreadId(), this.m_owner);
+        this.m_recorder.publishFrame(frameIndex);
     }
-
-
-public:
-    usize recordedSamples = 0u;
-
-
-private:
-    Core::CpuTaskScheduler& m_scheduler;
-    Core::Perf::TimingRecorder& m_recorder;
-    ThreadId m_owner;
-    b8 m_injectTasks;
-    usize m_injectionBudget = 64u;
-};
-
-struct CpuTaskProfileIntegrationArenaTag{};
-using CpuTaskProfileTestArena = Tests::TestArena<CpuTaskProfileIntegrationArenaTag>;
-using TimingSink = Core::Perf::TimingSink;
-using CpuTaskScheduler = Core::CpuTaskScheduler;
-using CpuTaskSchedulerConfig = Core::CpuTaskSchedulerConfig;
-using CpuTaskScope = Core::CpuTaskScope;
-using CpuTaskProfileLabel = Core::CpuTaskProfileLabel;
-using CpuTaskHandle = Core::CpuTaskHandle;
-
-using Core::Perf::CollectCpuTaskProfile;
-
-static_assert(noexcept(DeclVal<DiagnosticCaptureGuard&>().capture(DeclVal<const DiagnosticEventRecord&>())));
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+class CpuTaskProfileTestArena{ public HeapStorage arena; }
 
 const StringView s_ScopeDiagnosticCategory = "scope_diagnostic";
 const StringView s_TelemetryGuardCategory = "telemetry_guard";
@@ -278,7 +212,7 @@ void VerifyTelemetry_CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestructi
             CaptureSessionCaptureScope captureScope = CaptureSessionCaptureScope(session);
             [essential] info("scope text");
             CaptureDiagnosticEvent(MakeDiagnosticEvent(
-                DiagnosticEventName::s_Error,
+                s_DiagnosticEventError,
                 s_ScopeDiagnosticCategory,
                 "scope diagnostic",
                 "scope.cpp",
@@ -288,7 +222,7 @@ void VerifyTelemetry_CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestructi
         [essential] info("after scope");
     }
     CaptureDiagnosticEvent(MakeDiagnosticEvent(
-        DiagnosticEventName::s_Error,
+        s_DiagnosticEventError,
         s_ScopeDiagnosticCategory,
         "ignored after scope",
         "",
@@ -306,14 +240,14 @@ void VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEve
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     CapturingLogger forwardLogger = CapturingLogger();
     const LogTypeEnum invalidType = cast<LogTypeEnum>(0xffu);
-    native(mut testArena, mut recorder, mut forwardLogger, in invalidType){
-        TextLogCaptureLogger capture(recorder, &forwardLogger);
-        Core::Common::LogString message(FOUNDATION_TEXT("capture admission"), testArena.arena);
+    {
+        TextLogCaptureLogger capture(recorder, forwardLogger);
+        TelemetryLogString message(PlatformTextLiteral("capture admission"), testArena.arena);
         capture.enqueue(message, invalidType);
         EXPECT_EQ(capture.droppedTextLogCount(), 0u);
         EXPECT_EQ(recorder.eventCount(), 0u);
 
-        recorder.setCaptureOptions(Core::Telemetry::CaptureOptions::All());
+        recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
         capture.enqueue(message, invalidType);
         EXPECT_EQ(capture.droppedTextLogCount(), 1u);
         EXPECT_EQ(recorder.eventCount(), 0u);
@@ -321,7 +255,7 @@ void VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEve
         EXPECT_EQ(capture.droppedTextLogCount(), 1u);
         EXPECT_EQ(recorder.eventCount(), 1u);
 
-        recorder.setCaptureOptions(Core::Telemetry::CaptureOptions::Disabled());
+        recorder.setCaptureOptions(TelemetryCaptureOptionsDisabled());
         capture.enqueue(message, invalidType);
         EXPECT_EQ(capture.droppedTextLogCount(), 1u);
         EXPECT_EQ(recorder.eventCount(), 0u);
@@ -359,12 +293,13 @@ void VerifyTelemetry_DiagnosticPayloadPreservesAliasedTextFields(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     DiagnosticEventRecord record = DiagnosticEventRecord();
-    native(mut payload, mut record){
-        constexpr AStringView s_Text = "event category expression message file";
-        payload.reserve(512u);
+    {
+        const StringView s_Text = "event category expression message file";
+        payload.reserve(cast<usize>(512u));
         payload.resize(s_Text.size());
-        FOUNDATION_MEMCPY(payload.data(), payload.size(), s_Text.data(), s_Text.size());
-        const AStringView text(reinterpret_cast<const char*>(payload.data()), payload.size());
+        for(usize i = 0u; i < s_Text.size(); ++i)
+            payload[i] = cast<u8>(s_Text[i]);
+        const StringView text = ReadBinaryTextSlice(ByteOutputView(payload), 0u, payload.size()).value();
         record.event = text.substr(0u, 5u);
         record.category = text.substr(6u, 8u);
         record.expression = text.substr(15u, 10u);
@@ -397,19 +332,16 @@ void VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     u32 callbackCount = 0u;
-    native(mut recorder, mut callbackCount){
-        g_ExistingDiagnosticCallbackCount = 0u;
-        SetDiagnosticEventCallback(ExistingDiagnosticCallback);
+    {
+        TestProcessValue<ExistingCallbackObservations>().calls = 0u;
+        InstallTelemetryDiagnosticCallback(ExistingDiagnosticCallback);
         {
             DiagnosticCaptureGuard guard(recorder);
             EXPECT_FALSE(guard.installed());
-            CaptureDiagnosticEvent(DiagnosticEventRecord{
-                .event = DiagnosticEventName::s_Error,
-                .message = "existing callback should keep ownership",
-            });
+            CaptureDiagnosticEvent(MakeDiagnosticEvent(s_DiagnosticEventError, "", "existing callback should keep ownership", "", 0u));
         }
-        ClearDiagnosticEventCallback(ExistingDiagnosticCallback);
-        callbackCount = g_ExistingDiagnosticCallbackCount;
+        RemoveTelemetryDiagnosticCallback(ExistingDiagnosticCallback);
+        callbackCount = TestProcessValue<ExistingCallbackObservations>().calls;
     }
     EXPECT_EQ(callbackCount, 1u);
     EXPECT_EQ(recorder.eventCount(), 0u);
@@ -484,6 +416,7 @@ void VerifyTelemetry_DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDia
     EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
 }
 
+[cpp_unwind]
 void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
@@ -492,17 +425,11 @@ void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
     ASSERT_TRUE(guard.installed());
     const ArenaMemoryStats prepared = testArena.arena.memoryStats();
     b8 caught = false;
-    native(mut caught){
-        struct UnwindMarker{};
-        try{
-            ScopeExit capture([]()noexcept{
-                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "unwind", .message = "cleanup failed", });
-            });
-            throw UnwindMarker{};
-        }
-        catch(const UnwindMarker&){
-            caught = true;
-        }
+    {
+        caught = ThrowsException<TelemetryUnwindMarker>(lambda[]() -> void{
+            CaptureOnUnwind cleanup;
+            ThrowTestException<TelemetryUnwindMarker>(TelemetryUnwindMarker());
+        });
     }
     const ArenaMemoryStats captured = testArena.arena.memoryStats();
     EXPECT_TRUE(caught);
@@ -581,14 +508,14 @@ void VerifyTelemetry_DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuring
     ASSERT_TRUE(guard.installed());
     b8 captureDidNotAllocate = false;
     b8 builtRecorded = false;
-    native(mut testArena, mut recorder, mut captureDidNotAllocate, mut builtRecorded){
-        builtRecorded = recorder.recordBuiltPayload(EventKind::PerfFrame, 7u, 3u, [&](TelemetryArena&, TelemetryBytes& payload){
+    {
+        builtRecorded = recorder.recordBuiltPayload(EventKind::PerfFrame, 7u, 3u, lambda[mut testArena, mut recorder, mut captureDidNotAllocate](mut TelemetryPayloadStorage arena, mut TelemetryBytes payload) -> b8{
             const auto before = testArena.arena.memoryStats();
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_ErrorEvent, .message = "builder callback", });
+            CaptureDiagnosticEvent(MakeDiagnosticEvent(s_ErrorEvent, "", "builder callback", "", 0u));
             const auto after = testArena.arena.memoryStats();
             captureDidNotAllocate = before.allocationCount == after.allocationCount && before.reallocationCount == after.reallocationCount;
-            payload.push_back(17u);
-            return recorder.recordBinary(EventKind::MemoryFrame, 8u, nullptr, 0u);
+            payload.push_back(cast<u8>(17u));
+            return recorder.recordBinary(EventKind::MemoryFrame, 8u, TestArrayData<u8>(), 0u);
         });
     }
     ASSERT_TRUE(builtRecorded);
@@ -624,18 +551,18 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
     DiagnosticEventRecord source = DiagnosticEventRecord();
     source.event = s_ErrorEvent;
     source.message = "concurrent bounded observer";
-    native(in s_AttemptsPerThread, in source, mut guard){
-        AtomicFlag start;
-        const auto capture = [&]()noexcept{
-            while(!start.test(MemoryOrder::acquire))
+    {
+        TestAtomic<b8> start(false);
+        const auto capture = lambda[mut start, in s_AttemptsPerThread, mut guard, in source]() -> void{
+            while(!start.load(MemoryOrder::acquire))
                 start.wait(false, MemoryOrder::acquire);
             for(usize attempt = 0u; attempt < s_AttemptsPerThread; ++attempt)
                 guard.capture(source);
         };
-        Thread first(capture);
-        Thread second(capture);
-        start.testAndSet(MemoryOrder::release);
-        start.notifyAll();
+        TestThread first(capture);
+        TestThread second(capture);
+        start.store(true, MemoryOrder::release);
+        start.notify_all();
         first.join();
         second.join();
     }
@@ -661,23 +588,19 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
     b8 allIterationsCaptured = true;
     b8 dropsMonotonic = true;
     usize observedEventCount = 0u;
-    native(in s_IterationCount, mut recorder, mut allGuardsInstalled, mut allIterationsCaptured, mut dropsMonotonic, mut observedEventCount){
-        AtomicFlag captureThreadStarted;
-        AtomicFlag stopCaptureThread;
-        Thread captureThread([&captureThreadStarted, &stopCaptureThread]()noexcept{
-            captureThreadStarted.testAndSet(MemoryOrder::release);
-            captureThreadStarted.notifyAll();
-            while(!stopCaptureThread.test(MemoryOrder::acquire)){
-                CaptureDiagnosticEvent(DiagnosticEventRecord{
-                    .event = DiagnosticEventName::s_Error,
-                    .category = s_TelemetryGuardCategory,
-                    .message = "capture during destruction",
-                });
+    {
+        TestAtomic<b8> captureThreadStarted(false);
+        TestAtomic<b8> stopCaptureThread(false);
+        TestThread captureThread(lambda[mut captureThreadStarted, mut stopCaptureThread]() -> void{
+            captureThreadStarted.store(true, MemoryOrder::release);
+            captureThreadStarted.notify_all();
+            while(!stopCaptureThread.load(MemoryOrder::acquire)){
+                CaptureDiagnosticEvent(MakeDiagnosticEvent(s_DiagnosticEventError, s_TelemetryGuardCategory, "capture during destruction", "", 0u));
                 YieldThread();
             }
         });
 
-        while(!captureThreadStarted.test(MemoryOrder::acquire))
+        while(!captureThreadStarted.load(MemoryOrder::acquire))
             captureThreadStarted.wait(false, MemoryOrder::acquire);
 
         u64 previousDroppedCount = 0u;
@@ -689,7 +612,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
                     allGuardsInstalled = false;
                     break;
                 }
-                constexpr i32 s_CaptureDeadlineMS = 5000;
+                const i32 s_CaptureDeadlineMS = 5000;
                 const auto deadline = TimerAddMS(TimerNow(), s_CaptureDeadlineMS);
                 while(recorder.eventCount() == 0u && TimerNow() < deadline)
                     YieldThread();
@@ -705,7 +628,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
             previousDroppedCount = dropped;
         }
 
-        stopCaptureThread.testAndSet(MemoryOrder::release);
+        stopCaptureThread.store(true, MemoryOrder::release);
         captureThread.join();
     }
     EXPECT_TRUE(allGuardsInstalled);
@@ -720,7 +643,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
 
     const usize eventCountAfterFinalDestruction = recorder.eventCount();
     CaptureDiagnosticEvent(MakeDiagnosticEvent(
-        DiagnosticEventName::s_Error,
+        s_DiagnosticEventError,
         s_TelemetryGuardCategory,
         "ignored after destruction",
         "",
@@ -732,7 +655,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
     for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
         const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(events, eventIndex);
         ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(parsed.value().event, DiagnosticEventName::s_Error);
+        EXPECT_EQ(parsed.value().event, s_DiagnosticEventError);
         EXPECT_EQ(parsed.value().category, "telemetry_guard");
         EXPECT_EQ(parsed.value().message, "capture during destruction");
     }
@@ -754,16 +677,16 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
     LoggerRegistrationGuard baseRegistration = LoggerRegistrationGuard(forwardLogger, LoggerBreakPolicy::ReportOnly);
 
     u64 nextFrameIndex = 1u;
-    native(in s_BaseStreamId, in s_MessagesPerWriter, mut session, mut nextFrameIndex){
-        constexpr u32 kWriters = 4u;
-        Latch startGate(kWriters + 1u);
-        Atomic<u32> activeWriters{ kWriters };
-        Array<Thread, kWriters> writers;
+    {
+        const u32 kWriters = 4u;
+        TestLatch startGate(kWriters + 1u);
+        TestAtomic<u32> activeWriters(kWriters);
+        Array<Optional<TestThread>, 4u> writers;
         for(u32 writerIndex = 0u; writerIndex < kWriters; ++writerIndex){
-            writers[writerIndex] = Thread([&](){
+            writers[writerIndex].emplace(lambda[mut startGate, mut activeWriters, in s_MessagesPerWriter]() -> void{
                 startGate.arrive_and_wait();
                 for(u32 messageIndex = 0u; messageIndex < s_MessagesPerWriter; ++messageIndex){
-                    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("concurrent capture scope text {}"), messageIndex);
+                    [essential] info("concurrent capture scope text {}", messageIndex);
                     if((messageIndex & 7u) == 0u)
                         YieldThread();
                 }
@@ -774,19 +697,19 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
         startGate.arrive_and_wait();
         while(activeWriters.load(MemoryOrder::acquire) != 0u){
             session.setFrameIndex(nextFrameIndex);
-            session.setStreamId(s_BaseStreamId + static_cast<u32>(nextFrameIndex & 7u));
+            session.setStreamId(s_BaseStreamId + cast<u32>(nextFrameIndex & 7u));
             {
                 CaptureSessionCaptureScope scope(session);
                 ++nextFrameIndex;
                 session.setFrameIndex(nextFrameIndex);
-                session.setStreamId(s_BaseStreamId + static_cast<u32>(nextFrameIndex & 7u));
+                session.setStreamId(s_BaseStreamId + cast<u32>(nextFrameIndex & 7u));
                 YieldThread();
             }
             ++nextFrameIndex;
         }
 
-        for(Thread& writer : writers)
-            writer.join();
+        for(mut auto writer : writers)
+            writer.value().join();
     }
 
     EXPECT_EQ(forwardLogger.messageCount(), s_ExpectedForwardCount);
@@ -1371,7 +1294,7 @@ void VerifyTelemetry_PhysicalQueueDecodeShrinkingInputClearsPreviousRecords(){
     ASSERT_TRUE(parsed.has_value());
     ASSERT_EQ(parsed.value().physicalQueueRuntimeStatistics.size(), 2u);
 
-    records.resize(1u);
+    records.resize(cast<usize>(1u));
     ASSERT_TRUE(BuildTestFrameGraphPayload(916u, nodes, edges, records, testArena.scratchArena, payload));
     parsed = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
     ASSERT_TRUE(parsed.has_value());

@@ -3,252 +3,109 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_common_types.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <tests/unit/ui/native_input.adhd>
+#include <tests/common/value_storage.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-
-#include <global/limit.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_context_menu_input_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using UiTestSupport::Key;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiContextMenuInputTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiContextMenuInputTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContextMenuInput))
-    {}
-
-
-public:
-    void focus(){
-        EXPECT_TRUE(send(Key(Core::Key::Tab)).commandConsumed);
-        EXPECT_TRUE(release(Core::Key::Tab).commandConsumed);
+class UiContextMenuInputTests : RouterTestFixture{
+    public void focus(){
+        EXPECT_TRUE(this.send(Key(Key::Tab)).commandConsumed);
+        EXPECT_TRUE(this.release(Key::Tab).commandConsumed);
     }
-
-    [[nodiscard]] InputRoutingResult release(const Core::Key::Enum key){
+    public InputRoutingResult release(in Key key){
         InputEvent event;
         event.type = InputEventType::KeyUp;
         event.key = key;
-        return send(event);
+        return this.send(event);
     }
-
-    [[nodiscard]] b8 queueNative(const InputEvent& event){
-        return m_router.queue(UiTestSupport::NativeInput(event)).has_value();
+    public b8 queueNative(in InputEvent event){ return this.m_router.queue(NativeInput(event)).has_value(); }
+    public Expected<ContextMenuAction> take(){ return this.take(1u, 3u); }
+    public Expected<ContextMenuAction> take(in u64 id){ return this.take(id, 3u); }
+    public Expected<ContextMenuAction> take(in u64 id, in u64 declaration){
+        WidgetId widget;
+        widget.value = id;
+        return this.m_router.consumeContextMenu(widget, declaration);
     }
-
-    [[nodiscard]] Expected<ContextMenuAction> take(const u64 id = 1u, const u64 declaration = 3u)noexcept{
-        return m_router.consumeContextMenu({ id }, declaration);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_context_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-constexpr AStringView s_ActionKey = "action";
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget MakeButtonTarget(const Rect& rectangle = { 10.0f, 20.0f, 30.0f, 20.0f })noexcept{
-    HitTarget target;
-    target.rectangle = rectangle;
-    target.clip = { 0.0f, 0.0f, 200.0f, 100.0f };
-    target.focusable = true;
-    target.activatable = true;
-    return target;
 }
 
+class UiContextTests : ContextTestFixture{
+    private CompactString m_indexKey;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiContextTests : public UiTestSupport::ContextTestFixture{
-public:
-    UiContextTests()
-        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContext))
-    {}
-
-
-public:
-    [[nodiscard]] Expected<WidgetState> declareState(const AStringView stableKey, const WidgetKind::Enum kind){
-        const auto declared = m_context.declare(stableKey, kind);
-        if(!declared)
-            return MakeUnexpected(Failure{});
-        return **declared;
+    public Expected<WidgetState> declareState(in StringView key, in WidgetKind kind){
+        const auto declared = this.m_context.declare(key, kind);
+        if(!declared.has_value())
+            return MakeUnexpected(Failure());
+        return declared.value();
     }
-
-    [[nodiscard]] Expected<NotNull<WidgetState*>> declareIndex(const usize index){
-        Array<char, 32u> key;
-        const AStringView formatted = FormatDecimal(index, key);
-        if(formatted.empty())
-            return MakeUnexpected(Failure{});
-        return m_context.declare(formatted, WidgetKind::Button);
+    public Expected<mut WidgetState> declareIndex(in usize index){
+        this.m_indexKey.clear();
+        AppendUnsignedDecimal(this.m_indexKey, index);
+        if(this.m_indexKey.empty())
+            return MakeUnexpected(Failure());
+        return this.m_context.declare(this.m_indexKey.view(), WidgetKind::Button);
     }
-
-    [[nodiscard]] Expected<WidgetState> declareIndexState(const usize index){
-        const auto declared = declareIndex(index);
-        if(!declared)
-            return MakeUnexpected(Failure{});
-        return **declared;
+    public Expected<WidgetState> declareIndexState(in usize index){
+        const auto declared = this.declareIndex(index);
+        if(!declared.has_value())
+            return MakeUnexpected(Failure());
+        return declared.value();
     }
-
-    [[nodiscard]] b8 declareCapacityGrowthAndCheckPointerStability(const WidgetState& survivor){
-        const auto first = declareIndex(s_WidgetMaxStates);
-        if(!first)
+    public b8 declareCapacityGrowthAndCheckPointerStability(in WidgetState survivor){
+        const auto first = this.declareIndex(s_WidgetMaxStates);
+        if(!first.has_value())
             return false;
-        const WidgetState firstCopy = **first;
+        const WidgetState firstCopy = first.value();
         for(usize index = 1u; index < s_WidgetMaxStates - 1u; ++index){
-            if(!declareIndex(s_WidgetMaxStates + index))
+            if(!this.declareIndex(s_WidgetMaxStates + index).has_value())
                 return false;
         }
-        const auto current = declareIndex(0u);
-        if(!current)
+        const auto current = this.declareIndex(0u);
+        if(!current.has_value())
             return false;
-        EXPECT_EQ((*current)->declarationGeneration, survivor.declarationGeneration);
-        EXPECT_TRUE(m_context.takeActivation(**current, true));
-        if(!m_context.addTarget(**current, MakeButtonTarget()))
+        EXPECT_EQ(current.value().declarationGeneration, survivor.declarationGeneration);
+        EXPECT_TRUE(this.m_context.takeActivation(current.value(), true));
+        if(!this.m_context.addTarget(current.value(), MakeUiContextButtonTarget()))
             return false;
-        const auto found = m_context.states().find(firstCopy.id);
-        EXPECT_TRUE(found);
-        if(!found)
+        const auto found = this.m_context.states().find(firstCopy.id);
+        EXPECT_TRUE(found.has_value());
+        if(!found.has_value())
             return false;
-        EXPECT_EQ(found->get(), first->get());
-        EXPECT_EQ((*first)->declarationGeneration, firstCopy.declarationGeneration);
-        return found->get() == first->get();
+        const b8 sameAddress = TestValueAddress<WidgetState>(found.value()) == TestValueAddress<WidgetState>(first.value());
+        EXPECT_TRUE(sameAddress);
+        EXPECT_EQ(first.value().declarationGeneration, firstCopy.declarationGeneration);
+        return sameAddress;
     }
-
-    [[nodiscard]] Expected<WidgetState> prepare(const u64 generation, const WidgetRoot& root, const WidgetKind::Enum kind = WidgetKind::Button){
-        EXPECT_TRUE(m_context.beginFrame(generation));
-        EXPECT_TRUE(m_context.beginRoot(root));
-        const auto state = m_context.declare(s_ActionKey, kind);
-        EXPECT_TRUE(state);
-        if(!state)
+    public Expected<WidgetState> prepare(in u64 generation, in WidgetRoot root){ return this.prepare(generation, root, WidgetKind::Button); }
+    public Expected<WidgetState> prepare(in u64 generation, in WidgetRoot root, in WidgetKind kind){
+        EXPECT_TRUE(this.m_context.beginFrame(generation));
+        EXPECT_TRUE(this.m_context.beginRoot(root));
+        const auto state = this.m_context.declare(s_UiContextActionKey, kind);
+        EXPECT_TRUE(state.has_value());
+        if(!state.has_value())
             return MakeUnexpected(state.error());
-        const WidgetState retained = **state;
-        EXPECT_TRUE(m_context.addTarget(retained, MakeButtonTarget()));
-        EXPECT_TRUE(m_context.endRoot());
-        EXPECT_TRUE(m_context.finishFrame());
-        if(m_context.failed())
-            return MakeUnexpected(Failure{});
+        const WidgetState retained = state.value();
+        EXPECT_TRUE(this.m_context.addTarget(retained, MakeUiContextButtonTarget()));
+        EXPECT_TRUE(this.m_context.endRoot());
+        EXPECT_TRUE(this.m_context.finishFrame());
+        if(this.m_context.failed())
+            return MakeUnexpected(Failure());
         return retained;
     }
-
-    [[nodiscard]] b8 queuePointer(const InputEventType::Enum type, const Point position = { 15.0f, 25.0f }){
-        return m_context.input().queue(UiTestSupport::NativeInput({ .position = position, .type = type })).has_value();
+    public b8 queuePointer(in InputEventType type){ return this.queuePointer(type, Point(15.0f, 25.0f)); }
+    public b8 queuePointer(in InputEventType type, in Point point){ return this.m_context.input().queue(NativeInput(Pointer(type, point))).has_value(); }
+    public InputRoutingResult click(){ return this.click(Point(15.0f, 25.0f)); }
+    public InputRoutingResult click(in Point point){
+        EXPECT_TRUE(this.queuePointer(InputEventType::PrimaryDown, point));
+        EXPECT_TRUE(this.queuePointer(InputEventType::PrimaryUp, point));
+        return this.m_context.input().process();
     }
-
-    InputRoutingResult click(const Point position = { 15.0f, 25.0f }){
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = position, .type = InputEventType::PrimaryDown })));
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = position, .type = InputEventType::PrimaryUp })));
-        return m_context.input().process();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiContextMenuInputTests = __hidden_ui_context_menu_input_tests::UiContextMenuInputTests;
-using UiContextTests = __hidden_ui_context_tests::UiContextTests;
-
-using ContextMenuAction = ::NWB::Impl::Ui::ContextMenuAction;
-using ControlToken = ::NWB::Impl::Ui::ControlToken;
-using InputActionId = ::NWB::Impl::Ui::InputActionId;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using WidgetState = ::NWB::Impl::Ui::WidgetState;
-
-namespace InputActionSource = ::NWB::Impl::Ui::InputActionSource;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace PopupDismissReason = ::NWB::Impl::Ui::PopupDismissReason;
-using PopupDismissReasonEnum = ::NWB::Impl::Ui::PopupDismissReason::Enum;
-namespace WidgetKind = ::NWB::Impl::Ui::WidgetKind;
-namespace CoreKey = ::NWB::Core::Key;
-using CoreKeyEnum = ::NWB::Core::Key::Enum;
-
-using ::NWB::Impl::Ui::s_InputMaxContextMenuActions;
-using ::NWB::Impl::Ui::s_WidgetMaxStates;
-
-[[nodiscard]] FOUNDATION_INLINE f32 UiContextMenuInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f32 UiContextMenuQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] FOUNDATION_INLINE CoreKeyEnum MakeUiContextMenuOutOfBoundsKey()noexcept{
-    return static_cast<CoreKeyEnum>(static_cast<i32>(::NWB::Core::Key::Menu) + 1);
 }
-[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiContextMenuPointer(const InputEventTypeEnum type, const Point position = { 15.0f, 15.0f })noexcept{
-    return ::UiTestSupport::Pointer(type, position);
-}
-[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiContextMenuKey(const CoreKeyEnum key, const b8 shift = false, const b8 control = false, const b8 alt = false, const b8 repeat = false)noexcept{
-    return ::UiTestSupport::Key(key, shift, control, alt, repeat);
-}
-[[nodiscard]] FOUNDATION_INLINE AStringView MakeUiWidgetIdEmbeddedNulKey()noexcept{
-    return AStringView("a\0b", 3u);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 const StringView s_UiContextActionKey = "action";
@@ -338,7 +195,7 @@ void VerifyUiContextMenuInputTests_SecondaryReleaseTriggersOnceWithoutActivating
     target.pointerGesture = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 42u));
     self.focus();
-    const InputRoutingResult down = self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, Point(16.0f, 18.0f)));
+    const InputRoutingResult down = self.send(Pointer(InputEventType::SecondaryDown, Point(16.0f, 18.0f)));
     EXPECT_TRUE(down.pointerConsumed);
     EXPECT_TRUE(self.m_router.secondaryDown());
     EXPECT_FALSE(self.m_router.primaryDown());
@@ -348,7 +205,7 @@ void VerifyUiContextMenuInputTests_SecondaryReleaseTriggersOnceWithoutActivating
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_FALSE(self.m_router.consumePointerGesture(target.id, target.declarationGeneration).has_value());
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     const Expected<ContextMenuAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     const ContextMenuAction action = actionResult.value();
@@ -376,8 +233,8 @@ void VerifyUiContextMenuInputTests_SecondaryMenuOnAnotherParentAnchorPreservesAn
     ASSERT_EQ(self.m_router.focus(), previousFocus);
     ASSERT_NE(previousFocus, anchor.id);
     const Point position = Point(110.0f, 60.0f);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, position)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, position)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown, position)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, position)).pointerConsumed);
     EXPECT_EQ(self.m_router.focus(), previousFocus);
     const Expected<ContextMenuAction> actionResult = self.take(anchor.id.value, anchor.declarationGeneration);
     ASSERT_TRUE(actionResult.has_value());
@@ -420,9 +277,9 @@ void VerifyUiContextMenuInputTests_SecondaryMenuOnAnotherParentAnchorPreservesAn
     scopes[1u] = menu;
     ASSERT_TRUE(self.m_router.commitTargets(opened, 2u, scopes));
     EXPECT_EQ(self.m_router.focus(), command.id);
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Escape)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Escape).commandConsumed);
-    const Expected<PopupDismissReasonEnum> reasonResult = self.m_router.consumePopupDismissal(menu.token);
+    EXPECT_TRUE(self.send(Key(Key::Escape)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Escape).commandConsumed);
+    const Expected<PopupDismissReason> reasonResult = self.m_router.consumePopupDismissal(menu.token);
     ASSERT_TRUE(reasonResult.has_value());
     EXPECT_EQ(reasonResult.value(), PopupDismissReason::Cancel);
     EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
@@ -435,15 +292,15 @@ void VerifyUiContextMenuInputTests_SecondaryMenuOnAnotherParentAnchorPreservesAn
 void VerifyUiContextMenuInputTests_HeldSecondaryConsumesMovementLeaveAndReleaseOutsideTheTarget(mut UiContextMenuInputTests self){
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_TRUE(self.m_router.pointerKnown());
     EXPECT_FLOAT_EQ(self.m_router.pointerPosition().x, 15.0f);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::PointerLeave)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PointerLeave)).pointerConsumed);
     EXPECT_FALSE(self.m_router.pointerKnown());
     EXPECT_TRUE(self.m_router.secondaryDown());
     EXPECT_TRUE(self.m_router.wantsPointer());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::PointerMove, Point(180.0f, 180.0f))).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PointerMove, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.secondaryDown());
     EXPECT_FALSE(self.m_router.wantsPointer());
     EXPECT_FALSE(self.take().has_value());
@@ -454,16 +311,16 @@ void VerifyUiContextMenuInputTests_DuplicateSecondaryDownCannotTriggerAnotherTar
     targets[0u] = MakeUiContextMenuTarget(1u);
     targets[1u] = MakeUiContextMenuTargetAt(2u, Rect(70.0f, 10.0f, 40.0f, 20.0f));
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, Point(75.0f, 15.0f))).pointerConsumed);
-    EXPECT_FALSE(self.take().has_value());
-    EXPECT_FALSE(self.take(2u).has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(75.0f, 15.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown, Point(75.0f, 15.0f))).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
     EXPECT_FALSE(self.take(2u).has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, Point(75.0f, 15.0f))).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(75.0f, 15.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, Point(75.0f, 15.0f))).pointerConsumed);
+    EXPECT_FALSE(self.take().has_value());
+    EXPECT_FALSE(self.take(2u).has_value());
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown, Point(75.0f, 15.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, Point(75.0f, 15.0f))).pointerConsumed);
     const Expected<ContextMenuAction> actionResult2 = self.take(2u);
     ASSERT_TRUE(actionResult2.has_value());
     EXPECT_EQ(actionResult2.value().id.target, targets[1u].id);
@@ -474,8 +331,8 @@ void VerifyUiContextMenuInputTests_OrdinaryAcceptedSurfaceConsumesSecondaryWitho
     target.contextMenu = false;
     target.pointerGesture = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
     EXPECT_FALSE(self.m_router.consumePointerGesture(target.id, target.declarationGeneration).has_value());
@@ -486,16 +343,16 @@ void VerifyUiContextMenuInputTests_MenuAndShiftF10UseTheAcceptedKeyboardAnchorOn
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 5u));
     self.focus();
     EXPECT_FALSE(self.m_router.pointerKnown());
-    Array<CoreKeyEnum, 2u> keys = Array<CoreKeyEnum, 2u>();
-    keys[0u] = CoreKey::Menu;
-    keys[1u] = CoreKey::F10;
-    for(in CoreKeyEnum key : keys){
-        const b8 shift = key == CoreKey::F10;
-        EXPECT_TRUE(self.send(MakeUiContextMenuKey(key, shift)).commandConsumed);
+    Array<Key, 2u> keys = Array<Key, 2u>();
+    keys[0u] = Key::Menu;
+    keys[1u] = Key::F10;
+    for(in Key key : keys){
+        const b8 shift = key == Key::F10;
+        EXPECT_TRUE(self.send(Key(key, shift)).commandConsumed);
         EXPECT_TRUE(self.m_router.ownsKey(key));
         EXPECT_FALSE(self.take().has_value());
-        EXPECT_TRUE(self.send(MakeUiContextMenuKey(key, shift, false, false, true)).commandConsumed);
-        EXPECT_TRUE(self.send(MakeUiContextMenuKey(key, shift)).commandConsumed);
+        EXPECT_TRUE(self.send(Key(key, shift, false, false, true)).commandConsumed);
+        EXPECT_TRUE(self.send(Key(key, shift)).commandConsumed);
         EXPECT_FALSE(self.take().has_value());
         EXPECT_TRUE(self.release(key).commandConsumed);
         const Expected<ContextMenuAction> actionResult = self.take();
@@ -518,15 +375,15 @@ void VerifyUiContextMenuInputTests_OtherF10ModifierCombinationsStayWithTheNormal
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     self.focus();
     Array<InputEvent, 5u> events = Array<InputEvent, 5u>();
-    events[0u] = MakeUiContextMenuKey(CoreKey::F10);
-    events[1u] = MakeUiContextMenuKey(CoreKey::F10, false, true);
-    events[2u] = MakeUiContextMenuKey(CoreKey::F10, false, false, true);
-    events[3u] = MakeUiContextMenuKey(CoreKey::F10, true, true);
-    events[4u] = MakeUiContextMenuKey(CoreKey::F10, true, false, true);
+    events[0u] = Key(Key::F10);
+    events[1u] = Key(Key::F10, false, true);
+    events[2u] = Key(Key::F10, false, false, true);
+    events[3u] = Key(Key::F10, true, true);
+    events[4u] = Key(Key::F10, true, false, true);
     for(in InputEvent event : events){
         EXPECT_TRUE(self.send(event).commandConsumed);
         EXPECT_FALSE(self.take().has_value());
-        EXPECT_TRUE(self.release(CoreKey::F10).commandConsumed);
+        EXPECT_TRUE(self.release(Key::F10).commandConsumed);
     }
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -535,15 +392,15 @@ void VerifyUiContextMenuInputTests_OtherF10ModifierCombinationsStayWithTheNormal
 void VerifyUiContextMenuInputTests_UnfocusedOrUnboundContextKeysDoNotCreateTriggers(mut UiContextMenuInputTests self){
     HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_FALSE(self.release(CoreKey::Menu).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::F10, true)).commandConsumed);
-    EXPECT_FALSE(self.release(CoreKey::F10).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_FALSE(self.release(Key::Menu).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::F10, true)).commandConsumed);
+    EXPECT_FALSE(self.release(Key::F10).commandConsumed);
     target.contextMenu = false;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
 }
 
@@ -551,10 +408,10 @@ void VerifyUiContextMenuInputTests_RepeatWithoutAnInitialPressCannotOpenAMenu(mu
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     self.focus();
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu, false, false, false, true)).commandConsumed);
-    EXPECT_FALSE(self.release(CoreKey::Menu).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::F10, true, false, false, true)).commandConsumed);
-    EXPECT_FALSE(self.release(CoreKey::F10).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::Menu, false, false, false, true)).commandConsumed);
+    EXPECT_FALSE(self.release(Key::Menu).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::F10, true, false, false, true)).commandConsumed);
+    EXPECT_FALSE(self.release(Key::F10).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
 }
 
@@ -562,23 +419,23 @@ void VerifyUiContextMenuInputTests_SceneOwnedContextKeysCannotTransferToAnEditor
     HitTarget target = MakeUiContextMenuTarget(1u);
     target.textEditable = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::Menu)).commandConsumed);
     target.focusOnCommit = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu, false, false, false, true)).commandConsumed);
-    EXPECT_FALSE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::Menu, false, false, false, true)).commandConsumed);
+    EXPECT_FALSE(self.release(Key::Menu).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
     self.m_router.clearFocus();
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::F10)).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::F10)).commandConsumed);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 3u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::F10, true, false, false, true)).commandConsumed);
-    EXPECT_FALSE(self.release(CoreKey::F10).commandConsumed);
+    EXPECT_FALSE(self.send(Key(Key::F10, true, false, false, true)).commandConsumed);
+    EXPECT_FALSE(self.release(Key::F10).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::F10, true)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::F10).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::F10, true)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::F10).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
 }
 
@@ -591,8 +448,8 @@ void VerifyUiContextMenuInputTests_OnlyTheTopAcceptedHitMaySupplyAContextMenu(mu
     targets[0u] = base;
     targets[1u] = cover;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
     EXPECT_FALSE(self.take(2u).has_value());
 }
@@ -601,29 +458,29 @@ void VerifyUiContextMenuInputTests_DisabledAndClippedTargetsCannotReceiveContext
     HitTarget target = MakeUiContextMenuTarget(1u);
     target.enabled = false;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     target.enabled = true;
     target.clip = Rect(100.0f, 100.0f, 20.0f, 20.0f);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_FALSE(self.send(Key(Key::Menu)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
 }
 
 void VerifyUiContextMenuInputTests_SceneOwnedSecondaryStaysWithTheSceneAfterAPopupAppears(mut UiContextMenuInputTests self){
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryDown, Point(180.0f, 180.0f))).pointerConsumed);
     const PopupScope scope = MakeUiContextMenuScope(1u);
     const Array<HitTarget, 3u> targets = MakeUiContextMenuPopupTargets(scope);
     ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, MakeUiSinglePopupScopeArray(scope)));
     const Point inside = Point(55.0f, 55.0f);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::PointerMove, inside)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::PointerMove, inside)).pointerConsumed);
     EXPECT_FALSE(self.m_router.wouldConsumePointer(inside));
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::PrimaryDown, inside)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::PrimaryUp, inside)).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, inside)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::PrimaryDown, inside)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::PrimaryUp, inside)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryUp, inside)).pointerConsumed);
     EXPECT_TRUE(self.m_router.wantsPointer());
     EXPECT_FALSE(self.take(101u).has_value());
     EXPECT_FALSE(self.m_router.consumePopupDismissal(scope.token).has_value());
@@ -635,15 +492,15 @@ void VerifyUiContextMenuInputTests_SceneOwnedPrimaryCannotTransferASecondaryPres
     target.scrollable = true;
     target.navigable = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::PrimaryDown, Point(180.0f, 180.0f))).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    InputEvent wheel = MakeUiContextMenuPointer(InputEventType::PointerWheel);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::PrimaryDown, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    InputEvent wheel = Pointer(InputEventType::PointerWheel);
     wheel.scrollY = 1.0;
     EXPECT_FALSE(self.send(wheel).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_FALSE(self.send(wheel).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
 }
 
@@ -651,15 +508,15 @@ void VerifyUiContextMenuInputTests_OutsideSecondaryDismissesTheTopPopupAndConsum
     const PopupScope scope = MakeUiContextMenuScope(1u);
     const Array<HitTarget, 3u> targets = MakeUiContextMenuPopupTargets(scope);
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(scope)));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    const Expected<PopupDismissReasonEnum> reasonResult = self.m_router.consumePopupDismissal(scope.token);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    const Expected<PopupDismissReason> reasonResult = self.m_router.consumePopupDismissal(scope.token);
     ASSERT_TRUE(reasonResult.has_value());
     EXPECT_EQ(reasonResult.value(), PopupDismissReason::OutsideClick);
     EXPECT_FALSE(self.take().has_value());
     const HitTarget base = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(base), 2u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::PointerMove, Point(180.0f, 180.0f))).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PointerMove, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.wantsPointer());
     EXPECT_FALSE(self.m_router.consumeActivation(base.id));
 }
@@ -668,15 +525,15 @@ void VerifyUiContextMenuInputTests_PopupTriggersCopyTheExactScopeAndClosingItRet
     const PopupScope scope = MakeUiContextMenuScope(1u);
     const Array<HitTarget, 3u> targets = MakeUiContextMenuPopupTargets(scope);
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(scope)));
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     const Expected<ContextMenuAction> actionResult = self.take(101u);
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().popup, scope.token);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, Point(55.0f, 55.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown, Point(55.0f, 55.0f))).pointerConsumed);
     self.m_router.closePopup(scope.token);
     EXPECT_FALSE(self.take(101u).has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
 }
 
 void VerifyUiContextMenuInputTests_PopupReplacementCannotReplayAContextActionOrItsHeldPointerPress(mut UiContextMenuInputTests self){
@@ -684,17 +541,17 @@ void VerifyUiContextMenuInputTests_PopupReplacementCannotReplayAContextActionOrI
     const Array<HitTarget, 3u> targets = MakeUiContextMenuPopupTargets(first);
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(first)));
     const Point inside = Point(55.0f, 55.0f);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, inside)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown, inside)).pointerConsumed);
     const PopupScope replacement = MakeUiContextMenuScope(2u);
     const Array<HitTarget, 3u> replacementTargets = MakeUiContextMenuPopupTargets(replacement);
     ASSERT_TRUE(self.m_router.commitTargets(replacementTargets, 2u, MakeUiSinglePopupScopeArray(replacement)));
     ASSERT_TRUE(self.m_router.commitTargets(targets, 3u, MakeUiSinglePopupScopeArray(first)));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, inside)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown, inside)).pointerConsumed);
     EXPECT_FALSE(self.take(101u).has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, inside)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, inside)).pointerConsumed);
     EXPECT_FALSE(self.take(101u).has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown, inside)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, inside)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown, inside)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, inside)).pointerConsumed);
     const Expected<ContextMenuAction> actionResult = self.take(101u);
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().popup, first.token);
@@ -703,18 +560,18 @@ void VerifyUiContextMenuInputTests_PopupReplacementCannotReplayAContextActionOrI
 void VerifyUiContextMenuInputTests_DeclarationReplacementDiscardsIntentionsButPreservesHeldReleaseConsumption(mut UiContextMenuInputTests self){
     HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     ++target.declarationGeneration;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
     EXPECT_FALSE(self.take(1u, target.declarationGeneration).has_value());
     --target.declarationGeneration;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 3u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     ASSERT_TRUE(self.take().has_value());
 }
 
@@ -722,50 +579,50 @@ void VerifyUiContextMenuInputTests_ControlRebindRetiresKeyboardIntentionsEvenWhe
     HitTarget target = MakeUiContextMenuTarget(1u);
     target.focusOnCommit = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
     ++target.control.contentRevision;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
     --target.control.contentRevision;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 3u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu, false, false, false, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu, false, false, false, true)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
 }
 
 void VerifyUiContextMenuInputTests_DisablingOrOmittingAnAnchorRetiresItsPendingActionPermanently(mut UiContextMenuInputTests self){
     HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     target.enabled = false;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
     target.enabled = true;
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 3u));
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     const Vector<HitTarget> emptyTargets = Vector<HitTarget>();
     ASSERT_TRUE(self.m_router.commitTargets(emptyTargets, 4u));
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 5u));
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
 }
 
 void VerifyUiContextMenuInputTests_ExplicitTargetInvalidationAndControlFencesPruneContextActions(mut UiContextMenuInputTests self){
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     self.m_router.invalidateTarget(target.id);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     ControlToken changed = target.control;
     ++changed.contentRevision;
     self.m_router.fenceControl(target.id, target.declarationGeneration, changed);
@@ -778,11 +635,11 @@ void VerifyUiContextMenuInputTests_ConsumptionRequiresTheExactDeclarationAndKeep
     HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 8u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
     target.rectangle = Rect(80.0f, 80.0f, 30.0f, 30.0f);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 9u));
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     EXPECT_FALSE(self.take(1u, 0u).has_value());
     EXPECT_FALSE(self.take(1u, 4u).has_value());
     const Expected<ContextMenuAction> actionResult = self.take();
@@ -796,8 +653,8 @@ void VerifyUiContextMenuInputTests_ConsumptionRequiresTheExactDeclarationAndKeep
 void VerifyUiContextMenuInputTests_FailedLayoutPublicationPreservesAnAlreadyAcceptedContextTrigger(mut UiContextMenuInputTests self){
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     HitTarget invalid = target;
     invalid.rectangle.width = -1.0f;
     EXPECT_FALSE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(invalid), 2u));
@@ -811,62 +668,62 @@ void VerifyUiContextMenuInputTests_NativeFocusTerminationCancelsPendingMenuAndPo
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::FocusLost)).pointerConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::FocusLost)).pointerConsumed);
     EXPECT_FALSE(self.m_router.windowFocused());
     EXPECT_TRUE(self.m_router.secondaryDown());
     EXPECT_FALSE(self.m_router.pointerKnown());
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Menu));
+    EXPECT_TRUE(self.m_router.ownsKey(Key::Menu));
     self.m_router.cancelDeviceInput(0u);
     EXPECT_FALSE(self.m_router.secondaryDown());
-    EXPECT_FALSE(self.m_router.ownsKey(CoreKey::Menu));
+    EXPECT_FALSE(self.m_router.ownsKey(Key::Menu));
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_FALSE(self.release(CoreKey::Menu).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::FocusGained)).pointerConsumed);
+    EXPECT_FALSE(self.release(Key::Menu).commandConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::FocusGained)).pointerConsumed);
     EXPECT_TRUE(self.m_router.windowFocused());
     self.focus();
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
 }
 
 void VerifyUiContextMenuInputTests_NativeCaptureLossCancelsSecondaryTriggerAndTerminatesPointerOwnership(mut UiContextMenuInputTests self){
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::PointerCaptureLost)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PointerCaptureLost)).pointerConsumed);
     EXPECT_FALSE(self.m_router.secondaryDown());
     EXPECT_FALSE(self.m_router.pointerKnown());
     EXPECT_FALSE(self.m_router.wantsPointer());
-    EXPECT_FALSE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::SecondaryUp, Point(180.0f, 180.0f))).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_TRUE(self.take().has_value());
 }
 
 void VerifyUiContextMenuInputTests_ResetDropsPendingTriggersAndKeepsActionSequencesMonotonic(mut UiContextMenuInputTests self){
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     const Expected<ContextMenuAction> firstResult = self.take();
     ASSERT_TRUE(firstResult.has_value());
     const ContextMenuAction first = firstResult.value();
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     self.m_router.reset();
     EXPECT_TRUE(self.m_router.secondaryDown());
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     const Expected<ContextMenuAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_GT(actionResult.value().id.sequence, first.id.sequence);
@@ -877,13 +734,13 @@ void VerifyUiContextMenuInputTests_ContextTriggerQueueReportsOverflowOnReleaseWi
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     self.focus();
     for(usize index = 0u; index < s_InputMaxContextMenuActions; ++index){
-        EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).activationOverflow);
-        const InputRoutingResult released = self.release(CoreKey::Menu);
+        EXPECT_FALSE(self.send(Key(Key::Menu)).activationOverflow);
+        const InputRoutingResult released = self.release(Key::Menu);
         EXPECT_TRUE(released.commandConsumed);
         EXPECT_FALSE(released.activationOverflow);
     }
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).activationOverflow);
-    const InputRoutingResult overflow = self.release(CoreKey::Menu);
+    EXPECT_FALSE(self.send(Key(Key::Menu)).activationOverflow);
+    const InputRoutingResult overflow = self.release(Key::Menu);
     EXPECT_TRUE(overflow.commandConsumed);
     EXPECT_TRUE(overflow.activationOverflow);
     usize count = 0u;
@@ -898,22 +755,22 @@ void VerifyUiContextMenuInputTests_ContextTriggerQueueReportsOverflowOnReleaseWi
         ++count;
     }
     EXPECT_EQ(count, s_InputMaxContextMenuActions);
-    EXPECT_FALSE(self.send(MakeUiContextMenuKey(CoreKey::Menu, false, false, false, true)).activationOverflow);
+    EXPECT_FALSE(self.send(Key(Key::Menu, false, false, false, true)).activationOverflow);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_FALSE(self.release(CoreKey::Menu).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_FALSE(self.release(Key::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
 }
 
 void VerifyUiContextMenuInputTests_SecondaryInputRejectsNonfiniteCoordinatesAndNewKeyBoundsRemainValidated(mut UiContextMenuInputTests self){
-    EXPECT_FALSE(self.queueNative(MakeUiContextMenuPointer(InputEventType::SecondaryDown, Point(UiContextMenuQuietNaNF32(), 1.0f))));
-    EXPECT_FALSE(self.queueNative(MakeUiContextMenuPointer(InputEventType::SecondaryUp, Point(1.0f, UiContextMenuInfinityF32()))));
-    const CoreKeyEnum outOfBounds = MakeUiContextMenuOutOfBoundsKey();
-    EXPECT_FALSE(self.queueNative(MakeUiContextMenuKey(outOfBounds)));
+    EXPECT_FALSE(self.queueNative(Pointer(InputEventType::SecondaryDown, Point(bit_cast<f32>(0x7fc00000u), 1.0f))));
+    EXPECT_FALSE(self.queueNative(Pointer(InputEventType::SecondaryUp, Point(1.0f, bit_cast<f32>(0x7f800000u)))));
+    const Key outOfBounds = cast<Key>(cast<i32>(Key::Menu) + 1);
+    EXPECT_FALSE(self.queueNative(Key(outOfBounds)));
     EXPECT_FALSE(self.m_router.ownsKey(outOfBounds));
-    EXPECT_TRUE(self.queueNative(MakeUiContextMenuKey(CoreKey::Menu)));
-    EXPECT_TRUE(self.queueNative(MakeUiContextMenuKey(CoreKey::F10, true)));
+    EXPECT_TRUE(self.queueNative(Key(Key::Menu)));
+    EXPECT_TRUE(self.queueNative(Key(Key::F10, true)));
     EXPECT_FALSE(self.m_router.process().commandConsumed);
 }
 
@@ -921,29 +778,29 @@ void VerifyUiContextMenuInputTests_EscapeCancelsHeldPointerAndMenuIntentsWithout
     const HitTarget target = MakeUiContextMenuTarget(1u);
     ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Escape)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Escape).commandConsumed);
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Menu));
+    EXPECT_TRUE(self.send(Key(Key::Escape)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Escape).commandConsumed);
+    EXPECT_TRUE(self.m_router.ownsKey(Key::Menu));
     EXPECT_TRUE(self.m_router.secondaryDown());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu, false, false, false, true)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu, false, false, false, true)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     const Expected<ContextMenuAction> keyboard = self.take();
     ASSERT_TRUE(keyboard.has_value());
     EXPECT_EQ(keyboard.value().origin, InputActionSource::Command);
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryDown)).pointerConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuPointer(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     const Expected<ContextMenuAction> pointer = self.take();
     ASSERT_TRUE(pointer.has_value());
     EXPECT_EQ(pointer.value().origin, InputActionSource::Pointer);
@@ -958,19 +815,19 @@ void VerifyUiContextMenuInputTests_FocusTransferAwayAndBackCannotReviveTheOrigin
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
     self.focus();
     ASSERT_EQ(self.m_router.focus(), targets[0u].id);
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Tab)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Tab).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Tab).commandConsumed);
     EXPECT_EQ(self.m_router.focus(), targets[1u].id);
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Tab, true)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Tab).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Tab, true)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Tab).commandConsumed);
     EXPECT_EQ(self.m_router.focus(), targets[0u].id);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
     EXPECT_FALSE(self.take(2u).has_value());
-    EXPECT_TRUE(self.send(MakeUiContextMenuKey(CoreKey::Menu)).commandConsumed);
-    EXPECT_TRUE(self.release(CoreKey::Menu).commandConsumed);
+    EXPECT_TRUE(self.send(Key(Key::Menu)).commandConsumed);
+    EXPECT_TRUE(self.release(Key::Menu).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
     EXPECT_FALSE(self.take().has_value());
 }
@@ -987,7 +844,7 @@ void VerifyUiWidgetIdTests_EmbeddedNulAndScopeConcatenationDoNotAliasAndInvalidK
     const Expected<WidgetId> partId = TryMakeWidgetPartId(rootId.value(), 0x123456789abcdef0u);
     ASSERT_TRUE(partId.has_value());
     EXPECT_EQ(partId.value().value, 0xb6d51fb9629e37ddu);
-    const Expected<WidgetId> embedded = TryMakeWidgetId(rootId.value(), MakeUiWidgetIdEmbeddedNulKey());
+    const Expected<WidgetId> embedded = TryMakeWidgetId(rootId.value(), StringView("a\0b", 3u));
     const Expected<WidgetId> simple = TryMakeWidgetId(rootId.value(), "a");
     const Expected<WidgetId> combined = TryMakeWidgetId(rootId.value(), "ab");
     ASSERT_TRUE(embedded.has_value());

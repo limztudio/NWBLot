@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/name_hash.h>"), cpp_name("::NameText<char>"), cpp_flags(small_value)]
+extern class NameTextAscii;
+
 [cpp_name("::NameTextError::Enum")]
 extern enum NameTextError : u8{
     NullText,

@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.adhd>
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SmokeFrameGraphObservation{
+    public FrameGraphNodeDescs nodes;
+    public FrameGraphPacketSubmissionStatisticsRecords packets;
+    private FrameGraphEdgeDescs m_edges;
+    private FrameGraphPendingNameEdges m_pending;
+    private FrameGraphPhysicalQueueRuntimeStatisticsRecords m_queues;
+    private ScratchStorage m_scratch;
+    private u64 m_sourceFrame;
+
+    public SmokeFrameGraphObservation(mut ProjectRuntimeContext context, in Name scope, in u64 sourceFrame){
+        this.nodes = FrameGraphNodeDescs(context.objectArena);
+        this.packets = FrameGraphPacketSubmissionStatisticsRecords(context.objectArena);
+        this.m_edges = FrameGraphEdgeDescs(context.objectArena);
+        this.m_pending = FrameGraphPendingNameEdges(context.objectArena);
+        this.m_queues = FrameGraphPhysicalQueueRuntimeStatisticsRecords(context.objectArena);
+        this.m_scratch = ScratchStorage(scope);
+        this.m_sourceFrame = sourceFrame;
+    }
+
+    public b8 append(mut IFrameGraphContributor contributor){
+        FrameGraphBuilder builder(this.m_scratch, this.nodes, this.m_edges, this.m_pending, this.m_queues, this.packets, this.m_sourceFrame);
+        return contributor.appendFrameGraph(builder);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -5,230 +5,97 @@
 #include <tests/common/ecs_test_world.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
+#include <tests/common/threads.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/unit/ecs/basic_case_types.adhd>
+#include <tests/unit/ecs/publication_case_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ecs/publication_case_types.adhd.h>
-
-#include <core/common/module.h>
-#include <core/ecs/module.h>
-
-#include <global/atomic.h>
-#include <global/compile.h>
-#include <global/timer.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ecs_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using EcsTestWorld = ::NWB::Tests::EcsTestWorld;
-using EcsParallelTestArena = ::NWB::Tests::TestArena<>;
-using GlobalArena = ::NWB::Core::Alloc::GlobalArena;
-using CpuTaskScheduler = ::NWB::Core::CpuTaskScheduler;
-using CpuTaskScope = ::NWB::Core::CpuTaskScope;
-using CpuTaskOptions = ::NWB::Core::CpuTaskOptions;
-namespace CpuTaskAdmissionError = ::NWB::Core::CpuTaskAdmissionError;
-using TickAdmissionResult = Expected<void, ::NWB::Core::CpuTaskAdmissionError::Enum>;
-using TaskSubmitResult = Expected<::NWB::Core::CpuTaskScheduler::TaskHandle, ::NWB::Core::CpuTaskAdmissionError::Enum>;
-using Entity = ::NWB::Core::ECS::Entity;
-using World = ::NWB::Core::ECS::World;
-using SystemScheduler = ::NWB::Core::ECS::SystemScheduler;
-using ComponentTypeId = ::NWB::Core::ECS::ComponentTypeId;
-namespace AccessMode = ::NWB::Core::ECS::AccessMode;
-using ::NWB::Core::ECS::ComponentType;
-using ::NWB::Core::ECS::ECSDetail::s_EntityGenerationMask;
-using PublicationPositionComponent = ::__hidden_publication_failure_tests::PublicationPositionComponent;
-using PublicationVelocityComponent = ::__hidden_publication_failure_tests::PublicationVelocityComponent;
-
-extern thread_local b8 s_EcsCallerThread;
-
-FOUNDATION_INLINE void SetCallerThreadFlag(const b8 value)noexcept{
-    s_EcsCallerThread = value;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 IsCallerThreadFlagSet()noexcept{
-    return s_EcsCallerThread;
-}
-
-template<typename T>
-[[nodiscard]] FOUNDATION_INLINE usize ComponentAddress(const T& component)noexcept{
-    return reinterpret_cast<usize>(AddressOf(component));
-}
-
-template<typename T>
-[[nodiscard]] FOUNDATION_INLINE b8 HasTryComponent(World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
-    return world.tryGetComponent<T>(entityId) != nullptr;
-}
-
-template<typename T>
-[[nodiscard]] FOUNDATION_INLINE b8 HasConstTryComponent(const World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
-    return world.tryGetComponent<T>(entityId) != nullptr;
-}
-
-template<typename T>
-[[nodiscard]] FOUNDATION_INLINE b8 TryComponentMatches(World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
-    return world.tryGetComponent<T>(entityId) == AddressOf(expected);
-}
-
-template<typename T>
-[[nodiscard]] FOUNDATION_INLINE b8 ConstTryComponentMatches(const World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
-    return world.tryGetComponent<T>(entityId) == AddressOf(expected);
-}
-
-struct AddressTrapComponent{
-public:
-    mutable u32 addressCalls = 0u;
-
-
-public:
-    [[nodiscard]] AddressTrapComponent* operator&(){ ++addressCalls; throw 37u; }
-
-    [[nodiscard]] const AddressTrapComponent* operator&()const{ ++addressCalls; throw 41u; }
+[cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::AddressTrapComponent")]
+extern class AddressTrapComponent{
+    u32 addressCalls;
 };
 
-struct alignas(32) OverAlignedComponent{
-    Array<u8, 32> value{};
-};
-inline constexpr usize s_OverAlignedComponentAlignment = alignof(OverAlignedComponent);
-
-template<usize... Is>
-FOUNDATION_INLINE Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>)noexcept{
-    return { NWB::Core::ECS::ComponentType<PoolSlotComponent<Is>>()... };
-}
-
-[[nodiscard]] FOUNDATION_INLINE Array<usize, 64> RegisterPoolSlotTypes64()noexcept{
-    return RegisterPoolSlotTypes(IndexSequence<
-        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
-        16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
-        32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
-        48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
-    >{});
-}
-
-struct MoveOnlyMessage{
-    u32 value = 0u;
-
-
-public:
-    explicit MoveOnlyMessage(u32 v)noexcept
-        : value(v)
-    {}
-    MoveOnlyMessage(const MoveOnlyMessage&) = delete;
-    MoveOnlyMessage(MoveOnlyMessage&& rhs)noexcept
-        : value(rhs.value)
-    {
-        rhs.value = 0u;
-    }
-
-
-public:
-    MoveOnlyMessage& operator=(const MoveOnlyMessage&) = delete;
-
-    MoveOnlyMessage& operator=(MoveOnlyMessage&& rhs)noexcept{
-        if(this != &rhs){
-            value = rhs.value;
-            rhs.value = 0u;
-        }
-        return *this;
-    }
-};
-
-struct ThrowingConstructionComponent{
+[cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::ThrowingMoveAssignmentComponent")]
+extern class ThrowingMoveAssignmentComponent{
     u32 value;
+};
 
+[cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::ThrowingMoveMessage")]
+extern class ThrowingMoveMessage;
 
-public:
-    ThrowingConstructionComponent(b8 reject, u32 valueArg)
-        : value(valueArg)
-    {
+[cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::SetCallerThreadFlag")]
+extern void SetCallerThreadFlag(in b8 value);
+
+[cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::IsCallerThreadFlagSet")]
+extern b8 IsCallerThreadFlagSet();
+
+[cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::TryComponentAddress")]
+extern usize TryComponentAddress<T>(mut World world, in EntityID id);
+
+[cpp_header("<tests/unit/ecs/component_probes.h>"), cpp_name("::NWB::Tests::EcsProbes::ConstTryComponentAddress")]
+extern usize ConstTryComponentAddress<T>(in World world, in EntityID id);
+
+[cpp_header("<core/ecs/entity_id.h>"), cpp_name("::NWB::Core::ECS::ECSDetail::s_EntityGenerationMask")]
+extern const u32 s_EntityGenerationMask;
+
+type TaskSubmitResult = Expected<CpuTaskHandle, CpuTaskAdmissionError>;
+type TickAdmissionResult = Expected<void, CpuTaskAdmissionError>;
+
+[layout(32)]
+class OverAlignedComponent{
+    public Array<u8, 32u> value;
+}
+
+[move_only]
+class MoveOnlyMessage{
+    public u32 value;
+    public MoveOnlyMessage(in u32 initial){ this.value = initial; }
+}
+
+class ThrowingConstructionComponent{
+    public u32 value;
+    [cpp_unwind]
+    public ThrowingConstructionComponent(in b8 reject, in u32 initial){
+        this.value = initial;
         if(reject)
-            throw 61u;
+            ThrowTestException<u32>(61u);
     }
-};
-
-struct ThrowingMoveAssignmentComponent{
-    b8& rejectMove;
-    u32 value;
-
-
-public:
-    ThrowingMoveAssignmentComponent(b8& rejectMoveArg, u32 valueArg)noexcept
-        : rejectMove(rejectMoveArg)
-        , value(valueArg)
-    {}
-    ThrowingMoveAssignmentComponent(const ThrowingMoveAssignmentComponent&) = delete;
-    ThrowingMoveAssignmentComponent(ThrowingMoveAssignmentComponent&&)noexcept = default;
-
-
-public:
-    ThrowingMoveAssignmentComponent& operator=(const ThrowingMoveAssignmentComponent&) = delete;
-
-    ThrowingMoveAssignmentComponent& operator=(ThrowingMoveAssignmentComponent&& rhs){
-        if(rejectMove)
-            throw 67u;
-        value = rhs.value;
-        return *this;
-    }
-};
-
-struct ThrowingMoveMessage{
-    b8& rejectMove;
-    u32& moveAttempts;
-    u32& destructions;
-
-
-public:
-    ThrowingMoveMessage(b8& rejectMoveArg, u32& moveAttemptsArg, u32& destructionsArg)noexcept
-        : rejectMove(rejectMoveArg)
-        , moveAttempts(moveAttemptsArg)
-        , destructions(destructionsArg)
-    {}
-    ThrowingMoveMessage(const ThrowingMoveMessage&) = delete;
-    ThrowingMoveMessage(ThrowingMoveMessage&& rhs)
-        : rejectMove(rhs.rejectMove)
-        , moveAttempts(rhs.moveAttempts)
-        , destructions(rhs.destructions)
-    {
-        ++moveAttempts;
-        if(rejectMove)
-            throw 73u;
-    }
-    ~ThrowingMoveMessage()noexcept{ ++destructions; }
-
-
-public:
-    ThrowingMoveMessage& operator=(const ThrowingMoveMessage&) = delete;
-
-    ThrowingMoveMessage& operator=(ThrowingMoveMessage&&) = delete;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
+
+Array<usize, 64u> RegisterPoolSlotTypes64(){
+    return Array<usize, 64u>(
+        ComponentType<PoolSlotComponent<0u>>(), ComponentType<PoolSlotComponent<1u>>(), ComponentType<PoolSlotComponent<2u>>(), ComponentType<PoolSlotComponent<3u>>(),
+        ComponentType<PoolSlotComponent<4u>>(), ComponentType<PoolSlotComponent<5u>>(), ComponentType<PoolSlotComponent<6u>>(), ComponentType<PoolSlotComponent<7u>>(),
+        ComponentType<PoolSlotComponent<8u>>(), ComponentType<PoolSlotComponent<9u>>(), ComponentType<PoolSlotComponent<10u>>(), ComponentType<PoolSlotComponent<11u>>(),
+        ComponentType<PoolSlotComponent<12u>>(), ComponentType<PoolSlotComponent<13u>>(), ComponentType<PoolSlotComponent<14u>>(), ComponentType<PoolSlotComponent<15u>>(),
+        ComponentType<PoolSlotComponent<16u>>(), ComponentType<PoolSlotComponent<17u>>(), ComponentType<PoolSlotComponent<18u>>(), ComponentType<PoolSlotComponent<19u>>(),
+        ComponentType<PoolSlotComponent<20u>>(), ComponentType<PoolSlotComponent<21u>>(), ComponentType<PoolSlotComponent<22u>>(), ComponentType<PoolSlotComponent<23u>>(),
+        ComponentType<PoolSlotComponent<24u>>(), ComponentType<PoolSlotComponent<25u>>(), ComponentType<PoolSlotComponent<26u>>(), ComponentType<PoolSlotComponent<27u>>(),
+        ComponentType<PoolSlotComponent<28u>>(), ComponentType<PoolSlotComponent<29u>>(), ComponentType<PoolSlotComponent<30u>>(), ComponentType<PoolSlotComponent<31u>>(),
+        ComponentType<PoolSlotComponent<32u>>(), ComponentType<PoolSlotComponent<33u>>(), ComponentType<PoolSlotComponent<34u>>(), ComponentType<PoolSlotComponent<35u>>(),
+        ComponentType<PoolSlotComponent<36u>>(), ComponentType<PoolSlotComponent<37u>>(), ComponentType<PoolSlotComponent<38u>>(), ComponentType<PoolSlotComponent<39u>>(),
+        ComponentType<PoolSlotComponent<40u>>(), ComponentType<PoolSlotComponent<41u>>(), ComponentType<PoolSlotComponent<42u>>(), ComponentType<PoolSlotComponent<43u>>(),
+        ComponentType<PoolSlotComponent<44u>>(), ComponentType<PoolSlotComponent<45u>>(), ComponentType<PoolSlotComponent<46u>>(), ComponentType<PoolSlotComponent<47u>>(),
+        ComponentType<PoolSlotComponent<48u>>(), ComponentType<PoolSlotComponent<49u>>(), ComponentType<PoolSlotComponent<50u>>(), ComponentType<PoolSlotComponent<51u>>(),
+        ComponentType<PoolSlotComponent<52u>>(), ComponentType<PoolSlotComponent<53u>>(), ComponentType<PoolSlotComponent<54u>>(), ComponentType<PoolSlotComponent<55u>>(),
+        ComponentType<PoolSlotComponent<56u>>(), ComponentType<PoolSlotComponent<57u>>(), ComponentType<PoolSlotComponent<58u>>(), ComponentType<PoolSlotComponent<59u>>(),
+        ComponentType<PoolSlotComponent<60u>>(), ComponentType<PoolSlotComponent<61u>>(), ComponentType<PoolSlotComponent<62u>>(), ComponentType<PoolSlotComponent<63u>>()
+    );
+}
+
+[cpp_unwind]
+void ThrowDuringSingleVisit(in EntityID entity, mut PositionComponent position){ ThrowTestException<u32>(43u); }
+
+[cpp_unwind]
+void ThrowDuringMultipleVisit(mut EntityID entity, mut PositionComponent position, mut VelocityComponent velocity){ ThrowTestException<u32>(47u); }
+
+[cpp_unwind]
+void ThrowDuringMessageVisit(in u32 value){ ThrowTestException<u32>(53u); }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -363,11 +230,11 @@ class LifetimeSystem{
 }
 
 b8 HasTryPositionComponent(mut World world, in EntityID entityId){
-    return HasTryComponent<PositionComponent>(world, entityId);
+    return TryComponentAddress<PositionComponent>(world, entityId) != 0u;
 }
 
 b8 HasTryPoolSlot63Component(mut World world, in EntityID entityId){
-    return HasTryComponent<PoolSlotComponent<63>>(world, entityId);
+    return TryComponentAddress<PoolSlotComponent<63>>(world, entityId) != 0u;
 }
 
 void RegisterScheduledSystem(mut SystemScheduler scheduler, mut ScheduledSystem system){
@@ -375,16 +242,16 @@ void RegisterScheduledSystem(mut SystemScheduler scheduler, mut ScheduledSystem 
 }
 
 void VerifyEcs_ParallelEachNestedInTaskBatchCompletes(){
-    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
+    HeapStorage testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(3u);
-    World world(testArena.arena, taskScheduler);
+    World world(testArena, taskScheduler);
 
     for(u32 i = 0u; i < s_EcsTestNestedEntityCount; ++i){
         const EntityID id = world.createEntity().id();
         world.entity(id).addComponent<PositionComponent>().x = cast<i32>(i);
     }
 
-    Atomic<u32> visits(0u);
+    TestAtomic<u32> visits(0u);
     const b8 outerParallelOk = world.taskScope().parallelFor(
         cast<usize>(0u),
         s_EcsTestNestedOuterCount,
@@ -500,13 +367,13 @@ void VerifyEcs_SystemDependenciesPreserveRegistrationOrderAcrossComponents(){
 }
 
 void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
-    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
+    HeapStorage testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(3u);
-    World world(testArena.arena, taskScheduler);
+    World world(testArena, taskScheduler);
 
     const ComponentTypeId positionType = ComponentType<PositionComponent>();
-    Atomic<b8> dependentCompleted(false);
-    Atomic<b8> independentObservedCompletion(false);
+    TestAtomic<b8> dependentCompleted(false);
+    TestAtomic<b8> independentObservedCompletion(false);
     i32 value = 0;
 
     ScheduledSystem writer(
@@ -531,7 +398,7 @@ void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
         }
     );
 
-    SystemScheduler scheduler(testArena.arena);
+    SystemScheduler scheduler(testArena);
     RegisterScheduledSystem(scheduler, writer);
     RegisterScheduledSystem(scheduler, independent);
     RegisterScheduledSystem(scheduler, dependent);
@@ -542,9 +409,9 @@ void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
 }
 
 void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
-    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
+    HeapStorage testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
-    World world(testArena.arena, taskScheduler);
+    World world(testArena, taskScheduler);
     b8 executedOnCaller = false;
 
     const ComponentTypeId positionType = ComponentType<PositionComponent>();
@@ -574,7 +441,7 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
         lambda[mut value]() -> void{ EXPECT_EQ(value, 29); }
     );
 
-    SystemScheduler scheduler(testArena.arena);
+    SystemScheduler scheduler(testArena);
     RegisterScheduledSystem(scheduler, worker);
     RegisterScheduledSystem(scheduler, caller);
     RegisterScheduledSystem(scheduler, consumer);
@@ -585,9 +452,9 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
 }
 
 void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
-    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
+    HeapStorage testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
-    World world(testArena.arena, taskScheduler);
+    World world(testArena, taskScheduler);
     for(usize i = 0u; i < s_EcsTestDependentQueryEntityCount; ++i)
         world.createEntity().addComponent<PositionComponent>().x = cast<i32>(i);
     usize observed = 0u;
@@ -625,7 +492,7 @@ void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
         }
     );
 
-    SystemScheduler scheduler(testArena.arena);
+    SystemScheduler scheduler(testArena);
     RegisterScheduledSystem(scheduler, writer);
     RegisterScheduledSystem(scheduler, reader);
     ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
@@ -634,13 +501,13 @@ void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
 }
 
 void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
-    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
+    HeapStorage testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
-    World world(testArena.arena, taskScheduler);
+    World world(testArena, taskScheduler);
     i32 observed = 0;
 
     const ComponentTypeId positionType = ComponentType<PositionComponent>();
-    Atomic<i32> value(0);
+    TestAtomic<i32> value(0);
 
     ScheduledSystem writer(
         positionType,
@@ -668,7 +535,7 @@ void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
         }
     );
 
-    SystemScheduler scheduler(testArena.arena);
+    SystemScheduler scheduler(testArena);
     RegisterScheduledSystem(scheduler, writer);
     RegisterScheduledSystem(scheduler, reader);
     ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
@@ -677,14 +544,14 @@ void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
 }
 
 void VerifyEcs_WorldClearDoesNotWaitForUnrelatedSchedulerTasks(){
-    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
+    HeapStorage testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
     CpuTaskScope unrelatedTasks(taskScheduler);
-    World world(testArena.arena, taskScheduler);
+    World world(testArena, taskScheduler);
 
-    Atomic<b8> started(false);
-    Atomic<b8> release(false);
-    Atomic<b8> completed(false);
+    TestAtomic<b8> started(false);
+    TestAtomic<b8> release(false);
+    TestAtomic<b8> completed(false);
     const TaskSubmitResult cpuTaskAdmission = unrelatedTasks.submit(
         lambda[mut started, mut release, mut completed]() -> void{
             started.store(true, MemoryOrder::release);
@@ -712,59 +579,51 @@ void VerifyEcs_ComponentStoragePreservesOverAlignment(){
     EcsTestWorld testWorld = EcsTestWorld();
     Entity entity = testWorld.world.createEntity();
     mut OverAlignedComponent aligned = entity.addComponent<OverAlignedComponent>();
-    EXPECT_EQ(ComponentAddress(aligned) % s_OverAlignedComponentAlignment, 0u);
+    EXPECT_EQ(TestValueAddress(aligned) % align_of<OverAlignedComponent>(), 0u);
 }
 
 void VerifyEcs_StoredComponentLookupBypassesThrowingAddressOperators(){
     EcsTestWorld testWorld = EcsTestWorld();
-    native(mut testWorld){
-        auto entity = testWorld.world.createEntity();
-        AddressTrapComponent& component = entity.addComponent<AddressTrapComponent>();
-        AddressTrapComponent* const expected = AddressOf(component);
-        const World& constWorld = testWorld.world;
-        static_assert(noexcept(testWorld.world.tryGetComponent<AddressTrapComponent>(entity.id())));
-        static_assert(noexcept(constWorld.tryGetComponent<AddressTrapComponent>(entity.id())));
-        EXPECT_EQ(testWorld.world.tryGetComponent<AddressTrapComponent>(entity.id()), expected);
-        EXPECT_EQ(constWorld.tryGetComponent<AddressTrapComponent>(entity.id()), expected);
-        EXPECT_EQ(component.addressCalls, 0u);
-        entity.destroy();
-        EXPECT_EQ(testWorld.world.tryGetComponent<AddressTrapComponent>(entity.id()), nullptr);
-    }
+    Entity entity = testWorld.world.createEntity();
+    mut AddressTrapComponent component = entity.addComponent<AddressTrapComponent>();
+    const usize expected = TestValueAddress(component);
+    RequireNothrowExpression(TryComponentAddress<AddressTrapComponent>(testWorld.world, entity.id()));
+    RequireNothrowExpression(ConstTryComponentAddress<AddressTrapComponent>(testWorld.world, entity.id()));
+    EXPECT_EQ(TryComponentAddress<AddressTrapComponent>(testWorld.world, entity.id()), expected);
+    EXPECT_EQ(ConstTryComponentAddress<AddressTrapComponent>(testWorld.world, entity.id()), expected);
+    EXPECT_EQ(component.addressCalls, 0u);
+    entity.destroy();
+    EXPECT_EQ(TryComponentAddress<AddressTrapComponent>(testWorld.world, entity.id()), 0u);
 }
 
 void VerifyEcs_ViewAndMessageConsumersPreserveCallbackExceptionContracts(){
     EcsTestWorld testWorld = EcsTestWorld();
-    native(mut testWorld){
-        auto entity = testWorld.world.createEntity();
-        entity.addComponent<PositionComponent>();
-        entity.addComponent<VelocityComponent>();
-        const auto single = testWorld.world.view<PositionComponent>();
-        const auto multiple = testWorld.world.view<PositionComponent, VelocityComponent>();
-        const auto singleNoThrow = [](const NWB::Core::ECS::EntityID&, PositionComponent&)noexcept{};
-        const auto singleThrows = [](const NWB::Core::ECS::EntityID&, PositionComponent&){ throw 43u; };
-        const auto multipleNoThrow = [](NWB::Core::ECS::EntityID&, PositionComponent&, VelocityComponent&)noexcept{};
-        const auto multipleThrows = [](NWB::Core::ECS::EntityID&, PositionComponent&, VelocityComponent&){ throw 47u; };
-        static_assert(noexcept(single.each(singleNoThrow)));
-        static_assert(!noexcept(single.each(singleThrows)));
-        static_assert(noexcept(multiple.each(multipleNoThrow)));
-        static_assert(!noexcept(multiple.each(multipleThrows)));
-        EXPECT_THROW(single.each(singleThrows), u32);
-        EXPECT_THROW(multiple.each(multipleThrows), u32);
-        single.each(singleNoThrow);
-        multiple.each(multipleNoThrow);
+    Entity entity = testWorld.world.createEntity();
+    entity.addComponent<PositionComponent>();
+    entity.addComponent<VelocityComponent>();
+    const auto single = testWorld.world.view<PositionComponent>();
+    const auto multiple = testWorld.world.view<PositionComponent, VelocityComponent>();
+    const auto singleNoThrow = lambda[](in EntityID id, mut PositionComponent position) -> void{};
+    const auto multipleNoThrow = lambda[](mut EntityID id, mut PositionComponent position, mut VelocityComponent velocity) -> void{};
+    RequireNothrowExpression(single.each(singleNoThrow));
+    RequireThrowingExpression(single.each(ThrowDuringSingleVisit));
+    RequireNothrowExpression(multiple.each(multipleNoThrow));
+    RequireThrowingExpression(multiple.each(ThrowDuringMultipleVisit));
+    ExpectUnsignedException(single.each(ThrowDuringSingleVisit));
+    ExpectUnsignedException(multiple.each(ThrowDuringMultipleVisit));
+    single.each(singleNoThrow);
+    multiple.each(multipleNoThrow);
 
-        testWorld.world.postMessage(7u);
-        testWorld.world.swapMessageBuffers();
-        u32 observed = 0u;
-        const auto messageNoThrow = [&observed](const u32& value)noexcept{ observed += value; };
-        const auto messageThrows = [](const u32&){ throw 53u; };
-        static_assert(noexcept(testWorld.world.consumeMessages<u32>(messageNoThrow)));
-        static_assert(!noexcept(testWorld.world.consumeMessages<u32>(messageThrows)));
-        testWorld.world.consumeMessages<u32>(messageNoThrow);
-        EXPECT_EQ(observed, 7u);
-        EXPECT_THROW(testWorld.world.consumeMessages<u32>(messageThrows), u32);
-        EXPECT_EQ(testWorld.world.messageCount<u32>(), 1u);
-    }
+    testWorld.world.postMessage(7u);
+    testWorld.world.swapMessageBuffers();
+    u32 observed = 0u;
+    const auto messageNoThrow = lambda[mut observed](in u32 value) -> void{ observed += value; };
+    RequireNothrowExpression(testWorld.world.consumeMessages<u32>(messageNoThrow));
+    RequireThrowingExpression(testWorld.world.consumeMessages<u32>(ThrowDuringMessageVisit));
+    testWorld.world.consumeMessages<u32>(messageNoThrow);
+    EXPECT_EQ(observed, 7u);
+    ExpectUnsignedException(testWorld.world.consumeMessages<u32>(ThrowDuringMessageVisit));
+    EXPECT_EQ(testWorld.world.messageCount<u32>(), 1u);
 }
 
 void VerifyEcs_EmptyViewDoesNotAllocateComponentPools(){
@@ -941,23 +800,23 @@ void VerifyEcs_ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation(){
     secondEntity.addComponent<PoolSlotComponent<31>>().value = 29u;
     firstEntity.addComponent<PoolSlotComponent<64>>().value = 41u;
 
-    EXPECT_TRUE(TryComponentMatches<PoolSlotComponent<0>>(firstWorld.world, firstEntity.id(), firstComponent));
-    EXPECT_FALSE(HasTryComponent<PoolSlotComponent<31>>(firstWorld.world, firstEntity.id()));
-    EXPECT_FALSE(HasTryComponent<PoolSlotComponent<0>>(secondWorld.world, secondEntity.id()));
-    EXPECT_FALSE(HasTryComponent<PoolSlotComponent<64>>(secondWorld.world, secondEntity.id()));
+    EXPECT_TRUE(TryComponentAddress<PoolSlotComponent<0>>(firstWorld.world, firstEntity.id()) == TestValueAddress(firstComponent));
+    EXPECT_FALSE(TryComponentAddress<PoolSlotComponent<31>>(firstWorld.world, firstEntity.id()) != 0u);
+    EXPECT_FALSE(TryComponentAddress<PoolSlotComponent<0>>(secondWorld.world, secondEntity.id()) != 0u);
+    EXPECT_FALSE(TryComponentAddress<PoolSlotComponent<64>>(secondWorld.world, secondEntity.id()) != 0u);
     EXPECT_EQ(firstWorld.world.componentMutationVersion<PoolSlotComponent<31>>(), 0u);
 
-    EXPECT_TRUE(ConstTryComponentMatches<PoolSlotComponent<0>>(firstWorld.world, firstEntity.id(), firstComponent));
-    EXPECT_FALSE(HasConstTryComponent<PoolSlotComponent<31>>(firstWorld.world, firstEntity.id()));
-    EXPECT_FALSE(HasConstTryComponent<VelocityComponent>(firstWorld.world, firstEntity.id()));
+    EXPECT_TRUE(ConstTryComponentAddress<PoolSlotComponent<0>>(firstWorld.world, firstEntity.id()) == TestValueAddress(firstComponent));
+    EXPECT_FALSE(ConstTryComponentAddress<PoolSlotComponent<31>>(firstWorld.world, firstEntity.id()) != 0u);
+    EXPECT_FALSE(ConstTryComponentAddress<VelocityComponent>(firstWorld.world, firstEntity.id()) != 0u);
 
     usize visits = 0u;
     const EntityID expectedFirstId = firstEntity.id();
-    const usize expectedFirstAddress = ComponentAddress(firstComponent);
+    const usize expectedFirstAddress = TestValueAddress(firstComponent);
     firstWorld.world.view<PoolSlotComponent<0>>().each(
         lambda[in expectedFirstId, in expectedFirstAddress, mut visits](in EntityID entityId, mut PoolSlotComponent<0> component) -> void{
             EXPECT_EQ(entityId, expectedFirstId);
-            EXPECT_EQ(ComponentAddress(component), expectedFirstAddress);
+            EXPECT_EQ(TestValueAddress(component), expectedFirstAddress);
             EXPECT_EQ(component.value, 17u);
             ++visits;
         }
@@ -1008,7 +867,7 @@ void VerifyEcs_DuplicateComponentAddIsStable(){
     first.y = 4;
 
     mut PositionComponent second = entity.addComponent<PositionComponent>();
-    EXPECT_EQ(ComponentAddress(first), ComponentAddress(second));
+    EXPECT_EQ(TestValueAddress(first), TestValueAddress(second));
     EXPECT_EQ(second.x, 9);
     EXPECT_EQ(second.y, 4);
 
@@ -1024,22 +883,20 @@ void VerifyEcs_DuplicateComponentAddIsStable(){
 
 void VerifyEcs_FailedComponentConstructionDoesNotPublishMembership(){
     EcsTestWorld testWorld = EcsTestWorld();
-    native(mut testWorld){
-        auto entity = testWorld.world.createEntity();
-        entity.addComponent<PublicationPositionComponent>().x = 71;
-        EXPECT_THROW(entity.addComponent<ThrowingConstructionComponent>(true, 73u), u32);
-        ASSERT_FALSE(entity.hasComponent<ThrowingConstructionComponent>());
-        EXPECT_EQ(testWorld.world.tryGetComponent<ThrowingConstructionComponent>(entity.id()), nullptr);
-        EXPECT_EQ(testWorld.world.view<ThrowingConstructionComponent>().candidateCount(), 0u);
-        EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingConstructionComponent>(), 0u);
-        EXPECT_EQ(entity.getComponent<PublicationPositionComponent>().x, 71);
+    auto entity = testWorld.world.createEntity();
+    entity.addComponent<PublicationPositionComponent>().x = 71;
+    ExpectUnsignedException(entity.addComponent<ThrowingConstructionComponent>(true, 73u));
+    ASSERT_FALSE(entity.hasComponent<ThrowingConstructionComponent>());
+    EXPECT_EQ(TryComponentAddress<ThrowingConstructionComponent>(testWorld.world, entity.id()), 0u);
+    EXPECT_EQ(testWorld.world.view<ThrowingConstructionComponent>().candidateCount(), 0u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingConstructionComponent>(), 0u);
+    EXPECT_EQ(entity.getComponent<PublicationPositionComponent>().x, 71);
 
-        EXPECT_EQ(entity.addComponent<ThrowingConstructionComponent>(false, 79u).value, 79u);
-        EXPECT_EQ(entity.addComponent<ThrowingConstructionComponent>(true, 83u).value, 79u);
-        EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingConstructionComponent>(), 1u);
-        entity.destroy();
-        EXPECT_FALSE(entity.alive());
-    }
+    EXPECT_EQ(entity.addComponent<ThrowingConstructionComponent>(false, 79u).value, 79u);
+    EXPECT_EQ(entity.addComponent<ThrowingConstructionComponent>(true, 83u).value, 79u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingConstructionComponent>(), 1u);
+    entity.destroy();
+    EXPECT_FALSE(entity.alive());
     EXPECT_EQ(testWorld.world.view<ThrowingConstructionComponent>().candidateCount(), 0u);
     EXPECT_EQ(testWorld.world.view<PublicationPositionComponent>().candidateCount(), 0u);
 }
@@ -1047,75 +904,80 @@ void VerifyEcs_FailedComponentConstructionDoesNotPublishMembership(){
 void VerifyEcs_FailedComponentMoveAssignmentPreservesEntityMappings(){
     b8 rejectMove = false;
     EcsTestWorld testWorld = EcsTestWorld();
-    native(mut rejectMove, mut testWorld){
-        auto first = testWorld.world.createEntity();
-        auto second = testWorld.world.createEntity();
-        first.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 89u);
-        second.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 97u);
-        static_assert(!noexcept(first.removeComponent<ThrowingMoveAssignmentComponent>()));
-        rejectMove = true;
-        EXPECT_THROW(first.removeComponent<ThrowingMoveAssignmentComponent>(), u32);
-        rejectMove = false;
-        ASSERT_TRUE(first.hasComponent<ThrowingMoveAssignmentComponent>());
-        ASSERT_TRUE(second.hasComponent<ThrowingMoveAssignmentComponent>());
-        EXPECT_EQ(first.getComponent<ThrowingMoveAssignmentComponent>().value, 89u);
-        EXPECT_EQ(second.getComponent<ThrowingMoveAssignmentComponent>().value, 97u);
-        EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 2u);
-        EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingMoveAssignmentComponent>(), 2u);
+    auto first = testWorld.world.createEntity();
+    auto second = testWorld.world.createEntity();
+    first.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 89u);
+    second.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 97u);
+    RequireThrowingExpression(first.removeComponent<ThrowingMoveAssignmentComponent>());
+    rejectMove = true;
+    ExpectUnsignedException(first.removeComponent<ThrowingMoveAssignmentComponent>());
+    rejectMove = false;
+    ASSERT_TRUE(first.hasComponent<ThrowingMoveAssignmentComponent>());
+    ASSERT_TRUE(second.hasComponent<ThrowingMoveAssignmentComponent>());
+    EXPECT_EQ(first.getComponent<ThrowingMoveAssignmentComponent>().value, 89u);
+    EXPECT_EQ(second.getComponent<ThrowingMoveAssignmentComponent>().value, 97u);
+    EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 2u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingMoveAssignmentComponent>(), 2u);
 
-        first.removeComponent<ThrowingMoveAssignmentComponent>();
-        EXPECT_FALSE(first.hasComponent<ThrowingMoveAssignmentComponent>());
-        EXPECT_EQ(second.getComponent<ThrowingMoveAssignmentComponent>().value, 97u);
-        EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 1u);
-        second.destroy();
-    }
+    first.removeComponent<ThrowingMoveAssignmentComponent>();
+    EXPECT_FALSE(first.hasComponent<ThrowingMoveAssignmentComponent>());
+    EXPECT_EQ(second.getComponent<ThrowingMoveAssignmentComponent>().value, 97u);
+    EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 1u);
+    second.destroy();
     EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 0u);
 }
 
 void VerifyEcs_FailedEntityDestructionRetainsRemainingMembershipForRetry(){
     b8 rejectMove = false;
     EcsTestWorld testWorld = EcsTestWorld();
-    native(mut rejectMove, mut testWorld){
-        auto first = testWorld.world.createEntity();
-        auto second = testWorld.world.createEntity();
-        first.addComponent<PublicationPositionComponent>().x = 101;
-        first.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 103u);
-        first.addComponent<PublicationVelocityComponent>().x = 107;
-        second.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 109u);
-        rejectMove = true;
-        EXPECT_THROW(first.destroy(), u32);
-        rejectMove = false;
-        EXPECT_TRUE(first.alive());
-        EXPECT_FALSE(first.hasComponent<PublicationVelocityComponent>());
-        EXPECT_TRUE(first.hasComponent<PublicationPositionComponent>());
+    auto first = testWorld.world.createEntity();
+    auto second = testWorld.world.createEntity();
+    first.addComponent<PublicationPositionComponent>().x = 101;
+    first.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 103u);
+    first.addComponent<PublicationVelocityComponent>().x = 107;
+    second.addComponent<ThrowingMoveAssignmentComponent>(rejectMove, 109u);
+    rejectMove = true;
+    ExpectUnsignedException(first.destroy());
+    rejectMove = false;
+    EXPECT_TRUE(first.alive());
+    EXPECT_FALSE(first.hasComponent<PublicationVelocityComponent>());
+    EXPECT_TRUE(first.hasComponent<PublicationPositionComponent>());
 
-        first.destroy();
-        EXPECT_FALSE(first.alive());
-        EXPECT_EQ(testWorld.world.tryGetComponent<PublicationPositionComponent>(first.id()), nullptr);
-        EXPECT_EQ(testWorld.world.tryGetComponent<ThrowingMoveAssignmentComponent>(first.id()), nullptr);
-        EXPECT_EQ(testWorld.world.view<PublicationPositionComponent>().candidateCount(), 0u);
-        EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 1u);
-        ASSERT_TRUE(second.hasComponent<ThrowingMoveAssignmentComponent>());
-        EXPECT_EQ(second.getComponent<ThrowingMoveAssignmentComponent>().value, 109u);
-        second.destroy();
-    }
+    first.destroy();
+    EXPECT_FALSE(first.alive());
+    EXPECT_EQ(TryComponentAddress<PublicationPositionComponent>(testWorld.world, first.id()), 0u);
+    EXPECT_EQ(TryComponentAddress<ThrowingMoveAssignmentComponent>(testWorld.world, first.id()), 0u);
+    EXPECT_EQ(testWorld.world.view<PublicationPositionComponent>().candidateCount(), 0u);
+    EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 1u);
+    ASSERT_TRUE(second.hasComponent<ThrowingMoveAssignmentComponent>());
+    EXPECT_EQ(second.getComponent<ThrowingMoveAssignmentComponent>().value, 109u);
+    second.destroy();
     EXPECT_EQ(testWorld.world.entityCount(), 0u);
     EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 0u);
+}
+
+[cpp_unwind]
+void FailWithPendingMessage(mut b8 rejectMove, mut u32 moveAttempts, mut u32 destructions){
+    EcsTestWorld testWorld = EcsTestWorld();
+    testWorld.world.emplaceMessage<ThrowingMoveMessage>(rejectMove, moveAttempts, destructions);
+    rejectMove = true;
+    ThrowTestException<i32>(-79);
+}
+
+[cpp_unwind]
+void FailDuringWorldWait(mut SystemLifetimeState state){
+    EcsTestWorld testWorld = EcsTestWorld();
+    testWorld.world.addSystem<LifetimeSystem>(state, true);
+    testWorld.world.addSystem<LifetimeSystem>(state, false);
+    const auto admitted = testWorld.world.taskScope().submit(lambda[]() -> void{ ThrowTestException<i32>(-83); });
+    ASSERT_TRUE(admitted.has_value());
 }
 
 void VerifyEcs_WorldUnwindDestroysPendingMessagesWithoutMovingThem(){
     b8 rejectMove = false;
     u32 moveAttempts = 0u;
     u32 destructions = 0u;
-    native(mut rejectMove, mut moveAttempts, mut destructions){
-        const auto failWithPendingMessage = [&](){
-            EcsTestWorld testWorld;
-            testWorld.world.emplaceMessage<ThrowingMoveMessage>(rejectMove, moveAttempts, destructions);
-            rejectMove = true;
-            throw static_cast<i32>(-79);
-        };
-        EXPECT_THROW(failWithPendingMessage(), i32);
-    }
+    ExpectSignedException(FailWithPendingMessage(rejectMove, moveAttempts, destructions));
     EXPECT_EQ(moveAttempts, 0u);
     EXPECT_EQ(destructions, 1u);
 }
@@ -1134,16 +996,7 @@ void VerifyEcs_OrdinaryWorldDestructionDestroysPendingMessagesWithoutMovingThem(
 
 void VerifyEcs_FailedWorldTaskJoinStillRetiresBorrowingSystemsInOrder(){
     SystemLifetimeState state = SystemLifetimeState();
-    native(mut state){
-        const auto failDuringWorldWait = [&](){
-            EcsTestWorld testWorld;
-            testWorld.world.addSystem<LifetimeSystem>(state, true);
-            testWorld.world.addSystem<LifetimeSystem>(state, false);
-            const auto admitted = testWorld.world.taskScope().submit([](){ throw static_cast<i32>(-83); });
-            ASSERT_TRUE(admitted);
-        };
-        EXPECT_THROW(failDuringWorldWait(), i32);
-    }
+    ExpectSignedException(FailDuringWorldWait(state));
     EXPECT_TRUE(state.borrowerObservedProvider);
     EXPECT_FALSE(state.providerAlive);
     EXPECT_EQ(state.destructionCount, 2u);
@@ -1167,37 +1020,6 @@ void VerifyEcs_WorldClearAndDestructionRetireBorrowersBeforeEarlierSystems(){
         EXPECT_EQ(state.destructionOrder[0u], 2u);
         EXPECT_EQ(state.destructionOrder[1u], 1u);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ecs_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-thread_local b8 s_EcsCallerThread = false;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

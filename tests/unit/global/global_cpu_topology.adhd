@@ -1,0 +1,166 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "global_platform.adhd"
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/posix_child.adhd>
+#include <tests/common/threads.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::NWB::Tests::GlobalCases::CpuPlacements")]
+extern class CpuPlacements{
+    b8 empty()const;
+    usize size()const;
+    in CpuWorkerPlacement front()const;
+    in CpuWorkerPlacement back()const;
+    in CpuWorkerPlacement operator[](in usize index)const;
+};
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::QueryCpuWorkerPlacements")]
+extern Expected<CpuPlacements> QueryPlacements();
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::NWB::Tests::GlobalCases::CurrentThreadGroup")]
+extern Optional<u32> CurrentThreadGroup();
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::NWB::Tests::GlobalCases::RestrictProcessMask")]
+extern b8 RestrictProcessMask(in u64 mask);
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::NWB::Tests::GlobalCases::RestrictDefaultCpuSet")]
+extern b8 RestrictDefaultCpuSet(in u32 id);
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::NWB::Tests::GlobalCases::WindowsCpuSet")]
+extern class WindowsCpuSet{
+    u32 bytes;
+    b8 isCpuSet;
+    u32 processorGroup;
+    u32 logicalProcessor;
+    u32 id;
+};
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::NWB::Tests::GlobalCases::CpuSetBuffer")]
+extern class CpuSetBuffer{
+    Optional<u32> requiredBytes()const;
+    Optional<u32> read(in u32 capacity);
+    WindowsCpuSet at(in u32 offset)const;
+};
+
+[cpp_header("<tests/unit/global/global_cpu_topology.h>"), cpp_name("::testing::ExitedWithCode")]
+extern class TopologyExitCode;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 OnlySelectedPlacement(in CpuWorkerPlacement selected){
+    const auto restricted = QueryPlacements();
+    if(!restricted.has_value() || restricted.value().size() != 1u)
+        return false;
+    const CpuWorkerPlacement first = restricted.value().front();
+    return first.processorGroup == selected.processorGroup && first.logicalProcessorIndex == selected.logicalProcessorIndex && QueryCpuCoreCount(CpuAffinity::Any) == 1u;
+}
+
+void CheckProcessAffinityMask(){
+    const auto placements = QueryPlacements();
+    const Optional<u32> group = CurrentThreadGroup();
+    if(!placements.has_value() || !group.has_value())
+        ExitTestChild(1);
+    for(usize index = 0u; index < placements.value().size(); ++index){
+        const CpuWorkerPlacement selected = placements.value()[index];
+        if(selected.processorGroup != group.value())
+            continue;
+        if(!RestrictProcessMask(cast<u64>(1u) << selected.logicalProcessorIndex))
+            ExitTestChild(3);
+        if(!OnlySelectedPlacement(selected))
+            ExitTestChild(4);
+        ExitTestChild(0);
+    }
+    ExitTestChild(2);
+}
+
+void CheckProcessDefaultCpuSets(){
+    const auto placements = QueryPlacements();
+    if(!placements.has_value() || placements.value().empty())
+        ExitTestChild(1);
+    const CpuWorkerPlacement selected = placements.value().back();
+    CpuSetBuffer information;
+    const auto bytes = information.requiredBytes();
+    if(!bytes.has_value())
+        ExitTestChild(2);
+    if(bytes.value() == 0u)
+        ExitTestChild(3);
+    const auto read = information.read(bytes.value());
+    if(!read.has_value())
+        ExitTestChild(4);
+    u32 selectedId = u32.max;
+    u32 offset = 0u;
+    while(offset < read.value()){
+        const WindowsCpuSet info = information.at(offset);
+        if(info.isCpuSet && info.processorGroup == selected.processorGroup && info.logicalProcessor == selected.logicalProcessorIndex){
+            selectedId = info.id;
+            break;
+        }
+        if(info.bytes == 0u || info.bytes > read.value() - offset)
+            ExitTestChild(4);
+        offset += info.bytes;
+    }
+    if(selectedId == u32.max || !RestrictDefaultCpuSet(selectedId))
+        ExitTestChild(5);
+    if(!OnlySelectedPlacement(selected))
+        ExitTestChild(6);
+    ExitTestChild(0);
+}
+
+void VerifyProcessAffinityMask(){
+    ASSERT_EXIT(CheckProcessAffinityMask(), TopologyExitCode(0), "");
+}
+
+void VerifyProcessDefaultCpuSets(){
+    ASSERT_EXIT(CheckProcessDefaultCpuSets(), TopologyExitCode(0), "");
+}
+
+void VerifyLinuxThreadAffinity(){
+    const auto placements = QueryPlacements();
+    ASSERT_TRUE(placements.has_value());
+    ASSERT_FALSE(placements.value().empty());
+    const CpuWorkerPlacement target = placements.value().back();
+    b8 applied = false;
+    usize restrictedSize = 0u;
+    u32 processor = u32.max;
+    u32 usableCount = 0u;
+    b8 affinityIsAny = false;
+    TestThread worker(lambda[in target, mut applied, mut restrictedSize, mut processor, mut usableCount, mut affinityIsAny]() -> void{
+        applied = SetCurrentThreadCpuPlacement(target);
+        if(!applied)
+            return;
+        const auto restricted = QueryPlacements();
+        ASSERT_TRUE(restricted.has_value());
+        restrictedSize = restricted.value().size();
+        usableCount = QueryCpuCoreCount(CpuAffinity::Any);
+        if(restrictedSize > 0u){
+            processor = restricted.value().front().logicalProcessorIndex;
+            affinityIsAny = restricted.value().front().affinity == CpuAffinity::Any;
+        }
+    });
+    worker.join();
+    ASSERT_TRUE(applied);
+    ASSERT_EQ(restrictedSize, 1u);
+    EXPECT_EQ(processor, target.logicalProcessorIndex);
+    EXPECT_EQ(usableCount, 1u);
+    EXPECT_TRUE(affinityIsAny);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+registration GlobalWindowsCase(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction, VerifyProcessAffinityMask);
+registration GlobalWindowsCase(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets, VerifyProcessDefaultCpuSets);
+registration GlobalLinuxCase(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices, VerifyLinuxThreadAffinity);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

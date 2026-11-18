@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/meshlet_ref_encode.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+[cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::StringPointer")]
+extern class StringPointer;
+[cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::ThrowingConstIdentifierAppend")]
+extern class ThrowingConstIdentifierAppend;
+[cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::ThrowingIdentifierSizeAppend")]
+extern class ThrowingIdentifierSizeAppend;
+[cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::NoThrowMeshletBytes")]
+extern class NoThrowMeshletBytes;
+[cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::ThrowingMeshletAppend")]
+extern class ThrowingMeshletAppend;
+[cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::NoThrowMeshletFailure")]
+extern class NoThrowMeshletFailure;
+[cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::ThrowingMeshletFailureConversion")]
+extern class ThrowingMeshletFailureConversion;
+[cpp_header("<global/text_utils.h>"), cpp_name("::AppendAsciiUpperIdentifier")]
+extern void AppendAsciiUpperIdentifier<Sink>(in StringView text, in StringPointer fallback, mut Sink output);
+[cpp_header("<global/text_utils.h>"), cpp_name("::AppendUnderscoreSeparatedPascalIdentifier")]
+extern void AppendUnderscoreSeparatedPascalIdentifier<Sink>(in StringView text, in StringPointer fallback, mut Sink output);
+static_assert(is_nothrow_call<StringView, StringPointer, mut ThrowingConstIdentifierAppend>(AppendAsciiUpperIdentifier));
+static_assert(!is_nothrow_call<StringView, StringPointer, mut ThrowingConstIdentifierAppend>(AppendUnderscoreSeparatedPascalIdentifier));
+static_assert(!is_nothrow_call<StringView, StringPointer, mut ThrowingIdentifierSizeAppend>(AppendAsciiUpperIdentifier));
+static_assert(!is_nothrow_call<StringView, StringPointer, mut ThrowingIdentifierSizeAppend>(AppendUnderscoreSeparatedPascalIdentifier));
+static_assert(is_nothrow_call<u32, MeshletRefDeltaWidth, mut NoThrowMeshletBytes>(AppendMeshletRefDelta));
+static_assert(!is_nothrow_call<u32, MeshletRefDeltaWidth, mut ThrowingMeshletAppend>(AppendMeshletRefDelta));
+static_assert(is_nothrow_call<in Span<MeshletPositionStreamRef>, in Span<MeshletAttributeStreamRef>, b8, NoThrowMeshletFailure, mut Span<MeshletDesc>, mut NoThrowMeshletBytes, mut NoThrowMeshletBytes>(EncodeMeshletRefDeltas));
+static_assert(!is_nothrow_call<in Span<MeshletPositionStreamRef>, in Span<MeshletAttributeStreamRef>, b8, NoThrowMeshletFailure, mut Span<MeshletDesc>, mut ThrowingMeshletAppend, mut NoThrowMeshletBytes>(EncodeMeshletRefDeltas));
+static_assert(!is_nothrow_call<in Span<MeshletPositionStreamRef>, in Span<MeshletAttributeStreamRef>, b8, ThrowingMeshletFailureConversion, mut Span<MeshletDesc>, mut NoThrowMeshletBytes, mut NoThrowMeshletBytes>(EncodeMeshletRefDeltas));
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

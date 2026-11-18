@@ -58,6 +58,31 @@ struct GpuTaskGraphTaskView{
     b8 hasPayload = false;
     b8 hasRecordPayload = false;
     b8 hasAcceptedPayload = false;
+
+    void setResourceUses(Span<const GpuTaskResourceUse> uses)noexcept{
+        resourceUses = uses.data();
+        resourceUseCount = uses.size();
+    }
+    [[nodiscard]] b8 hasDependencies()const noexcept{ return dependencies != nullptr; }
+    [[nodiscard]] Span<const GpuTaskId> dependenciesSpan()const noexcept{
+        return dependencies ? Span<const GpuTaskId>(dependencies, dependencyCount) : Span<const GpuTaskId>();
+    }
+    [[nodiscard]] b8 hasExternalDependencies()const noexcept{ return externalDependencies != nullptr; }
+    [[nodiscard]] Span<const GpuExternalCompletionId> externalDependenciesSpan()const noexcept{
+        return externalDependencies ? Span<const GpuExternalCompletionId>(externalDependencies, externalDependencyCount) : Span<const GpuExternalCompletionId>();
+    }
+    [[nodiscard]] b8 hasExternalStateSources()const noexcept{ return externalStateSources != nullptr; }
+    [[nodiscard]] Span<const GpuTaskExternalStateSource> externalStateSourcesSpan()const noexcept{
+        return externalStateSources ? Span<const GpuTaskExternalStateSource>(externalStateSources, externalStateSourceCount) : Span<const GpuTaskExternalStateSource>();
+    }
+    [[nodiscard]] b8 hasResourceUses()const noexcept{ return resourceUses != nullptr; }
+    [[nodiscard]] Span<const GpuTaskResourceUse> resourceUsesSpan()const noexcept{
+        return resourceUses ? Span<const GpuTaskResourceUse>(resourceUses, resourceUseCount) : Span<const GpuTaskResourceUse>();
+    }
+    [[nodiscard]] b8 hasResourceVersionUses()const noexcept{ return resourceVersionUses != nullptr; }
+    [[nodiscard]] Span<const GpuTaskResourceVersionUse> resourceVersionUsesSpan()const noexcept{
+        return resourceVersionUses ? Span<const GpuTaskResourceVersionUse>(resourceVersionUses, resourceVersionUseCount) : Span<const GpuTaskResourceVersionUse>();
+    }
 };
 
 // Immutable view of an externally released resource range, copied at declaration so producer storage may retire.
@@ -89,6 +114,10 @@ struct GpuTaskGraphResourceView{
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     b8 hasQueueAdmission = false;
     b8 hasBackendResource = false;
+    [[nodiscard]] b8 hasInitialOwnerHandoffSources()const noexcept{ return initialOwnerHandoffSources != nullptr; }
+    [[nodiscard]] Span<const GpuTaskGraphInitialOwnerHandoffSourceView> initialOwnerHandoffSourcesSpan()const noexcept{
+        return initialOwnerHandoffSources ? Span<const GpuTaskGraphInitialOwnerHandoffSourceView>(initialOwnerHandoffSources, initialOwnerHandoffSourceCount) : Span<const GpuTaskGraphInitialOwnerHandoffSourceView>();
+    }
 };
 
 struct GpuTaskGraphResourceVersionView{
@@ -106,6 +135,10 @@ struct GpuTaskGraphResourceSetView{
     usize memberCount = 0u;
 
     [[nodiscard]] Span<const GpuGraphResourceId> memberSpan()const noexcept{ return { members, memberCount }; }
+    [[nodiscard]] b8 hasMembers()const noexcept{ return members != nullptr; }
+    [[nodiscard]] Span<const GpuGraphResourceId> membersSpan()const noexcept{
+        return members ? Span<const GpuGraphResourceId>(members, memberCount) : Span<const GpuGraphResourceId>();
+    }
 };
 
 struct GpuTaskGraphPipelineView{
@@ -134,6 +167,9 @@ struct GpuTaskGraphTelemetryOptions{
     const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
     const GpuCompiledGraph::ReadView* compiledPlan = nullptr;
     const GpuTaskGraphQueueAssignmentTelemetryTracker* queueAssignmentTelemetry = nullptr;
+    void setQueueAssignments(const GpuTaskGraphQueueAssignments& value)noexcept{ queueAssignments = &value; }
+    void setCompiledPlan(const GpuCompiledGraph::ReadView& value)noexcept{ compiledPlan = &value; }
+    void setQueueAssignmentTelemetry(const GpuTaskGraphQueueAssignmentTelemetryTracker& value)noexcept{ queueAssignmentTelemetry = &value; }
 };
 
 
@@ -196,7 +232,12 @@ public:
     [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const && = delete;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const & noexcept;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const && = delete;
-    [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(const GpuExternalCompletionId& completion)const & noexcept;
+    [[nodiscard]] Optional<QueueSubmissionToken> findCompletionToken(GpuExternalCompletionId completion)const noexcept{
+            if(const auto* result = externalCompletionToken(completion))
+                return *result;
+            return {};
+        }
+        [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(const GpuExternalCompletionId& completion)const & noexcept;
     [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(const GpuExternalCompletionId& completion)const && = delete;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const & noexcept;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const && = delete;
@@ -208,6 +249,7 @@ public:
     [[nodiscard]] Expected<BinaryByteView> uploadBlobData(const GpuUploadBlobId& blob)const && = delete;
     [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
     [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
+    [[nodiscard]] b8 hasComputePipeline(const GpuGraphPipelineId& pipeline)const noexcept{ return computePipelineFor(pipeline) != nullptr; }
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
     [[nodiscard]] Optional<NotNull<Texture*>> borrowTexture(const GpuGraphResourceId& id)const & noexcept{
@@ -236,7 +278,12 @@ public:
     [[nodiscard]] Optional<NotNull<Buffer*>> borrowBuffer(const GpuGraphResourceId&)const && = delete;
     [[nodiscard]] GpuGraphResourceId findImportedTexture(const TextureHandle& texture)const noexcept;
     [[nodiscard]] GpuGraphResourceId findImportedBuffer(const BufferHandle& buffer)const noexcept;
-    [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const & noexcept;
+    [[nodiscard]] Optional<GpuPresentEndpoint> findPresentEndpoint()const noexcept{
+            if(const auto* result = presentEndpoint())
+                return *result;
+            return {};
+        }
+        [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const & noexcept;
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const && = delete;
 
     [[nodiscard]] b8 appendAcceptedFrameGraphTelemetry(

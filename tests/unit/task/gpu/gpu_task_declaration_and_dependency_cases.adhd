@@ -29,27 +29,41 @@ FrameGraphBuilder GpuDecl_MakeFrameGraphBuilder(
     return FrameGraphBuilder(scratch.scratchArena, nodes, edges, pendingEdges);
 }
 
+class GpuDeclaredPayloadLifetime : NoCopy{
+    private mut u32 m_destructions;
+
+    public GpuDeclaredPayloadLifetime(mut u32 destructions){ this.m_destructions = destructions; }
+    public ~GpuDeclaredPayloadLifetime(){ ++this.m_destructions; }
+}
+
+class GpuReentrantDeclarationProbe{}
+
+class GpuReentrantTelemetryResult{
+    public b8 trackerValidationAttempted = false;
+    public b8 trackerValidationSucceeded = true;
+    public b8 trackerUpdateAttempted = false;
+    public b8 trackerUpdateSucceeded = true;
+    public b8 appendAttempted = false;
+    public b8 appendSucceeded = true;
+}
+
 Optional<GpuTaskQueueAssignmentTelemetry> GpuDecl_FindTrackedTelemetry(
     in GpuTaskGraphQueueAssignmentTelemetryTracker tracker,
     in GpuTaskId task
 ){
-    Optional<GpuTaskQueueAssignmentTelemetry> out = Optional<GpuTaskQueueAssignmentTelemetry>();
-    native(in tracker, in task, mut out){
-        if(const Core::GpuTaskQueueAssignmentTelemetry* const found = tracker.find(task))
-            out = *found;
+    const Optional<in GpuTaskQueueAssignmentTelemetry> found = BorrowTrackedQueueTelemetry(tracker, task);
+    if(found.has_value()){
+        in GpuTaskQueueAssignmentTelemetry value = found.value();
+        return value;
     }
-    return out;
+    return Optional<GpuTaskQueueAssignmentTelemetry>();
 }
 
 Expected<GpuUploadBlobId> GpuDecl_CopyUploadSpan(mut GpuTaskGraph graph, in Span<u8> bytes, in usize alignment){
-    Expected<GpuUploadBlobId> out = MakeUnexpected(Failure());
-    native(mut graph, in bytes, in alignment, mut out){
-        out = graph.copyUploadData(bytes.data(), bytes.size(), alignment);
-    }
-    return out;
+    return graph.copyAlignedUploadBytes(BinaryViewFromBytes(bytes), alignment);
 }
 
-Expected<GpuTaskId> GpuDecl_AddSetTask(in Name identity, in AStringView label, in Span<GpuTaskResourceSetUse> sets, mut GpuTaskGraph graph){
+Expected<GpuTaskId> GpuDecl_AddSetTask(in Name identity, in StringView label, in Span<GpuTaskResourceSetUse> sets, mut GpuTaskGraph graph){
     const Span<GpuTaskId> emptyDeps = Span<GpuTaskId>();
     const Span<GpuTaskResourceUse> emptyUses = Span<GpuTaskResourceUse>();
     const Span<GpuTaskResourceVersionUse> emptyVersions = Span<GpuTaskResourceVersionUse>();
@@ -684,11 +698,8 @@ void VerifyGpuDecl_CopiesCallerMetadataAndDestroysTypedPayloadOnReset(){
     desc.setMarkerLabel(markerLabel);
     desc.setDependencies(dependencies);
     desc.setResourceUses(uses);
-    Expected<GpuTaskId> taskResult = MakeUnexpected(Failure());
-    native(mut graph, in desc, mut destructionCount, mut taskResult){
-        PayloadDestroyTask::Payload payload(&destructionCount);
-        taskResult = graph.addTask<PayloadDestroyTask>(desc, Move(payload));
-    }
+    const auto taskResult = graph.addPayloadTaskFrom<GpuDeclaredPayloadLifetime>(desc,
+        lambda[mut destructionCount]() -> GpuDeclaredPayloadLifetime{ return GpuDeclaredPayloadLifetime(destructionCount); });
     dependencies[0u] = GpuTaskId();
     uses[0u].resource = GpuGraphResourceId();
     markerLabel.replace(0u, 1u, "X");
@@ -724,9 +735,8 @@ void VerifyGpuDecl_RejectsInvalidExternalStateSourceWithoutDeclarationMutation()
     ASSERT_FALSE(externalStateSource.valid());
     Array<GpuTaskExternalStateSource, 1> externalStateSources = Array<GpuTaskExternalStateSource, 1>();
     externalStateSources[0u].applicableConsumerQueueClass = CommandQueue::Compute;
-    native(in externalStateSource, mut externalStateSources){
-        externalStateSources[0u].states = &externalStateSource;
-    }
+    in CommandListResourceStateHandoff state = externalStateSource;
+    externalStateSources[0u].setState(state);
     GpuTaskDesc desc = GpuTaskDesc();
     desc.setIdentity(s_DeclarationCaseInvalidExternalStateSource);
     desc.setMarkerLabel("Invalid External State Source");
@@ -747,16 +757,14 @@ void VerifyGpuDecl_RejectsReentrantCompilerReadDuringDeclarationMutation(){
     GpuTaskDesc desc = GpuTaskDesc();
     desc.setIdentity(s_DeclarationCaseReentrantCompileDuringDeclaration);
     desc.setMarkerLabel("Reentrant Compile During Declaration");
-    Expected<GpuTaskId> taskResult = MakeUnexpected(Failure());
-    native(mut graph, in desc, mut analysis, mut scratch, mut compileAttempted, mut compileSucceeded, mut taskResult){
-        ReentrantCompileDuringDeclarationTask::Payload payload;
-        payload.graph = &graph;
-        payload.analysis = &analysis;
-        payload.scratchArena = &scratch.scratchArena;
-        payload.compileAttempted = &compileAttempted;
-        payload.compileSucceeded = &compileSucceeded;
-        taskResult = graph.addTask<ReentrantCompileDuringDeclarationTask>(desc, Move(payload));
-    }
+    const auto taskResult = graph.addPayloadTaskFrom<GpuReentrantDeclarationProbe>(desc,
+        lambda[mut graph, mut analysis, mut scratch, mut compileAttempted, mut compileSucceeded]() -> GpuReentrantDeclarationProbe{
+            compileAttempted = true;
+            const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadViewTryAcquire(graph);
+            GpuTaskGraphCompiler compiler;
+            compileSucceeded = declarations.valid() && compiler.analyze(declarations, scratch.scratchArena, analysis);
+            return GpuReentrantDeclarationProbe();
+        });
     ASSERT_TRUE(taskResult.has_value());
     const GpuTaskId task = taskResult.value();
 
@@ -803,7 +811,7 @@ void VerifyGpuDecl_RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     {
         const GpuTaskGraphReadViews reads = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(reads.valid());
-        ASSERT_TRUE(tracker.update(reads.declarations, assignments, reads.compiled, transaction, scratch.scratchArena));
+        ASSERT_TRUE(tracker.updateWithScratch(reads.declarations, assignments, reads.compiled, transaction, scratch.scratchArena));
         ASSERT_TRUE(tracker.validFor(reads.declarations, assignments, reads.compiled));
         const Optional<GpuTaskQueueAssignmentTelemetry> initialTelemetry = GpuDecl_FindTrackedTelemetry(tracker, existingTask);
         ASSERT_TRUE(initialTelemetry.has_value());
@@ -815,24 +823,21 @@ void VerifyGpuDecl_RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     const usize edgeCount = edges.size();
     const usize pendingEdgeCount = pendingEdges.size();
 
-    ReentrantTelemetryDuringDeclarationState state = ReentrantTelemetryDuringDeclarationState();
-    Expected<GpuTaskId> probeTaskResult = MakeUnexpected(Failure());
-    native(mut graph, in analysis, in assignments, in compiledGraph, in transaction, mut tracker, mut builder, mut scratch, mut state, mut probeTaskResult){
-        state.graph = &graph;
-        state.analysis = &analysis;
-        state.assignments = &assignments;
-        state.compiledGraph = &compiledGraph;
-        state.transaction = &transaction;
-        state.tracker = &tracker;
-        state.builder = &builder;
-        state.scratchArena = &scratch.scratchArena;
-        probeTaskResult = graph.addTask<ReentrantTelemetryDuringDeclarationTask>(
-            Core::GpuTaskDesc{}
-                .setIdentity(s_DeclarationCaseReentrantTelemetryDuringDeclaration)
-                .setMarkerLabel("Reentrant Telemetry During Declaration"),
-            ReentrantTelemetryDuringDeclarationTask::Payload(state)
-        );
-    }
+    GpuReentrantTelemetryResult state;
+    GpuTaskDesc probeDesc;
+    probeDesc.setIdentity(s_DeclarationCaseReentrantTelemetryDuringDeclaration).setMarkerLabel("Reentrant Telemetry During Declaration");
+    const auto probeTaskResult = graph.addPayloadTaskFrom<GpuReentrantDeclarationProbe>(probeDesc,
+        lambda[mut graph, mut analysis, mut assignments, mut compiledGraph, mut transaction, mut tracker, mut builder, mut scratch, mut state]() -> GpuReentrantDeclarationProbe{
+            const auto declarations = GpuTaskGraphDeclarationReadViewTryAcquire(graph);
+            const GpuCompiledGraphReadView compiledPlan(compiledGraph);
+            state.trackerValidationAttempted = true;
+            state.trackerValidationSucceeded = tracker.validFor(declarations, assignments, compiledPlan);
+            state.trackerUpdateAttempted = true;
+            state.trackerUpdateSucceeded = tracker.updateWithScratch(declarations, assignments, compiledPlan, transaction, scratch.scratchArena);
+            state.appendAttempted = true;
+            state.appendSucceeded = declarations.appendAcceptedFrameGraphTelemetry(analysis, builder, assignments, compiledPlan, tracker);
+            return GpuReentrantDeclarationProbe();
+        });
     ASSERT_TRUE(probeTaskResult.has_value());
     const GpuTaskId probeTask = probeTaskResult.value();
 
@@ -870,7 +875,7 @@ void VerifyGpuDecl_RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     );
     const GpuTaskGraphReadViews reads = GpuTaskGraphReadViews(graph, compiledGraph);
     ASSERT_TRUE(reads.valid());
-    ASSERT_TRUE(tracker.update(reads.declarations, assignments, reads.compiled, transaction, scratch.scratchArena));
+    ASSERT_TRUE(tracker.updateWithScratch(reads.declarations, assignments, reads.compiled, transaction, scratch.scratchArena));
     EXPECT_TRUE(tracker.validFor(reads.declarations, assignments, reads.compiled));
     const GpuTaskGraphTelemetryOptions recoveredOptions = MakeTelemetryOptions(assignments, reads.compiled, tracker);
     EXPECT_TRUE(reads.declarations.appendFrameGraphTelemetry(analysis, scratch.scratchArena, recoveredBuilder, recoveredOptions));
@@ -885,11 +890,9 @@ void VerifyGpuDecl_OwnsUploadBlobsAndInvalidatesThemOnReset(){
     sourceBytes[2u] = 0x5cu;
     sourceBytes[3u] = 0x8eu;
 
-    b8 nullRejected = false;
-    native(mut graph, in sourceBytes, mut nullRejected){
-        nullRejected = !graph.copyUploadData(nullptr, sourceBytes.size(), alignof(u8)).has_value();
-    }
-    EXPECT_TRUE(nullRejected);
+    BinaryByteView missing;
+    missing.byteCount = sourceBytes.size();
+    EXPECT_FALSE(graph.copyAlignedUploadBytes(missing, align_of<u8>()).has_value());
     const Span<u8> emptyBytes = Span<u8>();
     EXPECT_FALSE(GpuDecl_CopyUploadSpan(graph, emptyBytes, 1u).has_value());
     EXPECT_FALSE(GpuDecl_CopyUploadSpan(graph, sourceBytes, 3u).has_value());
@@ -942,11 +945,8 @@ void VerifyGpuDecl_UploadBlobPreservesRequestedAlignmentAcrossGrowth(){
     const auto bytes = declarations.uploadBlobData(first.value());
     ASSERT_TRUE(bytes.has_value());
     ASSERT_EQ(bytes.value().size(), source.size());
-    usize addrMod = 1u;
-    native(in bytes, in alignment, mut addrMod){
-        addrMod = reinterpret_cast<usize>(bytes.value().data()) % alignment;
-    }
-    EXPECT_EQ(addrMod, 0u);
+    ASSERT_FALSE(bytes.value().empty());
+    EXPECT_EQ(ObjectAddressKey(bytes.value().span()[0u]) % alignment, 0u);
     for(usize index = 0u; index < source.size(); ++index)
         EXPECT_EQ(bytes.value()[index], source[index]);
 }
@@ -954,12 +954,10 @@ void VerifyGpuDecl_UploadBlobPreservesRequestedAlignmentAcrossGrowth(){
 void VerifyGpuDecl_RejectsOverflowingUploadBlobAllocation(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    b8 rejected = false;
-    native(mut graph, mut rejected){
-        const u8 source = 0x17u;
-        rejected = !graph.copyUploadData(&source, Limit<usize>::s_Max, 65536u).has_value();
-    }
-    EXPECT_TRUE(rejected);
+    const Array<u8, 1u> source(0x17u);
+    BinaryByteView overflowing = BinaryViewFromBytes(Span<u8>(source));
+    overflowing.byteCount = usize.max;
+    EXPECT_FALSE(graph.copyAlignedUploadBytes(overflowing, cast<usize>(65536u)).has_value());
 }
 
 void VerifyGpuDecl_OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset(){
@@ -1013,11 +1011,7 @@ void VerifyGpuDecl_OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset(){
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         EXPECT_EQ(declarations.pipelineCount(), 0u);
         EXPECT_FALSE(declarations.validPipeline(pipeline));
-        b8 isNullCompute = false;
-        native(in declarations, in pipeline, mut isNullCompute){
-            isNullCompute = declarations.computePipelineFor(pipeline) == nullptr;
-        }
-        EXPECT_TRUE(isNullCompute);
+        EXPECT_FALSE(declarations.hasComputePipeline(pipeline));
     }
 
     const auto replacementResult = AddPipelineMetadata(graph, s_GpuDeclDeferredLightingPipelinePath, "Replacement Pipeline", GpuGraphPipelineType::Compute);

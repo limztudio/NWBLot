@@ -3,13 +3,17 @@
 
 
 [cpp_header("<core/os/clipboard_service.h>"), cpp_name("::NWB::Core::QueuedClipboardService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
-extern class QueuedClipboardService{
+extern class QueuedClipboardService : IClipboardService{
     b8 cancel(...);
     b8 isOwnerThread(...)const;
     ClipboardPollResult poll(...);
     b8 pump(...);
     Expected<ClipboardRequestToken, ClipboardAdmission> requestReadText(...);
     Expected<ClipboardRequestToken, ClipboardAdmission> requestWriteText(...);
+    ClipboardCapabilities capabilities(in ClipboardChannel channel)const;
+    void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView text);
+    void cancelNativeRequest(in ClipboardRequestToken token);
+    b8 completeNativeRequest(in ClipboardRequestToken token, in ClipboardStatus status, in StringView text = "");
 };
 
 

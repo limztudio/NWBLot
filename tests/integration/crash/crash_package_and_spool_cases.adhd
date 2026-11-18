@@ -23,65 +23,64 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
     const Path pendingDirectory = spoolDirectory / s_PendingBucket;
     UninstallCrashHandler();
 
-    b8 installAccepted = true;
-    b8 installed = true;
-    b8 handlerStarted = true;
-    b8 restorePending = true;
-    u32 nativeDiagnostics = 0u;
-    u32 unlockedDiagnostics = 0u;
-    b8 matchedOperation = false;
-    b8 matchedCategory = false;
-    b8 matchedCode = false;
-    native(in spoolDirectory, in pendingDirectory, mut installAccepted, mut installed, mut handlerStarted, mut restorePending, mut nativeDiagnostics, mut unlockedDiagnostics, mut matchedOperation, mut matchedCategory, mut matchedCode){
-#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
-        const auto expectedFailure = EnsureDirectories(pendingDirectory);
-        ASSERT_FALSE(expectedFailure);
-        Array<char, 64u> expectedCategory = {};
-        CopyFixedBuffer(expectedCategory, "category=");
-        AppendFixedBuffer(expectedCategory, AStringView(expectedFailure.error().category().name()));
-        Array<char, 32u> expectedCode = {};
-        CopyFixedBuffer(expectedCode, "code=");
-        const i64 nativeCode = expectedFailure.error().value();
-        if(nativeCode < 0)
-            AppendFixedBuffer(expectedCode, "-");
-        AppendUnsignedToFixedBuffer(expectedCode, static_cast<u64>(nativeCode < 0 ? -nativeCode : nativeCode));
-        const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
-        ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
-        s_NativeLifecycleDiagnostics = 0u;
-        s_UnlockedLifecycleDiagnostics = 0u;
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        Core::Crash::CrashConfig config(installArena);
-        config.applicationName = "bad-spool-admission";
-        config.spoolDirectory = spoolDirectory;
-        installAccepted = Core::Crash::InstallCrashHandler(config);
-        installed = Core::Crash::CrashDetail::g_State.installed;
-        handlerStarted = Core::Crash::CrashDetail::g_State.handlerStarted;
-        restorePending = Core::Crash::CrashDetail::g_State.platformRestorePending;
-        nativeDiagnostics = s_NativeLifecycleDiagnostics;
-        unlockedDiagnostics = s_UnlockedLifecycleDiagnostics;
-        matchedOperation = FixedBufferView(s_LastLifecycleOperation) == AStringView("prepare_spool");
-        matchedCategory = FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCategory)) != AStringView::npos;
-        matchedCode = FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCode)) != AStringView::npos;
-#endif
-    }
-    EXPECT_FALSE(installAccepted);
-    EXPECT_FALSE(installed);
-    EXPECT_FALSE(handlerStarted);
-    EXPECT_FALSE(restorePending);
-    EXPECT_EQ(nativeDiagnostics, 1u);
-    EXPECT_EQ(unlockedDiagnostics, 1u);
-    EXPECT_TRUE(matchedOperation);
-    EXPECT_TRUE(matchedCategory);
-    EXPECT_TRUE(matchedCode);
+    const auto failure = EnsureDirectories(pendingDirectory);
+    ASSERT_FALSE(failure.has_value());
+    const String expectedCategory = StringFormat("category={}", NativeErrorCategory(failure.error()));
+    const String expectedCode = StringFormat("code={}", failure.error().value());
+    CrashDiagnosticObserver observed("crash_native_lifecycle", true);
+    CrashDiagnosticSubscription<CrashDiagnosticObserver> registration(observed);
+    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    TestValueSlot<PersistentCrashConfig> slot;
+    mut PersistentCrashConfig config = slot.constructIn(installArena);
+    config.applicationName = "bad-spool-admission";
+    config.spoolDirectory = spoolDirectory;
+    EXPECT_FALSE(InstallCrashHandler(config));
+    in CrashRuntimeState state = TestCrashState();
+    EXPECT_FALSE(state.installed);
+    EXPECT_FALSE(state.handlerStarted);
+    EXPECT_FALSE(state.platformRestorePending);
+    EXPECT_EQ(observed.count, 1u);
+    EXPECT_EQ(observed.unlocked, 1u);
+    EXPECT_EQ(CrashText(observed.operation), "prepare_spool");
+    EXPECT_TRUE(Contains(CrashText(observed.message), StringView(expectedCategory)));
+    EXPECT_TRUE(Contains(CrashText(observed.message), StringView(expectedCode)));
     UninstallCrashHandler();
     RemoveTestArtifacts(group);
+}
+
+void VerifyExecutableAdmission(in Path spoolDirectory, in StringView executable){
+    CrashDiagnosticObserver observed("crash_native_lifecycle", true);
+    CrashDiagnosticSubscription<CrashDiagnosticObserver> registration(observed);
+    PersistentStorage installArena(s_InstallArena, CrashStorageAlignedSize(64u * 1024u));
+    TestValueSlot<PersistentCrashConfig> slot;
+    mut PersistentCrashConfig config = slot.constructIn(installArena);
+
+    config.applicationName = "bad-executable-admission";
+    config.spoolDirectory = spoolDirectory;
+    config.handlerExecutablePath = executable;
+    EXPECT_FALSE(InstallCrashHandler(config));
+
+    const Optional<usize> before = ProcessHandleCount();
+    ASSERT_TRUE(before.has_value());
+    in CrashRuntimeState state = TestCrashState();
+    for(u32 attempt = 0u; attempt < 4u; ++attempt){
+        EXPECT_FALSE(InstallCrashHandler(config));
+        EXPECT_FALSE(state.installed);
+        EXPECT_FALSE(state.handlerStarted);
+        EXPECT_FALSE(state.platformRestorePending);
+    }
+    const Optional<usize> after = ProcessHandleCount();
+    ASSERT_TRUE(after.has_value());
+    EXPECT_EQ(after.value(), before.value());
+    EXPECT_EQ(observed.count, 5u);
+    EXPECT_EQ(observed.unlocked, observed.count);
+    EXPECT_TRUE(Contains(CrashText(observed.message), "code="));
 }
 
 void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(){
     if(!IsDesktopCrashPlatform())
         return;
 
-    CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_bad_executable_admission";
     RemoveTestArtifacts(group);
     const Path caseDirectory = TestCaseDirectory(group);
@@ -91,182 +90,10 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
     const Path spoolDirectory = SpoolDirectory(group);
     UninstallCrashHandler();
 
-    usize beforeCount = 0u;
-    usize afterCount = 0u;
-    u32 nativeDiagnostics = 0u;
-    u32 unlockedDiagnostics = 0u;
-    b8 diagnosticHasCode = false;
-    native(in invalidExecutable, in spoolDirectory, mut testArena, mut beforeCount, mut afterCount, mut nativeDiagnostics, mut unlockedDiagnostics, mut diagnosticHasCode){
-#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
-        auto& arena = testArena.arena;
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        ASSERT_EQ(chmod(invalidExecutable.c_str(), 0700), 0);
-#endif
-        const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
-        ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
-        s_NativeLifecycleDiagnostics = 0u;
-        s_UnlockedLifecycleDiagnostics = 0u;
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-#if defined(FOUNDATION_UNICODE)
-        const auto executableText = PathToString<char>(arena, invalidExecutable);
-#else
-        const AStringView executableText = invalidExecutable.native();
-#endif
-        Core::Crash::CrashConfig config(installArena);
-        config.applicationName = "bad-executable-admission";
-        config.spoolDirectory = spoolDirectory;
-        config.handlerExecutablePath = AStringView(executableText);
-        EXPECT_FALSE(Core::Crash::InstallCrashHandler(config));
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        DWORD before = 0u;
-        ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &before));
-        beforeCount = static_cast<usize>(before);
-#else
-        constexpr AStringView s_FileDescriptorsDirectory = "/proc/self/fd";
-        const auto before = DirectoryIterator<GlobalArena>::Create(CrashTestPath(arena, s_FileDescriptorsDirectory));
-        ASSERT_TRUE(before);
-        beforeCount = static_cast<usize>(before->end() - before->begin());
-#endif
-        for(u32 attempt = 0u; attempt < 4u; ++attempt){
-            EXPECT_FALSE(Core::Crash::InstallCrashHandler(config));
-            EXPECT_FALSE(Core::Crash::CrashDetail::g_State.installed);
-            EXPECT_FALSE(Core::Crash::CrashDetail::g_State.handlerStarted);
-            EXPECT_FALSE(Core::Crash::CrashDetail::g_State.platformRestorePending);
-        }
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        DWORD after = 0u;
-        ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &after));
-        afterCount = static_cast<usize>(after);
-#else
-        const auto after = DirectoryIterator<GlobalArena>::Create(CrashTestPath(arena, s_FileDescriptorsDirectory));
-        ASSERT_TRUE(after);
-        afterCount = static_cast<usize>(after->end() - after->begin());
-#endif
-        nativeDiagnostics = s_NativeLifecycleDiagnostics;
-        unlockedDiagnostics = s_UnlockedLifecycleDiagnostics;
-        diagnosticHasCode = FixedBufferView(s_LastLifecycleDiagnostic).find("code=") != AStringView::npos;
-#endif
-    }
-    EXPECT_EQ(afterCount, beforeCount);
-    EXPECT_EQ(nativeDiagnostics, 5u);
-    EXPECT_EQ(unlockedDiagnostics, nativeDiagnostics);
-    EXPECT_TRUE(diagnosticHasCode);
+    ASSERT_TRUE(SetOwnerExecutable(invalidExecutable));
+    const String executable = PathToString(invalidExecutable);
+    VerifyExecutableAdmission(spoolDirectory, StringView(executable));
     UninstallCrashHandler();
-    RemoveTestArtifacts(group);
-}
-
-void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(){
-    if(!IsDesktopLinuxCrashPlatform())
-        return;
-
-    const StringView group = "crash_restore_native_hooks";
-    RemoveTestArtifacts(group);
-    UninstallCrashHandler();
-    const Path spoolDirectory = SpoolDirectory(group);
-
-    b8 stackDisabledRestored = false;
-    b8 signalOwnerRestored = false;
-    b8 terminateOwnerRestored = false;
-    b8 restorePending = true;
-    native(in spoolDirectory, mut stackDisabledRestored, mut signalOwnerRestored, mut terminateOwnerRestored, mut restorePending){
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-        stack_t originalStack = {};
-        struct sigaction originalAction = {};
-        ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
-        ASSERT_EQ(sigaction(SIGILL, nullptr, &originalAction), 0);
-        const auto originalTerminate = QueryTerminateHandler();
-        ScopeExit restore([&]()noexcept{
-            UninstallCrashHandler();
-            if(sigaction(SIGILL, &originalAction, nullptr) != 0 || sigaltstack(&originalStack, nullptr) != 0)
-                TerminateInvariant();
-            ExchangeTerminateHandler(originalTerminate);
-        });
-        stack_t disabled = {};
-        disabled.ss_flags = SS_DISABLE;
-        ASSERT_EQ(sigaltstack(&disabled, nullptr), 0);
-        struct sigaction desired = {};
-        desired.sa_handler = OriginalSignalOwner;
-        ASSERT_EQ(sigemptyset(&desired.sa_mask), 0);
-        ASSERT_EQ(sigaction(SIGILL, &desired, nullptr), 0);
-        ExchangeTerminateHandler(OriginalTerminateOwner);
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        Core::Crash::CrashConfig config(installArena);
-        config.applicationName = "restore-native-hooks";
-        config.spoolDirectory = spoolDirectory;
-        ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
-        UninstallCrashHandler();
-        stack_t restoredStack = {};
-        struct sigaction restoredAction = {};
-        ASSERT_EQ(sigaltstack(nullptr, &restoredStack), 0);
-        ASSERT_EQ(sigaction(SIGILL, nullptr, &restoredAction), 0);
-        stackDisabledRestored = (restoredStack.ss_flags & SS_DISABLE) != 0;
-        signalOwnerRestored = restoredAction.sa_handler == OriginalSignalOwner;
-        terminateOwnerRestored = QueryTerminateHandler() == OriginalTerminateOwner;
-        restorePending = Core::Crash::CrashDetail::g_State.platformRestorePending;
-#endif
-    }
-    EXPECT_TRUE(stackDisabledRestored);
-    EXPECT_TRUE(signalOwnerRestored);
-    EXPECT_TRUE(terminateOwnerRestored);
-    EXPECT_FALSE(restorePending);
-    RemoveTestArtifacts(group);
-}
-
-void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
-    if(!IsDesktopLinuxCrashPlatform())
-        return;
-
-    const StringView group = "crash_preserve_foreign_hooks";
-    RemoveTestArtifacts(group);
-    UninstallCrashHandler();
-    const Path spoolDirectory = SpoolDirectory(group);
-
-    b8 foreignStackRetained = false;
-    b8 foreignSignalRetained = false;
-    b8 foreignTerminateRetained = false;
-    b8 restorePending = true;
-    native(in spoolDirectory, mut foreignStackRetained, mut foreignSignalRetained, mut foreignTerminateRetained, mut restorePending){
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-        stack_t originalStack = {};
-        struct sigaction originalAction = {};
-        ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
-        ASSERT_EQ(sigaction(SIGILL, nullptr, &originalAction), 0);
-        const auto originalTerminate = QueryTerminateHandler();
-        ScopeExit restore([&]()noexcept{
-            UninstallCrashHandler();
-            if(sigaction(SIGILL, &originalAction, nullptr) != 0 || sigaltstack(&originalStack, nullptr) != 0)
-                TerminateInvariant();
-            ExchangeTerminateHandler(originalTerminate);
-        });
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        Core::Crash::CrashConfig config(installArena);
-        config.applicationName = "preserve-foreign-hooks";
-        config.spoolDirectory = spoolDirectory;
-        ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
-        struct sigaction foreignAction = {};
-        foreignAction.sa_handler = ForeignSignalOwner;
-        ASSERT_EQ(sigemptyset(&foreignAction.sa_mask), 0);
-        ASSERT_EQ(sigaction(SIGILL, &foreignAction, nullptr), 0);
-        stack_t foreignStack = {};
-        foreignStack.ss_sp = g_ForeignSignalStack.data();
-        foreignStack.ss_size = g_ForeignSignalStack.size();
-        ASSERT_EQ(sigaltstack(&foreignStack, nullptr), 0);
-        ExchangeTerminateHandler(ForeignTerminateOwner);
-        UninstallCrashHandler();
-        stack_t retainedStack = {};
-        struct sigaction retainedAction = {};
-        ASSERT_EQ(sigaltstack(nullptr, &retainedStack), 0);
-        ASSERT_EQ(sigaction(SIGILL, nullptr, &retainedAction), 0);
-        foreignStackRetained = retainedStack.ss_sp == g_ForeignSignalStack.data();
-        foreignSignalRetained = retainedAction.sa_handler == ForeignSignalOwner;
-        foreignTerminateRetained = QueryTerminateHandler() == ForeignTerminateOwner;
-        restorePending = Core::Crash::CrashDetail::g_State.platformRestorePending;
-#endif
-    }
-    EXPECT_TRUE(foreignStackRetained);
-    EXPECT_TRUE(foreignSignalRetained);
-    EXPECT_TRUE(foreignTerminateRetained);
-    EXPECT_FALSE(restorePending);
     RemoveTestArtifacts(group);
 }
 
@@ -274,24 +101,19 @@ void VerifyCrash_MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishe
     const StringView key = "bounded_metadata";
     ASSERT_TRUE(SetCrashMetadata(key, "original"));
     b8 found = false;
-    native(in key, mut found){
-        using namespace Core::Crash::CrashDetail;
-        Array<char, s_MaxShortText> longKey;
-        longKey.fill('k');
-        Array<char, s_MaxMediumText> longValue;
-        longValue.fill('v');
-        const Array<char, 3u> embedded{ 'a', '\0', 'b' };
-        EXPECT_TRUE(SetCrashMetadata(AStringView(longKey.data(), longKey.size() - 1u), AStringView(longValue.data(), longValue.size() - 1u)));
-        EXPECT_FALSE(SetCrashMetadata(AStringView(longKey), "value"));
-        EXPECT_FALSE(SetCrashMetadata(key, AStringView(longValue)));
-        EXPECT_FALSE(SetCrashMetadata(AStringView(embedded), "value"));
-        EXPECT_FALSE(SetCrashMetadata(key, AStringView(embedded)));
-        const auto request = BuildCrashDumpRequest(CrashReasonKind::ManualDump, 0u, {});
-        for(u32 i = 0u; i < request.metadataCount; ++i){
-            if(FixedBufferView(request.metadata[i].key) == key){
-                found = true;
-                EXPECT_EQ(FixedBufferView(request.metadata[i].value), AStringView("original"));
-            }
+    const String longKey(s_CrashMaxShortText, 107);
+    const String longValue(s_CrashMaxMediumText, 118);
+    const StringView embedded = StringView("a\0b", 3u);
+    EXPECT_TRUE(SetCrashMetadata(StringView(longKey).substr(0u, longKey.size() - 1u), StringView(longValue).substr(0u, longValue.size() - 1u)));
+    EXPECT_FALSE(SetCrashMetadata(StringView(longKey), "value"));
+    EXPECT_FALSE(SetCrashMetadata(key, StringView(longValue)));
+    EXPECT_FALSE(SetCrashMetadata(embedded, "value"));
+    EXPECT_FALSE(SetCrashMetadata(key, embedded));
+    const CrashRequest request = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, CrashRequestOptions());
+    for(u32 i = 0u; i < request.metadataCount; ++i){
+        if(CrashText(request.metadata[i].key) == key){
+            found = true;
+            EXPECT_EQ(CrashText(request.metadata[i].value), "original");
         }
     }
     EXPECT_TRUE(found);
@@ -305,22 +127,21 @@ void VerifyCrash_SnapshotKeepsPublishedMetadataDuringInterruptedWriter(){
     CrashRequest request = CrashRequest();
     b8 exercisedWriter = false;
     b8 found = false;
-    native(in key, in published, mut request, mut exercisedWriter, mut found){
-        NothrowScopedLock lock(Core::Crash::CrashDetail::g_State.mutex);
-        for(auto& metadata : Core::Crash::CrashDetail::g_State.metadata){
-            if(!metadata.used || AStringView(metadata.key.data()) != key)
-                continue;
-            const auto original = metadata;
-            ScopeExit restore([&metadata, &original]()noexcept{ metadata = original; });
-            CopyFixedBuffer(metadata.value, AStringView("unpublished_partial_value"));
-            request = Core::Crash::CrashDetail::BuildCrashDumpRequest(Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, {});
-            exercisedWriter = true;
-            break;
-        }
-        for(u32 i = 0u; i < request.metadataCount; ++i){
-            if(AStringView(request.metadata[i].key.data()) != key)
-                continue;
-            EXPECT_EQ(AStringView(request.metadata[i].value.data()), published);
+    mut CrashRuntimeState state = TestCrashState();
+    const FutexGuard guard = AcquireFutex(state.mutex);
+    for(mut CrashMetadata metadata : state.metadata){
+        if(metadata.used == 0u || CrashText(metadata.key) != key)
+            continue;
+        const CrashMetadata original = metadata;
+        SetCrashText(metadata.value, "unpublished_partial_value");
+        request = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, CrashRequestOptions());
+        metadata = original;
+        exercisedWriter = true;
+        break;
+    }
+    for(u32 i = 0u; i < request.metadataCount; ++i){
+        if(CrashText(request.metadata[i].key) == key){
+            EXPECT_EQ(CrashText(request.metadata[i].value), published);
             found = true;
         }
     }
@@ -332,55 +153,50 @@ void VerifyCrash_ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbReco
     const StringView key = "snapshot_concurrent_writer";
     const StringView category = "snapshot_concurrent_breadcrumb";
     const usize iterations = 2000u;
-    u32 failureCount = 0u;
-    native(in key, in category, in iterations, mut failureCount){
-        Array<char, Core::Crash::CrashDetail::s_MaxMediumText> first = {};
-        Array<char, Core::Crash::CrashDetail::s_MaxMediumText> second = {};
-        for(usize i = 0u; i + 1u < first.size(); ++i){
-            first[i] = 'a';
-            second[i] = 'b';
-        }
-        const AStringView firstText(first.data(), first.size() - 1u);
-        const AStringView secondText(second.data(), second.size() - 1u);
-        ASSERT_TRUE(SetCrashMetadata(key, firstText));
-        Atomic<u32> failures{ 0u };
-        Latch start(2u);
-        JoiningThread writer([&]()noexcept{
-            start.arrive_and_wait();
-            for(usize i = 0u; i < iterations; ++i){
-                const AStringView text = (i & 1u) != 0u ? firstText : secondText;
-                if(!SetCrashMetadata(key, text))
-                    failures.fetch_add(1u, MemoryOrder::relaxed);
-                AddCrashBreadcrumb(category, text);
-            }
-        });
+    const String first(s_CrashMaxMediumText - 1u, 97);
+    const String second(s_CrashMaxMediumText - 1u, 98);
+    const StringView firstText = first;
+    const StringView secondText = second;
+    ASSERT_TRUE(SetCrashMetadata(key, firstText));
+    TestAtomic<u32> failures(0u);
+    TestLatch start(2);
+    TestThread writer(lambda[mut start, in firstText, in secondText, in key, in category, mut failures]() -> void{
         start.arrive_and_wait();
-        for(usize iteration = 0u; iteration < iterations; ++iteration){
-            const auto request = Core::Crash::CrashDetail::BuildCrashDumpRequest(Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, {});
-            b8 found = false;
-            for(u32 i = 0u; i < request.metadataCount; ++i){
-                const auto& metadata = request.metadata[i];
-                if(AStringView(metadata.key.data()) != key)
-                    continue;
-                const AStringView value(metadata.value.data());
-                if(value != firstText && value != secondText)
-                    failures.fetch_add(1u, MemoryOrder::relaxed);
-                found = true;
-            }
-            if(!found)
+        for(usize i = 0u; i < iterations; ++i){
+            StringView text = secondText;
+            if((i & 1u) != 0u)
+                text = firstText;
+            if(!SetCrashMetadata(key, text))
                 failures.fetch_add(1u, MemoryOrder::relaxed);
-            for(u32 i = 0u; i < request.breadcrumbCount; ++i){
-                const auto& breadcrumb = request.breadcrumbs[i];
-                if(AStringView(breadcrumb.category) != category)
-                    continue;
-                const AStringView message(breadcrumb.message);
-                if(message != firstText && message != secondText)
-                    failures.fetch_add(1u, MemoryOrder::relaxed);
-            }
+            AddCrashBreadcrumb(category, text);
         }
-        writer.join();
-        failureCount = failures.load(MemoryOrder::relaxed);
+    });
+    start.arrive_and_wait();
+    for(usize iteration = 0u; iteration < iterations; ++iteration){
+        const CrashRequest request = BuildCrashDumpRequest(RequestReason::ManualDump, 0u, CrashRequestOptions());
+        b8 found = false;
+        for(u32 i = 0u; i < request.metadataCount; ++i){
+            in CrashMetadata metadata = request.metadata[i];
+            if(CrashText(metadata.key) != key)
+                continue;
+            const StringView value = CrashText(metadata.value);
+            if(value != firstText && value != secondText)
+                failures.fetch_add(1u, MemoryOrder::relaxed);
+            found = true;
+        }
+        if(!found)
+            failures.fetch_add(1u, MemoryOrder::relaxed);
+        for(u32 i = 0u; i < request.breadcrumbCount; ++i){
+            in CrashBreadcrumb breadcrumb = request.breadcrumbs[i];
+            if(CrashText(breadcrumb.category) != category)
+                continue;
+            const StringView message = CrashText(breadcrumb.message);
+            if(message != firstText && message != secondText)
+                failures.fetch_add(1u, MemoryOrder::relaxed);
+        }
     }
+    writer.join();
+    const u32 failureCount = failures.load(MemoryOrder::relaxed);
     EXPECT_EQ(failureCount, 0u);
 }
 
@@ -401,7 +217,7 @@ void VerifyCrash_WriteCrashPackageFailsWhenSpoolPathIsFile(){
 }
 
 void VerifyCrash_CrashSpoolRetentionPrunesOldestPackages(){
-    CrashTestArena testArena = CrashTestArena();
+    ScratchStorage testArena(s_OperationScratch);
     const StringView group = "crash_spool_retention_test";
     RemoveTestArtifacts(group);
 
@@ -421,7 +237,7 @@ void VerifyCrash_CrashSpoolRetentionPrunesOldestPackages(){
     retention.maxUploadedPackages = 1u;
     retention.maxFailedPackages = 1u;
     retention.maxUploadingPackages = 1u;
-    EXPECT_TRUE(ApplyCrashSpoolRetention(testArena.scratchArena, SpoolDirectory(group), retention).has_value());
+    EXPECT_TRUE(RetainTestCrashPackages(testArena, SpoolDirectory(group), retention, "").has_value());
 
     ExpectPathExists(PackageDirectory(group, s_PendingBucket, s_Crash001), false);
     ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash002), true);
@@ -438,7 +254,7 @@ void VerifyCrash_CrashSpoolRetentionPrunesOldestPackages(){
 }
 
 void VerifyCrash_CrashSpoolRetentionZeroDisablesPruning(){
-    CrashTestArena testArena = CrashTestArena();
+    ScratchStorage testArena(s_OperationScratch);
     const StringView group = "crash_spool_retention_zero_test";
     RemoveTestArtifacts(group);
 
@@ -450,7 +266,7 @@ void VerifyCrash_CrashSpoolRetentionZeroDisablesPruning(){
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    EXPECT_TRUE(ApplyCrashSpoolRetention(testArena.scratchArena, SpoolDirectory(group), retention).has_value());
+    EXPECT_TRUE(RetainTestCrashPackages(testArena, SpoolDirectory(group), retention, "").has_value());
 
     ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash001), true);
     ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash002), true);
@@ -459,7 +275,7 @@ void VerifyCrash_CrashSpoolRetentionZeroDisablesPruning(){
 }
 
 void VerifyCrash_CrashSpoolRetentionProtectsActivePendingPackage(){
-    CrashTestArena testArena = CrashTestArena();
+    ScratchStorage testArena(s_OperationScratch);
     const StringView group = "crash_spool_retention_protect_test";
     RemoveTestArtifacts(group);
 
@@ -472,7 +288,7 @@ void VerifyCrash_CrashSpoolRetentionProtectsActivePendingPackage(){
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    EXPECT_TRUE(ApplyCrashSpoolRetention(testArena.scratchArena, SpoolDirectory(group), retention, "crash-001").has_value());
+    EXPECT_TRUE(RetainTestCrashPackages(testArena, SpoolDirectory(group), retention, "crash-001").has_value());
 
     ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash001), true);
     ExpectPathExists(PackageDirectory(group, s_PendingBucket, s_Crash002), false);
@@ -482,7 +298,7 @@ void VerifyCrash_CrashSpoolRetentionProtectsActivePendingPackage(){
 }
 
 void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
-    CrashTestArena testArena = CrashTestArena();
+    HeapStorage testArena;
     const StringView group = "crash_uploading_recovery_blocked_test";
     const StringView crashId = "crash-recovery-blocked";
     RemoveTestArtifacts(group);
@@ -493,9 +309,9 @@ void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     EXPECT_TRUE(WriteTextFile(blockedBucket, "blocked"));
     CrashUploadSnapshot snapshot = CrashUploadSnapshot();
     CopyCrashPath(spoolPath, snapshot.spoolDirectory);
-    CopyFixedBuffer(snapshot.logServerUrl, "http://127.0.0.1:1");
+    SetCrashText(snapshot.logServerUrl, "http://127.0.0.1:1");
 
-    EXPECT_FALSE(FlushPendingCrashReportsImpl(testArena.arena, snapshot));
+    EXPECT_FALSE(FlushTestCrashReports(testArena, snapshot));
     ExpectIsDirectory(PackageDirectory(group, s_UploadingBucket, crashId), true);
     ExpectIsRegularFile(blockedBucket, true);
     EXPECT_TRUE(TextFileContains(PackageDirectory(group, s_UploadingBucket, crashId) / s_UploadAttemptFileName, s_RetryInterruptedState));
@@ -514,41 +330,3 @@ NWB_ADHD_GTEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked, VerifyCra
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-namespace NWB::Tests::CrashCases{
-alignas(MaxAlign) Array<u8, 256u * 1024u> g_ForeignSignalStack = {};
-void OriginalSignalOwner(const int)noexcept{}
-void ForeignSignalOwner(const int)noexcept{}
-[[noreturn]] void OriginalTerminateOwner()noexcept{ _exit(123); }
-[[noreturn]] void ForeignTerminateOwner()noexcept{ _exit(124); }
-};
-#endif
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
-TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){ NWB::Tests::CrashCases::VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(); }
-TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock){ NWB::Tests::CrashCases::VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(); }
-#endif
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners){ NWB::Tests::CrashCases::VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(); }
-TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){ NWB::Tests::CrashCases::VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(); }
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -513,5 +513,16 @@ struct formatter<ConvertStringArg<In>, CharT>{
 };
 
 
+template<typename ArenaT>
+[[nodiscard]] inline TString<ArenaT> AppendPlatformText(ArenaT& arena, const TStringView prefix, const AStringView suffix){
+    const auto converted = ConvertString(arena, suffix);
+    TString<ArenaT> result(arena);
+    result.reserve(prefix.size() + converted.size());
+    result.append(prefix);
+    result.append(converted);
+    return result;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

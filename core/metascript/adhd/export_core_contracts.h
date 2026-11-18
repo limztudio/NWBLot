@@ -5,7 +5,7 @@
 NWB_ADHD_EXPORT_CLASS_ROLE_CONTRACT(Asset,     "IAsset",  "::NWB::Core::Assets::TypedAsset", "NWB_DEFINE_ASSET_TYPE",     "AssetTypeName",     "s_AssetTypeName",     "s_AssetTypeText",     "<core/assets/module.h>")
 NWB_ADHD_EXPORT_CLASS_ROLE_CONTRACT(System,    "ISystem", "::NWB::Core::ECS::ISystem",       "NWB_DEFINE_SYSTEM_TYPE",    "SystemTypeName",    "s_SystemTypeName",    "s_SystemTypeText",    "<core/ecs/system.h>")
 NWB_ADHD_EXPORT_CLASS_ROLE_CONTRACT(Component, "",        "",                                "NWB_DEFINE_COMPONENT_TYPE", "ComponentTypeName", "s_ComponentTypeName", "s_ComponentTypeText", "<core/ecs/component.h>")
-NWB_ADHD_EXPORT_CLASS_ROLE_CONTRACT(Subsystem, "IAsset",  "::NWB::Core::Assets::TypedAsset", "NWB_DEFINE_ASSET_TYPE",     "AssetTypeName",     "s_AssetTypeName",     "s_AssetTypeText",     "<impl/assets_subsystem/asset.adhd.h>")
+NWB_ADHD_EXPORT_CLASS_ROLE_CONTRACT(Subsystem, "ISubsystem",  "::NWB::Core::Assets::TypedAsset", "NWB_DEFINE_ASSET_TYPE",     "AssetTypeName",     "s_AssetTypeName",     "s_AssetTypeText",     "<impl/assets_subsystem/asset.adhd.h>")
 
 NWB_ADHD_EXPORT_AUTO_OVERRIDE_METHOD(System, "prepare")
 NWB_ADHD_EXPORT_AUTO_OVERRIDE_METHOD(System, "update")

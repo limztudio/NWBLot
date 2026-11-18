@@ -2,199 +2,104 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/threads.adhd>
+#include <tests/common/value_storage.adhd>
+#include <tests/unit/frame/win32_fixture.adhd>
 #include <tests/unit/frame/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/log.h>
-#include <core/frame/frame_detail.h>
-#include <core/frame/module.h>
-
-#include <global/scope_exit.h>
-#include <global/terminal_entry.h>
-#include <global/termination.h>
-#include <global/thread.h>
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-#include <windows.h>
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace FrameLifecycleTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_ClampMessage = FOUNDATION_TEXT("Frame Win32 client size clamped");
-inline constexpr TStringView s_FrameClassName = FOUNDATION_TEXT("NWB_FRAME");
-
-struct ClampObserverFailure final{};
-
-class ThrowingClampLogger final : public Core::Common::ILogger{
-private:
-    using LogArena = Core::Common::LogArena;
-    using LogString = Core::Common::LogString;
-
-
-public:
-    ThrowingClampLogger()
-        : m_arena(Tests::FrameCases::s_OneOffNameTestsFrameClampObserver)
-    {}
-
-
-public:
-    virtual LogArena& arena()noexcept override{ return m_arena; }
-
-    virtual void enqueue(LogString&& text, Core::Common::LogType::Enum)override{ record(text); }
-
-    virtual void enqueue(const LogString& text, Core::Common::LogType::Enum)override{ record(text); }
-
-    [[nodiscard]] u32 clampCount()const noexcept{ return m_clampCount; }
-
-
-private:
-    void record(TStringView text);
-
-
-private:
-    LogArena m_arena;
-    u32 m_clampCount = 0u;
-};
-
-class LoopLogger final : public Core::Common::ILogger{
-private:
-    static void Record(const Core::Common::LogString& text, Core::Common::LogType::Enum type);
-
-
-public:
-    virtual Core::Common::LogArena& arena()noexcept override{ return m_arena; }
-    virtual void enqueue(Core::Common::LogString&& text, Core::Common::LogType::Enum type)override{ Record(text, type); }
-    virtual void enqueue(const Core::Common::LogString& text, Core::Common::LogType::Enum type)override{ Record(text, type); }
-
-
-private:
-    Core::Common::LogArena m_arena{ Name(Tests::FrameCases::s_OneOffNameTestsFrameInactiveLoopLogger) };
-};
-
-class UnfocusedLoopRenderPass final : public Core::IRenderPass{
-public:
-    explicit UnfocusedLoopRenderPass(Core::GraphicsRuntime& graphics)noexcept
-        : IRenderPass(graphics)
-    {}
-
-
-public:
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-};
-
-class CollectionTestPass final : public Core::IRenderPass{
-public:
-    explicit CollectionTestPass(Core::GraphicsRuntime& graphics)noexcept
-        : IRenderPass(graphics)
-    {}
-
-
-public:
-    virtual b8 validateResources(u32, u32, u32)override;
-    virtual void invalidateResources()override{ ++invalidationCount; }
-
-
-public:
-    u32 validationCount = 0u;
-    u32 invalidationCount = 0u;
-    b8 valid = true;
-};
-
-struct RenderPassCollectionHarness{
-    Core::Alloc::GlobalArena arena;
-    Core::GraphicsModuleDetail::RenderPassCollection passes;
-    explicit RenderPassCollectionHarness(const Name& scopeName)
-        : arena(scopeName)
-        , passes(arena)
-    {}
-};
-
-struct LoopCallbackState{
-    Core::Frame& frame;
-    u32 callbacks = 0u;
-};
-
-b8 RequestQuitOnUpdate(void* userData, f32 delta);
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-void DrainQuitMessages()noexcept;
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::FrameCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GlobalArena = Core::Alloc::GlobalArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-using CpuTaskSchedulerConfig = Core::CpuTaskSchedulerConfig;
-using GpuDescriptorHeapAbi = Core::GpuDescriptorHeapAbi;
-using GraphicsRuntime = Core::GraphicsRuntime;
-using RenderPassCollection = Core::GraphicsModuleDetail::RenderPassCollection;
-using RenderPassCollectionHarness = FrameLifecycleTestsDetail::RenderPassCollectionHarness;
-using CollectionTestPass = FrameLifecycleTestsDetail::CollectionTestPass;
-using UnfocusedLoopRenderPass = FrameLifecycleTestsDetail::UnfocusedLoopRenderPass;
-using LoopLogger = FrameLifecycleTestsDetail::LoopLogger;
-using ThrowingClampLogger = FrameLifecycleTestsDetail::ThrowingClampLogger;
-using Core::FrameDetail::LogicalDimensionForPixels;
-
-[[nodiscard]] FOUNDATION_INLINE b8 IsSameRenderPass(const NotNull<Core::IRenderPass*> ptr, const Core::IRenderPass& pass)noexcept{
-    return ptr.get() == &pass;
+class UnfocusedLoopRenderPass : IRenderPass{
+    [cpp_base(IRenderPass, graphics)]
+    public UnfocusedLoopRenderPass(mut GraphicsRuntime graphics){}
+    public b8 shouldRenderUnfocused() override{ return true; }
 }
 
+class CollectionTestPass : IRenderPass{
+    public u32 validationCount = 0u;
+    public u32 invalidationCount = 0u;
+    public b8 valid = true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_base(IRenderPass, graphics)]
+    public CollectionTestPass(mut GraphicsRuntime graphics){}
 
+    public b8 validateResources(in u32 width, in u32 height, in u32 samples) override{
+        ++this.validationCount;
+        return this.valid;
+    }
 
-};
+    public void invalidateResources() override{ ++this.invalidationCount; }
+}
 
+class ClampObserverFailure{}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class ThrowingClampLogger : Utf8LogSink{
+    public u32 clampCount = 0u;
 
+    [cpp_unwind]
+    public void receive(in StringView text, in LogType kind) override{
+        if(text.find("Frame Win32 client size clamped") == usize.max)
+            return;
+        ++this.clampCount;
+        ThrowTestException<ClampObserverFailure>(ClampObserverFailure());
+    }
+}
 
-NWB_END
+class LoopLogger : Utf8LogSink{
+    public void receive(in StringView text, in LogType kind) override{
+        if(kind >= LogType::Warning)
+            PrintFrameLog(text);
+    }
+}
 
+class FrameUpdateObserver{
+    public mut Frame frame;
+    public u32 callbacks = 0u;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public FrameUpdateObserver(mut Frame target){ this.frame = target; }
+    public b8 update(in f32 delta){
+        ++this.callbacks;
+        this.frame.requestQuit();
+        return true;
+    }
+}
 
+void DrainQuitMessages(){
+    while(RemoveQuitMessage()){}
+}
 
+class QuitMessageGuard : NoCopy{
+    public QuitMessageGuard(){ DrainQuitMessages(); }
+    public ~QuitMessageGuard(){ DrainQuitMessages(); }
+}
+
+class ScopedUnfocusedPass : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private mut IRenderPass m_pass;
+    private b8 m_registered;
+
+    public ScopedUnfocusedPass(mut GraphicsRuntime graphics, mut IRenderPass pass, in b8 enabled){
+        this.m_graphics = graphics;
+        this.m_pass = pass;
+        this.m_registered = enabled;
+        if(enabled)
+            graphics.addRenderPassToBack(pass);
+    }
+    public ~ScopedUnfocusedPass(){
+        if(this.m_registered)
+            this.m_graphics.removeRenderPass(this.m_pass);
+    }
+}
+
+String NativeFailure(in StringView message, in u32 code){
+    String reason;
+    StringAppendFormat(reason, "{}; native_code={}", message, code);
+    return reason;
 }
 
 
@@ -221,26 +126,27 @@ GpuDescriptorHeapAbi MakeShaderlessHeapAbi(){
 }
 
 void CheckRenderPassCollection(mut GraphicsRuntime graphics){
-    RenderPassCollectionHarness harness(s_OneOffNameTestsFrameRenderPassCollection);
+    HeapStorage storage(s_OneOffNameTestsFrameRenderPassCollection);
+    RenderPassCollection passes(storage);
     CollectionTestPass first(graphics);
     CollectionTestPass second(graphics);
-    harness.passes.addToBack(first, 64u, 64u, 1u);
-    harness.passes.addToBack(second, 64u, 64u, 1u);
+    passes.addToBack(first, 64u, 64u, 1u);
+    passes.addToBack(second, 64u, 64u, 1u);
     first.validationCount = 0u;
     second.validationCount = 0u;
     first.valid = false;
-    EXPECT_FALSE(harness.passes.validateResources(64u, 64u, 1u));
+    EXPECT_FALSE(passes.validateResources(64u, 64u, 1u));
     EXPECT_EQ(first.validationCount, 1u);
     EXPECT_EQ(second.validationCount, 1u);
 
     first.valid = true;
-    harness.passes.addToBack(first, 64u, 64u, 1u);
-    ASSERT_EQ(harness.passes.passes().size(), 2u);
-    EXPECT_TRUE(IsSameRenderPass(harness.passes.passes().front(), second));
-    EXPECT_TRUE(IsSameRenderPass(harness.passes.passes().back(), first));
-    harness.passes.remove(first);
+    passes.addToBack(first, 64u, 64u, 1u);
+    ASSERT_EQ(RenderPassCount(passes), 2u);
+    EXPECT_TRUE(TestValueAddress(FirstRenderPass(passes)) == TestValueAddress(second));
+    EXPECT_TRUE(TestValueAddress(LastRenderPass(passes)) == TestValueAddress(first));
+    passes.remove(first);
     EXPECT_EQ(first.invalidationCount, 1u);
-    EXPECT_EQ(harness.passes.passes().size(), 1u);
+    EXPECT_EQ(RenderPassCount(passes), 1u);
 }
 
 void CheckInactiveLoop(in b8 renderUnfocused){
@@ -248,72 +154,58 @@ void CheckInactiveLoop(in b8 renderUnfocused){
     CpuTaskSchedulerConfig cpuTasks = CpuTaskSchedulerConfig();
     cpuTasks.workerCount = 1u;
 
-    native(in renderUnfocused, in heapAbi, in cpuTasks){
-        (void)renderUnfocused;
-        (void)heapAbi;
-        (void)cpuTasks;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        FrameLifecycleTestsDetail::DrainQuitMessages();
-        ScopeExit drainQuit([]()noexcept{ FrameLifecycleTestsDetail::DrainQuitMessages(); });
-        const i32 screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        const i32 screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        if(screenWidth <= 0 || screenHeight <= 0)
-            GTEST_SKIP() << "Native desktop unavailable; inactive-window loop remains unqualified";
-        if(!AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) && !SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
-            GTEST_SKIP() << "Native DPI admission unavailable; inactive-window loop remains unqualified; native_code=" << GetLastError();
+    QuitMessageGuard quitMessages = QuitMessageGuard();
+    const i32 screenWidth = ScreenMetric(s_ScreenWidthMetric);
+    const i32 screenHeight = ScreenMetric(s_ScreenHeightMetric);
+    if(screenWidth <= 0 || screenHeight <= 0)
+        SkipTest("Native desktop unavailable for the inactive-window loop");
+    if(!PerMonitorDpiEnabled() && !EnablePerMonitorDpi())
+        SkipTest(NativeFailure("Native DPI admission unavailable for the inactive-window loop", NativeError()));
 
-        const HINSTANCE instance = GetModuleHandle(nullptr);
-        ASSERT_NE(instance, nullptr);
-        LoopLogger logger;
-        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
-        Core::Frame frame(instance, 64u, 64u, cpuTasks);
-        // Supply a generic descriptor heap layout for shaderless startup.
-        ASSERT_TRUE(frame.graphics().setBindlessHeapAbi(heapAbi));
-        if(!frame.init())
-            GTEST_SKIP() << "Hidden Win32 frame or selected graphics startup unsupported; inactive-window loop remains unqualified; native_code=" << GetLastError();
-        auto& nativeFrame = frame.data<Core::Common::WinFrame>();
-        ASSERT_NE(nativeFrame.hwnd(), nullptr);
-        ASSERT_FALSE(IsWindowVisible(nativeFrame.hwnd()));
-        nativeFrame.setActive(false);
-        if(renderUnfocused)
-            CheckRenderPassCollection(frame.graphics());
-        UnfocusedLoopRenderPass pass(frame.graphics());
-        if(renderUnfocused)
-            frame.graphics().addRenderPassToBack(pass);
-        ScopeExit removePass([&]()noexcept{
-            if(renderUnfocused)
-                frame.graphics().removeRenderPass(pass);
-        });
-        ASSERT_EQ(frame.graphics().shouldRenderUnfocused(), renderUnfocused);
-        FrameLifecycleTestsDetail::LoopCallbackState callback{ frame };
-        frame.setProjectUpdateCallback(&FrameLifecycleTestsDetail::RequestQuitOnUpdate, &callback);
-        const DWORD mainThread = GetCurrentThreadId();
-        Atomic<b8> watchdogFired{ false };
-        Atomic<DWORD> watchdogPostError{ ERROR_SUCCESS };
-        // The bounded quit keeps the old blocking loop a normal assertion failure.
-        JoiningThread watchdog([&](const StopToken& stop)noexcept{
-            const ULONGLONG deadline = GetTickCount64() + s_FrameTestInactiveLoopWatchdogMS;
-            while(!stop.stop_requested() && GetTickCount64() < deadline)
-                SleepMS(s_FrameTestWatchdogPollMS);
-            if(stop.stop_requested())
-                return;
-            watchdogFired.store(true, MemoryOrder::relaxed);
-            if(!PostThreadMessage(mainThread, WM_QUIT, 0u, 0)){
-                watchdogPostError.store(GetLastError(), MemoryOrder::relaxed);
-                if(!PostMessage(nativeFrame.hwnd(), WM_CLOSE, 0u, 0))
-                    TerminateInvariant();
-            }
-        });
-        const b8 loopSucceeded = frame.mainLoop();
-        watchdog.request_stop();
-        watchdog.join();
-        EXPECT_TRUE(loopSucceeded);
-        EXPECT_EQ(watchdogPostError.load(MemoryOrder::relaxed), static_cast<DWORD>(ERROR_SUCCESS));
-        EXPECT_EQ(callback.callbacks, renderUnfocused ? 1u : 0u);
-        EXPECT_EQ(watchdogFired.load(MemoryOrder::relaxed), !renderUnfocused);
-        EXPECT_EQ(frame.graphics().getFrameIndex(), 0u);
-#endif
-    }
+    const WinInstance instance = CurrentInstance();
+    ASSERT_TRUE(HasInstance(instance));
+    LoopLogger logger = LoopLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
+    Frame frame(instance, 64u, 64u, cpuTasks);
+    mut GraphicsRuntime graphics = frame.graphics();
+    ASSERT_TRUE(graphics.setBindlessHeapAbi(heapAbi));
+    if(!frame.init())
+        SkipTest(NativeFailure("Hidden Win32 frame or selected graphics startup unsupported", NativeError()));
+    const WinWindow window = FrameWindow(frame);
+    ASSERT_TRUE(HasWindow(window));
+    ASSERT_FALSE(WindowVisible(window));
+    DeactivateFrame(frame);
+    if(renderUnfocused)
+        CheckRenderPassCollection(graphics);
+    UnfocusedLoopRenderPass pass(graphics);
+    ScopedUnfocusedPass registered(graphics, pass, renderUnfocused);
+    ASSERT_EQ(graphics.shouldRenderUnfocused(), renderUnfocused);
+    FrameUpdateObserver callback(frame);
+    SetFrameUpdateObserver(frame, callback);
+    const u32 mainThread = NativeThreadId();
+    TestAtomic<b8> watchdogFired(false);
+    TestAtomic<u32> watchdogPostError(0u);
+    TestThread watchdog(lambda[in mainThread, in window, mut watchdogFired, mut watchdogPostError](in StopToken stop) -> void{
+        const u64 deadline = TickMilliseconds() + s_FrameTestInactiveLoopWatchdogMS;
+        while(!stop.stop_requested() && TickMilliseconds() < deadline)
+            SleepMS(s_FrameTestWatchdogPollMS);
+        if(stop.stop_requested())
+            return;
+        watchdogFired.store(true, MemoryOrder::relaxed);
+        if(!PostQuitToThread(mainThread)){
+            watchdogPostError.store(NativeError(), MemoryOrder::relaxed);
+            if(!PostCloseToWindow(window))
+                TerminateInvariant();
+        }
+    });
+    const b8 loopSucceeded = frame.mainLoop();
+    watchdog.request_stop();
+    watchdog.join();
+    EXPECT_TRUE(loopSucceeded);
+    EXPECT_EQ(watchdogPostError.load(MemoryOrder::relaxed), 0u);
+    EXPECT_EQ(callback.callbacks, cast<u32>(renderUnfocused));
+    EXPECT_EQ(watchdogFired.load(MemoryOrder::relaxed), !renderUnfocused);
+    EXPECT_EQ(graphics.getFrameIndex(), 0u);
 }
 
 void VerifyFrameWindowDimensions_LogicalDimensionsRemainPositiveAtLargestNativeScale(){
@@ -325,49 +217,43 @@ void VerifyFrameWindowDimensions_LogicalDimensionsRemainPositiveAtLargestNativeS
     EXPECT_EQ(LogicalDimensionForPixels(5u, 0), 5);
 }
 
+[cpp_unwind]
 void VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization(){
     CpuTaskSchedulerConfig cpuTasks = CpuTaskSchedulerConfig();
     cpuTasks.workerCount = 1u;
 
-    native(in cpuTasks){
-        (void)cpuTasks;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        const i32 screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        const i32 screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        if(screenWidth <= 0 || screenHeight <= 0 || screenWidth >= static_cast<i32>(s_MaxU16) || screenHeight >= static_cast<i32>(s_MaxU16))
-            GTEST_SKIP() << "Native desktop cannot provide the bounded oversize client clamp trigger; class unwind remains unqualified: " << screenWidth << "x" << screenHeight;
-        if(!AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) && !SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)){
-            const DWORD nativeError = GetLastError();
-            GTEST_SKIP() << "Native desktop DPI admission unavailable; class unwind remains unqualified; native_code=" << nativeError;
-        }
-
-        const HINSTANCE instance = GetModuleHandle(nullptr);
-        ASSERT_NE(instance, nullptr);
-        ThrowingClampLogger logger;
-        LoggerRegistrationGuard loggerGuard(logger);
-        for(u32 attempt = 0u; attempt < s_FrameTestInitializationAttempts; ++attempt){
-            WNDCLASSEX before{};
-            before.cbSize = sizeof(before);
-            const b8 existed = GetClassInfoEx(instance, FrameLifecycleTestsDetail::s_FrameClassName.data(), &before) != FALSE;
-            const DWORD beforeError = existed ? ERROR_SUCCESS : GetLastError();
-            ASSERT_FALSE(existed);
-            ASSERT_EQ(beforeError, static_cast<DWORD>(ERROR_CLASS_DOES_NOT_EXIST));
-
-            const int result = InvokeTerminalEntry<FrameLifecycleTestsDetail::ClampObserverFailure>([&]()->int{
-                Core::Frame frame(instance, static_cast<u16>(s_MaxU16), static_cast<u16>(s_MaxU16), cpuTasks);
-                return frame.init() ? 0 : 1;
-            }, [](const FrameLifecycleTestsDetail::ClampObserverFailure&)noexcept{ return s_FrameTestClampObserverFailure; }, []()noexcept{ return s_FrameTestUnexpectedFailure; });
-            ASSERT_EQ(result, s_FrameTestClampObserverFailure);
-            ASSERT_EQ(logger.clampCount(), attempt + 1u);
-
-            WNDCLASSEX after{};
-            after.cbSize = sizeof(after);
-            const b8 retained = GetClassInfoEx(instance, FrameLifecycleTestsDetail::s_FrameClassName.data(), &after) != FALSE;
-            const DWORD afterError = retained ? ERROR_SUCCESS : GetLastError();
-            EXPECT_FALSE(retained);
-            EXPECT_EQ(afterError, static_cast<DWORD>(ERROR_CLASS_DOES_NOT_EXIST));
-        }
-#endif
+    const i32 screenWidth = ScreenMetric(s_ScreenWidthMetric);
+    const i32 screenHeight = ScreenMetric(s_ScreenHeightMetric);
+    if(screenWidth <= 0 || screenHeight <= 0 || screenWidth >= cast<i32>(u16.max) || screenHeight >= cast<i32>(u16.max)){
+        String reason;
+        StringAppendFormat(reason, "No bounded oversize client clamp on {}x{} desktop", screenWidth, screenHeight);
+        SkipTest(reason);
+    }
+    if(!PerMonitorDpiEnabled() && !EnablePerMonitorDpi())
+        SkipTest(NativeFailure("Native desktop DPI admission unavailable for class unwind", NativeError()));
+    const WinInstance instance = CurrentInstance();
+    ASSERT_TRUE(HasInstance(instance));
+    ThrowingClampLogger logger = ThrowingClampLogger();
+    LoggerRegistrationGuard loggerGuard(logger);
+    for(u32 attempt = 0u; attempt < s_FrameTestInitializationAttempts; ++attempt){
+        const WindowClassResult before = QueryFrameClass(instance);
+        ASSERT_FALSE(before.registered);
+        ASSERT_EQ(before.error, s_ClassDoesNotExist);
+        const i32 result = InvokeTerminalEntry<ClampObserverFailure>(
+            lambda[in instance, in cpuTasks]() -> i32{
+                Frame frame(instance, u16.max, u16.max, cpuTasks);
+                if(frame.init())
+                    return 0;
+                return 1;
+            },
+            lambda[](in ClampObserverFailure failure) -> i32{ return s_FrameTestClampObserverFailure; },
+            lambda[]() -> i32{ return s_FrameTestUnexpectedFailure; }
+        );
+        ASSERT_EQ(result, s_FrameTestClampObserverFailure);
+        ASSERT_EQ(logger.clampCount, attempt + 1u);
+        const WindowClassResult after = QueryFrameClass(instance);
+        EXPECT_FALSE(after.registered);
+        EXPECT_EQ(after.error, s_ClassDoesNotExist);
     }
 }
 
@@ -383,79 +269,9 @@ void VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQ
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace FrameLifecycleTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ThrowingClampLogger::record(const TStringView text){
-    if(text.find(s_ClampMessage) == TStringView::npos)
-        return;
-    ++m_clampCount;
-    throw ClampObserverFailure{};
-}
-
-void LoopLogger::Record(const Core::Common::LogString& text, const Core::Common::LogType::Enum type){
-    if(type >= Core::Common::LogType::Warning)
-        FOUNDATION_TCERR << text.data() << FOUNDATION_TEXT("\n");
-}
-
-b8 CollectionTestPass::validateResources(u32, u32, u32){
-    ++validationCount;
-    return valid;
-}
-
-b8 RequestQuitOnUpdate(void* userData, [[maybe_unused]] const f32 delta){
-    auto& state = *MakeNotNull(static_cast<LoopCallbackState*>(userData));
-    ++state.callbacks;
-    state.frame.requestQuit();
-    return true;
-}
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-void DrainQuitMessages()noexcept{
-    MSG message{};
-    while(PeekMessage(&message, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE)){}
-}
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-TEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization(); }
-TEST(FrameWin32Lifecycle, InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass(); }
-TEST(FrameWin32Lifecycle, InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit(); }
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+NWB_ADHD_GTEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization, VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization)
+NWB_ADHD_GTEST(FrameWin32Lifecycle, InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass, VerifyFrameWin32Lifecycle_InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass)
+NWB_ADHD_GTEST(FrameWin32Lifecycle, InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit, VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

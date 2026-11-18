@@ -10,171 +10,106 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+class NavigationCall{
+    public String text;
+    public EditNavigationSnapshot navigation;
+    public Expected<EditNavigationResult> result = MakeUnexpected(Failure());
+    public u64 selectionGeneration = 0u;
+    public usize caret = 0u;
+    public f32 viewportHeight = 0.0f;
+}
 
-namespace NWB::Tests::EcsUi{
+type NavigationHook = Func<128u, void()>;
 
+class RecordingNavigationResolver : IEditNavigationResolver{
+    public Vector<NavigationCall> records;
+    public NavigationHook hook;
+    public Expected<EditNavigationResult> forcedResult = MakeUnexpected(Failure());
+    public b8 forceResult = false;
+    private mut TextLayoutBuilder m_layoutBuilder;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct NavigationCall{
-    AString<Alloc::GlobalArena> text;
-    Ui::EditNavigationSnapshot navigation;
-    Expected<Ui::EditNavigationResult> result = MakeUnexpected(Failure{});
-    u64 selectionGeneration = 0u;
-    usize caret = 0u;
-    f32 viewportHeight = 0.0f;
-    explicit NavigationCall(Alloc::GlobalArena& arena)noexcept : text(arena){}
-};
-
-class RecordingNavigationResolver final : public Ui::IEditNavigationResolver{
-public:
-    RecordingNavigationResolver(Alloc::GlobalArena& arena, Ui::TextLayoutBuilder& layoutBuilder)noexcept
-        : records(arena), m_arena(arena), m_layoutBuilder(layoutBuilder)
-    {}
-    virtual ~RecordingNavigationResolver()noexcept override = default;
-
-    [[nodiscard]] virtual Expected<Ui::EditNavigationResult> resolve(const Ui::EditModel& model, Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, f32 viewportHeight)noexcept override;
-    [[nodiscard]] Alloc::GlobalArena& arena()noexcept{ return m_arena; }
-    [[nodiscard]] Ui::TextLayoutBuilder& layoutBuilder()noexcept{ return m_layoutBuilder; }
-    void invokeHookIfPresent(){
-        if(hook){
-            Function<void()> callback = Move(hook);
-            hook = {};
+    public RecordingNavigationResolver(mut TextLayoutBuilder builder){ this.m_layoutBuilder = builder; }
+    public mut TextLayoutBuilder layoutBuilder(){ return this.m_layoutBuilder; }
+    public Expected<EditNavigationResult> resolve(in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot navigation, in f32 viewportHeight)override{
+        return ResolveEcsUiEditViewNavigation(this, model, direction, navigation, viewportHeight);
+    }
+    public void invokeHookIfPresent(){
+        if(this.hook){
+            NavigationHook callback = this.hook;
+            this.hook = NavigationHook();
             callback();
         }
     }
-
-    ::Vector<NavigationCall, Alloc::GlobalArena> records;
-    Function<void()> hook;
-    Expected<Ui::EditNavigationResult> forcedResult = MakeUnexpected(Failure{});
-    b8 forceResult = false;
-
-private:
-    Alloc::GlobalArena& m_arena;
-    Ui::TextLayoutBuilder& m_layoutBuilder;
-};
-
-struct NavigationAction{
-    AString<Alloc::GlobalArena> text;
-    Ui::EditAction::Enum action = Ui::EditAction::Abandon;
-    explicit NavigationAction(Alloc::GlobalArena& arena)noexcept : text(arena){}
-};
-
-class AcceptingNavigationActions final : public Ui::IEditActionSink{
-public:
-    explicit AcceptingNavigationActions(Alloc::GlobalArena& arena)noexcept : records(arena), m_arena(arena){}
-    virtual ~AcceptingNavigationActions()noexcept override = default;
-
-    [[nodiscard]] virtual b8 apply(Ui::EditModel& model, Ui::EditAction::Enum action, b8 readOnly)noexcept override;
-    [[nodiscard]] usize count(Ui::EditAction::Enum action)const noexcept;
-    [[nodiscard]] Alloc::GlobalArena& arena()noexcept{ return m_arena; }
-
-    ::Vector<NavigationAction, Alloc::GlobalArena> records;
-
-private:
-    Alloc::GlobalArena& m_arena;
-};
-
-class UiEditNavigationHostTests : public UiEditBoxHostTests{
-public:
-    UiEditNavigationHostTests()
-        : m_navigationModel(m_arena, {}, Ui::EditTextMode::Multiline)
-        , m_resolver(m_arena, m_layoutBuilder)
-        , m_actions(m_arena)
-    {
-        m_includeButton = true;
-    }
-
-    [[nodiscard]] b8 prepareNavigation(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
-        return prepareNavigationModel(m_navigationModel, m_navigation, options, bounds, previousScroll);
-    }
-    [[nodiscard]] b8 prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, Ui::Point previousScroll = {});
-    [[nodiscard]] b8 navigationFrame(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
-        return prepareNavigation(options, bounds, previousScroll) && commit();
-    }
-    [[nodiscard]] b8 activateNavigation(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }){
-        return navigationFrame(options, bounds) && key(Core::Key::Tab) && navigationFrame(options, bounds) && m_context.input().focus() == m_widget.id;
-    }
-    [[nodiscard]] b8 commitNative(AStringView text);
-    [[nodiscard]] b8 click(const Ui::Point position, const b8 shift = false){
-        return dispatch({ .position = position, .type = Ui::InputEventType::PrimaryDown, .shift = shift }) && dispatch({ .position = position, .type = Ui::InputEventType::PrimaryUp, .shift = shift });
-    }
-    [[nodiscard]] b8 focusOther(){ return key(Core::Key::Tab) && m_context.input().focus() == m_otherWidget.id; }
-    [[nodiscard]] b8 focusNavigation(){ return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id; }
-
-    Ui::EditModel m_navigationModel;
-    Ui::EditNavigationState m_navigation;
-    RecordingNavigationResolver m_resolver;
-    AcceptingNavigationActions m_actions;
-};
-
-using UiEditNavigationDirectionEnum = NWB::Impl::Ui::EditNavigationDirection::Enum;
-using UiEditNavigationResult = NWB::Impl::Ui::EditNavigationResult;
-using UiEditNavigationSnapshot = NWB::Impl::Ui::EditNavigationSnapshot;
-using UiEditNavigationState = NWB::Impl::Ui::EditNavigationState;
-namespace UiEditNavigationDirection = NWB::Impl::Ui::EditNavigationDirection;
-
-Expected<UiEditNavigationResult> ResolveEcsUiEditViewNavigation(RecordingNavigationResolver& self, const UiEditModel& model, const UiEditNavigationDirectionEnum& direction, const UiEditNavigationSnapshot& navigation, f32 viewportHeight)noexcept;
-b8 ApplyEcsUiAcceptingNavigationAction(AcceptingNavigationActions& self, UiEditModel& model, const UiEditActionEnum& action)noexcept;
-usize CountEcsUiNavigationActions(const AcceptingNavigationActions& self, const UiEditActionEnum& action)noexcept;
-b8 PrepareEcsUiNavigationModel(UiEditNavigationHostTests& self, UiEditModel& model, UiEditNavigationState& navigation, const UiEditBoxOptions& options, const UiRect& bounds, const UiPoint& previousScroll)noexcept;
-b8 CommitEcsUiNavigationText(UiEditNavigationHostTests& self, AStringView text)noexcept;
-
-FOUNDATION_INLINE Expected<Ui::EditNavigationResult> RecordingNavigationResolver::resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight)noexcept{
-    return ResolveEcsUiEditViewNavigation(*this, model, direction, navigation, viewportHeight);
 }
 
-FOUNDATION_INLINE b8 AcceptingNavigationActions::apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8)noexcept{
-    return ApplyEcsUiAcceptingNavigationAction(*this, model, action);
+class NavigationAction{
+    public String text;
+    public EditAction action = EditAction::Abandon;
 }
 
-FOUNDATION_INLINE usize AcceptingNavigationActions::count(const Ui::EditAction::Enum action)const noexcept{
-    return CountEcsUiNavigationActions(*this, action);
+class AcceptingNavigationActions : IEditActionSink{
+    public Vector<NavigationAction> records;
+    public b8 apply(mut EditModel model, in EditAction action, in b8 readOnly)override{ return ApplyEcsUiAcceptingNavigationAction(this, model, action); }
+    public usize count(in EditAction action)const{ return CountEcsUiNavigationActions(this, action); }
 }
 
-FOUNDATION_INLINE b8 UiEditNavigationHostTests::prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll){
-    return PrepareEcsUiNavigationModel(*this, model, navigation, options, bounds, previousScroll);
-}
+Rect DefaultNavigationBounds(){ return MakeEcsUiRect(10.0f, 20.0f, 180.0f, 48.0f); }
 
-FOUNDATION_INLINE b8 UiEditNavigationHostTests::commitNative(const AStringView text){
-    return CommitEcsUiNavigationText(*this, text);
+[ordered]
+class UiEditNavigationHostTests{
+    public UiEditBoxHostTests core;
+    public EditModel m_navigationModel = EditModel(EditLimits(), EditTextMode::Multiline);
+    public EditNavigationState m_navigation;
+    public RecordingNavigationResolver m_resolver;
+    public AcceptingNavigationActions m_actions;
+
+    public UiEditNavigationHostTests(){ this.m_resolver = RecordingNavigationResolver(this.core.m_layoutBuilder); }
+    public void setup(){ this.core.setup(); this.core.m_includeButton = true; }
+    public b8 prepareNavigationModel(mut EditModel model, mut EditNavigationState nav, in EditBoxOptions options, in Rect bounds, in Point scroll){
+        return PrepareEcsUiNavigationModel(this, model, nav, options, bounds, scroll);
+    }
+    public b8 prepareNavigation(in EditBoxOptions options, in Rect bounds, in Point scroll){ return this.prepareNavigationModel(this.m_navigationModel, this.m_navigation, options, bounds, scroll); }
+    public b8 navigationFrame(in EditBoxOptions options, in Rect bounds, in Point scroll){ return this.prepareNavigation(options, bounds, scroll) && this.core.commit(); }
+    public b8 activateNavigation(in EditBoxOptions options, in Rect bounds){
+        return this.navigationFrame(options, bounds) && this.core.key(Key::Tab) && this.navigationFrame(options, bounds) && this.core.m_context.input().focus() == this.core.m_widget.id;
+    }
+    public b8 commitNative(in StringView text){ return CommitEcsUiNavigationText(this, text); }
+    public b8 click(in Point position){ return this.click(position, false); }
+    public b8 click(in Point position, in b8 shift){
+        return this.core.dispatchPoint(position, InputEventType::PrimaryDown, shift) && this.core.dispatchPoint(position, InputEventType::PrimaryUp, shift);
+    }
+    public b8 focusOther(){ return this.core.key(Key::Tab) && this.core.m_context.input().focus() == this.core.m_otherWidget.id; }
+    public b8 focusNavigation(){ return this.core.key(Key::Tab) && this.core.m_context.input().focus() == this.core.m_widget.id; }
+    public b8 prepareNavigationModel(mut EditModel model, mut EditNavigationState nav){ return this.prepareNavigationModel(model, nav, EditBoxOptions()); }
+    public b8 prepareNavigationModel(mut EditModel model, mut EditNavigationState nav, in EditBoxOptions options){ return this.prepareNavigationModel(model, nav, options, DefaultNavigationBounds()); }
+    public b8 prepareNavigationModel(mut EditModel model, mut EditNavigationState nav, in EditBoxOptions options, in Rect bounds){ return this.prepareNavigationModel(model, nav, options, bounds, Point()); }
+    public b8 prepareNavigation(){ return this.prepareNavigation(EditBoxOptions()); }
+    public b8 prepareNavigation(in EditBoxOptions options){ return this.prepareNavigation(options, DefaultNavigationBounds()); }
+    public b8 prepareNavigation(in EditBoxOptions options, in Rect bounds){ return this.prepareNavigation(options, bounds, Point()); }
+    public b8 navigationFrame(){ return this.navigationFrame(EditBoxOptions()); }
+    public b8 navigationFrame(in EditBoxOptions options){ return this.navigationFrame(options, DefaultNavigationBounds()); }
+    public b8 navigationFrame(in EditBoxOptions options, in Rect bounds){ return this.navigationFrame(options, bounds, Point()); }
+    public b8 activateNavigation(){ return this.activateNavigation(EditBoxOptions()); }
+    public b8 activateNavigation(in EditBoxOptions options){ return this.activateNavigation(options, DefaultNavigationBounds()); }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-namespace UiEditNavigationTestSupport = NWB::Tests::EcsUi;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<UiEditNavigationResult> ResolveEcsUiEditViewNavigation(mut RecordingNavigationResolver self, in UiEditModel model, in UiEditNavigationDirectionEnum direction, in UiEditNavigationSnapshot navigation, in f32 viewportHeight){
-    NavigationCall record = NavigationCall(self.arena());
+Expected<EditNavigationResult> ResolveEcsUiEditViewNavigation(mut RecordingNavigationResolver self, in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot navigation, in f32 viewportHeight){
+    NavigationCall record = NavigationCall();
     record.text.assign(model.text().data(), model.text().size());
     record.navigation = navigation;
     record.selectionGeneration = model.selectionGeneration();
     record.caret = model.caret();
     record.viewportHeight = viewportHeight;
 
-    Expected<UiEditNavigationResult> result = MakeUnexpected(Failure());
-    UiEditBoxView view = UiEditBoxView(self.arena());
+    Expected<EditNavigationResult> result = MakeUnexpected(Failure());
+    EditBoxView view = EditBoxView();
     if(PrepareEcsUiEditView(model, self.layoutBuilder(), view)){
         const auto caret = view.caretGeometry().caretRect(view.displayCaret());
         if(caret){
@@ -183,18 +118,18 @@ Expected<UiEditNavigationResult> ResolveEcsUiEditViewNavigation(mut RecordingNav
                 preferredX = navigation.preferredX;
             }
             Expected<usize> target = MakeUnexpected(Failure());
-            if(direction == UiEditNavigationDirection::Up || direction == UiEditNavigationDirection::Down){
-                target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == UiEditNavigationDirection::Down, preferredX);
+            if(direction == EditNavigationDirection::Up || direction == EditNavigationDirection::Down){
+                target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == EditNavigationDirection::Down, preferredX);
             }
             else{
                 f32 distance = -viewportHeight;
-                if(direction == UiEditNavigationDirection::PageDown){
+                if(direction == EditNavigationDirection::PageDown){
                     distance = viewportHeight;
                 }
                 target = view.caretGeometry().hitTest(MakeEcsUiPoint(preferredX, caret.value().y + caret.value().height * 0.5f + distance));
             }
             if(target){
-                UiEditNavigationResult resolved = UiEditNavigationResult();
+                EditNavigationResult resolved = EditNavigationResult();
                 resolved.committedByte = target.value();
                 resolved.preferredX = preferredX;
                 result = resolved;
@@ -210,15 +145,15 @@ Expected<UiEditNavigationResult> ResolveEcsUiEditViewNavigation(mut RecordingNav
     return result;
 }
 
-b8 ApplyEcsUiAcceptingNavigationAction(mut AcceptingNavigationActions self, mut UiEditModel model, in UiEditActionEnum action){
-    NavigationAction record = NavigationAction(self.arena());
+b8 ApplyEcsUiAcceptingNavigationAction(mut AcceptingNavigationActions self, mut EditModel model, in EditAction action){
+    NavigationAction record = NavigationAction();
     record.text.assign(model.text().data(), model.text().size());
     record.action = action;
     self.records.push_back(record);
     return true;
 }
 
-usize CountEcsUiNavigationActions(in AcceptingNavigationActions self, in UiEditActionEnum action){
+usize CountEcsUiNavigationActions(in AcceptingNavigationActions self, in EditAction action){
     usize result = 0u;
     for(usize i = 0u; i < self.records.size(); ++i){
         if(self.records[i].action == action){
@@ -228,58 +163,58 @@ usize CountEcsUiNavigationActions(in AcceptingNavigationActions self, in UiEditA
     return result;
 }
 
-b8 PrepareEcsUiNavigationModel(mut UiEditNavigationHostTests self, mut UiEditModel model, mut UiEditNavigationState navigation, in UiEditBoxOptions options, in UiRect bounds, in UiPoint previousScroll){
-    if(!BeginEcsUiEditFrame(self)){
+b8 PrepareEcsUiNavigationModel(mut UiEditNavigationHostTests self, mut EditModel model, mut EditNavigationState navigation, in EditBoxOptions options, in Rect bounds, in Point previousScroll){
+    if(!BeginEcsUiEditFrame(self.core)){
         return false;
     }
-    self.m_result = self.m_host.editNavigated(self.m_widget, options, UiPopupToken(), model, navigation, self.m_resolver, self.m_actions);
-    if(!self.m_result.valid || !PublishEcsUiEditBox(self, model, options, bounds, previousScroll)){
+    self.core.m_result = self.core.m_host.editNavigated(self.core.m_widget, options, PopupToken(), model, navigation, self.m_resolver, self.m_actions);
+    if(!self.core.m_result.valid || !PublishEcsUiEditBox(self.core, model, options, bounds, previousScroll)){
         return false;
     }
-    if(!DeclareEcsUiWidget(self.m_context, "other", UiWidgetKind::Button, self.m_otherWidget)){
+    if(!DeclareEcsUiWidget(self.core.m_context, "other", WidgetKind::Button, self.core.m_otherWidget)){
         return false;
     }
-    UiHitTarget other = UiHitTarget();
+    HitTarget other = HitTarget();
     other.rectangle = MakeEcsUiRect(230.0f, 20.0f, 100.0f, 30.0f);
     other.clip = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
     other.focusable = true;
     other.activatable = true;
-    if(!self.m_context.addTarget(self.m_otherWidget, other) || !self.m_context.endRoot() || !self.m_context.finishFrame()){
+    if(!self.core.m_context.addTarget(self.core.m_otherWidget, other) || !self.core.m_context.endRoot() || !self.core.m_context.finishFrame()){
         return false;
     }
-    self.m_host.finishFrame();
+    self.core.m_host.finishFrame();
     return true;
 }
 
 b8 CommitEcsUiNavigationText(mut UiEditNavigationHostTests self, in StringView text){
-    if(self.m_textInput.commit(text) != TextInputAdmission::Accepted){
+    if(self.core.m_textInput.commit(text) != TextInputAdmission::Accepted){
         return false;
     }
-    self.m_host.collectNative();
+    self.core.m_host.collectNative();
     return true;
 }
 
 void VerifyUiTextEditSession_TrailingPreeditClearPreservesCommittedSelectedReplacementAndSingleUndo(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("abcd"));
     ASSERT_TRUE(model.setSelection(1u, 3u));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit("xy", 0u, 2u), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::Applied);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::Applied);
     EXPECT_EQ(model.text(), "abcd");
     EXPECT_FALSE(model.canUndo());
     ASSERT_EQ(service.preedit("xyz", 1u, 3u), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("Z"), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit(StringView(), 0u, 0u), TextInputAdmission::Accepted);
-    const UiTextEditResult result = session.drain(s_SessionTestOwner, model);
+    const UiTextEditResult result = session.drain(MakeSessionTestOwner(17u, 1u, 1u), model);
     EXPECT_EQ(result.eventsApplied, 3u);
     EXPECT_EQ(model.text(), "aZd");
     EXPECT_FALSE(model.composition().active);
-    ASSERT_TRUE(session.end(s_SessionTestOwner, model));
+    ASSERT_TRUE(session.end(MakeSessionTestOwner(17u, 1u, 1u), model));
     ASSERT_TRUE(model.undo());
     EXPECT_EQ(model.text(), "abcd");
     EXPECT_EQ(model.anchor(), 1u);
@@ -288,48 +223,48 @@ void VerifyUiTextEditSession_TrailingPreeditClearPreservesCommittedSelectedRepla
 }
 
 void VerifyUiTextEditSession_EmptyPreeditCancelsWithoutChangingCommittedText(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit("transient", 0u, 9u), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit(StringView(), 0u, 0u), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::Applied);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::Applied);
     EXPECT_EQ(model.text(), "base");
     EXPECT_FALSE(model.composition().active);
     EXPECT_FALSE(model.canUndo());
 }
 
 void VerifyUiTextEditSession_FocusLossDiscardsQueuedCommitAndClearsOnlyTransientPreedit(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit("new", 0u, 3u), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::Applied);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::Applied);
     ASSERT_EQ(service.commit("lost"), TextInputAdmission::Accepted);
     ASSERT_TRUE(service.setFocused(false));
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::Cancelled);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::Cancelled);
     EXPECT_EQ(model.text(), "base");
     EXPECT_FALSE(model.composition().active);
     EXPECT_FALSE(session.token().valid());
 }
 
 void VerifyUiTextEditSession_ReplacedOwnerCannotReceiveOldQueuedCommit(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel oldModel = UiEditModel(arena.arena);
-    UiEditModel newModel = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel oldModel = EditModel();
+    EditModel newModel = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(newModel.setText("replacement"));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, oldModel), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, oldModel), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("old"), TextInputAdmission::Accepted);
     const UiTextEditOwner replacement = MakeReplacedSessionOwner(2u);
     EXPECT_EQ(session.drain(replacement, newModel).status, UiTextEditStatus::StaleOwner);
@@ -339,141 +274,141 @@ void VerifyUiTextEditSession_ReplacedOwnerCannotReceiveOldQueuedCommit(){
 }
 
 void VerifyUiTextEditSession_ExternalTextAndSelectionChangesFenceOldNativeEvents(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("abcd"));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("late"), TextInputAdmission::Accepted);
     ASSERT_TRUE(model.setSelection(0u, 2u));
-    EXPECT_EQ(session.refresh(s_SessionTestOwner, model, s_SessionTestCaret), TextInputAdmission::InvalidSession);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::StaleModel);
+    EXPECT_EQ(session.refresh(MakeSessionTestOwner(17u, 1u, 1u), model, s_SessionTestCaret), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::StaleModel);
     EXPECT_EQ(model.text(), "abcd");
     EXPECT_EQ(model.anchor(), 0u);
     EXPECT_EQ(model.caret(), 2u);
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("late"), TextInputAdmission::Accepted);
     ASSERT_TRUE(model.setText("host value"));
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::StaleModel);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::StaleModel);
     EXPECT_EQ(model.text(), "host value");
 }
 
 void VerifyUiTextEditSession_DeleteAddressesPublishedUtf8BytesThenCommitUsesUpdatedSelection(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("abCde"));
     ASSERT_TRUE(model.setSelection(3u, 3u));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.erase(1u, 1u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("X"), TextInputAdmission::Accepted);
-    const UiTextEditResult result = session.drain(s_SessionTestOwner, model);
+    const UiTextEditResult result = session.drain(MakeSessionTestOwner(17u, 1u, 1u), model);
     EXPECT_EQ(result.status, UiTextEditStatus::Applied);
     EXPECT_EQ(result.eventsApplied, 2u);
     EXPECT_EQ(model.text(), "abXe");
 }
 
 void VerifyUiTextEditSession_PreeditClearBeforeCommitPreservesTheOriginalReplacementSelection(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("abcd"));
     ASSERT_TRUE(model.setSelection(3u, 1u));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit("pending", 0u, 7u), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::Applied);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::Applied);
     ASSERT_EQ(service.preedit(StringView(), 0u, 0u), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("X"), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::Applied);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::Applied);
     EXPECT_EQ(model.text(), "aXd");
-    ASSERT_TRUE(session.end(s_SessionTestOwner, model));
+    ASSERT_TRUE(session.end(MakeSessionTestOwner(17u, 1u, 1u), model));
     ASSERT_TRUE(model.undo());
     EXPECT_EQ(model.anchor(), 3u);
     EXPECT_EQ(model.caret(), 1u);
 }
 
 void VerifyUiTextEditSession_DeleteAfterUnpublishedCommitCannotDeleteDifferentText(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("ab"));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("X"), TextInputAdmission::Accepted);
     ASSERT_EQ(service.erase(1u, 0u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::StaleSurrounding);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::StaleSurrounding);
     EXPECT_EQ(model.text(), "abX");
     EXPECT_FALSE(session.token().valid());
 }
 
 void VerifyUiTextEditSession_NativeByteDeleteCannotSplitAGrapheme(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("e\xCC\x81"));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.erase(2u, 0u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::ModelRejected);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::ModelRejected);
     EXPECT_EQ(model.text(), "e\xCC\x81");
     EXPECT_FALSE(model.canUndo());
 }
 
 void VerifyUiTextEditSession_RejectedCommitPreservesCommittedTextAndCancelsNativeSession(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditLimits limits = UiEditLimits();
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditLimits limits = EditLimits();
     limits.maxBytes = 2u;
     limits.maxHistoryRecords = 4u;
     limits.maxHistoryBytes = 128u;
-    UiEditModel model = UiEditModel(arena.arena, limits);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    EditModel model = EditModel(limits);
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("ab"));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("too large"), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::ModelRejected);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::ModelRejected);
     EXPECT_EQ(model.text(), "ab");
     EXPECT_FALSE(model.canUndo());
     EXPECT_FALSE(service.activeSession().valid());
 }
 
 void VerifyUiTextEditSession_ExplicitEndClearsCompositionAndInvalidatesOldToken(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     const TextInputSessionToken first = session.token();
-    EXPECT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Busy);
+    EXPECT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Busy);
     ASSERT_EQ(service.preedit("pending", 0u, 7u), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_SessionTestOwner, model).status, UiTextEditStatus::Applied);
-    ASSERT_TRUE(session.end(s_SessionTestOwner, model));
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(17u, 1u, 1u), model).status, UiTextEditStatus::Applied);
+    ASSERT_TRUE(session.end(MakeSessionTestOwner(17u, 1u, 1u), model));
     EXPECT_FALSE(model.composition().active);
-    ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
     EXPECT_NE(session.token(), first);
     TextInputEvent event = TextInputEvent();
     EXPECT_EQ(service.poll(first, event), TextInputPollResult::InvalidSession);
 }
 
 void VerifyUiTextEditSession_DestructionReleasesServiceWithoutBorrowingTheDestroyedModel(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
     ASSERT_TRUE(service.setFocused(true));
     if(true){
-        UiTextEditSession session = UiTextEditSession(arena.arena, service);
+        UiTextEditSession session = UiTextEditSession(service);
         if(true){
-            UiEditModel model = UiEditModel(arena.arena);
-            ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
+            EditModel model = EditModel();
+            ASSERT_EQ(session.begin(MakeSessionTestOwner(17u, 1u, 1u), s_SessionTestCaret, model), TextInputAdmission::Accepted);
         }
         EXPECT_TRUE(service.activeSession().valid());
     }

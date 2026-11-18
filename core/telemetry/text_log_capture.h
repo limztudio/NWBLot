@@ -25,6 +25,9 @@ public:
         : m_recorder(recorder)
         , m_forwardLogger(forwardLogger)
     {}
+    TextLogCaptureLogger(Recorder& recorder, Common::ILogger& forwardLogger)noexcept
+        : TextLogCaptureLogger(recorder, &forwardLogger)
+    {}
     virtual ~TextLogCaptureLogger()noexcept override = default;
 
 

@@ -22,7 +22,7 @@ const StringView s_UiSliderValueKey = "value";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiProgressSmokeScene{
+class UiProgressSmokeScene : IUiSmokeInputScene{
     private PopupState m_parent = PopupState();
     private PopupState m_child = PopupState();
     private UiProgressSnapshot m_declared = UiProgressSnapshot();
@@ -31,8 +31,8 @@ class UiProgressSmokeScene{
     private u32 m_afterClicks = 0u;
     private b8 m_phase = false;
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private b8 paintMain(mut Builder ui, in Rect bounds);
     private b8 paintFrozen(mut Builder ui, in Rect bounds);
@@ -44,7 +44,7 @@ class UiProgressSmokeScene{
 
 
 // Scene fixture owning radio group sources and states across Builder loans.
-class UiRadioGroupSmokeScene{
+class UiRadioGroupSmokeScene : IUiSmokeInputScene{
     private UiRadioGroupSmokeSource m_source = UiRadioGroupSmokeSource();
     private RadioGroupState m_state = RadioGroupState();
     private RadioGroupState m_disabled = RadioGroupState();
@@ -61,8 +61,8 @@ class UiRadioGroupSmokeScene{
 
     public UiRadioGroupSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private b8 paintMain(mut Builder ui);
     private b8 paintDisabled(mut Builder ui);
@@ -72,7 +72,7 @@ class UiRadioGroupSmokeScene{
 }
 
 
-class UiSearchComboSmokeScene{
+class UiSearchComboSmokeScene : IUiSmokeInputScene{
     private UiSearchComboSmokeSource m_source = UiSearchComboSmokeSource();
     private SearchComboState m_state;
     private EditBoxView m_selectionView;
@@ -91,8 +91,8 @@ class UiSearchComboSmokeScene{
 
     public UiSearchComboSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private Array<u64, 22u> values()const;
     private Rect cursorRow()const;
@@ -100,7 +100,7 @@ class UiSearchComboSmokeScene{
 }
 
 
-class UiSliderSmokeScene{
+class UiSliderSmokeScene : IUiSmokeInputScene{
     private SliderState m_state = SliderState();
     private SliderState m_disabled = SliderState();
     private SliderState m_constant = SliderState();
@@ -118,8 +118,8 @@ class UiSliderSmokeScene{
 
     public UiSliderSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private b8 paintMain(mut Builder ui, in Rect bounds);
     private b8 paintOther(mut Builder ui, in Rect bounds);
@@ -879,7 +879,7 @@ void UiRadioGroupSmokeScene::paintMarkers(mut UiPaintContext context)const{
 
 
 UiSearchComboSmokeScene::UiSearchComboSmokeScene(){
-    this.m_selectionView = CreateSmokeEditBoxView();
+    this.m_selectionView = EditBoxView();
 }
 
 b8 UiSearchComboSmokeScene::paint(mut UiPaintContext context){

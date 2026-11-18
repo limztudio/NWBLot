@@ -2,32 +2,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/refraction/types.adhd>
+#include <impl/ecs_render/module.adhd>
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "refraction_gallery_scene.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+void LogRefractionQueryCounter(in RefractionStatistics statistics, in StringView name, in u32 value){
+    [essential] info("RefractionQueryCounter: sequence={} generation={} name={} value={}", statistics.sequence, statistics.generation, name, value);
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/refraction/diagnostics_layout.h>
-#include <impl/ecs_render/module.adhd.h>
-
-namespace NWB::Tests::Smoke{
-using Impl::RefractionStatistics;
-
-FOUNDATION_INLINE void LogRefractionQueryDiagnosticsCounters(
-    const Impl::RefractionStatistics& statistics,
-    const u64 currentFrame,
-    const u64 targetStart
+void LogRefractionQueryDiagnosticsCounters(
+    in RefractionStatistics statistics,
+    in u64 currentFrame,
+    in u64 targetStart
 ){
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RefractionQueryDiagnostics: sequence={} generation={} graphics_frame={} observed_frame={} target_start_frame={} completed_target_frames={} frame_index={} width={} height={}")
-        FOUNDATION_TEXT(" hardware_requested={} hardware_available={} hardware_ready={} csg_enabled={} token_valid={} physical_valid={} token_queue={} token_value={} physical_queue={} device_generation={}")
+    [essential] info("RefractionQueryDiagnostics: sequence={} generation={} graphics_frame={} observed_frame={} target_start_frame={} completed_target_frames={} frame_index={} width={} height={} hardware_requested={} hardware_available={} hardware_ready={} csg_enabled={} token_valid={} physical_valid={} token_queue={} token_value={} physical_queue={} device_generation={}"
         , statistics.sequence
         , statistics.generation
         , statistics.graphicsFrameIndex
@@ -37,32 +31,47 @@ FOUNDATION_INLINE void LogRefractionQueryDiagnosticsCounters(
         , statistics.frameIndex
         , statistics.width
         , statistics.height
-        , statistics.hardwareRequested ? 1u : 0u
-        , statistics.hardwareAvailable ? 1u : 0u
-        , statistics.hardwareReady ? 1u : 0u
-        , statistics.csgHardwareEnabled ? 1u : 0u
-        , statistics.acceptedToken.valid() ? 1u : 0u
-        , statistics.acceptedToken.hasPhysicalQueueIdentity() ? 1u : 0u
-        , static_cast<u32>(statistics.acceptedToken.queue)
+        , cast<u32>(statistics.hardwareRequested)
+        , cast<u32>(statistics.hardwareAvailable)
+        , cast<u32>(statistics.hardwareReady)
+        , cast<u32>(statistics.csgHardwareEnabled)
+        , cast<u32>(statistics.acceptedToken.valid())
+        , cast<u32>(statistics.acceptedToken.hasPhysicalQueueIdentity())
+        , cast<u32>(statistics.acceptedToken.queue)
         , statistics.acceptedToken.value
         , statistics.acceptedToken.physicalQueueIndex
         , statistics.acceptedToken.deviceGeneration
     );
-#define NWB_SMOKE_REFRACTION_LOG_COUNTER(name, offset) \
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RefractionQueryCounter: sequence={} generation={} name={} value={}"), statistics.sequence, statistics.generation, FOUNDATION_TEXT(#name), statistics.name);
-    NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_LOG_COUNTER)
-#undef NWB_SMOKE_REFRACTION_LOG_COUNTER
-#define NWB_SMOKE_REFRACTION_COUNT_COUNTER(name, offset) + 1u
-    constexpr u32 s_CounterCount = 0u NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_COUNT_COUNTER);
-#undef NWB_SMOKE_REFRACTION_COUNT_COUNTER
-    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RefractionQueryDiagnostics: complete sequence={} generation={} counters={}"), statistics.sequence, statistics.generation, s_CounterCount);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    LogRefractionQueryCounter(statistics, "hardwarePixels", statistics.hardwarePixels);
+    LogRefractionQueryCounter(statistics, "entryQueries", statistics.entryQueries);
+    LogRefractionQueryCounter(statistics, "entryAssociationMisses", statistics.entryAssociationMisses);
+    LogRefractionQueryCounter(statistics, "entryWrongEntities", statistics.entryWrongEntities);
+    LogRefractionQueryCounter(statistics, "entryFailures", statistics.entryFailures);
+    LogRefractionQueryCounter(statistics, "associatedEntries", statistics.associatedEntries);
+    LogRefractionQueryCounter(statistics, "invalidEntryDirections", statistics.invalidEntryDirections);
+    LogRefractionQueryCounter(statistics, "exitQueries", statistics.exitQueries);
+    LogRefractionQueryCounter(statistics, "exitMisses", statistics.exitMisses);
+    LogRefractionQueryCounter(statistics, "exitFailures", statistics.exitFailures);
+    LogRefractionQueryCounter(statistics, "tirEvents", statistics.tirEvents);
+    LogRefractionQueryCounter(statistics, "tirCappedPixels", statistics.tirCappedPixels);
+    LogRefractionQueryCounter(statistics, "volumeExits", statistics.volumeExits);
+    LogRefractionQueryCounter(statistics, "backgroundQueries", statistics.backgroundQueries);
+    LogRefractionQueryCounter(statistics, "backgroundMisses", statistics.backgroundMisses);
+    LogRefractionQueryCounter(statistics, "backgroundFailures", statistics.backgroundFailures);
+    LogRefractionQueryCounter(statistics, "secondaryGlassPixels", statistics.secondaryGlassPixels);
+    LogRefractionQueryCounter(statistics, "transparentHits", statistics.transparentHits);
+    LogRefractionQueryCounter(statistics, "backgroundLayerCapPixels", statistics.backgroundLayerCapPixels);
+    LogRefractionQueryCounter(statistics, "cachedOpaqueReturns", statistics.cachedOpaqueReturns);
+    LogRefractionQueryCounter(statistics, "shadedOpaqueReturns", statistics.shadedOpaqueReturns);
+    LogRefractionQueryCounter(statistics, "exitScreenBackgroundReturns", statistics.exitScreenBackgroundReturns);
+    LogRefractionQueryCounter(statistics, "exitStraightFallbackPixels", statistics.exitStraightFallbackPixels);
+    LogRefractionQueryCounter(statistics, "materialShadeCalls", statistics.materialShadeCalls);
+    LogRefractionQueryCounter(statistics, "cachedHitAttempts", statistics.cachedHitAttempts);
+    LogRefractionQueryCounter(statistics, "cachedHitMisses", statistics.cachedHitMisses);
+    LogRefractionQueryCounter(statistics, "physicalQueries", statistics.physicalQueries);
+    LogRefractionQueryCounter(statistics, "queryBudgetUnits", statistics.queryBudgetUnits);
+    LogRefractionQueryCounter(statistics, "overflowFlags", statistics.overflowFlags);
+    [essential] info("RefractionQueryDiagnostics: complete sequence={} generation={} counters={}", statistics.sequence, statistics.generation, 29u);
 }
 
 
@@ -107,8 +116,11 @@ ProjectFrameClientSize QueryRefractionSmokeFrameClientSize(){
     return MakeRefractionFrameClientSize(967u, 727u);
 }
 
-NotNullUniquePtr<World> CreateRefractionSmokeWorldOrDie(mut ProjectRuntimeContext context){
-    NotNullUniquePtr<World> world = CreateSmokeWorldOrDie(RefractionSmokeProjectName(), context);
+Expected<NotNullUniquePtr<World>> CreateRefractionSmokeWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(RefractionSmokeProjectName(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
     AddSmokeRenderSystems(SmokeWorldRef(world), context);
     // Isolate transmission by disabling reflection.
     ReflectionSettings reflection = ReflectionSettings();
@@ -125,7 +137,7 @@ NotNullUniquePtr<World> CreateRefractionSmokeWorldOrDie(mut ProjectRuntimeContex
     if(refractionEnabled)
         status = "enabled";
     [essential] info("RefractionSmokeProject: refraction {}", status);
-    return world;
+    return TakeSmokeWorld(world);
 }
 
 RefractionLifecyclePhase RefractionLifecyclePhaseAt(in usize phase){
@@ -144,7 +156,7 @@ RefractionLifecyclePhase RefractionLifecyclePhaseAt(in usize phase){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RefractionQueryDiagnostics{
+class RefractionQueryDiagnostics : ISmokeCapturePredicate{
     public RefractionQueryDiagnostics(mut ProjectRuntimeContext context){
         this.m_context = context;
     }
@@ -196,7 +208,7 @@ class RefractionQueryDiagnostics{
         i32 width = 0;
         i32 height = 0;
         this.m_context.graphics.getWindowDimensions(width, height);
-        const ProjectFrameClientSize target = QuerySmokeFrameClientSize();
+        const ProjectFrameClientSize target = GetProjectFrameClientSize();
         const u32 targetWidth = target.width;
         const u32 targetHeight = target.height;
         const u64 currentFrame = this.m_context.graphics.getFrameIndex();
@@ -241,7 +253,7 @@ class RefractionQueryDiagnostics{
         return ShouldCaptureRefractionQueryDiagnostics(this.m_reported, graphicsFrame, this.m_sourceFrame);
     }
 
-    public b8 shouldCaptureFrame(in u64 graphicsFrame)const{
+    public b8 shouldCaptureFrame(in u64 graphicsFrame)const override{
         return this.shouldCapture(graphicsFrame);
     }
 
@@ -303,7 +315,7 @@ Expected<EntityID> CreateRefractionDensityScene(in u32 percent, mut World world,
         return MakeUnexpected(Failure());
     }
     const b8 hardwareRequested = !hardware.value().has_value() || StringView(hardware.value().value()) == "1";
-    const ProjectFrameClientSize extent = QuerySmokeFrameClientSize();
+    const ProjectFrameClientSize extent = GetProjectFrameClientSize();
     const u32 frameWidth = extent.width;
     const u32 frameHeight = extent.height;
 
@@ -458,9 +470,9 @@ Expected<Optional<u32>> ReadRefractionDensityPercent(){
 
 [arena]
 class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
-    public RefractionSmokeProjectImpl(mut ProjectRuntimeContext context){
+    public RefractionSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateRefractionSmokeWorldOrDie(context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_queryDiagnostics = RefractionQueryDiagnostics(context);
         this.m_timingRenderPass = AvboitTimingRenderPass(context.graphics);
         this.m_fpsProbe = FpsProbe(RefractionSmokeProjectName());
@@ -648,7 +660,7 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
         i32 width = 0;
         i32 height = 0;
         this.m_context.graphics.getWindowDimensions(width, height);
-        const ProjectFrameClientSize target = QuerySmokeFrameClientSize();
+        const ProjectFrameClientSize target = GetProjectFrameClientSize();
         const u32 targetWidth = target.width;
         const u32 targetHeight = target.height;
         const u64 currentFrame = this.m_context.graphics.getFrameIndex();
@@ -706,7 +718,7 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
                 this.m_lifecyclePaths.push_back(phasePath);
             }
             const StringView firstPath = StringView(this.m_lifecyclePaths[0u]);
-            const ProjectFrameClientSize extent = QuerySmokeFrameClientSize();
+            const ProjectFrameClientSize extent = GetProjectFrameClientSize();
             FramebufferCaptureOptions options = FramebufferCaptureOptions();
             options.requiredWidth = extent.width;
             options.requiredHeight = extent.height;
@@ -722,7 +734,7 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
 
         FramebufferCaptureOptions options = FramebufferCaptureOptions();
         if(this.m_densityEnabled){
-            const ProjectFrameClientSize extent = QuerySmokeFrameClientSize();
+            const ProjectFrameClientSize extent = GetProjectFrameClientSize();
             options.requiredWidth = extent.width;
             options.requiredHeight = extent.height;
             // The density harness confirms the exact client/framebuffer extent and readback, then closes normally.
@@ -804,29 +816,21 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return NWB::Tests::Smoke::QueryRefractionSmokeFrameClientSize();
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return QueryRefractionSmokeFrameClientSize();
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Refraction Smoke");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB Refraction Smoke");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::RefractionSmokeProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateRefractionSmokeWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<RefractionSmokeProjectImpl>(owner, context);
 }
 
 

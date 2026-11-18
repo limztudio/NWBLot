@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::StackMemory"), cpp_flags(no_copy, no_assign)]
+extern class SignalStackMemory;
+
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::AlternateStack")]
+extern class AlternateStack{
+    b8 read();
+    b8 install()const;
+    void disable();
+    b8 disabled()const;
+    usize address()const;
+    void use(mut SignalStackMemory memory);
+};
+
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::SignalAction")]
+extern class SignalAction{
+    b8 read(in i32 number);
+    b8 install(in i32 number)const;
+    b8 clearMask();
+    void setHandler(in auto handler);
+    b8 matches(in auto handler)const;
+};
+
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::TerminateHandler")]
+extern class TerminationHandler;
+
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::QueryTerminateHandler")]
+extern TerminationHandler ReadTerminationHandler();
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::ExchangeTerminateHandler")]
+extern TerminationHandler ExchangeTerminationHandler(in auto handler);
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::TerminateMatches")]
+extern b8 TerminationHandlerMatches(in auto handler);
+[cpp_header("<signal.h>"), cpp_name("SIGILL")]
+extern const i32 s_IllegalInstruction;
+[cpp_header("<global/termination.h>"), cpp_name("::TerminateInvariant")]
+extern void FailTestCleanup();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

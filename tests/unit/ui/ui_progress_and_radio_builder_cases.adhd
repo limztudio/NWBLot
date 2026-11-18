@@ -3,411 +3,288 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_radio.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const StringView s_ProgressTrackRegion = "progress.track";
+const StringView s_ProgressFillRegion = "progress.fill";
+const StringView s_ScrollbarTrackRegion = "scrollbar.track";
+const StringView s_ScrollbarThumbRegion = "scrollbar.thumb.normal";
+const StringView s_MissingTrackRegion = "missing.track";
+const StringView s_MissingFillRegion = "missing.fill";
+enum<u8> RadioCallbackPhase{ None, Generation, Revision, RowCount, Key, Lookup, Enabled }
+enum<u8> RadioSourceMutation{ SelectIdentical, SelectAba, Reset, Reconcile, Apply, SourceRevision, SourceGeneration, SourceCount, GuardFailure }
+
+class UiProgressBuilderTests : WidgetFixture{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
-
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_progress_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-constexpr AStringView s_ProgressTrackRegion = "progress.track";
-constexpr AStringView s_ProgressFillRegion = "progress.fill";
-constexpr AStringView s_ScrollbarTrackRegion = "scrollbar.track";
-constexpr AStringView s_ScrollbarThumbRegion = "scrollbar.thumb.normal";
-constexpr AStringView s_MissingTrackRegion = "missing.track";
-constexpr AStringView s_MissingFillRegion = "missing.fill";
-
-class UiProgressBuilderTests : public WidgetFixture{
-public:
-    virtual void SetUp()override{
-        WidgetFixture::SetUp();
-        if(HasFatalFailure())
+    public void setup(){
+        this.setUpWidgetBase();
+        if(HasFatalTestFailure())
             return;
-        configureProgress();
-        m_builder.progressStyle().padding = { 4.0f, 4.0f, 4.0f, 4.0f };
+        this.configureProgress();
+        this.m_builder.progressStyle().padding = Insets(4.0f, 4.0f, 4.0f, 4.0f);
     }
-
-    void configureProgress(const b8 preferred = true, const b8 fallback = true){
-        configureSkin();
-        UiSkin::RegionVector regions(m_arena);
-        for(const UiSkinRegion& region : m_skin.regions())
+    public void configureProgress(){ this.configureProgress(true); }
+    public void configureProgress(in b8 preferred){ this.configureProgress(preferred, true); }
+    public void configureProgress(in b8 preferred, in b8 fallback){
+        this.configureSkin();
+        RegionVector regions;
+        for(in UiSkinRegion region : this.m_skin.regions())
             regions.push_back(region);
-        const Array<Name, 4u> names{ Name(s_ProgressTrackRegion), Name(s_ProgressFillRegion), Name(s_ScrollbarTrackRegion), Name(s_ScrollbarThumbRegion) };
+        const Array<Name, 4u> names( Name(s_ProgressTrackRegion), Name(s_ProgressFillRegion), Name(s_ScrollbarTrackRegion), Name(s_ScrollbarThumbRegion));
         for(u32 index = 0u; index < 4u; ++index){
             if((index < 2u && !preferred) || (index >= 2u && !fallback))
                 continue;
             UiSkinRegion region;
             region.name = names[index];
-            region.rectangle = { 96u + index * 32u, 8u, 24u, 24u };
-            region.sliceInsets = { 6u, 6u, 6u, 6u };
+            region.rectangle = UiSkinRect(96u + index * 32u, 8u, 24u, 24u);
+            region.sliceInsets = UiSkinSliceInsets(6u, 6u, 6u, 6u);
             region.minimumWidth = 12.0f;
             region.minimumHeight = 12.0f;
             region.drawMode = UiSkinDrawMode::NineSlice;
-            regions.push_back(Move(region));
+            regions.push_back(region);
         }
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 256u, 32u, 1.0f, Move(regions));
-        ASSERT_TRUE(m_skin.validatePayload());
-        m_builder.setSkin(m_skin);
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 256u, 32u, 1.0f, regions);
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_builder.setSkin(this.m_skin);
     }
-
-    [[nodiscard]] Expected<SkinPaintSample> sampleTrackRegion(const DrawSnapshot& snapshot)const{
-        return sampleSkinPaint(snapshot, Name(s_ProgressTrackRegion));
+    public Expected<UiFixtureSkinPaintSample> sampleTrackRegion(in DrawSnapshot snapshot)const{
+        return this.sampleSkinPaint(snapshot, Name(s_ProgressTrackRegion));
     }
-
-    [[nodiscard]] Expected<SkinPaintSample> sampleFillRegion(const DrawSnapshot& snapshot)const{
-        return sampleSkinPaint(snapshot, Name(s_ProgressFillRegion));
+    public Expected<UiFixtureSkinPaintSample> sampleFillRegion(in DrawSnapshot snapshot)const{
+        return this.sampleSkinPaint(snapshot, Name(s_ProgressFillRegion));
     }
-
-    [[nodiscard]] Expected<SkinPaintSample> sampleScrollbarTrackRegion(const DrawSnapshot& snapshot)const{
-        return sampleSkinPaint(snapshot, Name(s_ScrollbarTrackRegion));
+    public Expected<UiFixtureSkinPaintSample> sampleScrollbarTrackRegion(in DrawSnapshot snapshot)const{
+        return this.sampleSkinPaint(snapshot, Name(s_ScrollbarTrackRegion));
     }
-
-    [[nodiscard]] Expected<SkinPaintSample> sampleScrollbarThumbRegion(const DrawSnapshot& snapshot)const{
-        return sampleSkinPaint(snapshot, Name(s_ScrollbarThumbRegion));
+    public Expected<UiFixtureSkinPaintSample> sampleScrollbarThumbRegion(in DrawSnapshot snapshot)const{
+        return this.sampleSkinPaint(snapshot, Name(s_ScrollbarThumbRegion));
     }
-
-    void setMissingStyleRegions()noexcept{
-        m_builder.progressStyle().track = Name(s_MissingTrackRegion);
-        m_builder.progressStyle().fill = Name(s_MissingFillRegion);
+    public void setMissingStyleRegions(){
+        this.m_builder.progressStyle().track = Name(s_MissingTrackRegion);
+        this.m_builder.progressStyle().fill = Name(s_MissingFillRegion);
     }
-
-    void setMissingFallbackRegions()noexcept{
-        m_builder.progressStyle().trackFallback = Name(s_MissingTrackRegion);
-        m_builder.progressStyle().fillFallback = Name(s_MissingFillRegion);
+    public void setMissingFallbackRegions(){
+        this.m_builder.progressStyle().trackFallback = Name(s_MissingTrackRegion);
+        this.m_builder.progressStyle().fillFallback = Name(s_MissingFillRegion);
     }
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 
 
-};
+class ReconcileGate : IRadioGroupReconcileGuard{
+    public Optional<mut RadioGroupState> state;
+    public b8 allowed = true;
+    public TestObserved<b8> mutateState;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_radio_group_behavior_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-
-namespace CallbackPhase{
-    enum Enum : u8{ None, Generation, Revision, Count, Key, Lookup, Enabled };
-};
-
-namespace CallbackMutation{
-    enum Enum : u8{
-        SelectIdentical, SelectAba, Reset, Reconcile, Apply, SourceRevision, SourceGeneration, SourceCount, GuardFailure
-    };
-};
-
-class ReconcileGate final : public IRadioGroupReconcileGuard{
-public:
-    [[nodiscard]] virtual b8 current()const noexcept override{
-        if(mutateState && state){
-            mutateState = false;
-            state->select(state->selectedKey());
+    public b8 current()const override{
+        if(this.mutateState.value() && this.state.has_value()){
+            this.mutateState.value() = false;
+            this.state.value().select(this.state.value().selectedKey());
         }
-        return allowed;
+        return this.allowed;
     }
-
-    void bindState(RadioGroupState& targetState)noexcept{
-        state = &targetState;
+    public void bindState(mut RadioGroupState targetState){
+        this.state = Optional<mut RadioGroupState>(targetState);
     }
+}
 
 
-public:
-    RadioGroupState* state = nullptr;
-    b8 allowed = true;
-    mutable b8 mutateState = false;
-};
+class ChoiceSource : IListDataSource{
+    public Array<RadioGroupChoice, s_RadioGroupMaxChoices> rows;
+    public TestObserved<u64> generation = TestObserved<u64>(41u);
+    public TestObserved<u64> revisionValue = TestObserved<u64>(7u);
+    public TestObserved<u64> count = TestObserved<u64>(4u);
+    public Optional<mut RadioGroupState> state;
+    public Optional<mut ReconcileGate> gate;
+    public RadioGroupChoices borrowedChoices;
+    public TestObserved<u32> keyCalls;
+    public TestObserved<u32> findCalls;
+    public TestObserved<u32> countCalls;
+    public TestObserved<u32> callbackCalls;
+    public TestObserved<u32> callbacksAtMutation;
+    public u32 triggerCount = 0u;
+    public RadioCallbackPhase phase = RadioCallbackPhase::None;
+    public RadioSourceMutation mutation = RadioSourceMutation::SelectIdentical;
+    public b8 badLookup = false;
+    public b8 missingLookup = false;
+    public TestObserved<b8> armed;
+    public TestObserved<b8> nestedSucceeded = TestObserved<b8>(true);
 
-class ChoiceSource final : public IListDataSource{
-public:
-    ChoiceSource()noexcept{
+    public ChoiceSource(){
         for(u32 index = 0u; index < s_RadioGroupMaxChoices; ++index)
-            rows[index] = { index + 1u, true };
+            this.rows[index] = RadioGroupChoice(index + 1u, true);
     }
-
-
-public:
-    void bindState(RadioGroupState& targetState)noexcept{
-        state = &targetState;
+    public void bindState(mut RadioGroupState targetState){
+        this.state = Optional<mut RadioGroupState>(targetState);
     }
-
-    void bindGate(ReconcileGate& targetGate)noexcept{
-        gate = &targetGate;
+    public void bindGate(mut ReconcileGate targetGate){
+        this.gate = Optional<mut ReconcileGate>(targetGate);
     }
-
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
-        callback(CallbackPhase::Generation);
-        return generation;
+    public u64 instanceGeneration()const override{
+        this.callback(RadioCallbackPhase::Generation);
+        return this.generation.value();
     }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        callback(CallbackPhase::Revision);
-        return revisionValue;
+    public u64 revision()const override{
+        this.callback(RadioCallbackPhase::Revision);
+        return this.revisionValue.value();
     }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{
-        ++countCalls;
-        callback(CallbackPhase::Count);
-        return count;
+    public u64 rowCount()const override{
+        ++this.countCalls.value();
+        this.callback(RadioCallbackPhase::RowCount);
+        return this.count.value();
     }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        callback(CallbackPhase::Key);
-        ++keyCalls;
-        return index < s_RadioGroupMaxChoices ? rows[static_cast<usize>(index)].key : 0u;
+    public u64 key(in u64 index)const override{
+        this.callback(RadioCallbackPhase::Key);
+        ++this.keyCalls.value();
+        if(index < s_RadioGroupMaxChoices)
+            return this.rows[cast<usize>(index)].key;
+        return 0u;
     }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
+    public Expected<u64> indexOf(in u64 key)const override{
         u64 index = 0u;
-        callback(CallbackPhase::Lookup);
-        for(u32 candidate = 0u; candidate < Min<u64>(count, s_RadioGroupMaxChoices); ++candidate){
-            if(rows[candidate].key == key){
-                index = badLookup ? count : candidate;
-                return !missingLookup ? Expected<u64>{ index } : MakeUnexpected(Failure{});
+        this.callback(RadioCallbackPhase::Lookup);
+        for(u32 candidate = 0u; candidate < Min<u64>(this.count.value(), s_RadioGroupMaxChoices); ++candidate){
+            if(this.rows[candidate].key == key){
+                index = candidate;
+                if(this.badLookup)
+                    index = this.count.value();
+                if(this.missingLookup)
+                    return MakeUnexpected(Failure());
+                return index;
             }
         }
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
         u64 index = 0u;
-        ++findCalls;
-        if(start >= count || count > s_RadioGroupMaxChoices)
-            return MakeUnexpected(Failure{});
+        ++this.findCalls.value();
+        if(start >= this.count.value() || this.count.value() > s_RadioGroupMaxChoices)
+            return MakeUnexpected(Failure());
         index = start;
-        for(u64 visited = 0u; visited < count; ++visited){
-            if(rows[static_cast<usize>(index)].enabled)
+        for(u64 visited = 0u; visited < this.count.value(); ++visited){
+            if(this.rows[cast<usize>(index)].enabled)
                 return index;
             if(reverse){
                 if(index == 0u)
-                    return MakeUnexpected(Failure{});
+                    return MakeUnexpected(Failure());
                 --index;
             }
             else{
                 ++index;
-                if(index == count)
-                    return MakeUnexpected(Failure{});
+                if(index == this.count.value())
+                    return MakeUnexpected(Failure());
             }
         }
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     }
-
-    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "choice"; }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        callback(CallbackPhase::Enabled);
-        return index < s_RadioGroupMaxChoices && rows[static_cast<usize>(index)].enabled;
+    public StringView text(in u64 arg0)const override{ return "choice"; }
+    public b8 enabled(in u64 index)const override{
+        this.callback(RadioCallbackPhase::Enabled);
+        return index < s_RadioGroupMaxChoices && this.rows[cast<usize>(index)].enabled;
     }
-
-
-private:
-    void callback(const CallbackPhase::Enum current)const noexcept{
-        ++callbackCalls;
-        if(!armed || phase != current || (triggerCount != 0u && countCalls != triggerCount))
+    public void callback(in RadioCallbackPhase current)const{
+        ++this.callbackCalls.value();
+        if(!this.armed.value() || this.phase != current || (this.triggerCount != 0u && this.countCalls.value() != this.triggerCount))
             return;
-        armed = false;
-        callbacksAtMutation = callbackCalls;
-        if(mutation == CallbackMutation::GuardFailure){
-            if(gate)
-                gate->allowed = false;
+        this.armed.value() = false;
+        this.callbacksAtMutation.value() = this.callbackCalls.value();
+        if(this.mutation == RadioSourceMutation::GuardFailure){
+            if(this.gate.has_value())
+                this.gate.value().allowed = false;
             return;
         }
-        if(mutation == CallbackMutation::SourceRevision){
-            ++revisionValue;
+        if(this.mutation == RadioSourceMutation::SourceRevision){
+            ++this.revisionValue.value();
             return;
         }
-        if(mutation == CallbackMutation::SourceGeneration){
-            ++generation;
+        if(this.mutation == RadioSourceMutation::SourceGeneration){
+            ++this.generation.value();
             return;
         }
-        if(mutation == CallbackMutation::SourceCount){
-            ++count;
+        if(this.mutation == RadioSourceMutation::SourceCount){
+            ++this.count.value();
             return;
         }
-        if(!state)
+        if(!this.state.has_value())
             return;
-        switch(mutation){
-        case CallbackMutation::SelectIdentical:
-            state->select(state->selectedKey());
+        switch(this.mutation){
+        case RadioSourceMutation::SelectIdentical:
+            this.state.value().select(this.state.value().selectedKey());
             break;
-        case CallbackMutation::SelectAba:{
-            const u64 original = state->selectedKey();
-            state->select(original == 1u ? 2u : 1u);
-            state->select(original);
+        case RadioSourceMutation::SelectAba:{
+            const u64 original = this.state.value().selectedKey();
+            if(original == 1u)
+                this.state.value().select(2u);
+            else
+                this.state.value().select(1u);
+            this.state.value().select(original);
             break;
         }
-        case CallbackMutation::Reset:
-            state->reset();
+        case RadioSourceMutation::Reset:
+            this.state.value().reset();
             break;
-        case CallbackMutation::Reconcile:{
+        case RadioSourceMutation::Reconcile:{
             RadioGroupResult nestedResult;
-            nestedSucceeded = ReconcileRadioGroup(*this, *state, nestedResult).has_value();
+            this.nestedSucceeded.value() = ReconcileRadioGroup(this, this.state.value(), nestedResult).has_value();
             break;
         }
-        case CallbackMutation::Apply:{
+        case RadioSourceMutation::Apply:{
             ControlAction action;
-            const RadioGroupSnapshot snapshot = state->snapshot();
-            action.control = { snapshot.inputGeneration, snapshot.sourceGeneration, snapshot.sourceRevision };
+            const RadioGroupSnapshot snapshot = this.state.value().snapshot();
+            action.control = ControlToken(snapshot.inputGeneration, snapshot.sourceGeneration, snapshot.sourceRevision);
             action.kind = ControlActionKind::Down;
             RadioGroupResult nestedResult;
-            nestedSucceeded = ApplyRadioGroupControlAction(borrowedChoices, {}, action, *state, nestedResult);
+            this.nestedSucceeded.value() = ApplyRadioGroupControlAction(this.borrowedChoices, RadioGroupOptions(), action, this.state.value(), nestedResult);
             break;
         }
         default:
             break;
         }
     }
-
-
-public:
-    Array<RadioGroupChoice, s_RadioGroupMaxChoices> rows{};
-    mutable u64 generation = 41u;
-    mutable u64 revisionValue = 7u;
-    mutable u64 count = 4u;
-    RadioGroupState* state = nullptr;
-    ReconcileGate* gate = nullptr;
-    RadioGroupChoices borrowedChoices;
-    mutable u32 keyCalls = 0u;
-    mutable u32 findCalls = 0u;
-    mutable u32 countCalls = 0u;
-    mutable u32 callbackCalls = 0u;
-    mutable u32 callbacksAtMutation = 0u;
-    u32 triggerCount = 0u;
-    CallbackPhase::Enum phase = CallbackPhase::None;
-    CallbackMutation::Enum mutation = CallbackMutation::SelectIdentical;
-    b8 badLookup = false;
-    b8 missingLookup = false;
-    mutable b8 armed = false;
-    mutable b8 nestedSucceeded = true;
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoices(const IListDataSource& source, RadioGroupState& state, RadioGroupResult& result){
-    return ReconcileRadioGroup(source, state, result);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoicesGuarded(const IListDataSource& source, const IRadioGroupReconcileGuard& guard, RadioGroupState& state, RadioGroupResult& result){
-    return ReconcileRadioGroup(source, guard, state, result);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ApplyUiRadioGroupAction(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result){
-    return ApplyRadioGroupControlAction(choices, options, action, state, result);
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiRadioGroupBuilderTests : RadioGroupFixture{
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_radio_group_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiRadioGroupTests;
-
-class UiRadioGroupBuilderTests : public RadioGroupFixture{
-public:
-
-    [[nodiscard]] Expected<RadioGroupChoicePlacement> findChoice(const u64 keyValue)const noexcept{
-        const RadioGroupChoicePlacement* found = choice(keyValue, m_state);
-        if(!found)
-            return MakeUnexpected(Failure{});
-        return *found;
-    }
-
-    void verifyTemporaryLabelsOwned(const DrawSnapshot& actual){
-        PaintBuilder reference(m_arena);
-        reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<Impl::UiSkin>("tests/ui/skin"), m_skin);
+    public Expected<RadioGroupChoicePlacement> findChoice(in u64 keyValue)const{ return this.tryChoice(keyValue, this.m_state); }
+    public void verifyTemporaryLabelsOwned(in DrawSnapshot actual){
+        PaintBuilder reference;
+        reference.begin(DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f), 2u, 1u, AssetRef<UiSkin>("tests/ui/skin"), this.m_skin);
         for(u32 index = 0u; index < 5u; ++index){
-            const Array<char, 4u> bytes{ static_cast<char>('A' + index), 'b', 'c', 'd' };
-            TextLayout layout(m_arena);
-            {
-                auto layoutResult = m_text.layout({ .text = { bytes.data(), bytes.size() }, .fontSize = 14.0f });
-                ASSERT_TRUE(layoutResult);
-                layout = Move(*layoutResult);
-            }
-            const RadioGroupChoicePlacement& row = m_state.placement().rows[index];
-            const auto measured = m_text.measure(layout, reference.displayMetrics());
-            ASSERT_TRUE(measured);
-            const f32 centering = Max(0.0f, (row.rectangle.height - measured->height) * 0.5f);
-            const f32 textStart = row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap;
-            const f32 textTop = row.rectangle.y + centering;
-            const SIMDVectorSingle originValue = VectorSubtract(VectorSet(textStart, textTop, 0.0f, 0.0f), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
-            const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
+            String bytes = String("Abcd");
+            const StringView letters = "ABCDE";
+            bytes[0u] = letters[index];
+            ShapeRequest request;
+            request.text = StringView(bytes);
+            request.fontSize = 14.0f;
+            auto layout = this.m_text.layout(request);
+            ASSERT_TRUE(layout.has_value());
+            in RadioGroupChoicePlacement row = this.m_state.placement().rows[index];
+            const auto measured = this.m_text.measure(layout.value(), reference.displayMetrics());
+            ASSERT_TRUE(measured.has_value());
+            const f32 centering = Max(0.0f, (row.rectangle.height - measured.value().height) * 0.5f);
+            const f32 textStart = row.indicator.x + row.indicator.width + this.m_builder.radioGroupStyle().gap;
+            const Point origin = Point(textStart - measured.value().x, row.rectangle.y + centering - measured.value().y);
             reference.pushClip(row.clip);
             reference.pushClip(row.textClip);
-            const Color& color = row.enabled ? m_builder.style().text : m_builder.style().disabledText;
-            ASSERT_TRUE(m_text.paint(reference, layout, origin, color));
+            Color color = this.m_builder.style().disabledText;
+            if(row.enabled)
+                color = this.m_builder.style().text;
+            ASSERT_TRUE(this.m_text.paint(reference, layout.value(), origin, color));
             ASSERT_TRUE(reference.popClip());
             ASSERT_TRUE(reference.popClip());
         }
         const DrawSnapshot expected = reference.freeze();
-        Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::UiCases::s_UiCaseTestsUiRadioTemporaryLabels) };
-        Vector<Vertex, Core::Alloc::ScratchArena> actualGlyphs(scratch);
-        Vector<Vertex, Core::Alloc::ScratchArena> expectedGlyphs(scratch);
-        UiWidgetTests::CopyGlyphVertices(actual, actualGlyphs);
-        UiWidgetTests::CopyGlyphVertices(expected, expectedGlyphs);
+        Vector<Vertex> actualGlyphs;
+        Vector<Vertex> expectedGlyphs;
+        CopyGlyphVertices(actual, actualGlyphs);
+        CopyGlyphVertices(expected, expectedGlyphs);
         ASSERT_EQ(actualGlyphs.size(), expectedGlyphs.size());
         ASSERT_GT(actualGlyphs.size(), 0u);
         for(usize index = 0u; index < actualGlyphs.size(); ++index){
@@ -417,69 +294,6 @@ public:
             EXPECT_FLOAT_EQ(actualGlyphs[index].texCoord.y, expectedGlyphs[index].texCoord.y);
         }
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiProgressBuilderTests = ::__hidden_ui_progress_builder_tests::UiProgressBuilderTests;
-using UiRadioGroupBuilderTests = ::__hidden_ui_radio_group_builder_tests::UiRadioGroupBuilderTests;
-namespace UiRadioCallbackPhase = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackPhase;
-using UiRadioCallbackPhaseEnum = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackPhase::Enum;
-namespace UiRadioCallbackMutation = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackMutation;
-using UiRadioCallbackMutationEnum = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackMutation::Enum;
-using UiRadioReconcileGate = ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileGate;
-using UiRadioChoiceSource = ::NWB::__hidden_ui_radio_group_behavior_tests::ChoiceSource;
-using ::NWB::Tests::UiCases::s_UiCaseProgressTest;
-using ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileUiRadioGroupChoices;
-using ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileUiRadioGroupChoicesGuarded;
-using ::NWB::__hidden_ui_radio_group_behavior_tests::ApplyUiRadioGroupAction;
-
-namespace Key = ::NWB::Core::Key;
-using KeyEnum = ::NWB::Core::Key::Enum;
-using Insets = ::NWB::Impl::Ui::Insets;
-using Color = ::NWB::Impl::Ui::Color;
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-using UiSkinRegion = ::NWB::Impl::UiSkinRegion;
-namespace UiSkinDrawMode = ::NWB::Impl::UiSkinDrawMode;
-using SkinPaintSample = ::NWB::UiWidgetTests::SkinPaintSample;
-using ProgressOptions = ::NWB::Impl::Ui::ProgressOptions;
-using ProgressStyle = ::NWB::Impl::Ui::ProgressStyle;
-using ProgressMetrics = ::NWB::Impl::Ui::ProgressMetrics;
-using ProgressPlacement = ::NWB::Impl::Ui::ProgressPlacement;
-using ::NWB::Impl::Ui::MeasureProgress;
-using ::NWB::Impl::Ui::PlaceProgress;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-using ControlAction = ::NWB::Impl::Ui::ControlAction;
-namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
-using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
-using RadioGroupChoice = ::NWB::Impl::Ui::RadioGroupChoice;
-using RadioGroupChoices = ::NWB::Impl::Ui::RadioGroupChoices;
-using RadioGroupOptions = ::NWB::Impl::Ui::RadioGroupOptions;
-using RadioGroupState = ::NWB::Impl::Ui::RadioGroupState;
-using RadioGroupSnapshot = ::NWB::Impl::Ui::RadioGroupSnapshot;
-using RadioGroupResult = ::NWB::Impl::Ui::RadioGroupResult;
-using RadioGroupChoicePlacement = ::NWB::Impl::Ui::RadioGroupChoicePlacement;
-using UiRadioAcceptedInputState = ::NWB::UiWidgetTests::AcceptedInputState<128u>;
-using ::NWB::Impl::Ui::s_RadioGroupMaxChoices;
-using ::NWB::Tests::UiCases::s_UiInputNameRadioChecked;
-using ::NWB::Tests::UiCases::s_UiInputNameRadioMark;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -580,10 +394,10 @@ void VerifyUiProgressBuilderTests_CallerMutationCannotChangeDeferredProgressGeom
     const DrawSnapshot snapshot = self.m_paint.freeze();
     const auto trackResult = self.sampleTrackRegion(snapshot);
     ASSERT_TRUE(trackResult.has_value());
-    const SkinPaintSample track = trackResult.value();
+    const UiFixtureSkinPaintSample track = trackResult.value();
     const auto fillResult = self.sampleFillRegion(snapshot);
     ASSERT_TRUE(fillResult.has_value());
-    const SkinPaintSample fill = fillResult.value();
+    const UiFixtureSkinPaintSample fill = fillResult.value();
     EXPECT_FLOAT_EQ(track.bounds.width, 240.0f);
     EXPECT_FLOAT_EQ(track.bounds.height, 32.0f);
     EXPECT_FLOAT_EQ(fill.bounds.x - track.bounds.x, 4.0f);
@@ -617,12 +431,12 @@ void VerifyUiProgressBuilderTests_FiniteFractionsClampAtExactEmptyAndFullGeometr
         const DrawSnapshot snapshot = self.m_paint.freeze();
         const auto trackResult = self.sampleTrackRegion(snapshot);
         ASSERT_TRUE(trackResult.has_value());
-        const SkinPaintSample track = trackResult.value();
+        const UiFixtureSkinPaintSample track = trackResult.value();
         const auto fillResult = self.sampleFillRegion(snapshot);
         EXPECT_EQ(fillResult.has_value(), index >= 2u);
         if(index >= 2u){
             ASSERT_TRUE(fillResult.has_value());
-            const SkinPaintSample fill = fillResult.value();
+            const UiFixtureSkinPaintSample fill = fillResult.value();
             EXPECT_FLOAT_EQ(fill.bounds.x, track.bounds.x + 4.0f);
             EXPECT_FLOAT_EQ(fill.bounds.width, track.bounds.width - 8.0f);
             EXPECT_FLOAT_EQ(fill.bounds.height, track.bounds.height - 8.0f);
@@ -638,10 +452,10 @@ void VerifyUiProgressBuilderTests_TinyFillClipsNaturalBorderTexelsWithoutCompres
     const DrawSnapshot snapshot = self.m_paint.freeze();
     const auto trackResult = self.sampleTrackRegion(snapshot);
     ASSERT_TRUE(trackResult.has_value());
-    const SkinPaintSample track = trackResult.value();
+    const UiFixtureSkinPaintSample track = trackResult.value();
     const auto fillResult = self.sampleFillRegion(snapshot);
     ASSERT_TRUE(fillResult.has_value());
-    const SkinPaintSample fill = fillResult.value();
+    const UiFixtureSkinPaintSample fill = fillResult.value();
     EXPECT_NEAR(fill.bounds.width, (track.bounds.width - 8.0f) * 0.01f, 0.000001f);
     EXPECT_LT(fill.maximumU, 134.0f / 256.0f);
     EXPECT_NEAR(fill.maximumU, (128.0f + fill.bounds.width) / 256.0f, 0.000001f);
@@ -667,7 +481,7 @@ void VerifyUiProgressBuilderTests_ExternalClipConstrainsPaintAndBothNestedClipsA
     const DrawSnapshot snapshot = self.m_paint.freeze();
     const auto fillResult = self.sampleFillRegion(snapshot);
     ASSERT_TRUE(fillResult.has_value());
-    const SkinPaintSample fill = fillResult.value();
+    const UiFixtureSkinPaintSample fill = fillResult.value();
     EXPECT_FLOAT_EQ(fill.bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(fill.bounds.width, 20.0f);
     b8 sentinel = false;
@@ -1135,13 +949,13 @@ void VerifyUiProgressLayoutTests_OverflowingAndCollapsedPositiveInputEndpointsRe
 
 
 void VerifyUiRadioGroupBehaviorTests_DisabledCheckedChoiceIsPreservedWhileCursorMovesForward(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     source.rows[1u].enabled = false;
     source.rows[2u].enabled = false;
     RadioGroupState state = RadioGroupState();
     state.select(2u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 4u);
@@ -1150,18 +964,18 @@ void VerifyUiRadioGroupBehaviorTests_DisabledCheckedChoiceIsPreservedWhileCursor
 }
 
 void VerifyUiRadioGroupBehaviorTests_RevisionReorderPreservesStableKeys(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     state.select(3u);
     RadioGroupResult result = RadioGroupResult();
-    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     const RadioGroupChoice swapped = source.rows[0u];
     source.rows[0u] = source.rows[2u];
     source.rows[2u] = swapped;
-    ++source.revisionValue;
+    ++source.revisionValue.value();
     result = RadioGroupResult();
-    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 3u);
     EXPECT_EQ(state.cursorKey(), 3u);
@@ -1170,26 +984,26 @@ void VerifyUiRadioGroupBehaviorTests_RevisionReorderPreservesStableKeys(){
 }
 
 void VerifyUiRadioGroupBehaviorTests_RemovedSelectionAndSourceReplacementClearKnownChoices(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     state.select(4u);
     RadioGroupResult result = RadioGroupResult();
-    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
-    source.count = 3u;
-    ++source.revisionValue;
+    source.count.value() = 3u;
+    ++source.revisionValue.value();
     result = RadioGroupResult();
-    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 1u);
     EXPECT_TRUE(result.selectionChanged);
     state.select(2u);
-    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
-    ++source.generation;
+    ++source.generation.value();
     result = RadioGroupResult();
-    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 1u);
@@ -1197,52 +1011,52 @@ void VerifyUiRadioGroupBehaviorTests_RemovedSelectionAndSourceReplacementClearKn
 }
 
 void VerifyUiRadioGroupBehaviorTests_ResetAllowsExplicitChoiceOnANewFirstBinding(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     state.reset();
     state.select(3u);
-    ++source.generation;
-    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    ++source.generation.value();
+    choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 3u);
 }
 
 void VerifyUiRadioGroupBehaviorTests_EmptyAndAllDisabledSourcesAreValidWithoutAutomaticSelection(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    source.count = 0u;
-    auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    source.count.value() = 0u;
+    auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_TRUE(result.valid);
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 0u);
-    source.count = 4u;
+    source.count.value() = 4u;
     for(usize index = 0u; index < 4u; ++index)
         source.rows[index].enabled = false;
-    ++source.revisionValue;
+    ++source.revisionValue.value();
     state.select(2u);
-    choices = ReconcileUiRadioGroupChoices(source, state, result);
+    choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 0u);
     result = RadioGroupResult();
-    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Submit), state, result));
+    ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Submit), state, result));
     EXPECT_FALSE(result.activated);
     EXPECT_FALSE(result.selectionChanged);
 }
 
 void VerifyUiRadioGroupBehaviorTests_AllFourArrowsWrapAndSkipDisabledChoices(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     source.rows[1u].enabled = false;
     source.rows[2u].enabled = false;
     RadioGroupState state = RadioGroupState();
     state.select(1u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     const u64 input = state.inputGeneration();
     Array<ControlActionKindEnum, 4u> kinds = Array<ControlActionKindEnum, 4u>();
@@ -1257,7 +1071,7 @@ void VerifyUiRadioGroupBehaviorTests_AllFourArrowsWrapAndSkipDisabledChoices(){
     expected[3u] = 1u;
     for(usize index = 0u; index < 4u; ++index){
         result = RadioGroupResult();
-        ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, kinds[index]), state, result));
+        ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, kinds[index]), state, result));
         EXPECT_EQ(state.selectedKey(), expected[index]);
         EXPECT_EQ(state.cursorKey(), expected[index]);
         EXPECT_EQ(state.inputGeneration(), input);
@@ -1267,31 +1081,31 @@ void VerifyUiRadioGroupBehaviorTests_AllFourArrowsWrapAndSkipDisabledChoices(){
 }
 
 void VerifyUiRadioGroupBehaviorTests_HomeEndChooseEnabledEndpoints(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     source.rows[0u].enabled = false;
     source.rows[3u].enabled = false;
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
-    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::End), state, result));
+    ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::End), state, result));
     EXPECT_EQ(state.selectedKey(), 3u);
-    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Home), state, result));
+    ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Home), state, result));
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_FALSE(result.activated);
 }
 
 void VerifyUiRadioGroupBehaviorTests_IdenticalNavigationAndIgnoredPageIntentAdvanceRevisionWithoutRetiringInput(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
-    source.count = 1u;
+    ChoiceSource source = ChoiceSource();
+    source.count.value() = 1u;
     RadioGroupState state = RadioGroupState();
     state.select(1u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     const RadioGroupSnapshot before = state.snapshot();
-    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
-    ASSERT_TRUE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::PageUp), state, result));
+    ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::PageUp), state, result));
     EXPECT_EQ(state.selectedKey(), 1u);
     EXPECT_EQ(state.inputGeneration(), before.inputGeneration);
     EXPECT_EQ(state.revision(), before.revision + 2u);
@@ -1300,68 +1114,68 @@ void VerifyUiRadioGroupBehaviorTests_IdenticalNavigationAndIgnoredPageIntentAdva
 }
 
 void VerifyUiRadioGroupBehaviorTests_RejectedActionsPreserveStateAndResult(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     source.rows[1u].enabled = false;
     RadioGroupState state = RadioGroupState();
     state.select(1u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expected = MakeUiRadioGroupResult(true, true, true, true);
     result = expected;
-    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupActionKey(state, ControlActionKind::Activate, 2u), state, result));
+    EXPECT_FALSE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupActionKey(state, ControlActionKind::Activate, 2u), state, result));
     EXPECT_TRUE(state.matches(before));
     ExpectUiRadioGroupResult(result, expected);
     RadioGroupOptions disabled = RadioGroupOptions();
     disabled.enabled = false;
-    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), disabled, MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
+    EXPECT_FALSE(ApplyRadioGroupControlAction(choices.value(), disabled, MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
     EXPECT_TRUE(state.matches(before));
     ExpectUiRadioGroupResult(result, expected);
     ControlAction stale = MakeUiRadioGroupAction(state, ControlActionKind::Down);
     ++stale.control.contentRevision;
-    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), stale, state, result));
+    EXPECT_FALSE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), stale, state, result));
     EXPECT_TRUE(state.matches(before));
     ExpectUiRadioGroupResult(result, expected);
 }
 
 void VerifyUiRadioGroupBehaviorTests_IdenticalPublicSelectionRejectsCopiedOlderInput(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     state.select(2u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     const ControlAction action = MakeUiRadioGroupAction(state, ControlActionKind::Down);
     state.select(2u);
     const RadioGroupSnapshot before = state.snapshot();
     result = RadioGroupResult();
-    EXPECT_FALSE(ApplyUiRadioGroupAction(choices.value(), RadioGroupOptions(), action, state, result));
+    EXPECT_FALSE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), action, state, result));
     EXPECT_TRUE(state.matches(before));
     EXPECT_FALSE(result.valid);
 }
 
 void VerifyUiRadioGroupBehaviorTests_FullBoundIsAcceptedAndOversizedSourcePreservesStateAndDiagnostics(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
-    source.count = s_RadioGroupMaxChoices;
+    ChoiceSource source = ChoiceSource();
+    source.count.value() = s_RadioGroupMaxChoices;
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(choices.value().count, s_RadioGroupMaxChoices);
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expectedResult = result;
-    source.count = s_RadioGroupMaxChoices + 1u;
-    source.keyCalls = 0u;
-    EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+    source.count.value() = s_RadioGroupMaxChoices + 1u;
+    source.keyCalls.value() = 0u;
+    EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
     EXPECT_TRUE(state.matches(before));
     ExpectUiRadioGroupResult(result, expectedResult);
-    EXPECT_EQ(source.keyCalls, 0u);
+    EXPECT_EQ(source.keyCalls.value(), 0u);
 }
 
 void VerifyUiRadioGroupBehaviorTests_MalformedKeysAndLookupsRejectAtomically(){
     for(u32 mode = 0u; mode < 6u; ++mode){
-        UiRadioChoiceSource source = UiRadioChoiceSource();
+        ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         state.select(3u);
         RadioGroupResult result = MakeUiRadioGroupResult(true, true, true, true);
@@ -1381,39 +1195,39 @@ void VerifyUiRadioGroupBehaviorTests_MalformedKeysAndLookupsRejectAtomically(){
             source.missingLookup = true;
             break;
         case 4u:
-            source.generation = 0u;
+            source.generation.value() = 0u;
             break;
         default:
-            source.revisionValue = 0u;
+            source.revisionValue.value() = 0u;
             break;
         }
-        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
         EXPECT_TRUE(state.matches(before));
         ExpectUiRadioGroupResult(result, expectedResult);
     }
 }
 
 void VerifyUiRadioGroupBehaviorTests_EverySourceCallbackRejectsStateSelectionAbaBeforeUsingItsResult(){
-    Array<UiRadioCallbackPhaseEnum, 6u> phases = Array<UiRadioCallbackPhaseEnum, 6u>();
-    phases[0u] = UiRadioCallbackPhase::Generation;
-    phases[1u] = UiRadioCallbackPhase::Revision;
-    phases[2u] = UiRadioCallbackPhase::Count;
-    phases[3u] = UiRadioCallbackPhase::Key;
-    phases[4u] = UiRadioCallbackPhase::Lookup;
-    phases[5u] = UiRadioCallbackPhase::Enabled;
-    for(in UiRadioCallbackPhaseEnum phase : phases){
-        UiRadioChoiceSource source = UiRadioChoiceSource();
+    Array<RadioCallbackPhase, 6u> phases = Array<RadioCallbackPhase, 6u>();
+    phases[0u] = RadioCallbackPhase::Generation;
+    phases[1u] = RadioCallbackPhase::Revision;
+    phases[2u] = RadioCallbackPhase::RowCount;
+    phases[3u] = RadioCallbackPhase::Key;
+    phases[4u] = RadioCallbackPhase::Lookup;
+    phases[5u] = RadioCallbackPhase::Enabled;
+    for(in RadioCallbackPhase phase : phases){
+        ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         state.select(2u);
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
         source.bindState(state);
         source.phase = phase;
-        source.mutation = UiRadioCallbackMutation::SelectAba;
-        source.armed = true;
-        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        source.mutation = RadioSourceMutation::SelectAba;
+        source.armed.value() = true;
+        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
         EXPECT_EQ(state.selectedKey(), before.selectedKey);
         EXPECT_EQ(state.cursorKey(), before.cursorKey);
         EXPECT_EQ(state.revision(), before.revision + 2u);
@@ -1423,129 +1237,129 @@ void VerifyUiRadioGroupBehaviorTests_EverySourceCallbackRejectsStateSelectionAba
 }
 
 void VerifyUiRadioGroupBehaviorTests_CallbackIdenticalSelectionAndResetRemainAuthoritativeAfterRejection(){
-    Array<UiRadioCallbackMutationEnum, 2u> mutations = Array<UiRadioCallbackMutationEnum, 2u>();
-    mutations[0u] = UiRadioCallbackMutation::SelectIdentical;
-    mutations[1u] = UiRadioCallbackMutation::Reset;
-    for(in UiRadioCallbackMutationEnum mutation : mutations){
-        UiRadioChoiceSource source = UiRadioChoiceSource();
+    Array<RadioSourceMutation, 2u> mutations = Array<RadioSourceMutation, 2u>();
+    mutations[0u] = RadioSourceMutation::SelectIdentical;
+    mutations[1u] = RadioSourceMutation::Reset;
+    for(in RadioSourceMutation mutation : mutations){
+        ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         state.select(2u);
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         source.bindState(state);
-        source.phase = UiRadioCallbackPhase::Lookup;
+        source.phase = RadioCallbackPhase::Lookup;
         source.mutation = mutation;
-        source.armed = true;
-        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        source.armed.value() = true;
+        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
         EXPECT_EQ(state.revision(), before.revision + 1u);
         EXPECT_NE(state.inputGeneration(), before.inputGeneration);
         u64 expectedKey = 2u;
-        if(mutation == UiRadioCallbackMutation::Reset)
+        if(mutation == RadioSourceMutation::Reset)
             expectedKey = 0u;
         EXPECT_EQ(state.selectedKey(), expectedKey);
     }
 }
 
 void VerifyUiRadioGroupBehaviorTests_ReentrantBehaviorRejectsTheOuterReconciliationAndLeavesStateUsable(){
-    Array<UiRadioCallbackMutationEnum, 2u> mutations = Array<UiRadioCallbackMutationEnum, 2u>();
-    mutations[0u] = UiRadioCallbackMutation::Reconcile;
-    mutations[1u] = UiRadioCallbackMutation::Apply;
-    for(in UiRadioCallbackMutationEnum mutation : mutations){
-        UiRadioChoiceSource source = UiRadioChoiceSource();
+    Array<RadioSourceMutation, 2u> mutations = Array<RadioSourceMutation, 2u>();
+    mutations[0u] = RadioSourceMutation::Reconcile;
+    mutations[1u] = RadioSourceMutation::Apply;
+    for(in RadioSourceMutation mutation : mutations){
+        ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         RadioGroupResult result = RadioGroupResult();
-        auto choices = ReconcileUiRadioGroupChoices(source, state, result);
+        auto choices = ReconcileRadioGroup(source, state, result);
         ASSERT_TRUE(choices.has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
         source.bindState(state);
         source.borrowedChoices = choices.value();
-        source.phase = UiRadioCallbackPhase::Enabled;
+        source.phase = RadioCallbackPhase::Enabled;
         source.mutation = mutation;
-        source.armed = true;
-        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
-        EXPECT_FALSE(source.nestedSucceeded);
+        source.armed.value() = true;
+        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(source.nestedSucceeded.value());
         EXPECT_TRUE(state.matches(before));
         ExpectUiRadioGroupResult(result, expectedResult);
-        choices = ReconcileUiRadioGroupChoices(source, state, result);
+        choices = ReconcileRadioGroup(source, state, result);
         ASSERT_TRUE(choices.has_value());
     }
 }
 
 void VerifyUiRadioGroupBehaviorTests_SourceMutationDuringChoiceCallbacksRejectsWithoutCommittingState(){
-    Array<UiRadioCallbackMutationEnum, 3u> mutations = Array<UiRadioCallbackMutationEnum, 3u>();
-    mutations[0u] = UiRadioCallbackMutation::SourceRevision;
-    mutations[1u] = UiRadioCallbackMutation::SourceGeneration;
-    mutations[2u] = UiRadioCallbackMutation::SourceCount;
-    for(in UiRadioCallbackMutationEnum mutation : mutations){
-        UiRadioChoiceSource source = UiRadioChoiceSource();
+    Array<RadioSourceMutation, 3u> mutations = Array<RadioSourceMutation, 3u>();
+    mutations[0u] = RadioSourceMutation::SourceRevision;
+    mutations[1u] = RadioSourceMutation::SourceGeneration;
+    mutations[2u] = RadioSourceMutation::SourceCount;
+    for(in RadioSourceMutation mutation : mutations){
+        ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
-        source.phase = UiRadioCallbackPhase::Enabled;
+        source.phase = RadioCallbackPhase::Enabled;
         source.mutation = mutation;
-        source.armed = true;
-        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        source.armed.value() = true;
+        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
         EXPECT_TRUE(state.matches(before));
         ExpectUiRadioGroupResult(result, expectedResult);
     }
 }
 
 void VerifyUiRadioGroupBehaviorTests_FinalOneShotMetadataMutationIsRejectedBeforeCommit(){
-    Array<UiRadioCallbackMutationEnum, 2u> mutations = Array<UiRadioCallbackMutationEnum, 2u>();
-    mutations[0u] = UiRadioCallbackMutation::SourceRevision;
-    mutations[1u] = UiRadioCallbackMutation::SourceGeneration;
-    for(in UiRadioCallbackMutationEnum mutation : mutations){
-        UiRadioChoiceSource source = UiRadioChoiceSource();
+    Array<RadioSourceMutation, 2u> mutations = Array<RadioSourceMutation, 2u>();
+    mutations[0u] = RadioSourceMutation::SourceRevision;
+    mutations[1u] = RadioSourceMutation::SourceGeneration;
+    for(in RadioSourceMutation mutation : mutations){
+        ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
-        source.countCalls = 0u;
-        source.phase = UiRadioCallbackPhase::Count;
+        source.countCalls.value() = 0u;
+        source.phase = RadioCallbackPhase::RowCount;
         source.mutation = mutation;
-        source.triggerCount = cast<u32>(source.count) * 3u + 3u;
-        source.armed = true;
-        EXPECT_FALSE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
-        EXPECT_FALSE(source.armed);
+        source.triggerCount = cast<u32>(source.count.value()) * 3u + 3u;
+        source.armed.value() = true;
+        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(source.armed.value());
         EXPECT_TRUE(state.matches(before));
         ExpectUiRadioGroupResult(result, expectedResult);
     }
 }
 
 void VerifyUiRadioGroupBehaviorTests_FailedBorrowedGuardStopsAllFurtherSourceCallbacks(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    ASSERT_TRUE(ReconcileUiRadioGroupChoices(source, state, result).has_value());
+    ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expectedResult = result;
-    UiRadioReconcileGate gate = UiRadioReconcileGate();
+    ReconcileGate gate = ReconcileGate();
     source.bindGate(gate);
-    source.phase = UiRadioCallbackPhase::Enabled;
-    source.mutation = UiRadioCallbackMutation::GuardFailure;
-    source.armed = true;
-    EXPECT_FALSE(ReconcileUiRadioGroupChoicesGuarded(source, gate, state, result).has_value());
-    EXPECT_EQ(source.callbackCalls, source.callbacksAtMutation);
+    source.phase = RadioCallbackPhase::Enabled;
+    source.mutation = RadioSourceMutation::GuardFailure;
+    source.armed.value() = true;
+    EXPECT_FALSE(ReconcileRadioGroup(source, gate, state, result).has_value());
+    EXPECT_EQ(source.callbackCalls.value(), source.callbacksAtMutation.value());
     EXPECT_TRUE(state.matches(before));
     ExpectUiRadioGroupResult(result, expectedResult);
 }
 
 void VerifyUiRadioGroupBehaviorTests_BorrowedGuardMutationIsRejectedBeforeTheFirstSourceCall(){
-    UiRadioChoiceSource source = UiRadioChoiceSource();
+    ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     state.select(2u);
     const RadioGroupSnapshot before = state.snapshot();
     RadioGroupResult result = RadioGroupResult();
-    UiRadioReconcileGate gate = UiRadioReconcileGate();
+    ReconcileGate gate = ReconcileGate();
     gate.bindState(state);
-    gate.mutateState = true;
-    EXPECT_FALSE(ReconcileUiRadioGroupChoicesGuarded(source, gate, state, result).has_value());
-    EXPECT_EQ(source.callbackCalls, 0u);
+    gate.mutateState.value() = true;
+    EXPECT_FALSE(ReconcileRadioGroup(source, gate, state, result).has_value());
+    EXPECT_EQ(source.callbackCalls.value(), 0u);
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.revision(), before.revision + 1u);
     EXPECT_FALSE(state.matches(before));
@@ -1718,7 +1532,7 @@ void VerifyUiRadioGroupBuilderTests_EmptyAndAllDisabledSourcesAreValidWithoutATa
     EXPECT_FALSE(emptyHost.value().focusable);
     self.m_source.m_count = 5u;
     self.m_source.m_allDisabled = true;
-    ++self.m_source.m_contentRevision;
+    ++self.m_source.m_contentRevision.value();
     self.m_state.select(30u);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_EQ(self.m_state.selectedKey(), 30u);
@@ -1733,30 +1547,30 @@ void VerifyUiRadioGroupBuilderTests_SixtyFourChoicesSucceedAndTheSixtyFifthRejec
     self.m_source.m_count = 64u;
     ASSERT_TRUE(self.accept(1u));
     EXPECT_EQ(self.m_state.placement().count, 64u);
-    const UiRadioAcceptedInputState displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     const RadioGroupSnapshot saved = self.m_state.snapshot();
     self.m_source.resetCounters();
     self.m_source.m_count = 65u;
-    ++self.m_source.m_contentRevision;
+    ++self.m_source.m_contentRevision.value();
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_TRUE(self.m_state.matches(saved));
-    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupBuilderTests_DuplicateStableKeysRejectBeforeAnyLabelBorrow(mut UiRadioGroupBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInputState displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     const RadioGroupSnapshot saved = self.m_state.snapshot();
     self.m_source.resetCounters();
     self.m_source.m_duplicate = true;
-    ++self.m_source.m_contentRevision;
+    ++self.m_source.m_contentRevision.value();
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_TRUE(self.m_state.matches(saved));
-    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
     self.expectAccepted(displayed);
 }
 
@@ -1765,7 +1579,7 @@ void VerifyUiRadioGroupBuilderTests_SourceRevisionFencesQueuedKeysAndReorderKeep
     self.press(Key::Tab);
     self.press(Key::Right);
     self.m_source.m_reverse = true;
-    ++self.m_source.m_contentRevision;
+    ++self.m_source.m_contentRevision.value();
     ASSERT_TRUE(self.accept(2u));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.selectionChanged);
@@ -1780,13 +1594,13 @@ void VerifyUiRadioGroupBuilderTests_RemovalAndKnownSourceReplacementClearTheComm
     self.m_state.select(20u);
     ASSERT_TRUE(self.accept(1u));
     self.m_source.m_removed = 20u;
-    ++self.m_source.m_contentRevision;
+    ++self.m_source.m_contentRevision.value();
     ASSERT_TRUE(self.accept(2u));
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
     EXPECT_TRUE(self.m_result.selectionChanged);
     self.m_state.select(40u);
-    ++self.m_source.m_generation;
-    ++self.m_source.m_contentRevision;
+    ++self.m_source.m_generation.value();
+    ++self.m_source.m_contentRevision.value();
     self.m_source.m_removed = 0u;
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.selectedKey(), 0u);
@@ -1829,7 +1643,7 @@ void VerifyUiRadioGroupBuilderTests_InvalidWidthRejectsBeforeSourceCallbacksOrSt
     EXPECT_FALSE(self.declare(1u, options));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_TRUE(self.m_state.matches(saved));
-    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
 }
 
 

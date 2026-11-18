@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "avboit_depth_warp_probe_interop.adhd"
 
 
@@ -12,7 +14,6 @@
 class DepthWarpProbeProject : IProjectEntryCallbacks{
     public DepthWarpProbeProject(mut ProjectRuntimeContext context){
         this.m_sceneSubsystems = ActiveSceneSubsystems();
-        this.m_cases = GlobalProbeCaseVector(context.objectArena);
         this.m_context = context;
         this.m_unfocusedPass = DepthWarpUnfocusedPass(context.graphics);
     }
@@ -69,8 +70,8 @@ class DepthWarpProbeProject : IProjectEntryCallbacks{
     }
 
     private ActiveSceneSubsystems m_sceneSubsystems;
-    private DescriptorHandleArray4 m_descriptors = DescriptorHandleArray4();
-    private GlobalProbeCaseVector m_cases;
+    private Array<GpuDescriptorHandle, 4u> m_descriptors = Array<GpuDescriptorHandle, 4u>();
+    private Vector<AvboitDepthWarpCase> m_cases;
     private ShaderHandle m_shader = ShaderHandle();
     private BindingLayoutHandle m_pushLayout = BindingLayoutHandle();
     private ComputePipelineHandle m_pipeline = ComputePipelineHandle();
@@ -89,29 +90,17 @@ class DepthWarpProbeProject : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 320u, 240u };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(320u, 240u);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB AVBOIT Depth Warp Probe");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB AVBOIT Depth Warp Probe");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::DepthWarpProbeProject>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    return MakeUnique<DepthWarpProbeProject>(context);
 }
 
 

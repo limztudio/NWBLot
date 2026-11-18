@@ -3,66 +3,7 @@
 
 
 #include "case_types.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/module.h>
-
-#include <global/compile.h>
-#include <global/scope_exit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::MathSuiteDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL EvaluateSingleBoxNormal(SIMDVectorSingle position, SIMDVectorSingle extents, SIMDVectorSingle fallback, f32 threshold)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::MathCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using AabbTransformBounds = decltype(::AabbTests::Transform(::MatrixIdentity(), ::VectorZero(), ::VectorZero()))::value_type;
-using MathSuiteDetail::EvaluateSingleBoxNormal;
-using ::BuildTriangleAreaNormal64;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include "simd_abi.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,11 +70,11 @@ VectorDouble TransformVector3Double(in VectorDouble vec, in MatrixDouble mat){
 }
 
 VectorSingle EvalBoxNormalSingle(in VectorSingle pos, in VectorSingle extents, in VectorSingle fallback, in f32 threshold){
-    return SdfTests::BoxNormal(pos, extents, fallback, threshold);
+    return SdfBoxNormal(pos, extents, fallback, threshold);
 }
 
 VectorSingle EvalPlaneFromPointNormal(in VectorSingle normal, in VectorSingle point, in VectorSingle fallback){
-    return PlaneTests::FromPointNormal(normal, point, fallback);
+    return PlaneFromPointNormal(normal, point, fallback);
 }
 
 VectorSingle EvalInsetRectOrdinary(in VectorSingle rect, in VectorSingle inset){
@@ -260,10 +201,6 @@ VectorSingle EvalSuiteVectorAddInt(in VectorSingle lhs, in VectorSingle rhs){
     return VectorAddInt(lhs, rhs);
 }
 
-VectorSingle UnwrapSimdSingleResult(in SIMDVectorSingleResult res){
-    return res.value;
-}
-
 VectorSingle GetDualQuatRealSingle(in RigidDualQuaternion dq){
     return dq.real;
 }
@@ -290,10 +227,7 @@ void VerifyMathBoxNormal_FiniteSquaredLengthDoesNotOverflowInUnusedReductionLane
     const VectorSingle extents = MakeVolatileSingleBits(0xc1aeb5b9u, 0x7213a692u, 0xd272655fu, 0xdd4e3655u);
     const VectorSingle fallback = MakeVolatileSingleBits(0xa3419f79u, 0xb181e207u, 0xcedc8003u, 0x65e759c3u);
     f32 threshold = 0.0f;
-    native(mut threshold){
-        volatile u32 thresholdBits = 0x86a287b0u;
-        threshold = BitCast<f32>(static_cast<u32>(thresholdBits));
-    }
+    threshold = bit_cast<f32>(ObserveValue<u32>(0x86a287b0u));
 
     for(in i32 roundingMode : s_FloatingPointRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
@@ -459,11 +393,9 @@ void VerifyCurrentMathContractBoundaries_FrustumTransformationAppliesTheNewRotat
     Array<f32x3u, 8> sourceCorners = Array<f32x3u, 8>();
     Array<f32x3u, 8> srtCorners = Array<f32x3u, 8>();
     Array<f32x3u, 8> matrixCorners = Array<f32x3u, 8>();
-    native(in source, in fromSrt, in fromMatrix, mut sourceCorners, mut srtCorners, mut matrixCorners){
-        source.getCorners(*reinterpret_cast<Float3U(*)[BoundingFrustum::s_CornerCount]>(sourceCorners.data()));
-        fromSrt.getCorners(*reinterpret_cast<Float3U(*)[BoundingFrustum::s_CornerCount]>(srtCorners.data()));
-        fromMatrix.getCorners(*reinterpret_cast<Float3U(*)[BoundingFrustum::s_CornerCount]>(matrixCorners.data()));
-    }
+    ReadFrustumCorners(source, sourceCorners);
+    ReadFrustumCorners(fromSrt, srtCorners);
+    ReadFrustumCorners(fromMatrix, matrixCorners);
     for(usize index = 0u; index < 8u; ++index){
         ScopedTestTrace trace(index);
         const VectorSingle expected = Vector3Rotate(VectorSingle(sourceCorners[index], 0.0f), rotation);
@@ -481,11 +413,9 @@ void VerifyCurrentMathContractBoundaries_FrustumTransformationAppliesTheNewRotat
     Array<f64x3u, 8> doubleSourceCorners = Array<f64x3u, 8>();
     Array<f64x3u, 8> doubleSrtCorners = Array<f64x3u, 8>();
     Array<f64x3u, 8> doubleMatrixCorners = Array<f64x3u, 8>();
-    native(in doubleSource, in doubleFromSrt, in doubleFromMatrix, mut doubleSourceCorners, mut doubleSrtCorners, mut doubleMatrixCorners){
-        doubleSource.getCorners(*reinterpret_cast<Double3U(*)[BoundingDoubleFrustum::s_DoubleCornerCount]>(doubleSourceCorners.data()));
-        doubleFromSrt.getCorners(*reinterpret_cast<Double3U(*)[BoundingDoubleFrustum::s_DoubleCornerCount]>(doubleSrtCorners.data()));
-        doubleFromMatrix.getCorners(*reinterpret_cast<Double3U(*)[BoundingDoubleFrustum::s_DoubleCornerCount]>(doubleMatrixCorners.data()));
-    }
+    ReadFrustumCorners(doubleSource, doubleSourceCorners);
+    ReadFrustumCorners(doubleFromSrt, doubleSrtCorners);
+    ReadFrustumCorners(doubleFromMatrix, doubleMatrixCorners);
     for(usize index = 0u; index < 8u; ++index){
         ScopedTestTrace trace(index);
         const VectorDouble expected = RotateVector3Double(VectorDouble(doubleSourceCorners[index], 0.0), doubleRotation);
@@ -565,12 +495,9 @@ void VerifyMathDoubleConstant_ComponentConstructionPreservesSubFloatPrecisionAnd
     const Array<u64, 4> componentBits = MakeU64Array4(0x3FF0000000000001u, 0x8000000000000000u, 0x7FF8123456789ABCu, 0xBFF0000000000001u);
     f64x4 fromComponents = f64x4();
     f64x4 fromNative = f64x4();
-    native(in componentBits, mut fromComponents, mut fromNative){
-        const SIMDVectorDoubleConstF constant{ { { BitCast<f64>(componentBits[0u]), BitCast<f64>(componentBits[1u]), BitCast<f64>(componentBits[2u]), BitCast<f64>(componentBits[3u]) } } };
-        fromComponents = Double4(constant.f);
-        const SIMDVectorDouble nativeVec = constant;
-        StoreDouble(nativeVec, fromNative);
-    }
+    const auto constant = MakeDoubleConstant(bit_cast<f64>(componentBits[0u]), bit_cast<f64>(componentBits[1u]), bit_cast<f64>(componentBits[2u]), bit_cast<f64>(componentBits[3u]));
+    fromComponents = DoubleConstantComponents(constant);
+    fromNative = f64x4(DoubleConstantVector(constant));
 
     const VectorDouble compVec = VectorDouble(fromComponents);
     const VectorDouble natVec = VectorDouble(fromNative);
@@ -688,14 +615,13 @@ void VerifyMathGeometryBoundaries_TriangleAreaPreservesSquaredSumOrderAtThreshol
     const VectorSingle b = VectorSingle(1.0f, 0.0f, -1.0f, 0.0f);
     const VectorSingle c = VectorSingle(0.0f, 1.25f, -134217728.0f, 0.0f);
     const f64 largeSquaredComponent = 18014398509481984.0;
-    native(in a, in b, in c, in largeSquaredComponent){
-#if defined(FOUNDATION_HAS_AVX2)
-        EXPECT_TRUE(::TriangleHasArea(a, b, c, largeSquaredComponent));
-        EXPECT_FALSE(::TriangleHasArea(a, b, c, largeSquaredComponent + 4.0));
-#else
-        EXPECT_FALSE(::TriangleHasArea(a, b, c, largeSquaredComponent));
-        EXPECT_TRUE(::TriangleHasArea(a, b, c, largeSquaredComponent - 2.0));
-#endif
+    if(s_HasAvx2){
+        EXPECT_TRUE(TriangleHasArea(a, b, c, largeSquaredComponent));
+        EXPECT_FALSE(TriangleHasArea(a, b, c, largeSquaredComponent + 4.0));
+    }
+    else{
+        EXPECT_FALSE(TriangleHasArea(a, b, c, largeSquaredComponent));
+        EXPECT_TRUE(TriangleHasArea(a, b, c, largeSquaredComponent - 2.0));
     }
 }
 
@@ -717,23 +643,21 @@ void VerifyMath_FrustumSphereTangencyAndZeroRadiusKeepContainmentBoundary(){
     frustum.leftSlope = -1.0f;
     frustum.topSlope = 1.0f;
     frustum.bottomSlope = -1.0f;
-    native(in frustum){
-        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, CollisionDetail::s_FrustumPlaneCount> planes{};
-        frustum.getPlanes(&planes[0], &planes[1], &planes[2], &planes[3], &planes[4], &planes[5]);
-        const Array<f32, 6u> centers = { 0.5f, 0.25f, 1.5f, 9.5f, 10.5f, 1.0f };
-        const Array<ContainmentType::Enum, 6u> expected = {
-            ContainmentType::Intersects,
-            ContainmentType::Disjoint,
-            ContainmentType::Contains,
-            ContainmentType::Contains,
-            ContainmentType::Intersects,
-            ContainmentType::Contains,
-        };
-        for(usize index = 0u; index < centers.size(); ++index){
-            const BoundingSphere sphere(Float3U(0.0f, 0.0f, centers[index]), index == centers.size() - 1u ? 0.0f : 0.5f);
-            EXPECT_EQ(frustum.contains(sphere), expected[index]) << index;
-            EXPECT_EQ(sphere.containedBy(planes[0], planes[1], planes[2], planes[3], planes[4], planes[5]), expected[index]) << index;
-        }
+    Array<f32x4, 6u> planes;
+    ReadFrustumPlanes(frustum, planes);
+    const Array<f32, 6u> centers = Array<f32, 6u>(0.5f, 0.25f, 1.5f, 9.5f, 10.5f, 1.0f);
+    const Array<ContainmentType, 6u> expected = Array<ContainmentType, 6u>(
+        ContainmentType::Intersects, ContainmentType::Disjoint, ContainmentType::Contains,
+        ContainmentType::Contains, ContainmentType::Intersects, ContainmentType::Contains
+    );
+    for(usize index = 0u; index < centers.size(); ++index){
+        ScopedTestTrace trace(index);
+        f32 radius = 0.5f;
+        if(index == centers.size() - 1u)
+            radius = 0.0f;
+        const BoundingSphere sphere(f32x3u(0.0f, 0.0f, centers[index]), radius);
+        EXPECT_EQ(frustum.contains(sphere), expected[index]);
+        EXPECT_EQ(sphere.containedBy(VectorSingle(planes[0u]), VectorSingle(planes[1u]), VectorSingle(planes[2u]), VectorSingle(planes[3u]), VectorSingle(planes[4u]), VectorSingle(planes[5u])), expected[index]);
     }
 }
 
@@ -741,17 +665,17 @@ void VerifyMath_TransformedBoundsRejectInvalidAndOverflowingInputs(){
     const MatrixSingle identity = MakeIdentitySingle();
     const VectorSingle minimum = VectorSingle(-1.0f, -2.0f, -3.0f, 0.0f);
     const VectorSingle maximum = VectorSingle(1.0f, 2.0f, 3.0f, 0.0f);
-    EXPECT_FALSE(AabbTests::Transform(identity, maximum, minimum).has_value());
+    EXPECT_FALSE(AabbTransform(identity, maximum, minimum).has_value());
     const f32 inf = bit_cast<f32>(s_F32InfinityBits);
     const MatrixSingle invalid = MakeRowsSingle(VectorSingle(inf, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
-    EXPECT_FALSE(AabbTests::Transform(invalid, minimum, maximum).has_value());
+    EXPECT_FALSE(AabbTransform(invalid, minimum, maximum).has_value());
     const MatrixSingle overflow = MakeScalingSingle(f32.max, f32.max, f32.max);
-    EXPECT_FALSE(AabbTests::Transform(overflow, minimum, maximum).has_value());
+    EXPECT_FALSE(AabbTransform(overflow, minimum, maximum).has_value());
     const VectorSingle zero = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    const Expected<AabbTransformBounds> point = AabbTests::Transform(identity, zero, zero);
+    const Expected<AabbBounds> point = AabbTransform(identity, zero, zero);
     ASSERT_TRUE(point.has_value());
-    const AabbTransformBounds pointBounds = point.value();
-    EXPECT_TRUE(AabbTests::Valid(pointBounds.minBounds, pointBounds.maxBounds));
+    const AabbBounds pointBounds = point.value();
+    EXPECT_TRUE(AabbValid(pointBounds.minBounds, pointBounds.maxBounds));
     EXPECT_TRUE(NearlyEqual3(pointBounds.minBounds, 0.0f, 0.0f, 0.0f));
     EXPECT_TRUE(NearlyEqual3(pointBounds.maxBounds, 0.0f, 0.0f, 0.0f));
 }
@@ -813,10 +737,8 @@ void VerifyMath_DoubleMatrixTransformsAndInversePreserveSubunitOffsetsAtLargeTra
     const VectorDouble fromPacked = EvalVectorDouble3TransformCoord(point, loadedPacked);
     VectorDouble determinant = VectorDouble(0.0, 0.0, 0.0, 0.0);
     VectorDouble restored = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in matrix, in transformed, mut determinant, mut restored){
-        const SIMDMatrixDouble inverse = MatrixDoubleInverse(&determinant, matrix);
-        restored = VectorDouble3TransformCoord(transformed, inverse);
-    }
+    const MatrixDouble inverse = InvertWithDeterminant(determinant, matrix);
+    restored = EvalVectorDouble3TransformCoord(transformed, inverse);
     for(usize lane = 0u; lane < 4u; ++lane){
         EXPECT_EQ(GetDoubleLaneFloat(fromPacked, lane), GetDoubleLaneFloat(transformed, lane));
     }
@@ -916,9 +838,9 @@ void VerifyMath_DoubleRigidQuaternionExtractionKeepsRowMatrixRotationAndDualTran
 
     const MatrixDouble matrix = Mul(MakeTranslationVecDouble(translation), MakeRotationZDouble(0.75));
     const VectorDouble fromMatrix = EvalVectorDouble3TransformNormal(direction, matrix);
-    const Expected<SIMDVectorDoubleResult> quaternion = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12);
+    const Expected<VectorDouble> quaternion = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12);
     ASSERT_TRUE(quaternion.has_value());
-    const VectorDouble fromQuaternion = RotateVector3Double(direction, quaternion.value().value);
+    const VectorDouble fromQuaternion = RotateVector3Double(direction, quaternion.value());
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(GetDoubleLaneFloat(fromQuaternion, lane), GetDoubleLaneFloat(fromMatrix, lane), 2.0e-15);
 
@@ -1038,10 +960,8 @@ void VerifyMath_PartialHalfFloatBuffersPreserveSubnormalsAndNonfiniteInput(){
     source[5u] = inf;
     Array<u16, 6> packed = Array<u16, 6>();
     Array<f32, 6> unpacked = Array<f32, 6>();
-    native(in source, mut packed, mut unpacked){
-        ASSERT_EQ(ConvertFloatBufferToHalf(MakeNotNull(packed.data()), MakeNotNull(source.data()), 6u).get(), packed.data());
-        ASSERT_EQ(ConvertHalfBufferToFloat(MakeNotNull(unpacked.data()), MakeNotNull(packed.data()), 6u).get(), unpacked.data());
-    }
+    ASSERT_EQ(ConvertFloatsToHalves(packed, source), ObjectAddressKey(packed[0u]));
+    ASSERT_EQ(ConvertHalvesToFloats(unpacked, packed), ObjectAddressKey(unpacked[0u]));
     EXPECT_EQ(packed[3u], cast<u16>(0x7bffu));
     EXPECT_EQ(packed[4u], cast<u16>(0x0001u));
     EXPECT_EQ(packed[5u], cast<u16>(0x7c00u));
@@ -1218,9 +1138,9 @@ void VerifyMath_VectorIntegerAddWrapsAtUnsignedLaneLimits(){
 void VerifyCurrentMathContractBoundaries_SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection(){
     const MatrixSingle matrix = MakeRowsSingle(VectorSingle(0.0f, -1.0f, 0.0f, 7.0f), VectorSingle(1.0f, 0.0f, 0.0f, -11.0f), VectorSingle(0.0f, 0.0f, 1.0f, 5.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
     const VectorSingle direction = VectorSingle(2.0f, -3.0f, 4.0f, 0.0f);
-    const Expected<SIMDVectorSingleResult> q = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);
+    const Expected<VectorSingle> q = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);
     ASSERT_TRUE(q.has_value());
-    ExpectSingleDirectionNear(Vector3Rotate(direction, UnwrapSimdSingleResult(q.value())), TransformNormal3Single(direction, matrix));
+    ExpectSingleDirectionNear(Vector3Rotate(direction, q.value()), TransformNormal3Single(direction, matrix));
 
     const Expected<RigidDualQuaternion> dq = MatrixTryBuildRigidDualQuaternion(matrix, 0.0f, 0.0f);
     ASSERT_TRUE(dq.has_value());
@@ -1255,15 +1175,12 @@ void VerifyCurrentMathContractBoundaries_DoubleQuaternionExtractionKeepsBranchTi
         const VectorDouble input = VectorDouble(inputs[index]);
         VectorDouble expected = VectorDouble(0.0, 0.0, 0.0, 0.0);
         MatrixDouble matrix = MatrixDouble(f64x4x4());
-        native(in input, mut expected, mut matrix){
-            volatile u64 unusedBits = 0x7ff0000000000001u;
-            expected = QuaternionDoubleNormalize(input);
-            matrix = MatrixDoubleRotationQuaternion(expected);
-            const f64 poison = BitCast<f64>(static_cast<u64>(unusedBits));
-            for(usize row = 0u; row < 3u; ++row)
-                matrix.v[row].w = poison;
-            matrix.v[3] = VectorDoubleReplicate(poison);
-        }
+        expected = QuaternionDoubleNormalize(input);
+        matrix = MakeRotationQuatDouble(expected);
+        const f64 poison = bit_cast<f64>(ObserveValue<u64>(0x7ff0000000000001ull));
+        for(usize row = 0u; row < 3u; ++row)
+            DoubleMatrixRow(matrix, row).w = poison;
+        DoubleMatrixRow(matrix, 3u) = VectorDouble(poison, poison, poison, poison);
 
         ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
         const VectorDouble actual = EvalQuaternionDoubleRotationMatrix(matrix);
@@ -1339,39 +1256,6 @@ void VerifyMath_DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes(){
             EXPECT_EQ(GetDoubleLaneBits(rounded, lane), GetDoubleLaneBits(expectedVec, lane));
         }
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::MathSuiteDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL EvaluateSingleBoxNormal(const SIMDVectorSingle position, const SIMDVectorSingle extents, const SIMDVectorSingle fallback, const f32 threshold)noexcept{
-    return SdfTests::BoxNormal(position, extents, fallback, threshold);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

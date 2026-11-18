@@ -117,7 +117,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     expr.lhs->resolvedCppExportName = ctorCls->cppExportName;
                 if(targetCallable){
                     recordRequiredHeader(targetCallable->requiredHeader);
-                    if(!m_symbols.canAccessPrivateMembers(*ctorCls, ownerClass) && targetCallable->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessMember(*ctorCls, ownerClass, targetCallable->declaringClass, targetCallable->access)){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
                         ok = false;
                     }
@@ -164,6 +164,10 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             const b8 isConstThis = isThisConstInScope(method, scope);
             targetOwnerCls = ownerClass;
             targetCallable = m_symbols.findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, argTypeHints, argIsMutHints);
+            if(targetCallable && !m_symbols.canAccessMember(*ownerClass, ownerClass, targetCallable->declaringClass, targetCallable->access)){
+                reportError(errors, expr.span, "cannot access an inherited private member");
+                ok = false;
+            }
             if(!targetCallable){
                 const BuiltinReceiverMethodInfo* inheritedRecvInfo = m_symbols.findInheritedBuiltinReceiverMethod(ownerClass, nullptr, expr.lhs->text);
                 if(inheritedRecvInfo){
@@ -238,13 +242,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                             ? targetCallable->cppExportName.substr(lastSep + ContractSemantics::s_CppScopeSeparator.size())
                             : targetCallable->cppExportName;
                     }
-                    if(!m_symbols.canAccessPrivateMembers(*targetCls, ownerClass) && targetCallable->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessMember(*targetCls, ownerClass, targetCallable->declaringClass, targetCallable->access)){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
                         ok = false;
                     }
                 }
                 else if(const FieldDecl* field = SymbolTable::FindClassField(*targetCls, mName)){
-                    if(!m_symbols.canAccessPrivateMembers(*targetCls, ownerClass) && field->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessMember(*targetCls, ownerClass, field->declaringClass, field->access)){
                         reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                         ok = false;
                     }
@@ -387,7 +391,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             targetCallable = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, !m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass), argTypeHints, argIsMutHints, true);
             recordRequiredHeader(scopedCls->requiredHeader);
             if(targetCallable){
-                if(!m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass) && targetCallable->access != AccessSpecifier::Public){
+                if(!m_symbols.canAccessMember(*scopedCls, ownerClass, targetCallable->declaringClass, targetCallable->access)){
                     reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
                     ok = false;
                 }
@@ -405,7 +409,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 calleeSignatureKnown = true;
             }
             else if(const FieldDecl* staticField = SymbolTable::FindClassField(*scopedCls, expr.lhs->scopeChain[1]); staticField && staticField->isStatic){
-                if(!m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass) && staticField->access != AccessSpecifier::Public){
+                if(!m_symbols.canAccessMember(*scopedCls, ownerClass, staticField->declaringClass, staticField->access)){
                     reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                     ok = false;
                 }

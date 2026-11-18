@@ -3,705 +3,180 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/arena_owner_fixture.adhd>
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/test_context.adhd>
 #include <tests/unit/task/gpu/case_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type CommandQueueEnum = CommandQueue;
+type GpuQueueCapabilityMask = GpuQueueCapability;
+type GpuGraphPipelineTypeEnum = GpuGraphPipelineType;
+type GpuGraphResourceTypeEnum = GpuGraphResourceType;
+type GpuGraphResourceVersionOriginEnum = GpuGraphResourceVersionOrigin;
+type GpuTaskResourceAccessEnum = GpuTaskResourceAccess;
+type GpuTaskResourceVersionRoleEnum = GpuTaskResourceVersionRole;
+type GpuTaskHazardTypeEnum = GpuTaskHazardType;
+type GpuCompiledBarrierTypeEnum = GpuCompiledBarrierType;
+type ResourceStatesMask = ResourceStates;
+type ResourceQueueSharingMask = ResourceQueueSharing;
+type GraphicsBytes = HeapStorageVector<u8>;
+type TaskGraphicsVector = HeapStorageVector<GpuTaskId>;
+type EdgeGraphicsVector = HeapStorageVector<GpuTaskDependencyEdge>;
+type AssignmentGraphicsVector = HeapStorageVector<GpuTaskQueueAssignment>;
+type U32GraphicsVector = HeapStorageVector<u32>;
+type TokenGraphicsVector = HeapStorageVector<QueueSubmissionToken>;
+type ScratchDependencyEdges = ScratchStorageVector<GpuTaskDependencyEdge>;
+type ScratchResourceRanges = ScratchStorageVector<GpuTaskResourceRange>;
 
+const Name s_TaskGraphScratchArena = s_TaskGpuScratch;
+const u64 s_GpuAllBytes = s_AllBytes;
+const u32 s_GpuAllMipLevels = s_AllMipLevels;
+const u32 s_GpuAllArraySlices = s_AllArraySlices;
+const TextureSubresourceSet s_GpuAllSubresources = s_AllSubresources;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[ordered]
+class TestArena{
+    public HeapStorage arena;
+    public TestArena(){ this.arena = HeapStorage(); }
+    public TestArena(in Name name){ this.arena = HeapStorage(name); }
+    public GpuTaskTimingHistoryStore makeTimingHistory(in u32 capacity){ return this.arena.makeValue<GpuTaskTimingHistoryStore>(capacity); }
+    public GpuTaskTimingHistoryStore makeTimingHistory(){ return this.makeTimingHistory(s_DefaultGpuTaskTimingHistorySampleCount); }
+    public GpuTaskTimingHistorySnapshot makeTimingSnapshot(){ return this.arena.makeValue<GpuTaskTimingHistorySnapshot>(); }
+}
 
+[ordered]
+class TestScratchArena{
+    public ScratchStorage scratchArena;
+    public TestScratchArena(){ this.scratchArena = ScratchStorage(s_TaskGraphScratchArena); }
+    public TestScratchArena(in Name scopeName){ this.scratchArena = ScratchStorage(scopeName); }
+}
 
-#include <tests/common/arena_owner_fixture.adhd.h>
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/task/gpu/case_types.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/rhi/queue_sharing.h>
-#include <core/perf/timing.h>
-#include <core/task/gpu/compiler_internal.h>
-#include <core/task/gpu/inferred_dependency_collector.h>
-#include <core/task/gpu/output_layer_contributor.h>
-#include <core/task/gpu/packet_runtime.h>
-#include <core/task/gpu/packet_runtime_internal.h>
-#include <core/task/gpu/queue_assignment_telemetry.h>
-#include <core/task/gpu/scheduler_callback_bindings.h>
-#include <core/task/gpu/scheduler_submission_bindings.h>
-#include <core/task/gpu/task_graph.h>
-#include <core/task/gpu/timing_decision.h>
-#include <core/task/gpu/timing_feedback.h>
-#include <core/telemetry/frame_graph_contributor.h>
-
-#include <global/arena_memory.h>
-#include <global/scope_exit.h>
-#include <global/text_utils.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct GpuTaskGraphReadViews final : NoCopy{
-    Core::GpuTaskGraph::DeclarationReadView declarations;
-    Core::GpuCompiledGraph::ReadView compiled;
-
-
-public:
-    GpuTaskGraphReadViews(const Core::GpuTaskGraph& graph, const Core::GpuCompiledGraph& compiledGraph)noexcept
-        : declarations(graph)
-        , compiled(compiledGraph)
-    {}
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return declarations.valid() && compiled.valid() && compiled.validFor(declarations);
+[ordered]
+class GpuTaskGraphReadViews{
+    public GpuTaskGraphDeclarationReadView declarations;
+    public GpuCompiledGraphReadView compiled;
+    public GpuTaskGraphReadViews(in GpuTaskGraph graph, in GpuCompiledGraph compiledGraph){
+        this.declarations = GpuTaskGraphDeclarationReadView(graph);
+        this.compiled = GpuCompiledGraphReadView(compiledGraph);
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core;
-using Core::Alloc::GlobalArena;
-using Core::Alloc::ScratchArena;
-using GpuCompiledGraphReadView = Core::GpuCompiledGraph::ReadView;
-using GpuTaskGraphDeclarationReadView = Core::GpuTaskGraph::DeclarationReadView;
-using GpuTaskGraphReadViews = ::NWB::Tests::GpuTaskGraphReadViews;
-using ScopedTestTrace = ::NWB::Tests::ScopedTestTrace;
-using ::NWB::Tests::ExpectMemoryStatsEqual;
-using ::NWB::Tests::RecordUnsignedTestProperty;
-
-using CommandQueueEnum = Core::CommandQueue::Enum;
-using GpuQueueCapabilityMask = Core::GpuQueueCapability::Mask;
-using GpuGraphPipelineTypeEnum = Core::GpuGraphPipelineType::Enum;
-using GpuGraphResourceTypeEnum = Core::GpuGraphResourceType::Enum;
-using GpuGraphResourceVersionOriginEnum = Core::GpuGraphResourceVersionOrigin::Enum;
-using GpuTaskResourceAccessEnum = Core::GpuTaskResourceAccess::Enum;
-using GpuTaskResourceVersionRoleEnum = Core::GpuTaskResourceVersionRole::Enum;
-using GpuTaskHazardTypeEnum = Core::GpuTaskHazardType::Enum;
-using GpuCompiledBarrierTypeEnum = Core::GpuCompiledBarrierType::Enum;
-using ResourceQueueSharingMask = Core::ResourceQueueSharing::Mask;
-using ResourceStatesMask = Core::ResourceStates::Mask;
-struct TestArena : ::NWB::Tests::TestArena<struct TaskGraphTestsTag>{
-    using Tests::TestArena<TaskGraphTestsTag>::TestArena;
-
-    [[nodiscard]] Core::GpuTaskTimingHistoryStore makeTimingHistory(u32 capacity = Core::s_DefaultGpuTaskTimingHistorySampleCount){
-        return Core::GpuTaskTimingHistoryStore(arena, capacity);
-    }
-
-    [[nodiscard]] Core::GpuTaskTimingHistorySnapshot makeTimingSnapshot(){
-        return Core::GpuTaskTimingHistorySnapshot(arena);
-    }
-};
-
-namespace Telemetry = Core::Telemetry;
-namespace FrameGraphEdgeKind = Telemetry::FrameGraphEdgeKind;
-using FrameGraphNodeDescs = Telemetry::FrameGraphNodeDescs;
-using FrameGraphEdgeDescs = Telemetry::FrameGraphEdgeDescs;
-using FrameGraphPendingNameEdges = Telemetry::FrameGraphPendingNameEdges;
-using FrameGraphBuilder = Telemetry::FrameGraphBuilder;
-using TelemetryArena = Telemetry::TelemetryArena;
-
-using Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability;
-using Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoringData;
-using Core::GpuTaskGraphCompilerDetail::GpuTaskQueuePlacementGroup;
-using Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoreExclusions;
-using Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability;
-using Core::GpuTaskGraphCompilerDetail::BuildQueuePlacementGroups;
-using Core::GpuTaskGraphCompilerDetail::BuildQueueAssignmentScore;
-using Core::GpuTaskGraphCompilerDetail::BuildQueuePlacementGroupScore;
-using Core::GpuTaskGraphCompilerDetail::QueueCostWeight;
-using Core::GpuTaskGraphCompilerDetail::IsValidQueueTopology;
-using Core::GpuTaskGraphCompilerDetail::ResourceUsesConcurrentQueueSharing;
-using Core::GpuTaskGraphCompilerDetail::TrackedCompiledResourceState;
-using Core::GpuTaskGraphCompilerDetail::TrackedResourceStateFragment;
-using Core::GpuTaskGraphCompilerDetail::TrackedResourceStateHistory;
-using Core::GpuPacketRuntimeDetail::ValidateExternalDependencyTokens;
-using Core::GpuPacketRuntimeDetail::PacketWaitStatistics;
-
-using GraphicsArena = Core::GraphicsArena;
-using TaskGraphicsVector = Core::GraphicsVector<Core::GpuTaskId>;
-using EdgeGraphicsVector = Core::GraphicsVector<Core::GpuTaskDependencyEdge>;
-using AssignmentGraphicsVector = Core::GraphicsVector<Core::GpuTaskQueueAssignment>;
-using U32GraphicsVector = Core::GraphicsVector<u32>;
-using TokenGraphicsVector = Core::GraphicsVector<Core::QueueSubmissionToken>;
-using ScratchDependencyEdges = Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>;
-using ScratchResourceRanges = Vector<Core::GpuTaskResourceRange, Core::Alloc::ScratchArena>;
-using ScratchTrackedStates = Vector<Core::GpuTaskGraphCompilerDetail::TrackedCompiledResourceState, Core::Alloc::ScratchArena>;
-using ScratchStateFragments = Vector<Core::GpuTaskGraphCompilerDetail::TrackedResourceStateFragment, Core::Alloc::ScratchArena>;
-
-inline constexpr Name s_TaskGraphScratchArena = NWB::Tests::TaskGraphTestUtils::s_TaskGpuScratch;
-inline constexpr u64 s_GpuAllBytes = Core::BufferRange::s_AllBytes;
-inline constexpr u32 s_GpuAllMipLevels = Core::TextureSubresourceSet::s_AllMipLevels;
-inline constexpr u32 s_GpuAllArraySlices = Core::TextureSubresourceSet::s_AllArraySlices;
-inline constexpr Core::TextureSubresourceSet s_GpuAllSubresources = Core::s_AllSubresources;
-
-struct TestScratchArena{
-    Core::Alloc::ScratchArena scratchArena;
-
-
-public:
-    TestScratchArena()
-        : scratchArena(s_TaskGraphScratchArena)
-    {}
-    explicit TestScratchArena(const Name& scopeName)
-        : scratchArena(scopeName)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] constexpr Core::GpuQueueCapability::Mask CombineQueueCapabilities(
-    const Core::GpuQueueCapability::Mask first,
-    const Core::GpuQueueCapability::Mask second = Core::GpuQueueCapability::None,
-    const Core::GpuQueueCapability::Mask third = Core::GpuQueueCapability::None
-)noexcept{
-    return static_cast<Core::GpuQueueCapability::Mask>(static_cast<u8>(first) | static_cast<u8>(second) | static_cast<u8>(third));
+    public b8 valid()const{ return this.declarations.valid() && this.compiled.valid() && this.compiled.validFor(this.declarations); }
 }
 
-[[nodiscard]] constexpr Core::GpuQueueCapability::Mask MaskOutQueueCapability(
-    const Core::GpuQueueCapability::Mask mask,
-    const Core::GpuQueueCapability::Mask excluded
-)noexcept{
-    return static_cast<Core::GpuQueueCapability::Mask>(static_cast<u8>(mask) & static_cast<u8>(~static_cast<u8>(excluded)));
+GpuQueueCapability CombineQueueCapabilities(in GpuQueueCapability first, in GpuQueueCapability second, in GpuQueueCapability third){
+    return cast<GpuQueueCapability>(cast<u8>(first) | cast<u8>(second) | cast<u8>(third));
 }
-
-template<typename T>
-[[nodiscard]] FOUNDATION_INLINE Span<const T> PrefixSpan(const Span<const T> items, const usize count)noexcept{
-    return Span<const T>(items.data(), count);
+GpuQueueCapability MaskOutQueueCapability(in GpuQueueCapability mask, in GpuQueueCapability excluded){
+    return cast<GpuQueueCapability>(cast<u8>(mask) & ~cast<u8>(excluded));
 }
-
-template<typename T>
-[[nodiscard]] FOUNDATION_INLINE Span<const T> SubSpan(const Span<const T> items, const usize offset, const usize count)noexcept{
-    return Span<const T>(items.data() + offset, count);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskId> MakeNullTaskSpan(const usize count)noexcept{
-    return Span<const Core::GpuTaskId>(static_cast<const Core::GpuTaskId*>(nullptr), count);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuDescriptorHandle MakeSampledImageDescriptor(const u32 index)noexcept{
-    return Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, index);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphQueueAssignmentOptions MakeQueueAssignmentOptionsWithLoads(
-    const Span<const Core::GpuTaskQueueLoad> loads
-)noexcept{
-    Core::GpuTaskGraphQueueAssignmentOptions options{};
-    options.queueLoads = loads.data();
-    options.queueLoadCount = loads.size();
+Span<T> PrefixSpan<T>(in Span<T> items, in usize count){ return items.subspan(0u, count); }
+Span<T> SubSpan<T>(in Span<T> items, in usize offset, in usize count){ return items.subspan(offset, count); }
+Span<GpuTaskId> MakeNullTaskSpan(in usize count){ return TestArrayData<GpuTaskId>().declaredSpan(count); }
+GpuDescriptorHandle MakeSampledImageDescriptor(in u32 index){ return GpuDescriptorHandleMake(GpuDescriptorClass::SampledImage, index); }
+GpuTaskGraphQueueAssignmentOptions MakeQueueAssignmentOptionsWithLoads(in Span<GpuTaskQueueLoad> loads){
+    GpuTaskGraphQueueAssignmentOptions options;
+    options.setQueueLoads(loads);
     return options;
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 TryBuildResourceVersionDependencyEdges(
-    const Core::GpuTaskGraph::DeclarationReadView& declarations,
-    Core::Alloc::ScratchArena& scratchArena,
-    Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& outEdges
-){
-    Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> rawEdges(scratchArena);
-    if(!Core::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(declarations, scratchArena, rawEdges).has_value())
+b8 TryBuildResourceVersionDependencyEdges(in GpuTaskGraphDeclarationReadView declarations, mut ScratchStorage scratch, mut ScratchDependencyEdges outEdges){
+    ScratchDependencyEdges rawEdges(scratch);
+    if(!BuildResourceVersionDependencyEdges(declarations, scratch, rawEdges).has_value())
         return false;
-    for(const Core::GpuTaskDependencyEdge& edge : rawEdges)
-        outEdges.push_back(edge);
+    for(usize index = 0u; index < rawEdges.size(); ++index)
+        outEdges.push_back(rawEdges[index]);
     return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueTopology MakeTopology(const Span<const Core::GpuPhysicalQueueInfo> queues)noexcept{
-    return Core::GpuPhysicalQueueTopology{ .queues = queues.data(), .queueCount = queues.size() };
+GpuPhysicalQueueTopology MakeTopology(in Span<GpuPhysicalQueueInfo> queues){
+    GpuPhysicalQueueTopology topology;
+    topology.setQueues(queues);
+    return topology;
 }
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueTopology MakeTopologyPrefix(const Span<const Core::GpuPhysicalQueueInfo> queues, const usize count)noexcept{
-    return Core::GpuPhysicalQueueTopology{ .queues = queues.data(), .queueCount = count };
+GpuPhysicalQueueTopology MakeTopologyPrefix(in Span<GpuPhysicalQueueInfo> queues, in usize count){
+    GpuPhysicalQueueTopology topology = MakeTopology(queues);
+    topology.queueCount = count;
+    return topology;
 }
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueTopology MakeNullTopology(const usize queueCount)noexcept{
-    return Core::GpuPhysicalQueueTopology{ .queues = nullptr, .queueCount = queueCount };
+GpuPhysicalQueueTopology MakeNullTopology(in usize count){
+    GpuPhysicalQueueTopology topology;
+    topology.queueCount = count;
+    return topology;
 }
+b8 HasTopologyQueuesPtr(in GpuPhysicalQueueTopology topology){ return HasSpanStorage<GpuPhysicalQueueInfo>(topology.queueSpan()); }
+Span<GpuPhysicalQueueInfo> TopologyQueues(in GpuPhysicalQueueTopology topology){ return topology.queueSpan(); }
+b8 TestHasFatalFailure(){ return HasFatalTestFailure(); }
+b8 HasPrologueStateSeedsPtr(in GpuCompiledTaskView view){ return view.hasPrologueStateSeeds(); }
+Span<GpuPacketStateSeed> PrologueStateSeeds(in GpuCompiledTaskView view){ return view.prologueStateSeedsSpan(); }
+b8 HasPrologueBarriersPtr(in GpuCompiledTaskView view){ return view.hasPrologueBarriers(); }
+Span<GpuCompiledBarrier> PrologueBarriers(in GpuCompiledTaskView view){ return view.prologueBarriersSpan(); }
+b8 HasEpilogueBarriersPtr(in GpuCompiledTaskView view){ return view.hasEpilogueBarriers(); }
+Span<GpuCompiledBarrier> EpilogueBarriers(in GpuCompiledTaskView view){ return view.epilogueBarriersSpan(); }
+b8 HasPacketTasksPtr(in GpuCompiledPacketView view){ return view.hasTasks(); }
+Span<GpuTaskId> PacketTasks(in GpuCompiledPacketView view){ return view.tasksSpan(); }
+b8 HasPacketDependenciesPtr(in GpuCompiledPacketView view){ return view.hasDependencies(); }
+Span<GpuPacketDependency> PacketDependencies(in GpuCompiledPacketView view){ return view.dependenciesSpan(); }
+b8 HasPacketExternalDependenciesPtr(in GpuCompiledPacketView view){ return view.hasExternalDependencies(); }
+Span<GpuExternalCompletionId> PacketExternalDependencies(in GpuCompiledPacketView view){ return view.externalDependenciesSpan(); }
+b8 HasExportSourcesPtr(in GpuCompiledExternalResourceExportView view){ return view.hasSources(); }
+Span<GpuCompiledExternalResourceExportSource> ExportSources(in GpuCompiledExternalResourceExportView view){ return view.sourcesSpan(); }
+b8 HasTaskDependenciesPtr(in GpuTaskGraphTaskView view){ return view.hasDependencies(); }
+Span<GpuTaskId> TaskDependenciesSpan(in GpuTaskGraphTaskView view){ return view.dependenciesSpan(); }
+b8 HasTaskExternalDependenciesPtr(in GpuTaskGraphTaskView view){ return view.hasExternalDependencies(); }
+Span<GpuExternalCompletionId> TaskExternalDependenciesSpan(in GpuTaskGraphTaskView view){ return view.externalDependenciesSpan(); }
+b8 HasTaskExternalStateSourcesPtr(in GpuTaskGraphTaskView view){ return view.hasExternalStateSources(); }
+Span<GpuTaskExternalStateSource> TaskExternalStateSourcesSpan(in GpuTaskGraphTaskView view){ return view.externalStateSourcesSpan(); }
+b8 HasTaskResourceUsesPtr(in GpuTaskGraphTaskView view){ return view.hasResourceUses(); }
+Span<GpuTaskResourceUse> TaskResourceUsesSpan(in GpuTaskGraphTaskView view){ return view.resourceUsesSpan(); }
+b8 HasTaskResourceVersionUsesPtr(in GpuTaskGraphTaskView view){ return view.hasResourceVersionUses(); }
+Span<GpuTaskResourceVersionUse> TaskResourceVersionUsesSpan(in GpuTaskGraphTaskView view){ return view.resourceVersionUsesSpan(); }
+b8 HasResourceInitialOwnerHandoffSourcesPtr(in GpuTaskGraphResourceView view){ return view.hasInitialOwnerHandoffSources(); }
+Span<GpuTaskGraphInitialOwnerHandoffSourceView> ResourceInitialOwnerHandoffSourcesSpan(in GpuTaskGraphResourceView view){ return view.initialOwnerHandoffSourcesSpan(); }
+b8 HasResourceSetMembersPtr(in GpuTaskGraphResourceSetView view){ return view.hasMembers(); }
+Span<GpuGraphResourceId> ResourceSetMembersSpan(in GpuTaskGraphResourceSetView view){ return view.membersSpan(); }
+Optional<GpuCompiledTask> TaskPlan(in GpuCompiledTaskView view){ return view.taskPlan(); }
+b8 HasTaskPlan(in GpuCompiledTaskView view){ return view.taskPlan().has_value(); }
+Optional<GpuSubmissionPacket> PacketPlan(in GpuCompiledPacketView view){ return view.packetPlan(); }
+b8 HasPacketPlan(in GpuCompiledPacketView view){ return view.packetPlan().has_value(); }
+Optional<GpuCompiledExternalResourceExport> ExportPlan(in GpuCompiledExternalResourceExportView view){ return view.exportPlan(); }
+b8 HasExportPlan(in GpuCompiledExternalResourceExportView view){ return view.exportPlan().has_value(); }
 
-[[nodiscard]] FOUNDATION_INLINE b8 HasTopologyQueuesPtr(const Core::GpuPhysicalQueueTopology& topology)noexcept{
-    return topology.queues != nullptr;
+b8 HasQueueAssignment(in GpuTaskGraphQueueAssignments assignments, in GpuTaskId task){ return assignments.findAssignment(task).has_value(); }
+Optional<GpuTaskQueueAssignment> FindQueueAssignment(in GpuTaskGraphQueueAssignments assignments, in GpuTaskId task){ return assignments.findAssignment(task); }
+b8 HasLogicalOwnershipTransfersPtr(in GpuCompiledGraphReadView view){ return HasSpanStorage<GpuCompiledOwnershipTransfer>(view.logicalOwnershipTransferSpan()); }
+Span<GpuCompiledOwnershipTransfer> LogicalOwnershipTransfers(in GpuCompiledGraphReadView view){ return view.logicalOwnershipTransferSpan(); }
+Optional<GpuCompiledOwnershipTransfer> LogicalOwnershipTransferAtValue(in GpuCompiledGraphReadView view, in usize index){
+    const Span<GpuCompiledOwnershipTransfer> transfers = view.logicalOwnershipTransferSpan();
+    if(index < transfers.size())
+        return Optional<GpuCompiledOwnershipTransfer>(transfers[index]);
+    return Optional<GpuCompiledOwnershipTransfer>();
 }
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuPhysicalQueueInfo> TopologyQueues(const Core::GpuPhysicalQueueTopology& topology)noexcept{
-    return topology.queues ? Span<const Core::GpuPhysicalQueueInfo>(topology.queues, topology.queueCount) : Span<const Core::GpuPhysicalQueueInfo>{};
+Optional<GpuCompiledPresentEndpoint> CompiledPresentEndpointValue(in GpuCompiledGraphReadView view){ return view.findPresentEndpoint(); }
+Optional<GpuPhysicalQueueInfo> QueueInfoForTaskValue(in GpuCompiledGraphReadView view, in GpuTaskId task){ return view.findQueueInfoForTask(task); }
+Optional<GpuPhysicalQueueInfo> QueueInfoValue(in GpuCompiledGraphReadView view, in GpuPhysicalQueueId queue){ return view.findQueueInfo(queue); }
+Optional<QueueSubmissionToken> ExternalCompletionTokenValue(in GpuTaskGraphDeclarationReadView view, in GpuExternalCompletionId completion){ return view.findCompletionToken(completion); }
+Optional<GpuPresentEndpoint> DeclaredPresentEndpointValue(in GpuTaskGraphDeclarationReadView view){ return view.findPresentEndpoint(); }
+GpuTaskGraphTelemetryOptions MakeTelemetryOptions(in borrow GpuTaskGraphQueueAssignments assignments){
+    GpuTaskGraphTelemetryOptions options;
+    options.setQueueAssignments(assignments);
+    return options;
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 TestHasFatalFailure()noexcept{
-    return ::testing::Test::HasFatalFailure();
+GpuTaskGraphTelemetryOptions MakeTelemetryOptions(in borrow GpuTaskGraphQueueAssignments assignments, in borrow GpuCompiledGraphReadView compiledPlan){
+    GpuTaskGraphTelemetryOptions options;
+    options.setQueueAssignments(assignments);
+    options.setCompiledPlan(compiledPlan);
+    return options;
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasQueueAssignment(const Core::GpuTaskGraphQueueAssignments& assignments, const Core::GpuTaskId& task)noexcept{
-    return assignments.find(task) != nullptr;
+GpuTaskGraphTelemetryOptions MakeTelemetryOptions(in borrow GpuTaskGraphQueueAssignments assignments, in borrow GpuCompiledGraphReadView compiledPlan, in borrow GpuTaskGraphQueueAssignmentTelemetryTracker tracker){
+    GpuTaskGraphTelemetryOptions options;
+    options.setQueueAssignments(assignments);
+    options.setCompiledPlan(compiledPlan);
+    options.setQueueAssignmentTelemetry(tracker);
+    return options;
 }
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskQueueAssignment> FindQueueAssignment(
-    const Core::GpuTaskGraphQueueAssignments& assignments,
-    const Core::GpuTaskId& task
-)noexcept{
-    if(const Core::GpuTaskQueueAssignment* const found = assignments.find(task))
-        return *found;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasTaskPlan(const Core::GpuCompiledTaskView& view)noexcept{
-    return view.plan != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledTask> TaskPlan(const Core::GpuCompiledTaskView& view)noexcept{
-    if(view.plan)
-        return *view.plan;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasPrologueStateSeedsPtr(const Core::GpuCompiledTaskView& view)noexcept{
-    return view.prologueStateSeeds != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasPrologueBarriersPtr(const Core::GpuCompiledTaskView& view)noexcept{
-    return view.prologueBarriers != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasEpilogueBarriersPtr(const Core::GpuCompiledTaskView& view)noexcept{
-    return view.epilogueBarriers != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuPacketStateSeed> PrologueStateSeeds(const Core::GpuCompiledTaskView& view)noexcept{
-    return (view.plan && view.prologueStateSeeds)
-        ? Span<const Core::GpuPacketStateSeed>(view.prologueStateSeeds, view.plan->prologueStateSeedCount)
-        : Span<const Core::GpuPacketStateSeed>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledBarrier> PrologueBarriers(const Core::GpuCompiledTaskView& view)noexcept{
-    return (view.plan && view.prologueBarriers)
-        ? Span<const Core::GpuCompiledBarrier>(view.prologueBarriers, view.plan->prologueBarrierCount)
-        : Span<const Core::GpuCompiledBarrier>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledBarrier> EpilogueBarriers(const Core::GpuCompiledTaskView& view)noexcept{
-    return (view.plan && view.epilogueBarriers)
-        ? Span<const Core::GpuCompiledBarrier>(view.epilogueBarriers, view.plan->epilogueBarrierCount)
-        : Span<const Core::GpuCompiledBarrier>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasPacketPlan(const Core::GpuCompiledPacketView& view)noexcept{
-    return view.plan != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuSubmissionPacket> PacketPlan(const Core::GpuCompiledPacketView& view)noexcept{
-    if(view.plan)
-        return *view.plan;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasPacketTasksPtr(const Core::GpuCompiledPacketView& view)noexcept{
-    return view.tasks != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasPacketDependenciesPtr(const Core::GpuCompiledPacketView& view)noexcept{
-    return view.dependencies != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasPacketExternalDependenciesPtr(const Core::GpuCompiledPacketView& view)noexcept{
-    return view.externalDependencies != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskId> PacketTasks(const Core::GpuCompiledPacketView& view)noexcept{
-    return (view.plan && view.tasks)
-        ? Span<const Core::GpuTaskId>(view.tasks, view.plan->taskCount)
-        : Span<const Core::GpuTaskId>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuPacketDependency> PacketDependencies(const Core::GpuCompiledPacketView& view)noexcept{
-    return (view.plan && view.dependencies)
-        ? Span<const Core::GpuPacketDependency>(view.dependencies, view.plan->dependencyCount)
-        : Span<const Core::GpuPacketDependency>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuExternalCompletionId> PacketExternalDependencies(const Core::GpuCompiledPacketView& view)noexcept{
-    return (view.plan && view.externalDependencies)
-        ? Span<const Core::GpuExternalCompletionId>(view.externalDependencies, view.plan->externalDependencyCount)
-        : Span<const Core::GpuExternalCompletionId>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasExportPlan(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
-    return view.plan != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledExternalResourceExport> ExportPlan(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
-    if(view.plan)
-        return *view.plan;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasExportSourcesPtr(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
-    return view.sources != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledExternalResourceExportSource> ExportSources(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
-    return (view.plan && view.sources)
-        ? Span<const Core::GpuCompiledExternalResourceExportSource>(view.sources, view.plan->sourceCount)
-        : Span<const Core::GpuCompiledExternalResourceExportSource>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasLogicalOwnershipTransfersPtr(const Core::GpuCompiledGraph::ReadView& view)noexcept{
-    return view.logicalOwnershipTransfers() != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledOwnershipTransfer> LogicalOwnershipTransfers(const Core::GpuCompiledGraph::ReadView& view)noexcept{
-    const Core::GpuCompiledOwnershipTransfer* const ptr = view.logicalOwnershipTransfers();
-    return ptr
-        ? Span<const Core::GpuCompiledOwnershipTransfer>(ptr, view.logicalOwnershipTransferCount())
-        : Span<const Core::GpuCompiledOwnershipTransfer>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledOwnershipTransfer> LogicalOwnershipTransferAtValue(
-    const Core::GpuCompiledGraph::ReadView& view,
-    const usize index
-)noexcept{
-    if(const Core::GpuCompiledOwnershipTransfer* const ptr = view.logicalOwnershipTransferAt(index))
-        return *ptr;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledPresentEndpoint> CompiledPresentEndpointValue(const Core::GpuCompiledGraph::ReadView& view)noexcept{
-    if(const Core::GpuCompiledPresentEndpoint* const ptr = view.presentEndpoint())
-        return *ptr;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPhysicalQueueInfo> QueueInfoForTaskValue(
-    const Core::GpuCompiledGraph::ReadView& view,
-    const Core::GpuTaskId& task
-)noexcept{
-    if(const Core::GpuPhysicalQueueInfo* const ptr = view.queueInfoForTask(task))
-        return *ptr;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPhysicalQueueInfo> QueueInfoValue(
-    const Core::GpuCompiledGraph::ReadView& view,
-    const Core::GpuPhysicalQueueId& queue
-)noexcept{
-    if(const Core::GpuPhysicalQueueInfo* const ptr = view.queueInfo(queue))
-        return *ptr;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::QueueSubmissionToken> ExternalCompletionTokenValue(
-    const Core::GpuTaskGraph::DeclarationReadView& declarations,
-    const Core::GpuExternalCompletionId& completion
-)noexcept{
-    if(const Core::QueueSubmissionToken* const ptr = declarations.externalCompletionToken(completion))
-        return *ptr;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPresentEndpoint> DeclaredPresentEndpointValue(
-    const Core::GpuTaskGraph::DeclarationReadView& declarations
-)noexcept{
-    if(const Core::GpuPresentEndpoint* const ptr = declarations.presentEndpoint())
-        return *ptr;
-    return {};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasTaskDependenciesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.dependencies != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskId> TaskDependenciesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.dependencies ? Span<const Core::GpuTaskId>(view.dependencies, view.dependencyCount) : Span<const Core::GpuTaskId>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasTaskExternalDependenciesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.externalDependencies != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuExternalCompletionId> TaskExternalDependenciesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.externalDependencies
-        ? Span<const Core::GpuExternalCompletionId>(view.externalDependencies, view.externalDependencyCount)
-        : Span<const Core::GpuExternalCompletionId>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasTaskExternalStateSourcesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.externalStateSources != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskExternalStateSource> TaskExternalStateSourcesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.externalStateSources
-        ? Span<const Core::GpuTaskExternalStateSource>(view.externalStateSources, view.externalStateSourceCount)
-        : Span<const Core::GpuTaskExternalStateSource>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasTaskResourceUsesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.resourceUses != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskResourceUse> TaskResourceUsesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.resourceUses
-        ? Span<const Core::GpuTaskResourceUse>(view.resourceUses, view.resourceUseCount)
-        : Span<const Core::GpuTaskResourceUse>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasTaskResourceVersionUsesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.resourceVersionUses != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskResourceVersionUse> TaskResourceVersionUsesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
-    return view.resourceVersionUses
-        ? Span<const Core::GpuTaskResourceVersionUse>(view.resourceVersionUses, view.resourceVersionUseCount)
-        : Span<const Core::GpuTaskResourceVersionUse>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasResourceInitialOwnerHandoffSourcesPtr(const Core::GpuTaskGraphResourceView& view)noexcept{
-    return view.initialOwnerHandoffSources != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskGraphInitialOwnerHandoffSourceView> ResourceInitialOwnerHandoffSourcesSpan(
-    const Core::GpuTaskGraphResourceView& view
-)noexcept{
-    return view.initialOwnerHandoffSources
-        ? Span<const Core::GpuTaskGraphInitialOwnerHandoffSourceView>(view.initialOwnerHandoffSources, view.initialOwnerHandoffSourceCount)
-        : Span<const Core::GpuTaskGraphInitialOwnerHandoffSourceView>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasResourceSetMembersPtr(const Core::GpuTaskGraphResourceSetView& view)noexcept{
-    return view.members != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuGraphResourceId> ResourceSetMembersSpan(const Core::GpuTaskGraphResourceSetView& view)noexcept{
-    return view.members ? Span<const Core::GpuGraphResourceId>(view.members, view.memberCount) : Span<const Core::GpuGraphResourceId>{};
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(const Core::GpuTaskGraphQueueAssignments& assignments)noexcept{
-    return Core::GpuTaskGraphTelemetryOptions{ .queueAssignments = &assignments };
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(
-    const Core::GpuTaskGraphQueueAssignments& assignments,
-    const Core::GpuCompiledGraph::ReadView& compiledPlan
-)noexcept{
-    return Core::GpuTaskGraphTelemetryOptions{ .queueAssignments = &assignments, .compiledPlan = &compiledPlan };
-}
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(
-    const Core::GpuTaskGraphQueueAssignments& assignments,
-    const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    const Core::GpuTaskGraphQueueAssignmentTelemetryTracker& tracker
-)noexcept{
-    return Core::GpuTaskGraphTelemetryOptions{ .queueAssignments = &assignments, .compiledPlan = &compiledPlan, .queueAssignmentTelemetry = &tracker };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SingleQueueCompile{
-    Core::Alloc::ScratchArena scratchArena;
-    Core::GpuPhysicalQueueInfo singleQueue;
-    Core::GpuPhysicalQueueTopology topology;
-    Core::GpuTaskGraphAnalysis analysis;
-    Core::GpuTaskGraphQueueAssignments assignments;
-    Core::GpuCompiledGraph compiledGraph;
-
-
-public:
-    explicit SingleQueueCompile(TestArena& testArena)
-        : scratchArena(s_TaskGraphScratchArena)
-        , singleQueue{
-            .familyIndex = 0u,
-            .queueIndex = 0u,
-            .id = Core::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = CombineQueueCapabilities(Core::GpuQueueCapability::Graphics, Core::GpuQueueCapability::Compute, Core::GpuQueueCapability::Transfer),
-            .dedicated = false,
-        }
-        , topology{ .queues = &singleQueue, .queueCount = 1u }
-        , analysis(testArena.arena)
-        , assignments(testArena.arena)
-        , compiledGraph(testArena.arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 compile(const Core::GpuTaskGraph& graph, const Core::GpuTaskGraphCompileOptions& options = {}){
-        const Core::GpuTaskGraphCompiler compiler;
-        Core::GpuTaskGraphCompileOptions metadataOptions = options;
-        metadataOptions.allowMetadataOnlyTasks = true;
-        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        return compiler.compile(declarations, topology, metadataOptions, scratchArena, analysis, assignments, compiledGraph);
-    }
-};
-
-struct TwoQueueCompile{
-    Core::Alloc::ScratchArena scratchArena;
-    Core::GpuPhysicalQueueInfo graphicsQueue;
-    Core::GpuPhysicalQueueInfo computeQueue;
-    Array<Core::GpuPhysicalQueueInfo, 2> queueStorage{};
-    Core::GpuPhysicalQueueTopology topology;
-    Core::GpuTaskGraphAnalysis analysis;
-    Core::GpuTaskGraphQueueAssignments assignments;
-    Core::GpuCompiledGraph compiledGraph;
-
-
-public:
-    explicit TwoQueueCompile(TestArena& testArena)
-        : scratchArena(s_TaskGraphScratchArena)
-        , graphicsQueue{
-            .familyIndex = 0u,
-            .queueIndex = 0u,
-            .id = Core::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = CombineQueueCapabilities(Core::GpuQueueCapability::Graphics, Core::GpuQueueCapability::Compute, Core::GpuQueueCapability::Transfer),
-            .dedicated = false,
-        }
-        , computeQueue{
-            .familyIndex = 1u,
-            .queueIndex = 0u,
-            .id = Core::GpuPhysicalQueueId{ .index = 1u, .deviceGeneration = 1u },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = CombineQueueCapabilities(Core::GpuQueueCapability::Compute, Core::GpuQueueCapability::Transfer),
-            .dedicated = true,
-        }
-        , queueStorage{ graphicsQueue, computeQueue }
-        , topology{ .queues = queueStorage.data(), .queueCount = queueStorage.size() }
-        , analysis(testArena.arena)
-        , assignments(testArena.arena)
-        , compiledGraph(testArena.arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 compile(const Core::GpuTaskGraph& graph, const Core::GpuTaskGraphCompileOptions& options = {}){
-        Array<Core::GpuPhysicalQueueInfo, 2> separatedQueues = queueStorage;
-        separatedQueues[0u].capabilities = MaskOutQueueCapability(separatedQueues[0u].capabilities, Core::GpuQueueCapability::Compute);
-        const Core::GpuPhysicalQueueTopology separatedTopology{ .queues = separatedQueues.data(), .queueCount = separatedQueues.size() };
-        const Core::GpuTaskGraphCompiler compiler;
-        Core::GpuTaskGraphCompileOptions metadataOptions = options;
-        metadataOptions.allowMetadataOnlyTasks = true;
-        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        return compiler.compile(declarations, separatedTopology, metadataOptions, scratchArena, analysis, assignments, compiledGraph);
-    }
-};
-
-struct ThreeQueueCompile{
-    Core::Alloc::ScratchArena scratchArena;
-    Core::GpuPhysicalQueueInfo graphicsQueue;
-    Core::GpuPhysicalQueueInfo computeQueue;
-    Core::GpuPhysicalQueueInfo transferQueue;
-    Array<Core::GpuPhysicalQueueInfo, 3> queueStorage{};
-    Core::GpuPhysicalQueueTopology topology;
-    Core::GpuTaskGraphAnalysis analysis;
-    Core::GpuTaskGraphQueueAssignments assignments;
-    Core::GpuCompiledGraph compiledGraph;
-
-
-public:
-    explicit ThreeQueueCompile(TestArena& testArena)
-        : scratchArena(s_TaskGraphScratchArena)
-        , graphicsQueue{
-            .familyIndex = 0u,
-            .queueIndex = 0u,
-            .id = Core::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = CombineQueueCapabilities(Core::GpuQueueCapability::Graphics, Core::GpuQueueCapability::Compute, Core::GpuQueueCapability::Transfer),
-            .dedicated = false,
-        }
-        , computeQueue{
-            .familyIndex = 1u,
-            .queueIndex = 0u,
-            .id = Core::GpuPhysicalQueueId{ .index = 1u, .deviceGeneration = 1u },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = CombineQueueCapabilities(Core::GpuQueueCapability::Compute, Core::GpuQueueCapability::Transfer),
-            .dedicated = true,
-        }
-        , transferQueue{
-            .familyIndex = 2u,
-            .queueIndex = 0u,
-            .id = Core::GpuPhysicalQueueId{ .index = 2u, .deviceGeneration = 1u },
-            .queueClass = Core::CommandQueue::Transfer,
-            .capabilities = Core::GpuQueueCapability::Transfer,
-            .dedicated = true,
-        }
-        , queueStorage{ graphicsQueue, computeQueue, transferQueue }
-        , topology{ .queues = queueStorage.data(), .queueCount = queueStorage.size() }
-        , analysis(testArena.arena)
-        , assignments(testArena.arena)
-        , compiledGraph(testArena.arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 compile(const Core::GpuTaskGraph& graph, const Core::GpuTaskGraphCompileOptions& options = {}){
-        Array<Core::GpuPhysicalQueueInfo, 3> separatedQueues = queueStorage;
-        separatedQueues[0u].capabilities = MaskOutQueueCapability(
-            MaskOutQueueCapability(separatedQueues[0u].capabilities, Core::GpuQueueCapability::Compute),
-            Core::GpuQueueCapability::Transfer
-        );
-        separatedQueues[1u].capabilities = MaskOutQueueCapability(separatedQueues[1u].capabilities, Core::GpuQueueCapability::Transfer);
-        const Core::GpuPhysicalQueueTopology separatedTopology{ .queues = separatedQueues.data(), .queueCount = separatedQueues.size() };
-        const Core::GpuTaskGraphCompiler compiler;
-        Core::GpuTaskGraphCompileOptions metadataOptions = options;
-        metadataOptions.allowMetadataOnlyTasks = true;
-        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        return compiler.compile(declarations, separatedTopology, metadataOptions, scratchArena, analysis, assignments, compiledGraph);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 type GpuTaskCostHintEnum = GpuTaskCostHint;
@@ -783,6 +258,105 @@ GpuPhysicalQueueInfo DedicatedTransferQueue(in u16 index){
 
 GpuPhysicalQueueInfo DedicatedTransferQueue(){
     return DedicatedTransferQueue(2u);
+}
+
+[ordered]
+class SingleQueueCompile{
+    public ScratchStorage scratchArena;
+    public GpuPhysicalQueueInfo singleQueue;
+    public GpuPhysicalQueueTopology topology;
+    public GpuTaskGraphAnalysis analysis;
+    public GpuTaskGraphQueueAssignments assignments;
+    public GpuCompiledGraph compiledGraph;
+
+    public SingleQueueCompile(mut TestArena testArena){
+        this.scratchArena = ScratchStorage(s_TaskGraphScratchArena);
+        this.singleQueue = GraphicsQueue();
+        this.topology = MakeTopology(SpanOf<GpuPhysicalQueueInfo>(this.singleQueue));
+        this.analysis = GpuTaskGraphAnalysis(testArena.arena);
+        this.assignments = GpuTaskGraphQueueAssignments(testArena.arena);
+        this.compiledGraph = GpuCompiledGraph(testArena.arena);
+    }
+    public b8 compile(in GpuTaskGraph graph, in GpuTaskGraphCompileOptions options){
+        const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
+        GpuTaskGraphCompileOptions metadataOptions = options;
+        metadataOptions.allowMetadataOnlyTasks = true;
+        const GpuTaskGraphDeclarationReadView declarations(graph);
+        return compiler.compile(declarations, this.topology, metadataOptions, this.scratchArena, this.analysis, this.assignments, this.compiledGraph);
+    }
+    public b8 compile(in GpuTaskGraph graph){ return this.compile(graph, GpuTaskGraphCompileOptions()); }
+}
+
+[ordered]
+class TwoQueueCompile{
+    public ScratchStorage scratchArena;
+    public GpuPhysicalQueueInfo graphicsQueue;
+    public GpuPhysicalQueueInfo computeQueue;
+    public Array<GpuPhysicalQueueInfo, 2> queueStorage;
+    public GpuPhysicalQueueTopology topology;
+    public GpuTaskGraphAnalysis analysis;
+    public GpuTaskGraphQueueAssignments assignments;
+    public GpuCompiledGraph compiledGraph;
+
+    public TwoQueueCompile(mut TestArena testArena){
+        this.scratchArena = ScratchStorage(s_TaskGraphScratchArena);
+        this.graphicsQueue = GraphicsQueue();
+        this.computeQueue = DedicatedComputeQueue();
+        this.queueStorage = Array<GpuPhysicalQueueInfo, 2>(this.graphicsQueue, this.computeQueue);
+        this.topology = MakeTopology(Span<GpuPhysicalQueueInfo>(this.queueStorage));
+        this.analysis = GpuTaskGraphAnalysis(testArena.arena);
+        this.assignments = GpuTaskGraphQueueAssignments(testArena.arena);
+        this.compiledGraph = GpuCompiledGraph(testArena.arena);
+    }
+    public b8 compile(in GpuTaskGraph graph, in GpuTaskGraphCompileOptions options){
+        Array<GpuPhysicalQueueInfo, 2> separated = this.queueStorage;
+        separated[0u].capabilities = MaskOutQueueCapability(separated[0u].capabilities, GpuQueueCapability::Compute);
+        const GpuPhysicalQueueTopology topology = MakeTopology(Span<GpuPhysicalQueueInfo>(separated));
+        const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
+        GpuTaskGraphCompileOptions metadataOptions = options;
+        metadataOptions.allowMetadataOnlyTasks = true;
+        const GpuTaskGraphDeclarationReadView declarations(graph);
+        return compiler.compile(declarations, topology, metadataOptions, this.scratchArena, this.analysis, this.assignments, this.compiledGraph);
+    }
+    public b8 compile(in GpuTaskGraph graph){ return this.compile(graph, GpuTaskGraphCompileOptions()); }
+}
+
+[ordered]
+class ThreeQueueCompile{
+    public ScratchStorage scratchArena;
+    public GpuPhysicalQueueInfo graphicsQueue;
+    public GpuPhysicalQueueInfo computeQueue;
+    public GpuPhysicalQueueInfo transferQueue;
+    public Array<GpuPhysicalQueueInfo, 3> queueStorage;
+    public GpuPhysicalQueueTopology topology;
+    public GpuTaskGraphAnalysis analysis;
+    public GpuTaskGraphQueueAssignments assignments;
+    public GpuCompiledGraph compiledGraph;
+
+    public ThreeQueueCompile(mut TestArena testArena){
+        this.scratchArena = ScratchStorage(s_TaskGraphScratchArena);
+        this.graphicsQueue = GraphicsQueue();
+        this.computeQueue = DedicatedComputeQueue();
+        this.transferQueue = DedicatedTransferQueue();
+        this.queueStorage = Array<GpuPhysicalQueueInfo, 3>(this.graphicsQueue, this.computeQueue, this.transferQueue);
+        this.topology = MakeTopology(Span<GpuPhysicalQueueInfo>(this.queueStorage));
+        this.analysis = GpuTaskGraphAnalysis(testArena.arena);
+        this.assignments = GpuTaskGraphQueueAssignments(testArena.arena);
+        this.compiledGraph = GpuCompiledGraph(testArena.arena);
+    }
+    public b8 compile(in GpuTaskGraph graph, in GpuTaskGraphCompileOptions options){
+        Array<GpuPhysicalQueueInfo, 3> separated = this.queueStorage;
+        separated[0u].capabilities = MaskOutQueueCapability(separated[0u].capabilities, GpuQueueCapability::Compute);
+        separated[0u].capabilities = MaskOutQueueCapability(separated[0u].capabilities, GpuQueueCapability::Transfer);
+        separated[1u].capabilities = MaskOutQueueCapability(separated[1u].capabilities, GpuQueueCapability::Transfer);
+        const GpuPhysicalQueueTopology topology = MakeTopology(Span<GpuPhysicalQueueInfo>(separated));
+        const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
+        GpuTaskGraphCompileOptions metadataOptions = options;
+        metadataOptions.allowMetadataOnlyTasks = true;
+        const GpuTaskGraphDeclarationReadView declarations(graph);
+        return compiler.compile(declarations, topology, metadataOptions, this.scratchArena, this.analysis, this.assignments, this.compiledGraph);
+    }
+    public b8 compile(in GpuTaskGraph graph){ return this.compile(graph, GpuTaskGraphCompileOptions()); }
 }
 
 b8 Assign(
@@ -917,7 +491,7 @@ GpuTaskCommandRequirements ComputeCommands(){
 Expected<GpuGraphResourceId> AddTextureMetadata(
     mut GpuTaskGraph graph,
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in ResourceStatesMask initialState,
     in ResourceQueueSharingMask queueSharing
 ){
@@ -930,18 +504,18 @@ Expected<GpuGraphResourceId> AddTextureMetadata(
     return graph.importResource(desc);
 }
 
-Expected<GpuGraphResourceId> AddTextureMetadata(mut GpuTaskGraph graph, in Name identity, in AStringView label, in ResourceStatesMask initialState){
+Expected<GpuGraphResourceId> AddTextureMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label, in ResourceStatesMask initialState){
     return AddTextureMetadata(graph, identity, label, initialState, ResourceQueueSharing::Exclusive);
 }
 
-Expected<GpuGraphResourceId> AddTextureMetadata(mut GpuTaskGraph graph, in Name identity, in AStringView label){
+Expected<GpuGraphResourceId> AddTextureMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label){
     return AddTextureMetadata(graph, identity, label, ResourceStates::Common, ResourceQueueSharing::Exclusive);
 }
 
 Expected<GpuGraphResourceId> AddBufferMetadata(
     mut GpuTaskGraph graph,
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in ResourceStatesMask initialState,
     in ResourceQueueSharingMask queueSharing
 ){
@@ -954,18 +528,18 @@ Expected<GpuGraphResourceId> AddBufferMetadata(
     return graph.importResource(desc);
 }
 
-Expected<GpuGraphResourceId> AddBufferMetadata(mut GpuTaskGraph graph, in Name identity, in AStringView label, in ResourceStatesMask initialState){
+Expected<GpuGraphResourceId> AddBufferMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label, in ResourceStatesMask initialState){
     return AddBufferMetadata(graph, identity, label, initialState, ResourceQueueSharing::Exclusive);
 }
 
-Expected<GpuGraphResourceId> AddBufferMetadata(mut GpuTaskGraph graph, in Name identity, in AStringView label){
+Expected<GpuGraphResourceId> AddBufferMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label){
     return AddBufferMetadata(graph, identity, label, ResourceStates::Common, ResourceQueueSharing::Exclusive);
 }
 
 Expected<GpuGraphResourceId> AddAccelStructMetadata(
     mut GpuTaskGraph graph,
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in ResourceStatesMask initialState,
     in ResourceQueueSharingMask queueSharing
 ){
@@ -978,15 +552,15 @@ Expected<GpuGraphResourceId> AddAccelStructMetadata(
     return graph.importResource(desc);
 }
 
-Expected<GpuGraphResourceId> AddAccelStructMetadata(mut GpuTaskGraph graph, in Name identity, in AStringView label, in ResourceStatesMask initialState){
+Expected<GpuGraphResourceId> AddAccelStructMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label, in ResourceStatesMask initialState){
     return AddAccelStructMetadata(graph, identity, label, initialState, ResourceQueueSharing::Exclusive);
 }
 
-Expected<GpuGraphResourceId> AddAccelStructMetadata(mut GpuTaskGraph graph, in Name identity, in AStringView label){
+Expected<GpuGraphResourceId> AddAccelStructMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label){
     return AddAccelStructMetadata(graph, identity, label, ResourceStates::Common, ResourceQueueSharing::Exclusive);
 }
 
-Expected<GpuGraphResourceId> AddHazardDomain(mut GpuTaskGraph graph, in Name identity, in AStringView label){
+Expected<GpuGraphResourceId> AddHazardDomain(mut GpuTaskGraph graph, in Name identity, in StringView label){
     GpuGraphResourceDesc desc = GpuGraphResourceDesc();
     desc.setIdentity(identity);
     desc.setMarkerLabel(label);
@@ -994,7 +568,7 @@ Expected<GpuGraphResourceId> AddHazardDomain(mut GpuTaskGraph graph, in Name ide
     return graph.importHazardDomain(desc);
 }
 
-Expected<GpuGraphPipelineId> AddPipelineMetadata(mut GpuTaskGraph graph, in Name identity, in AStringView label, in GpuGraphPipelineTypeEnum type){
+Expected<GpuGraphPipelineId> AddPipelineMetadata(mut GpuTaskGraph graph, in Name identity, in StringView label, in GpuGraphPipelineTypeEnum type){
     GpuGraphPipelineDesc desc = GpuGraphPipelineDesc();
     desc.setIdentity(identity);
     desc.setMarkerLabel(label);
@@ -1004,7 +578,7 @@ Expected<GpuGraphPipelineId> AddPipelineMetadata(mut GpuTaskGraph graph, in Name
 
 Expected<GpuTaskId> AddTask(
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in Span<GpuTaskId> dependencies,
     in Span<GpuTaskResourceUse> resourceUses,
     in Span<GpuTaskResourceSetUse> resourceSetUses,
@@ -1025,7 +599,7 @@ Expected<GpuTaskId> AddTask(
 
 Expected<GpuTaskId> AddTaskWithCommands(
     in Name identity,
-    in AStringView label,
+    in StringView label,
     in GpuTaskCommandRequirements commands,
     in GpuTaskSchedulingHint scheduling,
     in GpuTaskTimingMetadata timing,

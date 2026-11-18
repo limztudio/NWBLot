@@ -419,7 +419,7 @@ b8 BuildSmokeBoxSubtractionPieces(in SmokeBoxBounds box, in SmokeBoxBounds cutte
 }
 
 const u32 s_AvboitCoverageWords = 9u;
-const u32 s_AvboitControlWordCount = 8u;
+const u32 s_AvboitProbeControlWordCount = 8u;
 const u32 s_AvboitTotalCaseCount = s_AvboitBoundaryCaseCount + s_AvboitExhaustiveCaseCount + s_AvboitRandomCaseCount;
 
 class AvboitDepthWarpCase{
@@ -445,7 +445,7 @@ class AvboitDepthWarpCase{
 
 class AvboitDepthWarpResult{
     public Array<u32, s_AvboitMaxVirtualCount> warp;
-    public Array<u32, s_AvboitControlWordCount> control;
+    public Array<u32, s_AvboitProbeControlWordCount> control;
 }
 
 AvboitDepthWarpResult BuildAvboitDepthWarpOracle(in AvboitDepthWarpCase probe, in Array<u32, 4u> frame){

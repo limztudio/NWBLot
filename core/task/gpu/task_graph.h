@@ -17,6 +17,7 @@
 #include <core/alloc/scratch.h>
 
 #include <global/arena_object.h>
+#include <global/binary.h>
 #include <global/sync.h>
 
 
@@ -285,6 +286,10 @@ public:
     // Copies caller bytes into graph-owned storage aligned to `alignment`, a nonzero power of two.
     [[nodiscard]] Expected<GpuUploadBlobId> copyUploadData(const void* data, usize byteSize, usize alignment = alignof(u8));
 
+    [[nodiscard]] Expected<GpuUploadBlobId> copyAlignedUploadBytes(const BinaryByteView bytes, const usize alignment){
+        return copyUploadData(bytes.data(), bytes.size(), alignment);
+    }
+
     template<typename T>
     [[nodiscard]] Expected<GpuUploadBlobId> copyUploadElements(const Span<const T> elements){
         static_assert(IsTriviallyCopyable_V<T>, "GPU upload elements must be trivially copyable");
@@ -321,41 +326,29 @@ public:
     template<typename TaskT>
     [[nodiscard]] Expected<GpuTaskId> addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
         using Payload = typename TaskT::Payload;
-        static_assert(IsNothrowDestructible_V<Payload>, "GPU task payload cleanup must remain no-throw");
-
-        DeclarationMutationScope mutation(*this);
-        if(!mutation.valid())
-            return MakeUnexpected(Failure{});
-
-        // Retained container storage must survive the caller's declaration scratch arena.
-        Payload* const payloadObject = [&](){
+        return declareTaskWithPayload<TaskT>(desc, [&](){
+            // Retained container storage must survive the caller's declaration scratch arena.
             if constexpr(::LeadingArenaConstructible<Payload> && IsConstructible_V<Payload, GraphicsArena&, Payload&&>)
                 return NewArenaObject<Payload>(m_arena, m_arena, Move(payload));
             else
                 return NewArenaObject<Payload>(m_arena, Move(payload));
-        }();
-        if(!payloadObject)
-            return MakeUnexpected(Failure{});
-        ProvisionalPayloadOwner<Payload> storedPayload(m_arena, payloadObject);
+        });
+    }
 
-        GpuTaskRecordThunk recordPayload = nullptr;
-        if constexpr(GpuGraphTaskContract::RecordApi<TaskT>)
-            recordPayload = &RecordTaskPayload<TaskT>;
-
-        GpuTaskAcceptedThunk acceptPayload = nullptr;
-        if constexpr(GpuGraphTaskContract::AcceptedApi<TaskT>)
-            acceptPayload = &AcceptTaskPayload<TaskT>;
-
-        GpuTaskDiscardedThunk discardPayload = nullptr;
-        if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
-            discardPayload = &DiscardTaskPayload<TaskT>;
-
-        const auto task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()), recordPayload, acceptPayload, discardPayload, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation, storedPayload.get());
-        if(task)
-            storedPayload.publish();
-        else
-            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyTaskPayload<Payload>);
-        return task;
+    template<typename Payload, typename Factory>
+    [[nodiscard]] Expected<GpuTaskId> addPayloadTaskFrom(const GpuTaskDesc& desc, Factory&& factory){
+        return declareTaskWithPayload<GpuGraphTaskContract::MemberTask<Payload>>(desc, [&](){
+            if constexpr(::LeadingArenaConstructible<Payload> && IsConstructible_V<Payload, GraphicsArena&, Payload&&>)
+                return NewArenaObject<Payload>(m_arena, m_arena, factory());
+            else{
+                // Direct initialization lets the graph own nonmovable payloads.
+                struct Source{
+                    Factory& factory;
+                    operator Payload()&& noexcept(noexcept(factory())){ return factory(); }
+                };
+                return NewArenaObject<Payload>(m_arena, Source{ factory });
+            }
+        });
     }
 
     template<typename Payload>
@@ -420,6 +413,39 @@ public:
 
 
 private:
+    template<typename TaskT, typename AllocatePayload>
+    [[nodiscard]] Expected<GpuTaskId> declareTaskWithPayload(const GpuTaskDesc& desc, AllocatePayload&& allocate){
+        using Payload = typename TaskT::Payload;
+        static_assert(IsNothrowDestructible_V<Payload>, "GPU task payload cleanup must remain no-throw");
+        DeclarationMutationScope mutation(*this);
+        if(!mutation.valid())
+            return MakeUnexpected(Failure{});
+        Payload* const payloadObject = allocate();
+        if(!payloadObject)
+            return MakeUnexpected(Failure{});
+        ProvisionalPayloadOwner<Payload> storedPayload(m_arena, payloadObject);
+
+        GpuTaskRecordThunk recordPayload = nullptr;
+        if constexpr(GpuGraphTaskContract::RecordApi<TaskT>)
+            recordPayload = &RecordTaskPayload<TaskT>;
+
+        GpuTaskAcceptedThunk acceptPayload = nullptr;
+        if constexpr(GpuGraphTaskContract::AcceptedApi<TaskT>)
+            acceptPayload = &AcceptTaskPayload<TaskT>;
+
+        GpuTaskDiscardedThunk discardPayload = nullptr;
+        if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
+            discardPayload = &DiscardTaskPayload<TaskT>;
+
+        const auto task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()), recordPayload, acceptPayload, discardPayload, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation, storedPayload.get());
+        if(task)
+            storedPayload.publish();
+        else
+            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyTaskPayload<Payload>);
+        return task;
+    }
+
+
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
     // Starts or validates one native-recording attempt for the compiler-owned packet.
     // A retry can begin only after every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.

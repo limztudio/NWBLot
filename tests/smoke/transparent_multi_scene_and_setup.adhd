@@ -15,36 +15,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::Smoke{
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-inline constexpr b8 s_TransparentMultiEnableCsg = true;
+const b8 s_TransparentMultiEnableCsg = true;
 #else
-inline constexpr b8 s_TransparentMultiEnableCsg = false;
+const b8 s_TransparentMultiEnableCsg = false;
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-inline constexpr b8 s_TransparentMultiCausticSphere = true;
+const b8 s_TransparentMultiCausticSphere = true;
 #else
-inline constexpr b8 s_TransparentMultiCausticSphere = false;
+const b8 s_TransparentMultiCausticSphere = false;
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-inline constexpr b8 s_TransparentMultiFrameLaggedAsyncLighting = true;
+const b8 s_TransparentMultiFrameLaggedAsyncLighting = true;
 #else
-inline constexpr b8 s_TransparentMultiFrameLaggedAsyncLighting = false;
+const b8 s_TransparentMultiFrameLaggedAsyncLighting = false;
 #endif
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -315,7 +300,7 @@ b8 PopulateTransparentMultiScene(
             s_SmokeNameProjectSmokeTransparentMultiCenterReceiver,
             s_CsgPlaneShapeName,
             cutterActive,
-            f32x4(0.0f, -1.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, -1.0f, 0.0f, 0.0f),
             VectorSingle(0.0f, s_TransparentMultiCameraTargetY, 0.0f, 0.0f),
             QuaternionIdentity(),
             world

@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_texture/asset.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_TextureMipCount = 3u;
+const usize s_TexturePrimaryPayloadBytes = 96u;
+const usize s_TextureMipTableBytes = size_of<TexturePayloadMipLevelBinary>() * s_TextureMipCount;
+const usize s_TestTextureHeaderBytes = size_of<TexturePayloadHeaderBinary>();
+const usize s_TextureMipRecordBinaryBytes = size_of<TexturePayloadMipLevelBinary>();
+const usize s_TextureHeaderMipCountOffset = offset_of<TexturePayloadHeaderBinary>(mipCount);
+const usize s_TextureHeaderPayloadFormatOffset = offset_of<TexturePayloadHeaderBinary>(payloadFormat);
+const usize s_TextureHeaderAlphaInfoOffset = offset_of<TexturePayloadHeaderBinary>(alphaInfo);
+const usize s_TextureHeaderVersionOffset = offset_of<TexturePayloadHeaderBinary>(version);
+const usize s_TextureMipReservedOffset = offset_of<TexturePayloadMipLevelBinary>(reserved);
+const usize s_TextureMipWidthOffset = offset_of<TexturePayloadMipLevelBinary>(width);
+const usize s_TextureMipBlockCountXOffset = offset_of<TexturePayloadMipLevelBinary>(blockCountX);
+const usize s_TextureMipSliceCountOffset = offset_of<TexturePayloadMipLevelBinary>(sliceCount);
+const usize s_TextureMipOffsetBytesOffset = offset_of<TexturePayloadMipLevelBinary>(offsetBytes);
+const usize s_TextureMipSizeBytesOffset = offset_of<TexturePayloadMipLevelBinary>(sizeBytes);
+
+
+TextureMipLevel TestMip(in u64 offset, in u64 size, in u32 width, in u32 height, in u32 x, in u32 y){
+    TextureMipLevel mip;
+    mip.offsetBytes = offset;
+    mip.sizeBytes = size;
+    mip.width = width;
+    mip.height = height;
+    mip.blockCountX = x;
+    mip.blockCountY = y;
+    return mip;
+}
+
+MipLevelVector TestTextureMips(){
+    MipLevelVector mips;
+    mips.reserve(3u);
+    mips.push_back(TestMip(0u, 64u, 7u, 5u, 2u, 2u));
+    mips.push_back(TestMip(64u, 16u, 3u, 2u, 1u, 1u));
+    mips.push_back(TestMip(80u, 16u, 1u, 1u, 1u, 1u));
+    return mips;
+}
+
+TexturePayloadMipLevelBinary TestBinaryMip(in TextureMipLevel mip){
+    TexturePayloadMipLevelBinary row;
+    row.width = mip.width;
+    row.height = mip.height;
+    row.sliceCount = 1u;
+    row.blockCountX = mip.blockCountX;
+    row.blockCountY = mip.blockCountY;
+    row.reserved = 0u;
+    row.offsetBytes = mip.offsetBytes;
+    row.sizeBytes = mip.sizeBytes;
+    return row;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

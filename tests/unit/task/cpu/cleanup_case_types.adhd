@@ -3,7 +3,9 @@
 
 
 class TerminalTaskError{
-    public i32 code = 0;
+    public i32 code;
+    public TerminalTaskError(){ this.code = 0; }
+    public TerminalTaskError(in i32 value){ this.code = value; }
 }
 
 

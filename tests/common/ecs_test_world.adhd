@@ -2,53 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "memory.adhd"
 #include "name_cases.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const Name s_EcsTestWorldArena = s_CommonCaseNameTestsCommonEcsTestWorld;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/general.h>
-#include <core/task/cpu/scheduler.h>
-#include <core/ecs/world.h>
-
-#include <global/global.h>
-
-NWB_BEGIN
-
-namespace Tests{
-
-inline constexpr Name s_EcsTestWorldArena = NWB::Tests::CommonCases::s_CommonCaseNameTestsCommonEcsTestWorld;
-
-struct EcsTestWorld{
-    Core::Alloc::GlobalArena arena;
-    Core::CpuTaskScheduler taskScheduler;
-    Core::ECS::World world;
-
-
-public:
-    EcsTestWorld()
-        : arena(s_EcsTestWorldArena)
-        , taskScheduler(0u)
-        , world(arena, taskScheduler)
-    {}
-};
-
-};
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[ordered]
+class EcsTestWorld{
+    public HeapStorage arena = HeapStorage(s_EcsTestWorldArena);
+    public CpuTaskScheduler taskScheduler = CpuTaskScheduler(0u);
+    public World world = World(this.arena, this.taskScheduler);
 }
 
 

@@ -249,6 +249,26 @@ private:
 };
 
 
+enum class FileWriteStatus : u8{
+    Success,
+    OpenFailed,
+    WriteFailed,
+};
+
+template<typename ArenaT>
+[[nodiscard]] inline FileWriteStatus WritePlatformTextFile(const Path<ArenaT>& path, const AStringView content, const b8 append){
+    if(!CanRepresentStreamSize(static_cast<u64>(content.size())))
+        return FileWriteStatus::WriteFailed;
+    OutputFileStream stream(path, append ? s_FileOpenAppend : s_FileOpenTruncate);
+    if(!stream.is_open())
+        return FileWriteStatus::OpenFailed;
+    if(!content.empty())
+        stream.write(content.data(), static_cast<StreamSize>(content.size()));
+    stream.close();
+    return stream.good() ? FileWriteStatus::Success : FileWriteStatus::WriteFailed;
+}
+
+
 class BinaryOutputStream final : NoCopy{
 public:
     template<typename ArenaT>

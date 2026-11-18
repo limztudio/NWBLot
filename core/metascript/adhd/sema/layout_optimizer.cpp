@@ -350,7 +350,7 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         return false;
     }
 
-    if(!classDecl.systemTypeName.empty())
+    if(!classDecl.systemTypeName.empty() || (classDecl.concreteBase && classDecl.concreteBase->canBorrowMotherArena() && classDecl.concreteBase->needsClassArena))
         classDecl.needsClassArena = true;
 
     classDecl.orderedFields.clear();
@@ -394,8 +394,9 @@ void LayoutOptimizer::finalizeClassFieldLayouts(const ClassDecl& decl, const b8 
         field->resolvedSize = fieldSize;
         field->resolvedAlign = (packSerialize && !field->isTransient) ? 1u : fieldAlign;
     }
-    const usize headerPointerCount = (hasVtablePointer ? 1u : 0u) + (hasMotherArenaPointer ? 1u : 0u);
-    SortAndPackFields(decl.isSerialize || decl.recordAlignment || decl.preserveFieldOrder, packSerialize, decl.recordAlignment, headerPointerCount, orderedFields, outTotalSize, outTotalAlign);
+    const usize baseBytes = decl.concreteBase ? decl.concreteBase->totalSize : (hasVtablePointer || decl.isExtensible ? 8u : 0u);
+    const usize headerPointerCount = (baseBytes + 7u) / 8u + (hasMotherArenaPointer ? 1u : 0u);
+    SortAndPackFields(decl.isSerialize || decl.recordAlignment || decl.preserveFieldOrder, packSerialize, decl.concreteBase ? Max(decl.recordAlignment, decl.concreteBase->totalAlign) : decl.recordAlignment, headerPointerCount, orderedFields, outTotalSize, outTotalAlign);
 }
 
 

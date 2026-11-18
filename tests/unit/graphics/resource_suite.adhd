@@ -5,254 +5,358 @@
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
+#include <tests/common/threads.adhd>
+#include <tests/common/value_storage.adhd>
 #include "gpu_timing_test_names.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type VkPipelineStageFlags2 = u64;
+type VkAccessFlags2 = u64;
+type VkImageCreateFlags = u32;
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("::VkSharingMode")]
+extern type VkSharingMode;
 
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("::VkIndexType")]
+extern type VkIndexType;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT")]
+extern const VkPipelineStageFlags2 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
 
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_PIPELINE_STAGE_2_COPY_BIT")]
+extern const VkPipelineStageFlags2 VK_PIPELINE_STAGE_2_COPY_BIT;
 
-#include <core/alloc/scratch.h>
-#include <core/graphics/rhi/gpu_crash_diagnostics.h>
-#include <core/graphics/rhi/raytracing.h>
-#include <core/graphics/runtime/runtime_setup_upload_graph.h>
-#include <core/graphics/runtime/runtime_standalone_graph.h>
-#include <core/graphics/vulkan/blas_opacity_micromap_policy.h>
-#include <core/graphics/vulkan/descriptor_buffer_allocation_state.h>
-#include <core/graphics/vulkan/descriptor_class_policy.h>
-#include <core/graphics/vulkan/descriptor_image_policy.h>
-#include <core/graphics/vulkan/queue_barrier_scope_policy.h>
-#include <core/graphics/vulkan/texture_image_policy.h>
-#include <core/graphics/vulkan/texture_shape_policy.h>
-#include <core/graphics/vulkan/texture_transfer_layout.h>
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_PIPELINE_STAGE_2_NONE")]
+extern const VkPipelineStageFlags2 VK_PIPELINE_STAGE_2_NONE;
 
-#if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-#include <core/graphics/vulkan/calibrated_timestamp_probe.h>
-#include <core/graphics/vulkan/cluster_operation_input.h>
-#endif
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_ACCESS_2_SHADER_READ_BIT")]
+extern const VkAccessFlags2 VK_ACCESS_2_SHADER_READ_BIT;
 
-#include <global/exception.h>
-#include <global/sync.h>
-#include <global/thread.h>
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_ACCESS_2_TRANSFER_READ_BIT")]
+extern const VkAccessFlags2 VK_ACCESS_2_TRANSFER_READ_BIT;
 
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_INDEX_TYPE_NONE_KHR")]
+extern const VkIndexType VK_INDEX_TYPE_NONE_KHR;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_SHARING_MODE_CONCURRENT")]
+extern const VkSharingMode VK_SHARING_MODE_CONCURRENT;
 
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("VK_IMAGE_CREATE_PROTECTED_BIT")]
+extern const VkImageCreateFlags VK_IMAGE_CREATE_PROTECTED_BIT;
 
-NWB_BEGIN
+[cpp_header("<core/graphics/vulkan/descriptor_buffer_allocation_state.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorBufferSegment"), cpp_flags(self_defaulted)]
+extern class DescriptorBufferSegment{
+    u32 offsetBytes;
+    u64 allocationSerial;
+};
 
+[cpp_header("<core/graphics/vulkan/descriptor_buffer_allocation_state.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorBufferAllocationState"), cpp_flags(no_copy, no_assign)]
+extern class DescriptorBufferAllocationState{
+    Expected<DescriptorBufferSegment> allocate(...);
+    void free(...);
+    b8 isLive(...)const;
+    b8 ownsAt(...)const;
+    void resetOffset();
+    void clearAllocations();
+};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/blas_opacity_micromap_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::OpacityMicromapIndexFormatInfo")]
+extern class OpacityMicromapIndexFormat{
+    VkIndexType indexType;
+    u64 indexStride;
+};
 
+[cpp_header("<core/graphics/vulkan/texture_image_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanTextureDetail::TextureCreateMetadata")]
+extern class TextureCreateMetadata;
 
-namespace Tests::GraphicsResourceSuiteDetail{
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("::VkImageCreateInfo"), cpp_flags(self_defaulted, brace_init)]
+extern class VkImageCreateInfo{
+    VkSharingMode sharingMode;
+    u32 queueFamilyIndexCount;
+    VkImageCreateFlags flags;
+};
 
+[cpp_header("<core/graphics/vulkan/backend_resource_context.h>"), cpp_name("::VkExtent3D"), cpp_flags(self_defaulted, brace_init)]
+extern class VkExtent3D{
+    u32 width;
+    u32 height;
+    u32 depth;
+};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/texture_transfer_layout.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::TextureFormatBlockLayout"), cpp_flags(self_defaulted, brace_init)]
+extern class TextureFormatBlockLayout{
+    u32 blockWidth;
+    u32 blockHeight;
+    u32 bytesPerBlock;
+};
 
+[cpp_header("<core/graphics/vulkan/texture_transfer_layout.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::BufferImageCopyLayout")]
+extern class BufferImageCopyLayout{
+    u64 requiredSize;
+    u32 bufferRowLength;
+    u32 bufferImageHeight;
+};
 
-struct GpuCrashMarkerTestsTag;
-using GpuCrashMarkerTestArena = Tests::TestArena<GpuCrashMarkerTestsTag>;
-using DefaultResourceTestArena = Tests::TestArena<>;
+[cpp_header("<core/graphics/runtime/runtime_standalone_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool"), cpp_flags(no_copy, no_assign)]
+extern class StandaloneGraphWorkspacePool{
+    b8 releaseCommandListCaches();
+};
 
-struct DescriptorBufferAllocationHarness{
-    Tests::TestArena<> arena;
-    Core::GraphicsBackend::DescriptorBufferAllocationState state{ arena.arena };
-    Array<u8, 64u> bytes{};
+[cpp_header("<core/graphics/runtime/runtime_standalone_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease"), cpp_flags(no_copy, no_assign)]
+extern class StandaloneGraphWorkspaceLease;
 
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashMarkerTracker"), cpp_flags(no_copy, no_assign)]
+extern class GpuCrashMarkerTracker{
+    usize pushEvent(in StringView label);
+    void resetEventStack();
+    void popEvent();
+};
 
-public:
-    [[nodiscard]] auto allocate(Core::GraphicsBackend::DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignBytes, u32 generation){
-        return state.allocate(kind, sizeBytes, alignBytes, generation, static_cast<u32>(bytes.size()), bytes.data());
+[cpp_header("<core/graphics/vulkan/blas_opacity_micromap_policy.h>"), cpp_name("::VkMicromapUsageEXT"), cpp_flags(self_defaulted)]
+extern class VkMicromapUsage;
+
+[cpp_header("<core/graphics/vulkan/blas_opacity_micromap_policy.h>"), cpp_name("::VkAccelerationStructureTrianglesOpacityMicromapEXT"), cpp_flags(self_defaulted)]
+extern class VkOpacityMicromap;
+
+[cpp_header("<core/graphics/vulkan/blas_opacity_micromap_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::BlasGeometryScratch"), cpp_flags(no_copy, no_assign)]
+extern class BlasGeometryScratch{
+    void resizeForSizeQuery(in usize size);
+};
+
+[cpp_header("<global/exception.h>"), cpp_name("::RuntimeException")]
+extern class WorkspaceTestException;
+
+[cpp_header("<core/graphics/vulkan/descriptor_buffer_allocation_state.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorBufferSegmentKind::Enum")]
+extern enum DescriptorBufferSegmentKind : u8{ None, Resource, Sampler };
+
+[cpp_header("<core/graphics/vulkan/texture_transfer_layout.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::BufferImageCopyRequiredSize::Enum")]
+extern enum BufferImageCopyRequiredSize : u8{ TouchedBytes, PaddedSlices };
+
+[cpp_header("<core/graphics/vulkan/texture_transfer_layout.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::BufferImageCopyPitchFields::Enum")]
+extern enum BufferImageCopyPitchFields : u8{ OmitImplicit, EmitExplicit };
+
+[cpp_header("<core/graphics/vulkan/descriptor_class_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorClassPolicy::ClassToResourceType")]
+extern ResourceType ClassToResourceType(in GpuDescriptorClass kind);
+
+[cpp_header("<core/graphics/vulkan/descriptor_class_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorClassPolicy::IsResourceTypeCompatible")]
+extern b8 IsResourceTypeCompatible(in GpuDescriptorClass kind, in ResourceType resource);
+
+[cpp_header("<core/graphics/vulkan/descriptor_class_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorClassPolicy::IsSampledImageClass")]
+extern b8 IsSampledImageClass(in GpuDescriptorClass kind);
+
+[cpp_header("<core/graphics/vulkan/descriptor_class_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorClassPolicy::GetSampledImageDimension")]
+extern TextureDimension GetSampledImageDimension(in GpuDescriptorClass kind);
+
+[cpp_header("<core/graphics/vulkan/descriptor_image_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::DescriptorImagePolicy::Validate")]
+extern b8 ValidateDescriptorImage(in GpuDescriptorClass kind, in DescriptorWriteItem item, in TextureDesc texture);
+
+[cpp_header("<core/graphics/vulkan/queue_barrier_scope_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::QueueBarrierScopePolicy::Normalize")]
+extern void NormalizeQueueBarrierScope(in GpuQueueCapability capabilities, mut VkPipelineStageFlags2 stages, mut VkAccessFlags2 access);
+
+[cpp_header("<core/graphics/vulkan/texture_image_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::BuildTextureImageCreateInfo")]
+extern VkImageCreateInfo BuildTextureImageCreateInfo(in TextureDesc desc, in TextureCreateMetadata metadata);
+
+[cpp_header("<core/graphics/vulkan/texture_image_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent")]
+extern b8 IsTextureImageInfoConsistent(in TextureDesc desc, in VkImageCreateInfo info);
+
+[cpp_header("<core/graphics/vulkan/texture_shape_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanTextureDetail::TextureShapePolicy::IsValid")]
+extern b8 IsValidTextureShape(in TextureDesc desc);
+
+[cpp_header("<core/graphics/vulkan/texture_shape_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanTextureDetail::TextureShapePolicy::MaxMipLevels")]
+extern u32 MaxMipLevels(in TextureDesc desc);
+
+[cpp_header("<core/graphics/vulkan/texture_transfer_layout.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::TextureTransferLayout::BuildBufferImageCopyLayout")]
+extern Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(in VkExtent3D extent, in TextureFormatBlockLayout block, in u64 rowPitch, in u64 depthPitch, in BufferImageCopyRequiredSize sizeMode, in BufferImageCopyPitchFields pitchMode);
+
+[cpp_header("<core/graphics/runtime/runtime_setup_upload_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::SetupUploadGraph::Scheduling")]
+extern GpuTaskSchedulingHint SetupUploadSchedulingHint(in usize bytes, in b8 multiQueue, in b8 crossFamily);
+
+[cpp_header("<core/graphics/runtime/runtime_setup_upload_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::SetupUploadGraph::FinalState")]
+extern ResourceStates FinalState(in ResourceStates state);
+
+[cpp_header("<core/graphics/runtime/runtime_setup_upload_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::SetupUploadGraph::ResolveConsumerSharing")]
+extern ResourceQueueSharing ResolveConsumerSharing(in ResourceQueueSharing declared, in CommandQueue consumer, in b8 crossFamily);
+
+[cpp_header("<core/graphics/runtime/runtime_setup_upload_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::SetupUploadGraph::s_LargeMinimumBytes")]
+extern const usize s_LargeUploadMinimumBytes;
+
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::DescriptorWriteItem::None")]
+extern DescriptorWriteItem EmptyDescriptorWrite();
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::WorkspaceAddress")]
+extern usize WorkspaceAddress(in StandaloneGraphWorkspaceLease lease);
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::SetImageQueueFamilies")]
+extern void SetImageQueueFamilies(mut VkImageCreateInfo info, in Span<u32> families);
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::ValidateTextureCreateDesc")]
+extern Expected<TextureCreateMetadata> ValidateTextureCreateDesc(in TextureDesc desc);
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::ResolveMicromapIndexFormat")]
+extern Expected<OpacityMicromapIndexFormat> ResolveMicromapIndexFormat(in Format format);
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::GeometryChainAddress")]
+extern usize GeometryChainAddress(in BlasGeometryScratch scratch, in usize index);
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::MicromapUsagesAddress")]
+extern usize MicromapUsagesAddress(in VkOpacityMicromap micromap);
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::SetGeometryUsageCount")]
+extern void SetGeometryUsageCount(mut RayTracingGeometryDesc geometry, in u32 count);
+
+[cpp_header("<tests/unit/graphics/vulkan_resource_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::AttachMicromaps")]
+extern void AttachMicromaps(in Span<RayTracingGeometryDesc> geometries, in ScratchStorageVector<usize> offsets, in ScratchStorageVector<VkMicromapUsage> usages, mut ScratchStorageVector<VkOpacityMicromap> micromaps, mut BlasGeometryScratch scratch);
+
+type GpuCrashMarkerTestArena = HeapStorage;
+type DefaultResourceTestArena = HeapStorage;
+type SetupUploadScheduling = GpuTaskSchedulingHint;
+type DescriptorBufferSegmentKindEnum = DescriptorBufferSegmentKind;
+
+[ordered]
+class DescriptorBufferAllocationHarness{
+    public HeapStorage arena;
+    public DescriptorBufferAllocationState state = DescriptorBufferAllocationState(this.arena);
+    public Array<u8, 64> bytes;
+    public Expected<DescriptorBufferSegment> allocate(in DescriptorBufferSegmentKind kind, in u32 size, in u32 alignment, in u32 generation){
+        return this.state.allocate(kind, size, alignment, generation, cast<u32>(this.bytes.size()), this.bytes.data());
     }
-
-    void free(const Core::GraphicsBackend::DescriptorBufferSegment& segment, u32 generation)noexcept{
-        state.free(segment, generation, static_cast<u32>(bytes.size()));
+    public void free(in DescriptorBufferSegment segment, in u32 generation){ this.state.free(segment, generation, cast<u32>(this.bytes.size())); }
+    public b8 isLive(in DescriptorBufferSegment segment, in DescriptorBufferSegmentKind kind, in u32 generation)const{
+        return this.state.isLive(segment, kind, generation, cast<u32>(this.bytes.size()));
     }
+}
 
-    [[nodiscard]] b8 isLive(const Core::GraphicsBackend::DescriptorBufferSegment& segment, Core::GraphicsBackend::DescriptorBufferSegmentKind::Enum kind, u32 generation)const noexcept{
-        return state.isLive(segment, kind, generation, static_cast<u32>(bytes.size()));
+class BlasOpacityMicromapAttachmentCheck{
+    public b8 absentGeometrySkipped = false;
+    public b8 emptyUsageGeometryBound = false;
+    public b8 emptyUsagePointerNull = false;
+    public b8 populatedGeometryBound = false;
+    public b8 populatedUsagePointerMatches = false;
+}
+
+BlasOpacityMicromapAttachmentCheck RunBlasOpacityMicromapAttachmentCheck(){
+    ScratchStorage arena(s_TestArena);
+    Array<RayTracingGeometryDesc, 3> geometries;
+    SetGeometryUsageCount(geometries[2u], 2u);
+    ScratchStorageVector<usize> offsets(arena);
+    offsets.resize(3u);
+    offsets[0u] = usize.max;
+    offsets[1u] = 0u;
+    offsets[2u] = 0u;
+    ScratchStorageVector<VkMicromapUsage> usages(arena);
+    usages.resize(2u);
+    ScratchStorageVector<VkOpacityMicromap> micromaps(arena);
+    micromaps.resize(3u);
+    BlasGeometryScratch scratch(arena);
+    scratch.resizeForSizeQuery(3u);
+    AttachMicromaps(geometries, offsets, usages, micromaps, scratch);
+    BlasOpacityMicromapAttachmentCheck check;
+    check.absentGeometrySkipped = GeometryChainAddress(scratch, 0u) == 0u;
+    check.emptyUsageGeometryBound = GeometryChainAddress(scratch, 1u) == TestValueAddress<VkOpacityMicromap>(micromaps[1u]);
+    check.emptyUsagePointerNull = MicromapUsagesAddress(micromaps[1u]) == 0u;
+    check.populatedGeometryBound = GeometryChainAddress(scratch, 2u) == TestValueAddress<VkOpacityMicromap>(micromaps[2u]);
+    check.populatedUsagePointerMatches = MicromapUsagesAddress(micromaps[2u]) == TestDataAddress(usages);
+    return check;
+}
+
+class EmbeddedNullMarkerHashes{
+    public usize outerHash = 0u;
+    public usize nestedHash = 0u;
+}
+
+EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullMarkers(mut GpuCrashMarkerTracker tracker){
+    Array<u8, 6> label(79u, 117u, 116u, 101u, 114u, 88u);
+    EmbeddedNullMarkerHashes hashes;
+    hashes.outerHash = tracker.pushEvent(BytePrefixText(label, 5u));
+    label[0u] = 120u;
+    const Array<u8, 3> nested(73u, 0u, 110u);
+    hashes.nestedHash = tracker.pushEvent(BytePrefixText(nested, nested.size()));
+    return hashes;
+}
+
+b8 MatchesEmbeddedNullNestedMarker(in StringView actual){
+    const Array<u8, 9> expected(79u, 117u, 116u, 101u, 114u, 47u, 73u, 0u, 110u);
+    return actual == BytePrefixText(expected, expected.size());
+}
+
+b8 IsConcurrentTextureImageConsistent(in TextureDesc desc, in VkImageCreateInfo imageInfo, in Span<u32> families, in VkImageCreateFlags extraFlags){
+    VkImageCreateInfo copy = imageInfo;
+    SetImageQueueFamilies(copy, families);
+    copy.flags |= extraFlags;
+    return IsTextureImageInfoConsistent(desc, copy);
+}
+
+void InsertCrashMarkers(mut GpuCrashTracker tracker, mut HeapStorage arena, in Span<StringView> names,
+    mut TestLatch start, mut TestLatch midpoint, mut TestAtomic<b8> invalid, mut TestAtomic<u32> writers){
+    {
+        GpuCrashMarkerTracker local(tracker, arena);
+        start.arrive_and_wait();
+        for(usize i = 0u; i < names.size(); ++i){
+            if(i == names.size() / 2u)
+                midpoint.arrive_and_wait();
+            local.resetEventStack();
+            const usize hash = local.pushEvent(names[i]);
+            const ResolvedMarker inserted = tracker.resolveMarker(hash);
+            if(!inserted.first() || inserted.second() != names[i])
+                invalid.store(true, MemoryOrder::release);
+        }
     }
-};
-
-struct BlasOpacityMicromapAttachmentCheck{
-    b8 absentGeometrySkipped = false;
-    b8 emptyUsageGeometryBound = false;
-    b8 emptyUsagePointerNull = false;
-    b8 populatedGeometryBound = false;
-    b8 populatedUsagePointerMatches = false;
-};
-
-struct CalibratedTimestampProbeResult{
-    b8 supported = false;
-    u32 countCalls = 0u;
-    u32 listCalls = 0u;
-    u32 timestampCalls = 0u;
-};
-
-struct ClusterOperationCopyInspection{
-    b8 builtOk = false;
-    u32 maxAccelerationStructureCount = 0u;
-    usize activeInputAddress = 0u;
-    usize moveFieldAddress = 1u;
-    usize blasFieldAddress = 1u;
-    usize clusterFieldAddress = 1u;
-};
-
-struct EmbeddedNullMarkerHashes{
-    usize outerHash = 0u;
-    usize nestedHash = 0u;
-};
-
-[[nodiscard]] FOUNDATION_INLINE auto ResolveImplicitOpacityMicromapIndexFormat(){
-    return Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(Core::Format::UNKNOWN, {});
+    const u32 previous = writers.fetch_sub(1u, MemoryOrder::acq_rel);
+    if(previous == 0u || previous > 2u)
+        invalid.store(true, MemoryOrder::release);
 }
 
-[[nodiscard]] FOUNDATION_INLINE auto ValidateDefaultTextureCreateDesc(const Core::TextureDesc& desc){
-    return Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::ValidateTextureCreateDesc(desc, {}, false);
+b8 RunConcurrentCrashMarkerGrowthCheck(mut GpuCrashTracker tracker, mut HeapStorage arena, in usize hash, in ResolvedMarker retained, in StringView label){
+    const Array<StringView, 16> firstNames(
+        "Concurrent writer A marker 00", "Concurrent writer A marker 01",
+        "Concurrent writer A marker 02", "Concurrent writer A marker 03",
+        "Concurrent writer A marker 04", "Concurrent writer A marker 05",
+        "Concurrent writer A marker 06", "Concurrent writer A marker 07",
+        "Concurrent writer A marker 08", "Concurrent writer A marker 09",
+        "Concurrent writer A marker 10", "Concurrent writer A marker 11",
+        "Concurrent writer A marker 12", "Concurrent writer A marker 13",
+        "Concurrent writer A marker 14", "Concurrent writer A marker 15");
+    const Array<StringView, 16> secondNames(
+        "Concurrent writer B marker 00", "Concurrent writer B marker 01",
+        "Concurrent writer B marker 02", "Concurrent writer B marker 03",
+        "Concurrent writer B marker 04", "Concurrent writer B marker 05",
+        "Concurrent writer B marker 06", "Concurrent writer B marker 07",
+        "Concurrent writer B marker 08", "Concurrent writer B marker 09",
+        "Concurrent writer B marker 10", "Concurrent writer B marker 11",
+        "Concurrent writer B marker 12", "Concurrent writer B marker 13",
+        "Concurrent writer B marker 14", "Concurrent writer B marker 15");
+    TestLatch start(3u);
+    TestLatch midpoint(3u);
+    TestAtomic<u32> writers(2u);
+    TestAtomic<b8> invalid(false);
+    TestThread first(lambda[mut tracker, mut arena, in firstNames, mut start, mut midpoint, mut invalid, mut writers]() -> void{
+        InsertCrashMarkers(tracker, arena, firstNames, start, midpoint, invalid, writers);
+    });
+    TestThread second(lambda[mut tracker, mut arena, in secondNames, mut start, mut midpoint, mut invalid, mut writers]() -> void{
+        InsertCrashMarkers(tracker, arena, secondNames, start, midpoint, invalid, writers);
+    });
+    start.arrive_and_wait();
+    auto valid = lambda[mut tracker, in hash, in retained, in label]() -> b8{
+        const ResolvedMarker marker = tracker.resolveMarker(hash);
+        return retained.second() == label && marker.first() && marker.second() == label;
+    };
+    if(!valid())
+        invalid.store(true, MemoryOrder::release);
+    midpoint.arrive_and_wait();
+    do{
+        if(!valid())
+            invalid.store(true, MemoryOrder::release);
+        YieldThread();
+    }while(writers.load(MemoryOrder::acquire) != 0u);
+    first.join();
+    second.join();
+    return invalid.load(MemoryOrder::acquire);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 IsConcurrentTextureImageConsistent(
-    const Core::TextureDesc& desc,
-    VkImageCreateInfo imageInfo,
-    const Span<const u32> families,
-    const VkImageCreateFlags extraFlags
-)noexcept{
-    imageInfo.queueFamilyIndexCount = static_cast<u32>(families.size());
-    imageInfo.pQueueFamilyIndices = families.data();
-    imageInfo.flags |= extraFlags;
-    return Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo);
-}
-
-[[nodiscard]] BlasOpacityMicromapAttachmentCheck RunBlasOpacityMicromapAttachmentCheck();
-[[nodiscard]] CalibratedTimestampProbeResult RunCalibratedTimestampProbe(b8 retryFirstCount, b8 hasDeviceDomain);
-[[nodiscard]] ClusterOperationCopyInspection InspectClusterOperationCopy(const Core::RayTracingClusterOperationParams& params);
-[[nodiscard]] EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullMarkers(Core::GpuCrashMarkerTracker& commandListTracker);
-[[nodiscard]] b8 MatchesEmbeddedNullNestedMarker(AStringView actual)noexcept;
-
-[[nodiscard]] b8 RunConcurrentCrashMarkerGrowthCheck(
-    Core::GpuCrashTracker& crashTracker,
-    Core::Alloc::GlobalArena& arena,
-    usize retainedHash,
-    const Core::ResolvedMarker& retained,
-    AStringView retainedLabel
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::GraphicsTimingCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using DefaultResourceTestArena = Tests::GraphicsResourceSuiteDetail::DefaultResourceTestArena;
-using GpuCrashMarkerTestArena = Tests::GraphicsResourceSuiteDetail::GpuCrashMarkerTestArena;
-using DescriptorBufferAllocationHarness = Tests::GraphicsResourceSuiteDetail::DescriptorBufferAllocationHarness;
-using BlasOpacityMicromapAttachmentCheck = Tests::GraphicsResourceSuiteDetail::BlasOpacityMicromapAttachmentCheck;
-using CalibratedTimestampProbeResult = Tests::GraphicsResourceSuiteDetail::CalibratedTimestampProbeResult;
-using ClusterOperationCopyInspection = Tests::GraphicsResourceSuiteDetail::ClusterOperationCopyInspection;
-using EmbeddedNullMarkerHashes = Tests::GraphicsResourceSuiteDetail::EmbeddedNullMarkerHashes;
-using DescriptorBufferSegment = Core::GraphicsBackend::DescriptorBufferSegment;
-namespace DescriptorBufferSegmentKind = Core::GraphicsBackend::DescriptorBufferSegmentKind;
-using DescriptorBufferSegmentKindEnum = Core::GraphicsBackend::DescriptorBufferSegmentKind::Enum;
-using Tests::GraphicsResourceSuiteDetail::ResolveImplicitOpacityMicromapIndexFormat;
-using Tests::GraphicsResourceSuiteDetail::ValidateDefaultTextureCreateDesc;
-using Tests::GraphicsResourceSuiteDetail::IsConcurrentTextureImageConsistent;
-using Tests::GraphicsResourceSuiteDetail::RunBlasOpacityMicromapAttachmentCheck;
-using Tests::GraphicsResourceSuiteDetail::RunCalibratedTimestampProbe;
-using Tests::GraphicsResourceSuiteDetail::InspectClusterOperationCopy;
-using Tests::GraphicsResourceSuiteDetail::PushTruncatedAndEmbeddedNullMarkers;
-using Tests::GraphicsResourceSuiteDetail::MatchesEmbeddedNullNestedMarker;
-using Tests::GraphicsResourceSuiteDetail::RunConcurrentCrashMarkerGrowthCheck;
-
-using QueueBarrierScopePolicy = Core::GraphicsBackend::QueueBarrierScopePolicy;
-namespace GpuQueueCapability = Core::GpuQueueCapability;
-using BlasOpacityMicromapPolicy = Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy;
-using OpacityMicromapIndexFormat = decltype(Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(Core::Format::UNKNOWN, {}))::value_type;
-namespace RayTracingClusterOperationType = Core::RayTracingClusterOperationType;
-using RayTracingClusterOperationParams = Core::RayTracingClusterOperationParams;
-
-using GpuCrashTracker = Core::GpuCrashTracker;
-using GpuCrashMarkerTracker = Core::GpuCrashMarkerTracker;
-using ResolvedMarker = Core::ResolvedMarker;
-
-using DescriptorClassPolicy = Core::GraphicsBackend::DescriptorClassPolicy;
-using DescriptorImagePolicy = Core::GraphicsBackend::DescriptorImagePolicy;
-namespace GpuDescriptorClass = Core::GpuDescriptorClass;
-namespace ResourceType = Core::ResourceType;
-namespace TextureDimension = Core::TextureDimension;
-namespace Format = Core::Format;
-using TextureDesc = Core::TextureDesc;
-using DescriptorWriteItem = Core::DescriptorWriteItem;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-
-using SetupUploadGraph = Core::GraphicsModuleDetail::SetupUploadGraph;
-using SetupUploadScheduling = decltype(Core::GraphicsModuleDetail::SetupUploadGraph::Scheduling(0u, false, false));
-namespace GpuTaskCostHint = Core::GpuTaskCostHint;
-namespace ResourceStates = Core::ResourceStates;
-namespace ResourceQueueSharing = Core::ResourceQueueSharing;
-namespace CommandQueue = Core::CommandQueue;
-
-using StandaloneGraphWorkspacePool = Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool;
-using StandaloneGraphWorkspaceLease = Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease;
-
-[[nodiscard]] FOUNDATION_INLINE usize WorkspaceAddress(const StandaloneGraphWorkspaceLease& lease)noexcept{
-    return reinterpret_cast<usize>(lease.workspace());
-}
-
-using TextureImagePolicy = Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy;
-using TextureCreateMetadata = decltype(Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::ValidateTextureCreateDesc(Core::TextureDesc{}, {}, false))::value_type;
-using TextureShapePolicy = Core::GraphicsBackend::VulkanTextureDetail::TextureShapePolicy;
-using TextureTransferLayout = Core::GraphicsBackend::VulkanDetail::TextureTransferLayout;
-using TextureFormatBlockLayout = Core::GraphicsBackend::VulkanDetail::TextureFormatBlockLayout;
-using BufferImageCopyLayout = decltype(Core::GraphicsBackend::VulkanDetail::TextureTransferLayout::BuildBufferImageCopyLayout(
-    VkExtent3D{},
-    Core::GraphicsBackend::VulkanDetail::TextureFormatBlockLayout{},
-    0u,
-    0u,
-    Core::GraphicsBackend::VulkanDetail::BufferImageCopyRequiredSize::TouchedBytes,
-    Core::GraphicsBackend::VulkanDetail::BufferImageCopyPitchFields::EmitExplicit
-))::value_type;
-namespace BufferImageCopyRequiredSize = Core::GraphicsBackend::VulkanDetail::BufferImageCopyRequiredSize;
-namespace BufferImageCopyPitchFields = Core::GraphicsBackend::VulkanDetail::BufferImageCopyPitchFields;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::BytePrefixText")]
+extern StringView BytePrefixText(in Span<u8> bytes, in usize count);
 
 type RayTracingClusterOperationTypeEnum = RayTracingClusterOperationType;
 
@@ -271,19 +375,19 @@ b8 CheckConcurrentCrashMarkerGrowth(
     in ResolvedMarker retained,
     in StringView retainedLabel
 ){
-    return RunConcurrentCrashMarkerGrowthCheck(crashTracker, testArena.arena, retainedHash, retained, retainedLabel);
+    return RunConcurrentCrashMarkerGrowthCheck(crashTracker, testArena, retainedHash, retained, retainedLabel);
 }
 
 void VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess(){
     VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_COPY_BIT;
     VkAccessFlags2 access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT;
-    QueueBarrierScopePolicy::Normalize(GpuQueueCapability::Transfer, stages, access);
+    NormalizeQueueBarrierScope(GpuQueueCapability::Transfer, stages, access);
     EXPECT_EQ(stages, VK_PIPELINE_STAGE_2_COPY_BIT);
     EXPECT_EQ(access, VK_ACCESS_2_TRANSFER_READ_BIT);
 
     stages = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
     access = VK_ACCESS_2_SHADER_READ_BIT;
-    QueueBarrierScopePolicy::Normalize(GpuQueueCapability::Transfer, stages, access);
+    NormalizeQueueBarrierScope(GpuQueueCapability::Transfer, stages, access);
     EXPECT_EQ(stages, VK_PIPELINE_STAGE_2_NONE);
     EXPECT_EQ(access, 0u);
 }
@@ -296,55 +400,16 @@ void VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmpt
     EXPECT_TRUE(attachment.populatedGeometryBound);
     EXPECT_TRUE(attachment.populatedUsagePointerMatches);
 
-    const Expected<OpacityMicromapIndexFormat> implicitFormat = ResolveImplicitOpacityMicromapIndexFormat();
+    const Expected<OpacityMicromapIndexFormat> implicitFormat = ResolveMicromapIndexFormat(Format::UNKNOWN);
     ASSERT_TRUE(implicitFormat.has_value());
     EXPECT_EQ(implicitFormat.value().indexType, VK_INDEX_TYPE_NONE_KHR);
     EXPECT_EQ(implicitFormat.value().indexStride, 0u);
 }
 
-void VerifyCalibratedTimestampProbe_RetriesIncompleteEnumerationBeforeDeviceQuery(){
-    const CalibratedTimestampProbeResult probe = RunCalibratedTimestampProbe(true, true);
-    EXPECT_TRUE(probe.supported);
-    EXPECT_EQ(probe.countCalls, 2u);
-    EXPECT_EQ(probe.listCalls, 1u);
-    EXPECT_EQ(probe.timestampCalls, 1u);
-}
-
-void VerifyCalibratedTimestampProbe_MissingDeviceDomainDoesNotQueryTimestamps(){
-    const CalibratedTimestampProbeResult probe = RunCalibratedTimestampProbe(false, false);
-    EXPECT_FALSE(probe.supported);
-    EXPECT_EQ(probe.countCalls, 1u);
-    EXPECT_EQ(probe.listCalls, 1u);
-    EXPECT_EQ(probe.timestampCalls, 0u);
-}
-
-void VerifyGpuClusterOperation_NativeInputRebindsUnionPointersAfterCopy(){
-    Array<RayTracingClusterOperationTypeEnum, 5> opTypes = Array<RayTracingClusterOperationTypeEnum, 5>();
-    opTypes[0u] = RayTracingClusterOperationType::Move;
-    opTypes[1u] = RayTracingClusterOperationType::ClasBuild;
-    opTypes[2u] = RayTracingClusterOperationType::ClasBuildTemplates;
-    opTypes[3u] = RayTracingClusterOperationType::ClasInstantiateTemplates;
-    opTypes[4u] = RayTracingClusterOperationType::BlasBuild;
-    for(in RayTracingClusterOperationTypeEnum opType : opTypes){
-        RayTracingClusterOperationParams params = RayTracingClusterOperationParams();
-        params.type = opType;
-        params.maxArgCount = 7u;
-        const ClusterOperationCopyInspection inspection = InspectClusterOperationCopy(params);
-        ASSERT_TRUE(inspection.builtOk);
-        EXPECT_EQ(inspection.maxAccelerationStructureCount, 7u);
-        if(opType == RayTracingClusterOperationType::Move)
-            EXPECT_EQ(inspection.activeInputAddress, inspection.moveFieldAddress);
-        else if(opType == RayTracingClusterOperationType::BlasBuild)
-            EXPECT_EQ(inspection.activeInputAddress, inspection.blasFieldAddress);
-        else
-            EXPECT_EQ(inspection.activeInputAddress, inspection.clusterFieldAddress);
-    }
-}
-
 void VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullBytes(){
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
-    GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
-    GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
+    GpuCrashTracker crashTracker = GpuCrashTracker(testArena);
+    GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena);
     const EmbeddedNullMarkerHashes hashes = PushTruncatedAndEmbeddedNullEvents(commandListTracker);
     const ResolvedMarker outer = crashTracker.resolveMarker(hashes.outerHash);
     const ResolvedMarker nested = crashTracker.resolveMarker(hashes.nestedHash);
@@ -356,8 +421,8 @@ void VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullByte
 
 void VerifyGpuCrashMarkerTracker_PushesResolvedHistoryDuringStackGrowth(){
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
-    GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
-    GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
+    GpuCrashTracker crashTracker = GpuCrashTracker(testArena);
+    GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena);
     const usize sourceHash = commandListTracker.pushEvent("a marker long enough to grow the stack");
     const ResolvedMarker source = crashTracker.resolveMarker(sourceHash);
     ASSERT_TRUE(source.first());
@@ -374,9 +439,9 @@ void VerifyGpuCrashMarkerTracker_PushesResolvedHistoryDuringStackGrowth(){
 
 void VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset(){
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
-    GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
-    GpuCrashMarkerTracker firstCommandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
-    GpuCrashMarkerTracker secondCommandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
+    GpuCrashTracker crashTracker = GpuCrashTracker(testArena);
+    GpuCrashMarkerTracker firstCommandListTracker = GpuCrashMarkerTracker(crashTracker, testArena);
+    GpuCrashMarkerTracker secondCommandListTracker = GpuCrashMarkerTracker(crashTracker, testArena);
 
     const usize outerHash = firstCommandListTracker.pushEvent("Outer");
     const usize nestedHash = firstCommandListTracker.pushEvent("Inner");
@@ -407,7 +472,7 @@ void VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossComman
 
 void VerifyGpuCrashMarkerTracker_DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable(){
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
-    GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
+    GpuCrashTracker crashTracker = GpuCrashTracker(testArena);
     Array<StringView, 6> markerNames = Array<StringView, 6>();
     markerNames[0u] = "Destroyed command list 0";
     markerNames[1u] = "Destroyed command list 1";
@@ -419,7 +484,7 @@ void VerifyGpuCrashMarkerTracker_DestroyedCommandListTrackersLeaveAllDeviceHisto
 
     usize markerIndex = 0u;
     for(in StringView markerName : markerNames){
-        GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
+        GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena);
         markerHashes[markerIndex] = commandListTracker.pushEvent(markerName);
         ++markerIndex;
     }
@@ -435,10 +500,10 @@ void VerifyGpuCrashMarkerTracker_DestroyedCommandListTrackersLeaveAllDeviceHisto
 
 void VerifyGpuCrashMarkerTracker_RetainedResolvedViewSurvivesConcurrentHistoryGrowthAndTrackerDestruction(){
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
-    GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
+    GpuCrashTracker crashTracker = GpuCrashTracker(testArena);
     usize retainedHash = 0u;
     {
-        GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
+        GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena);
         retainedHash = commandListTracker.pushEvent(s_RetainedMarkerLabel);
     }
     const ResolvedMarker retained = crashTracker.resolveMarker(retainedHash);
@@ -462,8 +527,8 @@ void VerifyGpuCrashMarkerTracker_RetainedResolvedViewSurvivesConcurrentHistoryGr
 
 void VerifyGpuCrashMarkerTracker_ExactDuplicatePathsReuseIdsAndDistinctPathsResolveIndependently(){
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
-    GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
-    GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
+    GpuCrashTracker crashTracker = GpuCrashTracker(testArena);
+    GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena);
 
     const usize firstRootHash = commandListTracker.pushEvent(s_DuplicateRootLabel);
     const usize firstDuplicateHash = commandListTracker.pushEvent(s_DuplicateLeafLabel);
@@ -511,15 +576,15 @@ void VerifyGpuDescriptorBufferAllocation_CoalescingReusesRangeWithoutRevivingSta
 }
 
 void VerifyGpuDescriptorClassPolicy_StorageAliasesAndSampledImageDimensionsStayDistinct(){
-    EXPECT_EQ(DescriptorClassPolicy::ClassToResourceType(GpuDescriptorClass::StorageBuffer), ResourceType::StructuredBuffer_UAV);
-    EXPECT_TRUE(DescriptorClassPolicy::IsResourceTypeCompatible(GpuDescriptorClass::StorageBuffer, ResourceType::StructuredBuffer_SRV));
-    EXPECT_TRUE(DescriptorClassPolicy::IsResourceTypeCompatible(GpuDescriptorClass::StorageBuffer, ResourceType::RawBuffer_UAV));
-    EXPECT_FALSE(DescriptorClassPolicy::IsResourceTypeCompatible(GpuDescriptorClass::UniformBuffer, ResourceType::RawBuffer_UAV));
-    EXPECT_TRUE(DescriptorClassPolicy::IsSampledImageClass(GpuDescriptorClass::SampledImage2DArrayUint));
-    EXPECT_EQ(DescriptorClassPolicy::GetSampledImageDimension(GpuDescriptorClass::SampledImage2DArrayUint), TextureDimension::Texture2DArray);
-    EXPECT_EQ(DescriptorClassPolicy::GetSampledImageDimension(GpuDescriptorClass::SampledImageCube), TextureDimension::TextureCube);
-    EXPECT_FALSE(DescriptorClassPolicy::IsSampledImageClass(GpuDescriptorClass::StorageImage));
-    EXPECT_EQ(DescriptorClassPolicy::GetSampledImageDimension(GpuDescriptorClass::StorageImage), TextureDimension::Unknown);
+    EXPECT_EQ(ClassToResourceType(GpuDescriptorClass::StorageBuffer), ResourceType::StructuredBuffer_UAV);
+    EXPECT_TRUE(IsResourceTypeCompatible(GpuDescriptorClass::StorageBuffer, ResourceType::StructuredBuffer_SRV));
+    EXPECT_TRUE(IsResourceTypeCompatible(GpuDescriptorClass::StorageBuffer, ResourceType::RawBuffer_UAV));
+    EXPECT_FALSE(IsResourceTypeCompatible(GpuDescriptorClass::UniformBuffer, ResourceType::RawBuffer_UAV));
+    EXPECT_TRUE(IsSampledImageClass(GpuDescriptorClass::SampledImage2DArrayUint));
+    EXPECT_EQ(GetSampledImageDimension(GpuDescriptorClass::SampledImage2DArrayUint), TextureDimension::Texture2DArray);
+    EXPECT_EQ(GetSampledImageDimension(GpuDescriptorClass::SampledImageCube), TextureDimension::TextureCube);
+    EXPECT_FALSE(IsSampledImageClass(GpuDescriptorClass::StorageImage));
+    EXPECT_EQ(GetSampledImageDimension(GpuDescriptorClass::StorageImage), TextureDimension::Unknown);
 }
 
 void VerifyGpuDescriptorImagePolicy_Storage3dRejectsIntegerFormatWhileTwoDimensionalStorageAcceptsIt(){
@@ -528,19 +593,19 @@ void VerifyGpuDescriptorImagePolicy_Storage3dRejectsIntegerFormatWhileTwoDimensi
     TextureDesc texture = TextureDesc();
     texture.dimension = TextureDimension::Texture3D;
     texture.format = Format::R32_UINT;
-    DescriptorWriteItem item = DescriptorWriteItem::None();
-    EXPECT_FALSE(DescriptorImagePolicy::Validate(GpuDescriptorClass::StorageImage, item, texture));
+    DescriptorWriteItem item = EmptyDescriptorWrite();
+    EXPECT_FALSE(ValidateDescriptorImage(GpuDescriptorClass::StorageImage, item, texture));
     EXPECT_TRUE(SawCapturedError(logger, "rejected format"));
     item.dimension = TextureDimension::Texture2D;
-    EXPECT_TRUE(DescriptorImagePolicy::Validate(GpuDescriptorClass::StorageImage, item, texture));
+    EXPECT_TRUE(ValidateDescriptorImage(GpuDescriptorClass::StorageImage, item, texture));
     item.dimension = TextureDimension::Unknown;
     item.format = Format::R32_FLOAT;
-    EXPECT_TRUE(DescriptorImagePolicy::Validate(GpuDescriptorClass::StorageImage, item, texture));
+    EXPECT_TRUE(ValidateDescriptorImage(GpuDescriptorClass::StorageImage, item, texture));
 }
 
 void VerifySetupUploadGraph_LargeThresholdKeepsQueueRoutingAndSubmissionBoundary(){
-    const SetupUploadScheduling below = SetupUploadGraph::Scheduling(SetupUploadGraph::s_LargeMinimumBytes - 1u, true, true);
-    const SetupUploadScheduling at = SetupUploadGraph::Scheduling(SetupUploadGraph::s_LargeMinimumBytes, true, true);
+    const SetupUploadScheduling below = SetupUploadSchedulingHint(s_LargeUploadMinimumBytes - 1u, true, true);
+    const SetupUploadScheduling at = SetupUploadSchedulingHint(s_LargeUploadMinimumBytes, true, true);
     EXPECT_EQ(below.cost, GpuTaskCostHint::Tiny);
     EXPECT_EQ(at.cost, GpuTaskCostHint::Large);
     Array<SetupUploadScheduling, 2> hints = Array<SetupUploadScheduling, 2>();
@@ -556,16 +621,16 @@ void VerifySetupUploadGraph_LargeThresholdKeepsQueueRoutingAndSubmissionBoundary
 }
 
 void VerifySetupUploadGraph_UnknownStateAndCrossFamilySharingKeepUploadContract(){
-    EXPECT_EQ(SetupUploadGraph::FinalState(ResourceStates::Unknown), ResourceStates::CopyDest);
-    EXPECT_EQ(SetupUploadGraph::FinalState(ResourceStates::ShaderResource), ResourceStates::ShaderResource);
-    EXPECT_EQ(SetupUploadGraph::ResolveConsumerSharing(ResourceQueueSharing::Exclusive, CommandQueue::Compute, false), ResourceQueueSharing::GraphicsAndAsyncCompute);
-    EXPECT_EQ(SetupUploadGraph::ResolveConsumerSharing(ResourceQueueSharing::Exclusive, CommandQueue::Compute, true), ResourceQueueSharing::AsyncCompute);
-    EXPECT_EQ(SetupUploadGraph::ResolveConsumerSharing(ResourceQueueSharing::Graphics, CommandQueue::Transfer, false), ResourceQueueSharing::GraphicsAndTransfer);
+    EXPECT_EQ(FinalState(ResourceStates::Unknown), ResourceStates::CopyDest);
+    EXPECT_EQ(FinalState(ResourceStates::ShaderResource), ResourceStates::ShaderResource);
+    EXPECT_EQ(ResolveConsumerSharing(ResourceQueueSharing::Exclusive, CommandQueue::Compute, false), ResourceQueueSharing::GraphicsAndAsyncCompute);
+    EXPECT_EQ(ResolveConsumerSharing(ResourceQueueSharing::Exclusive, CommandQueue::Compute, true), ResourceQueueSharing::AsyncCompute);
+    EXPECT_EQ(ResolveConsumerSharing(ResourceQueueSharing::Graphics, CommandQueue::Transfer, false), ResourceQueueSharing::GraphicsAndTransfer);
 }
 
 void VerifyStandaloneGraphWorkspacePool_OverlappingLeasesKeepDistinctWorkspacesAndReuseReleasedStorage(){
     DefaultResourceTestArena arena = DefaultResourceTestArena();
-    StandaloneGraphWorkspacePool pool = StandaloneGraphWorkspacePool(arena.arena);
+    StandaloneGraphWorkspacePool pool = StandaloneGraphWorkspacePool(arena);
     usize firstWorkspaceAddress = 0u;
     {
         const StandaloneGraphWorkspaceLease first = StandaloneGraphWorkspaceLease(pool);
@@ -588,16 +653,15 @@ void VerifyStandaloneGraphWorkspacePool_OverlappingLeasesKeepDistinctWorkspacesA
     EXPECT_TRUE(pool.releaseCommandListCaches());
 }
 
+[cpp_unwind]
 void VerifyStandaloneGraphWorkspacePool_ExceptionDiscardsLeaseWithoutBlockingNextSubmission(){
     DefaultResourceTestArena arena = DefaultResourceTestArena();
-    StandaloneGraphWorkspacePool pool = StandaloneGraphWorkspacePool(arena.arena);
-    native(mut pool){
-        EXPECT_THROW({
-            const Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease lease(pool);
-            ASSERT_NE(lease.workspace(), nullptr);
-            throw RuntimeException("expected workspace unwind");
-        }, RuntimeException);
-    }
+    StandaloneGraphWorkspacePool pool = StandaloneGraphWorkspacePool(arena);
+    EXPECT_TRUE(ThrowsException<WorkspaceTestException>(lambda[mut pool]() -> void{
+        const StandaloneGraphWorkspaceLease lease(pool);
+        ASSERT_NE(WorkspaceAddress(lease), 0u);
+        ThrowTestException<WorkspaceTestException>(WorkspaceTestException("expected workspace unwind"));
+    }));
     EXPECT_TRUE(pool.releaseCommandListCaches());
     {
         const StandaloneGraphWorkspaceLease next = StandaloneGraphWorkspaceLease(pool);
@@ -610,13 +674,13 @@ void VerifyStandaloneGraphWorkspacePool_ExceptionDiscardsLeaseWithoutBlockingNex
 void VerifyGpuTextureImagePolicyTests_ImageSharingRequiresCompleteQueueFamilyProvenance(){
     TextureDesc desc = TextureDesc();
     desc.format = Format::RGBA8_UNORM;
-    const Expected<TextureCreateMetadata> metadata = ValidateDefaultTextureCreateDesc(desc);
+    const Expected<TextureCreateMetadata> metadata = ValidateTextureCreateDesc(desc);
     ASSERT_TRUE(metadata.has_value());
-    VkImageCreateInfo imageInfo = TextureImagePolicy::BuildTextureImageCreateInfo(desc, metadata.value());
-    EXPECT_TRUE(TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo));
+    VkImageCreateInfo imageInfo = BuildTextureImageCreateInfo(desc, metadata.value());
+    EXPECT_TRUE(IsTextureImageInfoConsistent(desc, imageInfo));
     imageInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
     imageInfo.queueFamilyIndexCount = 1u;
-    EXPECT_FALSE(TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo));
+    EXPECT_FALSE(IsTextureImageInfoConsistent(desc, imageInfo));
     Array<u32, 2> families = Array<u32, 2>();
     families[0u] = 0u;
     families[1u] = 1u;
@@ -630,12 +694,12 @@ void VerifyGpuTextureShapePolicyTests_CubeArraysRequireWholeCubesAndSquareFaces(
     desc.width = 16u;
     desc.height = 16u;
     desc.arraySize = 12u;
-    EXPECT_TRUE(TextureShapePolicy::IsValid(desc));
+    EXPECT_TRUE(IsValidTextureShape(desc));
     desc.arraySize = 13u;
-    EXPECT_FALSE(TextureShapePolicy::IsValid(desc));
+    EXPECT_FALSE(IsValidTextureShape(desc));
     desc.arraySize = 12u;
     desc.height = 8u;
-    EXPECT_FALSE(TextureShapePolicy::IsValid(desc));
+    EXPECT_FALSE(IsValidTextureShape(desc));
 }
 
 void VerifyGpuTextureShapePolicyTests_ThreeDimensionalDepthDeterminesMipLimit(){
@@ -643,10 +707,10 @@ void VerifyGpuTextureShapePolicyTests_ThreeDimensionalDepthDeterminesMipLimit(){
     desc.dimension = TextureDimension::Texture3D;
     desc.depth = 16u;
     desc.mipLevels = 5u;
-    EXPECT_EQ(TextureShapePolicy::MaxMipLevels(desc), 5u);
-    EXPECT_TRUE(TextureShapePolicy::IsValid(desc));
+    EXPECT_EQ(MaxMipLevels(desc), 5u);
+    EXPECT_TRUE(IsValidTextureShape(desc));
     desc.mipLevels = 6u;
-    EXPECT_FALSE(TextureShapePolicy::IsValid(desc));
+    EXPECT_FALSE(IsValidTextureShape(desc));
 }
 
 void VerifyGpuTextureTransferLayoutTests_CompressedPaddedSlicesPreserveTouchedByteBoundary(){
@@ -658,274 +722,15 @@ void VerifyGpuTextureTransferLayoutTests_CompressedPaddedSlicesPreserveTouchedBy
     block.blockWidth = 4u;
     block.blockHeight = 4u;
     block.bytesPerBlock = 16u;
-    const Expected<BufferImageCopyLayout> touched = TextureTransferLayout::BuildBufferImageCopyLayout(extent, block, 48u, 144u, BufferImageCopyRequiredSize::TouchedBytes, BufferImageCopyPitchFields::EmitExplicit);
-    const Expected<BufferImageCopyLayout> padded = TextureTransferLayout::BuildBufferImageCopyLayout(extent, block, 48u, 144u, BufferImageCopyRequiredSize::PaddedSlices, BufferImageCopyPitchFields::EmitExplicit);
+    const Expected<BufferImageCopyLayout> touched = BuildBufferImageCopyLayout(extent, block, 48u, 144u, BufferImageCopyRequiredSize::TouchedBytes, BufferImageCopyPitchFields::EmitExplicit);
+    const Expected<BufferImageCopyLayout> padded = BuildBufferImageCopyLayout(extent, block, 48u, 144u, BufferImageCopyRequiredSize::PaddedSlices, BufferImageCopyPitchFields::EmitExplicit);
     ASSERT_TRUE(touched.has_value());
     ASSERT_TRUE(padded.has_value());
     EXPECT_EQ(touched.value().requiredSize, 224u);
     EXPECT_EQ(padded.value().requiredSize, 240u);
     EXPECT_EQ(touched.value().bufferRowLength, 12u);
     EXPECT_EQ(touched.value().bufferImageHeight, 12u);
-    EXPECT_FALSE(TextureTransferLayout::BuildBufferImageCopyLayout(extent, block, 17u, 0u, BufferImageCopyRequiredSize::TouchedBytes, BufferImageCopyPitchFields::OmitImplicit).has_value());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::GraphicsResourceSuiteDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-BlasOpacityMicromapAttachmentCheck RunBlasOpacityMicromapAttachmentCheck(){
-    using namespace NWB::Core;
-    using namespace NWB::Core::GraphicsBackend::VulkanDetail;
-    Alloc::ScratchArena arena(NWB::Tests::s_TestArena);
-    RayTracingGeometryDesc geometries[3];
-    geometries[2].geometryData.triangles.numOmmUsageCounts = 2u;
-    OpacityMicromapUsageOffsetVector offsets(arena);
-    offsets.resize(3u);
-    offsets[0] = Limit<usize>::s_Max;
-    offsets[1] = offsets[2] = 0u;
-    OpacityMicromapUsageVector usages(arena);
-    usages.resize(2u);
-    OpacityMicromapGeometryVector micromaps(arena);
-    micromaps.resize(3u);
-    BlasGeometryScratch scratch(arena);
-    scratch.resizeForSizeQuery(3u);
-    BlasOpacityMicromapPolicy::AttachBlasOpacityMicromapGeometries(geometries, 3u, offsets, usages, micromaps, scratch);
-    return BlasOpacityMicromapAttachmentCheck{
-        .absentGeometrySkipped = scratch.geometries[0].geometry.triangles.pNext == nullptr,
-        .emptyUsageGeometryBound = scratch.geometries[1].geometry.triangles.pNext == &micromaps[1],
-        .emptyUsagePointerNull = micromaps[1].pUsageCounts == nullptr,
-        .populatedGeometryBound = scratch.geometries[2].geometry.triangles.pNext == &micromaps[2],
-        .populatedUsagePointerMatches = micromaps[2].pUsageCounts == usages.data(),
-    };
-}
-
-EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullMarkers(Core::GpuCrashMarkerTracker& commandListTracker){
-    Array<char, 6u> label = { 'O', 'u', 't', 'e', 'r', 'X' };
-    const usize outerHash = commandListTracker.pushEvent(AStringView(label.data(), 5u));
-    label[0] = 'x';
-    const Array<char, 3u> nestedLabel = { 'I', '\0', 'n' };
-    const usize nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel));
-    return EmbeddedNullMarkerHashes{
-        .outerHash = outerHash,
-        .nestedHash = nestedHash,
-    };
-}
-
-b8 MatchesEmbeddedNullNestedMarker(const AStringView actual)noexcept{
-    constexpr Array<char, 9u> s_Expected = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
-    return actual == AStringView(s_Expected);
-}
-
-b8 RunConcurrentCrashMarkerGrowthCheck(
-    Core::GpuCrashTracker& crashTracker,
-    Core::Alloc::GlobalArena& arena,
-    const usize retainedHash,
-    const Core::ResolvedMarker& retained,
-    const AStringView retainedLabel
-){
-    constexpr Array<AStringView, 16> s_FirstWriterMarkerNames = {
-        "Concurrent writer A marker 00", "Concurrent writer A marker 01",
-        "Concurrent writer A marker 02", "Concurrent writer A marker 03",
-        "Concurrent writer A marker 04", "Concurrent writer A marker 05",
-        "Concurrent writer A marker 06", "Concurrent writer A marker 07",
-        "Concurrent writer A marker 08", "Concurrent writer A marker 09",
-        "Concurrent writer A marker 10", "Concurrent writer A marker 11",
-        "Concurrent writer A marker 12", "Concurrent writer A marker 13",
-        "Concurrent writer A marker 14", "Concurrent writer A marker 15",
-    };
-    constexpr Array<AStringView, 16> s_SecondWriterMarkerNames = {
-        "Concurrent writer B marker 00", "Concurrent writer B marker 01",
-        "Concurrent writer B marker 02", "Concurrent writer B marker 03",
-        "Concurrent writer B marker 04", "Concurrent writer B marker 05",
-        "Concurrent writer B marker 06", "Concurrent writer B marker 07",
-        "Concurrent writer B marker 08", "Concurrent writer B marker 09",
-        "Concurrent writer B marker 10", "Concurrent writer B marker 11",
-        "Concurrent writer B marker 12", "Concurrent writer B marker 13",
-        "Concurrent writer B marker 14", "Concurrent writer B marker 15",
-    };
-    Latch growthStart(3u);
-    Latch growthMidpoint(3u);
-    Atomic<u32> activeWriters{ 2u };
-    Atomic<b8> invalidObservation{ false };
-    const auto insertMarkers = [&](const Span<const AStringView> markerNames){
-        {
-            Core::GpuCrashMarkerTracker commandListTracker(crashTracker, arena);
-            growthStart.arrive_and_wait();
-            for(usize markerIndex = 0u; markerIndex < markerNames.size(); ++markerIndex){
-                if(markerIndex == markerNames.size() / 2u)
-                    growthMidpoint.arrive_and_wait();
-
-                commandListTracker.resetEventStack();
-                const usize insertedHash = commandListTracker.pushEvent(markerNames[markerIndex]);
-                const Core::ResolvedMarker inserted = crashTracker.resolveMarker(insertedHash);
-                if(!inserted.first() || inserted.second() != markerNames[markerIndex])
-                    invalidObservation.store(true, MemoryOrder::release);
-            }
-        }
-        const u32 previousActiveWriters = activeWriters.fetch_sub(1u, MemoryOrder::acq_rel);
-        if(previousActiveWriters == 0u || previousActiveWriters > 2u)
-            invalidObservation.store(true, MemoryOrder::release);
-    };
-    Thread firstWriter([&](){ insertMarkers(s_FirstWriterMarkerNames); });
-    Thread secondWriter([&](){ insertMarkers(s_SecondWriterMarkerNames); });
-
-    const auto retainedViewIsValid = [&]()noexcept{
-        const Core::ResolvedMarker resolved = crashTracker.resolveMarker(retainedHash);
-        return retained.second() == retainedLabel && resolved.first() && resolved.second() == retainedLabel;
-    };
-    growthStart.arrive_and_wait();
-    if(!retainedViewIsValid())
-        invalidObservation.store(true, MemoryOrder::release);
-    growthMidpoint.arrive_and_wait();
-    do{
-        if(!retainedViewIsValid())
-            invalidObservation.store(true, MemoryOrder::release);
-        YieldThread();
-    }while(activeWriters.load(MemoryOrder::acquire) != 0u);
-
-    firstWriter.join();
-    secondWriter.join();
-    return invalidObservation.load(MemoryOrder::acquire);
-}
-
-#if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-namespace __hidden_resource_calibrated_timestamps_mock{
-
-static u32 s_CountCalls = 0u;
-static u32 s_ListCalls = 0u;
-static u32 s_TimestampCalls = 0u;
-static b8 s_RetryFirstCount = false;
-static b8 s_HasDeviceDomain = false;
-
-VKAPI_ATTR VkResult VKAPI_CALL EnumerateDomains([[maybe_unused]] VkPhysicalDevice physicalDevice, u32* const count, VkTimeDomainKHR* const domains){
-    if(!domains){
-        ++s_CountCalls;
-        *count = 1u;
-        return s_RetryFirstCount && s_CountCalls == 1u ? VK_INCOMPLETE : VK_SUCCESS;
-    }
-    ++s_ListCalls;
-    *count = 1u;
-    domains[0] = s_HasDeviceDomain ? VK_TIME_DOMAIN_DEVICE_KHR : VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
-    return VK_SUCCESS;
-}
-
-VKAPI_ATTR VkResult VKAPI_CALL GetTimestamps([[maybe_unused]] VkDevice device, [[maybe_unused]] u32 count, [[maybe_unused]] const VkCalibratedTimestampInfoKHR* const infos, u64* const timestamps, u64* const maxDeviation){
-    ++s_TimestampCalls;
-    *timestamps = 1u;
-    *maxDeviation = 0u;
-    return VK_SUCCESS;
-}
-
-};
-using namespace __hidden_resource_calibrated_timestamps_mock;
-
-CalibratedTimestampProbeResult RunCalibratedTimestampProbe(const b8 retryFirstCount, const b8 hasDeviceDomain){
-    s_CountCalls = 0u;
-    s_ListCalls = 0u;
-    s_TimestampCalls = 0u;
-    s_RetryFirstCount = retryFirstCount;
-    s_HasDeviceDomain = hasDeviceDomain;
-    Core::Alloc::ScratchArena scratch(Tests::s_TestArena);
-    const b8 supported = Core::GraphicsBackend::VulkanDetail::CalibratedTimestampProbe::Query(
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE,
-        &EnumerateDomains,
-        &GetTimestamps,
-        scratch
-    );
-    return CalibratedTimestampProbeResult{
-        .supported = supported,
-        .countCalls = s_CountCalls,
-        .listCalls = s_ListCalls,
-        .timestampCalls = s_TimestampCalls,
-    };
-}
-
-ClusterOperationCopyInspection InspectClusterOperationCopy(const Core::RayTracingClusterOperationParams& params){
-    ClusterOperationCopyInspection result{};
-    const auto built = Core::GraphicsBackend::VulkanDetail::ClusterOperationInput::Build(params, FOUNDATION_TEXT("test cluster input"));
-    result.builtOk = built.has_value();
-    if(built){
-        auto copied = *built;
-        const auto nativeInfo = copied.nativeInfo();
-        result.maxAccelerationStructureCount = nativeInfo.maxAccelerationStructureCount;
-        if(params.type == Core::RayTracingClusterOperationType::Move)
-            result.activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pMoveObjects);
-        else if(params.type == Core::RayTracingClusterOperationType::BlasBuild)
-            result.activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pClustersBottomLevel);
-        else
-            result.activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pTriangleClusters);
-        result.moveFieldAddress = reinterpret_cast<usize>(&copied.move);
-        result.blasFieldAddress = reinterpret_cast<usize>(&copied.blas);
-        result.clusterFieldAddress = reinterpret_cast<usize>(&copied.cluster);
-    }
-    return result;
-}
-#else
-CalibratedTimestampProbeResult RunCalibratedTimestampProbe([[maybe_unused]] const b8 retryFirstCount, [[maybe_unused]] const b8 hasDeviceDomain){
-    return CalibratedTimestampProbeResult{};
-}
-
-ClusterOperationCopyInspection InspectClusterOperationCopy([[maybe_unused]] const Core::RayTracingClusterOperationParams& params){
-    return ClusterOperationCopyInspection{};
-}
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CalibratedTimestampProbe, RetriesIncompleteEnumerationBeforeDeviceQuery){ VerifyCalibratedTimestampProbe_RetriesIncompleteEnumerationBeforeDeviceQuery(); }
-TEST(CalibratedTimestampProbe, MissingDeviceDomainDoesNotQueryTimestamps){ VerifyCalibratedTimestampProbe_MissingDeviceDomainDoesNotQueryTimestamps(); }
-TEST(GpuClusterOperation, NativeInputRebindsUnionPointersAfterCopy){ VerifyGpuClusterOperation_NativeInputRebindsUnionPointersAfterCopy(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    EXPECT_FALSE(BuildBufferImageCopyLayout(extent, block, 17u, 0u, BufferImageCopyRequiredSize::TouchedBytes, BufferImageCopyPitchFields::OmitImplicit).has_value());
 }
 
 

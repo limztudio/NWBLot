@@ -7,7 +7,12 @@
 #include <impl/assets_font_atlas/asset.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/font_fixture.adhd>
-#include <tests/common/test_context.adhd>
+#include <impl/assets_font/cook.adhd>
+#include <impl/assets_font_atlas/cook.adhd>
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <tests/common/test_helpers.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include "name_cases.adhd"
 
@@ -15,104 +20,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_name("NWB_REPO_ROOT")]
+extern const StringView s_RepoRoot;
 
+const f32 s_InfinityF32 = BitCast<f32>(0x7f800000u);
+const f64 s_InfinityF64 = BitCast<f64>(0x7ff0000000000000ul);
+const f64 s_QuietNaNF64 = BitCast<f64>(0x7ff8000000000000ul);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/floating_point_environment_guard.adhd.h>
-
-#include <impl/assets_font/cook.adhd.h>
-
-#include <gtest/gtest.h>
-#include <impl/assets_font_atlas/cook.adhd.h>
-
-#include <core/assets/bunch/cook.h>
-#include <core/assets/cook_entry_registry.h>
-#include <core/common/module.h>
-
-#include <global/binary_big_endian.h>
-#include <global/filesystem.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::FontAtlasCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FontAtlasTestArenaTag{};
-struct AtlasTestArena : TestArena<FontAtlasTestArenaTag>{
-    Core::Alloc::ScratchArena scratchArena{ Name(s_FontAtlasValidationScratch) };
-    AtlasTestArena() = default;
-    explicit AtlasTestArena(const Name& scopeName)
-        : TestArena<FontAtlasTestArenaTag>(scopeName)
-    {}
-};
-
-struct FontMetadataTestArenaTag{};
-struct MetadataTestArena : TestArena<FontMetadataTestArenaTag>{
-    Core::Alloc::ScratchArena scratchArena{ s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch };
-};
-
-using AssetArena = Core::Assets::AssetArena;
-using AssetBytes = Core::Assets::AssetBytes;
-using ScratchArena = Core::Alloc::ScratchArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-using InitializerGuard = Core::Common::InitializerGuard;
-using CookEntryRegistry = Core::Assets::CookEntryRegistry;
-using CookEntryPathHashSet = Core::Assets::CookEntryPathHashSet;
-using CookEntryParseContext = Core::Assets::CookEntryParseContext;
-using ExpandedAssetMetadata = Core::Assets::ExpandedAssetMetadata;
-using ExpandedAssetMetadataVector = Core::Assets::ExpandedAssetMetadataVector;
-using NameHashHasher = Hasher<NameHash>;
-using NameHashEqual = EqualTo<NameHash>;
-using CpuTaskScheduler = Core::CpuTaskScheduler;
-using Core::Assets::RegisterAutoCollectedCookEntryTypes;
-using Core::Assets::AssetsBunchCook::ExpandAssetBunch;
-using Impl::FontCookEntry;
-using Impl::FontAtlasAssetCodec;
-using Impl::FontAtlasCookEntry;
-using Impl::BuildFontAtlasAsset;
-using Impl::ParseFontAtlasCookMetadataValue;
-using Impl::ParseFontCookMetadata;
-using Impl::ParseFontCookMetadataValue;
-
-inline constexpr auto s_BreakOnFatal = Core::Common::LoggerBreakPolicy::BreakOnFatal;
-inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
-inline constexpr f32 s_InfinityF32 = Limit<f32>::s_Infinity;
-inline constexpr f64 s_InfinityF64 = Limit<f64>::s_Infinity;
-inline constexpr f64 s_QuietNaNF64 = Limit<f64>::s_QuietNaN;
-inline constexpr AStringView s_RepoRoot = NWB_REPO_ROOT;
-
-[[nodiscard]] FOUNDATION_INLINE AssetBytes CopyAtlasBytes(const AssetBytes& source, AssetArena& arena){
-    AssetBytes copy(arena);
-    copy.resize(source.size());
-    for(usize index = 0u; index < source.size(); ++index)
-        copy[index] = source[index];
-    return copy;
+Vector<u8> CopyAtlasBytes(in Span<u8> source){
+    Vector<u8> result;
+    result.reserve(source.size());
+    for(in u8 byte : source)
+        result.push_back(byte);
+    return result;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const StringView s_BodyFontPath = "project/fonts/body";
 const StringView s_BodyFontAtlasPath = "project/fonts/body_atlas";
@@ -140,15 +61,15 @@ class InvalidFieldCase{
     }
 };
 
-void WriteLittleU32At(mut AssetBytes bytes, in usize offset, in u32 value){
+void WriteLittleU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
     bytes[offset] = cast<u8>(value);
     bytes[offset + 1u] = cast<u8>(value >> 8u);
     bytes[offset + 2u] = cast<u8>(value >> 16u);
     bytes[offset + 3u] = cast<u8>(value >> 24u);
 }
 
-FontAtlasPayload MakePayload(mut AtlasTestArena testArena){
-    FontAtlasPayload payload(testArena.arena);
+FontAtlasPayload MakePayload(){
+    FontAtlasPayload payload;
     payload.font = AssetRef<Font>(Name(s_BodyFontPath));
     payload.fontSha256 = ComputeSha256("exact source font identity fixture");
     payload.unitsPerEm = 1000u;
@@ -156,7 +77,7 @@ FontAtlasPayload MakePayload(mut AtlasTestArena testArena){
     payload.ascenderUnits = 800.0f;
     payload.descenderUnits = -200.0f;
 
-    payload.groups.emplace_back(testArena.arena);
+    payload.groups.emplace_back();
     mut FontAtlasGroup group = payload.groups.back();
     group.width = 8u;
     group.height = 8u;
@@ -184,7 +105,7 @@ FontAtlasPayload MakePayload(mut AtlasTestArena testArena){
         payload.glyphs.push_back(glyph);
     }
 
-    payload.positioningTables.emplace_back(testArena.arena);
+    payload.positioningTables.emplace_back();
     mut FontAtlasPositioningTable table = payload.positioningTables.back();
     table.tag = s_FontAtlasKernTag;
     table.bytes.resize(24u, 0u);
@@ -200,7 +121,7 @@ FontAtlasPayload MakePayload(mut AtlasTestArena testArena){
     return payload;
 }
 
-b8 SerializePayloadInto(in FontAtlasPayload payload, mut AssetBytes outBinary){
+b8 SerializePayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     return SerializeFontAtlasPayloadInto(payload, outBinary);
 }
 
@@ -208,7 +129,7 @@ b8 CanSerializePayload(in FontAtlasPayload payload){
     return SerializeFontAtlasPayload(payload).has_value();
 }
 
-b8 DeserializePayloadInto(in AssetBytes binary, mut FontAtlasPayload outPayload){
+b8 DeserializePayloadInto(in Vector<u8> binary, mut FontAtlasPayload outPayload){
     Expected<FontAtlasPayload> result = DeserializeFontAtlasPayload(binary);
     if(!result.has_value())
         return false;
@@ -216,25 +137,35 @@ b8 DeserializePayloadInto(in AssetBytes binary, mut FontAtlasPayload outPayload)
     return true;
 }
 
-b8 CanDeserializePayload(in AssetBytes binary){
+b8 CanDeserializePayload(in Vector<u8> binary){
     return DeserializeFontAtlasPayload(binary).has_value();
 }
 
-b8 BuildAtlasInto(in FontAtlasCookEntry entry, mut AtlasTestArena arenaOwner, mut AtlasTestArena scratchOwner, mut FontAtlas outAtlas){
-    Expected<FontAtlas> result = BuildFontAtlasAsset(arenaOwner.arena, entry);
-    if(!result.has_value())
-        return false;
-    outAtlas = result.value();
-    return true;
+class AtlasBuilder{
+    [owner_result]
+    public Expected<FontAtlas> build(in FontAtlasCookEntry entry){
+        return BuildFontAtlasAsset(entry);
+    }
+}
+
+Optional<ArenaMemoryStats> AtlasValidationMemory(){
+    ArenaMemoryOwnerCursor owners;
+    ArenaMemoryOwnerSnapshot snapshot;
+    while(owners.next(snapshot)){
+        if(snapshot.source == ArenaMemorySource::Arena && snapshot.ownerName == Name("ValidateFontAtlasGroupGuardedOverlap"))
+            return snapshot.stats;
+    }
+    return Optional<ArenaMemoryStats>();
 }
 
 b8 TryGetAtlasGlyph(in FontAtlas atlas, in u32 glyphId, mut FontAtlasGlyph outGlyph){
     return atlas.tryGlyph(glyphId, outGlyph);
 }
 
-b8 CopyDocumentVariable(in MetascriptDocument document, in StringView name, mut MetascriptValue outValue){
-    return document.visitVariable(name, lambda[mut outValue](in MetascriptValue variable) -> void{
+b8 CopyDocumentVariable(mut MetascriptDocument document, in StringView name, mut MetascriptValue outValue){
+    return document.visitVariable(name, lambda[mut outValue](mut MetascriptValue variable) -> b8{
         outValue = variable;
+        return true;
     });
 }
 
@@ -259,16 +190,16 @@ Path ScratchRoot(in StringView subDir){
     return Path(s_RepoRoot) / "__artifacts" / "font_metadata_tests" / subDir;
 }
 
-b8 PrepareFiles(in Path directory, mut MetadataTestArena testArena){
+b8 PrepareFiles(in Path directory){
     if(!EnsureDirectories(directory).has_value())
         return false;
-    AssetBytes bytes(testArena.arena);
+    Vector<u8> bytes;
     if(!ReadBinaryFile(BundledFontRoot() / s_LatinFontFilename, bytes).has_value())
         return false;
     return WriteBinaryFile(directory / s_LatinFontFilename, bytes);
 }
 
-b8 LoadMetadata(mut MetadataTestArena testArena, mut MetascriptDocument document){
+b8 LoadMetadata(mut MetascriptDocument document){
     String text = "";
     if(!ReadTextFile(BundledFontRoot() / s_LatinMetadataFilename, text).has_value())
         return false;
@@ -278,18 +209,19 @@ b8 LoadMetadata(mut MetadataTestArena testArena, mut MetascriptDocument document
 void RunBunchMetadataChecks(
     in Path directory,
     in MetascriptDocument document,
-    mut MetadataTestArena testArena,
+    mut HeapStorage testArena,
+    mut ScratchStorage scratch,
     mut CookEntryRegistry registry,
     mut CpuTaskScheduler scheduler,
     mut CookEntryPathHashSet parsedPaths
 ){
-    ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(registry, testArena.scratchArena));
+    ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(registry, scratch));
     const Path filePath = directory / s_LatinMetadataFilename;
-    const Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(directory, s_FontVirtualRoot, filePath, document, testArena.scratchArena);
+    const Expected<ExpandedAssetMetadataVector> expandedResult = ExpandAssetBunch(directory, s_FontVirtualRoot, filePath, document, scratch);
     ASSERT_TRUE(expandedResult.has_value());
-    const ExpandedAssetMetadataVector expanded = expandedResult.value();
+    in ExpandedAssetMetadataVector expanded = expandedResult.value();
     ASSERT_EQ(expanded.size(), 2u);
-    CookEntryParseContext parseContext(testArena.arena, scheduler, testArena.scratchArena, parsedPaths);
+    CookEntryParseContext parseContext(testArena, scheduler, scratch, parsedPaths);
     const Name atlasAssetType = FontAtlas::AssetTypeName();
     usize atlasIndex = expanded.size();
     for(usize index = 0u; index < expanded.size(); ++index){
@@ -323,13 +255,11 @@ void VerifyAssetsFontAtlas_EmptyAndPaddingBoundaryDigestsRejectMalformedText(){
 }
 
 void VerifyAssetsFontAtlas_EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfterLoad(){
-    AtlasTestArena testArena = AtlasTestArena();
-    FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
-    atlas.setPayload(MakePayload(testArena));
-    FontAtlasAssetCodec codec = FontAtlasAssetCodec();
-    AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(codec.serialize(atlas, binary));
-    FontAtlas loaded(testArena.arena, atlas.virtualPath());
+    FontAtlas atlas(Name(s_BodyFontAtlasPath));
+    atlas.setPayload(MakePayload());
+    Vector<u8> binary;
+    ASSERT_TRUE(SerializeFontAtlasAsset(atlas, binary));
+    FontAtlas loaded(atlas.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));
     EXPECT_EQ(loaded.payload().font.name(), atlas.payload().font.name());
     FontAtlasGlyph glyph4 = FontAtlasGlyph();
@@ -340,56 +270,58 @@ void VerifyAssetsFontAtlas_EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMisse
     EXPECT_FALSE(TryGetAtlasGlyph(loaded, 5u, glyph5));
 }
 
-void VerifyAssetsFontAtlas_BuildOwnsGlyphsGroupsAndPositioningInCallerArena(){
-    AtlasTestArena testArena = AtlasTestArena();
-    AtlasTestArena resultArena = AtlasTestArena(s_FontAtlasBuiltResult);
-    FontAtlasCookEntry entry(testArena.arena);
-    entry.payload = MakePayload(testArena);
-    entry.virtualPath = Name(s_BodyFontAtlasPath);
-    AssetBytes expected(resultArena.arena);
-    ASSERT_TRUE(SerializePayloadInto(entry.payload, expected));
-
-    FontAtlas built(resultArena.arena);
-    ASSERT_TRUE(BuildAtlasInto(entry, resultArena, testArena, built));
+void CheckBuiltAtlas(in Expected<FontAtlas> result, mut FontAtlasCookEntry entry, in HeapStorage resultArena, in Vector<u8> expected){
+    ASSERT_TRUE(result.has_value());
+    in FontAtlas built = result.value();
     EXPECT_EQ(built.virtualPath(), entry.virtualPath);
-    native(in built, in resultArena){
-        const NWB::Impl::FontAtlasPayload& payload = built.payload();
-        EXPECT_EQ(&payload.glyphs.get_allocator().arena(), &resultArena.arena);
-        EXPECT_EQ(&payload.groups.get_allocator().arena(), &resultArena.arena);
-        EXPECT_EQ(&payload.positioningTables.get_allocator().arena(), &resultArena.arena);
-        ASSERT_EQ(payload.groups.size(), 1u);
-        ASSERT_EQ(payload.positioningTables.size(), 1u);
-        EXPECT_EQ(&payload.groups[0u].pixels.get_allocator().arena(), &resultArena.arena);
-        EXPECT_EQ(&payload.positioningTables[0u].bytes.get_allocator().arena(), &resultArena.arena);
-    }
+    in FontAtlasPayload payload = built.payload();
+    EXPECT_TRUE(TestUsesStorage(payload.glyphs, resultArena));
+    EXPECT_TRUE(TestUsesStorage(payload.groups, resultArena));
+    EXPECT_TRUE(TestUsesStorage(payload.positioningTables, resultArena));
+    ASSERT_EQ(payload.groups.size(), 1u);
+    ASSERT_EQ(payload.positioningTables.size(), 1u);
+    EXPECT_TRUE(TestUsesStorage(payload.groups[0u].pixels, resultArena));
+    EXPECT_TRUE(TestUsesStorage(payload.positioningTables[0u].bytes, resultArena));
 
     entry.payload.glyphs[0u].advanceUnits = entry.payload.glyphs[0u].advanceUnits + 1.0f;
     entry.payload.groups[0u].pixels[0u] ^= 1u;
     entry.payload.positioningTables[0u].bytes.back() ^= 1u;
     ASSERT_TRUE(built.validatePayload());
-    AssetBytes actual(resultArena.arena);
+    Vector<u8> actual;
     ASSERT_TRUE(SerializePayloadInto(built.payload(), actual));
     EXPECT_EQ(actual, expected);
 }
 
+void VerifyAssetsFontAtlas_BuildOwnsGlyphsGroupsAndPositioningInCallerArena(){
+    HeapStorage resultArena(s_FontAtlasBuiltResult);
+    FontAtlasCookEntry entry;
+    entry.payload = MakePayload();
+    entry.virtualPath = Name(s_BodyFontAtlasPath);
+    Vector<u8> expected;
+    ASSERT_TRUE(SerializePayloadInto(entry.payload, expected));
+
+    TestValueSlot<AtlasBuilder> builderSlot;
+    mut AtlasBuilder builder = builderSlot.constructIn(resultArena);
+    CheckBuiltAtlas(builder.build(entry), entry, resultArena, expected);
+}
+
 void VerifyAssetsFontAtlas_FontIdentityPreservesUpperHashLanesAndRejectsOldVersion(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    AtlasTestArena testArena = AtlasTestArena();
-    FontAtlasPayload payload = MakePayload(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
+    FontAtlasPayload payload = MakePayload();
     NameHash identity = payload.font.name().hash();
     for(u32 lane = s_NameHashLaneCount / 2u; lane < s_NameHashLaneCount; ++lane)
         identity.qwords[lane] ^= 0x9e3779b97f4a7c15ul + cast<u64>(lane);
     payload.font.virtualPath = Name(identity);
-    AssetBytes binary(testArena.arena);
+    Vector<u8> binary;
     ASSERT_TRUE(SerializePayloadInto(payload, binary));
-    FontAtlasPayload decoded(testArena.arena);
+    FontAtlasPayload decoded;
     ASSERT_TRUE(DeserializePayloadInto(binary, decoded));
     EXPECT_EQ(decoded.font.name().hash(), identity);
 
-    FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
+    FontAtlas atlas(Name(s_BodyFontAtlasPath));
     atlas.setPayload(payload);
-    AssetBytes obsolete = CopyAtlasBytes(binary, testArena.arena);
+    Vector<u8> obsolete = CopyAtlasBytes(binary);
     WriteLittleU32At(obsolete, 4u, 2u);
     EXPECT_FALSE(atlas.loadBinary(obsolete));
     EXPECT_EQ(atlas.payload().font.name().hash(), identity);
@@ -397,15 +329,14 @@ void VerifyAssetsFontAtlas_FontIdentityPreservesUpperHashLanesAndRejectsOldVersi
 
 void VerifyAssetsFontAtlas_MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    const FontAtlasPayload payload = MakePayload(testArena);
-    AssetBytes valid(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    const FontAtlasPayload payload = MakePayload();
+    Vector<u8> valid;
     ASSERT_TRUE(SerializePayloadInto(payload, valid));
-    FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
+    FontAtlas atlas(Name(s_BodyFontAtlasPath));
     ASSERT_TRUE(atlas.loadBinary(valid));
     const usize glyphTableEnd = cast<usize>(s_FontAtlasBinaryHeaderBytes) + 5u * cast<usize>(s_FontAtlasBinaryGlyphBytes);
-    Vector<usize> corruptAtlasOffsets(testArena.scratchArena);
+    Vector<usize> corruptAtlasOffsets;
     corruptAtlasOffsets.push_back(0u);
     corruptAtlasOffsets.push_back(4u);
     corruptAtlasOffsets.push_back(8u);
@@ -424,35 +355,34 @@ void VerifyAssetsFontAtlas_MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas(){
     for(usize index = 0u; index < corruptAtlasOffsets.size(); ++index){
         const usize offset = corruptAtlasOffsets[index];
         const ScopedTestTrace trace(offset);
-        AssetBytes invalid = CopyAtlasBytes(valid, testArena.arena);
+        Vector<u8> invalid = CopyAtlasBytes(valid);
         WriteLittleU32At(invalid, offset, u32.max);
         EXPECT_FALSE(atlas.loadBinary(invalid));
         EXPECT_EQ(atlas.payload().fontSha256, payload.fontSha256);
         EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
     }
-    AssetBytes legacy = CopyAtlasBytes(valid, testArena.arena);
+    Vector<u8> legacy = CopyAtlasBytes(valid);
     WriteLittleU32At(legacy, 4u, 2u);
     EXPECT_FALSE(atlas.loadBinary(legacy));
     EXPECT_EQ(atlas.payload().font.name(), payload.font.name());
-    AssetBytes changed = CopyAtlasBytes(valid, testArena.arena);
+    Vector<u8> changed = CopyAtlasBytes(valid);
     changed.back() ^= 1u;
     EXPECT_FALSE(atlas.loadBinary(changed));
     EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
-    AssetBytes truncated = CopyAtlasBytes(valid, testArena.arena);
+    Vector<u8> truncated = CopyAtlasBytes(valid);
     truncated.pop_back();
     EXPECT_FALSE(atlas.loadBinary(truncated));
-    AssetBytes trailing = CopyAtlasBytes(valid, testArena.arena);
+    Vector<u8> trailing = CopyAtlasBytes(valid);
     trailing.push_back(0u);
     EXPECT_FALSE(atlas.loadBinary(trailing));
 }
 
 void VerifyAssetsFontAtlas_CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLostGuards(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     for(u32 channelCount = 1u; channelCount <= 4u; ++channelCount){
         const ScopedTestTrace trace(channelCount);
-        FontAtlasPayload payload = MakePayload(testArena);
+        FontAtlasPayload payload = MakePayload();
         mut FontAtlasGroup group = payload.groups[0u];
         group.width = 7u;
         group.height = 9u;
@@ -469,9 +399,9 @@ void VerifyAssetsFontAtlas_CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLos
         }
         payload.glyphs[channelCount] = FontAtlasGlyph();
         payload.glyphs[channelCount].glyphId = channelCount;
-        AssetBytes binary(testArena.arena);
+        Vector<u8> binary;
         ASSERT_TRUE(SerializePayloadInto(payload, binary));
-        FontAtlasPayload loaded(testArena.arena);
+        FontAtlasPayload loaded;
         ASSERT_TRUE(DeserializePayloadInto(binary, loaded));
         EXPECT_EQ(loaded.groups[0u].pixels, group.pixels);
 
@@ -495,12 +425,11 @@ void VerifyAssetsFontAtlas_CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLos
 
 void VerifyAssetsFontAtlas_UnsupportedVersionsAndCompactGroupHeadersAreRejected(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    const FontAtlasPayload payload = MakePayload(testArena);
-    AssetBytes binary(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    const FontAtlasPayload payload = MakePayload();
+    Vector<u8> binary;
     ASSERT_TRUE(SerializePayloadInto(payload, binary));
-    FontAtlasPayload loaded(testArena.arena);
+    FontAtlasPayload loaded;
     ASSERT_TRUE(DeserializePayloadInto(binary, loaded));
 
     const usize groupOffset = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
@@ -523,7 +452,7 @@ void VerifyAssetsFontAtlas_UnsupportedVersionsAndCompactGroupHeadersAreRejected(
         const usize offset = invalidFields[index].m_offset;
         const u32 value = invalidFields[index].m_value;
         const ScopedTestTrace trace(offset);
-        AssetBytes invalid = CopyAtlasBytes(binary, testArena.arena);
+        Vector<u8> invalid = CopyAtlasBytes(binary);
         WriteLittleU32At(invalid, offset, value);
         EXPECT_FALSE(CanDeserializePayload(invalid));
     }
@@ -541,32 +470,29 @@ void VerifyAssetsFontAtlas_UnsupportedVersionsAndCompactGroupHeadersAreRejected(
 
 void VerifyAssetsFontAtlas_CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    FontAtlasAssetCodec codec = FontAtlasAssetCodec();
-    AssetBytes binary(testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    Vector<u8> binary;
     binary.assign(3u, 42u);
-    const AssetBytes expected = CopyAtlasBytes(binary, testArena.arena);
-    FontAtlas unnamed(testArena.arena);
-    unnamed.setPayload(MakePayload(testArena));
-    EXPECT_FALSE(codec.serialize(unnamed, binary));
+    const Vector<u8> expected = CopyAtlasBytes(binary);
+    FontAtlas unnamed;
+    unnamed.setPayload(MakePayload());
+    EXPECT_FALSE(SerializeFontAtlasAsset(unnamed, binary));
     EXPECT_EQ(binary, expected);
     EXPECT_TRUE(SawCapturedError(logger, s_ErrEmptyVirtualPath));
 
-    FontAtlas corrupt(testArena.arena, Name(s_BodyFontAtlasPath));
-    FontAtlasPayload payload = MakePayload(testArena);
+    FontAtlas corrupt(Name(s_BodyFontAtlasPath));
+    FontAtlasPayload payload = MakePayload();
     payload.groups[0u].pixels[0u] ^= 1u;
     corrupt.setPayload(payload);
-    EXPECT_FALSE(codec.serialize(corrupt, binary));
+    EXPECT_FALSE(SerializeFontAtlasAsset(corrupt, binary));
     EXPECT_EQ(binary, expected);
     EXPECT_TRUE(SawCapturedError(logger, s_ErrPixelHashMismatch));
 }
 
 void VerifyAssetsFontAtlas_InvalidHashAndGeometryAreRejectedBySerialization(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    const FontAtlasPayload original = MakePayload(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    const FontAtlasPayload original = MakePayload();
     FontAtlasPayload candidate(original);
     candidate.groups[0u].pixels[0u] ^= 1u;
     EXPECT_FALSE(CanSerializePayload(candidate));
@@ -592,9 +518,8 @@ void VerifyAssetsFontAtlas_InvalidHashAndGeometryAreRejectedBySerialization(){
 
 void VerifyAssetsFontAtlas_GuardedRegionsRejectSameChannelOverlapAndAllowIndependentChannels(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    FontAtlasPayload payload = MakePayload(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    FontAtlasPayload payload = MakePayload();
     ASSERT_TRUE(ValidateFontAtlasPayload(payload));
     mut FontAtlasGroup group = payload.groups[0u];
     group.width = 16u;
@@ -615,14 +540,15 @@ void VerifyAssetsFontAtlas_GuardedRegionsRejectSameChannelOverlapAndAllowIndepen
 
 void VerifyAssetsFontAtlas_GuardedOverlapReusesCallerScratchAcrossGroupsAndRejectedChannels(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    FontAtlasPayload payload = MakePayload(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    FontAtlasPayload payload = MakePayload();
     payload.groups.push_back(FontAtlasGroup(payload.groups.front()));
     payload.glyphs[2u].group = 1u;
     payload.glyphs[3u].group = 1u;
     ASSERT_TRUE(ValidateFontAtlasPayload(payload));
-    const ArenaMemoryStats warm = testArena.scratchArena.memoryStats();
+    const auto warm = AtlasValidationMemory();
+    ASSERT_TRUE(warm.has_value());
+    ASSERT_GT(warm.value().allocationCount, 0u);
     for(usize iteration = 0u; iteration < 16u; ++iteration){
         const b8 valid = iteration % 2u == 0u;
         u32 channel = 2u;
@@ -630,18 +556,18 @@ void VerifyAssetsFontAtlas_GuardedOverlapReusesCallerScratchAcrossGroupsAndRejec
             channel = 3u;
         payload.glyphs[3u].channel = channel;
         EXPECT_EQ(ValidateFontAtlasPayload(payload), valid);
-        const ArenaMemoryStats current = testArena.scratchArena.memoryStats();
-        EXPECT_EQ(current.usedBytes, warm.usedBytes);
-        EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
+        const auto current = AtlasValidationMemory();
+        ASSERT_TRUE(current.has_value());
+        EXPECT_EQ(current.value().usedBytes, warm.value().usedBytes);
+        EXPECT_EQ(current.value().reservedBytes, warm.value().reservedBytes);
     }
     EXPECT_EQ(logger.errorCount(), 8u);
 }
 
 void VerifyAssetsFontAtlas_PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    const FontAtlasPayload original = MakePayload(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    const FontAtlasPayload original = MakePayload();
     ASSERT_TRUE(ValidateFontAtlasPayload(original));
     FontAtlasPayload candidate(original);
     candidate.glyphs[0u].planeRight = candidate.glyphs[0u].planeRight + 1.0f;
@@ -664,9 +590,8 @@ void VerifyAssetsFontAtlas_PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBake
 
 void VerifyAssetsFontAtlas_RejectsIncompleteOrDuplicateGlyphPolicyAndUnsupportedLimits(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    const FontAtlasPayload original = MakePayload(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    const FontAtlasPayload original = MakePayload();
     FontAtlasPayload candidate(original);
     candidate.glyphs.pop_back();
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
@@ -689,14 +614,13 @@ void VerifyAssetsFontAtlas_RejectsIncompleteOrDuplicateGlyphPolicyAndUnsupported
 
 void VerifyAssetsFontAtlas_OriginalSourcePositioningSetAndBytesMustMatchTheShapingFont(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    AtlasTestArena testArena = AtlasTestArena();
-    Font font(testArena.arena, Name(s_BodyFontPath));
-    FontAtlasPayload payload = MakePayload(testArena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    Font font(Name(s_BodyFontPath));
+    FontAtlasPayload payload = MakePayload();
     const Path sourcePath = BundledFontRoot() / s_LatinFontFilename;
-    const Expected<AssetBytes, StringView> bytesResult = ReadBundledFontBytes(sourcePath, testArena.arena);
+    const Expected<Vector<u8>, StringView> bytesResult = ReadBundledFontBytes(sourcePath);
     ASSERT_TRUE(bytesResult.has_value());
-    AssetBytes loadedFontBytes = CopyAtlasBytes(bytesResult.value(), testArena.arena);
+    Vector<u8> loadedFontBytes = CopyAtlasBytes(bytesResult.value());
     font.setFontBytes(loadedFontBytes);
     ASSERT_TRUE(font.validatePayload());
     payload.fontSha256 = ComputeSha256(font.fontBytes());
@@ -722,7 +646,7 @@ void VerifyAssetsFontAtlas_OriginalSourcePositioningSetAndBytesMustMatchTheShapi
             payload.sourceGlyphCount = glyphCountResult.value();
         }
         if(sourceTable.tag == s_FontAtlasKernTag || sourceTable.tag == s_FontAtlasGposTag || sourceTable.tag == s_FontAtlasGdefTag){
-            payload.positioningTables.emplace_back(testArena.arena);
+            payload.positioningTables.emplace_back();
             mut FontAtlasPositioningTable table = payload.positioningTables.back();
             table.tag = sourceTable.tag;
             table.bytes.resize(tableBytes.size());
@@ -744,27 +668,29 @@ void VerifyAssetsFontAtlas_OriginalSourcePositioningSetAndBytesMustMatchTheShapi
 
 void VerifyAssetsFontMetadata_BunchRejectsInvalidAndDuplicateChildrenWithoutPublication(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    MetadataTestArena testArena = MetadataTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch);
     const Path directory = ScratchRoot("bunch");
-    ASSERT_TRUE(PrepareFiles(directory, testArena));
+    ASSERT_TRUE(PrepareFiles(directory));
     InitializerGuard initializers = InitializerGuard();
     ASSERT_TRUE(initializers.initialize());
-    CookEntryRegistry registry(testArena.arena);
-    MetascriptDocument document(testArena.arena);
-    ASSERT_TRUE(LoadMetadata(testArena, document));
+    CookEntryRegistry registry(testArena);
+    MetascriptDocument document(testArena);
+    ASSERT_TRUE(LoadMetadata(document));
     CpuTaskScheduler scheduler(1u);
-    CookEntryPathHashSet parsedPaths(0u, NameHashHasher(), NameHashEqual(), testArena.scratchArena);
-    RunBunchMetadataChecks(directory, document, testArena, registry, scheduler, parsedPaths);
+    ScratchStorage scratch(s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch);
+    TestValueSlot<CookEntryPathHashSet> pathSlot;
+    mut CookEntryPathHashSet parsedPaths = pathSlot.constructIn(scratch);
+    RunBunchMetadataChecks(directory, document, testArena, scratch, registry, scheduler, parsedPaths);
 }
 
 void VerifyAssetsFontMetadata_FieldlessAndEmptyFontDeclarationsRejectNonmapValues(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    MetadataTestArena testArena = MetadataTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch);
     const Path directory = ScratchRoot("declaration_shape");
-    ASSERT_TRUE(PrepareFiles(directory, testArena));
-    MetascriptDocument document(testArena.arena);
+    ASSERT_TRUE(PrepareFiles(directory));
+    MetascriptDocument document(testArena);
     ASSERT_TRUE(document.parse("font asset;"));
     b8 visitedMissing = false;
     const b8 missingAccepted = document.visitVariable("missing", lambda[mut visitedMissing](mut MetascriptValue variable) -> b8{
@@ -780,15 +706,15 @@ void VerifyAssetsFontMetadata_FieldlessAndEmptyFontDeclarationsRejectNonmapValue
     });
     EXPECT_FALSE(rejectedAccepted);
     EXPECT_TRUE(visitedExisting);
-    MetascriptValue asset(testArena.arena);
+    MetascriptValue asset(testArena);
     ASSERT_TRUE(CopyDocumentVariable(document, "asset", asset));
     ASSERT_TRUE(asset.isNull());
     const Path path = directory / s_LatinMetadataFilename;
-    ASSERT_TRUE(ParseFontCookMetadata(testArena.arena, directory, s_FontVirtualRoot, path, document).has_value());
+    ASSERT_TRUE(ParseFontCookMetadata(directory, s_FontVirtualRoot, path, document).has_value());
     ASSERT_TRUE(MakeDocumentVariableEmptyMap(document, "asset"));
-    ASSERT_TRUE(ParseFontCookMetadata(testArena.arena, directory, s_FontVirtualRoot, path, document).has_value());
+    ASSERT_TRUE(ParseFontCookMetadata(directory, s_FontVirtualRoot, path, document).has_value());
     for(u32 caseIndex = 0u; caseIndex < 5u; ++caseIndex){
-        MetascriptValue invalid(testArena.arena);
+        MetascriptValue invalid(testArena);
         switch(caseIndex){
         case 0u: invalid.setInteger(0); break;
         case 1u: invalid.setDouble(0.0); break;
@@ -797,29 +723,29 @@ void VerifyAssetsFontMetadata_FieldlessAndEmptyFontDeclarationsRejectNonmapValue
         case 4u: invalid.makeList(); break;
         default: break;
         }
-        EXPECT_FALSE(ParseFontCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, invalid).has_value());
+        EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, invalid).has_value());
     }
 }
 
 void VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    MetadataTestArena testArena = MetadataTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch);
     const Path directory = ScratchRoot("metadata_rejection");
-    ASSERT_TRUE(PrepareFiles(directory, testArena));
-    MetascriptDocument document(testArena.arena);
-    ASSERT_TRUE(LoadMetadata(testArena, document));
+    ASSERT_TRUE(PrepareFiles(directory));
+    MetascriptDocument document(testArena);
+    ASSERT_TRUE(LoadMetadata(document));
 
-    MetascriptValue face(testArena.arena);
-    MetascriptValue atlas(testArena.arena);
+    MetascriptValue face(testArena);
+    MetascriptValue atlas(testArena);
     ASSERT_TRUE(CopyDocumentVariable(document, s_FaceVariable, face));
     ASSERT_TRUE(CopyDocumentVariable(document, s_AtlasVariable, atlas));
     atlas.field(s_FontField).setString(s_LatinFacePath);
     const Path path = directory / s_LatinMetadataFilename;
-    const Expected<FontCookEntry> fontEntryParseResult = ParseFontCookMetadataValue(testArena.arena, Name(s_LatinFacePath), path, face);
+    const Expected<FontCookEntry> fontEntryParseResult = ParseFontCookMetadataValue(Name(s_LatinFacePath), path, face);
     ASSERT_TRUE(fontEntryParseResult.has_value());
     const FontCookEntry fontEntry = fontEntryParseResult.value();
-    const Expected<FontAtlasCookEntry> atlasEntryParseResult = ParseFontAtlasCookMetadataValue(testArena.arena, Name(s_LatinAtlasPath), path, atlas);
+    const Expected<FontAtlasCookEntry> atlasEntryParseResult = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, atlas);
     ASSERT_TRUE(atlasEntryParseResult.has_value());
     const FontAtlasCookEntry atlasEntry = atlasEntryParseResult.value();
     ASSERT_TRUE(face.isNull());
@@ -837,7 +763,7 @@ void VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected(){
         else if(field == s_UnitsPerEmField)
             value = atlasEntry.payload.unitsPerEm;
         wrong.field(field).setInteger(cast<i64>(value));
-        EXPECT_FALSE(ParseFontCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrong).has_value());
+        EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, wrong).has_value());
     }
 
     Array<StringView, 4u> unsupportedFields = Array<StringView, 4u>();
@@ -850,10 +776,10 @@ void VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected(){
         EXPECT_FALSE(HasValueField(atlas, field));
         MetascriptValue wrongFace(face);
         wrongFace.field(field).setString("obsolete");
-        EXPECT_FALSE(ParseFontCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrongFace).has_value());
+        EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, wrongFace).has_value());
         MetascriptValue wrongAtlas(atlas);
         wrongAtlas.field(field).setString("obsolete");
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrongAtlas).has_value());
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrongAtlas).has_value());
     }
 
     Array<StringView, 4u> retiredAtlasFields = Array<StringView, 4u>();
@@ -873,7 +799,7 @@ void VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected(){
         else if(field == "glyph_count")
             value = atlasEntry.payload.sourceGlyphCount;
         wrong.field(field).setInteger(cast<i64>(value));
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrong).has_value());
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrong).has_value());
     }
 
     Array<StringView, 2u> atlasSettings = Array<StringView, 2u>();
@@ -883,41 +809,41 @@ void VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected(){
         const StringView field = atlasSettings[index];
         MetascriptValue wrong(atlas);
         wrong.field(field).setInteger(-1);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrong).has_value());
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrong).has_value());
     }
 
     EXPECT_FALSE(HasValueField(atlas, "groups"));
     MetascriptValue obsoleteGroups(atlas);
     obsoleteGroups.field("groups").setString("obsolete");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, obsoleteGroups).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, obsoleteGroups).has_value());
     MetascriptValue wrongMetric(atlas);
     wrongMetric.field("descender_units").setDouble(s_QuietNaNF64);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrongMetric).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrongMetric).has_value());
     MetascriptValue wrongRaster(atlas);
     wrongRaster.field("raster_mode").setString("automatic");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrongRaster).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrongRaster).has_value());
     MetascriptValue emptyReference(atlas);
     emptyReference.field(s_FontField).setString("");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, emptyReference).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, emptyReference).has_value());
     MetascriptValue unresolvedReference(atlas);
     unresolvedReference.field(s_FontField).setReference(s_FaceVariable);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, unresolvedReference).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, unresolvedReference).has_value());
 }
 
 void VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    MetadataTestArena testArena = MetadataTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch);
     const Path directory = ScratchRoot("glyph_rejection");
-    ASSERT_TRUE(PrepareFiles(directory, testArena));
-    MetascriptDocument document(testArena.arena);
-    ASSERT_TRUE(LoadMetadata(testArena, document));
+    ASSERT_TRUE(PrepareFiles(directory));
+    MetascriptDocument document(testArena);
+    ASSERT_TRUE(LoadMetadata(document));
 
-    MetascriptValue metadata(testArena.arena);
+    MetascriptValue metadata(testArena);
     ASSERT_TRUE(CopyDocumentVariable(document, s_AtlasVariable, metadata));
     metadata.field(s_FontField).setString(s_LatinFacePath);
     const Path path = directory / s_LatinMetadataFilename;
-    const Expected<FontAtlasCookEntry> entryParseResult = ParseFontAtlasCookMetadataValue(testArena.arena, Name(s_LatinAtlasPath), path, metadata);
+    const Expected<FontAtlasCookEntry> entryParseResult = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, metadata);
     ASSERT_TRUE(entryParseResult.has_value());
     const FontAtlasCookEntry entry = entryParseResult.value();
     const usize originalGlyphCount = entry.payload.glyphs.size();
@@ -925,12 +851,12 @@ void VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected(){
 
     MetascriptValue incomplete(metadata);
     incomplete.field(s_GlyphsField).asList().pop_back();
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, incomplete).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, incomplete).has_value());
 
     MetascriptValue obsoleteId(metadata);
     EXPECT_FALSE(HasValueField(obsoleteId.field(s_GlyphsField).asList()[0u], "id"));
     obsoleteId.field(s_GlyphsField).asList()[0u].field("id").setInteger(0);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, obsoleteId).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, obsoleteId).has_value());
 
     Array<StringView, 6u> integerFields = Array<StringView, 6u>();
     integerFields[0u] = "group";
@@ -942,7 +868,7 @@ void VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected(){
     for(usize index = 0u; index < integerFields.size(); ++index){
         MetascriptValue wrong(metadata);
         wrong.field(s_GlyphsField).asList()[0u].field(integerFields[index]).setInteger(cast<i64>(s_FontAtlasMaxExtent + 1u));
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrong).has_value());
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrong).has_value());
     }
 
     Array<StringView, 3u> floatFields = Array<StringView, 3u>();
@@ -952,7 +878,7 @@ void VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected(){
     for(usize index = 0u; index < floatFields.size(); ++index){
         MetascriptValue wrong(metadata);
         wrong.field(s_GlyphsField).asList()[0u].field(floatFields[index]).setDouble(s_InfinityF64);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrong).has_value());
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrong).has_value());
     }
 
     Array<StringView, 3u> derivedGlyphFields = Array<StringView, 3u>();
@@ -962,12 +888,12 @@ void VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected(){
     for(usize index = 0u; index < derivedGlyphFields.size(); ++index){
         MetascriptValue obsolete(metadata);
         obsolete.field(s_GlyphsField).asList()[0u].field(derivedGlyphFields[index]).setInteger(0);
-        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, obsolete).has_value());
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, obsolete).has_value());
     }
 
     MetascriptValue unknownGlyphField(metadata);
     unknownGlyphField.field(s_GlyphsField).asList()[0u].field("sha256").setString("obsolete");
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, unknownGlyphField).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, unknownGlyphField).has_value());
 
     usize drawableIndex = originalGlyphCount;
     for(usize index = 0u; index < originalGlyphCount; ++index){
@@ -980,13 +906,13 @@ void VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected(){
     MetascriptValue wrongChannel(metadata);
     const FontAtlasGlyph drawable = entry.payload.glyphs[drawableIndex];
     wrongChannel.field(s_GlyphsField).asList()[drawableIndex].field("channel").setInteger(cast<i64>(entry.payload.groups[drawable.group].channelCount));
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, wrongChannel).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, wrongChannel).has_value());
     MetascriptValue croppedGlyph(metadata);
     croppedGlyph.field(s_GlyphsField).asList()[drawableIndex].field("width").setInteger(cast<i64>(entry.payload.groups[drawable.group].width));
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, croppedGlyph).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, croppedGlyph).has_value());
     MetascriptValue zeroDimension(metadata);
     zeroDimension.field(s_GlyphsField).asList()[drawableIndex].field("height").setInteger(0);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, zeroDimension).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, zeroDimension).has_value());
 
     usize emptyIndex = originalGlyphCount;
     for(usize index = 0u; index < originalGlyphCount; ++index){
@@ -998,67 +924,98 @@ void VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected(){
     ASSERT_LT(emptyIndex, originalGlyphCount);
     MetascriptValue emptyWithGeometry(metadata);
     emptyWithGeometry.field(s_GlyphsField).asList()[emptyIndex].field("x").setInteger(0);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, emptyWithGeometry).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, emptyWithGeometry).has_value());
     MetascriptValue missingWidth(metadata);
     ASSERT_EQ(missingWidth.field(s_GlyphsField).asList()[drawableIndex].asMap().erase(StringView("width")), 1u);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, missingWidth).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, missingWidth).has_value());
 }
 
 void VerifyAssetsFontMetadata_MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    MetadataTestArena testArena = MetadataTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch);
     const Path directory = ScratchRoot("source_rejection");
-    ASSERT_TRUE(PrepareFiles(directory, testArena));
-    MetascriptDocument document(testArena.arena);
-    ASSERT_TRUE(LoadMetadata(testArena, document));
+    ASSERT_TRUE(PrepareFiles(directory));
+    MetascriptDocument document(testArena);
+    ASSERT_TRUE(LoadMetadata(document));
 
-    MetascriptValue face(testArena.arena);
-    MetascriptValue metadata(testArena.arena);
+    MetascriptValue face(testArena);
+    MetascriptValue metadata(testArena);
     ASSERT_TRUE(CopyDocumentVariable(document, s_FaceVariable, face));
     ASSERT_TRUE(CopyDocumentVariable(document, s_AtlasVariable, metadata));
     metadata.field(s_FontField).setString(s_LatinFacePath);
     const Path path = directory / s_LatinMetadataFilename;
-    ASSERT_TRUE(ParseFontCookMetadataValue(testArena.arena, Name(s_LatinFacePath), path, face).has_value());
-    const Expected<FontAtlasCookEntry> entryParseResult = ParseFontAtlasCookMetadataValue(testArena.arena, Name(s_LatinAtlasPath), path, metadata);
+    ASSERT_TRUE(ParseFontCookMetadataValue(Name(s_LatinFacePath), path, face).has_value());
+    const Expected<FontAtlasCookEntry> entryParseResult = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, metadata);
     ASSERT_TRUE(entryParseResult.has_value());
     const FontAtlasCookEntry entry = entryParseResult.value();
     const Sha256Digest originalHash = entry.payload.fontSha256;
     const Path fontPath = directory / s_LatinFontFilename;
-    AssetBytes originalFont(testArena.arena);
+    Vector<u8> originalFont;
     ASSERT_TRUE(ReadBinaryFile(fontPath, originalFont).has_value());
     ASSERT_FALSE(originalFont.empty());
 
-    AssetBytes truncated = CopyAtlasBytes(originalFont, testArena.arena);
+    Vector<u8> truncated = CopyAtlasBytes(originalFont);
     truncated.pop_back();
     ASSERT_TRUE(WriteBinaryFile(fontPath, truncated));
-    EXPECT_FALSE(ParseFontCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, face).has_value());
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, metadata).has_value());
+    EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, face).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, metadata).has_value());
 
-    AssetBytes corrupted = CopyAtlasBytes(originalFont, testArena.arena);
+    Vector<u8> corrupted = CopyAtlasBytes(originalFont);
     corrupted.back() ^= 1u;
     ASSERT_TRUE(WriteBinaryFile(fontPath, corrupted));
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, metadata).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, metadata).has_value());
 
-    corrupted = CopyAtlasBytes(originalFont, testArena.arena);
+    corrupted = CopyAtlasBytes(originalFont);
     ASSERT_GT(corrupted.size(), 24u);
     // The SFNT digest follows the six u32 prepared-source header fields.
     corrupted[24u] ^= 1u;
     ASSERT_TRUE(WriteBinaryFile(fontPath, corrupted));
-    EXPECT_FALSE(ParseFontCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, face).has_value());
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, metadata).has_value());
+    EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, face).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, metadata).has_value());
 
-    AssetBytes otherFont(testArena.arena);
+    Vector<u8> otherFont;
     ASSERT_TRUE(ReadBinaryFile(BundledFontRoot() / "korean.font", otherFont).has_value());
     ASSERT_TRUE(WriteBinaryFile(fontPath, otherFont));
-    const Expected<FontCookEntry> replacementFontParseResult = ParseFontCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, face);
+    const Expected<FontCookEntry> replacementFontParseResult = ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, face);
     ASSERT_TRUE(replacementFontParseResult.has_value());
     EXPECT_NE(ComputeSha256(replacementFontParseResult.value().fontBytes), originalHash);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, path, metadata).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, path, metadata).has_value());
 
     ASSERT_TRUE(WriteBinaryFile(fontPath, originalFont));
-    EXPECT_FALSE(ParseFontCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, directory / "missing.nwb", face).has_value());
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(testArena.arena, s_FontAtlasOtherProject, directory / "missing.nwb", metadata).has_value());
+    EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, directory / "missing.nwb", face).has_value());
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(s_FontAtlasOtherProject, directory / "missing.nwb", metadata).has_value());
+}
+
+void VerifyAssetsFontAtlas_RejectedWidthDoesNotEvaluateOverflowingHeightDifference(){
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment.has_value());
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST).has_value());
+    FontAtlasGlyph glyph;
+    glyph.width = 1u;
+    glyph.height = 1u;
+    glyph.planeBottom = -s_MaxF32;
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value());
+    const b8 accepted = IsValidFontAtlasGlyphPlaneBounds(glyph, s_MaxF32);
+    const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+    EXPECT_FALSE(accepted);
+    EXPECT_EQ(exceptions, 0);
+}
+
+
+void VerifyAssetsFontAtlas_PlaneBoundsPreserveMultiplyAddContraction(){
+    const f32 units = ObserveValue<f32>(1000.0f / 30.0f);
+    const f32 origin = ObserveValue<f32>(-100.0f);
+    FontAtlasGlyph glyph;
+    glyph.width = 3u;
+    glyph.height = 3u;
+    glyph.planeLeft = origin;
+    glyph.planeTop = origin;
+    const f32 expected = ScalarMultiplyAddReference<f32>(cast<f32>(glyph.width), units, origin);
+    ComputeFontAtlasGlyphPlaneBounds(units, glyph);
+    EXPECT_EQ(BitCast<u32>(glyph.planeRight), BitCast<u32>(expected));
+    EXPECT_EQ(BitCast<u32>(glyph.planeBottom), BitCast<u32>(expected));
 }
 
 NWB_ADHD_GTEST(AssetsFontAtlas, EmptyAndPaddingBoundaryDigestsRejectMalformedText, VerifyAssetsFontAtlas_EmptyAndPaddingBoundaryDigestsRejectMalformedText)
@@ -1080,65 +1037,8 @@ NWB_ADHD_GTEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmap
 NWB_ADHD_GTEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataAreRejected, VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected)
 NWB_ADHD_GTEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected, VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected)
 NWB_ADHD_GTEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected, VerifyAssetsFontMetadata_MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected)
+NWB_ADHD_GTEST(AssetsFontAtlas, RejectedWidthDoesNotEvaluateOverflowingHeightDifference, VerifyAssetsFontAtlas_RejectedWidthDoesNotEvaluateOverflowingHeightDifference)
+NWB_ADHD_GTEST(AssetsFontAtlas, PlaneBoundsPreserveMultiplyAddContraction, VerifyAssetsFontAtlas_PlaneBoundsPreserveMultiplyAddContraction)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_font_atlas_fenv_tests{
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-
-TEST(AssetsFontAtlas, RejectedWidthDoesNotEvaluateOverflowingHeightDifference){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
-    FontAtlasGlyph glyph{};
-    glyph.width = 1u;
-    glyph.height = 1u;
-    glyph.planeBottom = -Limit<f32>::s_Max;
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const b8 accepted = IsValidFontAtlasGlyphPlaneBounds(glyph, Limit<f32>::s_Max);
-    const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-    EXPECT_FALSE(accepted);
-    EXPECT_EQ(exceptions, 0);
-}
-
-
-TEST(AssetsFontAtlas, PlaneBoundsPreserveMultiplyAddContraction){
-    volatile f32 units = 1000.0f / 30.0f;
-    volatile f32 origin = -100.0f;
-    FontAtlasGlyph glyph{};
-    glyph.width = 3u;
-    glyph.height = 3u;
-    glyph.planeLeft = origin;
-    glyph.planeTop = origin;
-    const f32 expected = origin + static_cast<f32>(glyph.width) * units;
-    ComputeFontAtlasGlyphPlaneBounds(units, glyph);
-    EXPECT_EQ(BitCast<u32>(glyph.planeRight), BitCast<u32>(expected));
-    EXPECT_EQ(BitCast<u32>(glyph.planeBottom), BitCast<u32>(expected));
-}
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

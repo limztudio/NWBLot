@@ -1,0 +1,73 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReadPowerError")]
+extern i32 ReadPowerError();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::WritePowerError")]
+extern void WritePowerError(in i32 value);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReadRawStatus")]
+extern u64 ReadRawStatus();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::WriteRawStatus")]
+extern void WriteRawStatus(in u64 value);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ClearNativeStatus")]
+extern void ClearNativeStatus();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReadNativeStatus")]
+extern u32 ReadNativeStatus();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReadMxcsr")]
+extern u32 ReadMxcsr();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::WriteMxcsr")]
+extern void WriteMxcsr(in u32 value);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ConfigurePowerDenormalMode")]
+extern b8 ConfigurePowerDenormalMode(in u32 denormalMode, in b8 unmaskInvalid);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ShouldSkipNeon32SqrtCase")]
+extern b8 ShouldSkipNeon32SqrtCase();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::HasDoubleFmaResidual")]
+extern b8 HasDoubleFmaResidual();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::HasSingleFmaResidual")]
+extern b8 HasSingleFmaResidual();
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::s_HasPowerStatus")]
+extern const b8 s_HasPowerStatus;
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::s_HasMxcsr")]
+extern const b8 s_HasMxcsr;
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::s_DenormalSave")]
+extern const u32 s_DenormalSave;
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::s_DenormalFlush")]
+extern const u32 s_DenormalFlush;
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::s_SeedPowerError")]
+extern const i32 s_SeedPowerError;
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReferenceMultiplyAdd")]
+extern VectorDouble DoubleMultiplyAddExpression(in VectorDouble first, in VectorDouble second, in VectorDouble addend);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReferenceSeparateProduct")]
+extern VectorDouble DoubleMultiplyThenAdd(in VectorDouble first, in VectorDouble second, in VectorDouble addend);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReferenceSeparateProduct")]
+extern f64 LegacyDoubleMultiplyThenAdd(in f64 first, in f64 second, in f64 addend);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ReferenceNegativeProduct")]
+extern f32 LegacyNegativeMultiplySubtractExpression(in f32 first, in f32 second, in f32 addend);
+
+[cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("NWB_GTEST_POWER_STATUS_CASE")]
+extern registration GoogleTestPowerStatusCase(suite, caseName, verifier);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

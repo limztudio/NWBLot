@@ -2,86 +2,52 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "global_name_access.adhd"
+#include "name_case_types.adhd"
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
-#include <tests/unit/global/name_case_types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-#include <global/containers.h>
-#include <global/diagnostics.h>
-#include <global/name_hash_text.h>
-#include <global/not_null.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_name_identity_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-#if !defined(NWB_DEBUG)
-inline constexpr AStringView s_RuntimeGenerated = "runtime/generated";
-#endif
-
-struct NameSymbolCallbackProbe{
-public:
-    NameDetail::NameSymbolRecorderState previousRecorder = NameDetail::SymbolRecorderState();
-    NameDetail::NameSymbolResolverState previousResolver = NameDetail::SymbolResolverState();
-    u32 recordCount = 0u;
-    u32 resolveCount = 0u;
-
-
-public:
-    NameSymbolCallbackProbe()noexcept{
-        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->recordCount;
-        }, this
-        );
-        SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)noexcept{
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->resolveCount;
-            return false;
-        }, this
-        );
-    }
-    ~NameSymbolCallbackProbe()noexcept{
-        SetNameSymbolRecordCallback(previousRecorder.callback, previousRecorder.userData);
-        SetNameSymbolResolveCallback(previousResolver.callback, previousResolver.userData);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 const StringView s_RecursiveInnerName = "identity/recursive_inner";
+const usize s_NameTokenCapacity = s_TextLength + 1u;
+const Name s_FirstIdentity = "Identity\\First";
+const Name s_CallbackIdentity = "identity/callback_probe";
+const Name s_AuthoredIdentity = "Diagnostic\\Authored";
+
+class NameCallbackProbe{
+    public u32 recordCount = 0u;
+    public u32 resolveCount = 0u;
+    public b8 throws = false;
+    public b8 recursive = false;
+    public b8 nestedAccepted = false;
+    public b8 fillResolver = false;
+
+    [cpp_unwind]
+    public void record(){
+        ++this.recordCount;
+        if(this.throws)
+            ThrowTestException<u32>(17u);
+        if(this.recursive){
+            const auto nested = NameFromText(s_RecursiveInnerName);
+            this.nestedAccepted = nested.has_value() && nested.value().identityHash() == LiteralHash("identity/recursive_inner");
+        }
+    }
+
+    [cpp_unwind]
+    public b8 resolve(mut MutableSymbolText output){
+        ++this.resolveCount;
+        if(this.throws)
+            ThrowTestException<u32>(29u);
+        if(!this.fillResolver)
+            return false;
+        for(usize index = 0u; index < output.size(); ++index)
+            output.set(index, 120u);
+        return true;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,27 +76,14 @@ void VerifyGlobal_ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks(){
     Name runtimeViewName = s_NameNone;
     u32 afterRuntimeRecordCount = 0u;
     u32 resolveCount = 1u;
-    native(in bounded, mut constexprViewName, mut initialRecordCount, mut runtimeViewName, mut afterRuntimeRecordCount, mut resolveCount){
-        using namespace __hidden_name_identity_tests;
-        constexpr AStringView s_Source = "Identity\\Bounded.trailing";
-        constexpr AStringView s_Bounded = s_Source.substr(0u, 16u);
-        constexpr Name s_ViewName{s_Bounded};
-        constexpr Name s_LiteralName{"identity/bounded"};
-        constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
-        constexpr auto s_InvalidName = Name::FromText(AStringView(s_EmbeddedNull));
-        static_assert(s_ViewName == s_LiteralName);
-        static_assert(!s_InvalidName && s_InvalidName.error() == NameTextError::EmbeddedNull);
-        static_assert(Name{AStringView{}} != s_NameNone);
-        static_assert(Name{static_cast<const char*>(nullptr)} == s_NameNone);
-
-        NameSymbolCallbackProbe probe;
-        constexprViewName = s_ViewName;
-        initialRecordCount = probe.recordCount;
-        ASSERT_EQ(bounded, s_Bounded);
-        runtimeViewName = Name{s_Bounded};
-        afterRuntimeRecordCount = probe.recordCount;
-        resolveCount = probe.resolveCount;
-    }
+    NameCallbackProbe probe;
+    ScopedNameCallbacks callbacks(probe);
+    constexprViewName = s_ConstantViewName;
+    initialRecordCount = probe.recordCount;
+    ASSERT_EQ(bounded, s_ConstantBoundedText);
+    runtimeViewName = Name(s_ConstantBoundedText);
+    afterRuntimeRecordCount = probe.recordCount;
+    resolveCount = probe.resolveCount;
     EXPECT_EQ(constexprViewName.identityHash(), literalName.identityHash());
     EXPECT_EQ(initialRecordCount, 0u);
     EXPECT_EQ(runtimeViewName, literalName);
@@ -141,13 +94,8 @@ void VerifyGlobal_ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks(){
 void VerifyGlobal_BinaryIdentityLanesDoNotRecordNameSymbols(){
     b8 buildSymbolsEnabled = false;
     Name first = s_NameNone;
-    native(mut buildSymbolsEnabled, mut first){
-#if defined(NWB_BUILD_SYMBOLS)
-        buildSymbolsEnabled = true;
-#endif
-        constexpr Name s_First{"Identity\\First"};
-        first = s_First;
-    }
+    buildSymbolsEnabled = s_SymbolsEnabled;
+    first = s_FirstIdentity;
     InstallRuntimeRegistry();
     ClearRuntimeSymbols();
 
@@ -164,16 +112,10 @@ void VerifyGlobal_BinaryIdentityLanesDoNotRecordNameSymbols(){
     NameHash expectedFirstHash = NameHash();
     usize countAfterFirstHash = 0u;
     countAfterBinaryLanes = EntryCount();
-    native(in first, mut expectedFirstHash, mut countAfterFirstHash){
-#if defined(NWB_BUILD_SYMBOLS)
-        constexpr Name s_First{"Identity\\First"};
-        expectedFirstHash = ComputeNameHash(MakeNotNull("identity/first"));
-        const NameHash triggered = s_First.hash();
-        static_cast<void>(triggered);
-        countAfterFirstHash = NWB::Core::Common::NameSymbols::EntryCount();
-#else
-        static_cast<void>(first);
-#endif
+    if(buildSymbolsEnabled){
+        expectedFirstHash = LiteralHash("identity/first");
+        s_FirstIdentity.hash();
+        countAfterFirstHash = EntryCount();
     }
     EXPECT_EQ(countAfterBinaryLanes, 0u);
     if(buildSymbolsEnabled){
@@ -197,45 +139,25 @@ void VerifyGlobal_NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks(){
     NameHash literalHashCall = NameHash();
     u32 afterLiteralHashRecords = 0u;
 
-    native(
-        mut buildSymbolsEnabled,
-        mut literalIdentity,
-        mut expectedLiteralHash,
-        mut binaryIdentity,
-        mut expectedBinaryHash,
-        mut initialRecords,
-        mut initialResolves,
-        mut afterRuntimeRecords,
-        mut resolvedUnknown,
-        mut afterResolveRecords,
-        mut afterResolveCalls,
-        mut literalHashCall,
-        mut afterLiteralHashRecords
-    ){
-        using namespace __hidden_name_identity_tests;
-#if defined(NWB_BUILD_SYMBOLS)
-        buildSymbolsEnabled = true;
-#endif
-        constexpr Name s_Literal{"identity/callback_probe"};
-        expectedLiteralHash = ComputeNameHash(MakeNotNull("identity/callback_probe"));
-        expectedBinaryHash = ComputeNameHash(MakeNotNull("identity/binary_probe"));
-        const Name binary{expectedBinaryHash};
-        NameSymbolCallbackProbe probe;
-        literalIdentity = s_Literal.identityHash();
-        binaryIdentity = binary.identityHash();
-        initialRecords = probe.recordCount;
-        initialResolves = probe.resolveCount;
-
-        const Name recorded{AStringView("identity/recorded_probe")};
-        afterRuntimeRecords = probe.recordCount;
-        Array<char, 32u> resolved = {};
-        resolvedUnknown = NameDetail::ResolveNameSymbolText(resolved.data(), LengthOf(resolved), recorded.identityHash());
-        afterResolveRecords = probe.recordCount;
-        afterResolveCalls = probe.resolveCount;
-#if defined(NWB_BUILD_SYMBOLS)
-        literalHashCall = s_Literal.hash();
+    buildSymbolsEnabled = s_SymbolsEnabled;
+    expectedLiteralHash = LiteralHash("identity/callback_probe");
+    expectedBinaryHash = LiteralHash("identity/binary_probe");
+    const Name binary(expectedBinaryHash);
+    NameCallbackProbe probe;
+    ScopedNameCallbacks callbacks(probe);
+    literalIdentity = s_CallbackIdentity.identityHash();
+    binaryIdentity = binary.identityHash();
+    initialRecords = probe.recordCount;
+    initialResolves = probe.resolveCount;
+    const Name recorded(StringView("identity/recorded_probe"));
+    afterRuntimeRecords = probe.recordCount;
+    SymbolBuffer<32u> resolved;
+    resolvedUnknown = resolved.resolveCallback(recorded.identityHash());
+    afterResolveRecords = probe.recordCount;
+    afterResolveCalls = probe.resolveCount;
+    if(buildSymbolsEnabled){
+        literalHashCall = s_CallbackIdentity.hash();
         afterLiteralHashRecords = probe.recordCount;
-#endif
     }
 
     EXPECT_EQ(literalIdentity, expectedLiteralHash);
@@ -262,38 +184,22 @@ void VerifyGlobal_NameResolvedTextPreservesSymbolLookupAndHashFallback(){
     String clearedResolved = "";
     String clearedCStr = "";
 
-    native(
-        mut debugBuild,
-        mut formattedHashText,
-        mut initialResolved,
-        mut formattedDiagnostic,
-        mut resolvedDiffersFromLog,
-        mut clearedResolved,
-        mut clearedCStr
-    ){
-        using namespace __hidden_name_identity_tests;
-#if defined(NWB_DEBUG)
-        debugBuild = true;
-#endif
-        NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
-        NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-
-        const Name runtimeName{AStringView("Runtime\\Generated")};
-        Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
-        NameHashTextCodec::Format(hashText.data(), sizeof(hashText), runtimeName.identityHash());
-        formattedHashText.assign(AStringView(hashText.data(), NameHashTextCodec::s_TextLength));
-        const Name binaryName{runtimeName.identityHash()};
-        const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
-        initialResolved.assign(binaryName.resolvedText());
-        formattedDiagnostic.assign(formattedName.view());
-#if !defined(NWB_DEBUG)
-        resolvedDiffersFromLog = binaryName.resolvedText() != binaryName.logText() && binaryName.resolvedText() == s_RuntimeGenerated;
-#endif
-
-        NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-        clearedResolved.assign(binaryName.resolvedText());
-        clearedCStr.assign(AStringView(binaryName.c_str()));
-    }
+    debugBuild = s_DebugNameBuild;
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
+    const Name runtimeName(StringView("Runtime\\Generated"));
+    SymbolBuffer<s_NameTokenCapacity> hashText;
+    hashText.format(runtimeName.identityHash());
+    formattedHashText.assign(hashText.view());
+    const Name binaryName(runtimeName.identityHash());
+    const DiagnosticEventText formattedName = FormatDiagnosticName("{}", binaryName);
+    initialResolved.assign(binaryName.resolvedText());
+    formattedDiagnostic.assign(formattedName.view());
+    if(!debugBuild)
+        resolvedDiffersFromLog = binaryName.resolvedText() != binaryName.logText() && binaryName.resolvedText() == "runtime/generated";
+    ClearRuntimeSymbols();
+    clearedResolved.assign(binaryName.resolvedText());
+    clearedCStr.assign(StringView(binaryName.c_str()));
 
     const StringView hashView = formattedHashText;
     const StringView initialResolvedView = initialResolved;
@@ -321,31 +227,18 @@ void VerifyGlobal_DiagnosticNameTextNeverInvokesForeignSymbolCallbacks(){
     u32 recordCount = 1u;
     u32 resolveCount = 1u;
 
-    native(mut authoredDiagnostic, mut authoredLog, mut binaryDiagnostic, mut binaryHash, mut recordCount, mut resolveCount){
-        using namespace __hidden_name_identity_tests;
-        constexpr Name s_Authored{"Diagnostic\\Authored"};
-        const Name binary{ComputeNameHash(MakeNotNull("diagnostic/binary"))};
-        NameSymbolCallbackProbe probe;
-        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->recordCount;
-            throw 17u;
-        }, &probe
-        );
-        SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)->b8{
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->resolveCount;
-            throw 29u;
-        }, &probe
-        );
-
-        authoredDiagnostic.assign(MakeDiagnosticEventText(AStringView("{}"), s_Authored).view());
-        authoredLog.assign(s_Authored.logText());
-        Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
-        NameHashTextCodec::Format(hashText.data(), sizeof(hashText), binary.identityHash());
-        binaryDiagnostic.assign(MakeDiagnosticEventText(AStringView("{}"), binary).view());
-        binaryHash.assign(AStringView(hashText.data()));
-        recordCount = probe.recordCount;
-        resolveCount = probe.resolveCount;
-    }
+    const Name binary(LiteralHash("diagnostic/binary"));
+    NameCallbackProbe probe;
+    probe.throws = true;
+    ScopedNameCallbacks callbacks(probe);
+    authoredDiagnostic.assign(FormatDiagnosticName("{}", s_AuthoredIdentity).view());
+    authoredLog.assign(s_AuthoredIdentity.logText());
+    SymbolBuffer<s_NameTokenCapacity> hashText;
+    hashText.format(binary.identityHash());
+    binaryDiagnostic.assign(FormatDiagnosticName("{}", binary).view());
+    binaryHash.assign(hashText.view());
+    recordCount = probe.recordCount;
+    resolveCount = probe.resolveCount;
 
     EXPECT_EQ(StringView(authoredDiagnostic), StringView(authoredLog));
     EXPECT_EQ(StringView(binaryDiagnostic), StringView(binaryHash));
@@ -359,30 +252,24 @@ void VerifyGlobal_NameResolvedTextIsBoundedByStoredAndResolverBuffers(){
     usize actualBoundedLength = 1u;
     b8 nonDebugTerminated = true;
 
-    native(mut created, mut expectedBoundedLength, mut actualBoundedLength, mut nonDebugTerminated){
-        using namespace __hidden_name_identity_tests;
-        NameSymbolCallbackProbe probe;
-        Array<char, NameDetail::s_DebugNameCapacity + 1u> source = {};
-        for(char& character : source)
-            character = 'x';
-        const auto nameResult = Name::FromText(AStringView(source));
-        created = nameResult.has_value();
-        if(nameResult){
-            const Name name = *nameResult;
-#if defined(NWB_DEBUG)
-            expectedBoundedLength = NameDetail::s_DebugNameCapacity - 1u;
+    NameCallbackProbe probe;
+    ScopedNameCallbacks callbacks(probe);
+    String source;
+    source.resize(s_DebugNameSize + 1u, 'x');
+    const auto nameResult = NameFromText(StringView(source));
+    created = nameResult.has_value();
+    if(created){
+        const Name name = nameResult.value();
+        if(s_DebugNameBuild){
+            expectedBoundedLength = s_DebugNameSize - 1u;
             actualBoundedLength = name.resolvedText().size();
-#else
-            SetNameSymbolResolveCallback([](char* outText, const usize outTextSize, const NameHash&, void*)noexcept{
-                for(usize i = 0u; i < outTextSize; ++i)
-                    outText[i] = 'x';
-                return true;
-            });
-            const AStringView resolved = name.resolvedText();
-            expectedBoundedLength = NameDetail::s_SymbolTextBufferLength - 1u;
+        }
+        else{
+            probe.fillResolver = true;
+            const StringView resolved = name.resolvedText();
+            expectedBoundedLength = s_ResolverSize - 1u;
             actualBoundedLength = resolved.size();
-            nonDebugTerminated = !resolved.empty() && resolved.back() == 'x' && resolved.data()[resolved.size()] == '\0';
-#endif
+            nonDebugTerminated = !resolved.empty() && resolved.back() == 'x' && TerminatorByte(resolved) == 0u;
         }
     }
 
@@ -397,44 +284,14 @@ void VerifyGlobal_NameHashTextDistinguishesNullEmptyAndEmbeddedNull(){
     u32 recordCount = 1u;
     u32 resolveCount = 1u;
 
-    native(mut nullRejectedWithNullText, mut boundedRejectedWithEmbeddedNull, mut recordCount, mut resolveCount){
-        using namespace __hidden_name_identity_tests;
-        constexpr auto s_NullNarrow = ComputeNameHash(static_cast<const char*>(nullptr));
-        constexpr auto s_NullWide = ComputeNameHash(static_cast<const wchar*>(nullptr));
-        static_assert(!s_NullNarrow && s_NullNarrow.error() == NameTextError::NullText);
-        static_assert(!s_NullWide && s_NullWide.error() == NameTextError::NullText);
-        constexpr auto s_EmptyPointer = ComputeNameHash("");
-        constexpr auto s_EmptyWidePointer = ComputeNameHash(L"");
-        constexpr auto s_EmptyView = ComputeNameHash(AStringView{});
-        constexpr auto s_EmptyWideView = ComputeNameHash(WStringView{});
-        static_assert(s_EmptyPointer && s_EmptyWidePointer && s_EmptyView && s_EmptyWideView);
-        static_assert(*s_EmptyPointer == *s_EmptyView && *s_EmptyWidePointer == *s_EmptyWideView);
-        static_assert(*s_EmptyView == ComputeNameHash(MakeNotNull("")));
-        static_assert(*s_EmptyView != NameHash{});
-        constexpr Array<char, 4u> s_Narrow = { 'a', '\0', 'b', '\0' };
-        constexpr Array<wchar, 4u> s_Wide = { L'a', L'\0', L'b', L'\0' };
-        constexpr auto s_NarrowPointer = ComputeNameHash(s_Narrow.data());
-        constexpr auto s_WidePointer = ComputeNameHash(s_Wide.data());
-        constexpr auto s_NarrowBounded = ComputeNameHash(AStringView(s_Narrow.data(), 3u));
-        constexpr auto s_WideBounded = ComputeNameHash(WStringView(s_Wide.data(), 3u));
-        static_assert(s_NarrowPointer && s_WidePointer);
-        static_assert(*s_NarrowPointer == ComputeNameHash(MakeNotNull("a")));
-        static_assert(*s_WidePointer == ComputeNameHash(MakeNotNull(L"a")));
-        static_assert(!s_NarrowBounded && s_NarrowBounded.error() == NameTextError::EmbeddedNull);
-        static_assert(!s_WideBounded && s_WideBounded.error() == NameTextError::EmbeddedNull);
-        constexpr auto s_Validated = ComputeNameHash(NameText<char>{AStringView("Identity\\Text")});
-        constexpr auto s_ValidatedWide = ComputeNameHash(NameText<wchar>{WStringView(L"identity/text")});
-        static_assert(s_Validated == s_ValidatedWide);
-        static_assert(s_Validated == ComputeNameHash(MakeNotNull("identity/text")));
-
-        NameSymbolCallbackProbe probe;
-        const auto nullHash = ComputeNameHash(static_cast<const char*>(nullptr));
-        nullRejectedWithNullText = !nullHash && nullHash.error() == NameTextError::NullText;
-        const auto boundedHash = ComputeNameHash(AStringView(s_Narrow.data(), 3u));
-        boundedRejectedWithEmbeddedNull = !boundedHash && boundedHash.error() == NameTextError::EmbeddedNull;
-        recordCount = probe.recordCount;
-        resolveCount = probe.resolveCount;
-    }
+    NameCallbackProbe probe;
+    ScopedNameCallbacks callbacks(probe);
+    const auto nullHash = NullNameHash();
+    nullRejectedWithNullText = !nullHash.has_value() && nullHash.error() == NameTextError::NullText;
+    const auto boundedHash = ComputeNameHash(StringView("a\0b", 3u));
+    boundedRejectedWithEmbeddedNull = !boundedHash.has_value() && boundedHash.error() == NameTextError::EmbeddedNull;
+    recordCount = probe.recordCount;
+    resolveCount = probe.resolveCount;
 
     EXPECT_TRUE(nullRejectedWithNullText);
     EXPECT_TRUE(boundedRejectedWithEmbeddedNull);
@@ -460,62 +317,32 @@ void VerifyGlobal_RuntimeNameTextAdmissionPreservesIdentityAndCallbackBoundaries
     u32 afterWideRecordCount = 0u;
     u32 finalResolveCount = 1u;
 
-    native(
-        mut invalidNarrowRejected,
-        mut invalidWideRejected,
-        mut invalidRecordCount,
-        mut invalidResolveCount,
-        mut emptyAccepted,
-        mut emptyName,
-        mut expectedEmptyHash,
-        mut afterEmptyRecordCount,
-        mut narrowAccepted,
-        mut narrowName,
-        mut expectedRuntimeHash,
-        mut afterNarrowRecordCount,
-        mut wideAccepted,
-        mut wideName,
-        mut afterWideRecordCount,
-        mut finalResolveCount
-    ){
-        using namespace __hidden_name_identity_tests;
-        static_assert(!noexcept(Name::FromText(AStringView{})));
-        static_assert(Name{static_cast<const wchar*>(nullptr)} == s_NameNone);
-        constexpr Array<char, 3u> s_InvalidNarrow = { 'a', '\0', 'b' };
-        constexpr Array<wchar, 3u> s_InvalidWide = { L'a', L'\0', L'b' };
-        constexpr auto s_InvalidWideName = Name::FromText(WStringView(s_InvalidWide.data(), s_InvalidWide.size()));
-        static_assert(!s_InvalidWideName && s_InvalidWideName.error() == NameTextError::EmbeddedNull);
-
-        expectedEmptyHash = ComputeNameHash(MakeNotNull(""));
-        expectedRuntimeHash = ComputeNameHash(MakeNotNull("identity/runtime"));
-
-        NameSymbolCallbackProbe probe;
-        const auto invalidNarrow = Name::FromText(AStringView(s_InvalidNarrow));
-        invalidNarrowRejected = !invalidNarrow && invalidNarrow.error() == NameTextError::EmbeddedNull;
-        const auto invalidWide = Name::FromText(WStringView(s_InvalidWide.data(), s_InvalidWide.size()));
-        invalidWideRejected = !invalidWide && invalidWide.error() == NameTextError::EmbeddedNull;
-        invalidRecordCount = probe.recordCount;
-        invalidResolveCount = probe.resolveCount;
-
-        const auto empty = Name::FromText(AStringView{});
-        emptyAccepted = empty.has_value();
-        if(empty)
-            emptyName = *empty;
-        afterEmptyRecordCount = probe.recordCount;
-
-        const auto narrow = Name::FromText(AStringView("Identity\\Runtime"));
-        narrowAccepted = narrow.has_value();
-        if(narrow)
-            narrowName = *narrow;
-        afterNarrowRecordCount = probe.recordCount;
-
-        const auto wide = Name::FromText(WStringView(L"identity/runtime"));
-        wideAccepted = wide.has_value();
-        if(wide)
-            wideName = *wide;
-        afterWideRecordCount = probe.recordCount;
-        finalResolveCount = probe.resolveCount;
-    }
+    expectedEmptyHash = LiteralHash("");
+    expectedRuntimeHash = LiteralHash("identity/runtime");
+    NameCallbackProbe probe;
+    ScopedNameCallbacks callbacks(probe);
+    const auto invalidNarrow = NameFromText(StringView("a\0b", 3u));
+    invalidNarrowRejected = !invalidNarrow.has_value() && invalidNarrow.error() == NameTextError::EmbeddedNull;
+    const auto invalidWide = WideNameFromText(s_InvalidWideNameText);
+    invalidWideRejected = !invalidWide.has_value() && invalidWide.error() == NameTextError::EmbeddedNull;
+    invalidRecordCount = probe.recordCount;
+    invalidResolveCount = probe.resolveCount;
+    const auto empty = NameFromText(StringView());
+    emptyAccepted = empty.has_value();
+    if(emptyAccepted)
+        emptyName = empty.value();
+    afterEmptyRecordCount = probe.recordCount;
+    const auto narrow = NameFromText(StringView("Identity\\Runtime"));
+    narrowAccepted = narrow.has_value();
+    if(narrowAccepted)
+        narrowName = narrow.value();
+    afterNarrowRecordCount = probe.recordCount;
+    const auto wide = WideNameFromText(s_RuntimeWideName);
+    wideAccepted = wide.has_value();
+    if(wideAccepted)
+        wideName = wide.value();
+    afterWideRecordCount = probe.recordCount;
+    finalResolveCount = probe.resolveCount;
 
     EXPECT_TRUE(invalidNarrowRejected);
     EXPECT_TRUE(invalidWideRejected);
@@ -548,50 +375,31 @@ void VerifyGlobal_OptionalNameTextPreservesAbsenceAndOwnedContainerErrors(){
     u32 validRecordCount = 0u;
     u32 validResolveCount = 1u;
 
-    native(
-        mut emptyNarrowAbsent,
-        mut emptyWideAbsent,
-        mut invalidViewRejected,
-        mut invalidOwnedRejected,
-        mut invalidGenericRejected,
-        mut invalidRecordCount,
-        mut invalidResolveCount,
-        mut validPresent,
-        mut validName,
-        mut expectedValidHash,
-        mut validRecordCount,
-        mut validResolveCount
-    ){
-        using namespace __hidden_name_identity_tests;
-        constexpr Array<char, 3u> s_Invalid = { 'a', '\0', 'b' };
-        expectedValidHash = ComputeNameHash(MakeNotNull("identity/optional"));
-        NWB::Tests::TestArena<> testArena;
-        BasicString<char, NWB::Core::Alloc::GlobalArena> owned(testArena.arena);
-        owned.assign(s_Invalid.data(), s_Invalid.size());
-        AInteropString generic(s_Invalid.data(), s_Invalid.size());
-        NameSymbolCallbackProbe probe;
-
-        const auto emptyNarrow = ToName(AStringView{});
-        emptyNarrowAbsent = emptyNarrow.has_value() && !emptyNarrow->has_value();
-        const auto emptyWide = ToName(WStringView{});
-        emptyWideAbsent = emptyWide.has_value() && !emptyWide->has_value();
-        const auto invalidView = ToName(AStringView(s_Invalid));
-        invalidViewRejected = !invalidView && invalidView.error() == NameTextError::EmbeddedNull;
-        const auto invalidOwned = ToName(owned);
-        invalidOwnedRejected = !invalidOwned && invalidOwned.error() == NameTextError::EmbeddedNull;
-        const auto invalidGeneric = ToName(generic);
-        invalidGenericRejected = !invalidGeneric && invalidGeneric.error() == NameTextError::EmbeddedNull;
-        invalidRecordCount = probe.recordCount;
-        invalidResolveCount = probe.resolveCount;
-
-        const auto valid = ToName(AStringView("Identity\\Optional"));
-        if(valid && *valid){
-            validPresent = true;
-            validName = **valid;
-        }
-        validRecordCount = probe.recordCount;
-        validResolveCount = probe.resolveCount;
+    const StringView invalid = StringView("a\0b", 3u);
+    expectedValidHash = LiteralHash("identity/optional");
+    const String owned = String(invalid);
+    const InteropNameText generic(invalid);
+    NameCallbackProbe probe;
+    ScopedNameCallbacks callbacks(probe);
+    const auto emptyNarrow = ToName(StringView());
+    emptyNarrowAbsent = emptyNarrow.has_value() && !emptyNarrow.value().has_value();
+    const auto emptyWide = ToWideName(WideView());
+    emptyWideAbsent = emptyWide.has_value() && !emptyWide.value().has_value();
+    const auto invalidView = ToName(invalid);
+    invalidViewRejected = !invalidView.has_value() && invalidView.error() == NameTextError::EmbeddedNull;
+    const auto invalidOwned = ToContainerName(owned);
+    invalidOwnedRejected = !invalidOwned.has_value() && invalidOwned.error() == NameTextError::EmbeddedNull;
+    const auto invalidGeneric = ToContainerName(generic);
+    invalidGenericRejected = !invalidGeneric.has_value() && invalidGeneric.error() == NameTextError::EmbeddedNull;
+    invalidRecordCount = probe.recordCount;
+    invalidResolveCount = probe.resolveCount;
+    const auto valid = ToName(StringView("Identity\\Optional"));
+    if(valid.has_value() && valid.value().has_value()){
+        validPresent = true;
+        validName = valid.value().value();
     }
+    validRecordCount = probe.recordCount;
+    validResolveCount = probe.resolveCount;
 
     EXPECT_TRUE(emptyNarrowAbsent);
     EXPECT_TRUE(emptyWideAbsent);
@@ -607,33 +415,24 @@ void VerifyGlobal_OptionalNameTextPreservesAbsenceAndOwnedContainerErrors(){
 }
 
 void VerifyGlobal_RuntimeNameFactoryPreservesRecursiveRecorderGuard(){
-    NameRecursiveProbe probe = NameRecursiveProbe();
+    NameCallbackProbe probe;
     b8 firstCreated = false;
     b8 firstNestedAccepted = false;
     u32 firstRecordCount = 0u;
     b8 secondCreated = false;
     u32 previousRecords = 1u;
     u32 previousResolves = 1u;
-    native(mut probe, mut firstCreated, mut firstNestedAccepted, mut firstRecordCount, mut secondCreated, mut previousRecords, mut previousResolves){
-        using namespace __hidden_name_identity_tests;
-        using RecursiveProbe = NWB::Tests::GlobalCases::NameRecursiveProbe;
-        NameSymbolCallbackProbe restoreCallbacks;
-        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
-            auto& state = *MakeNotNull(static_cast<RecursiveProbe*>(context));
-            ++state.recordCount;
-            const auto nested = Name::FromText(AStringView(s_RecursiveInnerName));
-            state.nestedAccepted = nested && nested->identityHash() == ComputeNameHash(MakeNotNull(s_RecursiveInnerName.data()));
-        }, &probe
-        );
-        const auto first = Name::FromText(AStringView("identity/recursive_first"));
-        firstCreated = first.has_value();
-        firstNestedAccepted = probe.nestedAccepted;
-        firstRecordCount = probe.recordCount;
-        const auto second = Name::FromText(AStringView("identity/recursive_second"));
-        secondCreated = second.has_value();
-        previousRecords = restoreCallbacks.recordCount;
-        previousResolves = restoreCallbacks.resolveCount;
-    }
+    NameCallbackProbe previous;
+    ScopedNameCallbacks outer(previous);
+    probe.recursive = true;
+    ScopedNameCallbacks callbacks(probe);
+    const auto first = NameFromText(StringView("identity/recursive_first"));
+    firstCreated = first.has_value();
+    firstNestedAccepted = probe.nestedAccepted;
+    firstRecordCount = probe.recordCount;
+    secondCreated = NameFromText(StringView("identity/recursive_second")).has_value();
+    previousRecords = previous.recordCount;
+    previousResolves = previous.resolveCount;
     ASSERT_TRUE(firstCreated);
     EXPECT_TRUE(firstNestedAccepted);
     EXPECT_EQ(firstRecordCount, 1u);
@@ -648,12 +447,10 @@ void VerifyGlobal_NameHashDebugTextRejectsInvalidHex(){
     const Name sample("global_name_hash_debug_text");
     const NameHash source = sample.identityHash();
     b8 corruptedDecoded = true;
-    native(in source, mut corruptedDecoded){
-        Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
-        NameHashTextCodec::Format(hashText.data(), sizeof(hashText), source);
-        hashText[0u] = 'g';
-        corruptedDecoded = NameHashTextCodec::Decode(AStringView(hashText.data())).has_value();
-    }
+    SymbolBuffer<s_NameTokenCapacity> hashText;
+    hashText.format(source);
+    hashText.setByte(0u, 'g');
+    corruptedDecoded = NameHashTextCodecDecode(hashText.view()).has_value();
     EXPECT_FALSE(corruptedDecoded);
 }
 

@@ -68,6 +68,9 @@ public:
         Span<const GpuTaskGraphTaskSubmissionHook> taskSubmissionHooks
     );
     [[nodiscard]] b8 validateOwnedTimingTicket(GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* timingTicket)const noexcept;
+    [[nodiscard]] b8 validateTicket(GpuSubmissionPacketId packet, const Optional<NotNull<GpuTimingSubmissionTicket*>>& ticket)const noexcept{
+        return validateOwnedTimingTicket(packet, ticket ? ticket->get() : nullptr);
+    }
     [[nodiscard]] const QueueSubmissionPreSubmitHook* collectPacket(GpuSubmissionPacketId packet, Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena>& inOutTimingTickets)const;
 };
 

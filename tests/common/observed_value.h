@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+#include <engine_namespace.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+[[nodiscard]] inline T ObserveValue(const T value)noexcept{
+    volatile T observed = value;
+    return observed;
+}
+
+template<typename T>
+[[nodiscard]] FOUNDATION_NOINLINE T ScalarAddReference(const T first, const T second)noexcept{ return first + second; }
+
+template<typename T>
+[[nodiscard]] FOUNDATION_NOINLINE T ScalarSubtractReference(const T first, const T second)noexcept{ return first - second; }
+
+template<typename T>
+[[nodiscard]] FOUNDATION_NOINLINE T ScalarDivideReference(const T first, const T second)noexcept{ return first / second; }
+
+// Follow the native scalar contraction policy of this build.
+template<typename T>
+[[nodiscard]] FOUNDATION_NOINLINE T ScalarMultiplyAddReference(const T first, const T second, const T addend)noexcept{
+    return first * second + addend;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

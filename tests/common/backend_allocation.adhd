@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "memory.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::BackendReallocate")]
+extern RawAllocation BackendReallocate(in RawAllocation block, in usize count, in usize alignment);
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::SetRangeError")]
+extern void SetRangeError();
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::AllocationError")]
+extern i32 AllocationError();
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::AllocateBacking")]
+extern RawAllocation AllocateBacking(in usize bytes);
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::AllocateAlignedBacking")]
+extern RawAllocation AllocateAlignedBacking(in usize bytes, in usize alignment);
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::ResizeBacking")]
+extern RawAllocation ResizeBacking(in RawAllocation data, in usize bytes);
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::ResizeAlignedBacking")]
+extern RawAllocation ResizeAlignedBacking(in RawAllocation data, in usize bytes, in usize alignment);
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::FreeBacking")]
+extern void FreeBacking(in RawAllocation data);
+
+[cpp_header("<tests/common/backend_allocation.h>"), cpp_name("::NWB::Tests::FreeAlignedBacking")]
+extern void FreeAlignedBacking(in RawAllocation data, in usize bytes);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

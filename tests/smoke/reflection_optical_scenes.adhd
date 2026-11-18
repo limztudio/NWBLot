@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "frame_graph_observation.adhd"
+#include <impl/ecs_render/reflection/types.adhd>
+#include <impl/ecs_render/reflection/task_graph_reflection.adhd>
 #include <impl/assets_csg/shape_id.adhd>
 #include <impl/ecs_model/components.adhd>
 #include <impl/ecs_render/components.adhd>
@@ -15,37 +18,6 @@
 #include "smoke_project_helpers.adhd"
 #include "smoke_scene_helpers.adhd"
 #include "smoke_skinned_scene_helpers.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/telemetry/frame_graph_contributor.h>
-
-namespace NWB::Tests::Smoke{
-using Core::ECS::EntityID;
-using Core::ECS::s_InvalidEntityId;
-using Impl::ReflectionCsgHardwareSliceIdentity;
-inline constexpr u32 s_ReflectionTraceSliceRays = NWB_REFLECTION_TRACE_SLICE_RAYS;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,7 +137,7 @@ class ReflectionOpticalCsgBuilder{
         in VectorSingle normalDistance
     ){
         AddStaticCsgMeshReceiver(receiver, group, affectOpaque, affectTransparent, this.m_world);
-        return CreateSmokeCsgPlaneCutter(group, s_CsgPlaneShapeName, true, f32x4(normalDistance), this.m_world);
+        return CreateSmokeCsgPlaneCutter(group, s_CsgPlaneShapeName, true, VectorSingle(normalDistance), this.m_world);
     }
 
     public void addBox(
@@ -175,7 +147,7 @@ class ReflectionOpticalCsgBuilder{
         in VectorSingle center
     ){
         AddStaticCsgMeshReceiver(receiver, group, false, true, this.m_world);
-        CreateSmokeCsgBoxCutter(group, s_CsgBoxShapeName, true, f32x4(halfExtents), center, QuaternionIdentity(), this.m_world);
+        CreateSmokeCsgBoxCutter(group, s_CsgBoxShapeName, true, VectorSingle(halfExtents), center, QuaternionIdentity(), this.m_world);
     }
 
     private mut World m_world;
@@ -800,92 +772,67 @@ void ReportReflectionSlicePackets(
     u32 singleTaskPackets = 0u;
     u32 graphicsPackets = 0u;
 
-    native(
-        in sourceFrame,
-        in expectedSlices,
-        in sliceIdentities,
-        mut context,
-        mut renderer,
-        mut planGeneration,
-        mut deviceGeneration,
-        mut graphicsQueueIndex,
-        mut runtimePresentVal,
-        mut hardwareNodes,
-        mut indexedSlices,
-        mut compiledNodes,
-        mut uniquePacketCount,
-        mut acceptedPackets,
-        mut singleTaskPackets,
-        mut graphicsPackets
-    ){
-        Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
-        Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
-        Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
-        Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(context.objectArena);
-        Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
-        Core::Alloc::ScratchArena scratchArena{s_SmokeScratchNameTestsSmokeReflectionFrameGraph};
-        Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
-        const b8 graphAvailable = renderer.appendFrameGraph(builder);
-        const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-        deviceGeneration = primaryGraphics.deviceGeneration;
-        graphicsQueueIndex = primaryGraphics.index;
-        b8 runtimePresent = false;
-        for(const auto& node : nodes){
-            if(node.name == s_SmokeTimingNameEcsRenderFrame && node.runtimeStatistics.present){
-                // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
-                runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
-                planGeneration = node.runtimeStatistics.planGeneration;
-                break;
-            }
+    SmokeFrameGraphObservation graph(context, s_SmokeScratchNameTestsSmokeReflectionFrameGraph, sourceFrame);
+    const b8 graphAvailable = graph.append(renderer);
+    const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    deviceGeneration = primaryGraphics.deviceGeneration;
+    graphicsQueueIndex = primaryGraphics.index;
+    b8 runtimePresent = false;
+    for(in FrameGraphNodeDesc node : graph.nodes){
+        if(node.name == s_SmokeTimingNameEcsRenderFrame && node.runtimeStatistics.present){
+            // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
+            runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
+            planGeneration = node.runtimeStatistics.planGeneration;
+            break;
         }
-        runtimePresentVal = runtimePresent ? 1u : 0u;
-
-        Vector<u32, Core::Alloc::ScratchArena> uniquePackets(scratchArena);
-        uniquePackets.reserve(expectedSlices);
-        Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
-        observedSlices.resize(expectedSlices, 0u);
-        for(const auto& node : nodes){
-            if(node.label != "Reflection Hardware Resolve")
-                continue;
-            ++hardwareNodes;
-            u32 sliceIndex = expectedSlices;
-            for(u32 index = 0u; index < expectedSlices; ++index){
-                if(node.name == sliceIdentities[index]){
-                    sliceIndex = index;
-                    break;
-                }
-            }
-            if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
-                continue;
-            observedSlices[sliceIndex] = 1u;
-            ++indexedSlices;
-            if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
-                continue;
-            ++compiledNodes;
-            b8 unique = true;
-            for(const u32 packetIndex : uniquePackets){
-                if(packetIndex == node.compiledTask.packetIndex){
-                    unique = false;
-                    break;
-                }
-            }
-            if(unique)
-                uniquePackets.push_back(node.compiledTask.packetIndex);
-            if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
-                continue;
-            for(const auto& packet : packetStatistics){
-                if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
-                    continue;
-                ++acceptedPackets;
-                if(packet.taskCount == 1u)
-                    ++singleTaskPackets;
-                if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
-                    ++graphicsPackets;
-                break;
-            }
-        }
-        uniquePacketCount = uniquePackets.size();
     }
+    runtimePresentVal = cast<u32>(runtimePresent);
+
+    Vector<u32> uniquePackets;
+    uniquePackets.reserve(expectedSlices);
+    Vector<u8> observedSlices;
+    observedSlices.resize(expectedSlices, 0u);
+    for(in FrameGraphNodeDesc node : graph.nodes){
+        if(node.label != "Reflection Hardware Resolve")
+            continue;
+        ++hardwareNodes;
+        u32 sliceIndex = expectedSlices;
+        for(u32 index = 0u; index < expectedSlices; ++index){
+            if(node.name == sliceIdentities[index]){
+                sliceIndex = index;
+                break;
+            }
+        }
+        if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
+            continue;
+        observedSlices[sliceIndex] = 1u;
+        ++indexedSlices;
+        if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
+            continue;
+        ++compiledNodes;
+        b8 unique = true;
+        for(in u32 packetIndex : uniquePackets){
+            if(packetIndex == node.compiledTask.packetIndex){
+                unique = false;
+                break;
+            }
+        }
+        if(unique)
+            uniquePackets.push_back(node.compiledTask.packetIndex);
+        if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == FrameGraphQueueAssignmentAcceptance::NotAccepted)
+            continue;
+        for(in FrameGraphPacketSubmissionStatisticsRecord packet : graph.packets){
+            if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
+                continue;
+            ++acceptedPackets;
+            if(packet.taskCount == 1u)
+                ++singleTaskPackets;
+            if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
+                ++graphicsPackets;
+            break;
+        }
+    }
+    uniquePacketCount = uniquePackets.size();
 
     [essential] info(
         "ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={} graphics_queue={} runtime_present={} ray_capacity={} expected_slices={} hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}"
@@ -907,7 +854,7 @@ void ReportReflectionSlicePackets(
 }
 
 // Synchronized probe for reflection CSG captures and packet receipts.
-class ReflectionCsgContextProbe{
+class ReflectionCsgContextProbe : ISmokeCapturePredicate{
     public ReflectionCsgContextProbe(mut ProjectRuntimeContext context){
         this.m_context = context;
     }
@@ -920,7 +867,7 @@ class ReflectionCsgContextProbe{
         return sourceFrame == this.m_targetSource;
     }
 
-    public b8 shouldCaptureFrame(in u64 sourceFrame)const{
+    public b8 shouldCaptureFrame(in u64 sourceFrame)const override{
         return this.shouldCapture(sourceFrame);
     }
 

@@ -8,159 +8,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include "scheduler_test_config.adhd"
+#include "cleanup_case_types.adhd"
+#include "cpu_task_sdk.adhd"
+#include <tests/common/threads.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/task/cpu/cleanup_case_types.adhd.h>
-#include <tests/unit/task/cpu/scheduler_test_config.adhd.h>
-
-#include <loader/callback_shutdown.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/task/cpu/scheduler.h>
-
-#include <global/atomic.h>
-#include <global/platform.h>
-#include <global/sync.h>
-#include <global/terminal_entry.h>
-#include <global/termination.h>
-#include <global/thread.h>
-#include <global/timer.h>
-#include <global/type.h>
-
-#include <stdlib.h>
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Watchdog and capture probes shared by the CPU scheduler suites.
-namespace CpuTaskSchedulerTestSupport{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
-
-
-[[noreturn]] FOUNDATION_INLINE void ExitTestProcess(const u32 code)noexcept{
-    ::_Exit(static_cast<int>(code));
-}
-
-
-class DeadlineGuard final{
-public:
-    explicit DeadlineGuard(const b8 deathTest = false, const u32 timeoutMS = s_TestTimeoutMS)
-        : m_watchdog([deathTest, timeoutMS](const StopToken& stop)noexcept {
+class DeadlineGuard{
+    private TestThread watchdog;
+    public DeadlineGuard(in b8 deathTest, in u32 timeoutMS){
+        this.watchdog = TestThread(lambda[in deathTest, in timeoutMS](in StopToken stop) -> void{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= timeoutMS){
-                    // A timeout must fail a death test instead of being mistaken for the expected invariant rejection.
-                    if(deathTest)
-                        ExitTestProcess(0u);
+                    if(deathTest) ExitTestProcess(0u);
                     TerminateInvariant();
                 }
                 SleepMS(s_PollIntervalMS);
             }
-        })
-    {}
-    ~DeadlineGuard()noexcept = default;
-
-
-private:
-    JoiningThread m_watchdog;
-};
-
-
-struct LifetimeProbe{
-    Atomic<u32>* retirements;
-    u32 value;
-
-
-public:
-    explicit LifetimeProbe(Atomic<u32>& counter, const u32 payload = 0u)noexcept
-        : retirements(&counter)
-        , value(payload)
-    {}
-    LifetimeProbe(const LifetimeProbe&) = delete;
-    LifetimeProbe(LifetimeProbe&& other)noexcept
-        : retirements(other.retirements)
-        , value(other.value)
-    {
-        other.retirements = nullptr;
+        });
     }
-    ~LifetimeProbe()noexcept{
-        if(retirements)
-            retirements->fetch_add(1u, MemoryOrder::release);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::CpuTaskSuite{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
-using TestSchedulerConfig = CpuTaskSchedulerTestSupport::TestSchedulerConfig;
-using CpuTaskSchedulerTestSupport::DeadlineGuard;
-using CpuTaskSchedulerTestSupport::ExitTestProcess;
-using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
-using CpuTaskSchedulerTestSupport::LifetimeProbe;
-using CpuTaskSchedulerTestSupport::TaskGate;
-using CpuTaskSchedulerTestSupport::WaitUntil;
-using CpuTaskSchedulerTestSupport::WaitUntilCount;
-using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
-using CpuTaskSchedulerTestSupport::s_GateTimeoutMS;
-using CpuTaskSchedulerTestSupport::s_TestTimeoutMS;
-using CpuTaskSchedulerTestSupport::s_ProfilingPollIntervalMS;
-using CpuTaskSchedulerTestSupport::s_CompletionTimeoutMS;
-using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuScope;
-using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuTask;
-using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuLocalName;
-using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuEmptyScope;
-using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCompletedScope;
-using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCanceledScope;
-
-[[nodiscard]] FOUNDATION_INLINE usize ReadNullProfileEvents(CpuTaskScheduler& scheduler, const usize capacity)noexcept{
-    return scheduler.readProfileEvents(nullptr, capacity);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class LifetimeProbe{
+    private mut Atomic<u32> retirements;
+    public u32 value;
+    public LifetimeProbe(mut Atomic<u32> counter, in u32 value){ this.retirements = counter; this.value = value; }
+    public void retire(){ this.retirements.fetch_add(1u, MemoryOrder::release); }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+CpuTaskOptions MainThreadOptions(){
+    CpuTaskOptions options;
+    options.target = CpuTaskTarget::MainThread;
+    return options;
+}
 
 type CpuTaskTargetEnum = CpuTaskTarget;
-
 type CpuTaskAdmissionErrorEnum = CpuTaskAdmissionError;
 type CpuTaskCostEnum = CpuTaskCost;
 type CpuTaskPriorityEnum = CpuTaskPriority;

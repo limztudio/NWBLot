@@ -2,211 +2,47 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "global_text_access.adhd"
+#include "name_case_types.adhd"
+#include "terminal_case_types.adhd"
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
-#include <tests/unit/global/name_case_types.adhd>
+#include <tests/common/threads.adhd>
+#include <tests/common/value_storage.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type Latin1VoidResult = Expected<void, Latin1TextError>;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/global/scope_case_types.adhd.h>
-#include <tests/unit/global/terminal_case_types.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <global/algorithm.h>
-#include <global/basic_string.h>
-#include <global/binary.h>
-#include <global/call_text.h>
-#include <global/compact_string.h>
-#include <global/containers.h>
-#include <global/cpu_topology.h>
-#include <global/csv_text.h>
-#include <global/fixed_buffer.h>
-#include <global/generic.h>
-#include <global/latin1_text.h>
-#include <global/limit.h>
-#include <global/not_null.h>
-#include <global/numeric_text.h>
-#include <global/overflow.h>
-#include <global/platform.h>
-#include <global/process.h>
-#include <global/scope_exit.h>
-#include <global/source_text.h>
-#include <global/string_hash.h>
-#include <global/sync.h>
-#include <global/terminal_entry.h>
-#include <global/text_replacements.h>
-#include <global/text_utils.h>
-#include <global/thread.h>
-#include <global/type.h>
-#include <global/unicode/grapheme.h>
-#include <global/utf8_text.h>
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-#include <windows.h>
-#endif
-#if defined(FOUNDATION_PLATFORM_LINUX)
-#include <sched.h>
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_scope_exit_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MoveOnlyCleanup : NoCopy{
-public:
-    CleanupState* state;
-
-
-public:
-    explicit MoveOnlyCleanup(CleanupState& cleanupState)noexcept
-        : state(&cleanupState)
-    {}
-    MoveOnlyCleanup(MoveOnlyCleanup&& other)noexcept
-        : state(other.state)
-    {
-        other.state = nullptr;
-    }
-    ~MoveOnlyCleanup()noexcept{
-        if(state)
-            ++state->destructions;
-    }
-
-
-public:
-    void operator()()noexcept{ ++state->calls; }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_global_text_boundary_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-concept CanTrimView = requires{ TrimView(DeclVal<T>()); TrimLeftView(DeclVal<T>()); };
-
-static_assert(CanTrimView<ACompactString&>);
-static_assert(CanTrimView<const ACompactString&>);
-static_assert(!CanTrimView<ACompactString>);
-static_assert(!CanTrimView<const ACompactString>);
-static_assert(CanTrimView<AStringView>);
-static_assert(CanTrimView<AStringView&>);
-static_assert(CanTrimView<AString<::ArenaBase>&>);
-static_assert(!CanTrimView<AString<::ArenaBase>>);
-static_assert(LiteralView("a\0b").size() == 3u);
-static_assert(::TryMultiply<u64>(0u, Limit<u64>::s_Max) && *::TryMultiply<u64>(0u, Limit<u64>::s_Max) == 0u);
-static_assert(::TryMultiply<i64>(Limit<i64>::s_Min, 1) && *::TryMultiply<i64>(Limit<i64>::s_Min, 1) == Limit<i64>::s_Min);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::GlobalCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Latin1TextErrorEnum = ::Latin1TextError::Enum;
-namespace Latin1TextError = ::Latin1TextError;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_text_utility_edge_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ThrowingReplacementComparison{
-public:
-    b8 value;
-    explicit ThrowingReplacementComparison(const b8 inValue)noexcept : value(inValue){}
-    ThrowingReplacementComparison(const ThrowingReplacementComparison&){ throw RuntimeException("comparison copy failure"); }
-    explicit operator b8()const noexcept{ return value; }
-};
-
-struct ReplacementOffset{
-public:
-    usize value;
-    operator usize()const noexcept{ return value; }
-};
-
-[[nodiscard]] FOUNDATION_INLINE const ThrowingReplacementComparison& operator>(const ReplacementOffset lhs, const ReplacementOffset rhs)noexcept{
-    static const ThrowingReplacementComparison s_True(true);
-    static const ThrowingReplacementComparison s_False(false);
-    return lhs.value > rhs.value ? s_True : s_False;
+[ordered]
+class DecimalStorage{
+    public NarrowChar first = cast<NarrowChar>(97u);
+    public DecimalDigits buffer;
+    public NarrowChar last = cast<NarrowChar>(122u);
 }
 
+class CaseLifetime{
+    private mut b8 m_alive;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public CaseLifetime(mut b8 alive){
+        this.m_alive = alive;
+        alive = true;
+    }
+    public ~CaseLifetime(){ this.m_alive = false; }
+}
 
+class TextEdit<Offset>{
+    public Offset begin;
+    public Offset end;
+    public StringView text;
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::GlobalCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Latin1VoidResult = Expected<void, ::Latin1TextError::Enum>;
-using ConstU32Span = Span<const u32>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public TextEdit(in Offset first, in Offset last, in StringView text){
+        this.begin = first;
+        this.end = last;
+        this.text = text;
+    }
 }
 
 
@@ -242,21 +78,13 @@ void VerifyGlobal_DecimalFormattingUsesExactMinimumStorageWithoutEmptySentinelsO
         b8 usesBufferStart = false;
         u8 firstSentinel = 0u;
         u8 lastSentinel = 0u;
-        native(in value, mut formatted, mut usesBufferStart, mut firstSentinel, mut lastSentinel){
-            static_assert(sizeof(usize) == sizeof(u32) || sizeof(usize) == sizeof(u64));
-            struct Storage{
-                char first = 'a';
-                Array<char, s_UsizeDecimalDigitCount> buffer{};
-                char last = 'z';
-            };
-            Storage storage;
-            static_assert(noexcept(FormatDecimal(usize{}, storage.buffer)));
-            const AStringView text = FormatDecimal(value, storage.buffer);
-            formatted.assign(text);
-            usesBufferStart = text.data() == storage.buffer.data();
-            firstSentinel = static_cast<u8>(storage.first);
-            lastSentinel = static_cast<u8>(storage.last);
-        }
+        DecimalStorage storage;
+        RequireNothrowExpression(FormatTestDecimal(value, storage.buffer));
+        const StringView text = FormatTestDecimal(value, storage.buffer);
+        formatted.assign(text);
+        usesBufferStart = TestDataAddress(text) == TestDataAddress(storage.buffer);
+        firstSentinel = cast<u8>(storage.first);
+        lastSentinel = cast<u8>(storage.last);
         const StringView formattedView = formatted;
         EXPECT_EQ(formattedView, expectedTexts[caseIndex]);
         EXPECT_TRUE(usesBufferStart);
@@ -337,236 +165,72 @@ void VerifyCpuTopologyTests_InvalidPlacementFailsWithoutMutatingTheCallingThread
     EXPECT_FALSE(SetCurrentThreadCpuPlacement(invalidGroup));
 }
 
-void VerifyCpuTopologyTests_DiscoveryHonorsAProcessAffinityRestriction(){
-    b8 windowsSupported = false;
-    native(mut windowsSupported){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        windowsSupported = true;
-        ASSERT_EXIT({
-            auto placements = QueryCpuWorkerPlacements();
-            GROUP_AFFINITY original{};
-            if(!placements || !GetThreadGroupAffinity(GetCurrentThread(), &original))
-                ExitProcess(1u);
-            const auto selected = FindIf(placements->begin(), placements->end(), [&original](const CpuWorkerPlacement& placement)noexcept{
-                return placement.processorGroup == original.Group;
-            });
-            if(selected == placements->end())
-                ExitProcess(2u);
-            const u32 processorIndex = selected->logicalProcessorIndex;
-            const DWORD_PTR mask = static_cast<DWORD_PTR>(1u) << processorIndex;
-            if(!SetProcessAffinityMask(GetCurrentProcess(), mask))
-                ExitProcess(3u);
-            placements = QueryCpuWorkerPlacements();
-            if(!placements)
-                ExitProcess(3u);
-            if(placements->size() != 1u || placements->front().processorGroup != original.Group || placements->front().logicalProcessorIndex != processorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
-                ExitProcess(4u);
-            ExitProcess(0u);
-        }, testing::ExitedWithCode(0), ""
-        );
-#endif
-    }
-    if(!windowsSupported)
-        return;
-    EXPECT_TRUE(windowsSupported);
-}
-
-void VerifyCpuTopologyTests_DiscoveryHonorsProcessDefaultCpuSets(){
-    b8 windowsSupported = false;
-    native(mut windowsSupported){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        windowsSupported = true;
-        ASSERT_EXIT({
-            auto placements = QueryCpuWorkerPlacements();
-            if(!placements || placements->empty())
-                ExitProcess(1u);
-            const CpuWorkerPlacement selected = placements->back();
-            ULONG byteCount = 0u;
-            if(!GetSystemCpuSetInformation(nullptr, 0u, &byteCount, GetCurrentProcess(), 0u) && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-                ExitProcess(2u);
-            if(byteCount == 0u)
-                ExitProcess(3u);
-            InteropVector<u64> storage((static_cast<usize>(byteCount) + sizeof(u64) - 1u) / sizeof(u64));
-            auto information = MakeNotNull(reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(storage.data()));
-            if(!GetSystemCpuSetInformation(information.get(), byteCount, &byteCount, GetCurrentProcess(), 0u))
-                ExitProcess(4u);
-            ULONG selectedId = Limit<ULONG>::s_Max;
-            for(usize offset = 0u; offset < byteCount; offset += information->Size){
-                information = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(reinterpret_cast<u8*>(storage.data()) + offset);
-                if(information->Type == CpuSetInformation && information->CpuSet.Group == selected.processorGroup && information->CpuSet.LogicalProcessorIndex == selected.logicalProcessorIndex){
-                    selectedId = information->CpuSet.Id;
-                    break;
-                }
-            }
-            if(selectedId == Limit<ULONG>::s_Max || !SetProcessDefaultCpuSets(GetCurrentProcess(), &selectedId, 1u))
-                ExitProcess(5u);
-            placements = QueryCpuWorkerPlacements();
-            if(!placements || placements->size() != 1u || placements->front().processorGroup != selected.processorGroup || placements->front().logicalProcessorIndex != selected.logicalProcessorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u)
-                ExitProcess(6u);
-            ExitProcess(0u);
-        }, testing::ExitedWithCode(0), ""
-        );
-#endif
-    }
-    if(!windowsSupported)
-        return;
-    EXPECT_TRUE(windowsSupported);
-}
-
-void VerifyCpuTopologyTests_DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices(){
-    b8 linuxSupported = false;
-    b8 queriedInitial = false;
-    b8 initialNonEmpty = false;
-    u32 targetProcessorIndex = 0u;
-    b8 applied = false;
-    b8 queriedRestricted = false;
-    usize restrictedSize = 0u;
-    u32 restrictedProcessorIndex = 0u;
-    u32 usableCount = 0u;
-    b8 affinityIsAny = false;
-
-    native(
-        mut linuxSupported,
-        mut queriedInitial,
-        mut initialNonEmpty,
-        mut targetProcessorIndex,
-        mut applied,
-        mut queriedRestricted,
-        mut restrictedSize,
-        mut restrictedProcessorIndex,
-        mut usableCount,
-        mut affinityIsAny
-    ){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        linuxSupported = true;
-        auto placements = QueryCpuWorkerPlacements();
-        queriedInitial = placements.has_value();
-        if(placements && !placements->empty()){
-            initialNonEmpty = true;
-            const CpuWorkerPlacement placement = placements->back();
-            targetProcessorIndex = placement.logicalProcessorIndex;
-            Expected<InteropVector<CpuWorkerPlacement>> restrictedPlacements = MakeUnexpected(Failure{});
-            JoiningThread worker([&](){
-                applied = SetCurrentThreadCpuPlacement(placement);
-                if(!applied)
-                    return;
-                restrictedPlacements = QueryCpuWorkerPlacements();
-                usableCount = QueryCpuCoreCount(CpuAffinity::Any);
-            });
-            worker.join();
-            queriedRestricted = restrictedPlacements.has_value();
-            if(restrictedPlacements && !restrictedPlacements->empty()){
-                restrictedSize = restrictedPlacements->size();
-                restrictedProcessorIndex = restrictedPlacements->front().logicalProcessorIndex;
-                affinityIsAny = restrictedPlacements->front().affinity == CpuAffinity::Any;
-            }
-        }
-#endif
-    }
-
-    if(!linuxSupported)
-        return;
-
-    ASSERT_TRUE(queriedInitial);
-    ASSERT_TRUE(initialNonEmpty);
-    ASSERT_TRUE(applied);
-    ASSERT_TRUE(queriedRestricted);
-    ASSERT_EQ(restrictedSize, 1u);
-    EXPECT_EQ(restrictedProcessorIndex, targetProcessorIndex);
-    EXPECT_EQ(usableCount, 1u);
-    EXPECT_TRUE(affinityIsAny);
-}
-
 void VerifyScopeExit_ReleaseIsIdempotentAndDestroysTheOwnedCallable(){
     u32 callsBeforeExit = 1u;
     u32 destructionsBeforeExit = 1u;
     u32 callsAfterExit = 1u;
     u32 destructionsAfterExit = 0u;
-    native(mut callsBeforeExit, mut destructionsBeforeExit, mut callsAfterExit, mut destructionsAfterExit){
-        using namespace __hidden_scope_exit_tests;
-        CleanupState state;
-        {
-            ScopeExit cleanup{ MoveOnlyCleanup(state) };
-            cleanup.release();
-            cleanup.release();
-            callsBeforeExit = state.calls;
-            destructionsBeforeExit = state.destructions;
-        }
-        callsAfterExit = state.calls;
-        destructionsAfterExit = state.destructions;
+    CleanupState state;
+    {
+        CaseCleanup cleanup(MoveOnlyCleanup(state));
+        cleanup.release();
+        cleanup.release();
+        callsBeforeExit = state.calls;
+        destructionsBeforeExit = state.destructions;
     }
+    callsAfterExit = state.calls;
+    destructionsAfterExit = state.destructions;
     EXPECT_EQ(callsBeforeExit, 0u);
     EXPECT_EQ(destructionsBeforeExit, 0u);
     EXPECT_EQ(callsAfterExit, 0u);
     EXPECT_EQ(destructionsAfterExit, 1u);
 }
 
+[cpp_unwind]
 void VerifyScopeExit_UnwindingRunsNestedCleanupInReverseOrderAndPropagatesFailure(){
     Array<u32, 3> order = Array<u32, 3>();
     u32 count = 0u;
-    native(mut order, mut count){
-        using namespace __hidden_scope_exit_tests;
-        const auto operation = [&](){
-            ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
-            ScopeExit second([&]()noexcept{ order[count] = 2u; ++count; });
-            ScopeExit released([&]()noexcept{ order[count] = 3u; ++count; });
-            released.release();
-
-            throw ScopeExitFailure{};
-        };
-        EXPECT_THROW(operation(), ScopeExitFailure);
-    }
+    const auto operation = lambda[mut order, mut count]() -> void{
+        const auto first = GuardCleanup(lambda[mut order, mut count]() -> void{ order[count] = 1u; ++count; });
+        const auto second = GuardCleanup(lambda[mut order, mut count]() -> void{ order[count] = 2u; ++count; });
+        auto released = GuardCleanup(lambda[mut order, mut count]() -> void{ order[count] = 3u; ++count; });
+        released.release();
+        ThrowTestException<ScopeExitFailure>(ScopeExitFailure());
+    };
+    EXPECT_TRUE(ThrowsException<ScopeExitFailure>(operation));
     EXPECT_EQ(count, 2u);
     EXPECT_EQ(order[0u], 2u);
     EXPECT_EQ(order[1u], 1u);
     EXPECT_EQ(order[2u], 0u);
 }
 
+[cpp_unwind]
 void VerifyScopeExit_ResolvesTheFinalResultOnSuccessAndTheInitialResultOnUnwind(){
     b8 published = false;
-    native(mut published){
-        using namespace __hidden_scope_exit_tests;
-        const auto operation = [&](const b8 fails){
-            b8 completed = false;
-            ScopeExit publish([&]()noexcept{ published = completed; });
-
-            if(fails)
-                throw ScopeExitFailure{};
-            completed = true;
-            return completed;
-        };
-        EXPECT_TRUE(operation(false));
-        EXPECT_TRUE(published);
-        EXPECT_THROW(operation(true), ScopeExitFailure);
-    }
+    const auto operation = lambda[mut published](in b8 fails) -> b8{
+        b8 completed = false;
+        const auto publish = GuardCleanup(lambda[mut published, mut completed]() -> void{ published = completed; });
+        if(fails)
+            ThrowTestException<ScopeExitFailure>(ScopeExitFailure());
+        completed = true;
+        return completed;
+    };
+    EXPECT_TRUE(operation(false));
+    EXPECT_TRUE(published);
+    EXPECT_TRUE(ThrowsException<ScopeExitFailure>(lambda[in operation]() -> void{ operation(true); }));
     EXPECT_FALSE(published);
 }
 
+[cpp_unwind]
 void VerifyScopeExit_CleanupObservesEarlierCapturedObjectsBeforeTheirDestruction(){
     b8 alive = false;
     b8 observedAlive = false;
-    native(mut alive, mut observedAlive){
-        using namespace __hidden_scope_exit_tests;
-        struct Lifetime{
-            b8& alive;
-
-
-        public:
-            explicit Lifetime(b8& lifetime)noexcept
-                : alive(lifetime)
-            {
-                alive = true;
-            }
-            ~Lifetime()noexcept{ alive = false; }
-        };
-        const auto operation = [&](){
-            Lifetime lifetime(alive);
-            ScopeExit cleanup([&]()noexcept{ observedAlive = alive; });
-
-            throw ScopeExitFailure{};
-        };
-        EXPECT_THROW(operation(), ScopeExitFailure);
-    }
+    const auto operation = lambda[mut alive, mut observedAlive]() -> void{
+        CaseLifetime lifetime(alive);
+        const auto cleanup = GuardCleanup(lambda[mut observedAlive, mut alive]() -> void{ observedAlive = alive; });
+        ThrowTestException<ScopeExitFailure>(ScopeExitFailure());
+    };
+    EXPECT_TRUE(ThrowsException<ScopeExitFailure>(operation));
     EXPECT_TRUE(observedAlive);
     EXPECT_FALSE(alive);
 }
@@ -584,48 +248,48 @@ void VerifyGlobalSync_FutexPreservesEveryIncrementUnderContention(){
     const u32 threadCount = 4u;
     const u32 incrementsPerThread = 8192u;
     u32 value = 0u;
-    native(mut value){
-        constexpr u32 s_ThreadCount = 4u;
-        constexpr u32 s_IncrementsPerThread = 8192u;
-        Futex mutex;
-        Latch startGate(s_ThreadCount + 1u);
-        Array<Thread, s_ThreadCount> workers;
-        for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
-            workers[threadIndex] = Thread([&mutex, &startGate, &value]()noexcept{
-                startGate.arrive_and_wait();
-                for(u32 incrementIndex = 0u; incrementIndex < s_IncrementsPerThread; ++incrementIndex){
-                    ScopedLock lock(mutex);
-                    ++value;
-                }
-            });
-        }
-
-        startGate.arrive_and_wait();
-        for(Thread& worker : workers)
-            worker.join();
+    Futex mutex;
+    TestLatch startGate(threadCount + 1u);
+    Array<Optional<TestThread>, 4u> workers;
+    for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
+        workers[threadIndex].emplace(lambda[mut mutex, mut startGate, mut value, in incrementsPerThread]() -> void{
+            startGate.arrive_and_wait();
+            for(u32 incrementIndex = 0u; incrementIndex < incrementsPerThread; ++incrementIndex){
+                const FutexGuard lock = AcquireFutex(mutex);
+                ++value;
+            }
+        });
     }
+    startGate.arrive_and_wait();
+    for(mut Optional<TestThread> worker : workers)
+        worker.value().join();
     EXPECT_EQ(value, threadCount * incrementsPerThread);
 }
 
+[cpp_unwind]
 void VerifyTerminalEntry_TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContextRemainsAlive(){
     u32 cleanupCount = 0u;
     u32 handled = 0u;
     b8 reportingContextAlive = true;
     i32 result = 0;
-    native(mut cleanupCount, mut handled, mut reportingContextAlive, mut result){
-        using namespace __hidden_terminal_entry_tests;
-        ScopeExit reportingContext([&]()noexcept{ reportingContextAlive = false; });
-
-        result = InvokeTerminalEntry<TerminalTestError>([&]()->i32{
-            ScopeExit inner([&]()noexcept{ ++cleanupCount; });
-
-            throw TerminalTestError{ .result = 17 };
-        }, [&](const TerminalTestError& error){
-            EXPECT_EQ(cleanupCount, 1u);
-            EXPECT_TRUE(reportingContextAlive);
-            ++handled;
-            return error.result;
-        }, []()noexcept{ return -1; });
+    {
+        const auto reportingContext = GuardCleanup(lambda[mut reportingContextAlive]() -> void{ reportingContextAlive = false; });
+        result = InvokeTerminalEntry<TerminalTestError>(
+            lambda[mut cleanupCount]() -> i32{
+                const auto inner = GuardCleanup(lambda[mut cleanupCount]() -> void{ ++cleanupCount; });
+                TerminalTestError failure;
+                failure.result = 17;
+                ThrowTestException<TerminalTestError>(failure);
+                return -1;
+            },
+            lambda[mut cleanupCount, mut reportingContextAlive, mut handled](in TerminalTestError failure) -> i32{
+                EXPECT_EQ(cleanupCount, 1u);
+                EXPECT_TRUE(reportingContextAlive);
+                ++handled;
+                return failure.result;
+            },
+            lambda[]() -> i32{ return -1; }
+        );
         EXPECT_TRUE(reportingContextAlive);
     }
     EXPECT_EQ(result, 17);
@@ -634,24 +298,22 @@ void VerifyTerminalEntry_TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingC
     EXPECT_FALSE(reportingContextAlive);
 }
 
+[cpp_unwind]
 void VerifyTerminalEntry_UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup(){
     Array<u32, 3> order = Array<u32, 3>();
     u32 count = 0u;
     b8 typedHandled = false;
     i32 result = 0;
-    native(mut order, mut count, mut typedHandled, mut result){
-        using namespace __hidden_terminal_entry_tests;
-        result = InvokeTerminalEntry<TerminalTestError>([&]()->i32{
-            ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
-            ScopeExit second([&]()noexcept{ order[count] = 2u; ++count; });
-
-            throw 42;
-        }, [&](const TerminalTestError&)noexcept{ typedHandled = true; return 0; }, [&]()noexcept{
-            order[count] = 3u;
-            ++count;
+    result = InvokeTerminalEntry<TerminalTestError>(
+        lambda[mut order, mut count]() -> i32{
+            const auto first = GuardCleanup(lambda[mut order, mut count]() -> void{ order[count] = 1u; ++count; });
+            const auto second = GuardCleanup(lambda[mut order, mut count]() -> void{ order[count] = 2u; ++count; });
+            ThrowTestException<i32>(42);
             return -1;
-        });
-    }
+        },
+        lambda[mut typedHandled](in TerminalTestError failure) -> i32{ typedHandled = true; return 0; },
+        lambda[mut order, mut count]() -> i32{ order[count] = 3u; ++count; return -1; }
+    );
     EXPECT_EQ(result, -1);
     EXPECT_FALSE(typedHandled);
     EXPECT_EQ(count, 3u);
@@ -665,18 +327,16 @@ void VerifyGlobal_FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice(
     String appendedTwo = "";
     String copiedFull = "";
     String clearedText = "nonempty";
-    native(mut copiedThree, mut appendedTwo, mut copiedFull, mut clearedText){
-        constexpr Array<char, 6u> s_Text = { 'a', 'b', 'c', 'd', 'e', 'f' };
-        Array<char, 5u> text = {};
-        CopyFixedBuffer(text, AStringView(s_Text.data(), 3u));
-        copiedThree.assign(AStringView(text.data()));
-        AppendFixedBuffer(text, AStringView(s_Text.data() + 3u, 2u));
-        appendedTwo.assign(AStringView(text.data()));
-        CopyFixedBuffer(text, AStringView(s_Text.data(), sizeof(s_Text)));
-        copiedFull.assign(AStringView(text.data()));
-        CopyFixedBuffer(text, {});
-        clearedText.assign(AStringView(text.data()));
-    }
+    const StringView source = "abcdef";
+    Array<NarrowChar, 5u> text;
+    CopyTestBuffer(text, source.substr(0u, 3u));
+    copiedThree.assign(ReadFixedText(text));
+    AppendTestBuffer(text, source.substr(3u, 2u));
+    appendedTwo.assign(ReadFixedText(text));
+    CopyTestBuffer(text, source);
+    copiedFull.assign(ReadFixedText(text));
+    CopyTestBuffer(text, StringView());
+    clearedText.assign(ReadFixedText(text));
     EXPECT_EQ(StringView(copiedThree), StringView("abc"));
     EXPECT_EQ(StringView(appendedTwo), StringView("abcd"));
     EXPECT_EQ(StringView(copiedFull), StringView("abcd"));
@@ -719,16 +379,13 @@ void VerifyGlobal_OversizedWideCompactStringAssignmentClearsPreviousValue(){
     b8 seededEmpty = true;
     b8 oversizedAccepted = true;
     b8 clearedAfterFailure = false;
-    native(mut seededEmpty, mut oversizedAccepted, mut clearedAfterFailure){
-        Array<wchar, WCompactString::s_MaxLength + 2u> oversized = {};
-        for(usize i = 0u; i < WCompactString::s_MaxLength + 1u; ++i)
-            oversized[i] = L'a';
-
-        WCompactString rejected(L"unchanged");
-        seededEmpty = rejected.empty();
-        oversizedAccepted = rejected.assign(WStringView(oversized.data(), WCompactString::s_MaxLength + 1u));
-        clearedAfterFailure = rejected.empty();
-    }
+    WideOverflowBuffer oversized;
+    for(usize i = 0u; i < s_WideLimit + 1u; ++i)
+        oversized[i] = cast<WideChar>(97u);
+    WideCompact rejected(s_UnchangedWide);
+    seededEmpty = rejected.empty();
+    oversizedAccepted = rejected.assign(WidePrefix(oversized, s_WideLimit + 1u));
+    clearedAfterFailure = rejected.empty();
     EXPECT_FALSE(seededEmpty);
     EXPECT_FALSE(oversizedAccepted);
     EXPECT_TRUE(clearedAfterFailure);
@@ -754,9 +411,7 @@ void VerifyGlobal_TextUtilitiesRejectNullShortAndOverflowingInput(){
     EXPECT_TRUE(textValue.value().empty());
     EXPECT_FALSE(FindLineKeyValue(keyValueText, "missing").has_value());
 
-    native{
-        EXPECT_TRUE(SafeStringView(static_cast<const char*>(nullptr)).empty());
-    }
+    EXPECT_TRUE(SafeNullableText(s_AbsentText).empty());
     EXPECT_TRUE(CanRepresentU64<u32>(u32.max));
     EXPECT_FALSE(CanRepresentU64<u32>(cast<u64>(u32.max) + 1u));
     EXPECT_TRUE(CanRepresentU64<i64>(cast<u64>(i64.max)));
@@ -798,11 +453,11 @@ void VerifyGlobal_CallAndOptionTextRejectInvalidBoundaries(){
             return "other";
         return "mixed";
     };
-    const Expected<u32> parsed = ParseOptionText(StringView("  MiXeD\t"), ConstU32Span(choices), optionText);
+    const Expected<u32> parsed = ParseOptionText(StringView("  MiXeD\t"), Span<u32>(choices), optionText);
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed.value(), 0u);
-    EXPECT_FALSE(ParseOptionText(StringView("missing"), ConstU32Span(choices), optionText).has_value());
-    EXPECT_FALSE(ParseOptionText(StringView("mixed"), ConstU32Span(), optionText).has_value());
+    EXPECT_FALSE(ParseOptionText(StringView("missing"), Span<u32>(choices), optionText).has_value());
+    EXPECT_FALSE(ParseOptionText(StringView("mixed"), Span<u32>(), optionText).has_value());
 }
 
 void VerifyGlobal_TextReplacementsAndIdentifiersPreserveInputBoundaries(){
@@ -811,42 +466,25 @@ void VerifyGlobal_TextReplacementsAndIdentifiersPreserveInputBoundaries(){
     String upperIdentifier = "prefix:";
     u32 upperSelected = 0u;
     u32 pascalSelected = 0u;
-    native(mut editableText, mut proxyText, mut upperIdentifier, mut upperSelected, mut pascalSelected){
-        using namespace __hidden_text_utility_edge_tests;
-        struct TestTextReplacement{ usize begin; usize end; AStringView text; };
-        Array<TestTextReplacement, 4u> textEdits{
-            TestTextReplacement{ 1u, 3u, "" },
-            TestTextReplacement{ 6u, 6u, ">" },
-            TestTextReplacement{ 4u, 6u, "XYZ" },
-            TestTextReplacement{ 0u, 0u, "<" }
-        };
-        ApplyTextReplacements(Span<TestTextReplacement>(textEdits), editableText);
-
-        struct ProxyTextReplacement{ ReplacementOffset begin; ReplacementOffset end; AStringView text; };
-        Array<ProxyTextReplacement, 2u> proxyEdits{ ProxyTextReplacement{ {4u}, {6u}, "Z" }, ProxyTextReplacement{ {1u}, {3u}, "X" } };
-        EXPECT_NO_THROW(ApplyTextReplacements(Span<ProxyTextReplacement>(proxyEdits), proxyText));
-
-        const char identifierBytes[]{ 'a', '-', '\0', static_cast<char>(0x80), 'b' };
-        AppendAsciiUpperIdentifier(AStringView(identifierBytes, sizeof(identifierBytes)), "VALUE", upperIdentifier);
-
-        struct PointerFallbackProbe{
-            usize length = 0u;
-            u32 selected = 0u;
-            [[nodiscard]] usize size()const noexcept{ return length; }
-            PointerFallbackProbe& operator+=(char)noexcept{ ++length; return *this; }
-            PointerFallbackProbe& operator+=(const char*&&)noexcept{ selected = 1u; ++length; return *this; }
-            PointerFallbackProbe& operator+=(const char* const&){ selected = 2u; ++length; return *this; }
-        };
-        PointerFallbackProbe upperProbe;
-        static_assert(noexcept(AppendAsciiUpperIdentifier({}, "VALUE", upperProbe)));
-        AppendAsciiUpperIdentifier({}, "VALUE", upperProbe);
-        upperSelected = upperProbe.selected;
-
-        PointerFallbackProbe pascalProbe;
-        static_assert(noexcept(AppendUnderscoreSeparatedPascalIdentifier({}, "Value", pascalProbe)));
-        AppendUnderscoreSeparatedPascalIdentifier({}, "Value", pascalProbe);
-        pascalSelected = pascalProbe.selected;
-    }
+    Array<TextEdit<usize>, 4u> edits = Array<TextEdit<usize>, 4u>(
+        TextEdit<usize>(1u, 3u, ""), TextEdit<usize>(6u, 6u, ">"),
+        TextEdit<usize>(4u, 6u, "XYZ"), TextEdit<usize>(0u, 0u, "<")
+    );
+    ApplyEdits(edits, editableText);
+    Array<TextEdit<ReplacementOffset>, 2u> proxies = Array<TextEdit<ReplacementOffset>, 2u>(
+        TextEdit<ReplacementOffset>(ReplacementOffset(4u), ReplacementOffset(6u), "Z"),
+        TextEdit<ReplacementOffset>(ReplacementOffset(1u), ReplacementOffset(3u), "X")
+    );
+    EXPECT_NO_THROW(ApplyEdits(proxies, proxyText));
+    AppendAsciiUpperIdentifier(StringView("a-\0\x80\x62", 5u), "VALUE", upperIdentifier);
+    PointerFallbackProbe upper;
+    RequireNothrowExpression(ProbeUpperIdentifier(StringView(), "VALUE", upper));
+    ProbeUpperIdentifier(StringView(), "VALUE", upper);
+    upperSelected = upper.selected;
+    PointerFallbackProbe pascalProbe;
+    RequireNothrowExpression(ProbePascalIdentifier(StringView(), "Value", pascalProbe));
+    ProbePascalIdentifier(StringView(), "Value", pascalProbe);
+    pascalSelected = pascalProbe.selected;
 
     EXPECT_EQ(StringView(editableText), StringView("<adXYZ>"));
     EXPECT_EQ(StringView(proxyText), StringView("aXdZ"));
@@ -916,23 +554,15 @@ void VerifyGlobal_SourceAndNewlineTextPreserveBoundaries(){
     CollapseCrLfInPlace(lineText);
     EXPECT_EQ(StringView(lineText), StringView("\nx\n\r"));
 
-    native{
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        const auto joinedSlashes = JoinWithSingleSlash(scratchArena, "a/", "/b");
-        const auto joinedPlain = JoinWithSingleSlash(scratchArena, "a", "b");
-        const auto emptyBase = JoinWithSingleSlash(scratchArena, "", "b");
-        const auto emptySuffix = JoinWithSingleSlash(scratchArena, "a/", "");
-        EXPECT_EQ(AStringView(joinedSlashes), "a/b");
-        EXPECT_EQ(AStringView(joinedPlain), "a/b");
-        EXPECT_EQ(AStringView(emptyBase), "");
-        EXPECT_EQ(AStringView(emptySuffix), "a/");
-        constexpr WStringView s_MixedLines = L"a\r\nb\n\rc";
-        EXPECT_EQ(CountBareLineFeeds(s_MixedLines), 1u);
-        Array<wchar, 16u> expandedLines{};
-        const usize expandedLength = CopyWithCrBeforeBareLf(s_MixedLines, expandedLines.data());
-        EXPECT_EQ(WStringView(expandedLines.data(), expandedLength), WStringView(L"a\r\nb\r\n\rc"));
-        EXPECT_EQ(CountUtf8ScalarsAssumingValid(AStringView("a\xC3\xA9", 3u)), 2u);
-    }
+    EXPECT_EQ(StringView(JoinWithSingleSlash("a/", "/b")), "a/b");
+    EXPECT_EQ(StringView(JoinWithSingleSlash("a", "b")), "a/b");
+    EXPECT_EQ(StringView(JoinWithSingleSlash("", "b")), "");
+    EXPECT_EQ(StringView(JoinWithSingleSlash("a/", "")), "a/");
+    EXPECT_EQ(CountWideLineFeeds(s_MixedWideLines), 1u);
+    Array<WideChar, 16u> expanded;
+    const usize length = ExpandWideLines(s_MixedWideLines, expanded);
+    EXPECT_EQ(WidePrefix(expanded, length), s_ExpandedWideLines);
+    EXPECT_EQ(CountUtf8Scalars(StringView("a\xC3\xA9", 3u)), 2u);
 }
 
 void VerifyGlobal_UnsignedTextAndBytesAgreeAtMaximum(){
@@ -942,9 +572,7 @@ void VerifyGlobal_UnsignedTextAndBytesAgreeAtMaximum(){
     AppendUnsignedU64Bytes(u64Bytes, u64.max);
     EXPECT_EQ(StringView(u64Text), StringView("18446744073709551615"));
     ASSERT_EQ(u64Bytes.size(), u64Text.size());
-    native(in u64Text, in u64Bytes){
-        EXPECT_TRUE(BytesMatch(Span<const u8>(u64Bytes.data(), u64Bytes.size()), Span<const u8>(reinterpret_cast<const u8*>(u64Text.data()), u64Text.size())));
-    }
+    EXPECT_TRUE(BytesMatch(u64Bytes, TextBytes(StringView(u64Text))));
 }
 
 void VerifyGlobal_GraphemeAndTransparentHashRespectInvalidAndEmbeddedNull(){
@@ -959,16 +587,12 @@ void VerifyGlobal_GraphemeAndTransparentHashRespectInvalidAndEmbeddedNull(){
     usize borrowedHash = 1u;
     b8 embeddedNullEqual = false;
     b8 shortPrefixEqual = true;
-    native(mut keyHash, mut borrowedHash, mut embeddedNullEqual, mut shortPrefixEqual){
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        using ScratchText = AString<NWB::Core::Alloc::ScratchArena>;
-        const ScratchText key("a\0b", 3u, scratchArena);
-        const AStringView borrowed("a\0b", 3u);
-        keyHash = TransparentStringHash<ScratchText>{}(key);
-        borrowedHash = TransparentStringHash<ScratchText>{}(borrowed);
-        embeddedNullEqual = TransparentStringEqual<ScratchText>{}(key, borrowed);
-        shortPrefixEqual = TransparentStringEqual<ScratchText>{}(key, AStringView("a", 1u));
-    }
+    const StringView borrowed = StringView("a\0b", 3u);
+    const String key = String(borrowed);
+    keyHash = HashText<String>(key);
+    borrowedHash = HashText<String>(borrowed);
+    embeddedNullEqual = EqualTestText(key, borrowed);
+    shortPrefixEqual = EqualTestText(key, borrowed.substr(0u, 1u));
     EXPECT_EQ(keyHash, borrowedHash);
     EXPECT_TRUE(embeddedNullEqual);
     EXPECT_FALSE(shortPrefixEqual);
@@ -1018,39 +642,6 @@ NWB_ADHD_GTEST(Global, SourceAndNewlineTextPreserveBoundaries, VerifyGlobal_Sour
 NWB_ADHD_GTEST(Global, UnsignedTextAndBytesAgreeAtMaximum, VerifyGlobal_UnsignedTextAndBytesAgreeAtMaximum)
 NWB_ADHD_GTEST(Global, GraphemeAndTransparentHashRespectInvalidAndEmbeddedNull, VerifyGlobal_GraphemeAndTransparentHashRespectInvalidAndEmbeddedNull)
 NWB_ADHD_GTEST(Global, CsvAndCaseFormattingPreserveEscapes, VerifyGlobal_CsvAndCaseFormattingPreserveEscapes)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
-    VerifyCpuTopologyTests_DiscoveryHonorsAProcessAffinityRestriction();
-}
-
-TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
-    VerifyCpuTopologyTests_DiscoveryHonorsProcessDefaultCpuSets();
-}
-#endif
-
-#if defined(FOUNDATION_PLATFORM_LINUX)
-TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices){
-    VerifyCpuTopologyTests_DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices();
-}
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

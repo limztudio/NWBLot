@@ -1,0 +1,110 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "observation_sdk.adhd"
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ManifestContainsStringValue(in StringView manifest, in StringView key, in StringView value){
+    if(value.empty())
+        return true;
+    const String needle = StringFormat("\"{}\": \"{}\"", key, value);
+    return Contains(manifest, StringView(needle));
+}
+
+b8 TriggerPackageContains(in Path directory, in StringView category, in StringView expression, in StringView message, in StringView file){
+    String manifest;
+    if(!ReadTextFile(directory / s_ManifestFileName, manifest).has_value())
+        return false;
+    return ManifestContainsStringValue(manifest, s_ManifestTriggerCategoryKey, category)
+        && ManifestContainsStringValue(manifest, s_ManifestTriggerExpressionKey, expression)
+        && ManifestContainsStringValue(manifest, s_ManifestTriggerMessageKey, message)
+        && (file.empty() || Contains(StringView(manifest), file));
+}
+
+Expected<Path> FindTriggerPackage(in Path pending, in StringView category, in StringView expression, in StringView message, in StringView file){
+    const auto entries = DirectoryIteratorCreate(pending);
+    if(!entries.has_value())
+        return MakeUnexpected(Failure());
+    for(in DirectoryEntry entry : entries.value()){
+        const Path path = entry.path();
+        const auto isDirectory = IsDirectory(path);
+        if(isDirectory.has_value() && isDirectory.value() && TriggerPackageContains(path, category, expression, message, file))
+            return path;
+    }
+    return MakeUnexpected(Failure());
+}
+
+Expected<Path, ErrorCode> WaitForTriggerPackage(in Path pending, in StringView category, in StringView expression, in StringView message, in StringView file){
+    const Timer deadline = TimerAddMS(TimerNow(), 3000);
+    while(true){
+        const auto directory = IsDirectory(pending);
+        if(!directory.has_value())
+            return MakeUnexpected(directory.error());
+        if(directory.value()){
+            const auto found = FindTriggerPackage(pending, category, expression, message, file);
+            if(found.has_value())
+                return found.value();
+        }
+        const Timer now = TimerNow();
+        if(now >= deadline)
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::timed_out));
+        const i64 remaining = Max(DurationInMS<i64>(deadline, now), cast<i64>(1));
+        SleepMS(Min(cast<i64>(10), remaining));
+    }
+    return MakeUnexpected(MakeErrorCode(ErrorCondition::timed_out));
+}
+
+Path ObservedReportPath(in Path base, in StringView suffix){
+    if(suffix.empty())
+        return base;
+    const String filename = StringFormat("{}.{}{}", PathToString(base.stem()), suffix, PathToString(base.extension()));
+    return base.parentPath() / StringView(filename);
+}
+
+void PreserveObservedReport(in StringView report, in StringView suffix){
+    const auto output = ReadEnvironmentVariable("NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH");
+    EXPECT_TRUE(output.has_value());
+    if(!output.has_value() || !output.value().has_value() || output.value().value().empty())
+        return;
+    const Path path = ObservedReportPath(Path(StringView(output.value().value())), suffix);
+    EXPECT_TRUE(EnsureDirectories(path.parentPath()).has_value());
+    EXPECT_TRUE(WriteTextFile(path, report));
+}
+
+b8 PendingDirectoryContainsManifestTexts(in Path pending, in StringView first, in StringView second){
+    const auto entries = DirectoryIteratorCreate(pending);
+    if(!entries.has_value())
+        return false;
+    for(in DirectoryEntry entry : entries.value()){
+        const Path path = entry.path();
+        const auto directory = IsDirectory(path);
+        if(!directory.has_value() || !directory.value())
+            continue;
+        String manifest;
+        if(ReadTextFile(path / s_ManifestFileName, manifest).has_value() && Contains(StringView(manifest), first) && Contains(StringView(manifest), second))
+            return true;
+    }
+    return false;
+}
+
+Expected<b8, ErrorCode> LinuxExternalSymbolizerAvailable(){
+    const auto path = ReadEnvironmentVariable("PATH");
+    if(!path.has_value())
+        return MakeUnexpected(path.error());
+    if(!path.value().has_value() || path.value().value().empty())
+        return false;
+    const StringView search = path.value().value();
+    const auto llvm = ExecutableAvailableInPath(search, "llvm-symbolizer");
+    if(!llvm.has_value() || llvm.value())
+        return llvm;
+    return ExecutableAvailableInPath(search, "addr2line");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

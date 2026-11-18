@@ -4,152 +4,83 @@
 
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/threads.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/unit/common/name_cases.adhd>
+#include <tests/unit/common/name_symbol_sdk.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const usize s_TokenCapacity = s_TextLength + 1u;
+const usize s_ResolvedCapacity = s_MaxResolvedTextLength;
 
+void CopyAsciiText(in StringView source, mut MeasuredText text){
+    text.append(source);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/frame_data.h>
-#include <core/common/log.h>
-#include <core/common/name_symbols.h>
-
-#include <global/atomic.h>
-#include <global/filesystem/executable_paths.h>
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/filesystem/utility.h>
-#include <global/name_hash_text.h>
-#include <global/optional.h>
-#include <global/scope_exit.h>
-#include <global/thread.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CommonTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NameSymbols = Core::Common::NameSymbols;
-using Arena = Core::Alloc::GlobalArena;
-
-template<typename CharT>
-[[nodiscard]] FOUNDATION_INLINE BasicString<CharT, Arena> CopyAsciiText(Arena& arena, const AStringView source){
-    BasicString<CharT, Arena> text(arena);
+void CopyAsciiToPlatform(in StringView source, mut MeasuredPlatformText text){
     text.reserve(source.size());
-    for(const char ch : source)
-        text.push_back(static_cast<CharT>(ch));
-    return text;
+    for(usize index = 0u; index < source.size(); ++index)
+        text.push_back(cast<u8>(source[index]));
 }
 
-class CallbackUnregisterLogger final : public Core::Common::ILogger{
-public:
-    CallbackUnregisterLogger(
-        Core::Common::LogArena& arena,
-        Optional<Core::Common::LoggerRegistrationGuard>& guardSlot,
-        Latch& bothEnteredGate,
-        AtomicFlag& unregistrationStarted,
-        Atomic<b8>& peerStillInCallback,
-        Atomic<b8>& unregistrationReturnedWhilePeerActive,
-        Atomic<u32>& callbackCount
-    )noexcept
-        : m_arena(arena)
-        , m_guardSlot(guardSlot)
-        , m_bothEnteredGate(bothEnteredGate)
-        , m_unregistrationStarted(unregistrationStarted)
-        , m_peerStillInCallback(peerStillInCallback)
-        , m_unregistrationReturnedWhilePeerActive(unregistrationReturnedWhilePeerActive)
-        , m_callbackCount(callbackCount)
-    {}
+class SymbolRegistryScope{
+    private b8 m_restore;
 
+    public SymbolRegistryScope(in b8 restore){ this.m_restore = restore; }
+    public ~SymbolRegistryScope(){
+        if(this.m_restore)
+            InstallRuntimeRegistry();
+        ClearRuntimeSymbols();
+        if(!this.m_restore)
+            UninstallRuntimeRegistry();
+    }
+}
 
-public:
-    virtual Core::Common::LogArena& arena()noexcept override{ return m_arena; }
+class CallbackUnregisterLogger : Utf8LogSink{
+    private mut Optional<LoggerRegistrationGuard> m_guard;
+    private mut TestLatch m_entered;
+    private mut TestAtomic<b8> m_started;
+    private mut TestAtomic<b8> m_active;
+    private mut TestAtomic<b8> m_returnedEarly;
+    private mut TestAtomic<u32> m_count;
 
-    virtual void enqueue(Core::Common::LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
-        handle(TStringView(str), type);
+    public CallbackUnregisterLogger(mut Optional<LoggerRegistrationGuard> guard, mut TestLatch entered, mut TestAtomic<b8> started, mut TestAtomic<b8> active, mut TestAtomic<b8> returnedEarly, mut TestAtomic<u32> count){
+        this.m_guard = guard;
+        this.m_entered = entered;
+        this.m_started = started;
+        this.m_active = active;
+        this.m_returnedEarly = returnedEarly;
+        this.m_count = count;
     }
 
-    virtual void enqueue(const Core::Common::LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
-        handle(TStringView(str), type);
+    public void receive(in StringView text, in LogType kind) override{
+        this.m_count.fetch_add(1u, MemoryOrder::relaxed);
+        this.m_entered.arrive_and_wait();
+        if(text == "self-unregister"){
+            this.m_started.store(true, MemoryOrder::release);
+            this.m_started.notify_all();
+            this.m_guard.reset();
+            if(this.m_active.load(MemoryOrder::acquire))
+                this.m_returnedEarly.store(true, MemoryOrder::relaxed);
+            WriteEssentialLog(PlatformTextLiteral("routed-to-base-after-self-unregister"));
+            return;
+        }
+        while(!this.m_started.load(MemoryOrder::acquire))
+            this.m_started.wait(false, MemoryOrder::relaxed);
+        for(u32 spin = 0u; spin < 64u; ++spin)
+            YieldThread();
+        this.m_active.store(false, MemoryOrder::release);
     }
-
-
-private:
-    void handle(TStringView text, Core::Common::LogType::Enum);
-
-
-private:
-    Core::Common::LogArena& m_arena;
-    Optional<Core::Common::LoggerRegistrationGuard>& m_guardSlot;
-    Latch& m_bothEnteredGate;
-    AtomicFlag& m_unregistrationStarted;
-    Atomic<b8>& m_peerStillInCallback;
-    Atomic<b8>& m_unregistrationReturnedWhilePeerActive;
-    Atomic<u32>& m_callbackCount;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::CommonNameCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GlobalArena = Core::Alloc::GlobalArena;
-using ScratchArena = Core::Alloc::ScratchArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-namespace NameSymbols = Core::Common::NameSymbols;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_TargetText = "concurrent/symbol_entry";
 const StringView s_ParallelLoggerMessageText = "parallel logger message";
 const StringView s_TestsNamesymbolsBeforeRegistryLive = "tests/namesymbols/before_registry_live";
 const StringView s_TestsNamesymbolsBeforeRegistryRetire = "tests/namesymbols/before_registry_retired";
@@ -163,15 +94,15 @@ void BuildBoundaryTokenSource(in Name known, mut String source){
     String knownTokenText = "";
     String unknownTokenText = "";
     String mutatedKnownTokenText = "";
-    native(in known, mut knownTokenText, mut unknownTokenText, mut mutatedKnownTokenText){
-        Array<char, NameHashTextCodec::s_TextLength + 1u> knownToken = {};
-        Array<char, NameHashTextCodec::s_TextLength + 1u> unknownToken = {};
-        NameHashTextCodec::Format(knownToken.data(), sizeof(knownToken), known.identityHash());
-        NameHashTextCodec::Format(unknownToken.data(), sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unknown")));
-        knownTokenText.assign(AStringView(knownToken.data(), NameHashTextCodec::s_TextLength));
-        unknownTokenText.assign(AStringView(unknownToken.data(), NameHashTextCodec::s_TextLength));
-        knownToken[0u] = 'g';
-        mutatedKnownTokenText.assign(AStringView(knownToken.data(), NameHashTextCodec::s_TextLength));
+    {
+        SymbolBuffer<s_TokenCapacity> knownToken;
+        SymbolBuffer<s_TokenCapacity> unknownToken;
+        knownToken.format(known.identityHash());
+        unknownToken.format(ComputeNameHash(StringView("decode/unknown")).value());
+        knownTokenText.assign(knownToken.view());
+        unknownTokenText.assign(unknownToken.view());
+        knownToken.setByte(0u, 103u);
+        mutatedKnownTokenText.assign(knownToken.view());
     }
     const StringView knownView = knownTokenText;
     const StringView unknownView = unknownTokenText;
@@ -196,19 +127,19 @@ void BuildResolvedSpanSources(in Name shortName, mut b8 longNameCreated, mut Str
     String shortTokenText = "";
     String longTokenText = "";
     String unknownTokenText = "";
-    native(in shortName, in expandedView, mut longNameCreated, mut shortTokenText, mut longTokenText, mut unknownTokenText){
-        const auto longNameResult = Name::FromText(expandedView);
+    {
+        const auto longNameResult = NameFromText(expandedView);
         longNameCreated = longNameResult.has_value();
-        if(longNameResult){
-            Array<char, NameHashTextCodec::s_TextLength + 1u> shortToken = {};
-            Array<char, NameHashTextCodec::s_TextLength + 1u> longToken = {};
-            Array<char, NameHashTextCodec::s_TextLength + 1u> unknownToken = {};
-            NameHashTextCodec::Format(shortToken.data(), sizeof(shortToken), shortName.identityHash());
-            NameHashTextCodec::Format(longToken.data(), sizeof(longToken), longNameResult->identityHash());
-            NameHashTextCodec::Format(unknownToken.data(), sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unresolved")));
-            shortTokenText.assign(AStringView(shortToken.data(), NameHashTextCodec::s_TextLength));
-            longTokenText.assign(AStringView(longToken.data(), NameHashTextCodec::s_TextLength));
-            unknownTokenText.assign(AStringView(unknownToken.data(), NameHashTextCodec::s_TextLength));
+        if(longNameCreated){
+            SymbolBuffer<s_TokenCapacity> shortToken;
+            SymbolBuffer<s_TokenCapacity> longToken;
+            SymbolBuffer<s_TokenCapacity> unknownToken;
+            shortToken.format(shortName.identityHash());
+            longToken.format(longNameResult.value().identityHash());
+            unknownToken.format(ComputeNameHash(StringView("decode/unresolved")).value());
+            shortTokenText.assign(shortToken.view());
+            longTokenText.assign(longToken.view());
+            unknownTokenText.assign(unknownToken.view());
         }
     }
     if(!longNameCreated)
@@ -236,8 +167,8 @@ void BuildResolvedSpanSources(in Name shortName, mut b8 longNameCreated, mut Str
 }
 
 void VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate(){
-    NameSymbols::InstallRuntimeRegistry();
-    NameSymbols::ClearRuntimeSymbols();
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
     const Name known(s_DecodeKnownSymbol);
     String source = "";
     BuildBoundaryTokenSource(known, source);
@@ -247,16 +178,17 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate(){
     b8 dataPointerUnchanged = false;
     ArenaMemoryStats before = ArenaMemoryStats();
     ArenaMemoryStats after = ArenaMemoryStats();
-    native(in sourceView, mut decoded, mut dataPointerUnchanged, mut before, mut after){
-        GlobalArena arena(Name("Tests/NameSymbols/Boundaries"));
-        const AString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<char>(arena, sourceView);
-        AString<GlobalArena> text(expected);
-        const char* const originalData = text.data();
-        before = arena.memoryStats();
-        NameSymbols::DecodeHashTokens(arena, text);
-        after = arena.memoryStats();
-        decoded.assign(AStringView(text));
-        dataPointerUnchanged = text.data() == originalData;
+    {
+        HeapStorage storage(Name("Tests/NameSymbols/Boundaries"));
+        TestValueSlot<MeasuredText> textSlot;
+        mut MeasuredText text = textSlot.constructIn(storage);
+        CopyAsciiText(sourceView, text);
+        const usize originalData = TestDataAddress(text);
+        before = storage.memoryStats();
+        DecodeMeasuredText(storage, text);
+        after = storage.memoryStats();
+        dataPointerUnchanged = TestDataAddress(text) == originalData;
+        decoded.assign(NarrowView(text));
     }
 
     EXPECT_EQ(decoded, source);
@@ -267,16 +199,8 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate(){
 }
 
 void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
-    b8 unicodeEnabled = false;
-    native(mut unicodeEnabled){
-#if defined(FOUNDATION_UNICODE)
-        unicodeEnabled = true;
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-#endif
-    }
-    if(!unicodeEnabled)
-        return;
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
 
     const Name known(s_DecodeKnownSymbol);
     String source = "";
@@ -287,24 +211,20 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
     b8 dataPointerUnchanged = false;
     ArenaMemoryStats before = ArenaMemoryStats();
     ArenaMemoryStats after = ArenaMemoryStats();
-    native(in sourceView, mut textMatchesExpected, mut dataPointerUnchanged, mut before, mut after){
-#if defined(FOUNDATION_UNICODE)
-        GlobalArena arena(Name("Tests/NameSymbols/Boundaries"));
-        const WString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<wchar>(arena, sourceView);
-        WString<GlobalArena> text(expected);
-        const wchar* const originalData = text.data();
-        before = arena.memoryStats();
-        NameSymbols::DecodeHashTokens(arena, text);
-        after = arena.memoryStats();
-        textMatchesExpected = text == expected;
-        dataPointerUnchanged = text.data() == originalData;
-#else
-        static_cast<void>(sourceView);
-        static_cast<void>(textMatchesExpected);
-        static_cast<void>(dataPointerUnchanged);
-        static_cast<void>(before);
-        static_cast<void>(after);
-#endif
+    {
+        HeapStorage storage(Name("Tests/NameSymbols/Boundaries"));
+        TestValueSlot<MeasuredPlatformText> textSlot;
+        mut MeasuredPlatformText text = textSlot.constructIn(storage);
+        CopyAsciiToPlatform(sourceView, text);
+        TestValueSlot<MeasuredPlatformText> expectedSlot;
+        mut MeasuredPlatformText expected = expectedSlot.constructIn(storage);
+        CopyAsciiToPlatform(sourceView, expected);
+        const usize originalData = TestDataAddress(text);
+        before = storage.memoryStats();
+        DecodeMeasuredText(storage, text);
+        after = storage.memoryStats();
+        dataPointerUnchanged = TestDataAddress(text) == originalData;
+        textMatchesExpected = PlatformView(text) == PlatformView(expected);
     }
 
     EXPECT_TRUE(textMatchesExpected);
@@ -315,8 +235,8 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
 }
 
 void VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText(){
-    NameSymbols::InstallRuntimeRegistry();
-    NameSymbols::ClearRuntimeSymbols();
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
     const Name shortName(s_DecodeShortSymbol);
     b8 longNameCreated = false;
     String source = "";
@@ -326,27 +246,21 @@ void VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedTex
 
     const StringView sourceView = source;
     String decoded = "";
-    native(in sourceView, mut decoded){
-        GlobalArena arena(Name("Tests/NameSymbols/Resolved"));
-        AString<GlobalArena> text = CommonTestsDetail::CopyAsciiText<char>(arena, sourceView);
-        NameSymbols::DecodeHashTokens(arena, text);
-        decoded.assign(AStringView(text));
+    {
+        HeapStorage storage(Name("Tests/NameSymbols/Resolved"));
+        TestValueSlot<MeasuredText> textSlot;
+        mut MeasuredText text = textSlot.constructIn(storage);
+        CopyAsciiText(sourceView, text);
+        DecodeMeasuredText(storage, text);
+        decoded.assign(NarrowView(text));
     }
 
     EXPECT_EQ(decoded, expectedSource);
 }
 
 void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(){
-    b8 unicodeEnabled = false;
-    native(mut unicodeEnabled){
-#if defined(FOUNDATION_UNICODE)
-        unicodeEnabled = true;
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-#endif
-    }
-    if(!unicodeEnabled)
-        return;
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
 
     const Name shortName(s_DecodeShortSymbol);
     b8 longNameCreated = false;
@@ -359,20 +273,17 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
     const StringView expectedView = expectedSource;
     b8 decodedMatchesExpected = false;
     usize decodedLength = 0u;
-    native(in sourceView, in expectedView, mut decodedMatchesExpected, mut decodedLength){
-#if defined(FOUNDATION_UNICODE)
-        GlobalArena arena(Name("Tests/NameSymbols/Resolved"));
-        WString<GlobalArena> text = CommonTestsDetail::CopyAsciiText<wchar>(arena, sourceView);
-        const WString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<wchar>(arena, expectedView);
-        NameSymbols::DecodeHashTokens(arena, text);
-        decodedMatchesExpected = text == expected;
+    {
+        HeapStorage storage(Name("Tests/NameSymbols/Resolved"));
+        TestValueSlot<MeasuredPlatformText> textSlot;
+        mut MeasuredPlatformText text = textSlot.constructIn(storage);
+        CopyAsciiToPlatform(sourceView, text);
+        TestValueSlot<MeasuredPlatformText> expectedSlot;
+        mut MeasuredPlatformText expected = expectedSlot.constructIn(storage);
+        CopyAsciiToPlatform(expectedView, expected);
+        DecodeMeasuredText(storage, text);
+        decodedMatchesExpected = PlatformView(text) == PlatformView(expected);
         decodedLength = text.size();
-#else
-        static_cast<void>(sourceView);
-        static_cast<void>(expectedView);
-        static_cast<void>(decodedMatchesExpected);
-        static_cast<void>(decodedLength);
-#endif
     }
 
     EXPECT_TRUE(decodedMatchesExpected);
@@ -380,8 +291,8 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
 }
 
 void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished(){
-    NameSymbols::InstallRuntimeRegistry();
-    NameSymbols::ClearRuntimeSymbols();
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
     const StringView original = s_OriginalEscapedSymbol;
     const Name stored(s_OriginalEscapedSymbol);
     b8 serialized = false;
@@ -391,32 +302,33 @@ void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsSta
     String resolvedText = "";
     b8 resolvedInvalid = true;
 
-    native(in stored, mut serialized, mut documentText, mut loadedFromMemory, mut resolvedStored, mut resolvedText, mut resolvedInvalid){
-        GlobalArena arena(Name("Tests/NameSymbols/EscapedDocument"));
-        ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
-        ScopeExit cleanup([]()noexcept{
-            NameSymbols::ClearRuntimeSymbols();
-            NameSymbols::UninstallRuntimeRegistry();
-        });
-        const NameHash invalidHash = ComputeNameHash(MakeNotNull("symbols/invalid_escape_record"));
-        Array<char, NameHashTextCodec::s_TextLength + 1u> invalidToken = {};
-        NameHashTextCodec::Format(invalidToken.data(), invalidToken.size(), invalidHash);
+    {
+        HeapStorage storage(Name("Tests/NameSymbols/EscapedDocument"));
+        ScratchStorage scratchArena(s_CommonNameTestsNameSymbolsScratch);
+        SymbolRegistryScope cleanup(false);
+        const NameHash invalidHash = ComputeNameHash(StringView("symbols/invalid_escape_record")).value();
+        SymbolBuffer<s_TokenCapacity> invalidToken;
+        invalidToken.format(invalidHash);
 
-        AString<GlobalArena> document("prefix:", arena);
+        TestValueSlot<MeasuredText> documentSlot;
+        mut MeasuredText document = documentSlot.constructIn(storage);
+        document.append("prefix:");
         const usize prefixLength = document.size();
-        serialized = NameSymbols::Serialize(document).has_value();
-        documentText.assign(AStringView(document));
+        serialized = SerializeMeasured(document).has_value();
+        documentText.assign(NarrowView(document));
         if(serialized){
-            document.append(invalidToken.data()).append("\truntime\tinvalid\\q\n");
-            document.append(invalidToken.data()).append("\truntime\tdangling\\\n");
-            NameSymbols::ClearRuntimeSymbols();
-            loadedFromMemory = NameSymbols::LoadFromMemory(AStringView(document.data() + prefixLength, document.size() - prefixLength), scratchArena);
+            document.append(invalidToken.view());
+            document.append("\truntime\tinvalid\\q\n");
+            document.append(invalidToken.view());
+            document.append("\truntime\tdangling\\\n");
+            ClearRuntimeSymbols();
+            loadedFromMemory = LoadFromMemory(NarrowView(document).substr(prefixLength), scratchArena);
             if(loadedFromMemory){
-                Array<char, NameSymbols::s_MaxResolvedTextLength> resolved = {};
-                resolvedStored = NameSymbols::Resolve(resolved.data(), resolved.size(), stored.identityHash());
+                SymbolBuffer<s_ResolvedCapacity> resolved;
+                resolvedStored = resolved.resolve(stored.identityHash());
                 if(resolvedStored)
-                    resolvedText.assign(AStringView(resolved.data()));
-                resolvedInvalid = NameSymbols::Resolve(resolved.data(), resolved.size(), invalidHash);
+                    resolvedText.assign(resolved.view());
+                resolvedInvalid = resolved.resolve(invalidHash);
             }
         }
     }
@@ -431,8 +343,8 @@ void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsSta
 }
 
 void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishingSymbols(){
-    NameSymbols::InstallRuntimeRegistry();
-    NameSymbols::ClearRuntimeSymbols();
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
     const Name retained(s_RetainedAdmissionSymbol);
     Array<StringView, 6> rejectedHeaders = Array<StringView, 6>();
     rejectedHeaders[0u] = "";
@@ -448,37 +360,39 @@ void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishing
     b8 incomingResolvedAfterLoad = false;
     String incomingText = "";
 
-    native(in retained, in rejectedHeaders, mut rejectedAllInvalidHeaders, mut loadedCurrentDocument, mut retainedStillResolved, mut incomingResolvedAfterLoad, mut incomingText){
-        GlobalArena arena(Name("Tests/NameSymbols/DocumentAdmission"));
-        ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
-        const NameHash incomingHash = ComputeNameHash(MakeNotNull("admission/incoming"));
-        Array<char, NameHashTextCodec::s_TextLength + 1u> incomingToken = {};
-        NameHashTextCodec::Format(incomingToken.data(), sizeof(incomingToken), incomingHash);
-        AString<GlobalArena> record(arena);
-        StringAppendFormat(record, "{}\truntime\tAdmission/Incoming\n", incomingToken.data());
-        const usize retainedCount = NameSymbols::EntryCount();
-        Array<char, NameSymbols::s_MaxResolvedTextLength> resolvedText = {};
-        for(const AStringView header : rejectedHeaders){
-            AString<GlobalArena> document(arena);
-            document.append(header).append(record);
-            const b8 loaded = NameSymbols::LoadFromMemory(AStringView(document), scratchArena);
-            const b8 countPreserved = NameSymbols::EntryCount() == retainedCount;
-            const b8 retainedOk = NameSymbols::Resolve(resolvedText.data(), sizeof(resolvedText), retained.hash()) && AStringView(resolvedText.data()) == "admission/retained";
-            const b8 incomingPublished = NameSymbols::Resolve(resolvedText.data(), sizeof(resolvedText), incomingHash);
+    {
+        ScratchStorage scratchArena(s_CommonNameTestsNameSymbolsScratch);
+        const NameHash incomingHash = ComputeNameHash(StringView("admission/incoming")).value();
+        SymbolBuffer<s_TokenCapacity> incomingToken;
+        incomingToken.format(incomingHash);
+        String record;
+        StringAppendFormat(record, "{}\truntime\tAdmission/Incoming\n", incomingToken.view());
+        const usize retainedCount = EntryCount();
+        SymbolBuffer<s_ResolvedCapacity> resolvedText;
+        for(in StringView header : rejectedHeaders){
+            String document;
+            document.append(header);
+            document.append(record);
+            const b8 loaded = LoadFromMemory(StringView(document), scratchArena);
+            const b8 countPreserved = EntryCount() == retainedCount;
+            const b8 retainedOk = resolvedText.resolve(retained.hash()) && resolvedText.view() == "admission/retained";
+            const b8 incomingPublished = resolvedText.resolve(incomingHash);
             if(loaded || !countPreserved || !retainedOk || incomingPublished)
                 rejectedAllInvalidHeaders = false;
         }
 
-        AString<GlobalArena> currentDocument(arena);
-        currentDocument.append(NameSymbols::s_FileHeader).append("\tproducer=runtime\r\n").append(record);
-        loadedCurrentDocument = NameSymbols::LoadFromMemory(AStringView(currentDocument), scratchArena);
+        String currentDocument;
+        currentDocument.append(s_FileHeader);
+        currentDocument.append("\tproducer=runtime\r\n");
+        currentDocument.append(record);
+        loadedCurrentDocument = LoadFromMemory(StringView(currentDocument), scratchArena);
         if(loadedCurrentDocument){
-            retainedStillResolved = NameSymbols::Resolve(resolvedText.data(), sizeof(resolvedText), retained.hash());
-            incomingResolvedAfterLoad = NameSymbols::Resolve(resolvedText.data(), sizeof(resolvedText), incomingHash);
+            retainedStillResolved = resolvedText.resolve(retained.hash());
+            incomingResolvedAfterLoad = resolvedText.resolve(incomingHash);
             if(incomingResolvedAfterLoad)
-                incomingText.assign(AStringView(resolvedText.data()));
+                incomingText.assign(resolvedText.view());
         }
-        NameSymbols::ClearRuntimeSymbols();
+        ClearRuntimeSymbols();
     }
 
     EXPECT_TRUE(rejectedAllInvalidHeaders);
@@ -491,10 +405,8 @@ void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishing
 
 Expected<b8, ErrorCode> LoadNameSymbolsFileForTest(in Path path){
     Expected<b8, ErrorCode> loaded = false;
-    native(in path, mut loaded){
-        ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
-        loaded = NameSymbols::LoadFile(path, scratchArena);
-    }
+    ScratchStorage storage(s_CommonNameTestsNameSymbolsScratch);
+    loaded = LoadSymbolFile(path, storage);
     return loaded;
 }
 
@@ -533,7 +445,7 @@ void VerifyNameSymbolDecodeTests_FileLoadSeparatesHeaderAnswerFromNativeReadFail
 }
 
 void VerifyNameSymbolDecodeTests_NameSymbolsCollectArenaOwnersWithoutPerformanceCapture(){
-    b8 buildSymbolsEnabled = false;
+    const b8 buildSymbolsEnabled = s_SymbolsEnabled;
     b8 preResolveAny = true;
     b8 serialized = false;
     String serializedText = "";
@@ -551,82 +463,65 @@ void VerifyNameSymbolDecodeTests_NameSymbolsCollectArenaOwnersWithoutPerformance
     String liveAfterDefaultText = "";
     b8 removedDefaultFile = false;
 
-    native(
-        mut buildSymbolsEnabled,
-        mut preResolveAny,
-        mut serialized,
-        mut serializedText,
-        mut resolvedLive,
-        mut resolvedRetired,
-        mut resolvedHeap,
-        mut liveResolvedText,
-        mut retiredResolvedText,
-        mut heapResolvedText,
-        mut wroteDefaultFile,
-        mut readDefaultFile,
-        mut defaultFileText,
-        mut loadedDefaultOk,
-        mut resolvedLiveAfterDefault,
-        mut liveAfterDefaultText,
-        mut removedDefaultFile
-    ){
-#if defined(NWB_BUILD_SYMBOLS)
-        buildSymbolsEnabled = true;
-#endif
-        constexpr NameHash s_LiveHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_live"));
-        constexpr NameHash s_RetiredHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_retired"));
-        constexpr NameHash s_HeapHash = ComputeNameHash(MakeNotNull("global/arena_memory/heap_backing"));
-        NameSymbols::UninstallRuntimeRegistry();
-        GlobalArena liveOwner(s_CommonNameTestsNameSymbolsBeforeRegistryLive);
+    {
+        const NameHash s_LiveHash = ComputeNameHash(StringView("tests/namesymbols/before_registry_live")).value();
+        const NameHash s_RetiredHash = ComputeNameHash(StringView("tests/namesymbols/before_registry_retired")).value();
+        const NameHash s_HeapHash = ComputeNameHash(StringView("global/arena_memory/heap_backing")).value();
+        UninstallRuntimeRegistry();
+        HeapStorage liveOwner(s_CommonNameTestsNameSymbolsBeforeRegistryLive);
         {
-            GlobalArena retiredOwner(s_CommonNameTestsNameSymbolsBeforeRegistryRetired);
+            HeapStorage retiredOwner(s_CommonNameTestsNameSymbolsBeforeRegistryRetired);
         }
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
+        InstallRuntimeRegistry();
+        ClearRuntimeSymbols();
 
-        Array<char, 128u> resolvedBuffer = {};
+        SymbolBuffer<128u> resolvedBuffer;
         preResolveAny =
-            NameSymbols::Resolve(resolvedBuffer.data(), sizeof(resolvedBuffer), s_LiveHash)
-            || NameSymbols::Resolve(resolvedBuffer.data(), sizeof(resolvedBuffer), s_RetiredHash)
-            || NameSymbols::Resolve(resolvedBuffer.data(), sizeof(resolvedBuffer), s_HeapHash)
+            resolvedBuffer.resolve(s_LiveHash)
+            || resolvedBuffer.resolve(s_RetiredHash)
+            || resolvedBuffer.resolve(s_HeapHash)
         ;
 
-        ::AString<GlobalArena> namesymText(liveOwner);
-        serialized = NameSymbols::Serialize(namesymText).has_value();
-        serializedText.assign(AStringView(namesymText));
+        TestValueSlot<MeasuredText> textSlot;
+        mut MeasuredText namesymText = textSlot.constructIn(liveOwner);
+        serialized = SerializeMeasured(namesymText).has_value();
+        serializedText.assign(NarrowView(namesymText));
 
-        resolvedLive = NameSymbols::Resolve(resolvedBuffer.data(), sizeof(resolvedBuffer), s_LiveHash);
+        resolvedLive = resolvedBuffer.resolve(s_LiveHash);
         if(resolvedLive)
-            liveResolvedText.assign(AStringView(resolvedBuffer.data()));
-        resolvedRetired = NameSymbols::Resolve(resolvedBuffer.data(), sizeof(resolvedBuffer), s_RetiredHash);
+            liveResolvedText.assign(resolvedBuffer.view());
+        resolvedRetired = resolvedBuffer.resolve(s_RetiredHash);
         if(resolvedRetired)
-            retiredResolvedText.assign(AStringView(resolvedBuffer.data()));
-        resolvedHeap = NameSymbols::Resolve(resolvedBuffer.data(), sizeof(resolvedBuffer), s_HeapHash);
+            retiredResolvedText.assign(resolvedBuffer.view());
+        resolvedHeap = resolvedBuffer.resolve(s_HeapHash);
         if(resolvedHeap)
-            heapResolvedText.assign(AStringView(resolvedBuffer.data()));
+            heapResolvedText.assign(resolvedBuffer.view());
 
-        NameSymbols::ClearRuntimeSymbols();
-        const auto executableDirectory = ExecutablePaths(liveOwner).directory();
-        const auto executableName = ExecutablePaths(liveOwner).name();
+        ClearRuntimeSymbols();
+        const auto executableDirectory = ExecutablePaths().directory();
+        const auto executableName = ExecutablePaths().name();
         ASSERT_TRUE(executableDirectory);
         ASSERT_TRUE(executableName);
-        ::Path<GlobalArena> namesymPath = *executableDirectory / *executableName;
-        namesymPath.replaceExtension(FOUNDATION_TEXT(".namesym"));
+        Path namesymPath = executableDirectory.value() / executableName.value();
+        namesymPath.replaceExtension(PlatformTextLiteral(".namesym"));
         // The application exception path exports after its scoped runtime callbacks have already detached.
-        NameSymbols::UninstallRuntimeRegistry();
-        wroteDefaultFile = NameSymbols::WriteDefaultFile();
-        NameSymbols::InstallRuntimeRegistry();
+        UninstallRuntimeRegistry();
+        wroteDefaultFile = WriteDefaultFile();
+        InstallRuntimeRegistry();
         namesymText.clear();
         if(wroteDefaultFile){
-            readDefaultFile = ReadTextFile(namesymPath, namesymText).has_value();
-            defaultFileText.assign(AStringView(namesymText));
+            readDefaultFile = ReadMeasuredFile(namesymPath, namesymText).has_value();
+            defaultFileText.assign(NarrowView(namesymText));
         }
-        NameSymbols::ClearRuntimeSymbols();
-        const auto loadedDefault = NameSymbols::LoadDefaultFile();
-        loadedDefaultOk = loadedDefault ? *loadedDefault : loadedDefault.error().loadedAny;
-        resolvedLiveAfterDefault = NameSymbols::Resolve(resolvedBuffer.data(), sizeof(resolvedBuffer), s_LiveHash);
+        ClearRuntimeSymbols();
+        const auto loadedDefault = LoadDefaultFile();
+        if(loadedDefault.has_value())
+            loadedDefaultOk = loadedDefault.value();
+        else
+            loadedDefaultOk = loadedDefault.error().loadedAny;
+        resolvedLiveAfterDefault = resolvedBuffer.resolve(s_LiveHash);
         if(resolvedLiveAfterDefault)
-            liveAfterDefaultText.assign(AStringView(resolvedBuffer.data()));
+            liveAfterDefaultText.assign(resolvedBuffer.view());
         removedDefaultFile = RemoveFile(namesymPath).has_value();
     }
 
@@ -681,25 +576,21 @@ void VerifyNameSymbolDecodeTests_ConcurrentRecordResolveClearAndUninstallStaySyn
     b8 sawResolvedTextMismatch = false;
     usize observedPeakEntryCount = 0u;
 
-    native(in expectedRecorderIterations, mut completedIterations, mut sawIdentityMismatch, mut sawResolvedTextMismatch, mut observedPeakEntryCount){
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-        ScopeExit restoreRegistry([]()noexcept{
-            NameSymbols::InstallRuntimeRegistry();
-            NameSymbols::ClearRuntimeSymbols();
-        });
+    {
+        InstallRuntimeRegistry();
+        ClearRuntimeSymbols();
+        SymbolRegistryScope restoreRegistry(true);
 
-        constexpr AStringView s_TargetText = "concurrent/symbol_entry";
-        const NameHash targetHash = ComputeNameHash(MakeNotNull("concurrent/symbol_entry"));
-        Atomic<b8> stop{ false };
-        Atomic<u32> recordedCount{ 0u };
-        Atomic<b8> identityMismatch{ false };
-        Atomic<b8> resolvedMismatch{ false };
-        Atomic<usize> maxCount{ 0u };
-        Latch startLatch(4);
+        const NameHash targetHash = ComputeNameHash(StringView("concurrent/symbol_entry")).value();
+        TestAtomic<b8> stop(false);
+        TestAtomic<u32> recordedCount(0u);
+        TestAtomic<b8> identityMismatch(false);
+        TestAtomic<b8> resolvedMismatch(false);
+        TestAtomic<usize> maxCount(0u);
+        TestLatch startLatch(4);
 
         {
-            JoiningThread recorderThread([&](){
+            TestThread recorderThread(lambda[mut startLatch, in expectedRecorderIterations, in targetHash, mut identityMismatch, mut recordedCount, mut stop]() -> void{
                 startLatch.arrive_and_wait();
                 for(u32 i = 0u; i < expectedRecorderIterations; ++i){
                     const Name recorded(s_TargetText);
@@ -710,30 +601,30 @@ void VerifyNameSymbolDecodeTests_ConcurrentRecordResolveClearAndUninstallStaySyn
                 stop.store(true, MemoryOrder::release);
             });
 
-            JoiningThread resolverThread([&](){
+            TestThread resolverThread(lambda[mut startLatch, mut stop, in targetHash, mut resolvedMismatch]() -> void{
                 startLatch.arrive_and_wait();
-                Array<char, NameSymbols::s_MaxResolvedTextLength> buffer = {};
+                SymbolBuffer<s_ResolvedCapacity> buffer;
                 while(!stop.load(MemoryOrder::acquire)){
-                    if(NameSymbols::Resolve(buffer.data(), buffer.size(), targetHash) && AStringView(buffer.data()) != s_TargetText)
+                    if(buffer.resolve(targetHash) && buffer.view() != s_TargetText)
                         resolvedMismatch.store(true, MemoryOrder::relaxed);
                 }
             });
 
-            JoiningThread clearThread([&](){
+            TestThread clearThread(lambda[mut startLatch, mut stop, mut maxCount]() -> void{
                 startLatch.arrive_and_wait();
                 while(!stop.load(MemoryOrder::acquire)){
-                    NameSymbols::ClearRuntimeSymbols();
-                    const usize count = NameSymbols::EntryCount();
+                    ClearRuntimeSymbols();
+                    const usize count = EntryCount();
                     usize previousMax = maxCount.load(MemoryOrder::relaxed);
                     while(count > previousMax && !maxCount.compare_exchange_weak(previousMax, count, MemoryOrder::relaxed)){}
                 }
             });
 
-            JoiningThread toggleThread([&](){
+            TestThread toggleThread(lambda[mut startLatch, mut stop]() -> void{
                 startLatch.arrive_and_wait();
                 while(!stop.load(MemoryOrder::acquire)){
-                    NameSymbols::UninstallRuntimeRegistry();
-                    NameSymbols::InstallRuntimeRegistry();
+                    UninstallRuntimeRegistry();
+                    InstallRuntimeRegistry();
                 }
             });
         }
@@ -755,12 +646,9 @@ void VerifyCommonLoggingBoundaries_LoggerMacrosBehaveAsSingleStatements(){
     LoggerRegistrationGuard guard(logger);
 
     b8 elseBranchRan = false;
-    native(mut elseBranchRan){
-        if(false)
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("unreachable"));
-        else
-            elseBranchRan = true;
-    }
+    UnbracedIfElse(false, WriteEssentialLog(PlatformTextLiteral("unreachable")), lambda[mut elseBranchRan]() -> void{
+        elseBranchRan = true;
+    });
 
     EXPECT_TRUE(elseBranchRan);
     EXPECT_EQ(logger.messageCount(), 0u);
@@ -776,26 +664,25 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
     u32 observedMessageTotal = 0u;
     u32 observedErrorTotal = 0u;
 
-    native(mut logger, mut sawInvalidObservation, mut observedMessageTotal, mut observedErrorTotal){
-        static constexpr TStringView s_ParallelLoggerMessage = FOUNDATION_TEXT("parallel logger message");
-        Latch startGate(threadCount + 2u);
-        Atomic<u32> activeWriters{ threadCount };
-        Atomic<u32> observedMessages{ 0u };
-        Atomic<u32> observedErrors{ 0u };
-        Atomic<b8> invalidObservation{ false };
-        Thread reader([&]()noexcept{
+    {
+        TestLatch startGate(threadCount + 2u);
+        TestAtomic<u32> activeWriters(threadCount);
+        TestAtomic<u32> observedMessages(0u);
+        TestAtomic<u32> observedErrors(0u);
+        TestAtomic<b8> invalidObservation(false);
+        TestThread reader(lambda[mut startGate, mut activeWriters, in threadCount, mut logger, in expectedMessageCount, in expectedErrorCount, mut invalidObservation, mut observedMessages, mut observedErrors]() -> void{
             startGate.arrive_and_wait();
             // Wait for the first writer burst so reads overlap live writes.
             while(activeWriters.load(MemoryOrder::acquire) == threadCount)
                 YieldThread();
             u32 lastMessageCount = 0u;
             u32 lastErrorCount = 0u;
-            do{
+            while(true){
                 const u32 messageCount = logger.messageCount();
                 const u32 errorCount = logger.errorCount();
-                const Core::Common::LogType::Enum lastType = logger.lastType();
+                const LogType lastType = logger.lastType();
                 // Fail only on impossible counts, not on momentary message/error skew.
-                if(messageCount > expectedMessageCount || errorCount > expectedErrorCount || (lastType != Core::Common::LogType::Info && lastType != Core::Common::LogType::Error))
+                if(messageCount > expectedMessageCount || errorCount > expectedErrorCount || (lastType != LogType::Info && lastType != LogType::Error))
                     invalidObservation.store(true, MemoryOrder::relaxed);
                 if(messageCount > lastMessageCount){
                     observedMessages.fetch_add(messageCount - lastMessageCount, MemoryOrder::relaxed);
@@ -806,7 +693,9 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
                     lastErrorCount = errorCount;
                 }
                 YieldThread();
-            }while(activeWriters.load(MemoryOrder::acquire) != 0u);
+                if(activeWriters.load(MemoryOrder::acquire) == 0u)
+                    break;
+            }
             // Drain the tail after the last writer exits the loop.
             const u32 messageCount = logger.messageCount();
             const u32 errorCount = logger.errorCount();
@@ -816,21 +705,23 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
                 observedErrors.fetch_add(errorCount - lastErrorCount, MemoryOrder::relaxed);
             // Partial reads already proved reader and writer overlap.
         });
-        Array<Thread, 4> writers;
+        Array<Optional<TestThread>, 4> writers;
         for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
-            writers[threadIndex] = Thread([&logger, &startGate, &activeWriters](){
+            writers[threadIndex].emplace(lambda[mut logger, mut startGate, mut activeWriters, in messagesPerThread]() -> void{
                 startGate.arrive_and_wait();
                 for(u32 messageIndex = 0u; messageIndex < messagesPerThread; ++messageIndex){
-                    const Core::Common::LogType::Enum type = (messageIndex & 1u) == 0u ? Core::Common::LogType::Info : Core::Common::LogType::Error;
-                    Core::Common::LoggerDetail::EnqueueMessage(logger, type, s_ParallelLoggerMessage);
+                    LogType kind = LogType::Info;
+                    if((messageIndex & 1u) != 0u)
+                        kind = LogType::Error;
+                    EnqueueTestLog(logger, kind, PlatformTextLiteral("parallel logger message"));
                 }
                 activeWriters.fetch_sub(1u, MemoryOrder::release);
             });
         }
 
         startGate.arrive_and_wait();
-        for(Thread& writer : writers)
-            writer.join();
+        for(mut Optional<TestThread> writer : writers)
+            writer.value().join();
         reader.join();
 
         sawInvalidObservation = invalidObservation.load(MemoryOrder::relaxed);
@@ -848,6 +739,10 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
     EXPECT_TRUE(SawCapturedError(logger, s_ParallelLoggerMessageText));
 }
 
+void RegisterCallbackLogger(mut Optional<LoggerRegistrationGuard> guard, mut CallbackUnregisterLogger logger){
+    guard.emplace(logger, LoggerBreakPolicy::ReportOnly);
+}
+
 void VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReaderWithoutSelfDeadlock(){
     CapturingLogger baseLogger = CapturingLogger();
     LoggerRegistrationGuard baseGuard(baseLogger, LoggerBreakPolicy::ReportOnly);
@@ -855,16 +750,15 @@ void VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReader
     b8 unregistrationReturnedEarly = false;
     u32 totalCallbacks = 0u;
 
-    native(mut baseLogger, mut nestedGuardStillPresent, mut unregistrationReturnedEarly, mut totalCallbacks){
+    {
         Optional<LoggerRegistrationGuard> nestedGuard;
-        Latch bothEnteredGate(2u);
-        AtomicFlag unregistrationStarted;
-        Atomic<b8> peerStillInCallback{ true };
-        Atomic<b8> unregistrationReturnedWhilePeerActive{ false };
-        Atomic<u32> callbackCount{ 0u };
+        TestLatch bothEnteredGate(2u);
+        TestAtomic<b8> unregistrationStarted(false);
+        TestAtomic<b8> peerStillInCallback(true);
+        TestAtomic<b8> unregistrationReturnedWhilePeerActive(false);
+        TestAtomic<u32> callbackCount(0u);
 
-        CommonTestsDetail::CallbackUnregisterLogger callbackLogger(
-            baseLogger.arena(),
+        CallbackUnregisterLogger callbackLogger(
             nestedGuard,
             bothEnteredGate,
             unregistrationStarted,
@@ -872,13 +766,13 @@ void VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReader
             unregistrationReturnedWhilePeerActive,
             callbackCount
         );
-        nestedGuard.emplace(callbackLogger, LoggerBreakPolicy::ReportOnly);
+        RegisterCallbackLogger(nestedGuard, callbackLogger);
 
-        Thread selfUnregisterThread([](){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("self-unregister"));
+        TestThread selfUnregisterThread(lambda[]() -> void{
+            WriteErrorLog(PlatformTextLiteral("self-unregister"));
         });
-        Thread peerReaderThread([](){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("peer-reader"));
+        TestThread peerReaderThread(lambda[]() -> void{
+            WriteErrorLog(PlatformTextLiteral("peer-reader"));
         });
 
         selfUnregisterThread.join();
@@ -907,71 +801,8 @@ NWB_ADHD_GTEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolv
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CommonTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void CallbackUnregisterLogger::handle(const TStringView text, const Core::Common::LogType::Enum){
-    m_callbackCount.fetch_add(1u, MemoryOrder::relaxed);
-    m_bothEnteredGate.arrive_and_wait();
-    if(text == FOUNDATION_TEXT("self-unregister")){
-        m_unregistrationStarted.testAndSet(MemoryOrder::release);
-        m_unregistrationStarted.notifyAll();
-        m_guardSlot.reset();
-        if(m_peerStillInCallback.load(MemoryOrder::acquire))
-            m_unregistrationReturnedWhilePeerActive.store(true, MemoryOrder::relaxed);
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("routed-to-base-after-self-unregister"));
-        return;
-    }
-
-    while(!m_unregistrationStarted.test(MemoryOrder::acquire))
-        m_unregistrationStarted.wait(false, MemoryOrder::relaxed);
-    for(u32 spin = 0u; spin < 64u; ++spin)
-        YieldThread();
-    m_peerStillInCallback.store(false, MemoryOrder::release);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_UNICODE)
-TEST(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate){ VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(); }
-TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){ VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(); }
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+registration GoogleTestUnicodeCase(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate, VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate);
+registration GoogleTestUnicodeCase(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText, VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

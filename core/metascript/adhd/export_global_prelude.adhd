@@ -65,6 +65,7 @@
 #include <global/text_trim_parse.adhd>
 #include <global/text_utils.adhd>
 #include <global/texture_payload.adhd>
+#include <global/terminal_entry.adhd>
 #include <global/thread.adhd>
 #include <global/timer.adhd>
 #include <global/type.adhd>

@@ -3,482 +3,199 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+#include <tests/unit/ui/fixture_text_shaping.adhd>
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/test_helpers.adhd>
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[arena]
+class ThrowingFontConstructionLogger : Utf8LogSink{
+    public b8 sawFaceFailure = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/floating_point_environment_guard.adhd.h>
-#include <tests/common/font_fixture.adhd.h>
-#include <tests/unit/ui/fixture_text_shaping.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
-#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout_types.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
-
-#include <core/common/log.h>
-
-#include <global/bit.h>
-#include <global/filesystem.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_font_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-using UiWidgetTests::s_TestKoreanFontPath;
-using UiWidgetTests::s_TestLatinFontPath;
-using UiWidgetTests::s_TestSkinPath;
-
-
-inline constexpr i32 s_FontConstructionLogFailure = 61;
-
-
-class ThrowingFontConstructionLogger final : public Core::Common::ILogger{
-public:
-    explicit ThrowingFontConstructionLogger(Core::Common::LogArena& arena)noexcept
-        : m_arena(arena)
-    {}
-
-
-public:
-    virtual Core::Common::LogArena& arena()noexcept override{ return m_arena; }
-
-    virtual void enqueue(Core::Common::LogString&& text, Core::Common::LogType::Enum)override{ observe(text); }
-
-    virtual void enqueue(const Core::Common::LogString& text, Core::Common::LogType::Enum)override{ observe(text); }
-
-    [[nodiscard]] b8 sawFaceFailure()const noexcept{ return m_sawFaceFailure; }
-
-
-private:
-    void observe(const Core::Common::LogString& text){
-        if(text.find(FOUNDATION_TEXT("UI font face initialization failed")) == Core::Common::LogString::npos)
+    [cpp_unwind]
+    public void receive(in StringView text, in LogType kind)override{
+        if(text.find("UI font face initialization failed") == usize.max)
             return;
-        m_sawFaceFailure = true;
-        throw s_FontConstructionLogFailure;
+        this.sawFaceFailure = true;
+        ThrowTestException<i32>(61);
     }
+}
 
+TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip, in Point scale){
+    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip, scale);
+}
 
-private:
-    Core::Common::LogArena& m_arena;
-    b8 m_sawFaceFailure = false;
-};
+TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip){
+    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip);
+}
 
+Expected<Rect> UiTextGlyphAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
+    return AtlasRectangle(glyph, atlas.deref(), size, origin);
+}
 
-class TextFontTests : public testing::Test{
-public:
-    TextFontTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextFont))
-        , m_latin(m_arena, Name(s_TestLatinFontPath))
-        , m_korean(m_arena, Name(s_TestKoreanFontPath))
-        , m_service(m_arena)
-        , m_layout(m_arena)
-        , m_skin(m_arena, Name(s_TestSkinPath))
-        , m_paint(m_arena)
-    {}
+class GeometryShaper : ITextShaper{
+    public Point m_offset;
+    public Point m_secondOffset;
+    public Point m_advance = Point(10.0f, 0.0f);
+    public Rect m_ink = Rect(-2.0f, -8.0f, 9.0f, 10.0f);
+    public GlyphCoverageBounds m_coverage;
 
-
-public:
-    virtual void SetUp()override{
-        ASSERT_TRUE(Tests::LoadBundledFont(m_latin, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
-        ASSERT_TRUE(Tests::LoadBundledFont(m_korean, m_arena, NWB_TEST_FONT_DIRECTORY, "korean.font"));
-        const Array<FontSource, 2> sources{
-            FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u },
-            FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), m_korean, 1u },
-        };
-        ASSERT_TRUE(m_service.setFonts(Span(sources.data(), 2u)));
-        UiSkin::RegionVector regions(m_arena);
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
+    [cpp_unwind]
+    public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
+        ShapedRun run;
+        run.metrics.ascender = 8.0f;
+        run.metrics.descender = 2.0f;
+        run.metrics.lineGap = 2.0f;
+        for(usize index = 0u; index < request.text.size(); ++index){
+            Point offset = this.m_secondOffset;
+            if(index == 0u)
+                offset = this.m_offset;
+            run.glyphs.push_back(ShapedGlyph(SharedFontFace(), 1u, cast<u32>(index), cast<u32>(index + 1u), offset, this.m_advance, this.m_ink, this.m_coverage));
+        }
+        return run;
     }
+}
 
-    void beginPaint(u64 generation, f32 scale = 1.0f){
-        m_paint.begin({ 800.0f, 600.0f, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
+class TextFontTests{
+    public Font m_latin = Font(Name(s_TestLatinFontPath));
+    public Font m_korean = Font(Name(s_TestKoreanFontPath));
+    public TextService m_service;
+    public TextLayout m_layout;
+    public UiSkin m_skin = UiSkin(Name(s_TestSkinPath));
+    public PaintBuilder m_paint;
+
+    public void setup(){
+        ASSERT_TRUE(LoadBundledFixtureFont("latin.font", this.m_latin));
+        ASSERT_TRUE(LoadBundledFixtureFont("korean.font", this.m_korean));
+        const Array<FontSource, 2u> sources(FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, 1u), FontSource(AssetRef<Font>(s_TestKoreanFontPath), this.m_korean, 1u));
+        ASSERT_TRUE(this.m_service.setFonts(sources));
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, RegionVector());
     }
-
-    [[nodiscard]] b8 applyLayout(const ShapeRequest& request){
-        auto layoutResult = m_service.layout(request);
-        if(!layoutResult)
+    public void beginPaint(in u64 generation){ this.beginPaint(generation, 1.0f); }
+    public void beginPaint(in u64 generation, in f32 scale){
+        this.m_paint.begin(DisplayMetrics(800.0f, 600.0f, scale, scale), generation, 1u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
+    }
+    public b8 applyLayout(in ShapeRequest request){
+        auto result = this.m_service.layout(request);
+        if(!result.has_value())
             return false;
-        m_layout = Move(*layoutResult);
+        TestMoveAssign<TextLayout>(this.m_layout, result.value());
         return true;
     }
-
-    [[nodiscard]] b8 setLatinFontGeneration(const u64 generation){
-        const FontSource replacement{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, generation };
-        return m_service.setFonts(Span(&replacement, 1u));
+    public b8 setLatinFontGeneration(in u64 generation){
+        const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, generation));
+        return this.m_service.setFonts(sources);
     }
+    public void clearLatinFontBytes(){ this.m_latin.setFontBytes(Vector<u8>()); }
+    public b8 setEmptyFonts(){ return this.m_service.setFonts(Span<FontSource>()); }
+    public Expected<SharedFontFace> makeLatinFace(){ return this.makeLatinFace(1u); }
+    public Expected<SharedFontFace> makeLatinFace(in u64 generation){ return MakeFontFace(this.pool, FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, generation)); }
+    public SharedPool pool = SharedPool();}
 
-    void clearLatinFontBytes(){
-        Core::Assets::AssetBytes cleared(m_arena);
-        m_latin.setFontBytes(Move(cleared));
+
+class TextGlyphVisibilityFontTests{
+    public Font m_latin = Font(Name(s_TestLatinFontPath));
+    public Font m_korean = Font(Name(s_TestKoreanFontPath));
+    public SharedFontFace m_face;
+    public SharedFontFace m_koreanFace;
+
+    public void setup(){
+        ASSERT_TRUE(this.loadFont("latin.font", this.m_latin));
+        ASSERT_TRUE(this.loadFont("korean.font", this.m_korean));
+        const auto face = MakeFontFace(this.pool, FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, 1u));
+        const auto korean = MakeFontFace(this.pool, FontSource(AssetRef<Font>(s_TestKoreanFontPath), this.m_korean, 1u));
+        ASSERT_TRUE(face.has_value());
+        ASSERT_TRUE(korean.has_value());
+        this.m_face = face.value();
+        this.m_koreanFace = korean.value();
+        ASSERT_TRUE(this.m_face.deref().coverageInkReliable());
+        ASSERT_FALSE(this.m_koreanFace.deref().coverageInkReliable());
     }
-
-    [[nodiscard]] b8 setEmptyFonts(){
-        return m_service.setFonts({});
-    }
-
-    [[nodiscard]] Expected<SharedFontFace> makeLatinFace(const u64 generation = 1u){
-        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, generation };
-        return MakeFontFace(::NWB::Core::Alloc::SharedPool(m_arena), source);
-    }
+    public b8 loadFont(in StringView filename, mut Font font){ return LoadBundledFixtureFont(filename, font); }
+    public SharedPool pool = SharedPool();}
 
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Font m_latin;
-    Font m_korean;
-    TextService m_service;
-    TextLayout m_layout;
-    UiSkin m_skin;
-    PaintBuilder m_paint;
-};
+class TextGlyphVisibilityAtlasTests{
+    public FontAtlas m_asset = FontAtlas(Name(s_UiCaseTestsUiGlyphVisibilityAtlas));
+    public SharedBakedFontAtlas m_atlas;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_glyph_visibility_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-
-
-class TextGlyphVisibilityFontTests : public testing::Test{
-public:
-    TextGlyphVisibilityFontTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextGlyphVisibilityFonts))
-        , m_latin(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
-        , m_korean(m_arena, Name(UiWidgetTests::s_TestKoreanFontPath))
-    {}
-
-
-public:
-    virtual void SetUp()override{
-
-        ASSERT_TRUE(loadFont("latin.font", m_latin));
-        ASSERT_TRUE(loadFont("korean.font", m_korean));
-        auto faceResult = MakeFontFace(::NWB::Core::Alloc::SharedPool(m_arena), { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
-        auto koreanFaceResult = MakeFontFace(::NWB::Core::Alloc::SharedPool(m_arena), { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestKoreanFontPath), m_korean, 1u });
-        ASSERT_TRUE(faceResult);
-        ASSERT_TRUE(koreanFaceResult);
-        m_face = Move(*faceResult);
-        m_koreanFace = Move(*koreanFaceResult);
-        ASSERT_TRUE(m_face->coverageInkReliable());
-        ASSERT_FALSE(m_koreanFace->coverageInkReliable());
-    }
-
-    [[nodiscard]] b8 loadFont(const StringView filename, Font& font){
-        const ::Path<Core::Alloc::GlobalArena> directory(m_arena, NWB_TEST_FONT_DIRECTORY);
-        const ::Path<Core::Alloc::GlobalArena> path = directory / filename;
-        Core::Assets::AssetBytes bytes(m_arena);
-        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-        if(!bytesResult)
-            return false;
-        bytes = Move(*bytesResult);
-        font.setFontBytes(Move(bytes));
-        return font.validatePayload();
-    }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Font m_latin;
-    Font m_korean;
-    SharedFontFace m_face;
-    SharedFontFace m_koreanFace;
-};
-
-
-class TextGlyphVisibilityAtlasTests : public testing::Test{
-public:
-    TextGlyphVisibilityAtlasTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextGlyphVisibilityAtlas))
-        , m_asset(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiGlyphVisibilityAtlas))
-    {}
-
-
-public:
-    virtual void SetUp()override{
-        FontAtlasPayload payload(m_arena);
-        payload.font = Core::Assets::AssetRef<Font>("tests/ui/glyph_visibility/font");
-        const Array<u8, 1> source{ 1u };
-        payload.fontSha256 = ComputeSha256({ source.data(), 1u });
+    public void setup(){
+        FontAtlasPayload payload;
+        payload.font = AssetRef<Font>("tests/ui/glyph_visibility/font");
+        const Array<u8, 1u> source(1u);
+        payload.fontSha256 = ComputeSha256(source);
         payload.unitsPerEm = 1000u;
         payload.sourceGlyphCount = 2u;
         payload.bakePpem = 32u;
         payload.ascenderUnits = 800.0f;
         payload.descenderUnits = -200.0f;
         payload.glyphs.resize(2u);
-        payload.glyphs[0u] = { .glyphId = 0u, .x = 1u, .y = 1u, .width = 2u, .height = 4u, .planeLeft = -125.0f, .planeTop = -500.0f, .planeRight = -62.5f, .planeBottom = -375.0f, .drawable = 1u };
+        mut FontAtlasGlyph testGlyph = payload.glyphs[0u];
+        testGlyph.glyphId = 0u;
+        testGlyph.x = 1u;
+        testGlyph.y = 1u;
+        testGlyph.width = 2u;
+        testGlyph.height = 4u;
+        testGlyph.planeLeft = -125.0f;
+        testGlyph.planeTop = -500.0f;
+        testGlyph.planeRight = -62.5f;
+        testGlyph.planeBottom = -375.0f;
+        testGlyph.drawable = 1u;
         payload.glyphs[1u].glyphId = 1u;
-        payload.groups.emplace_back(m_arena);
-        FontAtlasGroup& group = payload.groups.back();
+        AppendArenaElement<FontAtlasGroup>(payload.groups);
+        mut FontAtlasGroup group = payload.groups.back();
         group.width = 8u;
         group.height = 8u;
         group.pixels.resize(8u * 8u * 4u, 128u);
-        group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
-        m_asset.setPayload(Move(payload));
-        ASSERT_TRUE(m_asset.validatePayload());
-        auto atlasResult = CreateBakedFontAtlas(::NWB::Core::Alloc::SharedPool(m_arena), m_asset, 1u);
-        ASSERT_TRUE(atlasResult);
-        m_atlas = Move(*atlasResult);
-        ASSERT_TRUE(m_atlas);
+        group.sha256 = ComputeSha256(group.pixels);
+        this.m_asset.setPayload(payload);
+        ASSERT_TRUE(this.m_asset.validatePayload());
+        auto atlasResult = CreateBakedFontAtlas(this.pool, this.m_asset, 1u);
+        ASSERT_TRUE(atlasResult.has_value());
+        this.m_atlas = atlasResult.value();
+        ASSERT_TRUE(this.m_atlas.valid());
     }
+    public SharedPool pool = SharedPool();}
 
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    FontAtlas m_asset;
-    SharedBakedFontAtlas m_atlas;
-};
+[ordered]
+class TextLayoutInkTests{
+    public GeometryShaper m_shaper;
+    public TextLayoutBuilder m_builder;
+    public TextLayout m_layout;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_layout_ink_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-class GeometryShaper final : public ITextShaper{
-public:
-    explicit GeometryShaper(Core::Alloc::GlobalArena&)noexcept{}
-    virtual ~GeometryShaper()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(::ArenaBase& resultArena, const ShapeRequest& request)override{
-        ShapedRun run(resultArena);
-        run.metrics = { 8.0f, 2.0f, 2.0f };
-        for(usize index = 0u; index < request.text.size(); ++index)
-            run.glyphs.push_back({ {}, 1u, static_cast<u32>(index), static_cast<u32>(index + 1u), index == 0u ? m_offset : m_secondOffset, m_advance, m_ink, m_coverage });
-        return run;
-    }
-
-
-public:
-    Point m_offset;
-    Point m_secondOffset;
-    Point m_advance{ 10.0f, 0.0f };
-    Rect m_ink{ -2.0f, -8.0f, 9.0f, 10.0f };
-    GlyphCoverageBounds m_coverage{};
-};
-
-class TextLayoutInkTests : public testing::Test{
-public:
-    TextLayoutInkTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextLayoutInk))
-        , m_shaper(m_arena)
-        , m_builder(m_arena, m_shaper)
-        , m_layout(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 applyLayout(const ShapeRequest& request){
-        auto layoutResult = m_builder.layout(request);
-        if(!layoutResult)
+    public TextLayoutInkTests(){ this.m_builder = TextLayoutBuilder(this.m_shaper); }
+    public b8 applyLayout(in ShapeRequest request){
+        auto result = this.m_builder.layout(request);
+        if(!result.has_value())
             return false;
-        m_layout = Move(*layoutResult);
+        TestMoveAssign<TextLayout>(this.m_layout, result.value());
         return true;
     }
+}
 
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    GeometryShaper m_shaper;
-    TextLayoutBuilder m_builder;
-    TextLayout m_layout;
-};
+[ordered]
+class TextLayoutTests{
+    public FixtureShaper m_shaper;
+    public TextLayoutBuilder m_builder;
+    public TextLayout m_layout;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using NWB::Tests::UiFixtureText::FixtureShaper;
-
-class TextLayoutTests : public testing::Test{
-public:
-    TextLayoutTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextLayout))
-        , m_shaper(m_arena)
-        , m_builder(m_arena, m_shaper)
-        , m_layout(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 applyLayout(const ShapeRequest& request){
-        auto layoutResult = m_builder.layout(request);
-        if(!layoutResult)
+    public TextLayoutTests(){ this.m_builder = TextLayoutBuilder(this.m_shaper); }
+    public b8 applyLayout(in ShapeRequest request){
+        auto result = this.m_builder.layout(request);
+        if(!result.has_value())
             return false;
-        m_layout = Move(*layoutResult);
+        TestMoveAssign<TextLayout>(this.m_layout, result.value());
         return true;
     }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    FixtureShaper m_shaper;
-    TextLayoutBuilder m_builder;
-    TextLayout m_layout;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using TextFontTests = ::__hidden_ui_text_font_tests::TextFontTests;
-using ThrowingFontConstructionLogger = ::__hidden_ui_text_font_tests::ThrowingFontConstructionLogger;
-using TextGlyphVisibilityFontTests = ::NWB::__hidden_ui_text_glyph_visibility_tests::TextGlyphVisibilityFontTests;
-using TextGlyphVisibilityAtlasTests = ::NWB::__hidden_ui_text_glyph_visibility_tests::TextGlyphVisibilityAtlasTests;
-using TextLayoutInkTests = ::__hidden_ui_text_layout_ink_tests::TextLayoutInkTests;
-using TextLayoutTests = ::__hidden_ui_text_layout_tests::TextLayoutTests;
-using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
-namespace TextDirection = ::NWB::Impl::Ui::TextDirection;
-namespace TextCaretEdge = ::NWB::Impl::Ui::TextCaretEdge;
-namespace TextLayoutStatus = ::NWB::Impl::Ui::TextLayoutStatus;
-namespace TextGlyphIntersection = ::NWB::Impl::Ui::TextGlyphIntersection;
-using TextGlyphIntersectionEnum = ::NWB::Impl::Ui::TextGlyphIntersection::Enum;
-using AtlasGlyph = ::NWB::Impl::Ui::AtlasGlyph;
-using GlyphAtlas = ::NWB::Impl::Ui::GlyphAtlas;
-using GlyphBitmap = ::NWB::Impl::Ui::GlyphBitmap;
-using GlyphCoverageBounds = ::NWB::Impl::Ui::GlyphCoverageBounds;
-using ::PackFourCharTag;
-using ::NWB::Impl::Ui::TryIntersectTextRects;
-using ::NWB::Impl::Ui::s_GlyphAtlasNoPage;
-using ::NWB::Impl::Ui::s_GlyphAtlasMaxPages;
-using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Rect> UiTextGlyphCoverageRect(
-    const ::NWB::Impl::Ui::PlacedGlyph& glyph,
-    const ::NWB::Impl::Ui::AtlasGlyph& record,
-    const f32 scale,
-    const ::NWB::Impl::Ui::Point& origin,
-    const ::NWB::Impl::Ui::Point& pixelScale = { 1.0f, 1.0f }
-)noexcept{
-    return ::NWB::Impl::Ui::TextGlyphVisibility::CoverageRectangle(glyph, record, scale, origin, pixelScale);
-}
-
-[[nodiscard]] FOUNDATION_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateNoAtlas(
-    const ::NWB::Impl::Ui::PlacedGlyph& glyph,
-    const f32 fontSize,
-    const f32 physicalSize,
-    const ::NWB::Impl::Ui::Point& origin,
-    const ::NWB::Impl::Ui::Rect& clip,
-    const ::NWB::Impl::Ui::Point& pixelScale = { 1.0f, 1.0f }
-)noexcept{
-    return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, nullptr, fontSize, physicalSize, origin, clip, pixelScale);
-}
-
-[[nodiscard]] FOUNDATION_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateWithAtlas(
-    const ::NWB::Impl::Ui::PlacedGlyph& glyph,
-    const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas,
-    const f32 fontSize,
-    const f32 physicalSize,
-    const ::NWB::Impl::Ui::Point& origin,
-    const ::NWB::Impl::Ui::Rect& clip
-)noexcept{
-    return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, atlas, fontSize, physicalSize, origin, clip);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Rect> UiTextGlyphAtlasRect(
-    const ::NWB::Impl::Ui::PlacedGlyph& glyph,
-    const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas,
-    const f32 fontSize,
-    const ::NWB::Impl::Ui::Point& origin
-)noexcept{
-    return ::NWB::Impl::Ui::TextGlyphVisibility::AtlasRectangle(glyph, *atlas, fontSize, origin);
-}
-
-[[nodiscard]] FOUNDATION_INLINE StringView MakeUiTextLayoutNullByteView()noexcept{
-    return StringView("\0", 1u);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -509,39 +226,28 @@ GlyphCoverageBounds MakeUiTextFontLayoutCoverage(in Rect ink, in b8 known){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 void VerifyTextFontConstruction_ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemory(){
-    b8 sawFaceFailure = false;
-    u64 beforeAllocs = 0u;
-    u64 afterAllocs = 0u;
-    usize beforeUsed = 0u;
-    usize afterUsed = 0u;
-    usize beforeReserved = 0u;
-    usize afterReserved = 0u;
-    native(mut sawFaceFailure, mut beforeAllocs, mut afterAllocs, mut beforeUsed, mut afterUsed, mut beforeReserved, mut afterReserved){
-        ::NWB::Core::Alloc::GlobalArena sourceArena{Name(::NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionSource)};
-        const ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font> emptyFontRef("tests/ui/font_construction/empty");
-        ::NWB::Impl::Font emptyFont(sourceArena, emptyFontRef.name());
-        ::NWB::Core::Alloc::GlobalArena fontArena{Name(::NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionNative)};
-        const ::NWB::Core::Alloc::SharedPool fontPool(fontArena);
-        ::NWB::Core::Common::LogArena logArena{Name(::NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionLogger)};
-        ThrowingFontConstructionLogger logger(logArena);
-        ::NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, ::NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-        const ::NWB::Impl::Ui::FontSource source{ emptyFontRef, emptyFont, 1u };
-        const auto before = fontPool.memoryStats();
-        EXPECT_THROW({ const auto failed = ::NWB::Impl::Ui::MakeFontFace(fontPool, source); EXPECT_FALSE(failed && (*failed)->valid()); }, i32);
-        sawFaceFailure = logger.sawFaceFailure();
-        const auto after = fontPool.memoryStats();
-        beforeAllocs = before.allocationCount;
-        afterAllocs = after.allocationCount;
-        beforeUsed = before.usedBytes;
-        afterUsed = after.usedBytes;
-        beforeReserved = before.reservedBytes;
-        afterReserved = after.reservedBytes;
-    }
-    EXPECT_TRUE(sawFaceFailure);
-    EXPECT_GT(afterAllocs, beforeAllocs);
-    EXPECT_EQ(afterUsed, beforeUsed);
-    EXPECT_EQ(afterReserved, beforeReserved);
+    HeapStorage sourceArena = HeapStorage(Name(s_UiFixtureNameTestsUiFontConstructionSource));
+    const AssetRef<Font> emptyFontRef("tests/ui/font_construction/empty");
+    TestValueSlot<Font> assetSlot;
+    mut Font emptyFont = assetSlot.constructIn(sourceArena, emptyFontRef.name());
+    HeapStorage fontArena = HeapStorage(Name(s_UiFixtureNameTestsUiFontConstructionNative));
+    TestValueSlot<SharedPool> poolSlot;
+    mut SharedPool fontPool = poolSlot.constructIn(fontArena);
+    ThrowingFontConstructionLogger logger;
+    LoggerRegistrationGuard guard(logger, LoggerBreakPolicy::ReportOnly);
+    const FontSource source(emptyFontRef, emptyFont, 1u);
+    const auto before = fontPool.memoryStats();
+    EXPECT_TRUE(ThrowsException<i32>(lambda[in fontPool, in source]() -> void{
+        const auto failed = MakeFontFace(fontPool, source);
+        EXPECT_FALSE(failed.has_value() && failed.value().deref().valid());
+    }));
+    const auto after = fontPool.memoryStats();
+    EXPECT_TRUE(logger.sawFaceFailure);
+    EXPECT_GT(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
 }
 
 void VerifyTextFontTests_MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClusters(mut TextFontTests self){
@@ -650,7 +356,7 @@ void VerifyTextFontTests_GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcros
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontSampleGlyphText)));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const u32 glyphId = self.m_layout.glyphs()[0u].glyphId;
-    GlyphAtlas atlas = GlyphAtlas(self.m_arena);
+    GlyphAtlas atlas = GlyphAtlas();
     const SharedFontFace face = self.m_layout.glyphs()[0u].face;
     const auto otherFaceResult = self.makeLatinFace(1u);
     ASSERT_TRUE(otherFaceResult.has_value());
@@ -672,7 +378,7 @@ void VerifyTextFontTests_GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcros
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(" ")));
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const u32 spaceId = self.m_layout.glyphs()[0u].glyphId;
-    GlyphBitmap bitmap = GlyphBitmap(self.m_arena);
+    GlyphBitmap bitmap = GlyphBitmap();
     ASSERT_TRUE(FontFaceRasterize(face, spaceId, 24u, bitmap));
     ASSERT_TRUE(bitmap.width == 0u || bitmap.height == 0u);
     ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
@@ -703,7 +409,7 @@ void VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs(mut Te
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontWideGlyphText)));
     ASSERT_FALSE(self.m_layout.glyphs().empty());
     const PlacedGlyph glyph = self.m_layout.glyphs()[0u];
-    GlyphAtlas atlas = GlyphAtlas(self.m_arena);
+    GlyphAtlas atlas = GlyphAtlas();
     ASSERT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, 24u));
     const auto firstFound = TryFindAtlasGlyph(atlas, glyph.face, glyph.glyphId, 24u);
     ASSERT_TRUE(firstFound.has_value());
@@ -730,7 +436,7 @@ void VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs(mut Te
 void VerifyTextFontTests_AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages(mut TextFontTests self){
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontWideGlyphText)));
     const PlacedGlyph glyph = self.m_layout.glyphs()[0u];
-    GlyphAtlas atlas = GlyphAtlas(self.m_arena);
+    GlyphAtlas atlas = GlyphAtlas();
     for(u32 index = 0u; index < s_GlyphAtlasMaxPages; ++index){
         ASSERT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, 460u + index));
         ASSERT_EQ(cast<u32>(atlas.pageCount()), index + 1u);
@@ -790,7 +496,7 @@ void VerifyTextFontTests_NativeCffBoundsCoverFractionalDpiRasterFringes(mut Text
         ASSERT_TRUE(glyph.coverage.known);
         const f32 pixelSizeFloat = Ceil(fontSize * 1.375f);
         const u32 pixelSize = cast<u32>(pixelSizeFloat);
-        GlyphBitmap bitmap = GlyphBitmap(self.m_arena);
+        GlyphBitmap bitmap = GlyphBitmap();
         ASSERT_TRUE(FontFaceRasterize(glyph.face, glyph.glyphId, pixelSize, bitmap));
         const f32 scaleValue = pixelSizeFloat / fontSize;
         const VectorSingle scale = VectorSingle(scaleValue, scaleValue, scaleValue, scaleValue);
@@ -850,10 +556,10 @@ void VerifyTextGlyphVisibilityTests_NativeCoverageOriginSnapsToWholePhysicalPixe
     record.pixels = Rect(0.0f, 0.0f, 5.0f, 7.0f);
     record.bearingX = -2;
     record.bearingY = 3;
-    auto rectangle = UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(10.0f, 20.0f), Point(1.0f, 1.0f));
+    auto rectangle = CoverageRectangle(glyph, record, 1.0f, Point(10.0f, 20.0f), Point(1.0f, 1.0f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(8.0f, 17.0f, 5.0f, 7.0f));
-    rectangle = UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(10.5f, 20.5f), Point(1.0f, 1.0f));
+    rectangle = CoverageRectangle(glyph, record, 1.0f, Point(10.5f, 20.5f), Point(1.0f, 1.0f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(9.0f, 18.0f, 5.0f, 7.0f));
 }
@@ -866,10 +572,10 @@ void VerifyTextGlyphVisibilityTests_NativeCoverageOriginSnapsUsingEachPhysicalPi
     record.pixels = Rect(0.0f, 0.0f, 6.0f, 9.0f);
     record.bearingX = -3;
     record.bearingY = 6;
-    auto rectangle = UiTextGlyphCoverageRect(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.5f, 1.5f));
+    auto rectangle = CoverageRectangle(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.5f, 1.5f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f));
-    rectangle = UiTextGlyphCoverageRect(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.0f, 1.5f));
+    rectangle = CoverageRectangle(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.0f, 1.5f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(3.0f, 7.0f / 1.5f, 4.0f, 6.0f));
 }
@@ -885,12 +591,12 @@ void VerifyTextGlyphVisibilityTests_InvalidCoverageGeometryRejectsTheResult(){
     invalidScales[2u] = bit_cast<f32>(s_UiTextFontLayoutPosInfF32Bits);
     invalidScales[3u] = bit_cast<f32>(s_UiTextFontLayoutQuietNaNF32Bits);
     for(in f32 scale : invalidScales)
-        EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, scale, Point()).has_value());
+        EXPECT_FALSE(CoverageRectangle(glyph, record, scale, Point()).has_value());
     record.pixels.width = -1.0f;
-    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point()).has_value());
+    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point()).has_value());
     record.pixels.width = 1.0f;
     glyph.position.x = bit_cast<f32>(s_UiTextFontLayoutQuietNaNF32Bits);
-    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point()).has_value());
+    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point()).has_value());
 }
 
 void VerifyTextGlyphVisibilityTests_InvalidPhysicalPixelScalesRejectNativeCoverage(){
@@ -907,7 +613,7 @@ void VerifyTextGlyphVisibilityTests_InvalidPhysicalPixelScalesRejectNativeCovera
     invalidScales[4u] = Point(1.0f, -1.0f);
     invalidScales[5u] = Point(1.0f, bit_cast<f32>(s_UiTextFontLayoutQuietNaNF32Bits));
     for(in Point pixelScale : invalidScales){
-        EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(), pixelScale).has_value());
+        EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point(), pixelScale).has_value());
         EXPECT_EQ(UiTextGlyphCandidateNoAtlas(glyph, 16.0f, 16.0f, Point(), Rect(0.0f, 0.0f, 10.0f, 10.0f), pixelScale), TextGlyphIntersection::Invalid);
     }
 }
@@ -918,9 +624,9 @@ void VerifyTextGlyphVisibilityTests_UnrepresentableCoverageGeometryRejectsTheRes
     AtlasGlyph record = AtlasGlyph();
     record.pageIndex = 0u;
     record.pixels = Rect(0.0f, 0.0f, 2.0f, 2.0f);
-    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(f32.max, 0.0f)).has_value());
+    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point(f32.max, 0.0f)).has_value());
     glyph.position = Point();
-    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0e-39f, Point()).has_value());
+    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0e-39f, Point()).has_value());
 }
 
 void VerifyTextGlyphVisibilityTests_MissingNativeFaceAndCoverageBoundsRejectsUnknownInk(){
@@ -974,7 +680,7 @@ void VerifyTextGlyphVisibilityTests_AnisotropicPhysicalScaleRetainsSnappedNative
     record.bearingX = -3;
     const Point pixelScale = Point(1.5f, 1.0f);
     const Rect clip = Rect(8.6f, 20.0f, 0.1f, 1.0f);
-    const auto rectangle = UiTextGlyphCoverageRect(glyph, record, 1.5f, Point(), pixelScale);
+    const auto rectangle = CoverageRectangle(glyph, record, 1.5f, Point(), pixelScale);
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(8.0f, 20.0f, 2.0f, 2.0f));
     EXPECT_EQ(TryIntersectTextRects(rectangle.value(), clip), TextGlyphIntersection::Visible);
@@ -1048,8 +754,8 @@ void VerifyTextGlyphVisibilityAtlasTests_SdfCandidateUsesExactPlanesRatherThanSh
     PlacedGlyph glyph = PlacedGlyph();
     glyph.position = Point(10.0f, 20.0f);
     glyph.ink = Rect(1000.0f, 1000.0f, 1.0f, 1.0f);
-    EXPECT_EQ(UiTextGlyphCandidateWithAtlas(glyph, self.m_atlas, 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(106.25f, 204.25f, 0.25f, 0.25f)), TextGlyphIntersection::Visible);
-    EXPECT_EQ(UiTextGlyphCandidateWithAtlas(glyph, self.m_atlas, 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(108.0f, 204.0f, 1.0f, 4.0f)), TextGlyphIntersection::Invisible);
+    EXPECT_EQ(Candidate(glyph, self.m_atlas, 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(106.25f, 204.25f, 0.25f, 0.25f)), TextGlyphIntersection::Visible);
+    EXPECT_EQ(Candidate(glyph, self.m_atlas, 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(108.0f, 204.0f, 1.0f, 4.0f)), TextGlyphIntersection::Invisible);
 }
 
 void VerifyTextGlyphVisibilityAtlasTests_NondrawableAtlasGlyphHasNoCandidateImage(mut TextGlyphVisibilityAtlasTests self){
@@ -1058,7 +764,7 @@ void VerifyTextGlyphVisibilityAtlasTests_NondrawableAtlasGlyphHasNoCandidateImag
     const auto rectangle = UiTextGlyphAtlasRect(glyph, self.m_atlas, 32.0f, Point());
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect());
-    EXPECT_EQ(UiTextGlyphCandidateWithAtlas(glyph, self.m_atlas, 32.0f, 32.0f, Point(), Rect(0.0f, 0.0f, 100.0f, 100.0f)), TextGlyphIntersection::Invisible);
+    EXPECT_EQ(Candidate(glyph, self.m_atlas, 32.0f, 32.0f, Point(), Rect(0.0f, 0.0f, 100.0f, 100.0f)), TextGlyphIntersection::Invisible);
 }
 
 void VerifyTextGlyphVisibilityAtlasTests_RejectedAtlasRectanglesRejectTheResult(mut TextGlyphVisibilityAtlasTests self){
@@ -1258,7 +964,7 @@ void VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAto
     invalid[1u] = "\xed\xa0\x80";
     invalid[2u] = "\xf4\x90\x80\x80";
     invalid[3u] = "\xe2\x82";
-    invalid[4u] = MakeUiTextLayoutNullByteView();
+    invalid[4u] = StringView("\0", 1u);
     for(in StringView text : invalid){
         const auto layoutResult = self.m_builder.layout(MakeUiDefaultShapeRequest(text));
         ASSERT_FALSE(layoutResult.has_value());
@@ -1335,67 +1041,42 @@ NWB_ADHD_GTEST_F(TextLayoutTests, StrictUtf8AndHorizontalRequestValidationAreFai
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_snap_fenv_tests{
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-TEST(TextGlyphVisibility, CoverageSnapMatchesScalarAtHalfPixelsAndDirectedRounding){
-#pragma STDC FENV_ACCESS ON
+void VerifyTextGlyphVisibility_CoverageSnapMatchesScalarAtHalfPixelsAndDirectedRounding(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    volatile f32 rasterInput = 3.0f;
-    volatile f32 pixelXInput = 0.75f;
-    volatile f32 pixelYInput = 1.5f;
-    volatile f32 topXInput = -1.0f;
-    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
-        const f32 raster = rasterInput;
-        const Point glyphPosition{ 0.0f, 0.0f };
-        const Point topLeft{ topXInput, 0.0f };
-        const Point pixelScale{ pixelXInput, pixelYInput };
-        const Rect pixels{ 0.0f, 0.0f, 1.0f, 1.0f };
-        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const f64 posX = (static_cast<f64>(topLeft.x) + static_cast<f64>(glyphPosition.x)) + (1.0 / static_cast<f64>(raster));
-        const f64 posY = (static_cast<f64>(topLeft.y) + static_cast<f64>(glyphPosition.y)) - (1.0 / static_cast<f64>(raster));
-        const f64 alignedX = Floor((posX * static_cast<f64>(pixelScale.x)) + 0.5) / static_cast<f64>(pixelScale.x);
-        const f64 alignedY = Floor((posY * static_cast<f64>(pixelScale.y)) + 0.5) / static_cast<f64>(pixelScale.y);
-        const f64 width = static_cast<f64>(pixels.width) / static_cast<f64>(raster);
-        const f64 height = static_cast<f64>(pixels.height) / static_cast<f64>(raster);
+    ASSERT_TRUE(originalEnvironment.has_value());
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    const Array<i32, 4u> modes(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+    for(in i32 rounding : modes){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding).has_value());
+        const f32 raster = ObserveValue<f32>(3.0f);
+        const Point glyphPosition(0.0f, 0.0f);
+        const Point topLeft(ObserveValue<f32>(-1.0f), 0.0f);
+        const Point pixelScale(ObserveValue<f32>(0.75f), ObserveValue<f32>(1.5f));
+        const Rect pixels(0.0f, 0.0f, 1.0f, 1.0f);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value());
+        const f64 inverseRaster = ScalarDivideReference<f64>(1.0, cast<f64>(raster));
+        const f64 posX = ScalarAddReference<f64>(ScalarAddReference<f64>(topLeft.x, glyphPosition.x), inverseRaster);
+        const f64 posY = ScalarSubtractReference<f64>(ScalarAddReference<f64>(topLeft.y, glyphPosition.y), inverseRaster);
+        const f64 alignedX = ScalarDivideReference<f64>(Floor(ScalarMultiplyAddReference<f64>(posX, pixelScale.x, 0.5)), pixelScale.x);
+        const f64 alignedY = ScalarDivideReference<f64>(Floor(ScalarMultiplyAddReference<f64>(posY, pixelScale.y, 0.5)), pixelScale.y);
+        const f64 width = ScalarDivideReference<f64>(pixels.width, raster);
+        const f64 height = ScalarDivideReference<f64>(pixels.height, raster);
         const auto expected = TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints);
         const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value());
         const auto actual = TryResolveGlyphCoverageRectangle(glyphPosition, 0u, pixels, 1, 1, raster, topLeft, pixelScale);
         const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
         ASSERT_TRUE(expected.has_value());
         ASSERT_TRUE(actual.has_value());
-        EXPECT_EQ(BitCast<u32>(actual->x), BitCast<u32>(expected->x));
-        EXPECT_EQ(BitCast<u32>(actual->y), BitCast<u32>(expected->y));
-        EXPECT_EQ(BitCast<u32>(actual->width), BitCast<u32>(expected->width));
-        EXPECT_EQ(BitCast<u32>(actual->height), BitCast<u32>(expected->height));
+        EXPECT_EQ(bit_cast<u32>(actual.value().x), bit_cast<u32>(expected.value().x));
+        EXPECT_EQ(bit_cast<u32>(actual.value().y), bit_cast<u32>(expected.value().y));
+        EXPECT_EQ(bit_cast<u32>(actual.value().width), bit_cast<u32>(expected.value().width));
+        EXPECT_EQ(bit_cast<u32>(actual.value().height), bit_cast<u32>(expected.value().height));
         EXPECT_EQ(actualFlags, expectedFlags);
     }
 }
 
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+NWB_ADHD_GTEST(TextGlyphVisibility, CoverageSnapMatchesScalarAtHalfPixelsAndDirectedRounding, VerifyTextGlyphVisibility_CoverageSnapMatchesScalarAtHalfPixelsAndDirectedRounding)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

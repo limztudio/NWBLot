@@ -1,0 +1,118 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Core::Alloc::GlobalArena"), cpp_flags(no_copy, no_assign)]
+extern class TestHeapAllocator{
+    ArenaMemoryStats memoryStats()const;
+};
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Core::Alloc::ScratchArena"), cpp_flags(no_copy, no_assign)]
+extern class TestScratchAllocator{
+    ArenaMemoryStats memoryStats()const;
+};
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::RawAllocation"), cpp_flags(self_defaulted, brace_init, small_value)]
+extern class RawAllocation{
+    usize address()const;
+    mut u8 operator[](in usize index)const;
+    u8 readVolatile(in usize index)const;
+    void writeVolatile(in usize index, in u8 value)const;
+};
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::AllocateBytes")]
+extern RawAllocation AllocateBytes(mut auto storage, in usize alignment, in usize count);
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::FreeBytes")]
+extern void FreeBytes(mut auto storage, in RawAllocation block, in usize alignment, in usize count);
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::ResizeBytes")]
+extern RawAllocation ResizeBytes(mut auto storage, in RawAllocation block, in usize alignment, in usize count);
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::BackendSize")]
+extern usize BackendSize(in RawAllocation block);
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::HeapStorage"), cpp_flags(no_copy, no_assign)]
+extern class HeapStorageHandle{
+    TestHeapAllocator arena;
+    T makeValue<T>(...);
+    ArenaMemoryStats memoryStats()const;
+    AllocationIdentity identity()const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::ScratchStorage"), cpp_flags(no_copy, no_assign)]
+extern class ScratchStorage{
+    TestScratchAllocator arena;
+    T makeValue<T>(...);
+    ArenaMemoryStats memoryStats()const;
+    AllocationIdentity identity()const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::PersistentStorage"), cpp_flags(no_copy, no_assign)]
+extern class PersistentStorage{
+    ArenaMemoryStats memoryStats()const;
+    AllocationIdentity identity()const;
+};
+
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::HeapStorageVector")]
+extern class HeapStorageVector<T>{
+    mut T emplace_back(...);
+    void assign(...);
+    auto begin();
+    auto end();
+    void erase(...);
+    void pop_back();
+    void insert(...);
+    void swap(...);
+    usize capacity()const;
+    b8 empty()const;
+    void clear();
+    mut T front();
+    in T front()const;
+    in T back()const;
+    void reserve(in usize count);
+    void push_back(in T value);
+    mut T back();
+    void resize(...);
+    mut T operator[](in usize index);
+    in T operator[](in usize index)const;
+    usize size()const;
+};
+
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::ScratchStorageVector"), cpp_flags(no_copy, no_assign)]
+extern class ScratchStorageVector<T>{
+    void clear();
+    mut T front();
+    in T front()const;
+    in T back()const;
+    b8 empty()const;
+    void reserve(in usize count);
+    void push_back(in T value);
+    mut T back();
+    void resize(...);
+    mut T operator[](in usize index);
+    in T operator[](in usize index)const;
+    usize size()const;
+};
+
+
+type HeapStorage = HeapStorageHandle;
+
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::TestArrayData"), cpp_flags(self_defaulted, small_value)]
+extern class TestArrayData<T>{
+    Span<T> declaredSpan(in usize count)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

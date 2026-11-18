@@ -72,7 +72,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             recvIsConst,
             &opDeclCls
         )){
-            if(opDeclCls && !m_checker.m_symbols.canAccessPrivateMembers(*opDeclCls, ownerClass) && opMethod->access != AccessSpecifier::Public){
+            if(opDeclCls && !m_checker.m_symbols.canAccessMember(*opDeclCls, ownerClass, opMethod->declaringClass, opMethod->access)){
                 m_checker.reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
                 ok = false;
             }

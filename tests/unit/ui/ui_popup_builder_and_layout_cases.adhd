@@ -3,273 +3,121 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+static_assert(!is_cpp_constructible<PopupState, in PopupState>());
+static_assert(!is_cpp_constructible<PopupState, PopupState>());
 
+class CountingEditHost : IEditBoxHost{
+    public u32 loans = 0u;
+    public u32 publications = 0u;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
-
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_popup_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-constexpr AStringView s_PopupKey = "popup";
-
-class CountingEditHost final : public IEditBoxHost{
-public:
-    virtual ~CountingEditHost()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel& model)noexcept override{
-        ++loans;
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel model) override{
+        ++this.loans;
         EditBoxResult result;
         result.valid = model.setText("borrowed");
         result.textChanged = result.valid;
         return result;
     }
-
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken&, EditModel& model)noexcept override{ return edit(widget, options, model); }
-
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
-        ++publications;
+    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken arg2, mut EditModel model) override{ return this.edit(widget, options, model); }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{ return EditBoxResult(); }
+    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6) override{ return EditBoxResult(); }
+    public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3) override{
+        ++this.publications;
         return true;
     }
+}
 
 
-public:
-    u32 loans = 0u;
-    u32 publications = 0u;
-};
+class UiPopupBuilderTests : WidgetFixture{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiPopupBuilderTests : public WidgetFixture{
-public:
-    [[nodiscard]] b8 finishPopup(){
-        return m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
+    public b8 finishPopup(){
+        return this.m_builder.endPopup() && this.m_context.endRoot() && this.m_context.finishFrame();
     }
-
-    [[nodiscard]] b8 finishRoot(){
-        return m_context.endRoot() && m_context.finishFrame();
+    public b8 finishRoot(){
+        return this.m_context.endRoot() && this.m_context.finishFrame();
     }
-
-    [[nodiscard]] WidgetId ownerId(const AStringView key = s_PopupKey)const{
-        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), key);
+    public WidgetId ownerId()const{ return this.ownerId("popup"); }
+    public WidgetId ownerId(in StringView key)const{
+        return RequireUiWidgetId(RequireUiRootId(this.m_root), key);
     }
-
-    void useEditHost(IEditBoxHost& host)noexcept{
-        m_builder.setEditHost(host);
+    public void useEditHost(mut IEditBoxHost host){
+        this.m_builder.setEditHost(host);
     }
-
-    void clearEditHost()noexcept{
-        m_builder.clearEditHost();
+    public void clearEditHost(){
+        this.m_builder.clearEditHost();
     }
-};
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class PopupFrame{
+    public WidgetState base;
+    public WidgetState popup;
+    public WidgetState child;
+    public PopupScope scope;
 
 
-};
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class PopupStack{
+    public PopupFrame lower;
+    public PopupFrame higher;
 
 
-namespace __hidden_ui_popup_context_tests{
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiPopupContextTests : ContextTestFixture{
 
 
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-constexpr AStringView s_BaseKey = "base";
-constexpr AStringView s_PopupKey = "popup";
-constexpr AStringView s_ChildKey = "child";
-
-struct PopupFrame{
-    WidgetState base;
-    WidgetState popup;
-    WidgetState child;
-    PopupScope scope;
-};
-
-struct PopupStack{
-    PopupFrame lower;
-    PopupFrame higher;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiPopupContextTests : public UiTestSupport::ContextTestFixture{
-public:
-    UiPopupContextTests()
-        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPopupContext))
-    {}
-
-
-public:
-    [[nodiscard]] b8 begin(const u64 generation){
-        return m_context.beginFrame(generation) && m_context.beginRoot({ 401u, 1u });
+    public b8 begin(in u64 generation){
+        return this.m_context.beginFrame(generation) && this.m_context.beginRoot(WidgetRoot(401u, 1u));
     }
-
-    [[nodiscard]] b8 finish(){
-        return m_context.endRoot() && m_context.finishFrame();
+    public b8 finish(){
+        return this.m_context.endRoot() && this.m_context.finishFrame();
     }
-
-    void clearRetainedRoots(){
-        m_context.retainRoots({});
+    public void clearRetainedRoots(){
+        this.m_context.retainRoots(Span<WidgetRoot>());
     }
-
-    [[nodiscard]] Expected<WidgetState> declare(const AStringView key, const WidgetKind::Enum kind){
-        const auto state = m_context.declare(key, kind);
-        EXPECT_TRUE(state);
-        if(!state)
+    public Expected<WidgetState> declare(in StringView key, in WidgetKind kind){
+        const auto state = this.m_context.declare(key, kind);
+        EXPECT_TRUE(state.has_value());
+        if(!state.has_value())
             return MakeUnexpected(state.error());
-        return **state;
+        return state.value();
     }
-
-    [[nodiscard]] Expected<WidgetState> button(AStringView key, const Rect& bounds, b8 publish = true);
-    [[nodiscard]] PopupScope scope(const WidgetState& owner, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f }, u64 instance = 1u, u64 epoch = 1u)noexcept;
-    void addOwner(const WidgetState& owner, const PopupScope& popup);
-    [[nodiscard]] Expected<PopupFrame> prepare(u64 generation, b8 open = false, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f }, b8 keepClosedChild = false, b8 autofocus = true);
-    [[nodiscard]] Expected<PopupStack> prepareStack(u64 generation);
-    [[nodiscard]] Expected<PopupFrame> focusBase();
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_popup_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-static_assert(!IsConstructible_V<PopupState, const PopupState&>);
-static_assert(!IsConstructible_V<PopupState, PopupState&&>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiPopupBuilderTests = ::__hidden_ui_popup_builder_tests::UiPopupBuilderTests;
-using UiPopupCountingEditHost = ::__hidden_ui_popup_builder_tests::CountingEditHost;
-using UiPopupContextTests = ::__hidden_ui_popup_context_tests::UiPopupContextTests;
-using UiPopupFrame = ::__hidden_ui_popup_context_tests::PopupFrame;
-using UiPopupStack = ::__hidden_ui_popup_context_tests::PopupStack;
-
-namespace Key = ::NWB::Core::Key;
-using KeyEnum = ::NWB::Core::Key::Enum;
-using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
-using WidgetOptions = ::NWB::Impl::Ui::WidgetOptions;
-using WidgetState = ::NWB::Impl::Ui::WidgetState;
-namespace WidgetKind = ::NWB::Impl::Ui::WidgetKind;
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-using PopupState = ::NWB::Impl::Ui::PopupState;
-using PopupPlacement = ::NWB::Impl::Ui::PopupPlacement;
-namespace PopupPlacementSide = ::NWB::Impl::Ui::PopupPlacementSide;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-namespace PopupDismissReason = ::NWB::Impl::Ui::PopupDismissReason;
-using EditModel = ::NWB::Impl::Ui::EditModel;
-using EditBoxState = ::NWB::Impl::Ui::EditBoxState;
-using EditBoxResult = ::NWB::Impl::Ui::EditBoxResult;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-using ::NWB::Impl::Ui::PlacePopup;
-using ::NWB::Impl::Ui::s_InputMaxPopups;
-
-Expected<WidgetState> DeclareUiPopupContextButton(UiPopupContextTests& self, StringView key, const Rect& bounds, b8 publish)noexcept;
-PopupScope MakeUiPopupContextScope(const WidgetState& owner, const Rect& bounds, u64 instance, u64 epoch)noexcept;
-void AddUiPopupContextOwner(UiPopupContextTests& self, const WidgetState& owner, const PopupScope& popup)noexcept;
-Expected<UiPopupFrame> PrepareUiPopupContextFrame(UiPopupContextTests& self, u64 generation, b8 open, const Rect& bounds, b8 keepClosedChild, b8 autofocus)noexcept;
-Expected<UiPopupStack> PrepareUiPopupContextStack(UiPopupContextTests& self, u64 generation)noexcept;
-Expected<UiPopupFrame> FocusUiPopupContextBase(UiPopupContextTests& self)noexcept;
-};
-
-namespace __hidden_ui_popup_context_tests{
-FOUNDATION_INLINE Expected<WidgetState> UiPopupContextTests::button(const AStringView key, const Rect& bounds, const b8 publish){
-    return ::__hidden_ui_glyph_sdf_tests::DeclareUiPopupContextButton(*this, key, bounds, publish);
-}
-FOUNDATION_INLINE PopupScope UiPopupContextTests::scope(const WidgetState& owner, const Rect& bounds, const u64 instance, const u64 epoch)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeUiPopupContextScope(owner, bounds, instance, epoch);
-}
-FOUNDATION_INLINE void UiPopupContextTests::addOwner(const WidgetState& owner, const PopupScope& popup){
-    ::__hidden_ui_glyph_sdf_tests::AddUiPopupContextOwner(*this, owner, popup);
-}
-FOUNDATION_INLINE Expected<PopupFrame> UiPopupContextTests::prepare(const u64 generation, const b8 open, const Rect& bounds, const b8 keepClosedChild, const b8 autofocus){
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiPopupContextFrame(*this, generation, open, bounds, keepClosedChild, autofocus);
-}
-FOUNDATION_INLINE Expected<PopupStack> UiPopupContextTests::prepareStack(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiPopupContextStack(*this, generation);
-}
-FOUNDATION_INLINE Expected<PopupFrame> UiPopupContextTests::focusBase(){
-    return ::__hidden_ui_glyph_sdf_tests::FocusUiPopupContextBase(*this);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public Expected<WidgetState> button(in StringView key, in Rect bounds){ return this.button(key, bounds, true); }
+    public Expected<WidgetState> button(in StringView key, in Rect bounds, in b8 publish){
+        return DeclareUiPopupContextButton(this, key, bounds, publish);
+    }
+    public PopupScope scope(in WidgetState owner){ return this.scope(owner, Rect(100.0f, 40.0f, 160.0f, 100.0f)); }
+    public PopupScope scope(in WidgetState owner, in Rect bounds){ return this.scope(owner, bounds, 1u); }
+    public PopupScope scope(in WidgetState owner, in Rect bounds, in u64 instance){ return this.scope(owner, bounds, instance, 1u); }
+    public PopupScope scope(in WidgetState owner, in Rect bounds, in u64 instance, in u64 epoch){
+        return MakeUiPopupContextScope(owner, bounds, instance, epoch);
+    }
+    public void addOwner(in WidgetState owner, in PopupScope popup){
+        AddUiPopupContextOwner(this, owner, popup);
+    }
+    public Expected<PopupFrame> prepare(in u64 generation){ return this.prepare(generation, false); }
+    public Expected<PopupFrame> prepare(in u64 generation, in b8 open){ return this.prepare(generation, open, Rect(100.0f, 40.0f, 160.0f, 100.0f)); }
+    public Expected<PopupFrame> prepare(in u64 generation, in b8 open, in Rect bounds){ return this.prepare(generation, open, bounds, false); }
+    public Expected<PopupFrame> prepare(in u64 generation, in b8 open, in Rect bounds, in b8 keepClosedChild){ return this.prepare(generation, open, bounds, keepClosedChild, true); }
+    public Expected<PopupFrame> prepare(in u64 generation, in b8 open, in Rect bounds, in b8 keepClosedChild, in b8 autofocus){
+        return PrepareUiPopupContextFrame(this, generation, open, bounds, keepClosedChild, autofocus);
+    }
+    public Expected<PopupStack> prepareStack(in u64 generation){
+        return PrepareUiPopupContextStack(this, generation);
+    }
+    public Expected<PopupFrame> focusBase(){
+        return FocusUiPopupContextBase(this);
+    }
 }
 
 
@@ -321,7 +169,7 @@ void AddUiPopupContextOwner(mut UiPopupContextTests self, in WidgetState owner, 
     EXPECT_TRUE(self.m_context.addTarget(owner, target));
 }
 
-Expected<UiPopupFrame> PrepareUiPopupContextFrame(
+Expected<PopupFrame> PrepareUiPopupContextFrame(
     mut UiPopupContextTests self,
     in u64 generation,
     in b8 open,
@@ -329,7 +177,7 @@ Expected<UiPopupFrame> PrepareUiPopupContextFrame(
     in b8 keepClosedChild,
     in b8 autofocus
 ){
-    UiPopupFrame frame = UiPopupFrame();
+    PopupFrame frame = PopupFrame();
     EXPECT_TRUE(self.begin(generation));
     Rect baseBounds = Rect();
     baseBounds.x = 10.0f;
@@ -374,8 +222,8 @@ Expected<UiPopupFrame> PrepareUiPopupContextFrame(
     return frame;
 }
 
-Expected<UiPopupStack> PrepareUiPopupContextStack(mut UiPopupContextTests self, in u64 generation){
-    UiPopupStack stack = UiPopupStack();
+Expected<PopupStack> PrepareUiPopupContextStack(mut UiPopupContextTests self, in u64 generation){
+    PopupStack stack = PopupStack();
     EXPECT_TRUE(self.begin(generation));
     Rect baseBounds = Rect();
     baseBounds.x = 10.0f;
@@ -446,7 +294,7 @@ Expected<UiPopupStack> PrepareUiPopupContextStack(mut UiPopupContextTests self, 
     return stack;
 }
 
-Expected<UiPopupFrame> FocusUiPopupContextBase(mut UiPopupContextTests self){
+Expected<PopupFrame> FocusUiPopupContextBase(mut UiPopupContextTests self){
     Rect bounds = Rect();
     bounds.x = 100.0f;
     bounds.y = 40.0f;
@@ -456,7 +304,7 @@ Expected<UiPopupFrame> FocusUiPopupContextBase(mut UiPopupContextTests self){
     EXPECT_TRUE(frameResult.has_value());
     if(!frameResult.has_value())
         return MakeUnexpected(frameResult.error());
-    const UiPopupFrame frame = frameResult.value();
+    const PopupFrame frame = frameResult.value();
     const b8 committed = self.m_context.commitFrame(1u);
     EXPECT_TRUE(committed);
     if(!committed)
@@ -654,7 +502,7 @@ void VerifyUiPopupBuilderTests_EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeH
     const auto closeTarget = self.tryTarget(self.id(s_UiPopupBuilderCloseKey, s_UiPopupBuilderPopupKey));
     ASSERT_TRUE(closeTarget.has_value());
     self.click(Point(closeTarget.value().rectangle.x + 4.0f, closeTarget.value().rectangle.y + 4.0f));
-    EditModel model = EditModel(self.m_arena);
+    EditModel model = EditModel();
     ASSERT_TRUE(model.setText("kept"));
     ASSERT_TRUE(model.setSelection(1u, 3u));
     const u64 revision = model.revision();
@@ -662,7 +510,7 @@ void VerifyUiPopupBuilderTests_EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeH
     EditBoxState editState = EditBoxState();
     editState.scroll = 17.0f;
     editState.caretElapsed = 0.25f;
-    UiPopupCountingEditHost host = UiPopupCountingEditHost();
+    CountingEditHost host = CountingEditHost();
     self.useEditHost(host);
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiPopupBuilderPopupKey, state, MakeUiPopupAnchoredOptions()));
@@ -866,10 +714,10 @@ void VerifyUiPopupBuilderTests_MissingPopupAndPanelSkinRejectsAdmissionWithoutCh
 void VerifyUiPopupContextTests_PendingOpenPreservesBaseFocusAndRoutingUntilExactAcceptance(mut UiPopupContextTests self){
     const auto baseResult = self.focusBase();
     ASSERT_TRUE(baseResult.has_value());
-    const UiPopupFrame base = baseResult.value();
+    const PopupFrame base = baseResult.value();
     const auto candidateResult = self.prepare(2u, true);
     ASSERT_TRUE(candidateResult.has_value());
-    const UiPopupFrame candidate = candidateResult.value();
+    const PopupFrame candidate = candidateResult.value();
     ASSERT_TRUE(candidate.child.id.valid());
     EXPECT_TRUE(self.m_context.ready());
     EXPECT_FALSE(self.m_context.input().hasPopup());
@@ -891,11 +739,11 @@ void VerifyUiPopupContextTests_PendingOpenPreservesBaseFocusAndRoutingUntilExact
 void VerifyUiPopupContextTests_PendingGeometryKeepsAcceptedHitBoundsAndChildFocus(mut UiPopupContextTests self){
     const auto originalResult = self.prepare(1u, true);
     ASSERT_TRUE(originalResult.has_value());
-    const UiPopupFrame original = originalResult.value();
+    const PopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     const auto candidateResult = self.prepare(2u, true, Rect(200.0f, 160.0f, 160.0f, 100.0f));
     ASSERT_TRUE(candidateResult.has_value());
-    const UiPopupFrame candidate = candidateResult.value();
+    const PopupFrame candidate = candidateResult.value();
     EXPECT_EQ(candidate.child.id, original.child.id);
     EXPECT_EQ(candidate.child.declarationGeneration, original.child.declarationGeneration);
     EXPECT_EQ(self.m_context.input().focus(), original.child.id);
@@ -912,15 +760,15 @@ void VerifyUiPopupContextTests_PendingGeometryKeepsAcceptedHitBoundsAndChildFocu
 void VerifyUiPopupContextTests_ScopeOmissionRetainsLiveAcceptedDeclarationsUntilCommitThenRestoresFocus(mut UiPopupContextTests self){
     const auto baseResult = self.focusBase();
     ASSERT_TRUE(baseResult.has_value());
-    const UiPopupFrame base = baseResult.value();
+    const PopupFrame base = baseResult.value();
     const auto openedResult = self.prepare(2u, true);
     ASSERT_TRUE(openedResult.has_value());
-    const UiPopupFrame opened = openedResult.value();
+    const PopupFrame opened = openedResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().focus(), opened.child.id);
     const auto closedResult = self.prepare(3u, false, opened.scope.bounds, true);
     ASSERT_TRUE(closedResult.has_value());
-    const UiPopupFrame closed = closedResult.value();
+    const PopupFrame closed = closedResult.value();
     EXPECT_EQ(closed.child.id, opened.child.id);
     EXPECT_EQ(closed.child.declarationGeneration, opened.child.declarationGeneration);
     EXPECT_TRUE(self.m_context.input().hasPopup());
@@ -937,7 +785,7 @@ void VerifyUiPopupContextTests_ScopeOmissionRetainsLiveAcceptedDeclarationsUntil
 void VerifyUiPopupContextTests_RemovingPopupDeclarationImmediatelyRetiresAcceptedScopeAndActions(mut UiPopupContextTests self){
     const auto originalResult = self.prepare(1u, true);
     ASSERT_TRUE(originalResult.has_value());
-    const UiPopupFrame original = originalResult.value();
+    const PopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     self.click(Point(115.0f, 55.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
@@ -955,7 +803,7 @@ void VerifyUiPopupContextTests_RemovingPopupDeclarationImmediatelyRetiresAccepte
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     const auto recreatedResult = self.prepare(3u, true);
     ASSERT_TRUE(recreatedResult.has_value());
-    const UiPopupFrame recreated = recreatedResult.value();
+    const PopupFrame recreated = recreatedResult.value();
     EXPECT_EQ(recreated.popup.id, original.popup.id);
     EXPECT_GT(recreated.popup.declarationGeneration, original.popup.declarationGeneration);
     EXPECT_GT(recreated.child.declarationGeneration, original.child.declarationGeneration);
@@ -966,13 +814,13 @@ void VerifyUiPopupContextTests_RemovingPopupDeclarationImmediatelyRetiresAccepte
 void VerifyUiPopupContextTests_RootRetirementRemovesAcceptedAndPendingPopupOwnershipImmediately(mut UiPopupContextTests self){
     const auto originalResult = self.prepare(1u, true);
     ASSERT_TRUE(originalResult.has_value());
-    const UiPopupFrame original = originalResult.value();
+    const PopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     self.click(Point(115.0f, 55.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
     const auto pendingResult = self.prepare(2u, true);
     ASSERT_TRUE(pendingResult.has_value());
-    const UiPopupFrame pending = pendingResult.value();
+    const PopupFrame pending = pendingResult.value();
     EXPECT_EQ(pending.popup.id, original.popup.id);
     self.clearRetainedRoots();
     EXPECT_TRUE(self.m_context.states().entries().empty());
@@ -989,7 +837,7 @@ void VerifyUiPopupContextTests_RootRetirementRemovesAcceptedAndPendingPopupOwner
 void VerifyUiPopupContextTests_ReopeningSameWidgetCannotBorrowAnActivationFromItsPreviousOpenEpoch(mut UiPopupContextTests self){
     const auto originalResult = self.prepare(1u, true);
     ASSERT_TRUE(originalResult.has_value());
-    const UiPopupFrame original = originalResult.value();
+    const PopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     self.click(Point(115.0f, 55.0f));
     ASSERT_EQ(self.m_context.input().actions().size(), 1u);
@@ -1122,7 +970,7 @@ void VerifyUiPopupContextTests_TargetsInSequentialScopesReceiveDistinctLayersThe
 void VerifyUiPopupContextTests_NestedScopeWithoutItsParentTokenPoisonsCandidateWithoutPublishingIt(mut UiPopupContextTests self){
     const auto acceptedResult = self.focusBase();
     ASSERT_TRUE(acceptedResult.has_value());
-    const UiPopupFrame accepted = acceptedResult.value();
+    const PopupFrame accepted = acceptedResult.value();
     ASSERT_TRUE(self.begin(2u));
     const auto ownerResult = self.declare(s_UiPopupContextPopupKey, WidgetKind::Popup);
     ASSERT_TRUE(ownerResult.has_value());
@@ -1144,7 +992,7 @@ void VerifyUiPopupContextTests_NestedScopeWithoutItsParentTokenPoisonsCandidateW
 void VerifyUiPopupContextTests_UnbalancedPopupScopeCannotPublishItsCandidate(mut UiPopupContextTests self){
     const auto acceptedResult = self.focusBase();
     ASSERT_TRUE(acceptedResult.has_value());
-    const UiPopupFrame accepted = acceptedResult.value();
+    const PopupFrame accepted = acceptedResult.value();
     ASSERT_TRUE(self.begin(2u));
     const auto unbalancedOwnerResult = self.declare(s_UiPopupContextPopupKey, WidgetKind::Popup);
     ASSERT_TRUE(unbalancedOwnerResult.has_value());
@@ -1161,7 +1009,7 @@ void VerifyUiPopupContextTests_UnbalancedPopupScopeCannotPublishItsCandidate(mut
 void VerifyUiPopupContextTests_CapacityRejectsNinthScopeBeforePublishingAnyCandidate(mut UiPopupContextTests self){
     const auto acceptedResult = self.focusBase();
     ASSERT_TRUE(acceptedResult.has_value());
-    const UiPopupFrame accepted = acceptedResult.value();
+    const PopupFrame accepted = acceptedResult.value();
     ASSERT_TRUE(self.begin(2u));
     Array<StringView, 8u> keys = Array<StringView, 8u>();
     keys[0u] = "popup0";
@@ -1197,7 +1045,7 @@ void VerifyUiPopupContextTests_CapacityRejectsNinthScopeBeforePublishingAnyCandi
 void VerifyUiPopupContextTests_DuplicateOwnerOrMismatchedTokenCannotPublishAScope(mut UiPopupContextTests self){
     const auto acceptedResult = self.focusBase();
     ASSERT_TRUE(acceptedResult.has_value());
-    const UiPopupFrame accepted = acceptedResult.value();
+    const PopupFrame accepted = acceptedResult.value();
     ASSERT_TRUE(self.begin(2u));
     const auto ownerResult = self.declare(s_UiPopupContextPopupKey, WidgetKind::Popup);
     ASSERT_TRUE(ownerResult.has_value());
@@ -1228,10 +1076,10 @@ void VerifyUiPopupContextTests_DuplicateOwnerOrMismatchedTokenCannotPublishAScop
 void VerifyUiPopupContextTests_AutofocusDisabledChangesFocusOnlyAtAcceptanceAndTabEntersPopup(mut UiPopupContextTests self){
     const auto acceptedResult = self.focusBase();
     ASSERT_TRUE(acceptedResult.has_value());
-    const UiPopupFrame accepted = acceptedResult.value();
+    const PopupFrame accepted = acceptedResult.value();
     const auto candidateResult = self.prepare(2u, true, Rect(100.0f, 40.0f, 160.0f, 100.0f), false, false);
     ASSERT_TRUE(candidateResult.has_value());
-    const UiPopupFrame candidate = candidateResult.value();
+    const PopupFrame candidate = candidateResult.value();
     EXPECT_EQ(self.m_context.input().focus(), accepted.base.id);
     EXPECT_FALSE(self.m_context.input().hasPopup());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
@@ -1246,7 +1094,7 @@ void VerifyUiPopupContextTests_AutofocusDisabledChangesFocusOnlyAtAcceptanceAndT
 void VerifyUiPopupContextTests_MissingOwnerTargetRejectsCommitWithoutReplacingAcceptedFocusOrLayout(mut UiPopupContextTests self){
     const auto acceptedResult = self.focusBase();
     ASSERT_TRUE(acceptedResult.has_value());
-    const UiPopupFrame accepted = acceptedResult.value();
+    const PopupFrame accepted = acceptedResult.value();
     ASSERT_TRUE(self.begin(2u));
     const auto baseResult = self.button(s_UiPopupContextBaseKey, Rect(10.0f, 10.0f, 60.0f, 24.0f));
     ASSERT_TRUE(baseResult.has_value());
@@ -1276,10 +1124,10 @@ void VerifyUiPopupContextTests_MissingOwnerTargetRejectsCommitWithoutReplacingAc
 void VerifyUiPopupContextTests_FocusLossFencesPreparedOpenBeforeItsFirstAcceptance(mut UiPopupContextTests self){
     const auto baseResult = self.focusBase();
     ASSERT_TRUE(baseResult.has_value());
-    const UiPopupFrame base = baseResult.value();
+    const PopupFrame base = baseResult.value();
     const auto candidateResult = self.prepare(2u, true);
     ASSERT_TRUE(candidateResult.has_value());
-    const UiPopupFrame candidate = candidateResult.value();
+    const PopupFrame candidate = candidateResult.value();
     EXPECT_EQ(self.m_context.input().focus(), base.base.id);
     EXPECT_FALSE(self.m_context.input().hasPopup());
     EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
@@ -1300,12 +1148,12 @@ void VerifyUiPopupContextTests_FocusLossFencesPreparedOpenBeforeItsFirstAcceptan
 void VerifyUiPopupContextTests_FocusLossFencesPreparedHigherPopupAboveAcceptedLowerScope(mut UiPopupContextTests self){
     const auto originalResult = self.prepare(1u, true);
     ASSERT_TRUE(originalResult.has_value());
-    const UiPopupFrame original = originalResult.value();
+    const PopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     ASSERT_EQ(self.m_context.input().focus(), original.child.id);
     const auto candidateResult = self.prepareStack(2u);
     ASSERT_TRUE(candidateResult.has_value());
-    const UiPopupStack candidate = candidateResult.value();
+    const PopupStack candidate = candidateResult.value();
     EXPECT_TRUE(candidate.lower.scope.token == original.scope.token);
     EXPECT_EQ(self.m_context.input().focus(), original.child.id);
     EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
@@ -1327,10 +1175,10 @@ void VerifyUiPopupContextTests_FocusLossFencesPreparedHigherPopupAboveAcceptedLo
 void VerifyUiPopupContextTests_NativeFocusGainCannotReviveCandidatePreparedBeforeFocusLoss(mut UiPopupContextTests self){
     const auto baseResult = self.focusBase();
     ASSERT_TRUE(baseResult.has_value());
-    const UiPopupFrame base = baseResult.value();
+    const PopupFrame base = baseResult.value();
     const auto candidateResult = self.prepare(2u, true);
     ASSERT_TRUE(candidateResult.has_value());
-    const UiPopupFrame candidate = candidateResult.value();
+    const PopupFrame candidate = candidateResult.value();
     EXPECT_EQ(self.m_context.input().focus(), base.base.id);
     EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
@@ -1346,12 +1194,12 @@ void VerifyUiPopupContextTests_NativeFocusGainCannotReviveCandidatePreparedBefor
 void VerifyUiPopupContextTests_FreshPopupPreparedAfterNativeFocusGainMayAutofocus(mut UiPopupContextTests self){
     const auto baseResult = self.focusBase();
     ASSERT_TRUE(baseResult.has_value());
-    const UiPopupFrame base = baseResult.value();
+    const PopupFrame base = baseResult.value();
     EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     EXPECT_FALSE(self.send(MakeUiBareInputEvent(InputEventType::FocusGained)).focus.valid());
     const auto freshResult = self.prepare(2u, true);
     ASSERT_TRUE(freshResult.has_value());
-    const UiPopupFrame fresh = freshResult.value();
+    const PopupFrame fresh = freshResult.value();
     EXPECT_EQ(fresh.base.id, base.base.id);
     EXPECT_FALSE(self.m_context.input().focus().valid());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
@@ -1365,10 +1213,10 @@ void VerifyUiPopupContextTests_FreshPopupPreparedAfterNativeFocusGainMayAutofocu
 void VerifyUiPopupContextTests_NativeFocusGainNeverRestoresAlreadyClosingScopes(mut UiPopupContextTests self){
     const auto baseResult = self.focusBase();
     ASSERT_TRUE(baseResult.has_value());
-    const UiPopupFrame base = baseResult.value();
+    const PopupFrame base = baseResult.value();
     const auto originalResult = self.prepare(2u, true);
     ASSERT_TRUE(originalResult.has_value());
-    const UiPopupFrame original = originalResult.value();
+    const PopupFrame original = originalResult.value();
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     ASSERT_EQ(self.m_context.input().focus(), original.child.id);
     EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
@@ -1376,7 +1224,7 @@ void VerifyUiPopupContextTests_NativeFocusGainNeverRestoresAlreadyClosingScopes(
     EXPECT_FALSE(self.m_context.input().hitTest(Point(115.0f, 55.0f)).valid());
     const auto retainedResult = self.prepare(3u, true);
     ASSERT_TRUE(retainedResult.has_value());
-    const UiPopupFrame retained = retainedResult.value();
+    const PopupFrame retained = retainedResult.value();
     EXPECT_TRUE(retained.scope.token == original.scope.token);
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_FALSE(self.m_context.input().focus().valid());
@@ -1386,7 +1234,7 @@ void VerifyUiPopupContextTests_NativeFocusGainNeverRestoresAlreadyClosingScopes(
     EXPECT_EQ(reasonResult.value(), PopupDismissReason::FocusLost);
     const auto closedResult = self.prepare(4u, false, original.scope.bounds, true);
     ASSERT_TRUE(closedResult.has_value());
-    const UiPopupFrame closed = closedResult.value();
+    const PopupFrame closed = closedResult.value();
     EXPECT_EQ(closed.base.id, base.base.id);
     ASSERT_TRUE(self.m_context.commitFrame(4u));
     EXPECT_FALSE(self.m_context.input().hasPopup());

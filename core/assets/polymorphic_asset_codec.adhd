@@ -3,10 +3,14 @@
 
 
 [cpp_header("<core/assets/polymorphic_asset_codec.h>"), cpp_name("::NWB::Core::Assets::FamilyAssetCodec")]
-extern class FamilyAssetCodec<FamilyT, PolicyT>;
+extern class FamilyAssetCodec<FamilyT, PolicyT>{
+    Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> binary, mut auto storage)const;
+};
 
 [cpp_header("<core/assets/polymorphic_asset_codec.h>"), cpp_name("::NWB::Core::Assets::FamilyMemberAssetCodec")]
-extern class FamilyMemberAssetCodec<FamilyT, AssetT, PolicyT>;
+extern class FamilyMemberAssetCodec<FamilyT, AssetT, PolicyT>{
+    Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> binary, mut auto storage)const;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

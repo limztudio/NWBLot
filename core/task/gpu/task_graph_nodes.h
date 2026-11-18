@@ -152,6 +152,11 @@ struct GpuGraphResourceNode{
 struct ResourcePointerKey{
     const void* pointer = nullptr;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
+
+    template<typename T>
+    [[nodiscard]] static ResourcePointerKey FromObject(const T& value, const GpuGraphResourceType::Enum type)noexcept{ return { &value, type }; }
+    template<typename T>
+    static ResourcePointerKey FromObject(const T&&, GpuGraphResourceType::Enum) = delete;
 };
 
 struct ResourcePointerEqual{

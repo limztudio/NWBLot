@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "volume_sdk.adhd"
+#include "name_cases.adhd"
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/filesystem_platform.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[ordered]
+class FilesystemVolumeTest{
+    public HeapStorage m_arena(s_FilesystemNameTestsFilesystem);
+    public Path m_directory("filesystem_unit_test_volume");
+    public VolumeMountDesc m_desc(this.m_arena);
+    public CapturingLogger m_logger;
+    private LoggerRegistrationGuard guard(this.m_logger, LoggerBreakPolicy::ReportOnly);
+
+    public void setup(){
+        ASSERT_TRUE(RemoveAllIfExists(this.m_directory).has_value());
+        ASSERT_TRUE(this.m_desc.volumeName.assign("test"));
+        this.m_desc.mountDirectory = this.m_directory;
+        this.m_desc.segmentSize = 4096u;
+        this.m_desc.metadataSize = 512u;
+        this.m_desc.createIfMissing = true;
+        this.m_desc.usage = VolumeUsage::CookWrite;
+    }
+    public void teardown(){ EXPECT_TRUE(RemoveAllIfExists(this.m_directory).has_value()); }
+}
+
+class CreatedFilesystem{
+    private Expected<UniquePtr<IFilesystem>> owner;
+    public CreatedFilesystem(mut HeapStorage storage, in VolumeMountDesc desc){ this.owner = CreateVolumeFilesystem(storage, desc); }
+    public b8 valid()const{ return this.owner.has_value() && cast<b8>(this.owner.value()); }
+    public mut IFilesystem get(){ return this.owner.value().deref(); }
+    public void reset(){ if(this.owner.has_value()) this.owner.value().reset(); }
+}
+
+class ThrowingPublishLogger : Utf8LogSink{
+    [cpp_unwind]
+    public void receive(in StringView text, in LogType kind)override{ ThrowTestException<i32>(s_FilesystemPublishLogFailure); }
+}
+
+class BlockingRestoreLogger : Utf8LogSink{
+    private Path path;
+    private b8 throws;
+    private b8 received = false;
+    public BlockingRestoreLogger(in Path path, in b8 throws){ this.path = path; this.throws = throws; }
+    [cpp_unwind]
+    public void receive(in StringView text, in LogType kind)override{
+        this.received = EnsureDirectories(this.path).has_value();
+        if(this.throws) ThrowTestException<i32>(s_FilesystemPublishLogFailure);
+    }
+    public b8 blocked()const{ return this.received; }
+}
+
+class RestoreSegment{
+    private Path live;
+    private Path backup;
+    private mut b8 restored;
+    public RestoreSegment(in Path live, in Path backup, mut b8 restored){
+        this.live = live;
+        this.backup = backup;
+        this.restored = restored;
+    }
+    public ~RestoreSegment(){
+        if(RemoveAllForCleanup(this.live).has_value())
+            this.restored = RenamePath(this.backup, this.live).has_value();
+    }
+}
+
+b8 SameVolumeBytes(in Span<u8> lhs, in Span<u8> rhs){
+    if(lhs.size() != rhs.size()) return false;
+    for(usize i = 0u; i < lhs.size(); ++i){
+        if(lhs[i] != rhs[i]) return false;
+    }
+    return true;
+}
+
+class RollbackSignal{
+    public b8 triggered = false;
+    public void rollbackFailed(){ this.triggered = true; }
+}
+
+class EmptyVolumeFactory{
+    public Expected<UniquePtr<IFilesystem>> create()const{ UniquePtr<IFilesystem> empty; return empty; }
+}
+class FailedVolumeFactory{
+    public Expected<UniquePtr<IFilesystem>> create()const{ return MakeUnexpected(Failure()); }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

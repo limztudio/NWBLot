@@ -2,597 +2,531 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
 #include "bitmap_capture_writer.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const u64 s_UncapturedGraphicsFrame = 0xffffffffffffffffu;
+interface ISmokeCapturePredicate{
+    b8 shouldCaptureFrame(in u64 frame)const;
+}
 
+class FramebufferCaptureOptions{
+    public Optional<in ISmokeCapturePredicate> shouldCapture;
+    public u32 requiredWidth = 0u;
+    public u32 requiredHeight = 0u;
+    public b8 quitWhenReady = true;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class FramebufferCaptureCompletion{
+    public QueueSubmissionToken acceptedToken;
+    public u64 graphicsFrameIndex = s_UncapturedGraphicsFrame;
+    public u64 generation = 1u;
+}
 
+class FramebufferReadbackTask{
+    public TextureHandle source;
+    public StagingTextureHandle destination;
+    public Shared<FramebufferCaptureCompletion> completion;
+    public u64 graphicsFrameIndex = 0u;
+    public u64 generation = 0u;
 
-#include <loader/project_entry.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/rhi/command.h>
-#include <core/graphics/rhi/resource.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/presentation_contributor.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/refcount_ptr.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-namespace Tests::Smoke{
-
-struct FramebufferCaptureOptions{
-    b8 (*shouldCapture)(void*, u64) = nullptr;
-    void* predicateContext = nullptr;
-    u32 requiredWidth = 0u;
-    u32 requiredHeight = 0u;
-    b8 quitWhenReady = true;
-};
-
-class FramebufferCapture final
-    : public Core::IRenderPass
-    , public Core::IGpuTaskGraphPresentationContributor
-{
-private:
-    struct CompletionStateData{
-        Core::QueueSubmissionToken acceptedToken;
-        u64 graphicsFrameIndex = Limit<u64>::s_Max;
-        u64 generation = 1u;
-    };
-
-private:
-    using CompletionState = RefCounter<CompletionStateData>;
-
-private:
-    struct ReadbackTask{
-        static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Transfer };
-
-    public:
-        struct Payload{
-            Core::TextureHandle source;
-            Core::TextureSlice sourceSlice;
-            Core::StagingTextureHandle destination;
-            Core::TextureSlice destinationSlice;
-            RefCountPtr<CompletionState> completionState;
-            u64 graphicsFrameIndex = 0u;
-            u64 generation = 0u;
-        };
-
-    public:
-        [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-            if(!payload.source || !payload.destination || !payload.completionState || context.commandIrCapture)
-                return false;
-
-            commandList.copyTexture(*payload.destination, payload.destinationSlice, *payload.source, payload.sourceSlice);
-            return !commandList.commandRecordingFailed();
-        }
-
-        static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-            if(payload.completionState && payload.generation == payload.completionState->generation){
-                payload.completionState->acceptedToken = token;
-                payload.completionState->graphicsFrameIndex = payload.graphicsFrameIndex;
-            }
-        }
-
-        static void Discarded(Payload& payload)noexcept{
-            if(payload.completionState && payload.generation == payload.completionState->generation)
-                payload.completionState->acceptedToken = {};
-        }
-    };
-
-public:
-    FramebufferCapture(const AStringView outputPath, const u32 captureFrameCount, ProjectRuntimeContext& context, const FramebufferCaptureOptions options = {})
-        : FramebufferCapture(::Path<Core::Alloc::GlobalArena>(context.objectArena, outputPath), captureFrameCount, context, options)
-    {}
-
-    FramebufferCapture(::Path<Core::Alloc::GlobalArena>&& outputPath, const u32 captureFrameCount, ProjectRuntimeContext& context, const FramebufferCaptureOptions options = {})
-        : Core::IRenderPass(context.graphics)
-        , m_context(context)
-        , m_outputPath(Move(outputPath))
-        , m_options(options)
-        , m_completionState(MakeRefCount<CompletionState>())
-        , m_captureFrameCount(captureFrameCount)
-    {
-        if(m_outputPath.empty())
-            markFailed(FOUNDATION_TEXT("capture output path is empty"));
-        if(m_captureFrameCount == 0u)
-            markFailed(FOUNDATION_TEXT("capture frame count must be greater than zero"));
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Transfer;
+        return commands;
     }
 
-    virtual ~FramebufferCapture()noexcept override{
-        stop();
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        if(!this.source.valid() || !this.destination.valid() || !this.completion.valid() || context.hasCommandIrCapture())
+            return false;
+        commandList.copyTexture(this.destination.deref(), TextureSlice(), this.source.deref(), TextureSlice());
+        return !commandList.commandRecordingFailed();
     }
 
-public:
-    [[nodiscard]] b8 start(){
-        if(m_registered)
+    public void accepted(in QueueSubmissionToken token){
+        if(this.completion.valid() && this.generation == this.completion.deref().generation){
+            this.completion.deref().acceptedToken = token;
+            this.completion.deref().graphicsFrameIndex = this.graphicsFrameIndex;
+        }
+    }
+
+    public void discarded(){
+        if(this.completion.valid() && this.generation == this.completion.deref().generation)
+            this.completion.deref().acceptedToken = QueueSubmissionToken();
+    }
+}
+
+[arena]
+class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
+    private mut ProjectRuntimeContext m_context;
+    private Path m_outputPath;
+    private FramebufferCaptureOptions m_options;
+    private SharedPool m_completionPool = SharedPool();
+    private Shared<FramebufferCaptureCompletion> m_completionState;
+    private StagingTextureHandle m_readback;
+    private TextureDesc m_captureDescription;
+    private AcquiredPresentationFrame m_preparedFrame;
+    private u64 m_preparedGraphGeneration = 0u;
+    private u64 m_lastCountedGraphicsFrame = s_UncapturedGraphicsFrame;
+    private u32 m_captureFrameCount;
+    private u32 m_preparedFrameCount = 0u;
+    private b8 m_registered = false;
+    private b8 m_taskGraphPresentationPrepared = false;
+    private b8 m_taskGraphPresentationClaimed = false;
+    private b8 m_captureReady = false;
+    private b8 m_skipped = false;
+    private b8 m_failed = false;
+    private b8 m_quitRequested = false;
+    private b8 m_stopped = false;
+
+    public FramebufferCapture(mut GraphicsRuntime graphics, in StringView outputPath, in u32 captureFrameCount, mut ProjectRuntimeContext context, in FramebufferCaptureOptions options){
+        this.m_context = context;
+        this.m_outputPath = Path(outputPath);
+        this.m_options = options;
+        this.m_completionState = this.m_completionPool.make<FramebufferCaptureCompletion>().value();
+        this.m_captureFrameCount = captureFrameCount;
+        if(this.m_outputPath.empty())
+            this.markFailed("capture output path is empty");
+        if(this.m_captureFrameCount == 0u)
+            this.markFailed("capture frame count must be greater than zero");
+    }
+
+    public ~FramebufferCapture(){ this.stop(); }
+
+    public b8 start(){
+        if(this.m_registered)
             return true;
-        if(m_failed || m_stopped)
+        if(this.m_failed || this.m_stopped)
             return false;
 
-        Core::GraphicsRuntime& graphics = getGraphics();
-        Core::IGpuTaskGraphPresentationContributor* const contributor = graphics.taskGraphPresentationContributor();
-        if(contributor && contributor != this){
-            markFailed(FOUNDATION_TEXT("another task-graph presentation contributor is already registered"));
+        mut GraphicsRuntime graphics = this.getGraphics();
+        const Optional<mut IGpuTaskGraphPresentationContributor> contributor = graphics.borrowTaskGraphPresentationContributor();
+        mut IGpuTaskGraphPresentationContributor self = this;
+        if(contributor.has_value() && !SameAddress(contributor.value(), self)){
+            this.markFailed("another task-graph presentation contributor is already registered");
             return false;
         }
 
-        graphics.addRenderPassToBack(*this);
-        if(m_failed){
-            graphics.removeRenderPass(*this);
+        graphics.addRenderPassToBack(this);
+        if(this.m_failed){
+            graphics.removeRenderPass(this);
             return false;
         }
         graphics.setTaskGraphPresentationContributor(this);
-        m_registered = true;
+        this.m_registered = true;
         return true;
     }
 
-    void stop(){
-        if(!m_registered)
+    public void stop(){
+        if(!this.m_registered)
             return;
 
-        Core::GraphicsRuntime& graphics = getGraphics();
-        graphics.clearTaskGraphPresentationContributor(*this);
-        m_registered = false;
-        m_stopped = true;
-        graphics.removeRenderPass(*this);
-        resetPendingReadback();
+        mut GraphicsRuntime graphics = this.getGraphics();
+        graphics.clearTaskGraphPresentationContributor(this);
+        this.m_registered = false;
+        this.m_stopped = true;
+        graphics.removeRenderPass(this);
+        this.resetPendingReadback();
     }
 
-    void update(){
-        if(!m_registered)
+    public void update(){
+        if(!this.m_registered)
             return;
-        if(m_skipped || m_failed){
-            requestTerminalQuit();
-            return;
-        }
-        if(m_captureReady){
-            if(m_options.quitWhenReady)
-                requestTerminalQuit();
+        if(this.m_skipped || this.m_failed){
+            this.requestTerminalQuit();
             return;
         }
-        const Core::QueueSubmissionToken acceptedToken = m_completionState->acceptedToken;
+        if(this.m_captureReady){
+            if(this.m_options.quitWhenReady)
+                this.requestTerminalQuit();
+            return;
+        }
+        const QueueSubmissionToken acceptedToken = this.m_completionState.deref().acceptedToken;
         if(!acceptedToken.valid())
             return;
         if(!acceptedToken.hasPhysicalQueueIdentity()){
-            markFailed(FOUNDATION_TEXT("accepted readback submission has no physical queue identity"));
-            requestTerminalQuit();
+            this.markFailed("accepted readback submission has no physical queue identity");
+            this.requestTerminalQuit();
             return;
         }
 
-        Core::GraphicsBackend::Device& device = getGraphics().getDevice();
+        mut GraphicsRuntime graphics = this.getGraphics();
+        mut Device device = graphics.getDevice();
         if(acceptedToken.deviceGeneration != device.getDeviceGeneration()){
-            markFailed(FOUNDATION_TEXT("accepted readback submission belongs to a stale graphics device"));
-            requestTerminalQuit();
+            this.markFailed("accepted readback submission belongs to a stale graphics device");
+            this.requestTerminalQuit();
             return;
         }
-        const Core::GpuPhysicalQueueId physicalQueue{ .index = acceptedToken.physicalQueueIndex, .deviceGeneration = acceptedToken.deviceGeneration };
+        GpuPhysicalQueueId physicalQueue = GpuPhysicalQueueId();
+        physicalQueue.index = acceptedToken.physicalQueueIndex;
+        physicalQueue.deviceGeneration = acceptedToken.deviceGeneration;
         const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
-        if(!completedValue){
-            markFailed(FOUNDATION_TEXT("failed to query readback submission completion"));
-            requestTerminalQuit();
+        if(!completedValue.has_value()){
+            this.markFailed("failed to query readback submission completion");
+            this.requestTerminalQuit();
             return;
         }
-        if(*completedValue < acceptedToken.value)
+        if(completedValue.value() < acceptedToken.value)
             return;
-        if(!m_readback){
-            markFailed(FOUNDATION_TEXT("accepted readback submission lost its staging texture"));
-            requestTerminalQuit();
+        if(!this.m_readback.valid()){
+            this.markFailed("accepted readback submission lost its staging texture");
+            this.requestTerminalQuit();
             return;
         }
 
-        const auto mapping = device.mapStagingTexture(*m_readback, Core::TextureSlice{}, Core::CpuAccessMode::Read);
-        if(!mapping){
-            markFailed(FOUNDATION_TEXT("failed to map the completed readback staging texture"));
-            requestTerminalQuit();
+        const auto mapping = device.mapStagingTexture(this.m_readback.deref(), TextureSlice(), CpuAccessMode::Read);
+        if(!mapping.has_value()){
+            this.markFailed("failed to map the completed readback staging texture");
+            this.requestTerminalQuit();
             return;
         }
 
         usize requiredSourceBytes = 0u;
         b8 validSourceSpan = true;
-        if(m_captureDescription.width > 0u && m_captureDescription.height > 0u){
-            const auto lastRowOffset = TryMultiply<usize>(static_cast<usize>(m_captureDescription.height - 1u), mapping->rowPitch);
-            const auto rowBytes = TryMultiply<usize>(static_cast<usize>(m_captureDescription.width), s_BitmapSourceBytesPerPixel);
-            if(!lastRowOffset || !rowBytes || AddOverflows<usize>(*lastRowOffset, *rowBytes))
+        if(this.m_captureDescription.width > 0u && this.m_captureDescription.height > 0u){
+            const auto lastRowOffset = TryMultiply<usize>(cast<usize>(this.m_captureDescription.height - 1u), mapping.value().rowPitch);
+            const auto rowBytes = TryMultiply<usize>(cast<usize>(this.m_captureDescription.width), s_BitmapSourceBytesPerPixel);
+            if(!lastRowOffset.has_value() || !rowBytes.has_value() || AddOverflows<usize>(lastRowOffset.value(), rowBytes.value()))
                 validSourceSpan = false;
             else
-                requiredSourceBytes = *lastRowOffset + *rowBytes;
+                requiredSourceBytes = lastRowOffset.value() + rowBytes.value();
         }
         b8 captureWritten = false;
-        if(validSourceSpan && mapping->data){
-            const Span<const u8> sourceSpan(static_cast<const u8*>(mapping->data), requiredSourceBytes);
-            captureWritten = BitmapCaptureWriter(m_captureDescription).write(m_outputPath, sourceSpan, mapping->rowPitch);
+        const Span<u8> mapped = mapping.value().readBytes();
+        if(validSourceSpan && !mapped.empty() && requiredSourceBytes <= mapped.size()){
+            const Span<u8> sourceSpan = mapped.first(requiredSourceBytes);
+            captureWritten = BitmapCaptureWriter(this.m_captureDescription).write(this.m_outputPath, sourceSpan, mapping.value().rowPitch);
         }
-        device.unmapStagingTexture(*m_readback);
+        device.unmapStagingTexture(this.m_readback.deref());
         if(!captureWritten){
-            markFailed(FOUNDATION_TEXT("failed to write the framebuffer capture atomically"));
-            requestTerminalQuit();
+            this.markFailed("failed to write the framebuffer capture atomically");
+            this.requestTerminalQuit();
             return;
         }
 
-        m_captureReady = true;
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: capture ready"));
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
-        if(m_options.quitWhenReady)
-            requestTerminalQuit();
+        this.m_captureReady = true;
+        [essential] info("FramebufferCapture: capture ready");
+        [essential] info("FramebufferCapture: graphics source frame {}", this.m_completionState.deref().graphicsFrameIndex);
+        if(this.m_options.quitWhenReady)
+            this.requestTerminalQuit();
     }
 
-    [[nodiscard]] b8 rearm(::Path<Core::Alloc::GlobalArena>&& outputPath)noexcept{
-        if(!m_registered || !m_captureReady || m_failed || m_skipped || m_quitRequested || outputPath.empty() || m_completionState->generation == Limit<u64>::s_Max)
+    public b8 rearm(in StringView path){
+        const Path outputPath = Path(path);
+        if(!this.m_registered || !this.m_captureReady || this.m_failed || this.m_skipped || this.m_quitRequested || outputPath.empty() || this.m_completionState.deref().generation == s_UncapturedGraphicsFrame)
             return false;
 
-        m_outputPath = Move(outputPath);
-        ++m_completionState->generation;
-        m_completionState->acceptedToken = {};
-        m_completionState->graphicsFrameIndex = Limit<u64>::s_Max;
-        m_preparedFrame = {};
-        m_preparedGraphGeneration = 0u;
-        m_lastCountedGraphicsFrame = Limit<u64>::s_Max;
-        m_preparedFrameCount = 0u;
-        m_taskGraphPresentationPrepared = false;
-        m_taskGraphPresentationClaimed = false;
-        m_captureReady = false;
+        this.m_outputPath = outputPath;
+        ++this.m_completionState.deref().generation;
+        this.m_completionState.deref().acceptedToken = QueueSubmissionToken();
+        this.m_completionState.deref().graphicsFrameIndex = s_UncapturedGraphicsFrame;
+        this.m_preparedFrame = AcquiredPresentationFrame();
+        this.m_preparedGraphGeneration = 0u;
+        this.m_lastCountedGraphicsFrame = s_UncapturedGraphicsFrame;
+        this.m_preparedFrameCount = 0u;
+        this.m_taskGraphPresentationPrepared = false;
+        this.m_taskGraphPresentationClaimed = false;
+        this.m_captureReady = false;
         return true;
     }
 
-    [[nodiscard]] b8 rearm(const AStringView outputPath)noexcept{
-        if(outputPath.empty())
-            return false;
-        return rearm(::Path<Core::Alloc::GlobalArena>(m_context.objectArena, outputPath));
+
+    public b8 captureReady()const { return this.m_captureReady; }
+
+    public u64 capturedGraphicsFrameIndex()const { return this.m_completionState.deref().graphicsFrameIndex; }
+
+    public void finish(){
+        assert(this.m_captureReady);
+        this.requestTerminalQuit();
     }
 
-    [[nodiscard]] b8 captureReady()const noexcept{ return m_captureReady; }
+    public b8 shouldRenderUnfocused() override{ return true; }
 
-    [[nodiscard]] u64 capturedGraphicsFrameIndex()const noexcept{ return m_completionState->graphicsFrameIndex; }
-
-    void finish(){
-        FOUNDATION_ASSERT(m_captureReady);
-        requestTerminalQuit();
-    }
-
-public:
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-
-    virtual b8 validateResources(const u32 width, const u32 height, const u32)override{
-        if(m_skipped || m_failed || width == 0u || height == 0u)
+    public b8 validateResources(in u32 width, in u32 height, in u32 samples)override{
+        if(this.m_skipped || this.m_failed || width == 0u || height == 0u)
             return true;
-        if((m_options.requiredWidth != 0u && width != m_options.requiredWidth) || (m_options.requiredHeight != 0u && height != m_options.requiredHeight))
+        if((this.m_options.requiredWidth != 0u && width != this.m_options.requiredWidth) || (this.m_options.requiredHeight != 0u && height != this.m_options.requiredHeight))
             return true;
-        if(!getGraphics().isSwapChainReadbackAvailable())
+        if(!this.getGraphics().isSwapChainReadbackAvailable())
             return true;
 
-        const Core::Texture* const backbuffer = getGraphics().getBackBuffer(0u);
-        if(!backbuffer){
-            markFailed(FOUNDATION_TEXT("swap-chain texture is unavailable during capture resource setup"));
+        const TexturePtr backbuffer = this.getGraphics().getBackBuffer(0u);
+        if(!IsValidTexturePtr(backbuffer)){
+            this.markFailed("swap-chain texture is unavailable during capture resource setup");
             return false;
         }
-        return prepareReadback(backbuffer->getCreationDescription());
+        return this.prepareReadback(DerefTexturePtr(backbuffer).getCreationDescription());
     }
 
-    virtual void invalidateResources()override{
-        if(!m_registered)
+    public void invalidateResources()override{
+        if(!this.m_registered)
             return;
 
-        if(m_captureReady){
-            m_readback.reset();
-            m_captureDescription = {};
+        if(this.m_captureReady){
+            this.m_readback.reset();
+            this.m_captureDescription = TextureDesc();
         }
-        else if(!m_skipped && !m_failed)
-            resetPendingReadback();
+        else if(!this.m_skipped && !this.m_failed)
+            this.resetPendingReadback();
     }
 
-    virtual void backBufferResizing()override{
-        if(m_registered)
-            invalidateResources();
+    public void backBufferResizing()override{
+        if(this.m_registered)
+            this.invalidateResources();
     }
 
-public:
-    [[nodiscard]] virtual b8 prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override{
-        m_taskGraphPresentationPrepared = false;
-        if(m_captureReady || m_skipped || m_failed || m_completionState->acceptedToken.valid())
+    public b8 prepareTaskGraphPresentation(in AcquiredPresentationFrame frame)override{
+        this.m_taskGraphPresentationPrepared = false;
+        if(this.m_captureReady || this.m_skipped || this.m_failed || this.m_completionState.deref().acceptedToken.valid())
             return true;
 
-        if(!getGraphics().isSwapChainReadbackAvailable()){
-            m_skipped = true;
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable"));
+        if(!this.getGraphics().isSwapChainReadbackAvailable()){
+            this.m_skipped = true;
+            [essential] info("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable");
             return true;
         }
         if(!frame.valid()){
-            markFailed(FOUNDATION_TEXT("renderer supplied an invalid acquired presentation frame"));
+            this.markFailed("renderer supplied an invalid acquired presentation frame");
             return true;
         }
 
-        const u64 graphicsFrame = getGraphics().getFrameIndex();
-        if(graphicsFrame != m_lastCountedGraphicsFrame){
-            m_lastCountedGraphicsFrame = graphicsFrame;
-            if(m_preparedFrameCount < m_captureFrameCount)
-                ++m_preparedFrameCount;
+        const u64 graphicsFrame = this.getGraphics().getFrameIndex();
+        if(graphicsFrame != this.m_lastCountedGraphicsFrame){
+            this.m_lastCountedGraphicsFrame = graphicsFrame;
+            if(this.m_preparedFrameCount < this.m_captureFrameCount)
+                ++this.m_preparedFrameCount;
         }
-        if(m_preparedFrameCount < m_captureFrameCount)
+        if(this.m_preparedFrameCount < this.m_captureFrameCount)
             return true;
-        const Core::TextureDesc& description = frame.backBuffer.texture->getCreationDescription();
-        if((m_options.requiredWidth != 0u && description.width != m_options.requiredWidth) || (m_options.requiredHeight != 0u && description.height != m_options.requiredHeight))
+        in TextureDesc description = frame.backBuffer.texture.deref().getCreationDescription();
+        if((this.m_options.requiredWidth != 0u && description.width != this.m_options.requiredWidth) || (this.m_options.requiredHeight != 0u && description.height != this.m_options.requiredHeight))
             return true;
-        if(m_options.shouldCapture && !m_options.shouldCapture(m_options.predicateContext, graphicsFrame))
+        if(this.m_options.shouldCapture.has_value() && !this.m_options.shouldCapture.value().shouldCaptureFrame(graphicsFrame))
             return true;
 
-        if(!stagingMatches(description)){
-            markFailed(FOUNDATION_TEXT("framebuffer readback staging texture was not prepared for the current swap chain"));
+        if(!this.stagingMatches(description)){
+            this.markFailed("framebuffer readback staging texture was not prepared for the current swap chain");
             return true;
         }
 
-        m_preparedFrame = frame;
-        m_taskGraphPresentationPrepared = true;
-        m_taskGraphPresentationClaimed = false;
-        m_preparedGraphGeneration = 0u;
+        this.m_preparedFrame = frame;
+        this.m_taskGraphPresentationPrepared = true;
+        this.m_taskGraphPresentationClaimed = false;
+        this.m_preparedGraphGeneration = 0u;
         return true;
     }
 
-    [[nodiscard]] virtual b8 hasTaskGraphPresentationWork()const noexcept override{
-        return m_taskGraphPresentationPrepared && m_readback && !m_completionState->acceptedToken.valid() && !m_captureReady && !m_skipped && !m_failed;
+    public b8 hasTaskGraphPresentationWork()const  override{
+        return this.m_taskGraphPresentationPrepared && this.m_readback.valid() && !this.m_completionState.deref().acceptedToken.valid() && !this.m_captureReady && !this.m_skipped && !this.m_failed;
     }
 
-    [[nodiscard]] virtual Expected<Core::GpuTaskId> declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, const Core::GpuGraphResourceId backbuffer, const Core::GpuTaskId previousTask)override{
+    public Expected<GpuTaskId> declareTaskGraphPresentation(mut GpuTaskGraph graph, in AcquiredPresentationFrame frame, in GpuGraphResourceId backbuffer, in GpuTaskId previousTask)override{
         u64 graphGeneration = 0u;
         {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+            const GpuTaskGraphDeclarationReadView declarations(graph);
             graphGeneration = declarations.generation();
         }
-        if(m_taskGraphPresentationClaimed && m_preparedGraphGeneration != graphGeneration){
-            m_taskGraphPresentationClaimed = false;
-            m_preparedGraphGeneration = 0u;
+        if(this.m_taskGraphPresentationClaimed && this.m_preparedGraphGeneration != graphGeneration){
+            this.m_taskGraphPresentationClaimed = false;
+            this.m_preparedGraphGeneration = 0u;
         }
-        if(!m_taskGraphPresentationPrepared || m_taskGraphPresentationClaimed || !m_readback || m_completionState->acceptedToken.valid())
-            return MakeUnexpected(Failure{});
+        if(!this.m_taskGraphPresentationPrepared || this.m_taskGraphPresentationClaimed || !this.m_readback.valid() || this.m_completionState.deref().acceptedToken.valid())
+            return MakeUnexpected(Failure());
         if(
             !frame.valid()
             || !previousTask.valid()
             || !backbuffer.valid()
-            || frame.backBuffer.texture != m_preparedFrame.backBuffer.texture
-            || frame.backBuffer.nativeInitialState != m_preparedFrame.backBuffer.nativeInitialState
-            || frame.backBuffer.index != m_preparedFrame.backBuffer.index
-            || frame.framebuffer != m_preparedFrame.framebuffer
+            || frame.backBuffer.texture != this.m_preparedFrame.backBuffer.texture
+            || frame.backBuffer.nativeInitialState != this.m_preparedFrame.backBuffer.nativeInitialState
+            || frame.backBuffer.index != this.m_preparedFrame.backBuffer.index
+            || frame.framebuffer != this.m_preparedFrame.framebuffer
         ){
-            markFailed(FOUNDATION_TEXT("presentation declaration no longer matches the prepared acquired frame"));
-            return MakeUnexpected(Failure{});
+            this.markFailed("presentation declaration no longer matches the prepared acquired frame");
+            return MakeUnexpected(Failure());
         }
 
-        Core::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = Core::GpuTaskCostHint::Small;
+        GpuTaskSchedulingHint scheduling;
+        scheduling.cost = GpuTaskCostHint::Small;
         scheduling.overlapPreferred = false;
         scheduling.avoidQueueCrossing = true;
         scheduling.forceSubmissionBoundary = true;
         scheduling.allowPacketMerge = false;
 
-        const auto stagingHazardResult = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFramebufferCaptureStaging))
-            .setMarkerLabel("Framebuffer Capture Staging").setType(Core::GpuGraphResourceType::HazardDomain));
-        if(!stagingHazardResult){
-            markFailed(FOUNDATION_TEXT("failed to declare the framebuffer staging hazard domain"));
-            return MakeUnexpected(Failure{});
+        GpuGraphResourceDesc hazard;
+        hazard.setIdentity(s_SmokeNameTestsSmokeFramebufferCaptureStaging).setMarkerLabel("Framebuffer Capture Staging").setType(GpuGraphResourceType::HazardDomain);
+        const auto stagingHazardResult = graph.importHazardDomain(hazard);
+        if(!stagingHazardResult.has_value()){
+            this.markFailed("failed to declare the framebuffer staging hazard domain");
+            return MakeUnexpected(Failure());
         }
 
-        const Core::GpuGraphResourceId stagingHazard = *stagingHazardResult;
+        const GpuGraphResourceId stagingHazard = stagingHazardResult.value();
 
-        Core::GpuTaskDesc taskDesc;
-        const Array<Core::GpuTaskResourceUse, 2> resourceUses = {
-            Core::GpuTaskResourceUse{ .resource = backbuffer, .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read },
-            Core::GpuTaskResourceUse{ .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write },
-        };
-        taskDesc.setIdentity(Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFramebufferCapture)).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(Span(&previousTask, 1u)).setResourceUses(resourceUses);
-        const auto readbackTask = graph.addTask<ReadbackTask>(
-            taskDesc,
-            ReadbackTask::Payload{
-                .source = frame.backBuffer.texture,
-                .sourceSlice = {},
-                .destination = m_readback,
-                .destinationSlice = {},
-                .completionState = m_completionState,
-                .graphicsFrameIndex = m_lastCountedGraphicsFrame,
-                .generation = m_completionState->generation,
-            });
-        if(!readbackTask){
-            markFailed(FOUNDATION_TEXT("failed to declare the framebuffer readback task"));
-            return MakeUnexpected(Failure{});
+        GpuTaskDesc taskDesc;
+        Array<GpuTaskResourceUse, 2u> resourceUses;
+        resourceUses[0u].resource = backbuffer;
+        resourceUses[0u].range.textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+        resourceUses[0u].requiredState = ResourceStates::CopySource;
+        resourceUses[0u].access = GpuTaskResourceAccess::Read;
+        resourceUses[1u].resource = stagingHazard;
+        resourceUses[1u].requiredState = ResourceStates::Unknown;
+        resourceUses[1u].access = GpuTaskResourceAccess::Write;
+        const GpuTaskId dependency = previousTask;
+        taskDesc.setIdentity(s_SmokeNameTestsSmokeFramebufferCapture).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependency(dependency).setResourceUses(resourceUses);
+        FramebufferReadbackTask payload;
+        payload.source = frame.backBuffer.texture;
+        payload.destination = this.m_readback;
+        payload.completion = this.m_completionState;
+        payload.graphicsFrameIndex = this.m_lastCountedGraphicsFrame;
+        payload.generation = this.m_completionState.deref().generation;
+        const auto readbackTask = graph.addPayloadTask(taskDesc, payload);
+        if(!readbackTask.has_value()){
+            this.markFailed("failed to declare the framebuffer readback task");
+            return MakeUnexpected(Failure());
         }
 
-        m_taskGraphPresentationClaimed = true;
-        m_preparedGraphGeneration = graphGeneration;
+        this.m_taskGraphPresentationClaimed = true;
+        this.m_preparedGraphGeneration = graphGeneration;
         return readbackTask;
     }
 
-private:
-    void markFailed(const TStringView reason){
-        if(m_failed)
+    private void markFailed(in StringView reason){
+        if(this.m_failed)
             return;
 
-        m_failed = true;
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("FramebufferCapture: {}"), reason);
+        this.m_failed = true;
+        error("FramebufferCapture: {}", reason);
     }
 
-    void requestTerminalQuit(){
-        if(m_quitRequested)
+    private void requestTerminalQuit(){
+        if(this.m_quitRequested)
             return;
 
-        m_quitRequested = true;
-        m_context.requestQuit();
+        this.m_quitRequested = true;
+        this.m_context.requestQuit();
     }
 
-    void resetPendingReadback(){
-        m_completionState = MakeRefCount<CompletionState>();
-        m_readback.reset();
-        m_captureDescription = {};
-        m_preparedFrame = {};
-        m_preparedGraphGeneration = 0u;
-        m_taskGraphPresentationPrepared = false;
-        m_taskGraphPresentationClaimed = false;
+    private void resetPendingReadback(){
+        this.m_completionState = this.m_completionPool.make<FramebufferCaptureCompletion>().value();
+        this.m_readback.reset();
+        this.m_captureDescription = TextureDesc();
+        this.m_preparedFrame = AcquiredPresentationFrame();
+        this.m_preparedGraphGeneration = 0u;
+        this.m_taskGraphPresentationPrepared = false;
+        this.m_taskGraphPresentationClaimed = false;
     }
 
-    [[nodiscard]] b8 stagingMatches(const Core::TextureDesc& description)const noexcept{
+    private b8 stagingMatches(in TextureDesc description)const {
         return
-            m_readback
-            && m_captureDescription.width == description.width
-            && m_captureDescription.height == description.height
-            && m_captureDescription.depth == description.depth
-            && m_captureDescription.arraySize == description.arraySize
-            && m_captureDescription.mipLevels == description.mipLevels
-            && m_captureDescription.sampleCount == description.sampleCount
-            && m_captureDescription.sampleQuality == description.sampleQuality
-            && m_captureDescription.format == description.format
-            && m_captureDescription.dimension == description.dimension
-            && m_captureDescription.queueSharing == description.queueSharing
+            this.m_readback.valid()
+            && this.m_captureDescription.width == description.width
+            && this.m_captureDescription.height == description.height
+            && this.m_captureDescription.depth == description.depth
+            && this.m_captureDescription.arraySize == description.arraySize
+            && this.m_captureDescription.mipLevels == description.mipLevels
+            && this.m_captureDescription.sampleCount == description.sampleCount
+            && this.m_captureDescription.sampleQuality == description.sampleQuality
+            && this.m_captureDescription.format == description.format
+            && this.m_captureDescription.dimension == description.dimension
+            && this.m_captureDescription.queueSharing == description.queueSharing
         ;
     }
 
-    [[nodiscard]] b8 prepareReadback(const Core::TextureDesc& description){
+    private b8 prepareReadback(in TextureDesc description){
         if(!IsSupportedFramebufferSdrFormat(description.format)){
-            markFailed(FOUNDATION_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
+            this.markFailed("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB");
             return false;
         }
-        if(description.width == 0u || description.height == 0u || description.depth != 1u || description.arraySize != 1u || description.mipLevels != 1u || description.sampleCount != 1u || description.dimension != Core::TextureDimension::Texture2D){
-            markFailed(FOUNDATION_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
+        if(description.width == 0u || description.height == 0u || description.depth != 1u || description.arraySize != 1u || description.mipLevels != 1u || description.sampleCount != 1u || description.dimension != TextureDimension::Texture2D){
+            this.markFailed("swap-chain texture shape cannot be represented by the SDR framebuffer capture");
             return false;
         }
-        if(stagingMatches(description))
+        if(this.stagingMatches(description))
             return true;
 
-        m_readback.reset();
-        m_captureDescription = description;
-        auto readbackResult = getGraphics().getDevice().createStagingTexture(description, Core::CpuAccessMode::Read);
-        if(readbackResult)
-            m_readback = Move(*readbackResult);
+        this.m_readback.reset();
+        this.m_captureDescription = description;
+        mut GraphicsRuntime graphics = this.getGraphics();
+        mut Device device = graphics.getDevice();
+        auto readbackResult = device.createStagingTexture(description, CpuAccessMode::Read);
+        if(readbackResult.has_value())
+            this.m_readback = readbackResult.value();
         else
-            m_readback.reset();
-        if(!readbackResult){
-            markFailed(FOUNDATION_TEXT("failed to allocate the matching framebuffer readback staging texture"));
+            this.m_readback.reset();
+        if(!readbackResult.has_value()){
+            this.markFailed("failed to allocate the matching framebuffer readback staging texture");
             return false;
         }
         return true;
     }
 
-private:
-    ProjectRuntimeContext& m_context;
-    ::Path<Core::Alloc::GlobalArena> m_outputPath;
-    FramebufferCaptureOptions m_options;
-    RefCountPtr<CompletionState> m_completionState;
-    Core::StagingTextureHandle m_readback;
-    Core::TextureDesc m_captureDescription;
-    Core::AcquiredPresentationFrame m_preparedFrame;
-    u64 m_preparedGraphGeneration = 0u;
-    u64 m_lastCountedGraphicsFrame = Limit<u64>::s_Max;
-    u32 m_captureFrameCount = 0u;
-    u32 m_preparedFrameCount = 0u;
-    b8 m_registered = false;
-    b8 m_taskGraphPresentationPrepared = false;
-    b8 m_taskGraphPresentationClaimed = false;
-    b8 m_captureReady = false;
-    b8 m_skipped = false;
-    b8 m_failed = false;
-    b8 m_quitRequested = false;
-    b8 m_stopped = false;
-};
 
-using Core::ECS::World;
-using Core::Alloc::ScratchArena;
+}
 
-[[nodiscard]] FOUNDATION_INLINE b8 StartNewSmokeFramebufferCapture(
-    const AStringView outputPath,
-    const u32 captureFrameCount,
-    ProjectRuntimeContext& context,
-    const FramebufferCaptureOptions& options,
-    UniquePtr<FramebufferCapture>& outCapture
-){
-    auto capture = MakeUnique<FramebufferCapture>(outputPath, captureFrameCount, context, options);
-    if(!capture || !capture->start())
+[cpp_unwind]
+b8 StartNewSmokeFramebufferCapture(in StringView outputPath, in u32 count, mut ProjectRuntimeContext context, in FramebufferCaptureOptions options, mut UniquePtr<FramebufferCapture> outCapture){
+    auto capture = MakeUnique<FramebufferCapture>(context.graphics, outputPath, count, context, options);
+    if(!capture.valid() || !capture.deref().start())
         return false;
-    outCapture = Move(capture);
+    outCapture = capture;
     return true;
 }
 
-FOUNDATION_INLINE void UpdateSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
-    if(capture)
-        capture->update();
+void UpdateSmokeFramebufferCapture(mut UniquePtr<FramebufferCapture> capture){
+    if(capture.valid())
+        capture.deref().update();
 }
 
-FOUNDATION_INLINE void StopAndResetSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
-    if(capture){
-        capture->stop();
+void StopAndResetSmokeFramebufferCapture(mut UniquePtr<FramebufferCapture> capture){
+    if(capture.valid()){
+        capture.deref().stop();
         capture.reset();
     }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 SmokeFramebufferCaptureValid(const UniquePtr<FramebufferCapture>& capture)noexcept{
-    return static_cast<b8>(capture);
+b8 SmokeFramebufferCaptureValid(in UniquePtr<FramebufferCapture> capture){
+    return capture.valid();
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 SmokeFramebufferCaptureReady(const UniquePtr<FramebufferCapture>& capture)noexcept{
-    return capture && capture->captureReady();
+b8 SmokeFramebufferCaptureReady(in UniquePtr<FramebufferCapture> capture){
+    return capture.valid() && capture.deref().captureReady();
 }
 
-[[nodiscard]] FOUNDATION_INLINE u64 SmokeFramebufferCapturedFrameIndex(const UniquePtr<FramebufferCapture>& capture)noexcept{
-    return capture ? capture->capturedGraphicsFrameIndex() : Limit<u64>::s_Max;
+u64 SmokeFramebufferCapturedFrameIndex(in UniquePtr<FramebufferCapture> capture){
+    if(capture.valid())
+        return capture.deref().capturedGraphicsFrameIndex();
+    return s_UncapturedGraphicsFrame;
 }
 
-FOUNDATION_INLINE void FinishSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
-    if(capture)
-        capture->finish();
+void FinishSmokeFramebufferCapture(mut UniquePtr<FramebufferCapture> capture){
+    if(capture.valid())
+        capture.deref().finish();
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 RearmSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture, const AStringView outputPath)noexcept{
-    return capture && capture->rearm(outputPath);
+b8 RearmSmokeFramebufferCapture(mut UniquePtr<FramebufferCapture> capture, in StringView outputPath){
+    return capture.valid() && capture.deref().rearm(outputPath);
 }
 
-FOUNDATION_INLINE void MoveSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& src, UniquePtr<FramebufferCapture>& dst)noexcept{
-    dst = Move(src);
+void MoveSmokeFramebufferCapture(mut UniquePtr<FramebufferCapture> source, mut UniquePtr<FramebufferCapture> destination){
+    destination = TakeUnique<FramebufferCapture>(source);
 }
 
-FOUNDATION_INLINE void MoveSmokeFramebufferCapture(UniquePtr<FramebufferCapture>&& src, UniquePtr<FramebufferCapture>& dst)noexcept{
-    dst = Move(src);
-}
-
-template<typename OwnerT>
-[[nodiscard]] FOUNDATION_INLINE FramebufferCaptureOptions MakeSmokeCaptureOptions(
-    OwnerT& owner,
-    const u32 requiredWidth,
-    const u32 requiredHeight,
-    const b8 quitWhenReady = true
-)noexcept{
-    FramebufferCaptureOptions options{};
-    options.requiredWidth = requiredWidth;
-    options.requiredHeight = requiredHeight;
+FramebufferCaptureOptions MakeSmokeCaptureOptions(in borrow ISmokeCapturePredicate owner, in u32 width, in u32 height, in b8 quitWhenReady){
+    FramebufferCaptureOptions options;
+    options.requiredWidth = width;
+    options.requiredHeight = height;
     options.quitWhenReady = quitWhenReady;
-    options.predicateContext = &owner;
-    options.shouldCapture = +[](void* const ctx, const u64 frame)noexcept -> b8{
-        return MakeNotNull(static_cast<OwnerT*>(ctx))->shouldCaptureFrame(frame);
-    };
+    options.shouldCapture = Optional<in ISmokeCapturePredicate>(owner);
     return options;
 }
-};
 
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+FramebufferCaptureOptions MakeSmokeCaptureOptions(in borrow ISmokeCapturePredicate owner, in u32 width, in u32 height){
+    return MakeSmokeCaptureOptions(owner, width, height, true);
 }
 
 

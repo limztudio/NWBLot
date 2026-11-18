@@ -3,63 +3,64 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/unit/common/initializer_case_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/module.h>
-
-#include <global/terminal_entry.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_common_initializer_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using InitializerGuard = NWB::Core::Common::InitializerGuard;
-
-extern InitializerState s_State;
-
-class InitializerProbe final : public NWB::Core::Common::Initializerable{
-public:
-    explicit InitializerProbe(const u32 index)
-        : m_index(index)
-    {}
-
-
-public:
-    virtual b8 initialize()override;
-    virtual void finalize()noexcept override;
-
-
-private:
-    const u32 m_index;
+[cpp_header("<tests/common/gtest_runtime.h>"), cpp_name("::NWB::Tests::NarrowGoogleTestArguments")]
+extern class InitializerTestArguments{
+    void initialize()const;
+    i32 run()const;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+class InitializerProbe : Initializerable{
+    private u32 m_index;
 
+    public InitializerProbe(in u32 index){ this.m_index = index; }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public b8 initialize() override{
+        mut InitializerState state = TestProcessValue<InitializerState>();
+        ++state.initializeCounts[this.m_index];
+        state.record(this.m_index);
+        if(this.m_index == 1u){
+            if(state.failNext){
+                state.failNext = false;
+                return false;
+            }
+            if(state.throwNext){
+                state.throwNext = false;
+                InitializerFailure failure;
+                failure.code = s_InitializationFailureCode;
+                ThrowTestException<InitializerFailure>(failure);
+            }
+        }
+        return true;
+    }
 
+    public void finalize() override{
+        mut InitializerState state = TestProcessValue<InitializerState>();
+        ++state.finalizeCounts[this.m_index];
+        state.record(this.m_index + s_InitializerCount);
+    }
+}
 
+[ordered]
+class InitializerProbes{
+    private InitializerProbe m_first;
+    private InitializerProbe m_second;
+
+    public InitializerProbes(){
+        this.m_first = InitializerProbe(0u);
+        this.m_second = InitializerProbe(1u);
+    }
 }
 
 
@@ -67,15 +68,14 @@ private:
 
 
 void ResetInitializerState(in b8 failNext, in b8 throwNext){
-    native(in failNext, in throwNext){
-        s_State.reset();
-        s_State.failNext = failNext;
-        s_State.throwNext = throwNext;
-    }
+    mut InitializerState state = TestProcessValue<InitializerState>();
+    state.reset();
+    state.failNext = failNext;
+    state.throwNext = throwNext;
 }
 
 InitializerState SnapshotInitializerState(){
-    return s_State;
+    return TestProcessValue<InitializerState>();
 }
 
 void VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire(){
@@ -105,15 +105,19 @@ void VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccess
     EXPECT_EQ(SnapshotInitializerState().eventCount, 7u);
 }
 
+[cpp_unwind]
 void VerifyCommonInitializerLifetime_ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire(){
     ResetInitializerState(false, true);
-    i32 result = 0;
-    native(mut result){
-        result = InvokeTerminalEntry<InitializerFailure>([]()->int{
+    const i32 result = InvokeTerminalEntry<InitializerFailure>(
+        lambda[]() -> i32{
             InitializerGuard guard;
-            return guard.initialize() ? 0 : -1;
-        }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
-    }
+            if(guard.initialize())
+                return 0;
+            return -1;
+        },
+        lambda[](in InitializerFailure error) -> i32{ return error.code; },
+        lambda[]() -> i32{ return -1; }
+    );
     EXPECT_EQ(result, s_InitializationFailureCode);
     InitializerState afterThrow = SnapshotInitializerState();
     EXPECT_EQ(afterThrow.eventCount, 3u);
@@ -171,19 +175,22 @@ void VerifyCommonInitializerLifetime_NestedGuardsFinalizeOnlyTheLastOwnerAndAllo
     EXPECT_EQ(finalState.eventCount, 8u);
 }
 
+[cpp_unwind]
 void VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure(){
     ResetInitializerState(false, false);
-    i32 result = 0;
-    native(mut result){
-        result = InvokeTerminalEntry<InitializerFailure>([]()->int{
+    const i32 result = InvokeTerminalEntry<InitializerFailure>(
+        lambda[]() -> i32{
             InitializerGuard initializer;
             if(!initializer.initialize())
                 return -1;
             InitializerFailure failure;
             failure.code = s_OwnerFailureCode;
-            throw failure;
-        }, [](const InitializerFailure& error)noexcept{ return error.code; }, []()noexcept{ return -1; });
-    }
+            ThrowTestException<InitializerFailure>(failure);
+            return -1;
+        },
+        lambda[](in InitializerFailure error) -> i32{ return error.code; },
+        lambda[]() -> i32{ return -1; }
+    );
     EXPECT_EQ(result, s_OwnerFailureCode);
     InitializerState afterUnwind = SnapshotInitializerState();
     EXPECT_EQ(afterUnwind.initializeCounts[0u], 1u);
@@ -208,69 +215,17 @@ NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_common_initializer_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-InitializerState s_State{};
-
-b8 InitializerProbe::initialize(){
-    ++s_State.initializeCounts[m_index];
-    s_State.record(m_index);
-    if(m_index == 1u){
-        if(s_State.failNext){
-            s_State.failNext = false;
-            return false;
-        }
-        if(s_State.throwNext){
-            s_State.throwNext = false;
-            InitializerFailure failure;
-            failure.code = s_InitializationFailureCode;
-            throw failure;
-        }
-    }
-    return true;
-}
-
-void InitializerProbe::finalize()noexcept{
-    ++s_State.finalizeCounts[m_index];
-    s_State.record(m_index + s_InitializerCount);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// This executable owns its initializer guards so the last release is exercised directly.
-int main(int argc, char** argv){
-    using namespace __hidden_common_initializer_tests;
-    return InvokeTerminalEntry<InitializerFailure>([&](){
-        static InitializerProbe s_FirstInitializer(0u);
-        static InitializerProbe s_SecondInitializer(1u);
-        ::testing::InitGoogleTest(&argc, argv);
-        return RUN_ALL_TESTS();
-    }, [](const InitializerFailure&)noexcept{ return -1; }, []()noexcept{ return -1; });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+i32 RunInitializerTests(in InitializerTestArguments arguments){
+    return InvokeTerminalEntry<InitializerFailure>(
+        lambda[in arguments]() -> i32{
+            TestProcessValue<InitializerProbes>();
+            arguments.initialize();
+            return arguments.run();
+        },
+        lambda[](in InitializerFailure error) -> i32{ return -1; },
+        lambda[]() -> i32{ return -1; }
+    );
 }
 
 

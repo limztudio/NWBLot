@@ -130,7 +130,7 @@ b8 TypeLayoutAnalyzer::supportsTypeOperation(const TypeRef& type, const b8 requi
 }
 
 b8 TypeLayoutAnalyzer::supportsClassOperation(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const TypeRef* const instance, const b8 requireCopy, const b8 assign, const ValueTypeVisit* const active)const noexcept{
-    if((requireCopy && decl.isMoveOnly) || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty() || decl.isAbstract)
+    if(decl.isExtensible || decl.concreteBase || (requireCopy && decl.isMoveOnly) || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty() || decl.isAbstract)
         return false;
     for(const TypeRef* iface : decl.implementedInterfaces){
         if(iface && interfaceInheritsNoCopy(*iface) && (requireCopy || assign || !decl.isMoveOnly || !IsNonCopyableBaseInterfaceName(iface->name)))

@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/telemetry/scope_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::BorrowedScopePointer")]
+extern class BorrowedScopePointer<T>;
+
+[cpp_header("<tests/unit/telemetry/scope_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::ScopeNonNull")]
+extern class ScopeNonNull<T>;
+
+[cpp_header("<tests/unit/telemetry/scope_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::MakeScopeNonNull")]
+extern ScopeNonNull<T> MakeScopeNonNull<T>(mut T record);
+
+[cpp_header("<tests/unit/telemetry/scope_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::FindScopeAddress")]
+extern usize FindScopeAddress<T>(in Span<BorrowedScopePointer<T>> records, in TimingScopeId scope);
+
+[cpp_header("<tests/unit/telemetry/scope_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::ThrowingScopeName")]
+extern class ThrowingScopeName{ u32 failure; };
+
+[cpp_header("<tests/unit/telemetry/scope_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::s_ExplicitScopeConversionIsNothrow")]
+extern const b8 s_ExplicitScopeConversionIsNothrow;
+
+[cpp_header("<tests/unit/telemetry/scope_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::s_ImplicitScopeConversionIsNothrow")]
+extern const b8 s_ImplicitScopeConversionIsNothrow;
+
+[cpp_header("<global/named_registry.h>"), cpp_name("::ScopeNameAt")]
+extern Name TestScopeNameAt<T>(in Span<ScopeNonNull<T>> records, in usize index);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

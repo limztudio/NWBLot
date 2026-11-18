@@ -136,11 +136,32 @@ b8 SymbolTable::IsStringSwitchType(const MStringView typeName)noexcept{
 }
 
 const FieldDecl* SymbolTable::FindClassField(const ClassDecl& classDecl, const MStringView name)noexcept{
-    for(const FieldDecl* field : classDecl.fields){
-        if(field && field->name == name)
-            return field;
+    for(auto* owner = &classDecl; owner; owner = owner->concreteBase){
+        for(const FieldDecl* field : owner->fields){
+            if(field && field->name == name)
+                return field;
+        }
     }
     return nullptr;
+}
+
+b8 SymbolTable::canAccessMember(const ClassDecl& receiver, const ClassDecl* caller, const ClassDecl* declaringClass, const AccessSpecifier::Enum access)const noexcept{
+    const ClassDecl& owner = declaringClass ? *declaringClass : receiver;
+    if(access == AccessSpecifier::Public || canAccessPrivateMembers(owner, caller))
+        return true;
+    if(access == AccessSpecifier::Protected && caller){
+        // Protected access through an object requires the caller's own type or a derived object.
+        for(auto* object = &receiver; object; object = object->concreteBase){
+            if(object == caller){
+                for(auto* base = caller->concreteBase; base; base = base->concreteBase){
+                    if(base == &owner)
+                        return true;
+                }
+                break;
+            }
+        }
+    }
+    return false;
 }
 
 b8 SymbolTable::canAccessPrivateMembers(const ClassDecl& target, const ClassDecl* const caller)const noexcept{
@@ -180,6 +201,36 @@ b8 SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     registerTypeSymbols(unit.interfaces, m_interfaces);
     registerTypeSymbols(unit.classes, m_classes);
     registerTypeSymbols(unit.typeAliases, m_typeAliases);
+
+    for(ClassDecl* cls : unit.classes){
+        cls->concreteBase = nullptr;
+        for(FieldDecl* field : cls->fields)
+            field->declaringClass = cls;
+        for(MethodDecl* method : cls->methods)
+            method->declaringClass = cls;
+        for(const TypeRef* baseRef : cls->implementedInterfaces){
+            const auto* base = baseRef ? findClass(resolveBaseTypeName(baseRef->name)) : nullptr;
+            if(!base || !base->isExtensible)
+                continue;
+            if(cls->concreteBase){
+                ReportAdhdDiagnostic(m_arena, errors, cls->span, "only one authored concrete base is supported");
+                ok = false;
+                break;
+            }
+            cls->concreteBase = base;
+        }
+    }
+    for(ClassDecl* cls : unit.classes){
+        const ClassDecl* current = cls->concreteBase;
+        for(usize depth = 0u; current; ++depth, current = current->concreteBase){
+            if(current == cls || depth >= unit.classes.size()){
+                ReportAdhdDiagnostic(m_arena, errors, cls->span, "cyclic concrete class inheritance is prohibited");
+                cls->concreteBase = nullptr;
+                ok = false;
+                break;
+            }
+        }
+    }
 
     for(MethodDecl* fn : unit.freeFunctions)
         m_freeFunctions.push_back(fn);
@@ -262,7 +313,15 @@ const MethodDecl* SymbolTable::findClassMethod(
     const Span<const u8> argIsMut,
     const b8 staticOnly
 )const noexcept{
-    return CallableOverloadSelector::FindScoredClassCallable(*this, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut, staticOnly);
+    for(auto* owner = &classDecl; owner; owner = owner->concreteBase){
+        if(const MethodDecl* method = CallableOverloadSelector::FindScoredClassCallable(*this, *owner, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut, staticOnly))
+            return method;
+        for(const MethodDecl* local : owner->methods){
+            if(local->name == name)
+                return nullptr;
+        }
+    }
+    return nullptr;
 }
 
 const MethodDecl* SymbolTable::findClassOperator(

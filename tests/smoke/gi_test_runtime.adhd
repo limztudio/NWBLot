@@ -3,6 +3,8 @@
 
 
 #include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
+#include <loader/project_entry.adhd>
 #include "gi_test_scenes.adhd"
 
 
@@ -21,10 +23,10 @@ const SmokeMaterialRef s_GiGroundOpaqueMaterial = "project/smoke/transparent_mul
 
 
 [arena]
-class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
-    public GiTestSmokeProjectImpl(mut ProjectRuntimeContext context){
+class GiTestSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
+    public GiTestSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSmokeRenderWorldOrDie(GiTestProjectName(), context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_csgGiScene = CsgGiScene(context);
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(GiTestProjectName());
     }
@@ -37,7 +39,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
         return this.m_complexLiveWarmupComplete;
     }
 
-    public b8 shouldCaptureFrame(in u64 frame)const{
+    public b8 shouldCaptureFrame(in u64 frame)const override{
         return this.shouldCaptureComplex();
     }
 
@@ -331,29 +333,21 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB GI Test");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB GI Test");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::GiTestSmokeProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateSmokeRenderWorld(GiTestProjectName(), context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<GiTestSmokeProjectImpl>(owner, context);
 }
 
 

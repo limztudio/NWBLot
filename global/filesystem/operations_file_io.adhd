@@ -47,6 +47,12 @@ extern Expected<Path, ErrorCode> ResolveAbsolutePath(in Path a0, in auto a1);
 [cpp_name("::WriteBinaryFile")]
 extern b8 WriteBinaryFile(in Path a0, in auto a1);
 
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::FileWriteStatus")]
+extern enum<u8> FileWriteStatus{ Success, OpenFailed, WriteFailed };
+
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::WritePlatformTextFile")]
+extern FileWriteStatus WritePlatformTextFile(in Path path, in StringView content, in b8 append);
+
 [cpp_name("::WriteTextFile")]
 extern b8 WriteTextFile(in Path a0, in StringView a1);
 

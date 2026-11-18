@@ -3,7 +3,7 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_numeric_and_popup_tools.adhd>
 #include <tests/unit/ui/multiline_fixture.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
@@ -11,361 +11,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type IntegerModelTests = NumericModelFixture<IntegerEditModel>;
 
+class UiInputBindingsTests{
+    public InputBindings m_bindings;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
-#include <impl/ecs_ui/toolkit/layout/tree.adhd.h>
-
-#include <global/limit.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_input_bindings_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiInputBindingsTests : public testing::Test{
-public:
-    UiInputBindingsTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiInputBindings))
-        , m_bindings(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] usize bindingsDataAddress()const noexcept{
-        return reinterpret_cast<usize>(m_bindings.bindings().data());
+    public usize bindingsDataAddress()const{ return TestDataAddress(this.m_bindings.bindings()); }
+    public b8 setSingle(in InputKeyBinding binding){ return this.m_bindings.set(Array<InputKeyBinding, 1u>(binding)); }
+    public b8 setSpan(in Span<InputKeyBinding> bindings){
+        return this.m_bindings.set(bindings);
     }
-
-    [[nodiscard]] b8 setSingle(const InputKeyBinding& binding){
-        return m_bindings.set(Span<const InputKeyBinding>(&binding, 1u));
+    public b8 setCount(in Span<InputKeyBinding> bindings, in usize count){
+        return this.m_bindings.set(bindings.subspan(0u, count));
     }
-
-    [[nodiscard]] b8 setSpan(const Span<const InputKeyBinding> bindings){
-        return m_bindings.set(bindings);
-    }
-
-    [[nodiscard]] b8 setCount(const Span<const InputKeyBinding> bindings, const usize count){
-        return m_bindings.set(bindings.subspan(0u, count));
-    }
-
-    [[nodiscard]] b8 setEmpty(){
-        return m_bindings.set({});
-    }
-
-    [[nodiscard]] b8 setAliasedSlice(const usize offset, const usize count){
-        return m_bindings.set(Span<const InputKeyBinding>(m_bindings.bindings().data() + offset, count));
-    }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    InputBindings m_bindings;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_input_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiInputTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiInputTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiInput))
-    {}
-
-
-public:
-    void tab(const b8 reverse = false){
-        key(Core::Key::Tab, reverse);
-    }
-
-    [[nodiscard]] b8 commitSingle(const HitTarget& target, const u64 generation){
-        return m_router.commitTargets(Span<const HitTarget>(&target, 1u), generation);
-    }
-
-    [[nodiscard]] b8 commitSpan(const Span<const HitTarget> targets, const u64 generation){
-        return m_router.commitTargets(targets, generation);
-    }
-
-    [[nodiscard]] b8 commitEmpty(const u64 generation){
-        return m_router.commitTargets({}, generation);
-    }
-
-    [[nodiscard]] b8 commitOverflowSingle(const HitTarget& target, const usize overflowCount, const u64 generation){
-        return m_router.commitTargets(Span<const HitTarget>(&target, overflowCount), generation);
-    }
-
-    [[nodiscard]] b8 commitOverflowSpan(const Span<const HitTarget> targets, const u64 generation){
-        return m_router.commitTargets(Span<const HitTarget>(targets.data(), targets.size() + 1u), generation);
-    }
-
-    [[nodiscard]] usize findTargetAddress(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
-        const auto found = m_router.findTarget(id, declarationGeneration);
-        return found ? reinterpret_cast<usize>(found->get()) : 0u;
-    }
-
-    [[nodiscard]] usize targetEntryAddress(const usize index)const noexcept{
-        return reinterpret_cast<usize>(&m_router.targets()[index]);
-    }
-
-    [[nodiscard]] Optional<HitTarget> findTargetCopy(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
-        if(const auto found = m_router.findTarget(id, declarationGeneration))
-            return **found;
-        return {};
-    }
-
-    [[nodiscard]] b8 queueNative(const InputEvent& event){
-        return m_router.queue(UiTestSupport::NativeInput(event)).has_value();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_integer_model_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiNumericTests;
-using IntegerModelTests = NumericModelFixture<IntegerEditModel>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiLayoutTests : public testing::Test{
-public:
-    UiLayoutTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiLayout))
-        , m_tree(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<u32> add(const u32 parent, const LayoutNodeDesc& description){
-        return m_tree.addNode(parent, description);
-    }
-
-    [[nodiscard]] usize boxAddress(const u32 index)const noexcept{
-        return index < m_tree.boxes().size() ? reinterpret_cast<usize>(&m_tree.boxes()[index]) : 0u;
-    }
-
-    [[nodiscard]] Optional<LayoutBox> boxCopy(const u32 index)const noexcept{
-        return m_tree.box(index);
-    }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    LayoutTree m_tree;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiInputBindingsTests = __hidden_ui_input_bindings_tests::UiInputBindingsTests;
-using UiInputTests = __hidden_ui_input_tests::UiInputTests;
-using IntegerModelTests = __hidden_ui_integer_model_tests::IntegerModelTests;
-using UiLayoutTests = __hidden_ui_layout_tests::UiLayoutTests;
-using UiListBehaviorRangeSource = ::UiListBehaviorTestSupport::RangeSource;
-using UiListBuilderTests = ::NWB::UiListTests::UiListBuilderTests;
-using MultilineSnapshot = ::NWB::UiMultilineTests::MultilineSnapshot;
-using ScopedTestTrace = ::NWB::Tests::ScopedTestTrace;
-
-using ControlAction = ::NWB::Impl::Ui::ControlAction;
-using ControlToken = ::NWB::Impl::Ui::ControlToken;
-using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
-using HitTarget = ::NWB::Impl::Ui::HitTarget;
-using UiInputAction = ::NWB::Impl::Ui::InputAction;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-using InputKeyBinding = ::NWB::Impl::Ui::InputKeyBinding;
-using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
-using InputSource = ::NWB::Impl::Ui::InputSource;
-using Insets = ::NWB::Impl::Ui::Insets;
-using IntegerBounds = ::NWB::Impl::Ui::IntegerBounds;
-using LayoutBox = ::NWB::Impl::Ui::LayoutBox;
-using LayoutNodeDesc = ::NWB::Impl::Ui::LayoutNodeDesc;
-using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
-using LayoutTree = ::NWB::Impl::Ui::LayoutTree;
-using ListOptions = ::NWB::Impl::Ui::ListOptions;
-using ListResult = ::NWB::Impl::Ui::ListResult;
-using ListState = ::NWB::Impl::Ui::ListState;
-using NumericEditResult = ::NWB::Impl::Ui::NumericEditResult;
-using Point = ::NWB::Impl::Ui::Point;
-using PopupState = ::NWB::Impl::Ui::PopupState;
-using Rect = ::NWB::Impl::Ui::Rect;
-using ScrollPlacement = ::NWB::Impl::Ui::ScrollPlacement;
-using WidgetId = ::NWB::Impl::Ui::WidgetId;
-
-namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
-using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
-namespace InputActionSource = ::NWB::Impl::Ui::InputActionSource;
-using InputActionSourceEnum = ::NWB::Impl::Ui::InputActionSource::Enum;
-namespace InputCommand = ::NWB::Impl::Ui::InputCommand;
-using InputCommandEnum = ::NWB::Impl::Ui::InputCommand::Enum;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace InputSelectionPolicy = ::NWB::Impl::Ui::InputSelectionPolicy;
-using InputSelectionPolicyEnum = ::NWB::Impl::Ui::InputSelectionPolicy::Enum;
-namespace LayoutDirection = ::NWB::Impl::Ui::LayoutDirection;
-using LayoutDirectionEnum = ::NWB::Impl::Ui::LayoutDirection::Enum;
-namespace LayoutSizePolicy = ::NWB::Impl::Ui::LayoutSizePolicy;
-using LayoutSizePolicyEnum = ::NWB::Impl::Ui::LayoutSizePolicy::Enum;
-namespace NumericBoundsPolicy = ::NWB::Impl::Ui::NumericBoundsPolicy;
-using NumericBoundsPolicyEnum = ::NWB::Impl::Ui::NumericBoundsPolicy::Enum;
-namespace NumericParseStatus = ::NWB::Impl::Ui::NumericParseStatus;
-using NumericParseStatusEnum = ::NWB::Impl::Ui::NumericParseStatus::Enum;
-namespace CoreKey = ::NWB::Core::Key;
-using CoreKeyEnum = ::NWB::Core::Key::Enum;
-namespace CoreInputModifier = ::NWB::Core::InputModifier;
-
-using ::NWB::Impl::Ui::s_InputMaxBindings;
-using ::NWB::Impl::Ui::s_InputBindingModifierMask;
-using ::NWB::Impl::Ui::s_InputMaxTargets;
-using ::NWB::Impl::Ui::s_InputMaxEvents;
-using ::NWB::Impl::Ui::s_InputMaxActions;
-using ::NWB::Impl::Ui::s_LayoutNoParent;
-using ::NWB::Impl::Ui::s_LayoutMaxNodes;
-
-[[nodiscard]] FOUNDATION_INLINE f32 UiInputLayoutInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f32 UiInputLayoutQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] FOUNDATION_INLINE f64 UiInputLayoutInfinityF64()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f64 UiInputLayoutQuietNaNF64()noexcept{ return ::Limit<f64>::s_QuietNaN; }
-
-FOUNDATION_INLINE void ExpectUiIntegerModelRejected(const NumericEditResult& result, const b8 restored = false){
-    ::NWB::UiNumericTests::ExpectRejected(result, restored);
+    public b8 setEmpty(){ return this.m_bindings.set(Span<InputKeyBinding>()); }
+    public b8 setAliasedSlice(in usize offset, in usize count){ return this.m_bindings.set(this.m_bindings.bindings().subspan(offset, count)); }
 }
 
-FOUNDATION_INLINE void ExpectUiLayoutRect(const Rect& actual, const Rect& expected){
-    ::NWB::UiPaintAssertions::ExpectRect(actual, expected);
+
+class UiInputTests : RouterTestFixture{
+
+
+    public void tab(){ this.tab(false); }
+    public void tab(in b8 reverse){
+        this.key(Key::Tab, reverse);
+    }
+    public b8 commitSingle(in HitTarget target, in u64 generation){ return this.m_router.commitTargets(MakeUiSingleHitTargetArray(target), generation); }
+    public b8 commitSpan(in Span<HitTarget> targets, in u64 generation){
+        return this.m_router.commitTargets(targets, generation);
+    }
+    public b8 commitEmpty(in u64 generation){ return this.m_router.commitTargets(Span<HitTarget>(), generation); }
+    public b8 commitOverflowSingle(in HitTarget target, in usize overflowCount, in u64 generation){
+        Vector<HitTarget> targets;
+        targets.resize(overflowCount, target);
+        return this.m_router.commitTargets(targets, generation);
+    }
+    public b8 commitOverflowSpan(in Span<HitTarget> targets, in u64 generation){
+        Vector<HitTarget> oversized;
+        oversized.reserve(targets.size() + 1u);
+        for(in HitTarget target : targets)
+            oversized.push_back(target);
+        oversized.push_back(HitTarget());
+        return this.m_router.commitTargets(oversized, generation);
+    }
+    public usize findTargetAddress(in WidgetId id)const{ return this.findTargetAddress(id, 0u); }
+    public usize findTargetAddress(in WidgetId id, in u64 declarationGeneration)const{
+        const auto found = this.m_router.findTarget(id, declarationGeneration);
+        if(found.has_value())
+            return TestValueAddress<HitTarget>(found.value());
+        return 0u;
+    }
+    public usize targetEntryAddress(in usize index)const{ return TestValueAddress<HitTarget>(this.m_router.targets()[index]); }
+    public Optional<HitTarget> findTargetCopy(in WidgetId id)const{ return this.findTargetCopy(id, 0u); }
+    public Optional<HitTarget> findTargetCopy(in WidgetId id, in u64 declarationGeneration)const{
+        const auto found = this.m_router.findTarget(id, declarationGeneration);
+        if(found.has_value())
+            return Optional<HitTarget>(found.value());
+        return Optional<HitTarget>();
+    }
+    public b8 queueNative(in InputEvent event){
+        return this.m_router.queue(NativeInput(event)).has_value();
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE usize UiLayoutTreeBoxAddress(const LayoutTree& tree, const u32 index)noexcept{
-    return index < tree.boxes().size() ? reinterpret_cast<usize>(&tree.boxes()[index]) : 0u;
+
+class UiLayoutTests{
+    public LayoutTree m_tree;
+
+    public Expected<u32> add(in u32 parent, in LayoutNodeDesc description){
+        return this.m_tree.addNode(parent, description);
+    }
+    public usize boxAddress(in u32 index)const{ return UiLayoutTreeBoxAddress(this.m_tree, index); }
+    public Optional<LayoutBox> boxCopy(in u32 index)const{
+        return this.m_tree.box(index);
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 UiListBehaviorReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ReconcileListState(state, source);
+usize UiLayoutTreeBoxAddress(in LayoutTree tree, in u32 index){
+    if(index < tree.boxes().size())
+        return TestValueAddress<LayoutBox>(tree.boxes()[index]);
+    return 0u;
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiListBehaviorApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
-    return ::NWB::Impl::Ui::ApplyListControlAction(source, options, action, state, result);
-}
-
-[[nodiscard]] FOUNDATION_INLINE ControlAction MakeUiListBehaviorAction(const ListState& state, const UiListBehaviorRangeSource& source, const ControlActionKindEnum kind)noexcept{
-    return ::UiListBehaviorTestSupport::Action(state, source, kind);
-}
-
-FOUNDATION_INLINE void ExpectUiListBehaviorResult(const ListResult& actual, const ListResult& expected){
-    ::UiListBehaviorTestSupport::ExpectResult(actual, expected);
-}
-
-[[nodiscard]] FOUNDATION_INLINE ListOptions MakeUiListScrollbarDefaultOptions()noexcept{
-    return ::NWB::UiListTests::Options();
-}
-
-[[nodiscard]] FOUNDATION_INLINE Point UiListScrollbarCenter(const Rect& bounds)noexcept{
-    return ::NWB::UiWidgetTests::Center(bounds);
-}
-
-[[nodiscard]] FOUNDATION_INLINE WidgetId UiListScrollbarRequireWidgetId(const WidgetId parent, const StringView stableKey){
-    return ::UiTestSupport::RequireWidgetId(parent, stableKey);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiListScrollbarPrepareSinglePopup(UiListBuilderTests& self, const u64 generation, PopupState& lowerPopup, ListState& lowerState){
-    return self.preparePopups(generation, lowerPopup, lowerState);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiListScrollbarPrepareTwoPopups(UiListBuilderTests& self, const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState& upperPopup, ListState& upperState){
-    return self.preparePopups(generation, lowerPopup, lowerState, &upperPopup, &upperState);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
+void ExpectUiIntegerModelRejected(in NumericEditResult result){ ExpectNumericEditRejected(result, false); }
+void ExpectUiIntegerModelRejected(in NumericEditResult result, in b8 restored){ ExpectNumericEditRejected(result, restored); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -380,7 +108,7 @@ const StringView s_UiListScrollbarKey = "scrollbar";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-InputKeyBinding MakeUiInputKeyBinding(in i32 key, in i32 modifiers, in i32 ignoredModifiers, in InputCommandEnum command){
+InputKeyBinding MakeUiInputKeyBinding(in i32 key, in i32 modifiers, in i32 ignoredModifiers, in InputCommand command){
     InputKeyBinding binding = InputKeyBinding();
     binding.key = key;
     binding.modifiers = modifiers;
@@ -403,11 +131,11 @@ HitTarget MakeUiInputTarget(in u64 value){
     return MakeUiInputTargetAt(value, Rect(10.0f, 10.0f, 20.0f, 20.0f));
 }
 
-InputEvent MakeUiInputPointer(in InputEventTypeEnum type){
+InputEvent MakeUiInputPointer(in InputEventType type){
     return MakeUiPointerEvent(type, Point(15.0f, 15.0f));
 }
 
-InputEvent MakeUiInputKey(in InputEventTypeEnum type, in CoreKeyEnum key, in b8 repeat){
+InputEvent MakeUiInputKey(in InputEventType type, in Key key, in b8 repeat){
     InputEvent event = InputEvent();
     event.type = type;
     event.key = key;
@@ -415,7 +143,7 @@ InputEvent MakeUiInputKey(in InputEventTypeEnum type, in CoreKeyEnum key, in b8 
     return event;
 }
 
-LayoutNodeDesc MakeUiLayoutStretchContainer(in LayoutDirectionEnum direction){
+LayoutNodeDesc MakeUiLayoutStretchContainer(in LayoutDirection direction){
     LayoutNodeDesc description = LayoutNodeDesc();
     description.direction = direction;
     description.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
@@ -444,16 +172,16 @@ ListResult MakeUiListBehaviorResult(in b8 valid, in b8 selectionChanged, in b8 a
 
 
 void VerifyUiInputBindingsTests_OverlappingIgnoredModifierChordsRejectAtomicallyRegardlessOfCommand(mut UiInputBindingsTests self){
-    const InputKeyBinding accepted = MakeUiInputKeyBinding(CoreKey::W, 0, 0, InputCommand::Left);
+    const InputKeyBinding accepted = MakeUiInputKeyBinding(Key::W, 0, 0, InputCommand::Left);
     ASSERT_TRUE(self.setSingle(accepted));
     const usize previous = self.bindingsDataAddress();
     Array<InputKeyBinding, 2u> overlap = Array<InputKeyBinding, 2u>();
-    overlap[0u] = MakeUiInputKeyBinding(CoreKey::W, CoreInputModifier::Control, CoreInputModifier::Shift, InputCommand::Right);
-    overlap[1u] = MakeUiInputKeyBinding(CoreKey::W, CoreInputModifier::Shift, CoreInputModifier::Control, InputCommand::Up);
+    overlap[0u] = MakeUiInputKeyBinding(Key::W, InputModifier::Control, InputModifier::Shift, InputCommand::Right);
+    overlap[1u] = MakeUiInputKeyBinding(Key::W, InputModifier::Shift, InputModifier::Control, InputCommand::Up);
     EXPECT_FALSE(self.setSpan(overlap));
     EXPECT_EQ(self.bindingsDataAddress(), previous);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::W, 0).command, InputCommand::Left);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::W, CoreInputModifier::Control | CoreInputModifier::Shift).command, InputCommand::None);
+    EXPECT_EQ(self.m_bindings.resolve(Key::W, 0).command, InputCommand::Left);
+    EXPECT_EQ(self.m_bindings.resolve(Key::W, cast<i32>(InputModifier::Control) | cast<i32>(InputModifier::Shift)).command, InputCommand::None);
     Array<InputKeyBinding, 2u> duplicate = Array<InputKeyBinding, 2u>();
     duplicate[0u] = accepted;
     duplicate[1u] = accepted;
@@ -462,15 +190,15 @@ void VerifyUiInputBindingsTests_OverlappingIgnoredModifierChordsRejectAtomically
 }
 
 void VerifyUiInputBindingsTests_MalformedKeysEnumsAndModifiersPreserveAcceptedProfile(mut UiInputBindingsTests self){
-    const InputKeyBinding accepted = MakeUiInputKeyBinding(CoreKey::W, 0, 0, InputCommand::Left);
+    const InputKeyBinding accepted = MakeUiInputKeyBinding(Key::W, 0, 0, InputCommand::Left);
     ASSERT_TRUE(self.setSingle(accepted));
     const usize previous = self.bindingsDataAddress();
     Array<i32, 5u> invalidKeys = Array<i32, 5u>();
-    invalidKeys[0u] = CoreKey::Unknown;
-    invalidKeys[1u] = CoreKey::Space - 1;
-    invalidKeys[2u] = CoreKey::Menu + 1;
-    invalidKeys[3u] = CoreKey::Apostrophe + 1;
-    invalidKeys[4u] = CoreKey::GraveAccent + 1;
+    invalidKeys[0u] = Key::Unknown;
+    invalidKeys[1u] = Key::Space - 1;
+    invalidKeys[2u] = Key::Menu + 1;
+    invalidKeys[3u] = Key::Apostrophe + 1;
+    invalidKeys[4u] = Key::GraveAccent + 1;
     for(in i32 key : invalidKeys){
         InputKeyBinding invalid = accepted;
         invalid.key = key;
@@ -481,35 +209,35 @@ void VerifyUiInputBindingsTests_MalformedKeysEnumsAndModifiersPreserveAcceptedPr
     InputKeyBinding invalid = accepted;
     invalid.command = InputCommand::None;
     EXPECT_FALSE(self.setSingle(invalid));
-    invalid.command = bit_cast<InputCommandEnum>(u8(255u));
+    invalid.command = bit_cast<InputCommand>(u8(255u));
     EXPECT_FALSE(self.setSingle(invalid));
     invalid = accepted;
-    invalid.selection = bit_cast<InputSelectionPolicyEnum>(u8(255u));
+    invalid.selection = bit_cast<InputSelectionPolicy>(u8(255u));
     EXPECT_FALSE(self.setSingle(invalid));
     invalid = accepted;
-    invalid.modifiers = CoreInputModifier::CapsLock;
+    invalid.modifiers = InputModifier::CapsLock;
     EXPECT_FALSE(self.setSingle(invalid));
     invalid = accepted;
-    invalid.ignoredModifiers = CoreInputModifier::NumLock;
+    invalid.ignoredModifiers = InputModifier::NumLock;
     EXPECT_FALSE(self.setSingle(invalid));
-    invalid.modifiers = CoreInputModifier::Shift;
-    invalid.ignoredModifiers = CoreInputModifier::Shift;
+    invalid.modifiers = InputModifier::Shift;
+    invalid.ignoredModifiers = InputModifier::Shift;
     EXPECT_FALSE(self.setSingle(invalid));
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::W, 0x0040).command, InputCommand::None);
+    EXPECT_EQ(self.m_bindings.resolve(Key::W, 0x0040).command, InputCommand::None);
     EXPECT_EQ(self.bindingsDataAddress(), previous);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::W, 0).command, InputCommand::Left);
+    EXPECT_EQ(self.m_bindings.resolve(Key::W, 0).command, InputCommand::Left);
 }
 
 void VerifyUiInputBindingsTests_WorldKeyCodesRejectSparseNeighborsWithoutReplacingTheAcceptedProfile(mut UiInputBindingsTests self){
     Array<InputKeyBinding, 2u> accepted = Array<InputKeyBinding, 2u>();
-    accepted[0u] = MakeUiInputKeyBinding(CoreKey::World1, 0, 0, InputCommand::Left);
-    accepted[1u] = MakeUiInputKeyBinding(CoreKey::World2, 0, 0, InputCommand::Right);
+    accepted[0u] = MakeUiInputKeyBinding(Key::World1, 0, 0, InputCommand::Left);
+    accepted[1u] = MakeUiInputKeyBinding(Key::World2, 0, 0, InputCommand::Right);
     ASSERT_TRUE(self.setSpan(accepted));
     const usize previous = self.bindingsDataAddress();
     Array<i32, 3u> invalidKeys = Array<i32, 3u>();
-    invalidKeys[0u] = CoreKey::GraveAccent + 1;
-    invalidKeys[1u] = CoreKey::World1 - 1;
-    invalidKeys[2u] = CoreKey::World2 + 1;
+    invalidKeys[0u] = Key::GraveAccent + 1;
+    invalidKeys[1u] = Key::World1 - 1;
+    invalidKeys[2u] = Key::World2 + 1;
     for(in i32 key : invalidKeys){
         InputKeyBinding invalid = accepted[0u];
         invalid.key = key;
@@ -525,7 +253,7 @@ void VerifyUiInputBindingsTests_ExactCapacitySucceedsAndOverflowPreservesTheProf
     Array<InputKeyBinding, 257u> custom = Array<InputKeyBinding, 257u>();
     ASSERT_EQ(custom.size(), s_InputMaxBindings + 1u);
     for(usize index = 0u; index < s_InputMaxBindings; ++index){
-        custom[index].key = CoreKey::F1 + cast<i32>(index / 16u);
+        custom[index].key = Key::F1 + cast<i32>(index / 16u);
         custom[index].modifiers = cast<i32>(index % 16u);
         custom[index].command = InputCommand::Right;
     }
@@ -533,24 +261,24 @@ void VerifyUiInputBindingsTests_ExactCapacitySucceedsAndOverflowPreservesTheProf
     const usize previous = self.bindingsDataAddress();
     EXPECT_FALSE(self.setSpan(custom));
     EXPECT_EQ(self.bindingsDataAddress(), previous);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::F16, s_InputBindingModifierMask).command, InputCommand::Right);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::F17, 0).command, InputCommand::None);
+    EXPECT_EQ(self.m_bindings.resolve(Key::F16, s_InputBindingModifierMask).command, InputCommand::Right);
+    EXPECT_EQ(self.m_bindings.resolve(Key::F17, 0).command, InputCommand::None);
 }
 
 void VerifyUiInputBindingsTests_EmptyAndAliasedProfileReplacementCanRecoverToDefaults(mut UiInputBindingsTests self){
     Array<InputKeyBinding, 2u> custom = Array<InputKeyBinding, 2u>();
-    custom[0u] = MakeUiInputKeyBinding(CoreKey::W, 0, 0, InputCommand::Up);
-    custom[1u] = MakeUiInputKeyBinding(CoreKey::F, 0, 0, InputCommand::Activate);
+    custom[0u] = MakeUiInputKeyBinding(Key::W, 0, 0, InputCommand::Up);
+    custom[1u] = MakeUiInputKeyBinding(Key::F, 0, 0, InputCommand::Activate);
     ASSERT_TRUE(self.setSpan(custom));
     ASSERT_TRUE(self.setAliasedSlice(1u, 1u));
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::W, 0).command, InputCommand::None);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::F, 0).command, InputCommand::Activate);
+    EXPECT_EQ(self.m_bindings.resolve(Key::W, 0).command, InputCommand::None);
+    EXPECT_EQ(self.m_bindings.resolve(Key::F, 0).command, InputCommand::Activate);
     ASSERT_TRUE(self.setEmpty());
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::F, 0).command, InputCommand::None);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::Tab, 0).command, InputCommand::None);
+    EXPECT_EQ(self.m_bindings.resolve(Key::F, 0).command, InputCommand::None);
+    EXPECT_EQ(self.m_bindings.resolve(Key::Tab, 0).command, InputCommand::None);
     self.m_bindings.restoreDefaults();
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::F, 0).command, InputCommand::None);
-    EXPECT_EQ(self.m_bindings.resolve(CoreKey::Tab, CoreInputModifier::Shift).command, InputCommand::FocusPrevious);
+    EXPECT_EQ(self.m_bindings.resolve(Key::F, 0).command, InputCommand::None);
+    EXPECT_EQ(self.m_bindings.resolve(Key::Tab, InputModifier::Shift).command, InputCommand::FocusPrevious);
 }
 
 
@@ -639,7 +367,7 @@ void VerifyUiInputTests_FirstClickConsumesBeforeFocusExistsAndActivationIsNotRep
     EXPECT_TRUE(released.pointerConsumed);
     EXPECT_FALSE(released.capture.valid());
     ASSERT_EQ(self.m_router.actions().size(), 1u);
-    const UiInputAction action = self.m_router.actions()[0u];
+    const InputAction action = self.m_router.actions()[0u];
     EXPECT_FALSE(self.m_router.process().pointerConsumed);
     EXPECT_EQ(self.m_router.actions()[0u].id.sequence, action.id.sequence);
     EXPECT_FALSE(self.commitSingle(target, 7u));
@@ -672,7 +400,7 @@ void VerifyUiInputTests_HitTestRespectsPaintOrderClippingDisabledTargetsAndHalfO
     EXPECT_EQ(self.m_router.hitTest(Point(60.0f, 60.0f)).value, 2u);
     EXPECT_EQ(self.m_router.hitTest(Point(10.0f, 10.0f)).value, 2u);
     EXPECT_FALSE(self.m_router.hitTest(Point(100.0f, 10.0f)).valid());
-    EXPECT_FALSE(self.m_router.hitTest(Point(UiInputLayoutQuietNaNF32(), 0.0f)).valid());
+    EXPECT_FALSE(self.m_router.hitTest(Point(bit_cast<f32>(0x7fc00000u), 0.0f)).valid());
     EXPECT_TRUE(self.m_router.wouldConsumePointer(Point(45.0f, 45.0f)));
     EXPECT_FALSE(self.m_router.wouldConsumePointer(Point(-1.0f, -1.0f)));
 }
@@ -846,7 +574,7 @@ void VerifyUiInputTests_InvalidatedDeclarationPrunesActionsAndCaptureWithoutAdva
     self.click();
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     self.m_router.invalidateTarget(targets[0u].id);
     EXPECT_EQ(self.m_router.layoutGeneration(), 7u);
     ASSERT_EQ(self.m_router.targets().size(), 1u);
@@ -857,7 +585,7 @@ void VerifyUiInputTests_InvalidatedDeclarationPrunesActionsAndCaptureWithoutAdva
     EXPECT_FALSE(self.m_router.hitTest(Point(15.0f, 15.0f)).valid());
     EXPECT_EQ(self.m_router.hitTest(Point(45.0f, 15.0f)).value, 2u);
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
 }
 
 void VerifyUiInputTests_PanelBlocksPointerAndClearsKeyboardFocusWithoutActivating(mut UiInputTests self){
@@ -876,8 +604,8 @@ void VerifyUiInputTests_PanelBlocksPointerAndClearsKeyboardFocusWithoutActivatin
     EXPECT_EQ(panel.capture.value, 2u);
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(45.0f, 15.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false)).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
 }
 
 void VerifyUiInputTests_TabOrderWrapsInBothDirectionsAndSkipsDisabledOrInvisibleTargets(mut UiInputTests self){
@@ -903,41 +631,41 @@ void VerifyUiInputTests_TabOrderWrapsInBothDirectionsAndSkipsDisabledOrInvisible
     EXPECT_EQ(self.m_router.focus().value, 5u);
     self.tab(true);
     EXPECT_EQ(self.m_router.focus().value, 1u);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
     EXPECT_FALSE(self.m_router.focus().valid());
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
     self.tab(true);
     EXPECT_EQ(self.m_router.focus().value, 5u);
     ASSERT_TRUE(self.commitEmpty(2u));
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Tab, false)).commandConsumed);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Tab, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
 }
 
 void VerifyUiInputTests_KeyboardActivationIgnoresNativeRepeatsAndDuplicateDowns(mut UiInputTests self){
     const HitTarget target = MakeUiInputTarget(1u);
     ASSERT_TRUE(self.commitSingle(target, 1u));
     self.tab();
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_TRUE(self.m_router.pressed(target.id));
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, true)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_FALSE(self.m_router.process().commandConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     EXPECT_EQ(self.m_router.actions()[0u].origin, InputActionSource::Command);
     EXPECT_FALSE(self.m_router.pressed(target.id));
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
     EXPECT_EQ(self.m_router.actions().size(), 1u);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     EXPECT_EQ(self.m_router.actions().size(), 3u);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, true)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, true)).commandConsumed);
     EXPECT_EQ(self.m_router.actions().size(), 3u);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     ASSERT_TRUE(self.commitEmpty(2u));
     EXPECT_TRUE(self.m_router.actions().empty());
 }
@@ -946,18 +674,18 @@ void VerifyUiInputTests_HeldUiKeysKeepReleaseOwnershipAfterFocusedTargetRemoval(
     const HitTarget target = MakeUiInputTarget(1u);
     ASSERT_TRUE(self.commitSingle(target, 1u));
     self.tab();
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     ASSERT_TRUE(self.commitEmpty(2u));
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_TRUE(self.m_router.actions().empty());
-    const InputRoutingResult repeated = self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, true));
+    const InputRoutingResult repeated = self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, true));
     EXPECT_TRUE(repeated.commandConsumed);
     EXPECT_TRUE(repeated.wantsCommands);
     EXPECT_TRUE(self.m_router.actions().empty());
-    const InputRoutingResult released = self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false));
+    const InputRoutingResult released = self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false));
     EXPECT_TRUE(released.commandConsumed);
     EXPECT_FALSE(released.wantsCommands);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
 }
 
 void VerifyUiInputTests_ClearingKeyboardFocusPreservesAcceptedActionsCaptureAndHeldReleaseOwnership(mut UiInputTests self){
@@ -965,19 +693,19 @@ void VerifyUiInputTests_ClearingKeyboardFocusPreservesAcceptedActionsCaptureAndH
     ASSERT_TRUE(self.commitSingle(target, 1u));
     self.click();
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     ASSERT_EQ(self.m_router.actions().size(), 1u);
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Space));
-    EXPECT_FALSE(self.m_router.ownsKey(CoreKey::Unknown));
-    EXPECT_FALSE(self.m_router.ownsKey(CoreKey::Menu + 1));
+    EXPECT_TRUE(self.m_router.ownsKey(Key::Space));
+    EXPECT_FALSE(self.m_router.ownsKey(Key::Unknown));
+    EXPECT_FALSE(self.m_router.ownsKey(Key::Menu + 1));
     self.m_router.clearFocus();
     EXPECT_FALSE(self.m_router.focus().valid());
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Space));
+    EXPECT_TRUE(self.m_router.ownsKey(Key::Space));
     EXPECT_EQ(self.m_router.capture().value, 1u);
     EXPECT_TRUE(self.m_router.primaryDown());
     EXPECT_EQ(self.m_router.actions().size(), 1u);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
-    EXPECT_FALSE(self.m_router.ownsKey(CoreKey::Space));
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
+    EXPECT_FALSE(self.m_router.ownsKey(Key::Space));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
     ASSERT_EQ(self.m_router.actions().size(), 2u);
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
@@ -992,7 +720,7 @@ void VerifyUiInputTests_NativeFocusTerminationAndResetDoNotReuseActionSequences(
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     const u64 firstSequence = self.m_router.actions()[0u].id.sequence;
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     const InputRoutingResult lost = self.send(MakeUiBareInputEvent(InputEventType::FocusLost));
     EXPECT_TRUE(lost.pointerConsumed);
     EXPECT_TRUE(lost.commandConsumed);
@@ -1002,14 +730,14 @@ void VerifyUiInputTests_NativeFocusTerminationAndResetDoNotReuseActionSequences(
     EXPECT_FALSE(lost.focus.valid());
     EXPECT_FALSE(lost.capture.valid());
     EXPECT_TRUE(self.m_router.primaryDown());
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Space));
+    EXPECT_TRUE(self.m_router.ownsKey(Key::Space));
     EXPECT_TRUE(self.m_router.actions().empty());
     self.m_router.cancelDeviceInput(0u);
     EXPECT_FALSE(self.m_router.primaryDown());
-    EXPECT_FALSE(self.m_router.ownsKey(CoreKey::Space));
+    EXPECT_FALSE(self.m_router.ownsKey(Key::Space));
     EXPECT_FALSE(self.m_router.wantsPointer());
     EXPECT_FALSE(self.m_router.wantsCommands());
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     EXPECT_FALSE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(90.0f, 90.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     ASSERT_TRUE(self.queueNative(MakeUiInputPointer(InputEventType::PrimaryDown)));
@@ -1056,7 +784,7 @@ void VerifyUiInputTests_InvalidTargetPublicationPreservesAcceptedLayoutCaptureAn
     invalid[1u].id.value = 3u;
     invalid[1u].rectangle.width = -1.0f;
     EXPECT_FALSE(self.commitSpan(invalid, 2u));
-    invalid[1u].rectangle.width = UiInputLayoutInfinityF32();
+    invalid[1u].rectangle.width = bit_cast<f32>(0x7f800000u);
     EXPECT_FALSE(self.commitSpan(invalid, 2u));
     invalid[1u].rectangle = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     invalid[1u].declarationGeneration = 0u;
@@ -1091,9 +819,9 @@ void VerifyUiInputTests_TargetAndEventLimitsRejectOverflowAndAllowSubsequentProc
     EXPECT_FALSE(self.queueNative(MakeUiInputPointer(InputEventType::PointerMove)));
     EXPECT_TRUE(self.m_router.process().pointerConsumed);
     EXPECT_EQ(self.m_router.hover().value, s_InputMaxTargets);
-    EXPECT_FALSE(self.queueNative(MakeUiPointerEvent(InputEventType::PointerMove, Point(UiInputLayoutQuietNaNF32(), 1.0f))));
-    EXPECT_FALSE(self.queueNative(MakeUiBareInputEvent(bit_cast<InputEventTypeEnum>(u8(255u)))));
-    EXPECT_FALSE(self.queueNative(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Unknown, false)));
+    EXPECT_FALSE(self.queueNative(MakeUiPointerEvent(InputEventType::PointerMove, Point(bit_cast<f32>(0x7fc00000u), 1.0f))));
+    EXPECT_FALSE(self.queueNative(MakeUiBareInputEvent(bit_cast<InputEventType>(u8(255u)))));
+    EXPECT_FALSE(self.queueNative(MakeUiInputKey(InputEventType::KeyDown, Key::Unknown, false)));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PointerMove)).pointerConsumed);
 }
 
@@ -1102,24 +830,24 @@ void VerifyUiInputTests_ActionLimitReportsOverflowWithoutReplayingDroppedInput(m
     ASSERT_TRUE(self.commitSingle(target, 1u));
     self.tab();
     for(usize index = 0u; index < s_InputMaxActions; ++index){
-        const InputRoutingResult activated = self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false));
+        const InputRoutingResult activated = self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, false));
         EXPECT_TRUE(activated.commandConsumed);
         EXPECT_FALSE(activated.activationOverflow);
-        EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
+        EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     }
     ASSERT_EQ(self.m_router.actions().size(), s_InputMaxActions);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false)).activationOverflow);
-    const InputRoutingResult overflow = self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false));
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, false)).activationOverflow);
+    const InputRoutingResult overflow = self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Enter, false));
     EXPECT_TRUE(overflow.commandConsumed);
     EXPECT_TRUE(overflow.activationOverflow);
     EXPECT_EQ(self.m_router.actions().size(), s_InputMaxActions);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     EXPECT_FALSE(self.m_router.process().activationOverflow);
     EXPECT_EQ(self.m_router.actions().size(), s_InputMaxActions - 1u);
-    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Enter, false)).activationOverflow);
+    EXPECT_FALSE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Enter, false)).activationOverflow);
     EXPECT_EQ(self.m_router.actions().size(), s_InputMaxActions - 1u);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     EXPECT_EQ(self.m_router.actions().size(), s_InputMaxActions);
 }
 
@@ -1129,7 +857,7 @@ void VerifyUiInputTests_EscapeCancelsPointerPressEvenWhenATextEditorKeepsFocus(m
     ASSERT_TRUE(self.commitSingle(target, 1u));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(self.m_router.pressed(target.id));
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
     EXPECT_EQ(self.m_router.focus(), target.id);
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_FALSE(self.m_router.pressed(target.id));
@@ -1137,7 +865,7 @@ void VerifyUiInputTests_EscapeCancelsPointerPressEvenWhenATextEditorKeepsFocus(m
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, Point(90.0f, 90.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
     self.click();
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
 }
@@ -1160,16 +888,16 @@ void VerifyUiInputTests_NativeCaptureTerminationAdmitsFreshClicksWithoutCancelli
     ASSERT_TRUE(self.commitSingle(target, 1u));
     self.click();
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::PointerCaptureLost)).pointerConsumed);
     EXPECT_FALSE(self.m_router.primaryDown());
     EXPECT_FALSE(self.m_router.secondaryDown());
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Space));
+    EXPECT_TRUE(self.m_router.ownsKey(Key::Space));
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
     self.click();
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
 }
@@ -1178,7 +906,7 @@ void VerifyUiInputTests_NativeFocusTerminationDropsMissingNativeReleasesButPrese
     const HitTarget target = MakeUiInputTarget(1u);
     ASSERT_TRUE(self.commitSingle(target, 1u));
     EXPECT_TRUE(self.send(MakeUiInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     InputEvent controller = InputEvent();
     controller.type = InputEventType::CommandDown;
     controller.source = InputSource(7u, 3u);
@@ -1187,15 +915,15 @@ void VerifyUiInputTests_NativeFocusTerminationDropsMissingNativeReleasesButPrese
     EXPECT_TRUE(self.send(MakeUiBareInputEvent(InputEventType::FocusLost)).commandConsumed);
     self.m_router.cancelDeviceInput(0u);
     EXPECT_FALSE(self.m_router.primaryDown());
-    EXPECT_FALSE(self.m_router.ownsKey(CoreKey::Space));
+    EXPECT_FALSE(self.m_router.ownsKey(Key::Space));
     EXPECT_TRUE(self.m_router.ownsSource(controller.source));
     EXPECT_TRUE(self.m_router.actions().empty());
     self.send(MakeUiBareInputEvent(InputEventType::FocusGained));
     self.click();
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
-    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, CoreKey::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiInputKey(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     controller.type = InputEventType::CommandUp;
     controller.command = InputCommand::None;
@@ -1356,9 +1084,9 @@ void VerifyUiLayoutTests_ExhaustedColumnSpaceCollapsesStretchAndClipsFixedOverfl
     const Optional<LayoutBox> stretchedBox = self.boxCopy(stretched);
     ASSERT_TRUE(fixedBox.has_value());
     ASSERT_TRUE(stretchedBox.has_value());
-    ExpectUiLayoutRect(fixedBox.value().rectangle, Rect(0.0f, 0.0f, 12.0f, 30.0f));
-    ExpectUiLayoutRect(fixedBox.value().hit, Rect(0.0f, 0.0f, 12.0f, 17.0f));
-    ExpectUiLayoutRect(stretchedBox.value().rectangle, Rect(0.0f, 33.0f, 20.0f, 0.0f));
+    ExpectUiRect(fixedBox.value().rectangle, Rect(0.0f, 0.0f, 12.0f, 30.0f));
+    ExpectUiRect(fixedBox.value().hit, Rect(0.0f, 0.0f, 12.0f, 17.0f));
+    ExpectUiRect(stretchedBox.value().rectangle, Rect(0.0f, 33.0f, 20.0f, 0.0f));
     EXPECT_FLOAT_EQ(stretchedBox.value().hit.height, 0.0f);
 }
 
@@ -1380,9 +1108,9 @@ void VerifyUiLayoutTests_OverlaySizesChildrenIndependentlyAndClipsToPaddedConten
     const Optional<LayoutBox> stretchedBox = self.boxCopy(stretched);
     ASSERT_TRUE(fixedBox.has_value());
     ASSERT_TRUE(stretchedBox.has_value());
-    ExpectUiLayoutRect(fixedBox.value().rectangle, Rect(12.0f, 23.0f, 70.0f, 80.0f));
-    ExpectUiLayoutRect(fixedBox.value().clip, Rect(12.0f, 23.0f, 35.0f, 23.0f));
-    ExpectUiLayoutRect(stretchedBox.value().rectangle, Rect(12.0f, 23.0f, 35.0f, 23.0f));
+    ExpectUiRect(fixedBox.value().rectangle, Rect(12.0f, 23.0f, 70.0f, 80.0f));
+    ExpectUiRect(fixedBox.value().clip, Rect(12.0f, 23.0f, 35.0f, 23.0f));
+    ExpectUiRect(stretchedBox.value().rectangle, Rect(12.0f, 23.0f, 35.0f, 23.0f));
 }
 
 void VerifyUiLayoutTests_UnclippedContainerOverflowStillHonorsViewportAndOuterAncestors(mut UiLayoutTests self){
@@ -1404,8 +1132,8 @@ void VerifyUiLayoutTests_UnclippedContainerOverflowStillHonorsViewportAndOuterAn
     const Optional<LayoutBox> leafBox = self.boxCopy(leaf);
     ASSERT_TRUE(containerBox.has_value());
     ASSERT_TRUE(leafBox.has_value());
-    ExpectUiLayoutRect(containerBox.value().hit, Rect(5.0f, 7.0f, 20.0f, 15.0f));
-    ExpectUiLayoutRect(leafBox.value().hit, Rect(5.0f, 7.0f, 43.0f, 31.0f));
+    ExpectUiRect(containerBox.value().hit, Rect(5.0f, 7.0f, 20.0f, 15.0f));
+    ExpectUiRect(leafBox.value().hit, Rect(5.0f, 7.0f, 43.0f, 31.0f));
 }
 
 void VerifyUiLayoutTests_FixedAndContentRootSizingRespectsViewportClipping(mut UiLayoutTests self){
@@ -1421,8 +1149,8 @@ void VerifyUiLayoutTests_FixedAndContentRootSizingRespectsViewportClipping(mut U
     ASSERT_EQ(self.m_tree.boxes().size(), 2u);
     const Optional<LayoutBox> rootBox = self.boxCopy(root);
     ASSERT_TRUE(rootBox.has_value());
-    ExpectUiLayoutRect(rootBox.value().rectangle, Rect(3.0f, 4.0f, 40.0f, 24.0f));
-    ExpectUiLayoutRect(rootBox.value().clip, Rect(3.0f, 4.0f, 31.0f, 17.0f));
+    ExpectUiRect(rootBox.value().rectangle, Rect(3.0f, 4.0f, 40.0f, 24.0f));
+    ExpectUiRect(rootBox.value().clip, Rect(3.0f, 4.0f, 31.0f, 17.0f));
 }
 
 void VerifyUiLayoutTests_OddPhysicalDisplaySizesRemainLogicalAndDoNotRoundStretch(mut UiLayoutTests self){
@@ -1452,8 +1180,8 @@ void VerifyUiLayoutTests_OddPhysicalDisplaySizesRemainLogicalAndDoNotRoundStretc
     const Optional<LayoutBox> secondAfter = self.boxCopy(second);
     ASSERT_TRUE(firstAfter.has_value());
     ASSERT_TRUE(secondAfter.has_value());
-    ExpectUiLayoutRect(firstAfter.value().rectangle, firstBefore);
-    ExpectUiLayoutRect(secondAfter.value().rectangle, secondBefore);
+    ExpectUiRect(firstAfter.value().rectangle, firstBefore);
+    ExpectUiRect(secondAfter.value().rectangle, secondBefore);
 }
 
 void VerifyUiLayoutTests_OversizedPaddingAndEmptyViewportProduceFiniteEmptyContentAndHit(mut UiLayoutTests self){
@@ -1471,12 +1199,12 @@ void VerifyUiLayoutTests_OversizedPaddingAndEmptyViewportProduceFiniteEmptyConte
     const Optional<LayoutBox> leafBox = self.boxCopy(leaf);
     ASSERT_TRUE(rootBox.has_value());
     ASSERT_TRUE(leafBox.has_value());
-    ExpectUiLayoutRect(rootBox.value().content, Rect(12.0f, 14.0f, 0.0f, 0.0f));
-    ExpectUiLayoutRect(leafBox.value().hit, Rect(12.0f, 14.0f, 0.0f, 0.0f));
+    ExpectUiRect(rootBox.value().content, Rect(12.0f, 14.0f, 0.0f, 0.0f));
+    ExpectUiRect(leafBox.value().hit, Rect(12.0f, 14.0f, 0.0f, 0.0f));
     ASSERT_TRUE(self.m_tree.arrange(Rect(7.0f, 11.0f, 0.0f, 0.0f)));
     const Optional<LayoutBox> emptyRootBox = self.boxCopy(root);
     ASSERT_TRUE(emptyRootBox.has_value());
-    ExpectUiLayoutRect(emptyRootBox.value().hit, Rect(7.0f, 11.0f, 0.0f, 0.0f));
+    ExpectUiRect(emptyRootBox.value().hit, Rect(7.0f, 11.0f, 0.0f, 0.0f));
 }
 
 void VerifyUiLayoutTests_InvalidViewportOrOverflowCannotPublishPartialBoxes(mut UiLayoutTests self){
@@ -1488,12 +1216,12 @@ void VerifyUiLayoutTests_InvalidViewportOrOverflowCannotPublishPartialBoxes(mut 
     ASSERT_TRUE(publishedCopy.has_value());
     const Rect before = publishedCopy.value().rectangle;
     EXPECT_FALSE(self.m_tree.arrange(Rect(0.0f, 0.0f, -1.0f, 10.0f)));
-    EXPECT_FALSE(self.m_tree.arrange(Rect(UiInputLayoutQuietNaNF32(), 0.0f, 1.0f, 1.0f)));
-    EXPECT_FALSE(self.m_tree.arrange(Rect(0.0f, 0.0f, UiInputLayoutInfinityF32(), 1.0f)));
+    EXPECT_FALSE(self.m_tree.arrange(Rect(bit_cast<f32>(0x7fc00000u), 0.0f, 1.0f, 1.0f)));
+    EXPECT_FALSE(self.m_tree.arrange(Rect(0.0f, 0.0f, bit_cast<f32>(0x7f800000u), 1.0f)));
     EXPECT_EQ(self.boxAddress(0u), published);
     const Optional<LayoutBox> afterInvalidViewport = self.boxCopy(0u);
     ASSERT_TRUE(afterInvalidViewport.has_value());
-    ExpectUiLayoutRect(afterInvalidViewport.value().rectangle, before);
+    ExpectUiRect(afterInvalidViewport.value().rectangle, before);
     self.m_tree.reset();
     const Expected<u32> rootResult = self.add(s_LayoutNoParent, MakeUiLayoutStretchContainer(LayoutDirection::Row));
     ASSERT_TRUE(rootResult.has_value());
@@ -1505,7 +1233,7 @@ void VerifyUiLayoutTests_InvalidViewportOrOverflowCannotPublishPartialBoxes(mut 
     EXPECT_EQ(self.boxAddress(0u), published);
     const Optional<LayoutBox> afterRowOverflow = self.boxCopy(0u);
     ASSERT_TRUE(afterRowOverflow.has_value());
-    ExpectUiLayoutRect(afterRowOverflow.value().rectangle, before);
+    ExpectUiRect(afterRowOverflow.value().rectangle, before);
     self.m_tree.reset();
     ASSERT_TRUE(self.add(s_LayoutNoParent, MakeUiLayoutFixedLeaf(f32.max * 0.75f, 10.0f)).has_value());
     EXPECT_FALSE(self.m_tree.arrange(Rect(f32.max, 0.0f, 0.0f, 0.0f)));
@@ -1539,7 +1267,7 @@ void VerifyUiLayoutTests_InvalidConstructionPoisonsTheBuildUntilResetAndPreserve
     ASSERT_TRUE(self.m_tree.arrange(Rect(3.0f, 4.0f, 21.0f, 13.0f)));
     const Optional<LayoutBox> finalBox = self.boxCopy(0u);
     ASSERT_TRUE(finalBox.has_value());
-    ExpectUiLayoutRect(finalBox.value().rectangle, Rect(3.0f, 4.0f, 7.0f, 9.0f));
+    ExpectUiRect(finalBox.value().rectangle, Rect(3.0f, 4.0f, 7.0f, 9.0f));
 }
 
 void VerifyUiLayoutTests_InvalidDescriptionsAndBoundedCapacityRejectNodeAdmission(mut UiLayoutTests self){
@@ -1547,18 +1275,18 @@ void VerifyUiLayoutTests_InvalidDescriptionsAndBoundedCapacityRejectNodeAdmissio
     Array<LayoutNodeDesc, 7u> invalidDescriptions = Array<LayoutNodeDesc, 7u>();
     invalidDescriptions[0u].width = LayoutSize(LayoutSizePolicy::Stretch, 0.0f);
     invalidDescriptions[1u].width = LayoutSize(LayoutSizePolicy::Fixed, -1.0f);
-    invalidDescriptions[2u].height = LayoutSize(LayoutSizePolicy::Content, UiInputLayoutQuietNaNF32());
+    invalidDescriptions[2u].height = LayoutSize(LayoutSizePolicy::Content, bit_cast<f32>(0x7fc00000u));
     invalidDescriptions[3u].padding = Insets(0.0f, -1.0f, 0.0f, 0.0f);
-    invalidDescriptions[4u].gap = UiInputLayoutInfinityF32();
+    invalidDescriptions[4u].gap = bit_cast<f32>(0x7f800000u);
     invalidDescriptions[5u].intrinsicSize = Point(0.0f, -1.0f);
-    invalidDescriptions[6u].direction = bit_cast<LayoutDirectionEnum>(u8(255u));
+    invalidDescriptions[6u].direction = bit_cast<LayoutDirection>(u8(255u));
     for(in LayoutNodeDesc description : invalidDescriptions){
         self.m_tree.reset();
         EXPECT_FALSE(self.m_tree.addNode(s_LayoutNoParent, description).has_value());
         EXPECT_EQ(self.m_tree.nodeCount(), 0u);
         EXPECT_FALSE(self.m_tree.arrange(Rect(0.0f, 0.0f, 31.0f, 17.0f)));
     }
-    LayoutTree bounded = LayoutTree(self.m_arena, 2u);
+    LayoutTree bounded = LayoutTree(2u);
     const Expected<u32> admittedNode = bounded.addNode(s_LayoutNoParent, MakeUiLayoutStretchContainer(LayoutDirection::Overlay));
     ASSERT_TRUE(admittedNode.has_value());
     const u32 root = admittedNode.value();
@@ -1568,7 +1296,7 @@ void VerifyUiLayoutTests_InvalidDescriptionsAndBoundedCapacityRejectNodeAdmissio
     EXPECT_FALSE(bounded.addNode(root, MakeUiLayoutFixedLeaf(1.0f, 1.0f)).has_value());
     EXPECT_FALSE(bounded.arrange(Rect(0.0f, 0.0f, 31.0f, 17.0f)));
     EXPECT_EQ(UiLayoutTreeBoxAddress(bounded, root), published);
-    LayoutTree empty = LayoutTree(self.m_arena, 0u);
+    LayoutTree empty = LayoutTree(0u);
     EXPECT_FALSE(empty.addNode(s_LayoutNoParent, invalid).has_value());
 }
 
@@ -1584,7 +1312,7 @@ void VerifyUiLayoutTests_MaximumDepthArrangesWithoutRecursionAndRejectsFurtherNo
     ASSERT_EQ(self.m_tree.boxes().size(), s_LayoutMaxNodes);
     const Optional<LayoutBox> deepestBox = self.boxCopy(parent);
     ASSERT_TRUE(deepestBox.has_value());
-    ExpectUiLayoutRect(deepestBox.value().rectangle, Rect(3.0f, 5.0f, 101.0f, 79.0f));
+    ExpectUiRect(deepestBox.value().rectangle, Rect(3.0f, 5.0f, 101.0f, 79.0f));
     EXPECT_FALSE(self.m_tree.addNode(parent, MakeUiLayoutFixedLeaf(1.0f, 1.0f)).has_value());
 }
 
@@ -1593,222 +1321,222 @@ void VerifyUiLayoutTests_MaximumDepthArrangesWithoutRecursionAndRejectsFurtherNo
 
 
 void VerifyUiListBehaviorTests_EmptySourceClearsKeysAndNavigationAndSubmitAreValidNoOps(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     source.count = 0u;
     ListState state = ListState();
     state.select(5u);
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 0u);
     ListResult result = ListResult();
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Down), state, result));
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Submit), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Submit), state, result));
     EXPECT_TRUE(result.valid);
     EXPECT_FALSE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
-    EXPECT_EQ(source.findCalls, 0u);
-    EXPECT_EQ(source.lookupCalls, 0u);
+    EXPECT_EQ(source.findCalls.value(), 0u);
+    EXPECT_EQ(source.lookupCalls.value(), 0u);
 }
 
 void VerifyUiListBehaviorTests_HundredThousandRowsSkipALargeDisabledRangeWithBoundedSourceCalls(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     source.count = 100000u;
     source.disabledBegin = 49999u;
     source.disabledEnd = 99999u;
     ListState state = ListState();
     state.select(49999u);
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     source.clearCalls();
     ListResult result = ListResult();
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Down), state, result));
     EXPECT_EQ(state.selectedKey(), 100000u);
     EXPECT_EQ(state.cursorKey(), 100000u);
-    EXPECT_EQ(source.findCalls, 1u);
-    EXPECT_LE(source.lookupCalls, 2u);
-    EXPECT_LE(source.keyCalls, 3u);
-    EXPECT_LE(source.enabledCalls, 2u);
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Up), state, result));
+    EXPECT_EQ(source.findCalls.value(), 1u);
+    EXPECT_LE(source.lookupCalls.value(), 2u);
+    EXPECT_LE(source.keyCalls.value(), 3u);
+    EXPECT_LE(source.enabledCalls.value(), 2u);
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Up), state, result));
     EXPECT_EQ(state.cursorKey(), 49999u);
     EXPECT_TRUE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
 }
 
 void VerifyUiListBehaviorTests_HomeEndAndBoundaryNavigationNeverWrap(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     ListState state = ListState();
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     ListResult result = ListResult();
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Home), state, result));
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Up), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Home), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Up), state, result));
     EXPECT_EQ(state.cursorKey(), 1u);
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::End), state, result));
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Down), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::End), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Down), state, result));
     EXPECT_EQ(state.cursorKey(), 10u);
     EXPECT_FALSE(result.activated);
 }
 
 void VerifyUiListBehaviorTests_PageNavigationUsesAcceptedRowsAndSaturatesWithoutIntegerOverflow(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     ListState state = ListState();
     state.select(3u);
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     ListResult result = ListResult();
-    ControlAction action = MakeUiListBehaviorAction(state, source, ControlActionKind::PageDown);
+    ControlAction action = MakeRangeSourceAction(state, source, ControlActionKind::PageDown);
     action.pageRows = u64.max;
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.cursorKey(), 10u);
     action.kind = ControlActionKind::PageUp;
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.cursorKey(), 1u);
 }
 
 void VerifyUiListBehaviorTests_PageNavigationSkipsDisabledRowsBeyondTheRequestedBoundary(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     source.disabledBegin = 4u;
     source.disabledEnd = 7u;
     ListState state = ListState();
     state.select(2u);
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     ListResult result = ListResult();
-    ControlAction action = MakeUiListBehaviorAction(state, source, ControlActionKind::PageDown);
+    ControlAction action = MakeRangeSourceAction(state, source, ControlActionKind::PageDown);
     action.pageRows = 3u;
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.cursorKey(), 8u);
     action.kind = ControlActionKind::PageUp;
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.cursorKey(), 4u);
 }
 
 void VerifyUiListBehaviorTests_AllDisabledNavigationAndUnselectedSubmitAreValidNoOps(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     source.disabledBegin = 0u;
     source.disabledEnd = source.count;
     ListState state = ListState();
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     ListResult result = ListResult();
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Home), state, result));
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Submit), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Home), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Submit), state, result));
     EXPECT_EQ(state.cursorKey(), 0u);
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_FALSE(result.activated);
 }
 
 void VerifyUiListBehaviorTests_MissingDisabledOrMalformedActivationDoesNotModifyStateOrResult(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     source.disabledBegin = 3u;
     source.disabledEnd = 4u;
     ListState state = ListState();
     state.select(2u);
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     const ListResult previous = MakeUiListBehaviorResult(true, true, false, true);
     ListResult result = previous;
-    ControlAction action = MakeUiListBehaviorAction(state, source, ControlActionKind::Activate);
+    ControlAction action = MakeRangeSourceAction(state, source, ControlActionKind::Activate);
     action.value = 99u;
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     action.value = 4u;
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     action.value = 5u;
     source.badLookup = true;
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 2u);
-    ExpectUiListBehaviorResult(result, previous);
+    ExpectUiListResult(result, previous);
 }
 
 void VerifyUiListBehaviorTests_MalformedEnabledSearchFailsAtomically(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     ListState state = ListState();
     state.select(2u);
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     source.badFind = true;
     ListResult result = ListResult();
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Down), state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Down), state, result));
     EXPECT_EQ(state.cursorKey(), 2u);
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_FALSE(result.valid);
 }
 
 void VerifyUiListBehaviorTests_HugeWheelDeltasClampWithoutMultiplicationOverflow(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     ListState state = ListState();
     ASSERT_TRUE(state.scrollTo(500.0));
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
-    ControlAction action = MakeUiListBehaviorAction(state, source, ControlActionKind::Wheel);
+    ASSERT_TRUE(ReconcileListState(state, source));
+    ControlAction action = MakeRangeSourceAction(state, source, ControlActionKind::Wheel);
     action.delta = f64.max;
     action.step = f64.max;
     action.maximum = 1000.0;
     ListResult result = ListResult();
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
     action.delta = -f64.max;
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 1000.0);
     action.delta = 0.0;
     action.maximum = 20.0;
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 20.0);
 }
 
 void VerifyUiListBehaviorTests_InvalidWheelMetricsFailWithoutChangingOffsetOrResult(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     ListState state = ListState();
     ASSERT_TRUE(state.scrollTo(50.0));
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
-    ControlAction valid = MakeUiListBehaviorAction(state, source, ControlActionKind::Wheel);
+    ASSERT_TRUE(ReconcileListState(state, source));
+    ControlAction valid = MakeRangeSourceAction(state, source, ControlActionKind::Wheel);
     valid.delta = -1.0;
     valid.step = 32.0;
     valid.maximum = 300.0;
     ListResult result = ListResult();
     ControlAction action = valid;
-    action.delta = UiInputLayoutQuietNaNF64();
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    action.delta = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     action = valid;
     action.step = 0.0;
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     action = valid;
     action.maximum = -1.0;
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     action = valid;
-    action.maximum = UiInputLayoutInfinityF64();
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    action.maximum = bit_cast<f64>(cast<u64>(0x7ff0000000000000u));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 50.0);
     EXPECT_FALSE(result.valid);
 }
 
 void VerifyUiListBehaviorTests_InvalidOptionsKindsAndZeroPageSizeRejectWithoutChangingCursor(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     ListState state = ListState();
     state.select(2u);
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
-    const ControlAction valid = MakeUiListBehaviorAction(state, source, ControlActionKind::Down);
+    ASSERT_TRUE(ReconcileListState(state, source));
+    const ControlAction valid = MakeRangeSourceAction(state, source, ControlActionKind::Down);
     ListOptions options = ListOptions();
     options.enabled = false;
     ListResult result = ListResult();
-    EXPECT_FALSE(UiListBehaviorApply(source, options, valid, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, options, valid, state, result));
     options = ListOptions();
     options.wheelRows = 0.0f;
-    EXPECT_FALSE(UiListBehaviorApply(source, options, valid, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, options, valid, state, result));
     options = ListOptions();
-    options.wheelRows = UiInputLayoutQuietNaNF32();
-    EXPECT_FALSE(UiListBehaviorApply(source, options, valid, state, result));
+    options.wheelRows = bit_cast<f32>(0x7fc00000u);
+    EXPECT_FALSE(ApplyListControlAction(source, options, valid, state, result));
     ControlAction action = valid;
-    action.kind = bit_cast<ControlActionKindEnum>(u8(255u));
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    action.kind = bit_cast<ControlActionKind>(u8(255u));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     action.kind = ControlActionKind::PageDown;
     action.pageRows = 0u;
-    EXPECT_FALSE(UiListBehaviorApply(source, ListOptions(), action, state, result));
+    EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.cursorKey(), 2u);
     EXPECT_EQ(state.selectedKey(), 2u);
 }
 
 void VerifyUiListBehaviorTests_RepeatedHomeNoopPreservesEarlierSelectionChange(){
-    UiListBehaviorRangeSource source = UiListBehaviorRangeSource();
+    RangeSource source = RangeSource();
     ListState state = ListState();
-    ASSERT_TRUE(UiListBehaviorReconcile(state, source));
+    ASSERT_TRUE(ReconcileListState(state, source));
     ListResult result = ListResult();
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Home), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Home), state, result));
     EXPECT_TRUE(result.selectionChanged);
-    ASSERT_TRUE(UiListBehaviorApply(source, ListOptions(), MakeUiListBehaviorAction(state, source, ControlActionKind::Home), state, result));
+    ASSERT_TRUE(ApplyListControlAction(source, ListOptions(), MakeRangeSourceAction(state, source, ControlActionKind::Home), state, result));
     EXPECT_TRUE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
 }
@@ -1819,14 +1547,14 @@ void VerifyUiListBehaviorTests_RepeatedHomeNoopPreservesEarlierSelectionChange()
 
 void VerifyUiListBuilderScrollbarTests_ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightChanges(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
+    const WidgetId thumb = RequireUiWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
     const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
-    const Point origin = UiListScrollbarCenter(accepted.rectangle);
+    const Point origin = CenterUiRect(accepted.rectangle);
     const Point destination = Point(origin.x, origin.y + 10.0f);
     self.drag(origin, destination);
-    ListOptions resized = MakeUiListScrollbarDefaultOptions();
+    ListOptions resized = MakeListFixtureOptions();
     resized.height.value = 200.0f;
     ASSERT_TRUE(self.prepare(2u, resized));
     const f64 travel = cast<f64>(accepted.gestureReference.height) - cast<f64>(accepted.rectangle.height);
@@ -1840,11 +1568,11 @@ void VerifyUiListBuilderScrollbarTests_ThumbUsesItsAcceptedTrackMaximumWhenCandi
 
 void VerifyUiListBuilderScrollbarTests_LatestThumbMotionFollowsAnInterveningWheelInNativeInputOrder(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
+    const WidgetId thumb = RequireUiWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
     const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
-    const Point origin = UiListScrollbarCenter(accepted.rectangle);
+    const Point origin = CenterUiRect(accepted.rectangle);
     const f32 trackEnd = accepted.gestureReference.y + accepted.gestureReference.height;
     const Point destination = Point(origin.x, trackEnd - accepted.rectangle.height * 0.5f);
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, origin)).pointerConsumed);
@@ -1862,29 +1590,29 @@ void VerifyUiListBuilderScrollbarTests_LatestThumbMotionFollowsAnInterveningWhee
 
 void VerifyUiListBuilderScrollbarTests_EmptyDatasetKeepsABoundedPageCountWithoutReadingText(mut UiListBuilderTests self){
     self.m_source.count = 0u;
-    const ListOptions options = MakeUiListScrollbarDefaultOptions();
+    const ListOptions options = MakeListFixtureOptions();
     ASSERT_TRUE(self.accept(1u, options));
     const Expected<HitTarget> hostTarget = self.tryTarget(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
     ASSERT_TRUE(hostTarget.has_value());
     EXPECT_EQ(hostTarget.value().pageRows, 1u);
-    EXPECT_EQ(self.m_source.textCalls, 0u);
+    EXPECT_EQ(self.m_source.textCalls.value(), 0u);
 }
 
 void VerifyUiListBuilderScrollbarTests_SmallDatasetBoundsPageSizeByRows(mut UiListBuilderTests self){
     self.m_source.count = 2u;
-    const ListOptions options = MakeUiListScrollbarDefaultOptions();
+    const ListOptions options = MakeListFixtureOptions();
     ASSERT_TRUE(self.accept(1u, options));
     const Expected<HitTarget> hostTarget = self.tryTarget(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
     ASSERT_TRUE(hostTarget.has_value());
     EXPECT_EQ(hostTarget.value().pageRows, 2u);
-    EXPECT_EQ(self.m_source.textCalls, 2u);
+    EXPECT_EQ(self.m_source.textCalls.value(), 2u);
     EXPECT_EQ(self.m_state.placement().endRow, 2u);
 }
 
 void VerifyUiListBuilderScrollbarTests_PopupListsAutofocusAndRestoreEachCoveredListHost(mut UiListBuilderTests self){
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
-    self.press(CoreKey::Tab);
+    self.press(Key::Tab);
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
     PopupState lowerPopup = PopupState();
     PopupState upperPopup = PopupState();
@@ -1893,44 +1621,44 @@ void VerifyUiListBuilderScrollbarTests_PopupListsAutofocusAndRestoreEachCoveredL
     lowerState.select(2u);
     upperState.select(3u);
     lowerPopup.open();
-    ASSERT_TRUE(UiListScrollbarPrepareSinglePopup(self, 2u, lowerPopup, lowerState));
+    ASSERT_TRUE(self.preparePopups(2u, lowerPopup, lowerState));
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     const WidgetId lowerHost = self.id(s_UiListScrollbarListKey, s_UiListScrollbarPopupKey);
     EXPECT_EQ(self.m_context.input().focus(), lowerHost);
     upperPopup.open();
-    ASSERT_TRUE(UiListScrollbarPrepareTwoPopups(self, 3u, lowerPopup, lowerState, upperPopup, upperState));
+    ASSERT_TRUE(self.preparePopups(3u, lowerPopup, lowerState, upperPopup, upperState));
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiListScrollbarListKey, s_UiListScrollbarUpperPopupKey));
-    self.press(CoreKey::Down);
-    ASSERT_TRUE(UiListScrollbarPrepareTwoPopups(self, 4u, lowerPopup, lowerState, upperPopup, upperState));
+    self.press(Key::Down);
+    ASSERT_TRUE(self.preparePopups(4u, lowerPopup, lowerState, upperPopup, upperState));
     EXPECT_EQ(upperState.selectedKey(), 4u);
     EXPECT_EQ(lowerState.selectedKey(), 2u);
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     ASSERT_TRUE(self.m_context.commitFrame(4u));
     upperPopup.close();
-    ASSERT_TRUE(UiListScrollbarPrepareTwoPopups(self, 5u, lowerPopup, lowerState, upperPopup, upperState));
+    ASSERT_TRUE(self.preparePopups(5u, lowerPopup, lowerState, upperPopup, upperState));
     ASSERT_TRUE(self.m_context.commitFrame(5u));
     EXPECT_EQ(self.m_context.input().focus(), lowerHost);
-    self.press(CoreKey::Down);
-    ASSERT_TRUE(UiListScrollbarPrepareTwoPopups(self, 6u, lowerPopup, lowerState, upperPopup, upperState));
+    self.press(Key::Down);
+    ASSERT_TRUE(self.preparePopups(6u, lowerPopup, lowerState, upperPopup, upperState));
     EXPECT_EQ(lowerState.selectedKey(), 3u);
     ASSERT_TRUE(self.m_context.commitFrame(6u));
     lowerPopup.close();
-    ASSERT_TRUE(UiListScrollbarPrepareSinglePopup(self, 7u, lowerPopup, lowerState));
+    ASSERT_TRUE(self.preparePopups(7u, lowerPopup, lowerState));
     ASSERT_TRUE(self.m_context.commitFrame(7u));
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
-    self.press(CoreKey::Down);
+    self.press(Key::Down);
     ASSERT_TRUE(self.prepare(8u));
     EXPECT_EQ(self.m_state.selectedKey(), 2u);
 }
 
 void VerifyUiListBuilderScrollbarTests_TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline(mut UiListBuilderTests self){
     ASSERT_TRUE(self.accept(1u));
-    const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
+    const WidgetId thumb = RequireUiWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
     const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
-    const Point origin = UiListScrollbarCenter(accepted.rectangle);
+    const Point origin = CenterUiRect(accepted.rectangle);
     self.drag(origin, Point(origin.x, origin.y + 10.0f));
     self.drag(origin, Point(origin.x, origin.y + 20.0f));
     ASSERT_TRUE(self.prepare(2u));
@@ -1942,16 +1670,16 @@ void VerifyUiListBuilderScrollbarTests_TwoCompletedThumbDragsAreConsumedInOneDec
 }
 
 void VerifyUiListBuilderScrollbarTests_FullHeightMinimumThumbFocusesItsHostWithoutStartingAnUnusableGesture(mut UiListBuilderTests self){
-    ListOptions options = MakeUiListScrollbarDefaultOptions();
+    ListOptions options = MakeListFixtureOptions();
     options.height.value = 20.0f;
     ASSERT_TRUE(self.accept(1u, options));
-    const WidgetId thumb = UiListScrollbarRequireWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
+    const WidgetId thumb = RequireUiWidgetId(self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey), s_UiListScrollbarKey);
     const Expected<HitTarget> acceptedOpt = self.tryTarget(thumb);
     ASSERT_TRUE(acceptedOpt.has_value());
     const HitTarget accepted = acceptedOpt.value();
     EXPECT_FLOAT_EQ(self.m_state.placement().track.height, self.m_state.placement().thumb.height);
     EXPECT_FALSE(accepted.pointerGesture);
-    self.click(UiListScrollbarCenter(accepted.rectangle));
+    self.click(CenterUiRect(accepted.rectangle));
     EXPECT_EQ(self.m_context.input().focus(), self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey));
     EXPECT_FALSE(self.m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration).has_value());
     ASSERT_TRUE(self.prepare(2u, options));

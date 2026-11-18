@@ -3,218 +3,174 @@
 
 
 #include "benchmark_support.adhd"
+#include "binary_kernel_call.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <utilities/cli/tool_cli.adhd>
 
+[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::DoubleRow")]
+extern VectorDouble BenchmarkDoubleRow(in MatrixDouble matrix, in usize index);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace SimdOptimizationBenchmark{
-namespace VectorKernels{
-
-template<b8 Candidate>
-FOUNDATION_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
-    if constexpr(Candidate)
+MatrixDouble VectorKernelRotationX<const b8 Candidate>(in f64 angle){
+    if(Candidate)
         return MatrixDoubleRotationX(angle);
-    SIMDVectorDouble sine{}, cosine{};
+    VectorDouble sine = VectorDoubleZero();
+    VectorDouble cosine = VectorDoubleZero();
     VectorDoubleSinCos(sine, cosine, VectorDoubleReplicate(angle));
-    SIMDMatrixDouble matrix{};
-    matrix.v[0] = s_DoubleSIMDIdentityR0;
-    matrix.v[1] = VectorDoubleMergeX(VectorDoubleZero(), cosine, VectorDoubleNegate(sine), VectorDoubleZero());
-    matrix.v[2] = VectorDoubleMergeX(VectorDoubleZero(), sine, cosine, VectorDoubleZero());
-    matrix.v[3] = s_DoubleSIMDIdentityR3;
-    return matrix;
+    return MatrixDouble(
+        VectorDouble(1.0, 0.0, 0.0, 0.0),
+        VectorDoubleMergeX(VectorDoubleZero(), cosine, VectorDoubleNegate(sine), VectorDoubleZero()),
+        VectorDoubleMergeX(VectorDoubleZero(), sine, cosine, VectorDoubleZero()),
+        VectorDouble(0.0, 0.0, 0.0, 1.0));
 }
 
-template<b8 Candidate>
-FOUNDATION_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
-    if constexpr(Candidate)
+MatrixDouble VectorKernelPerspectiveFov<const b8 Candidate>(in f64 angle){
+    if(Candidate)
         return MatrixDoublePerspectiveFovLH(angle, 1.75, 0.125, 100.0);
-    SIMDVectorDouble sine{}, cosine{};
+    VectorDouble sine = VectorDoubleZero();
+    VectorDouble cosine = VectorDoubleZero();
     VectorDoubleSinCos(sine, cosine, VectorDoubleScale(VectorDoubleReplicate(angle), 0.5));
-    const SIMDVectorDouble zero = VectorDoubleZero(), nearZ = VectorDoubleReplicate(0.125), farZ = VectorDoubleReplicate(100.0);
-    const SIMDVectorDouble height = VectorDoubleDivide(cosine, sine), width = VectorDoubleDivide(height, VectorDoubleReplicate(1.75));
-    const SIMDVectorDouble range = VectorDoubleDivide(farZ, VectorDoubleSubtract(farZ, nearZ));
-    const SIMDVectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleReplicate(-1.0), range), nearZ);
-    SIMDMatrixDouble matrix{};
-    matrix.v[0] = VectorDoubleMergeX(width, zero, zero, zero);
-    matrix.v[1] = VectorDoubleMergeX(zero, height, zero, zero);
-    matrix.v[2] = VectorDoubleMergeX(zero, zero, range, rangeNear);
-    matrix.v[3] = VectorDoubleMergeX(zero, zero, VectorDoubleReplicate(1.0), zero);
-    return matrix;
+    const VectorDouble zero = VectorDoubleZero();
+    const VectorDouble nearZ = VectorDoubleReplicate(0.125);
+    const VectorDouble farZ = VectorDoubleReplicate(100.0);
+    const VectorDouble height = VectorDoubleDivide(cosine, sine);
+    const VectorDouble width = VectorDoubleDivide(height, VectorDoubleReplicate(1.75));
+    const VectorDouble range = VectorDoubleDivide(farZ, VectorDoubleSubtract(farZ, nearZ));
+    const VectorDouble rangeNear = VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleReplicate(-1.0), range), nearZ);
+    return MatrixDouble(
+        VectorDoubleMergeX(width, zero, zero, zero),
+        VectorDoubleMergeX(zero, height, zero, zero),
+        VectorDoubleMergeX(zero, zero, range, rangeNear),
+        VectorDoubleMergeX(zero, zero, VectorDoubleReplicate(1.0), zero));
 }
 
-template<b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDouble normal = VectorDoubleSet(0.25, -0.5, 0.75, 0.0))noexcept{
-    if constexpr(Candidate)
+VectorDouble VectorKernelQuaternionNormal<const b8 Candidate>(in f64 angle, in VectorDouble normal){
+    if(Candidate)
         return QuaternionDoubleRotationNormal(normal, angle);
-    const SIMDVectorDouble n = VectorDoubleSelect(s_DoubleSIMDIdentityR3, normal, s_DoubleSIMDSelect1110);
-    SIMDVectorDouble sine{}, cosine{};
+    const VectorDouble n = VectorDoubleSelect(VectorDouble(0.0, 0.0, 0.0, 1.0), normal, VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u)));
+    VectorDouble sine = VectorDoubleZero();
+    VectorDouble cosine = VectorDoubleZero();
     VectorDoubleSinCos(sine, cosine, VectorDoubleScale(VectorDoubleReplicate(angle), 0.5));
-    return VectorDoubleMultiply(n, VectorDoubleSelect(cosine, sine, s_DoubleSIMDSelect1110));
+    return VectorDoubleMultiply(n, VectorDoubleSelect(cosine, sine, VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u))));
 }
 
-template<u32 KindIndex, b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(KindIndex == 0u){
-        if constexpr(Candidate)
+VectorDouble VectorKernelReduce<const u32 KindIndex, const b8 Candidate>(in VectorDouble lhs, in VectorDouble rhs){
+    if(KindIndex == 0u){
+        if(Candidate)
             return VectorDouble2Dot(lhs, rhs);
         else
-            return SimdBaselineKernels::Dot2(lhs, rhs);
+            return BaselineDot2(lhs, rhs);
     }
-    else if constexpr(KindIndex == 1u){
-        if constexpr(Candidate)
+    else if(KindIndex == 1u){
+        if(Candidate)
             return VectorDouble3Dot(lhs, rhs);
         else
-            return SimdBaselineKernels::Dot3(lhs, rhs);
+            return BaselineDot3(lhs, rhs);
     }
-    else if constexpr(KindIndex == 2u){
-        if constexpr(Candidate)
+    else if(KindIndex == 2u){
+        if(Candidate)
             return VectorDouble4Dot(lhs, rhs);
         else
-            return SimdBaselineKernels::Dot4(lhs, rhs);
+            return BaselineDot4(lhs, rhs);
     }
     else{
-        if constexpr(Candidate)
+        if(Candidate)
             return VectorDoubleSum(lhs);
         else
-            return SimdBaselineKernels::Sum(lhs);
+            return BaselineSum(lhs);
     }
 }
 
-template<u32 KindIndex, b8 Candidate>
-FOUNDATION_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    return Reduce<KindIndex, Candidate>(lhs, rhs);
+VectorDouble VectorKernelEvaluate<const u32 KindIndex, const b8 Candidate>(in VectorDouble lhs, in VectorDouble rhs){
+    return EvaluateBinaryKernel(lambda[](in VectorDouble left, in VectorDouble right) -> VectorDouble{
+        return VectorKernelReduce<KindIndex, Candidate>(left, right);
+    }, lhs, rhs);
 }
 
-template<u32 KindIndex, b8 Candidate>
-FOUNDATION_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(KindIndex == 4u)
-        return RotationX<Candidate>(angle);
-    else if constexpr(KindIndex == 5u)
-        return PerspectiveFov<Candidate>(angle);
+MatrixDouble VectorKernelEvaluateFactory<const u32 KindIndex, const b8 Candidate>(in f64 angle){
+    if(KindIndex == 4u)
+        return VectorKernelRotationX<Candidate>(angle);
+    else if(KindIndex == 5u)
+        return VectorKernelPerspectiveFov<Candidate>(angle);
     else{
-        SIMDMatrixDouble result{};
-        result.v[0] = QuaternionNormal<Candidate>(angle);
-        return result;
+        return MatrixDouble(VectorKernelQuaternionNormal<Candidate>(angle, VectorDouble(0.25, -0.5, 0.75, 0.0)), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero());
     }
 }
 
-template<b8 Candidate>
-FOUNDATION_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis, const f64 angle)noexcept{
-#pragma STDC FENV_ACCESS ON
-    return QuaternionNormal<Candidate>(angle, axis);
+VectorDouble VectorKernelEvaluateQuaternionAxis<const b8 Candidate>(in VectorDouble axis, in f64 angle){
+    return EvaluateAxisKernel(lambda[](in VectorDouble normal, in f64 radians) -> VectorDouble{
+        return VectorKernelQuaternionNormal<Candidate>(radians, normal);
+    }, axis, angle);
 }
 
-template<u32 KindIndex, b8 Candidate, typename DatasetT>
-FOUNDATION_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency)noexcept{
-    if constexpr(KindIndex <= 3u){
+class VectorKernelReducer<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{ return VectorKernelReduce<KindIndex, Candidate>(lhs, rhs); }
+}
+
+VectorDouble VectorKernelRunWorkload<const u32 KindIndex, const b8 Candidate>(in Dataset data, in usize dataCount, in usize iterations, in b8 latency){
+    if(KindIndex <= 3u){
         if(!latency){
-            return ThroughputWorkload<8u>(
-                data, dataCount, iterations,
-                [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<KindIndex, Candidate>(lhs, rhs); });
+            return ThroughputWorkload<8u, VectorKernelReducer<KindIndex, Candidate>>(data, dataCount, iterations, VectorKernelReducer<KindIndex, Candidate>());
         }
     }
-    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
+    Array<f64x4, 8> accumulators;
     for(usize lane = 0u; lane < 8u; ++lane)
-        accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);
+        accumulators[lane] = f64x4(0.125, 0.25, 0.5, 1.0);
     for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if constexpr(KindIndex <= 3u){
-            const SIMDVectorDouble input = KindIndex == 3u ? VectorDoubleScale(accumulators[0], 0.125) : accumulators[0];
-            accumulators[0] = VectorDoubleAdd(Reduce<KindIndex, Candidate>(input, LoadDouble(data.right[iteration % dataCount])), VectorDoubleReplicate(0.125));
+        if(KindIndex <= 3u){
+            VectorDouble input = VectorDouble(accumulators[0]);
+            if(KindIndex == 3u)
+                input = VectorDoubleScale(input, 0.125);
+            accumulators[0] = f64x4(VectorDoubleAdd(VectorKernelReduce<KindIndex, Candidate>(input, VectorDouble(data.right[iteration % dataCount])), VectorDoubleReplicate(0.125)));
         }
         else{
             const f64 angle = data.angles[iteration % dataCount];
-            if constexpr(KindIndex == 6u)
-                accumulators[0] = VectorDoubleAdd(accumulators[0], QuaternionNormal<Candidate>(angle));
+            if(KindIndex == 6u)
+                accumulators[0] = f64x4(VectorDoubleAdd(VectorDouble(accumulators[0]), VectorKernelQuaternionNormal<Candidate>(angle, VectorDouble(0.25, -0.5, 0.75, 0.0))));
             else{
-                const SIMDMatrixDouble matrix = KindIndex == 4u ? RotationX<Candidate>(angle) : PerspectiveFov<Candidate>(angle);
+                MatrixDouble matrix = MatrixDouble(f64x4x4());
+                if(KindIndex == 4u)
+                    matrix = VectorKernelRotationX<Candidate>(angle);
+                else
+                    matrix = VectorKernelPerspectiveFov<Candidate>(angle);
                 for(usize row = 0u; row < 4u; ++row)
-                    accumulators[row] = VectorDoubleAdd(accumulators[row], matrix.v[row]);
+                    accumulators[row] = f64x4(VectorDoubleAdd(VectorDouble(accumulators[row]), BenchmarkDoubleRow(matrix, row)));
             }
         }
     }
-    SIMDVectorDouble result = accumulators[0];
+    VectorDouble result = VectorDouble(accumulators[0]);
     for(usize lane = 1u; lane < 8u; ++lane)
-        result = VectorDoubleAdd(result, accumulators[lane]);
+        result = VectorDoubleAdd(result, VectorDouble(accumulators[lane]));
     return result;
 }
 
-}
-
-namespace VectorKernels{
-
-template<b8 Candidate, u32 Index = 0u>
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchEvaluate(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if(kindIndex == Index)
-        return Evaluate<Index, Candidate>(lhs, rhs);
-    if constexpr(Index + 1u < 4u)
-        return DispatchEvaluate<Candidate, Index + 1u>(kindIndex, lhs, rhs);
-    else
-        return VectorDoubleZero();
-}
-
-template<b8 Candidate, typename DatasetT, u32 Index = 0u>
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchWorkload(const u32 kindIndex, const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency)noexcept{
-    if(kindIndex == Index)
-        return RunWorkload<Index, Candidate>(data, dataCount, iterations, latency);
-    if constexpr(Index + 1u < 7u)
-        return DispatchWorkload<Candidate, DatasetT, Index + 1u>(kindIndex, data, dataCount, iterations, latency);
-    else
-        return VectorDoubleZero();
-}
-
-}
-
-FOUNDATION_INLINE void EvaluateVectorKernel(const u32 kindIndex, const b8 candidate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
-    const SIMDVectorDouble result = candidate
-        ? VectorKernels::DispatchEvaluate<true>(kindIndex, lhs, rhs)
-        : VectorKernels::DispatchEvaluate<false>(kindIndex, lhs, rhs);
-    StoreDoubleInt(result, outBits);
-}
-
-template<typename DatasetT>
-FOUNDATION_INLINE void RunVectorWorkloadKernel(const u32 kindIndex, const b8 candidate, const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency, UInt64x4& outBits)noexcept{
-    const SIMDVectorDouble result = candidate
-        ? VectorKernels::DispatchWorkload<true>(kindIndex, data, dataCount, iterations, latency)
-        : VectorKernels::DispatchWorkload<false>(kindIndex, data, dataCount, iterations, latency);
-    StoreDoubleInt(result, outBits);
-}
-
-template<u32 KindIndex>
-[[nodiscard]] FOUNDATION_INLINE b8 CompareVectorFactoryPairImpl(const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const f64 angle = BitCast<f64>(angleBits);
+b8 CompareVectorFactoryPairImpl<const u32 KindIndex>(in u64 angleBits, mut b8 outMatch, mut i32 outExpectedFlags, mut i32 outActualFlags, mut i32 outExpectedErrno, mut i32 outActualErrno){
+    const f64 angle = bit_cast<f64>(angleBits);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = E2BIG;
-    const SIMDMatrixDouble expected = VectorKernels::EvaluateFactory<KindIndex, false>(angle);
+    SetMathErrno(s_ArgumentListTooLong);
+    const MatrixDouble expected = VectorKernelEvaluateFactory<KindIndex, false>(angle);
     outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outExpectedErrno = errno;
+    outExpectedErrno = CurrentMathErrno();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = E2BIG;
-    const SIMDMatrixDouble actual = VectorKernels::EvaluateFactory<KindIndex, true>(angle);
+    SetMathErrno(s_ArgumentListTooLong);
+    const MatrixDouble actual = VectorKernelEvaluateFactory<KindIndex, true>(angle);
     outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outActualErrno = errno;
+    outActualErrno = CurrentMathErrno();
     b8 equal = true;
     for(usize row = 0u; row < 4u; ++row){
         for(usize lane = 0u; lane < 4u; ++lane)
-            equal = equal && (VectorDoubleGetIntByIndex(expected.v[row], lane) == VectorDoubleGetIntByIndex(actual.v[row], lane));
+            equal = equal && (VectorDoubleGetIntByIndex(BenchmarkDoubleRow(expected, row), lane) == VectorDoubleGetIntByIndex(BenchmarkDoubleRow(actual, row), lane));
     }
     outMatch = equal && outExpectedFlags == outActualFlags && outExpectedErrno == outActualErrno;
     return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 CompareVectorFactoryPair(const u32 kindIndex, const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
+b8 CompareVectorFactoryPair(in u32 kindIndex, in u64 angleBits, mut b8 outMatch, mut i32 outExpectedFlags, mut i32 outActualFlags, mut i32 outExpectedErrno, mut i32 outActualErrno){
     if(kindIndex == 4u)
         return CompareVectorFactoryPairImpl<4u>(angleBits, outMatch, outExpectedFlags, outActualFlags, outExpectedErrno, outActualErrno);
     if(kindIndex == 5u)
@@ -222,38 +178,26 @@ template<u32 KindIndex>
     return CompareVectorFactoryPairImpl<6u>(angleBits, outMatch, outExpectedFlags, outActualFlags, outExpectedErrno, outActualErrno);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 CompareQuaternionAxisPair(const SIMDVectorDouble axis, const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const f64 angle = BitCast<f64>(angleBits);
+b8 CompareQuaternionAxisPair(in VectorDouble axis, in u64 angleBits, mut b8 outMatch, mut i32 outExpectedFlags, mut i32 outActualFlags, mut i32 outExpectedErrno, mut i32 outActualErrno){
+    const f64 angle = bit_cast<f64>(angleBits);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = E2BIG;
-    const SIMDVectorDouble expected = VectorKernels::EvaluateQuaternionAxis<false>(axis, angle);
+    SetMathErrno(s_ArgumentListTooLong);
+    const VectorDouble expected = VectorKernelEvaluateQuaternionAxis<false>(axis, angle);
     outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outExpectedErrno = errno;
+    outExpectedErrno = CurrentMathErrno();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = E2BIG;
-    const SIMDVectorDouble actual = VectorKernels::EvaluateQuaternionAxis<true>(axis, angle);
+    SetMathErrno(s_ArgumentListTooLong);
+    const VectorDouble actual = VectorKernelEvaluateQuaternionAxis<true>(axis, angle);
     outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outActualErrno = errno;
+    outActualErrno = CurrentMathErrno();
     b8 equal = true;
     for(usize lane = 0u; lane < 4u; ++lane)
         equal = equal && (VectorDoubleGetIntByIndex(expected, lane) == VectorDoubleGetIntByIndex(actual, lane));
     outMatch = equal && outExpectedFlags == outActualFlags && outExpectedErrno == outActualErrno;
     return true;
 }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 enum<u32> VectorOperation{
     Dot2 = 0u,
@@ -289,9 +233,7 @@ StringView VectorOperationName(in u32 kindIndex){
 
 class VectorEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
     public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
-        EvaluateVectorKernel(KindIndex, Candidate, lhs, rhs, bits);
-        return VectorDouble(bits);
+        return VectorKernelEvaluate<KindIndex, Candidate>(lhs, rhs);
     }
 }
 
@@ -307,9 +249,7 @@ class VectorWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubleWor
     }
 
     public VectorDouble run()const override{
-        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
-        RunVectorWorkloadKernel(KindIndex, Candidate, this.m_data, s_DataCount, this.m_iterations, this.m_latency, bits);
-        return VectorDouble(bits);
+        return VectorKernelRunWorkload<KindIndex, Candidate>(this.m_data, s_DataCount, this.m_iterations, this.m_latency);
     }
 }
 
@@ -520,29 +460,15 @@ i32 RunVectorBenchmarkCli(in Span<StringView> args){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-int main(const int argc, const char* const* argv){
-    if(argc <= 0)
+i32 RunVectorBenchmarkCliEntry(in ConsoleArguments arguments){
+    if(arguments.count <= 0)
         return 2;
-    Array<StringView, 8> args{};
-    const usize count = Min(static_cast<usize>(argc), args.size());
+    Array<StringView, 8> args;
+    const usize count = Min(cast<usize>(arguments.count), args.size());
     for(usize index = 0u; index < count; ++index)
-        args[index] = StringView(argv[index]);
-    return SimdOptimizationBenchmark::RunVectorBenchmarkCli(Span<const StringView>(args.data(), count));
+        args[index] = arguments.text(cast<i32>(index));
+    return RunVectorBenchmarkCli(Span<StringView>(args).first(count));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

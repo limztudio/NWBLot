@@ -1,0 +1,140 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "case_types.adhd"
+#include "storage_access.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[ordered]
+class DoubleStorageRecord<T>{
+    public T value;
+    public Array<u64, 4u> gap = Array<u64, 4u>();
+}
+
+[layout(32)]
+class UnalignedTripleRecord{
+    public u64 prefix = 0u;
+    public f64x3u value = f64x3u();
+    public Array<u64, 4u> gap = Array<u64, 4u>();
+}
+
+[layout(16)]
+class UnalignedMatrixRecord{
+    public u32 prefix = 0u;
+    public f32x3x3u value = f32x3x3u();
+}
+
+b8 RunDoubleStorePaddingStep<T, const usize Count, Source>(in Source source, in b8 stream, mut T stored){
+    DoubleStorageRecord<T> record;
+    const usize bytes = size_of<DoubleStorageRecord<T>>();
+    const usize logical = Count * size_of<f64>();
+    const usize pad = size_of<T>() - logical;
+    FillTestBytes(StorageBytes(record), 0xa5u, bytes);
+    const Array<u64, 3u> poison(0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u);
+    CopyStorageBytes(GuardAddress(StorageBytes(record.value), logical), pad, ConstStorageBytes(poison), pad);
+    StorageSnapshot<DoubleStorageRecord<T>> original;
+    original.capture(record);
+    if(stream){
+        StreamDouble(source, record.value);
+        StreamDoubleFence();
+    }
+    else
+        StoreDoubleValue(source, record.value);
+    for(usize offset = logical; offset < bytes; ++offset){
+        if(LoadByte(ConstStorageBytes(record), offset) != original[offset])
+            return false;
+    }
+    stored = record.value;
+    return true;
+}
+
+void PoisonDoubleStoragePadding<T, const usize Count>(mut T lhs, mut T rhs){
+    const usize logical = Count * size_of<f64>();
+    const usize pad = size_of<T>() - logical;
+    FillTestBytes(GuardAddress(StorageBytes(lhs), logical), 0x7fu, pad);
+    FillTestBytes(GuardAddress(StorageBytes(rhs), logical), 0xffu, pad);
+}
+
+type AlignedTripleRecord = DoubleStorageRecord<f64x3>;
+type AlignedPairRecord = DoubleStorageRecord<f64x2>;
+
+class DoubleTransformStreamFixture{
+    public Array<AlignedTripleRecord, 3u> aligned = Array<AlignedTripleRecord, 3u>();
+    public Array<UnalignedTripleRecord, 3u> unaligned = Array<UnalignedTripleRecord, 3u>();
+    public Array<AlignedPairRecord, 2u> pairs = Array<AlignedPairRecord, 2u>();
+    private StorageSnapshot<Array<AlignedTripleRecord, 3u>> m_alignedOriginal;
+    private StorageSnapshot<Array<UnalignedTripleRecord, 3u>> m_unalignedOriginal;
+    private StorageSnapshot<Array<AlignedPairRecord, 2u>> m_pairOriginal;
+
+    public DoubleTransformStreamFixture(){
+        FillTestBytes(StorageBytes(this.aligned), 0xa5u, size_of<Array<AlignedTripleRecord, 3u>>());
+        FillTestBytes(StorageBytes(this.unaligned), 0x5au, size_of<Array<UnalignedTripleRecord, 3u>>());
+        const u64 poison = 0x7ff8000000001234u;
+        const f64 epsilon = 0x1p-52;
+        const f64 infinity = bit_cast<f64>(s_F64InfinityBits);
+        for(usize index = 0u; index < this.aligned.size(); ++index){
+            const f64 position = cast<f64>(index);
+            const f64 x = 0.25 * position + (1099511627776.0 + 0.25);
+            const f64 y = (position - 1.0) * 0x1p-40;
+            StoreDoubleValue(VectorDouble(x, y, 1.0 + epsilon, infinity), this.aligned[index].value);
+            CopyStorageBytes(GuardAddress(StorageBytes(this.aligned[index].value), 24u), size_of<f64x3>() - 24u, ConstStorageBytes(poison), size_of<u64>());
+        }
+        this.m_alignedOriginal.capture(this.aligned);
+        this.m_unalignedOriginal.capture(this.unaligned);
+        FillTestBytes(StorageBytes(this.pairs), 0xa5u, size_of<Array<AlignedPairRecord, 2u>>());
+        for(usize index = 0u; index < this.pairs.size(); ++index){
+            StoreDoubleValue(VectorDouble(1099511627776.25, 1.0 + epsilon, infinity, bit_cast<f64>(s_F64QuietNanBits)), this.pairs[index].value);
+            CopyStorageBytes(GuardAddress(StorageBytes(this.pairs[index].value), 16u), size_of<f64x2>() - 16u, ConstStorageBytes(poison), size_of<u64>());
+        }
+        this.m_pairOriginal.capture(this.pairs);
+    }
+
+    public b8 alignedBytesIntact()const{
+        for(usize offset = 0u; offset < size_of<Array<AlignedTripleRecord, 3u>>(); ++offset){
+            if(LoadByte(ConstStorageBytes(this.aligned), offset) != this.m_alignedOriginal[offset])
+                return false;
+        }
+        return true;
+    }
+
+    public b8 alignedPaddingIntact(in usize index)const{
+        for(usize offset = 24u; offset < size_of<AlignedTripleRecord>(); ++offset){
+            if(LoadByte(ConstStorageBytes(this.aligned[index]), offset) != this.m_alignedOriginal[index * size_of<AlignedTripleRecord>() + offset])
+                return false;
+        }
+        return true;
+    }
+
+    public b8 unalignedPaddingIntact(in usize index)const{
+        for(usize offset = 0u; offset < size_of<UnalignedTripleRecord>(); ++offset){
+            const usize first = offset_of<UnalignedTripleRecord>(value);
+            if(offset >= first && offset < first + size_of<f64x3u>())
+                continue;
+            if(LoadByte(ConstStorageBytes(this.unaligned[index]), offset) != this.m_unalignedOriginal[index * size_of<UnalignedTripleRecord>() + offset])
+                return false;
+        }
+        return true;
+    }
+
+    public b8 pairPaddingIntact(in usize index)const{
+        for(usize offset = 16u; offset < size_of<AlignedPairRecord>(); ++offset){
+            if(LoadByte(ConstStorageBytes(this.pairs[index]), offset) != this.m_pairOriginal[index * size_of<AlignedPairRecord>() + offset])
+                return false;
+        }
+        return true;
+    }
+}
+
+[ordered]
+class ExpectedVectorStorage<T>{
+    public u64 prefix = 0u;
+    public Array<Expected<T>, 2u> values = Array<Expected<T>, 2u>();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -3,8 +3,8 @@
 
 
 #include <tests/common/capturing_logger.adhd>
-#include <tests/common/test_context.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <impl/assets_mesh/payload_types.adhd>
 #include "skin_name_cases.adhd"
 #include <utilities/fbx_to_nwb/skin.adhd>
 #include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd>
@@ -15,80 +15,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::FbxSkinCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using DefaultTestArena = Tests::TestArena<>;
-struct SkinScratchArena : Tests::TestArena<>{
-    Core::Alloc::ScratchArena scratchArena;
-    SkinScratchArena() = default;
-    explicit SkinScratchArena(const Name& scopeName)
-        : scratchArena(scopeName)
-    {}
-};
-using ScratchArena = Core::Alloc::ScratchArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-using FbxToNwb::FbxMeshSkinningSummary;
-using FbxToNwb::ImportOptions;
-using FbxToNwb::MeshInstance;
-using FbxToNwb::HasUsableSourceTriangleArea;
-using FbxToNwb::HasSourceMeshStreamValueCapacity;
-using FbxToNwb::TryComputeMeshRefreshReplacementCapacity;
-using FbxToNwb::TryComputeTriangleIndexScratchCapacity;
-using FbxToNwb::ValidateFbxSkinPositionCount;
-using FbxToNwb::TryAccumulateFbxSelectedTriangleCorners;
-using FbxToNwb::ValidateFbxMeshAttributes;
-using FbxToNwb::ValidateFbxSkinDeformerCount;
-using FbxToNwb::ValidateFbxOutputMode;
-using FbxToNwb::ValidateFbxNewSkeletonJointCapacity;
-using FbxToNwb::AccumulateFbxJointCapacity;
-using FbxToNwb::ValidateFbxSkinLogicalVertex;
-using FbxToNwb::IsValidFbxImportScale;
-using FbxToNwb::IsValidFbxTriangleAreaEpsilon;
-using FbxToNwb::s_MaxMeshReplacementCount;
-using FbxToNwb::s_MaxSkeletonJointCount;
-using Impl::s_MeshMissingStreamIndex;
-using Impl::s_MeshletTriangleIndexCount;
-inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
-inline constexpr auto s_OutputAssetSkeleton = FbxToNwb::OutputAssetType::Skeleton;
-inline constexpr auto s_OutputAssetMesh = FbxToNwb::OutputAssetType::Mesh;
-inline constexpr b8 s_OccurWarning = FOUNDATION_OCCUR_WARNING != 0;
-inline constexpr f64 s_QuietNaNF64 = Limit<f64>::s_QuietNaN;
-inline constexpr f64 s_InfinityF64 = Limit<f64>::s_Infinity;
-inline constexpr f64 s_UnitPlusUlpF64 = 1.0 + 0x1p-52;
-inline constexpr f64 s_MinNormalF64 = 0x1p-1022;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_header("<tests/integration/fbx_to_nwb/ufbx_fixture.h>"), cpp_name("::NWB::Tests::FbxSkinCases::NodeStorage"), cpp_flags(no_copy, no_assign)]
+extern class NodeStorage{
+    UfbxNode view()const;
+    void setName(in StringView name);
 };
 
+[cpp_header("<tests/integration/fbx_to_nwb/ufbx_fixture.h>"), cpp_name("::NWB::Tests::FbxSkinCases::SkinStorage"), cpp_flags(no_copy, no_assign)]
+extern class SkinStorage{
+    UfbxSkin view()const;
+};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<global/compile.h>"), cpp_name("FOUNDATION_OCCUR_WARNING")]
+extern const b8 s_OccurWarning;
 
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+const f64 s_QuietNaNF64 = BitCast<f64>(cast<u64>(0x7ff8000000000000u));
+const f64 s_InfinityF64 = BitCast<f64>(cast<u64>(0x7ff0000000000000u));
+const f64 s_UnitPlusUlpF64 = BitCast<f64>(cast<u64>(0x3ff0000000000001u));
+const f64 s_MinNormalF64 = BitCast<f64>(cast<u64>(0x0010000000000000u));
 
 const StringView s_ErrMissingPositions = "mesh is missing positions";
 const StringView s_ErrImportedNormalMode = "imported normal mode";
@@ -108,7 +52,7 @@ void VerifyFbxMesh_RejectsNonFiniteAndThresholdTriangleAreas(){
 
 void VerifyFbxMesh_RejectsSourceStreamAndReplacementCapacityOverflow(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     const usize missingIndex = cast<usize>(s_MeshMissingStreamIndex);
     const usize maxValue = usize.max;
     const usize factor = s_MaxMeshReplacementCount;
@@ -128,7 +72,7 @@ void VerifyFbxMesh_RejectsSourceStreamAndReplacementCapacityOverflow(){
 
 void VerifyFbxMesh_RejectsMismatchedSkinPositionCounts(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     EXPECT_FALSE(ValidateFbxSkinPositionCount(1u, 0u));
     EXPECT_FALSE(ValidateFbxSkinPositionCount(0u, 1u));
     EXPECT_TRUE(ValidateFbxSkinPositionCount(0u, 0u));
@@ -137,7 +81,7 @@ void VerifyFbxMesh_RejectsMismatchedSkinPositionCounts(){
 
 void VerifyFbxMesh_TriangleCornerAccumulationPreservesCountOnOverflow(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     usize corners = usize.max - 2u;
     EXPECT_FALSE(TryAccumulateFbxSelectedTriangleCorners(1u, corners));
     EXPECT_EQ(corners, usize.max - 2u);
@@ -149,7 +93,7 @@ void VerifyFbxMesh_TriangleCornerAccumulationPreservesCountOnOverflow(){
 
 void VerifyFbxMesh_MissingAttributesAndDeformerCountsPreserveFailureOrder(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     EXPECT_FALSE(ValidateFbxMeshAttributes(false, true, false));
     EXPECT_TRUE(SawCapturedError(logger, s_ErrMissingPositions));
     EXPECT_FALSE(SawCapturedError(logger, s_ErrImportedNormalMode));
@@ -163,20 +107,20 @@ void VerifyFbxMesh_MissingAttributesAndDeformerCountsPreserveFailureOrder(){
 
 void VerifyFbxMesh_OutputModeValidationPreservesFailureOrder(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetSkeleton, true, false, false, false, false));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
+    EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Skeleton, true, false, false, false, false));
     EXPECT_TRUE(SawCapturedError(logger, s_ErrSeparateAssetsOnlyValid));
     EXPECT_FALSE(SawCapturedError(logger, s_ErrRequiresSkinnedSourceMesh));
-    EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetMesh, false, false, false, true, false));
+    EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Mesh, false, false, false, true, false));
     EXPECT_TRUE(SawCapturedError(logger, s_ErrSplitSkeletonSkinPayload));
-    EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetSkeleton, false, false, false, false, false));
+    EXPECT_FALSE(ValidateFbxOutputMode(OutputAssetType::Skeleton, false, false, false, false, false));
     EXPECT_TRUE(SawCapturedError(logger, s_ErrRequiresSkinnedSourceMesh));
     EXPECT_EQ(logger.errorCount(), 3u);
 }
 
 void VerifyFbxSkin_JointCapacityRejectsOverflowAndSaturatesReservations(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     EXPECT_TRUE(ValidateFbxNewSkeletonJointCapacity(s_MaxSkeletonJointCount - 1u));
     EXPECT_FALSE(ValidateFbxNewSkeletonJointCapacity(s_MaxSkeletonJointCount));
     EXPECT_EQ(AccumulateFbxJointCapacity(s_MaxSkeletonJointCount - 1u, 0u), s_MaxSkeletonJointCount - 1u);
@@ -187,7 +131,7 @@ void VerifyFbxSkin_JointCapacityRejectsOverflowAndSaturatesReservations(){
 
 void VerifyFbxSkin_RejectsLogicalVertexAtAndBeyondWeightList(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     EXPECT_FALSE(ValidateFbxSkinLogicalVertex(0u, 0u));
     EXPECT_TRUE(ValidateFbxSkinLogicalVertex(4u, 5u));
     EXPECT_FALSE(ValidateFbxSkinLogicalVertex(5u, 5u));
@@ -209,7 +153,7 @@ void VerifyFbxOptions_RejectsNonFiniteAndBoundaryScaleOrEpsilon(){
 
 void VerifyFbxOptions_MixedSkinningSelectionIsRejected(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     FbxMeshSkinningSummary summary = FbxMeshSkinningSummary();
     const Expected<b8> empty = summary.resolve();
     ASSERT_TRUE(empty.has_value());
@@ -226,44 +170,33 @@ void VerifyFbxOptions_MixedSkinningSelectionIsRejected(){
 }
 
 void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
-    DefaultTestArena arena = DefaultTestArena();
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    SkinScratchArena scratch = SkinScratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkin));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     ImportOptions options = ImportOptions();
     options.bakeTransforms = false;
     options.scale = 1.0;
     MeshInstance instance = MeshInstance();
     for(u32 testCase = 0u; testCase < 3u; ++testCase){
         FbxSkinExportContext context;
-        b8 built = true;
-        native(in instance, in options, in testCase, mut scratch, mut context, mut built){
-            auto& scratchArena = scratch.scratchArena;
-            static_assert(sizeof(ufbx_real) == sizeof(f64));
-            ufbx_node bone{};
-            ufbx_skin_cluster cluster{};
-            cluster.bone_node = &bone;
-            cluster.geometry_to_bone.m00 = 1.0;
-            cluster.geometry_to_bone.m11 = 1.0;
-            cluster.geometry_to_bone.m22 = 1.0;
-            if(testCase == 0u)
-                cluster.geometry_to_bone.m03 = 1e40;
-            else if(testCase == 1u){
-                cluster.geometry_to_bone.m00 = 1e-40;
-                cluster.geometry_to_bone.m11 = 1e20;
-                cluster.geometry_to_bone.m22 = 1e20;
-            }
-            else{
-                cluster.geometry_to_bone.m00 = 1e200;
-                cluster.geometry_to_bone.m11 = 1e200;
-                cluster.geometry_to_bone.m22 = 1e200;
-            }
-            ufbx_skin_cluster* clusters[] = { &cluster };
-            ufbx_skin_deformer skin{};
-            skin.clusters.data = clusters;
-            skin.clusters.count = 1u;
-            built = NWB::FbxToNwb::BuildClusterJointMap(scratchArena, instance, options, NWB::FbxToNwb::Ufbx::Skin{ &skin }, context).has_value();
+        NodeStorage bone;
+        UfbxMatrix transform;
+        transform.m00 = 1.0;
+        transform.m11 = 1.0;
+        transform.m22 = 1.0;
+        if(testCase == 0u)
+            transform.m03 = 1e40;
+        else if(testCase == 1u){
+            transform.m00 = 1e-40;
+            transform.m11 = 1e20;
+            transform.m22 = 1e20;
         }
+        else{
+            transform.m00 = 1e200;
+            transform.m11 = 1e200;
+            transform.m22 = 1e200;
+        }
+        SkinStorage skin(bone, transform);
+        const b8 built = BuildClusterJointMap(instance, options, skin.view(), context).has_value();
         EXPECT_FALSE(built);
         EXPECT_TRUE(context.joints.empty());
         EXPECT_TRUE(context.bindPoseMatrices.empty());
@@ -274,90 +207,85 @@ void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
 }
 
 void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
-    DefaultTestArena arena = DefaultTestArena();
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     Array<b8, 4u> accepted = Array<b8, 4u>();
-    native(mut accepted){
-        ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
-        ufbx_node root{};
-        const NWB::FbxToNwb::Ufbx::Node joints[] = { { &root } };
-        NWB::FbxToNwb::JointMatrix bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
-        NWB::FbxToNwb::JointMatrix inverse = bind;
-        using NWB::FbxToNwb::BuildSkeletonOutputData;
-
-        accepted[0u] = BuildSkeletonOutputData(scratchArena, joints, {}, { &inverse, 1u }).has_value();
-        accepted[1u] = BuildSkeletonOutputData(scratchArena, joints, { &bind, 1u }, {}).has_value();
-        bind._11 = Limit<f32>::s_Infinity;
-        accepted[2u] = BuildSkeletonOutputData(scratchArena, joints, { &bind, 1u }, { &inverse, 1u }).has_value();
-        bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
-        inverse._11 = Limit<f32>::s_QuietNaN;
-        accepted[3u] = BuildSkeletonOutputData(scratchArena, joints, { &bind, 1u }, { &inverse, 1u }).has_value();
-    }
+    NodeStorage root;
+    Array<UfbxNode, 1u> joints;
+    joints[0u] = root.view();
+    const JointMatrix identity = JointMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Array<JointMatrix, 1u> bind;
+    bind[0u] = identity;
+    Array<JointMatrix, 1u> inverse;
+    inverse[0u] = identity;
+    const Span<JointMatrix> empty = Span<JointMatrix>();
+    accepted[0u] = BuildSkeletonOutputData(joints, empty, inverse).has_value();
+    accepted[1u] = BuildSkeletonOutputData(joints, bind, empty).has_value();
+    bind[0u]._11 = BitCast<f32>(0x7f800000u);
+    accepted[2u] = BuildSkeletonOutputData(joints, bind, inverse).has_value();
+    bind[0u] = identity;
+    inverse[0u]._11 = BitCast<f32>(0x7fc00000u);
+    accepted[3u] = BuildSkeletonOutputData(joints, bind, inverse).has_value();
     for(usize index = 0u; index < accepted.size(); ++index)
         EXPECT_FALSE(accepted[index]);
     EXPECT_GE(logger.errorCount(), 4u);
 }
 
 void VerifyFbxSkin_SortsBorrowedAndFallbackJointNames(){
-    native{
-        ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
-        ufbx_node longName{};
-        ufbx_node firstFallback{};
-        ufbx_node alpha{};
-        ufbx_node secondFallback{};
-        constexpr AStringView longText = "zzzz a named joint longer than inline string storage";
-        longName.name = { longText.data(), longText.size() };
-        alpha.name = { "Alpha", 5u };
-        const NWB::FbxToNwb::Ufbx::Node joints[] = { { &longName }, { &firstFallback }, { &alpha }, { &secondFallback } };
-        const NWB::FbxToNwb::JointMatrix identity = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
-        const NWB::FbxToNwb::JointMatrix matrices[] = { identity, identity, identity, identity };
-        const auto result = NWB::FbxToNwb::BuildSkeletonOutputData(scratchArena, joints, matrices, matrices);
-        ASSERT_TRUE(result.has_value());
-        ASSERT_EQ(result->joints.size(), 4u);
-        EXPECT_EQ(result->joints[0u].ptr, &alpha);
-        EXPECT_EQ(result->joints[1u].ptr, &firstFallback);
-        EXPECT_EQ(result->joints[2u].ptr, &secondFallback);
-        EXPECT_EQ(result->joints[3u].ptr, &longName);
-    }
+    NodeStorage longName;
+    NodeStorage firstFallback;
+    NodeStorage alpha;
+    NodeStorage secondFallback;
+    longName.setName("zzzz a named joint longer than inline string storage");
+    alpha.setName("Alpha");
+    Array<UfbxNode, 4u> joints;
+    joints[0u] = longName.view();
+    joints[1u] = firstFallback.view();
+    joints[2u] = alpha.view();
+    joints[3u] = secondFallback.view();
+    const JointMatrix identity = JointMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Array<JointMatrix, 4u> matrices;
+    matrices[0u] = identity;
+    matrices[1u] = identity;
+    matrices[2u] = identity;
+    matrices[3u] = identity;
+    const auto result = BuildSkeletonOutputData(joints, matrices, matrices);
+    ASSERT_TRUE(result.has_value());
+    ASSERT_EQ(result.value().joints.size(), 4u);
+    EXPECT_EQ(result.value().joints[0u].identity(), alpha.view().identity());
+    EXPECT_EQ(result.value().joints[1u].identity(), firstFallback.view().identity());
+    EXPECT_EQ(result.value().joints[2u].identity(), secondFallback.view().identity());
+    EXPECT_EQ(result.value().joints[3u].identity(), longName.view().identity());
 }
 
 void VerifyFbxSkin_FallbackNamesOnlyCollideWithPublishedNames(){
-    native{
-        ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
-        using namespace NWB::FbxToNwb;
-        ::Vector<AString<::ArenaBase>, ::ArenaBase> names(scratchArena);
-        names.reserve(4u);
-        ufbx_node unnamed{};
-        ufbx_node named{};
-        named.name = { "joint_2", 7u };
-        names.push_back(MakeSkeletonJointName(scratchArena, NWB::FbxToNwb::Ufbx::Node{ &unnamed }, 0u, names));
-        names.push_back(MakeSkeletonJointName(scratchArena, NWB::FbxToNwb::Ufbx::Node{ &named }, 1u, names));
-        names.push_back(MakeSkeletonJointName(scratchArena, NWB::FbxToNwb::Ufbx::Node{ &unnamed }, 2u, names));
-        named.name = { "joint_0", 7u };
-        names.push_back(MakeSkeletonJointName(scratchArena, NWB::FbxToNwb::Ufbx::Node{ &named }, 3u, names));
-        EXPECT_EQ(AStringView(names[0u]), "joint_0");
-        EXPECT_EQ(AStringView(names[1u]), "joint_2");
-        EXPECT_EQ(AStringView(names[2u]), "joint_2_1");
-        EXPECT_EQ(AStringView(names[3u]), "joint_0_1");
-    }
+    Vector<String> names;
+    names.reserve(4u);
+    NodeStorage unnamed;
+    NodeStorage named;
+    named.setName("joint_2");
+    names.push_back(MakeSkeletonJointName(unnamed.view(), 0u, names));
+    names.push_back(MakeSkeletonJointName(named.view(), 1u, names));
+    names.push_back(MakeSkeletonJointName(unnamed.view(), 2u, names));
+    named.setName("joint_0");
+    names.push_back(MakeSkeletonJointName(named.view(), 3u, names));
+    EXPECT_EQ(StringView(names[0u]), "joint_0");
+    EXPECT_EQ(StringView(names[1u]), "joint_2");
+    EXPECT_EQ(StringView(names[2u]), "joint_2_1");
+    EXPECT_EQ(StringView(names[3u]), "joint_0_1");
 }
 
 void VerifyFbxOptions_BorrowsQuotedPromptTextAndParsesAsciiCase(){
-    native{
-        using ::NWB::FbxToNwb::ParseFbxConfirmText;
-        using ::NWB::FbxToNwb::UnquoteFbxInputText;
-        constexpr AStringView quoted = "  \"path with spaces\"  ";
-        const AStringView unquoted = UnquoteFbxInputText(quoted);
-        EXPECT_EQ(unquoted, "path with spaces");
-        EXPECT_EQ(unquoted.data(), quoted.data() + 3u);
-        EXPECT_TRUE(UnquoteFbxInputText("  ''  ").empty());
-        EXPECT_EQ(UnquoteFbxInputText(" 'unmatched\" "), "'unmatched\"");
-        const auto yes = ParseFbxConfirmText(" \tYeS\n");
-        ASSERT_TRUE(yes.has_value());
-        EXPECT_TRUE(*yes);
-        EXPECT_FALSE(ParseFbxConfirmText("  ").has_value());
-    }
+    const StringView quoted = "  \"path with spaces\"  ";
+    const StringView unquoted = UnquoteFbxInputText(quoted);
+    EXPECT_EQ(unquoted, "path with spaces");
+    EXPECT_EQ(unquoted.data(), quoted.substr(3u).data());
+    EXPECT_TRUE(UnquoteFbxInputText("  ''  ").empty());
+    EXPECT_EQ(UnquoteFbxInputText(" 'unmatched\" "), "'unmatched\"");
+    const auto yes = ParseFbxConfirmText(" \tYeS\n");
+    ASSERT_TRUE(yes.has_value());
+    EXPECT_TRUE(yes.value());
+    EXPECT_FALSE(ParseFbxConfirmText("  ").has_value());
 }
 
 NWB_ADHD_GTEST(FbxOptions, BorrowsQuotedPromptTextAndParsesAsciiCase, VerifyFbxOptions_BorrowsQuotedPromptTextAndParsesAsciiCase)

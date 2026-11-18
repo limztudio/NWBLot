@@ -3,333 +3,126 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_numeric_and_popup_tools.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+
+class UiPopupRouterTests : RouterTestFixture{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_popup_router_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget Button(const u64 id, const Rect& rectangle, const u32 paintOrder = 0u)noexcept{
-    HitTarget target;
-    target.id = { id };
-    target.rectangle = rectangle;
-    target.clip = { 0.0f, 0.0f, 200.0f, 120.0f };
-    target.paintOrder = paintOrder;
-    target.focusable = true;
-    target.activatable = true;
-    return target;
-}
-
-[[nodiscard]] FOUNDATION_INLINE PopupScope Scope(const u64 widget = 100u, const u32 layer = 3u, const u64 openGeneration = 1u)noexcept{
-    PopupScope scope;
-    scope.token = { { widget }, 10u, 20u, openGeneration };
-    scope.bounds = { 40.0f, 40.0f, 100.0f, 70.0f };
-    scope.viewport = { 0.0f, 0.0f, 200.0f, 120.0f };
-    scope.layer = layer;
-    return scope;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Array<HitTarget, 2u> BaseTargets()noexcept{
-    return { Button(1u, { 10.0f, 10.0f, 30.0f, 20.0f }), Button(2u, { 60.0f, 10.0f, 30.0f, 20.0f }) };
-}
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget Barrier(const PopupScope& scope)noexcept{
-    HitTarget target;
-    target.id = scope.token.widget;
-    target.declarationGeneration = scope.token.declarationGeneration;
-    target.rectangle = scope.bounds;
-    target.clip = scope.viewport;
-    target.paintOrder = 10u;
-    target.popup = scope.token;
-    target.layer = scope.layer;
-    return target;
-}
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget Child(const PopupScope& scope, const u64 id, const Rect& rectangle, const u32 paintOrder)noexcept{
-    HitTarget target = Button(id, rectangle, paintOrder);
-    target.clip = scope.bounds;
-    target.popup = scope.token;
-    target.layer = scope.layer;
-    return target;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Array<HitTarget, 5u> Targets(const PopupScope& scope)noexcept{
-    const auto base = BaseTargets();
-    return { base[0u], base[1u], Barrier(scope), Child(scope, scope.token.widget.value + 1u, { 50.0f, 50.0f, 30.0f, 20.0f }, 11u), Child(scope, scope.token.widget.value + 2u, { 90.0f, 50.0f, 30.0f, 20.0f }, 12u) };
+    public b8 install(in PopupScope scope, in u64 generation){
+        const auto targets = MakeUiPopupRouterTargets(scope);
+        return this.m_router.commitTargets(targets, generation, MakeUiSinglePopupScopeArray(scope));
+    }
+    public b8 commitWithScope(in Span<HitTarget> targets, in u64 generation, in PopupScope scope){
+        return this.m_router.commitTargets(targets, generation, MakeUiSinglePopupScopeArray(scope));
+    }
+    public b8 commitCountWithScope(in Span<HitTarget> targets, in usize count, in u64 generation, in PopupScope scope){
+        return this.m_router.commitTargets(targets.subspan(0u, count), generation, MakeUiSinglePopupScopeArray(scope));
+    }
+    public b8 commitSingle(in HitTarget target, in u64 generation){
+        return this.m_router.commitTargets(MakeUiSingleHitTargetArray(target), generation);
+    }
+    public void focusBase(){
+        const auto targets = MakeUiPopupRouterBaseTargets();
+        ASSERT_TRUE(this.m_router.commitTargets(targets, 1u));
+        this.key(Key::Tab);
+        ASSERT_EQ(this.m_router.focus().value, 1u);
+    }
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[extensible]
+class PopupToolsCaseFixture : PopupToolsFixture{
 
 
-class UiPopupRouterTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiPopupRouterTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPopupRouter))
-    {}
-
-
-public:
-    [[nodiscard]] b8 install(const PopupScope& scope, const u64 generation){
-        const auto targets = Targets(scope);
-        return m_router.commitTargets(targets, generation, Span(&scope, 1u));
+    public b8 hasMenuHost()const{
+        return this.menuHost().has_value();
     }
-
-    [[nodiscard]] b8 commitWithScope(const Span<const HitTarget> targets, const u64 generation, const PopupScope& scope){
-        return m_router.commitTargets(targets, generation, Span(&scope, 1u));
+    public Expected<HitTarget> findMenuHost()const{
+        const auto hit = this.menuHost();
+        if(!hit.has_value())
+            return MakeUnexpected(Failure());
+        return hit.value();
     }
-
-    [[nodiscard]] b8 commitCountWithScope(const Span<const HitTarget> targets, const usize count, const u64 generation, const PopupScope& scope){
-        return m_router.commitTargets(targets.subspan(0u, count), generation, Span(&scope, 1u));
+    public Expected<HitTarget> findMenuRow(in u64 key)const{
+        const auto hit = this.menuRow(key);
+        if(!hit.has_value())
+            return MakeUnexpected(Failure());
+        return hit.value();
     }
-
-    [[nodiscard]] b8 commitSingle(const HitTarget& target, const u64 generation){
-        return m_router.commitTargets(Span(&target, 1u), generation);
+    public void armCloseMenuOnText(){
+        this.m_source.closeOnText.value() = Optional<mut ContextMenuState>(this.m_menu);
     }
-
-    void focusBase(){
-        const auto targets = BaseTargets();
-        ASSERT_TRUE(m_router.commitTargets(targets, 1u));
-        key(Core::Key::Tab);
-        ASSERT_EQ(m_router.focus().value, 1u);
+    public void armResetTooltipOnText(){
+        this.m_source.resetTooltipOnText.value() = Optional<mut TooltipState>(this.m_tooltip);
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_popup_tools_case_support{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiPopupToolsTests;
-
-class PopupToolsCaseFixture : public PopupToolsFixture{
-public:
-    [[nodiscard]] b8 hasMenuHost()const noexcept{
-        return menuHost() != nullptr;
+    public void armSelectListOnText(mut ListState list, in u64 key){
+        this.m_source.selectListOnText.value() = Optional<mut ListState>(list);
+        this.m_source.selectListKey = key;
     }
-
-    [[nodiscard]] Expected<HitTarget> findMenuHost()const noexcept{
-        const HitTarget* hit = menuHost();
-        if(!hit)
-            return MakeUnexpected(Failure{});
-        return *hit;
+    public b8 hasSelectListOnText()const{
+        return this.m_source.selectListOnText.value().has_value();
     }
-
-    [[nodiscard]] Expected<HitTarget> findMenuRow(const u64 key)const noexcept{
-        const HitTarget* hit = menuRow(key);
-        if(!hit)
-            return MakeUnexpected(Failure{});
-        return *hit;
+    public b8 hasCloseComboOnRevision()const{
+        return this.m_source.closeComboOnRevision.value().has_value();
     }
+}
 
-    void armCloseMenuOnText()noexcept{
-        m_source.closeOnText = &m_menu;
+
+class UiPopupToolsBuilderTests : PopupToolsCaseFixture{
+
+
+
+}
+
+
+class UiPopupToolsLoanTests : PopupToolsCaseFixture{
+
+
+
+}
+
+
+[ordered]
+class RevisionArmingComboSource : IListDataSource{
+    public TestObserved<u64> textCalls;
+    public TestObserved<b8> armed;
+    public mut PopupToolsSource m_menuSource;
+    public mut ComboState m_combo;
+    public PopupToolsSource m_rows;
+
+    public RevisionArmingComboSource(mut PopupToolsSource menuSource, mut ComboState combo){
+        this.m_menuSource = menuSource;
+        this.m_combo = combo;
+        this.m_rows.generation = 1501u;
     }
-
-    void armResetTooltipOnText()noexcept{
-        m_source.resetTooltipOnText = &m_tooltip;
+    public u64 instanceGeneration()const override{ return this.m_rows.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_rows.revision(); }
+    public u64 rowCount()const override{ return this.m_rows.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_rows.key(index); }
+    public Expected<u64> indexOf(in u64 key)const override{ return this.m_rows.indexOf(key); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
+        return this.m_rows.findEnabled(start, reverse);
     }
-
-    void armSelectListOnText(ListState& list, const u64 key)noexcept{
-        m_source.selectListOnText = &list;
-        m_source.selectListKey = key;
-    }
-
-    [[nodiscard]] b8 hasSelectListOnText()const noexcept{
-        return m_source.selectListOnText != nullptr;
-    }
-
-    [[nodiscard]] b8 hasCloseComboOnRevision()const noexcept{
-        return m_source.closeComboOnRevision != nullptr;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_popup_tools_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiPopupToolsBuilderTests : public __hidden_ui_popup_tools_case_support::PopupToolsCaseFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_popup_tools_loan_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiPopupToolsTests;
-
-class UiPopupToolsLoanTests : public __hidden_ui_popup_tools_case_support::PopupToolsCaseFixture{};
-
-class RevisionArmingComboSource final : public IListDataSource{
-public:
-    RevisionArmingComboSource(PopupToolsSource& menuSource, ComboState& combo)noexcept
-        : m_menuSource(menuSource)
-        , m_combo(combo)
-    {
-        m_rows.generation = 1501u;
-    }
-
-
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_rows.instanceGeneration(); }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{ return m_rows.revision(); }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_rows.rowCount(); }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_rows.key(index); }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_rows.indexOf(key); }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        return m_rows.findEnabled(start, reverse);
-    }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        ++textCalls;
-        if(!armed){
-            m_menuSource.closeComboOnRevision = &m_combo;
-            armed = true;
+    public StringView text(in u64 index)const override{
+        ++this.textCalls.value();
+        if(!this.armed.value()){
+            this.m_menuSource.closeComboOnRevision.value() = Optional<mut ComboState>(this.m_combo);
+            this.armed.value() = true;
         }
-        return m_rows.text(index);
+        return this.m_rows.text(index);
     }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_rows.enabled(index); }
-
-
-public:
-    mutable u64 textCalls = 0u;
-    mutable b8 armed = false;
+    public b8 enabled(in u64 index)const override{ return this.m_rows.enabled(index); }
+}
 
 
-private:
-    PopupToolsSource& m_menuSource;
-    ComboState& m_combo;
-    PopupToolsSource m_rows;
-};
+class UiPopupToolsNavigationTests : PopupToolsCaseFixture{
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_popup_tools_navigation_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiPopupToolsNavigationTests : public __hidden_ui_popup_tools_case_support::PopupToolsCaseFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiPopupRouterTests = ::__hidden_ui_popup_router_tests::UiPopupRouterTests;
-using UiPopupToolsBuilderTests = ::__hidden_ui_popup_tools_builder_tests::UiPopupToolsBuilderTests;
-using UiPopupToolsLoanTests = ::__hidden_ui_popup_tools_loan_tests::UiPopupToolsLoanTests;
-using UiPopupToolsNavigationTests = ::__hidden_ui_popup_tools_navigation_tests::UiPopupToolsNavigationTests;
-using UiPopupToolsRevisionArmingComboSource = ::__hidden_ui_popup_tools_loan_tests::RevisionArmingComboSource;
-using UiPopupToolsSource = ::NWB::UiPopupToolsTests::PopupToolsSource;
-
-namespace Key = ::NWB::Core::Key;
-using KeyEnum = ::NWB::Core::Key::Enum;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-namespace PopupDismissReason = ::NWB::Impl::Ui::PopupDismissReason;
-using ContextMenuResult = ::NWB::Impl::Ui::ContextMenuResult;
-using ListState = ::NWB::Impl::Ui::ListState;
-using ComboState = ::NWB::Impl::Ui::ComboState;
-using ComboOptions = ::NWB::Impl::Ui::ComboOptions;
-using ::NWB::Impl::Ui::s_InputMaxPopups;
-using ::NWB::Tests::UiCases::s_UiCaseNameButtonNormal;
-using ::NWB::Tests::UiCases::s_UiCaseButtonPressed;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 }
@@ -1405,7 +1198,7 @@ void VerifyUiPopupToolsBuilderTests_NativeFocusLossCancelsMenuEvenIfFocusReturns
 
 void VerifyUiPopupToolsBuilderTests_EmptyMenuRemainsOpenAndCannotProduceACommand(mut UiPopupToolsBuilderTests self){
     self.m_source.count = 0u;
-    ++self.m_source.contentRevision;
+    ++self.m_source.contentRevision.value();
     ASSERT_TRUE(self.acceptTools(1u, false));
     ASSERT_TRUE(self.openBySecondary(2u));
     EXPECT_EQ(self.m_menu.cursorKey(), 0u);
@@ -1507,10 +1300,10 @@ void VerifyUiPopupToolsBuilderTests_SourceMutationDuringRowPaintingRejectsTheCan
     ASSERT_TRUE(self.acceptTools(1u, false));
     ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
     ASSERT_TRUE(self.declareTools(2u, false));
-    self.m_source.changeRevisionOnText = true;
-    const u64 revision = self.m_source.contentRevision;
+    self.m_source.changeRevisionOnText.value() = true;
+    const u64 revision = self.m_source.contentRevision.value();
     EXPECT_FALSE(self.m_builder.endPanel());
-    EXPECT_GT(self.m_source.contentRevision, revision);
+    EXPECT_GT(self.m_source.contentRevision.value(), revision);
     EXPECT_TRUE(self.m_menu.isOpen());
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
 }
@@ -1575,7 +1368,7 @@ void VerifyUiPopupToolsLoanTests_ClosingAUserPopupAfterTooltipDeclarationHidesHe
 
 void VerifyUiPopupToolsLoanTests_MenuRowCallbackCannotReplaceAnAlreadyPaintedOrdinaryListAndPublish(mut UiPopupToolsLoanTests self){
     ASSERT_TRUE(self.acceptTools(1u, false, false));
-    UiPopupToolsSource ordinarySource = UiPopupToolsSource();
+    PopupToolsSource ordinarySource = PopupToolsSource();
     ordinarySource.generation = 1502u;
     ListState ordinary = ListState();
     ordinary.select(1u);
@@ -1604,7 +1397,7 @@ void VerifyUiPopupToolsLoanTests_MenuRowCallbackCannotReplaceAnAlreadyPaintedOrd
 void VerifyUiPopupToolsLoanTests_LateMenuMetadataCallbackCannotCloseAPaintedComboAndPublish(mut UiPopupToolsLoanTests self){
     ASSERT_TRUE(self.acceptTools(1u, false, false));
     ComboState combo = ComboState();
-    UiPopupToolsRevisionArmingComboSource comboSource = UiPopupToolsRevisionArmingComboSource(self.m_source, combo);
+    RevisionArmingComboSource comboSource = RevisionArmingComboSource(self.m_source, combo);
     combo.open();
     ASSERT_EQ(combo.selectedKey(), 0u);
     ASSERT_TRUE(self.m_menu.open(Rect(40.0f, 60.0f, 0.0f, 0.0f)));
@@ -1619,12 +1412,12 @@ void VerifyUiPopupToolsLoanTests_LateMenuMetadataCallbackCannotCloseAPaintedComb
     options.height.value = 32.0f;
     options.popupHeight = 176.0f;
     ASSERT_TRUE(self.m_builder.comboBox("combo", comboSource, combo, options).valid);
-    ASSERT_EQ(comboSource.textCalls, 0u);
+    ASSERT_EQ(comboSource.textCalls.value(), 0u);
     ASSERT_FALSE(self.hasCloseComboOnRevision());
     const u64 inputGeneration = combo.inputGeneration();
     EXPECT_FALSE(self.m_builder.endPanel());
-    EXPECT_TRUE(comboSource.armed);
-    EXPECT_GT(comboSource.textCalls, 0u);
+    EXPECT_TRUE(comboSource.armed.value());
+    EXPECT_GT(comboSource.textCalls.value(), 0u);
     EXPECT_FALSE(self.hasCloseComboOnRevision());
     EXPECT_FALSE(combo.isOpen());
     EXPECT_NE(combo.inputGeneration(), inputGeneration);
@@ -1659,7 +1452,7 @@ void VerifyUiPopupToolsNavigationTests_SourceRevisionRestoresRowsFocusAtAcceptan
     EXPECT_TRUE(self.send(heldNavigation).commandConsumed);
     ASSERT_FALSE(self.m_context.input().controlActions().empty());
     self.m_source.count = 4u;
-    ++self.m_source.contentRevision;
+    ++self.m_source.contentRevision.value();
 
     ASSERT_TRUE(self.prepareTools(4u, false));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 3u);
@@ -1680,7 +1473,7 @@ void VerifyUiPopupToolsNavigationTests_SourceRevisionRestoresRowsFocusAtAcceptan
     EXPECT_EQ(committedHost.value().id, rows);
     EXPECT_EQ(self.m_context.input().focus(), rows);
     EXPECT_NE(committedHost.value().control.contentRevision, oldSourceRevision);
-    EXPECT_EQ(committedHost.value().control.contentRevision, self.m_source.contentRevision);
+    EXPECT_EQ(committedHost.value().control.contentRevision, self.m_source.contentRevision.value());
     EXPECT_EQ(committedHost.value().control.instanceGeneration, self.m_menu.listState().inputGeneration());
     heldNavigation.repeat = true;
     EXPECT_TRUE(self.send(heldNavigation).commandConsumed);
@@ -1712,7 +1505,7 @@ void VerifyUiPopupToolsNavigationTests_FocusLossAndRegainCannotRestorePreparedRo
     ASSERT_TRUE(host.has_value());
     ASSERT_EQ(self.m_context.input().focus(), host.value().id);
     self.m_source.count = 4u;
-    ++self.m_source.contentRevision;
+    ++self.m_source.contentRevision.value();
     ASSERT_TRUE(self.prepareTools(3u, false));
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_TRUE(self.m_menu.isOpen());

@@ -10,246 +10,147 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <tests/common/frame_graph_snapshot_validation.adhd>
+#include <tests/smoke/gpu_pass_timing_probe.adhd>
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+const StringView s_ScalingTargetText = "target";
 
+class ContributionFailure{}
 
-#include <tests/common/frame_graph_snapshot_validation.adhd.h>
-#include <tests/smoke/gpu_pass_timing_probe.adhd.h>
-
-#include <core/telemetry/frame_graph_contributor.h>
-#include <core/telemetry/frame_graph_registry.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::TelemetryCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_ScalingTargetText = "target";
-
-struct ContributionFailure{};
-
-class PendingNameFrameGraphContributor final : public Core::Telemetry::IFrameGraphContributor{
-public:
-    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
-        const Core::Telemetry::FrameGraphNodeHandle source = builder.addPass(s_TelemetryCaseSource, "Source");
-        const Core::Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_ScalingTargetText), "Target");
-        const Core::Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_ScalingTargetText), "Duplicate Target");
+class PendingNameFrameGraphContributor : IFrameGraphContributor{
+    public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
+        const auto source = builder.addPass(s_TelemetryCaseSource, "Source");
+        const auto target = builder.addResource(Name(s_ScalingTargetText), "Target");
+        const auto duplicateTarget = builder.addResource(Name(s_ScalingTargetText), "Duplicate Target");
         if(!target.valid() || !duplicateTarget.valid())
             return false;
-
         builder.dependsOnByName(source, Name(s_ScalingTargetText), 7u);
         builder.dependsOnByName(source, s_TelemetryCaseMissing, 9u);
         return true;
     }
-};
-
-class LocalLabelContributor final : public Core::Telemetry::IFrameGraphContributor{
-public:
-    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
-        char label[] = "local label";
-        const auto node = builder.addPass(s_TelemetryCaseLocalLabel, AStringView(label));
-        label[0u] = 'X';
-        return node.valid();
-    }
-};
-
-class MutatingContributor final : public Core::Telemetry::IFrameGraphContributor{
-public:
-    explicit MutatingContributor(Core::Telemetry::FrameGraphRegistry& registry)noexcept
-        : m_registry(&registry)
-    {}
-
-    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
-        ++calls;
-        const auto node = builder.addPass(s_TelemetryCaseMutation, "mutation");
-        if(clearRegistry)
-            m_registry->clear();
-        if(removeSelf)
-            m_registry->unregisterContributor(*this);
-        if(removeOther)
-            m_registry->unregisterContributor(*removeOther);
-        if(addOther)
-            m_registry->registerContributor(*addOther);
-        if(throwAfterMutation)
-            throw ContributionFailure{};
-        return node.valid();
-    }
-
-    void setRemoveOther(Core::Telemetry::IFrameGraphContributor& other)noexcept{ removeOther = &other; }
-    void setAddOther(Core::Telemetry::IFrameGraphContributor& other)noexcept{ addOther = &other; }
-
-
-public:
-    Core::Telemetry::IFrameGraphContributor* removeOther = nullptr;
-    Core::Telemetry::IFrameGraphContributor* addOther = nullptr;
-    usize calls = 0u;
-    b8 removeSelf = false;
-    b8 clearRegistry = false;
-    b8 throwAfterMutation = false;
-
-
-private:
-    Core::Telemetry::FrameGraphRegistry* m_registry = nullptr;
-};
-
-class OwnedLabelContributor final : public Core::Telemetry::IFrameGraphContributor{
-public:
-    OwnedLabelContributor(Core::Telemetry::FrameGraphRegistry& registry, Core::Telemetry::TelemetryArena& arena)
-        : m_registry(&registry)
-        , m_label("label retained after contributor destruction", arena)
-    {}
-
-    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
-        const auto node = builder.addPass(s_TelemetryCaseOwnedLabel, AStringView(m_label));
-        m_registry->unregisterContributor(*this);
-        return node.valid();
-    }
-
-
-private:
-    Core::Telemetry::FrameGraphRegistry* m_registry = nullptr;
-    AString<Core::Telemetry::TelemetryArena> m_label;
-};
-
-class DestroyContributor final : public Core::Telemetry::IFrameGraphContributor{
-public:
-    explicit DestroyContributor(Optional<OwnedLabelContributor>& target)noexcept
-        : m_target(&target)
-    {}
-
-    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
-        m_target->reset();
-        return builder.addPass(s_TelemetryCaseDestroyer, "destroyer").valid();
-    }
-
-
-private:
-    Optional<OwnedLabelContributor>* m_target = nullptr;
-};
-
-class CacheLifetimeContributor final : public Core::Telemetry::IFrameGraphContributor{
-public:
-    CacheLifetimeContributor(Core::Telemetry::FrameGraphRegistry& registry, Core::Telemetry::CaptureSession& session, const AString<Core::Telemetry::TelemetryArena>& label)noexcept
-        : m_registry(&registry)
-        , m_session(&session)
-        , m_label(&label)
-    {}
-
-
-public:
-    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
-        if(!builder.addPass(s_TelemetryCaseCacheLifetime, AStringView(*m_label)).valid())
-            return false;
-        if(m_throwNext){
-            m_throwNext = false;
-            throw ContributionFailure{};
-        }
-        m_reentryRejected = !m_registry->record(*m_session);
-        return true;
-    }
-
-
-public:
-    b8 m_throwNext = true;
-    b8 m_reentryRejected = false;
-
-
-private:
-    Core::Telemetry::FrameGraphRegistry* m_registry = nullptr;
-    Core::Telemetry::CaptureSession* m_session = nullptr;
-    const AString<Core::Telemetry::TelemetryArena>* m_label = nullptr;
-};
-
-struct ReportFixture{
-    Core::Telemetry::FrameGraphNodeDescs nodes;
-    Core::Telemetry::FrameGraphEdgeDescs edges;
-    Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
-    Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
-
-
-public:
-    explicit ReportFixture(Core::Telemetry::TelemetryArena& arena)noexcept
-        : nodes(arena)
-        , edges(arena)
-        , queues(arena)
-        , packets(arena)
-    {}
-};
-
-struct SnapshotValidationFixture{
-    Core::Telemetry::FrameGraphPayload payload;
-    Core::Telemetry::FrameGraphRuntimeStatistics runtime;
-
-
-public:
-    explicit SnapshotValidationFixture(Core::Telemetry::TelemetryArena& arena)noexcept
-        : payload(arena)
-    {}
-};
-
-struct StatisticsFixture{
-    Core::Telemetry::FrameGraphNodeDescs nodes;
-    Core::Telemetry::FrameGraphEdgeDescs edges;
-    Core::Telemetry::FrameGraphPendingNameEdges pendingEdges;
-    Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
-    Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
-
-
-public:
-    explicit StatisticsFixture(Core::Telemetry::TelemetryArena& arena)noexcept
-        : nodes(arena)
-        , edges(arena)
-        , pendingEdges(arena)
-        , queues(arena)
-        , packets(arena)
-    {}
-};
-
-using CapturingLogger = Tests::CapturingLogger;
-using GpuPassTimingProbe = Tests::Smoke::GpuPassTimingProbe;
-using Tests::Smoke::ValidateNormalFrameSnapshotCompletion;
-using FrameGraphRegistry = Core::Telemetry::FrameGraphRegistry;
-using FrameGraphBuilder = Core::Telemetry::FrameGraphBuilder;
-using FrameGraphNodeHandle = Core::Telemetry::FrameGraphNodeHandle;
-using FrameGraphPendingNameEdges = Core::Telemetry::FrameGraphPendingNameEdges;
-using FrameGraphPassMetadata = Core::Telemetry::FrameGraphPassMetadata;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
+class LocalLabelContributor : IFrameGraphContributor{
+    public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
+        String label = String("local label");
+        const auto node = builder.addPass(s_TelemetryCaseLocalLabel, StringView(label));
+        label[0u] = 88u;
+        return node.valid();
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MutatingContributor : IFrameGraphContributor{
+    private mut FrameGraphRegistry m_registry;
+    private Optional<mut IFrameGraphContributor> m_removeOther;
+    private Optional<mut IFrameGraphContributor> m_addOther;
+    public usize calls = 0u;
+    public b8 removeSelf = false;
+    public b8 clearRegistry = false;
+    public b8 throwAfterMutation = false;
+    public MutatingContributor(mut FrameGraphRegistry registry){ this.m_registry = registry; }
+    [cpp_unwind]
+    public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
+        ++this.calls;
+        const auto node = builder.addPass(s_TelemetryCaseMutation, "mutation");
+        if(this.clearRegistry)
+            this.m_registry.clear();
+        if(this.removeSelf)
+            this.m_registry.unregisterContributor(this);
+        if(this.m_removeOther.has_value())
+            this.m_registry.unregisterContributor(this.m_removeOther.value());
+        if(this.m_addOther.has_value())
+            this.m_registry.registerContributor(this.m_addOther.value());
+        if(this.throwAfterMutation)
+            ThrowTestException<ContributionFailure>(ContributionFailure());
+        return node.valid();
+    }
+    public void setRemoveOther(mut IFrameGraphContributor other){ this.m_removeOther = Optional<mut IFrameGraphContributor>(other); }
+    public void setAddOther(mut IFrameGraphContributor other){ this.m_addOther = Optional<mut IFrameGraphContributor>(other); }
+}
 
+class OwnedLabelContributor : IFrameGraphContributor{
+    private mut FrameGraphRegistry m_registry;
+    private TelemetryLabelString m_label;
+    public OwnedLabelContributor(mut FrameGraphRegistry registry, mut HeapStorage arena){
+        this.m_registry = registry;
+        this.m_label = TelemetryLabelString("label retained after contributor destruction", arena);
+    }
+    public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
+        const auto node = builder.addPass(s_TelemetryCaseOwnedLabel, StringView(this.m_label));
+        this.m_registry.unregisterContributor(this);
+        return node.valid();
+    }
+}
+
+class DestroyContributor : IFrameGraphContributor{
+    private mut Optional<OwnedLabelContributor> m_target;
+    public DestroyContributor(mut Optional<OwnedLabelContributor> target){ this.m_target = target; }
+    public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
+        this.m_target.reset();
+        return builder.addPass(s_TelemetryCaseDestroyer, "destroyer").valid();
+    }
+}
+
+class CacheLifetimeContributor : IFrameGraphContributor{
+    private mut FrameGraphRegistry m_registry;
+    private mut CaptureSession m_session;
+    private in TelemetryLabelString m_label;
+    public b8 m_throwNext = true;
+    public b8 m_reentryRejected = false;
+    public CacheLifetimeContributor(mut FrameGraphRegistry registry, mut CaptureSession session, in TelemetryLabelString label){
+        this.m_registry = registry;
+        this.m_session = session;
+        this.m_label = label;
+    }
+    [cpp_unwind]
+    public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
+        if(!builder.addPass(s_TelemetryCaseCacheLifetime, StringView(this.m_label)).valid())
+            return false;
+        if(this.m_throwNext){
+            this.m_throwNext = false;
+            ThrowTestException<ContributionFailure>(ContributionFailure());
+        }
+        this.m_reentryRejected = !this.m_registry.record(this.m_session);
+        return true;
+    }
+}
+
+class ReportFixture{
+    public FrameGraphNodeDescs nodes;
+    public FrameGraphEdgeDescs edges;
+    public FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
+    public FrameGraphPacketSubmissionStatisticsRecords packets;
+    public ReportFixture(mut HeapStorage arena){
+        this.nodes = FrameGraphNodeDescs(arena);
+        this.edges = FrameGraphEdgeDescs(arena);
+        this.queues = FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
+        this.packets = FrameGraphPacketSubmissionStatisticsRecords(arena);
+    }
+}
+
+class SnapshotValidationFixture{
+    public FrameGraphPayload payload;
+    public FrameGraphRuntimeStatistics runtime;
+    public SnapshotValidationFixture(mut HeapStorage arena){
+        this.payload = FrameGraphPayload(arena);
+    }
+}
+
+class StatisticsFixture{
+    public FrameGraphNodeDescs nodes;
+    public FrameGraphEdgeDescs edges;
+    public FrameGraphPendingNameEdges pendingEdges;
+    public FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
+    public FrameGraphPacketSubmissionStatisticsRecords packets;
+    public StatisticsFixture(mut HeapStorage arena){
+        this.nodes = FrameGraphNodeDescs(arena);
+        this.edges = FrameGraphEdgeDescs(arena);
+        this.pendingEdges = FrameGraphPendingNameEdges(arena);
+        this.queues = FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
+        this.packets = FrameGraphPacketSubmissionStatisticsRecords(arena);
+    }
+}
 
 const StringView s_ProbeRegressionLabel = "Probe regression";
 const StringView s_ProbeGrowthLabel = "Probe growth";
@@ -442,9 +343,9 @@ FrameGraphPhysicalQueueRuntimeStatistics QueueStatistics(in u16 queueIndex, in u
 
 void PrepareFixture(in u32 packetCount, in u32 ownerCount, mut StatisticsFixture fixture){
     const u32 packetsPerOwner = packetCount / ownerCount;
-    fixture.nodes.reserve(ownerCount);
-    fixture.queues.reserve(ownerCount * 2u);
-    fixture.packets.reserve(packetCount);
+    fixture.nodes.reserve(cast<usize>(ownerCount));
+    fixture.queues.reserve(cast<usize>(ownerCount) * 2u);
+    fixture.packets.reserve(cast<usize>(packetCount));
     for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
         FrameGraphNodeDesc node = FrameGraphNodeDesc();
         node.name = s_TelemetryCaseScalingOwner;
@@ -682,12 +583,12 @@ void VerifyTelemetry_RegistryKeepsLabelsAfterRemovedContributorIsDestroyed(){
     session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     b8 firstDestroyed = false;
-    native(mut testArena, mut session, mut registry, mut firstDestroyed){
-        Optional<OwnedLabelContributor> first;
+    {
+        Optional<OwnedLabelContributor> first = Optional<OwnedLabelContributor>();
         first.emplace(registry, testArena.arena);
-        DestroyContributor destroyer(first);
+        DestroyContributor destroyer = DestroyContributor(first);
         registry.registerContributor(first.value());
-        registry.registerContributor(destroyer);
+        RegisterTestContributor(registry, destroyer);
         ASSERT_TRUE(registry.record(session));
         firstDestroyed = !first.has_value();
     }
@@ -736,6 +637,7 @@ void VerifyTelemetry_RegistryCanRemoveAndReregisterTheCurrentContributor(){
     EXPECT_EQ(contributor.calls, 2u);
 }
 
+[cpp_unwind]
 void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
@@ -750,8 +652,8 @@ void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
     first.throwAfterMutation = true;
     RegisterTestContributor(registry, first);
     RegisterTestContributor(registry, skipped);
-    native(mut registry, mut session){
-        EXPECT_THROW(EXPECT_TRUE(registry.record(session)), ContributionFailure);
+    {
+        EXPECT_TRUE(ThrowsException<ContributionFailure>(lambda[mut registry, mut session]() -> void{ EXPECT_TRUE(registry.record(session)); }));
     }
     EXPECT_EQ(session.eventCount(), 0u);
     ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
@@ -760,6 +662,7 @@ void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
     EXPECT_EQ(added.calls, 1u);
 }
 
+[cpp_unwind]
 void VerifyTelemetry_RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphCapacity(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
@@ -767,14 +670,14 @@ void VerifyTelemetry_RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphC
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     const StringView replacementLabel = "replacement label after unwind";
     b8 reentryRejected = false;
-    native(mut testArena, mut session, mut registry, in replacementLabel, mut reentryRejected){
-        AString<Core::Telemetry::TelemetryArena> label("first borrowed label", testArena.arena);
-        CacheLifetimeContributor contributor(registry, session, label);
+    {
+        TelemetryLabelString label = TelemetryLabelString("first borrowed label", testArena.arena);
+        CacheLifetimeContributor contributor = CacheLifetimeContributor(registry, session, label);
         registry.registerContributor(contributor);
-        EXPECT_THROW(EXPECT_TRUE(registry.record(session)), ContributionFailure);
+        EXPECT_TRUE(ThrowsException<ContributionFailure>(lambda[mut registry, mut session]() -> void{ EXPECT_TRUE(registry.record(session)); }));
         EXPECT_EQ(session.eventCount(), 0u);
 
-        label.assign(replacementLabel.data(), replacementLabel.size());
+        label.assign(replacementLabel);
         ASSERT_TRUE(registry.record(session));
         reentryRejected = contributor.m_reentryRejected;
     }
@@ -1092,6 +995,9 @@ void VerifyTelemetry_FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords()
 }
 
 void VerifyTelemetry_FrameGraphPayloadRejectsInvalidInput(){
+    String embeddedNulLabel = String("bad");
+    embeddedNulLabel.resize(4u);
+    embeddedNulLabel.append("label");
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
@@ -1102,9 +1008,6 @@ void VerifyTelemetry_FrameGraphPayloadRejectsInvalidInput(){
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestFrameGraph(testArena, nodes, edges);
-    String embeddedNulLabel = String("bad");
-    embeddedNulLabel.resize(4u);
-    embeddedNulLabel.append("label");
     nodes[0u].label = StringView(embeddedNulLabel);
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 

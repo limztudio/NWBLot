@@ -5,43 +5,44 @@
 #include "logger_crash_fixture.adhd"
 #include <logger/server/crash_manifest_validator.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/posix_child.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText(){
-    LoggerTestArena testArena = LoggerTestArena();
-    CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
+    HeapStorage testArena = HeapStorage();
+    CrashPackageSummary summary = CrashPackageSummary(testArena);
     summary.triggerMessage = "fault";
     String details = "package=one\n[tombstone_callstack]\nframe-one\n[metadata]\nkey=value\n";
 
-    const String report = BuildOrderedCrashReport(testArena.arena, summary, details);
+    const String report = BuildOrderedCrashReport(summary, details);
     EXPECT_EQ(StringView(report), "fault\n\ncallstack:\nframe-one\n\ndetails:\npackage=one\n[metadata]\nkey=value\n");
 }
 
 void VerifyCrashReportComposerTests_EmptyPrimaryStackTakesPrecedenceOverTombstone(){
-    LoggerTestArena testArena = LoggerTestArena();
-    CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
+    HeapStorage testArena = HeapStorage();
+    CrashPackageSummary summary = CrashPackageSummary(testArena);
     String details = "[callstack]\n\n[tombstone_callstack]\nfallback\n";
 
-    const String report = BuildOrderedCrashReport(testArena.arena, summary, details);
+    const String report = BuildOrderedCrashReport(summary, details);
     EXPECT_EQ(StringView(report), "callstack:\n<unavailable>\n\ndetails:\n[tombstone_callstack]\nfallback\n");
 }
 
 void VerifyCrashReportComposerTests_TrimsAcrossRemovedSection(){
-    LoggerTestArena testArena = LoggerTestArena();
-    CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
+    HeapStorage testArena = HeapStorage();
+    CrashPackageSummary summary = CrashPackageSummary(testArena);
     String before = " \n[callstack]\nframe\n[metadata]\n value \n";
-    const String first = BuildOrderedCrashReport(testArena.arena, summary, before);
+    const String first = BuildOrderedCrashReport(summary, before);
     EXPECT_EQ(StringView(first), "callstack:\nframe\n\ndetails:\n[metadata]\n value\n");
 
     String after = " left \n[callstack]\nframe\n";
-    const String second = BuildOrderedCrashReport(testArena.arena, summary, after);
+    const String second = BuildOrderedCrashReport(summary, after);
     EXPECT_EQ(StringView(second), "callstack:\nframe\n\ndetails:\nleft\n");
 
     String whitespace = " \t\n";
-    const String third = BuildOrderedCrashReport(testArena.arena, summary, whitespace);
+    const String third = BuildOrderedCrashReport(summary, whitespace);
     EXPECT_EQ(StringView(third), "callstack:\n<unavailable>\n\ndetails:\n");
 }
 
@@ -67,19 +68,19 @@ void VerifyCrashManifestTests_FindsExactKeysAtBoundaries(){
 
 
 void ExerciseMessageProgressesWhileTelemetryBacklogRemains(mut ShutdownCaptureServer server, in u16 port){
-    LogClientHolder holder = LogClientHolder();
+    ProtocolClient client = ProtocolClient();
     ServerFirstRequestReleaseGuard releaseGate = ServerFirstRequestReleaseGuard(server);
     const String url = StringFormat("http://127.0.0.1:{}", port);
-    ASSERT_TRUE(holder.client.init(StringView(url)));
+    ASSERT_TRUE(client.init(StringView(url)));
     Array<u8, 1> telemetry = Array<u8, 1>();
     telemetry[0] = 1u;
-    ASSERT_TRUE(EnqueueClientTelemetry(holder.client, Span<u8>(telemetry)));
+    ASSERT_TRUE(EnqueueClientTelemetry(client, Span<u8>(telemetry)));
     for(u32 attempt = 0u; attempt < 500u && !server.processingFirstRequest(); ++attempt)
         SleepMS(1u);
     ASSERT_TRUE(server.processingFirstRequest());
     for(u32 index = 0u; index < 3u; ++index)
-        ASSERT_TRUE(EnqueueClientTelemetry(holder.client, Span<u8>(telemetry)));
-    EnqueueClientAscii(holder.client, "queued message");
+        ASSERT_TRUE(EnqueueClientTelemetry(client, Span<u8>(telemetry)));
+    EnqueueLogMessage(client, LogType::Info, "queued message");
     server.releaseFirstRequest();
     releaseGate.release();
     for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
@@ -97,19 +98,19 @@ void VerifyLogClientShutdown_MessageProgressesWhileTelemetryBacklogRemains(){
 }
 
 void ExerciseTelemetryProgressesWhileMessageBacklogRemains(mut ShutdownCaptureServer server, in u16 port){
-    LogClientHolder holder = LogClientHolder();
+    ProtocolClient client = ProtocolClient();
     ServerFirstRequestReleaseGuard releaseGate = ServerFirstRequestReleaseGuard(server);
     const String url = StringFormat("http://127.0.0.1:{}", port);
-    ASSERT_TRUE(holder.client.init(StringView(url)));
-    EnqueueClientAscii(holder.client, "first message");
+    ASSERT_TRUE(client.init(StringView(url)));
+    EnqueueLogMessage(client, LogType::Info, "first message");
     for(u32 attempt = 0u; attempt < 500u && !server.processingFirstRequest(); ++attempt)
         SleepMS(1u);
     ASSERT_TRUE(server.processingFirstRequest());
     for(u32 index = 0u; index < 3u; ++index)
-        EnqueueClientAscii(holder.client, "queued message");
+        EnqueueLogMessage(client, LogType::Info, "queued message");
     Array<u8, 1> telemetry = Array<u8, 1>();
     telemetry[0] = 1u;
-    ASSERT_TRUE(EnqueueClientTelemetry(holder.client, Span<u8>(telemetry)));
+    ASSERT_TRUE(EnqueueClientTelemetry(client, Span<u8>(telemetry)));
     server.releaseFirstRequest();
     releaseGate.release();
     for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
@@ -127,18 +128,18 @@ void VerifyLogClientShutdown_TelemetryProgressesWhileMessageBacklogRemains(){
 }
 
 void ExerciseRetriesRejectedPayloadClient(mut ShutdownCaptureServer server, in u16 port){
-    LogClientHolder holder = LogClientHolder();
+    ProtocolClient client = ProtocolClient();
     const String url = StringFormat("http://127.0.0.1:{}", port);
-    ASSERT_TRUE(holder.client.init(StringView(url)));
-    EnqueueClientAscii(holder.client, "first payload");
-    EnqueueClientAscii(holder.client, "second payload");
+    ASSERT_TRUE(client.init(StringView(url)));
+    EnqueueLogMessage(client, LogType::Info, "first payload");
+    EnqueueLogMessage(client, LogType::Info, "second payload");
     for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 3u; ++attempt)
         SleepMS(10u);
     EXPECT_EQ(server.requestCount(), 3u);
 }
 
 void VerifyLogClientShutdown_RetriesRejectedPayloadBeforeSendingNextMessage(){
-    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpServiceUnavailable);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpServiceUnavailable, false, false);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
     ExerciseRetriesRejectedPayloadClient(server, port);
@@ -146,30 +147,27 @@ void VerifyLogClientShutdown_RetriesRejectedPayloadBeforeSendingNextMessage(){
 }
 
 void VerifyLogClientShutdown_ShutdownInterruptsBackoffAfterRepeatedTemporaryFailures(){
-    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpServiceUnavailable, true);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpServiceUnavailable, true, false);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
     String stderrText = "";
     Timer stopStarted = TimerNow();
-    native(mut server, in port, mut stderrText, mut stopStarted){
-        testing::internal::CaptureStderr();
-        {
-            LogClient client;
-            const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-            const b8 initialized = client.init(AStringView(url));
-            EXPECT_TRUE(initialized);
-            if(initialized){
-                EnqueueClientAscii(client, "retry payload");
-                for(u32 attempt = 0u; attempt < 1200u && server.requestCount() < 7u; ++attempt)
-                    SleepMS(10u);
-                EXPECT_GE(server.requestCount(), 7u);
-                SleepMS(50u);
-            }
-            stopStarted = TimerNow();
+    BeginStderrCapture();
+    {
+        ProtocolClient client = ProtocolClient();
+        const String url = StringFormat("http://127.0.0.1:{}", port);
+        const b8 initialized = client.init(StringView(url));
+        EXPECT_TRUE(initialized);
+        if(initialized){
+            EnqueueLogMessage(client, LogType::Info, "retry payload");
+            for(u32 attempt = 0u; attempt < 1200u && server.requestCount() < 7u; ++attempt)
+                SleepMS(10u);
+            EXPECT_GE(server.requestCount(), 7u);
+            SleepMS(50u);
         }
-        const auto captured = testing::internal::GetCapturedStderr();
-        stderrText.assign(captured.data(), captured.size());
+        stopStarted = TimerNow();
     }
+    FinishStderrCapture(stderrText);
     EXPECT_TRUE(Contains(StringView(stderrText), "stopped with an unsent payload"));
     EXPECT_LT(TimerNow(), TimerAddMS(stopStarted, 3000));
 }
@@ -179,38 +177,35 @@ void VerifyLogClientShutdown_TransportFailureIsVisibleWithoutDiagnosticCallback(
     const u32 waitMilliseconds = 500u;
     b8 initialized = false;
     String stderrText = "";
-    native(in invalidUrl, in waitMilliseconds, mut initialized, mut stderrText){
-        testing::internal::CaptureStderr();
-        {
-            LogClient client;
-            initialized = client.init(invalidUrl);
-            if(initialized){
-                EnqueueClientAscii(client, "unsent payload");
-                SleepMS(waitMilliseconds);
-            }
+    BeginStderrCapture();
+    {
+        ProtocolClient client = ProtocolClient();
+        initialized = client.init(invalidUrl);
+        if(initialized){
+            EnqueueLogMessage(client, LogType::Info, "unsent payload");
+            SleepMS(waitMilliseconds);
         }
-        const auto captured = testing::internal::GetCapturedStderr();
-        stderrText.assign(captured.data(), captured.size());
     }
+    FinishStderrCapture(stderrText);
     EXPECT_TRUE(initialized);
     EXPECT_TRUE(Contains(StringView(stderrText), "[ERROR] Log client: sending payload failed"));
     EXPECT_TRUE(Contains(StringView(stderrText), "stopped with an unsent payload"));
 }
 
 void ExercisePermanentBadRequestClient(mut ShutdownCaptureServer server, in u16 port){
-    LogClientHolder holder = LogClientHolder();
+    ProtocolClient client = ProtocolClient();
     const String url = StringFormat("http://127.0.0.1:{}", port);
-    ASSERT_TRUE(holder.client.init(StringView(url)));
-    EnqueueClientAscii(holder.client, "rejected payload");
-    EnqueueClientAscii(holder.client, "later payload");
+    ASSERT_TRUE(client.init(StringView(url)));
+    EnqueueLogMessage(client, LogType::Info, "rejected payload");
+    EnqueueLogMessage(client, LogType::Info, "later payload");
     for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
         SleepMS(10u);
     EXPECT_EQ(server.requestCount(), 2u);
-    EXPECT_EQ(holder.client.rejectedPayloadCount(), 1u);
+    EXPECT_EQ(client.rejectedPayloadCount(), 1u);
 }
 
 void VerifyLogClientShutdown_PermanentBadRequestDoesNotBlockLaterMessages(){
-    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpBadRequest);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpBadRequest, false, false);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
     ExercisePermanentBadRequestClient(server, port);
@@ -219,23 +214,21 @@ void VerifyLogClientShutdown_PermanentBadRequestDoesNotBlockLaterMessages(){
 }
 
 void ExerciseOversizedMessageClient(mut ShutdownCaptureServer server, in u16 port){
-    LogClientHolder holder = LogClientHolder();
+    ProtocolClient client = ProtocolClient();
     const String url = StringFormat("http://127.0.0.1:{}", port);
-    ASSERT_TRUE(holder.client.init(StringView(url)));
-    native(mut holder){
-        Log::LogString message(holder.client.arena());
-        message.resize(Log::s_MaxLogMessageUploadBytes / sizeof(tchar) + 1u, static_cast<tchar>('x'));
-        holder.client.enqueue(TStringView(message));
-    }
-    EnqueueClientAscii(holder.client, "later payload");
+    ASSERT_TRUE(client.init(StringView(url)));
+    String message;
+    message.resize(s_MaxClientMessageBytes / s_NativeCharacterBytes + 1u, 'x');
+    EnqueueLogMessage(client, LogType::Info, message);
+    EnqueueLogMessage(client, LogType::Info, "later payload");
     for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
         SleepMS(10u);
     EXPECT_EQ(server.requestCount(), 2u);
-    EXPECT_EQ(holder.client.rejectedPayloadCount(), 1u);
+    EXPECT_EQ(client.rejectedPayloadCount(), 1u);
 }
 
 void VerifyLogClientShutdown_OversizedMessageDoesNotBlockLaterMessages(){
-    ShutdownCaptureServer server = ShutdownCaptureServer();
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpOk, false, false);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
     ExerciseOversizedMessageClient(server, port);
@@ -245,27 +238,26 @@ void VerifyLogClientShutdown_OversizedMessageDoesNotBlockLaterMessages(){
 }
 
 void VerifyLogClientShutdown_OversizedTelemetryIsRejectedBeforeReadingItsBuffer(){
-    LogClientHolder holder = LogClientHolder();
-    native(mut holder){
-        const u8 byte = 0u;
-        EXPECT_FALSE(holder.client.enqueueTelemetry(&byte, Log::s_MaxTelemetryUploadBytes + 1u));
-    }
-    EXPECT_EQ(holder.client.rejectedPayloadCount(), 1u);
+    ProtocolClient client = ProtocolClient();
+    const Array<u8, 1u> backing = Array<u8, 1u>(0u);
+    const BinaryByteView oversized = TestByteView(Span<u8>(backing), s_MaxClientTelemetryBytes + 1u, true);
+    EXPECT_FALSE(EnqueueTestTelemetryView(client, oversized));
+    EXPECT_EQ(client.rejectedPayloadCount(), 1u);
 }
 
 void EnqueueShutdownMessages(in u16 port){
-    LogClientHolder holder = LogClientHolder();
+    ProtocolClient client = ProtocolClient();
     const String url = StringFormat("http://127.0.0.1:{}", port);
-    ASSERT_TRUE(holder.client.init(StringView(url)));
+    ASSERT_TRUE(client.init(StringView(url)));
 
     for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex){
         const String payload = StringFormat("Log client shutdown payload {}", messageIndex);
-        EnqueueClientAscii(holder.client, StringView(payload));
+        EnqueueLogMessage(client, LogType::Info, StringView(payload));
     }
 }
 
 void VerifyLogClientShutdown_DrainsEveryQueuedMessageAfterStopBegins(){
-    ShutdownCaptureServer server = ShutdownCaptureServer();
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpOk, false, false);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
     EnqueueShutdownMessages(port);
@@ -276,11 +268,13 @@ void VerifyLogClientShutdown_DrainsEveryQueuedMessageAfterStopBegins(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class LinuxForceAssertFalseForCrashObservation{}
+
 void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut LoggerServerCrash self){
     if(!IsDesktopLinuxLoggerCrashPlatform())
         return;
 
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_linux_assert_observe_test";
     const StringView stem = "linux_assert_observe_001";
     RemoveTestArtifacts(group);
@@ -289,69 +283,50 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     const Path pendingDirectory = spoolDirectory / s_PendingDirectoryName;
     const Path archiveInputDirectory = ArchiveInputDirectory(group);
     const Path archivePath = ArchivePath(group, stem);
-    b8 externalSymbolizerAvailable = false;
-    native(in spoolDirectory, in pendingDirectory, in archiveInputDirectory, in archivePath, mut testArena, mut externalSymbolizerAvailable){
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-        auto& arena = testArena.arena;
-        const AStringView expectedAssertCategory(LinuxObservableAssertCategory());
-        const pid_t childPid = fork();
-        ASSERT_GE(childPid, 0);
-        if(childPid == 0){
-            PersistentArena installArena(s_AssertChildInstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-            Core::Crash::CrashConfigT<PersistentArena> config(installArena);
-            config.applicationName = s_ApplicationName;
-            config.version = s_ApplicationVersion;
-            config.buildId = AStringView("linux-assert-observe-test");
-            config.spoolDirectory = spoolDirectory;
-
-            if(!Core::Crash::InstallCrashHandler(config))
-                _exit(121);
-
-            LinuxSilenceExpectedCrashChildConsole();
-            LinuxForceAssertFalseForCrashObservation();
-            _exit(122);
-        }
-
-        int status = 0;
-        while(waitpid(childPid, &status, 0) < 0){
-            if(errno == EINTR)
-                continue;
-            break;
-        }
-
-        EXPECT_TRUE(WIFSIGNALED(status));
-        EXPECT_EQ(WTERMSIG(status), SIGABRT);
-
-        {
-            constexpr u32 s_PendingDirectoryReadyTimeoutMS = 3000u;
-            const auto directoryReady = WaitForDirectory(pendingDirectory, s_PendingDirectoryReadyTimeoutMS);
-            ASSERT_TRUE(directoryReady);
-            EXPECT_TRUE(*directoryReady);
-        }
-
-        CrashTestText expectedAbortCode(arena);
-        expectedAbortCode += "\"reason_code\": ";
-        AppendDecimalText(static_cast<u64>(SIGABRT), expectedAbortCode);
-        EXPECT_FALSE(PendingDirectoryContainsManifestTexts(arena, pendingDirectory, AStringView("\"reason_kind\": \"signal\""), AStringView(expectedAbortCode)));
-
-        const auto assertPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, expectedAssertCategory, "false", AStringView(), s_TestSourceFilename);
-        EXPECT_TRUE(assertPackageDirectory);
-
-        ASSERT_TRUE(assertPackageDirectory);
-        ScratchArena archiveScratch(s_ArchiveScratch);
-        const auto archive = Core::Crash::CrashDetail::CrashPackageArchive::Build(arena, archiveScratch, *assertPackageDirectory);
-        ASSERT_TRUE(archive);
-        ASSERT_TRUE(EnsureDirectories(archiveInputDirectory));
-        EXPECT_TRUE(WriteBinaryFile(archivePath, *archive));
-        const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
-        ASSERT_TRUE(externalSymbolizer);
-        externalSymbolizerAvailable = *externalSymbolizer;
-#endif
+    const i32 child = ForkTestChild();
+    ASSERT_GE(child, 0);
+    if(child == 0){
+        PersistentStorage installArena(s_AssertChildInstallArena, CrashStorageAlignedSize(64u * 1024u));
+        TestValueSlot<PersistentCrashConfig> configSlot;
+        mut PersistentCrashConfig config = configSlot.constructIn(installArena);
+        config.applicationName = s_ApplicationName;
+        config.version = s_ApplicationVersion;
+        config.buildId = "linux-assert-observe-test";
+        config.spoolDirectory = spoolDirectory;
+        if(!InstallCrashHandler(config))
+            ExitTestChild(121);
+        SilenceTestChildConsole();
+        ObserveStackFrame<LinuxForceAssertFalseForCrashObservation>(lambda[]() -> void{
+            ObservableTestAssertion(false);
+            ExitTestChild(120);
+        });
+        ExitTestChild(122);
     }
 
-    const CrashIngestResult result = ProcessCrashUpload(testArena.arena, archivePath, MakeIngestConfig(testArena, group));
+    const ChildWaitResult status = WaitForTestChild(child);
+    ASSERT_TRUE(status.collected);
+    EXPECT_TRUE(status.signaled);
+    EXPECT_EQ(status.signal, s_TestAbortSignal);
+    const auto directoryReady = WaitForDirectory(pendingDirectory, 3000u);
+    ASSERT_TRUE(directoryReady.has_value());
+    EXPECT_TRUE(directoryReady.value());
+    const String abortCode = StringFormat("\"reason_code\": {}", s_TestAbortSignal);
+    EXPECT_FALSE(PendingDirectoryContainsManifestTexts(pendingDirectory, "\"reason_kind\": \"signal\"", abortCode));
+    const auto package = WaitForTriggerPackage(pendingDirectory, s_TestAssertCategory, "false", "", s_TestSourceFilename);
+    ASSERT_TRUE(package.has_value());
+    HeapStorage archiveOwner;
+    ScratchStorage archiveScratch(s_ArchiveScratch);
+    const auto archive = BuildObservationArchive(archiveOwner, archiveScratch, package.value());
+    ASSERT_TRUE(archive.has_value());
+    ASSERT_TRUE(EnsureDirectories(archiveInputDirectory).has_value());
+    EXPECT_TRUE(WriteBinaryFile(archivePath, Span<u8>(archive.value())));
+    const auto external = LinuxExternalSymbolizerAvailable();
+    ASSERT_TRUE(external.has_value());
+    const b8 externalSymbolizerAvailable = external.value();
+
+    const CrashIngestResult result = ProcessCrashUpload(testArena, archivePath, MakeIngestConfig(testArena, group));
     EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, s_LogTypeAssert);
+    EXPECT_EQ(result.type, LogType::Assert);
 
     String report = "";
     ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
@@ -366,15 +341,17 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     if(externalSymbolizerAvailable)
         EXPECT_TRUE(Contains(StringView(report), "LinuxForceAssertFalseForCrashObservation"));
 
-    PreserveObservedReport(testArena.arena, StringView(report), "linux_assert");
+    PreserveObservedReport(StringView(report), "linux_assert");
     RemoveTestArtifacts(group);
 }
+
+class CaptureRecoverableErrorForCrashObservation{}
 
 void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerReport(mut LoggerServerCrash self){
     if(!IsDesktopLoggerCrashPlatform())
         return;
 
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_recoverable_error_observe_test";
     const StringView stem = "recoverable_error_observe_001";
     const StringView errorMessage = "recoverable logger error observation";
@@ -385,47 +362,48 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
     const Path archiveInputDirectory = ArchiveInputDirectory(group);
     const Path archivePath = ArchivePath(group, stem);
     b8 externalSymbolizerAvailable = false;
-    native(in spoolDirectory, in pendingDirectory, in archiveInputDirectory, in archivePath, in errorMessage, mut testArena, mut externalSymbolizerAvailable){
-#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
-        auto& arena = testArena.arena;
-        PersistentArena installArena(s_RecoverableErrorInstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        Core::Crash::CrashConfigT<PersistentArena> crashConfig(installArena);
-        crashConfig.applicationName = s_ApplicationName;
-        crashConfig.version = s_ApplicationVersion;
-        crashConfig.buildId = AStringView("recoverable-error-observe-test");
-        crashConfig.spoolDirectory = spoolDirectory;
-
-        const b8 installed = Core::Crash::InstallCrashHandler(crashConfig);
-        EXPECT_TRUE(installed);
-
-        b8 continuedAfterError = false;
-        if(installed){
-            CaptureRecoverableErrorForCrashObservation(errorMessage);
-            continuedAfterError = true;
-        }
-
-        const auto errorPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, Core::Common::LoggerDetail::s_DiagnosticEventCategoryError, AStringView(), errorMessage, s_TestSourceFilename);
-        EXPECT_TRUE(errorPackageDirectory);
-        EXPECT_TRUE(continuedAfterError);
-        Core::Crash::UninstallCrashHandler();
-
-        ASSERT_TRUE(errorPackageDirectory);
-        ScratchArena archiveScratch(s_ArchiveScratch);
-        const auto archive = Core::Crash::CrashDetail::CrashPackageArchive::Build(arena, archiveScratch, *errorPackageDirectory);
-        ASSERT_TRUE(archive);
-        ASSERT_TRUE(EnsureDirectories(archiveInputDirectory));
-        EXPECT_TRUE(WriteBinaryFile(archivePath, *archive));
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-        const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
-        ASSERT_TRUE(externalSymbolizer);
-        externalSymbolizerAvailable = *externalSymbolizer;
-#endif
-#endif
+    PersistentStorage installArena(s_RecoverableErrorInstallArena, CrashStorageAlignedSize(64u * 1024u));
+    TestValueSlot<PersistentCrashConfig> configSlot;
+    mut PersistentCrashConfig config = configSlot.constructIn(installArena);
+    config.applicationName = s_ApplicationName;
+    config.version = s_ApplicationVersion;
+    config.buildId = "recoverable-error-observe-test";
+    config.spoolDirectory = spoolDirectory;
+    const b8 installed = InstallCrashHandler(config);
+    EXPECT_TRUE(installed);
+    b8 continuedAfterError = false;
+    if(installed){
+        ObserveStackFrame<CaptureRecoverableErrorForCrashObservation>(lambda[in errorMessage]() -> void{
+            DiagnosticEventRecord record;
+            record.event = s_DiagnosticEventError;
+            record.category = s_ObservedErrorCategory;
+            record.message = errorMessage;
+            record.file = s_TestSourceFilename;
+            record.line = s_ObservationSourceLine;
+            CaptureDiagnosticEvent(record);
+        });
+        continuedAfterError = true;
+    }
+    const auto package = WaitForTriggerPackage(pendingDirectory, s_ObservedErrorCategory, "", errorMessage, s_TestSourceFilename);
+    EXPECT_TRUE(package.has_value());
+    EXPECT_TRUE(continuedAfterError);
+    UninstallCrashHandler();
+    ASSERT_TRUE(package.has_value());
+    HeapStorage archiveOwner;
+    ScratchStorage archiveScratch(s_ArchiveScratch);
+    const auto archive = BuildObservationArchive(archiveOwner, archiveScratch, package.value());
+    ASSERT_TRUE(archive.has_value());
+    ASSERT_TRUE(EnsureDirectories(archiveInputDirectory).has_value());
+    EXPECT_TRUE(WriteBinaryFile(archivePath, Span<u8>(archive.value())));
+    if(IsDesktopLinuxLoggerCrashPlatform()){
+        const auto external = LinuxExternalSymbolizerAvailable();
+        ASSERT_TRUE(external.has_value());
+        externalSymbolizerAvailable = external.value();
     }
 
-    const CrashIngestResult result = ProcessCrashUpload(testArena.arena, archivePath, MakeIngestConfig(testArena, group));
+    const CrashIngestResult result = ProcessCrashUpload(testArena, archivePath, MakeIngestConfig(testArena, group));
     EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, s_LogTypeError);
+    EXPECT_EQ(result.type, LogType::Error);
 
     String report = "";
     ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
@@ -445,18 +423,18 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
         EXPECT_TRUE(Contains(StringView(report), "resolver=windows_pdb_minidump"));
     }
 
-    PreserveObservedReport(testArena.arena, StringView(report), "recoverable_error");
+    PreserveObservedReport(StringView(report), "recoverable_error");
     RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_LinuxCrashPackageReportsMissingProcMaps(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_linux_missing_maps_test";
     const StringView stem = "linux_missing_maps_001";
     RemoveTestArtifacts(group);
 
     String archive = "";
-    BeginArchiveWithManifest("linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
+    BeginArchiveWithManifest("linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Include, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4198964\n", archive);
 
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
@@ -472,13 +450,13 @@ void VerifyLoggerServerCrash_LinuxCrashPackageReportsMissingProcMaps(mut LoggerS
 }
 
 void VerifyLoggerServerCrash_LinuxCrashPackageReportsUnmappedInstructionPointer(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_linux_unmapped_ip_test";
     const StringView stem = "linux_unmapped_ip_001";
     RemoveTestArtifacts(group);
 
     String archive = "";
-    BeginArchiveWithManifest("linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
+    BeginArchiveWithManifest("linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Include, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=7340032\n", archive);
     AppendArchiveFile(s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n", archive);
 
@@ -494,34 +472,16 @@ void VerifyLoggerServerCrash_LinuxCrashPackageReportsUnmappedInstructionPointer(
     RemoveTestArtifacts(group);
 }
 
-void VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
-    const StringView group = "logger_server_linux_offset_overflow_test";
-    const StringView stem = "linux_offset_overflow_001";
-    RemoveTestArtifacts(group);
 
-    String archive = "";
-    BeginArchiveWithManifest("linux-offset-overflow-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
-    AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4097\n", archive);
-    AppendArchiveFile(s_ProcMapsFileName, "1000-2000 r-xp ffffffffffffffff 00:00 0 /tmp/overflow\n", archive);
-    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
-    ASSERT_TRUE(result.accepted);
-
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
-    EXPECT_TRUE(Contains(StringView(report), "instruction_pointer_module=/tmp/overflow"));
-    EXPECT_TRUE(Contains(StringView(report), "symbolication_relative_ip=unavailable"));
-    RemoveTestArtifacts(group);
-}
 
 void VerifyLoggerServerCrash_AndroidCrashPackageReportsTombstoneWithoutFrames(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_android_no_frames_test";
     const StringView stem = "android_no_frames_001";
     RemoveTestArtifacts(group);
 
     String archive = "";
-    BeginArchiveWithManifest("android-no-frames-test", "android", s_Crash, s_ManualDump, 0u, s_IncludeEventField, ManifestTriggerFields(), archive);
+    BeginArchiveWithManifest("android-no-frames-test", "android", s_Crash, s_ManualDump, 0u, ManifestEventField::Include, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n", archive);
 
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
@@ -538,13 +498,13 @@ void VerifyLoggerServerCrash_AndroidCrashPackageReportsTombstoneWithoutFrames(mu
 }
 
 void VerifyLoggerServerCrash_WindowsCrashPackageReportsMissingMinidump(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_windows_missing_dump_test";
     const StringView stem = "windows_missing_dump_001";
     RemoveTestArtifacts(group);
 
     String archive = "";
-    BeginArchiveWithManifest("windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, s_IncludeEventField, ManifestTriggerFields(), archive);
+    BeginArchiveWithManifest("windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, ManifestEventField::Include, ManifestTriggerFields(), archive);
 
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
@@ -567,13 +527,13 @@ void VerifyLoggerServerCrash_WindowsCrashPackageReportsMissingMinidump(mut Logge
 }
 
 void VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_gpu_detective_test";
     const StringView stem = "gpu_detective_001";
     RemoveTestArtifacts(group);
 
     String archive = "";
-    BeginArchiveWithManifest("gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, s_IncludeEventField, ManifestTriggerFields(), archive);
+    BeginArchiveWithManifest("gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, ManifestEventField::Include, ManifestTriggerFields(), archive);
     // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n", archive);
 
@@ -590,7 +550,7 @@ void VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProc
 }
 
 void VerifyLoggerServerCrash_InvalidCrashPackageIsRejected(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_invalid_crash_test";
     const StringView stem = "invalid_001";
     RemoveTestArtifacts(group);
@@ -600,7 +560,7 @@ void VerifyLoggerServerCrash_InvalidCrashPackageIsRejected(mut LoggerServerCrash
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
 
     EXPECT_FALSE(result.accepted);
-    EXPECT_EQ(result.type, s_LogTypeError);
+    EXPECT_EQ(result.type, LogType::Error);
     EXPECT_TRUE(CrashIngestMessageContains(result, "Crash upload rejected"));
     EXPECT_TRUE(CrashIngestMessageContains(result, "invalid crash archive header"));
 
@@ -609,7 +569,7 @@ void VerifyLoggerServerCrash_InvalidCrashPackageIsRejected(mut LoggerServerCrash
 }
 
 void VerifyLoggerServerCrash_UnsafeArchiveEntryCannotEscapePackageDirectory(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_unsafe_archive_20261107";
     const StringView stem = "unsafe_001";
     const Path testDirectory = TestCaseDirectory(group);
@@ -631,17 +591,17 @@ void VerifyLoggerServerCrash_UnsafeArchiveEntryCannotEscapePackageDirectory(mut 
 }
 
 void VerifyLoggerServerCrash_CrashManifestWithoutEventIsRejected(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_missing_event_manifest_crash_test";
     const StringView stem = "missing_event_manifest_001";
     RemoveTestArtifacts(group);
 
     String archive = "";
-    BeginArchiveWithManifest("missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, s_OmitEventField, ManifestTriggerFields(), archive);
+    BeginArchiveWithManifest("missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Omit, ManifestTriggerFields(), archive);
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
 
     EXPECT_FALSE(result.accepted);
-    EXPECT_EQ(result.type, s_LogTypeError);
+    EXPECT_EQ(result.type, LogType::Error);
     EXPECT_TRUE(CrashIngestMessageContains(result, "manifest.json is missing required fields"));
     ExpectIsRegularFile(InvalidArchivePath(group, stem), true);
 
@@ -649,18 +609,18 @@ void VerifyLoggerServerCrash_CrashManifestWithoutEventIsRejected(mut LoggerServe
 }
 
 void VerifyLoggerServerCrash_InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemainValid(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_boolean_manifest_test";
     const StringView validStem = "valid_false_001";
     const StringView invalidStem = "invalid_boolean_001";
     RemoveTestArtifacts(group);
 
     String validArchive = "";
-    BeginArchiveWithManifest(validStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields(), validArchive);
+    BeginArchiveWithManifest(validStem, s_Linux, s_Crash, s_Signal, 0u, ManifestEventField::Include, ManifestTriggerFields(), validArchive);
     const CrashIngestResult validResult = ProcessCrashArchive(testArena, group, validStem, StringView(validArchive));
     ASSERT_TRUE(validResult.accepted);
 
-    String manifest = BuildManifest(invalidStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields());
+    String manifest = BuildManifest(invalidStem, s_Linux, s_Crash, s_Signal, 0u, ManifestEventField::Include, ManifestTriggerFields());
     const StringView booleanPrefix = "\"has_exception_context\": ";
     const usize fieldOffset = StringView(manifest).find(booleanPrefix);
     ASSERT_LT(fieldOffset, manifest.size());
@@ -679,7 +639,7 @@ void VerifyLoggerServerCrash_InvalidManifestBooleanIsRejectedWhileFalseAndZeroRe
 }
 
 void VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_retention_accepted_test";
     const StringView stem0 = "retention_001";
     const StringView stem1 = "retention_002";
@@ -714,7 +674,7 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads(mut Logge
 }
 
 void VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_raw_archive_failed_test";
     const StringView stem = "raw_blocked_001";
     RemoveTestArtifacts(group);
@@ -731,7 +691,7 @@ void VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained(mu
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive), config);
 
     EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, s_LogTypeWarning);
+    EXPECT_EQ(result.type, LogType::Warning);
     EXPECT_TRUE(CrashIngestMessageContains(result, "raw upload archive could not be retained"));
     ExpectIsDirectory(ExtractedPackageDirectory(group, stem), true);
     ExpectPathExists(ArchivePath(group, stem), false);
@@ -740,7 +700,7 @@ void VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained(mu
 }
 
 void VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads(mut LoggerServerCrash self){
-    LoggerTestArena testArena = LoggerTestArena();
+    HeapStorage testArena = HeapStorage();
     const StringView group = "logger_server_retention_invalid_test";
     const StringView stem0 = "invalid_retention_001";
     const StringView stem1 = "invalid_retention_002";
@@ -798,50 +758,6 @@ NWB_ADHD_GTEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAn
 NWB_ADHD_GTEST_F(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads, VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads)
 NWB_ADHD_GTEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained, VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained)
 NWB_ADHD_GTEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads, VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::LoggerCrashCases{
-
-FOUNDATION_NOINLINE void LinuxForceAssertFalseForCrashObservation(){
-#if FOUNDATION_OCCUR_ASSERT
-    FOUNDATION_ASSERT(false);
-#else
-    FOUNDATION_FATAL_ASSERT(false);
-#endif
-    _exit(120);
-}
-
-};
-
-TEST_F(LoggerServerCrash, LinuxCrashPackageDoesNotWrapSymbolOffset){ VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset(*this); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

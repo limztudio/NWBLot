@@ -3,315 +3,73 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/native_input.adhd>
+#include <tests/unit/ui/ui_fixture_common_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class UiPointerGestureTests : RouterTestFixture{
+    public Context m_context;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-
-#include <global/bit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_pointer_gesture_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-constexpr AStringView s_TitleKey = "title";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiPointerGestureTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiPointerGestureTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerGesture))
-        , m_context(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 commitSingle(const HitTarget& target, const u64 generation){
-        return m_router.commitTargets(Span(&target, 1u), generation);
+    public b8 commitSingle(in HitTarget target, in u64 generation){
+        return this.m_router.commitTargets(MakeUiSingleHitTargetArray(target), generation);
     }
-
-    InputRoutingResult sendToContext(const InputEvent& event);
-    void complete(const Point& position = { 45.0f, 55.0f });
-
-    [[nodiscard]] Expected<WidgetState> declarePanel(){
-        const auto state = m_context.declare(s_TitleKey, WidgetKind::Panel);
-        if(!state)
+    public InputRoutingResult sendToContext(in InputEvent event){ return SendUiPointerGestureToContext(this, event); }
+    public void complete(){ this.complete(Point(45.0f, 55.0f)); }
+    public void complete(in Point position){ CompleteUiPointerGesture(this, position); }
+    public Expected<WidgetState> declarePanel(){
+        const auto state = this.m_context.declare("title", WidgetKind::Panel);
+        if(!state.has_value())
             return MakeUnexpected(state.error());
-        return **state;
+        return state.value();
     }
-
-    void clearRetainedRoots(){
-        m_context.retainRoots({});
+    public void clearRetainedRoots(){ this.m_context.retainRoots(Span<WidgetRoot>()); }
+    public Expected<WidgetState> prepare(in u64 generation){
+        WidgetRoot root;
+        root.value = 91u;
+        root.generation = 1u;
+        return this.prepare(generation, root);
     }
+    public Expected<WidgetState> prepare(in u64 generation, in WidgetRoot root){ return PrepareUiPointerGesture(this, generation, root); }
+}
 
-    [[nodiscard]] Expected<WidgetState> prepare(u64 generation, const WidgetRoot& root = { 91u, 1u });
+class UiPointerGestureValueTests : RouterTestFixture{
+    public Array<HitTarget, 2u> m_targets;
+    public u64 m_generation = 0u;
 
+    public UiPointerGestureValueTests(){ InitUiPointerGestureValueTargets(this.m_targets); }
+    public b8 publish(){ return this.publish(2u); }
+    public b8 publish(in usize count){ return PublishUiPointerGestureValueTargets(this, count); }
+    public Expected<PointerGesture> take(){ return TakeUiPointerGestureValue(this); }
+    public Expected<ControlAction> takeControl(){ return TakeUiPointerGestureValueControl(this); }
+    public void focusHost(){ FocusUiPointerGestureValueHost(this); }
+}
 
-public:
-    Context m_context;
-};
+class UiPointerHitTests : RouterTestFixture{}
 
+class UiPointerHitPopupHarness{
+    public InputRouter router;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_pointer_gesture_value_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-class UiPointerGestureValueTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiPointerGestureValueTests();
-
-
-public:
-    [[nodiscard]] b8 publish(usize count = 2u);
-    [[nodiscard]] Expected<PointerGesture> take()noexcept;
-    [[nodiscard]] Expected<ControlAction> takeControl()noexcept;
-    void focusHost();
-
-
-public:
-    Array<HitTarget, 2u> m_targets;
-    u64 m_generation = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_pointer_hit_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiPointerHitTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiPointerHitTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerHit))
-    {}
-};
-
-class UiPointerHitPopupHarness final : NoCopy{
-public:
-    UiPointerHitPopupHarness()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerHitPopup))
-        , router(m_arena)
-    {}
-
-    [[nodiscard]] b8 commitWithPopup(const Span<const HitTarget> targets, const u64 generation, const PopupScope& scope){
-        return router.commitTargets(targets, generation, Span(&scope, 1u));
+    public b8 commitWithPopup(in Span<HitTarget> targets, in u64 generation, in PopupScope scope){
+        return this.router.commitTargets(targets, generation, MakeUiSinglePopupScopeArray(scope));
     }
-
-    [[nodiscard]] b8 commitSingle(const HitTarget& target, const u64 generation){
-        return router.commitTargets(Span(&target, 1u), generation);
+    public b8 commitSingle(in HitTarget target, in u64 generation){
+        return this.router.commitTargets(MakeUiSingleHitTargetArray(target), generation);
     }
+}
 
+class UiPointerSourceTests : RouterTestFixture{
+    public Array<HitTarget, 2u> m_targets;
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter router;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_pointer_sources_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-class UiPointerSourceTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiPointerSourceTests();
-
-
-public:
-    virtual void SetUp()override{
-        ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
+    public UiPointerSourceTests(){
+        this.m_targets[0u] = MakeUiPointerSourceTarget(1u, 10.0f);
+        this.m_targets[1u] = MakeUiPointerSourceTarget(2u, 110.0f);
     }
-
-    void cancelCommand();
-
-
-public:
-    Array<HitTarget, 2u> m_targets;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiPointerGestureTests = ::__hidden_ui_pointer_gesture_tests::UiPointerGestureTests;
-using UiPointerGestureValueTests = ::__hidden_ui_pointer_gesture_value_tests::UiPointerGestureValueTests;
-using UiPointerHitTests = ::__hidden_ui_pointer_hit_tests::UiPointerHitTests;
-using UiPointerHitPopupHarness = ::__hidden_ui_pointer_hit_tests::UiPointerHitPopupHarness;
-using UiPointerSourceTests = ::__hidden_ui_pointer_sources_tests::UiPointerSourceTests;
-
-namespace Key = ::NWB::Core::Key;
-using KeyEnum = ::NWB::Core::Key::Enum;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace InputCommand = ::NWB::Impl::Ui::InputCommand;
-using InputSource = ::NWB::Impl::Ui::InputSource;
-using InputActionId = ::NWB::Impl::Ui::InputActionId;
-using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
-using PointerInput = ::NWB::Impl::Ui::PointerInput;
-namespace PointerPhase = ::NWB::Impl::Ui::PointerPhase;
-using PointerPhaseEnum = ::NWB::Impl::Ui::PointerPhase::Enum;
-namespace PointerIntent = ::NWB::Impl::Ui::PointerIntent;
-using PointerIntentEnum = ::NWB::Impl::Ui::PointerIntent::Enum;
-using PointerGesture = ::NWB::Impl::Ui::PointerGesture;
-namespace PointerGestureState = ::NWB::Impl::Ui::PointerGestureState;
-using ControlToken = ::NWB::Impl::Ui::ControlToken;
-using ControlAction = ::NWB::Impl::Ui::ControlAction;
-namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-namespace PopupDismissReason = ::NWB::Impl::Ui::PopupDismissReason;
-using WidgetState = ::NWB::Impl::Ui::WidgetState;
-namespace WidgetKind = ::NWB::Impl::Ui::WidgetKind;
-using ::NWB::Impl::Ui::s_InputMaxPointerGestures;
-using ::NWB::Impl::Ui::s_InputMaxSources;
-using ::UiTestSupport::NativeInput;
-
-InputRoutingResult SendUiPointerGestureToContext(UiPointerGestureTests& self, const InputEvent& event)noexcept;
-void CompleteUiPointerGesture(UiPointerGestureTests& self, const Point& position)noexcept;
-Expected<WidgetState> PrepareUiPointerGesture(UiPointerGestureTests& self, u64 generation, const WidgetRoot& root)noexcept;
-void InitUiPointerGestureValueTargets(Array<HitTarget, 2u>& targets)noexcept;
-b8 PublishUiPointerGestureValueTargets(UiPointerGestureValueTests& self, usize count)noexcept;
-Expected<PointerGesture> TakeUiPointerGestureValue(UiPointerGestureValueTests& self)noexcept;
-Expected<ControlAction> TakeUiPointerGestureValueControl(UiPointerGestureValueTests& self)noexcept;
-void FocusUiPointerGestureValueHost(UiPointerGestureValueTests& self)noexcept;
-HitTarget MakeUiPointerSourceTarget(u64 idValue, f32 x)noexcept;
-void CancelUiPointerSourceCommand(UiPointerSourceTests& self)noexcept;
-};
-
-namespace __hidden_ui_pointer_gesture_tests{
-FOUNDATION_INLINE InputRoutingResult UiPointerGestureTests::sendToContext(const InputEvent& event){
-    return ::__hidden_ui_glyph_sdf_tests::SendUiPointerGestureToContext(*this, event);
+    public void setup(){ ASSERT_TRUE(this.m_router.commitTargets(this.m_targets, 1u)); }
+    public void cancelCommand(){ CancelUiPointerSourceCommand(this); }
 }
-FOUNDATION_INLINE void UiPointerGestureTests::complete(const Point& position){
-    ::__hidden_ui_glyph_sdf_tests::CompleteUiPointerGesture(*this, position);
-}
-FOUNDATION_INLINE Expected<WidgetState> UiPointerGestureTests::prepare(const u64 generation, const WidgetRoot& root){
-    return ::__hidden_ui_glyph_sdf_tests::PrepareUiPointerGesture(*this, generation, root);
-}
-};
-
-namespace __hidden_ui_pointer_gesture_value_tests{
-FOUNDATION_INLINE UiPointerGestureValueTests::UiPointerGestureValueTests()
-    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerGestureValue))
-{
-    ::__hidden_ui_glyph_sdf_tests::InitUiPointerGestureValueTargets(m_targets);
-}
-FOUNDATION_INLINE b8 UiPointerGestureValueTests::publish(const usize count){
-    return ::__hidden_ui_glyph_sdf_tests::PublishUiPointerGestureValueTargets(*this, count);
-}
-FOUNDATION_INLINE Expected<PointerGesture> UiPointerGestureValueTests::take()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::TakeUiPointerGestureValue(*this);
-}
-FOUNDATION_INLINE Expected<ControlAction> UiPointerGestureValueTests::takeControl()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::TakeUiPointerGestureValueControl(*this);
-}
-FOUNDATION_INLINE void UiPointerGestureValueTests::focusHost(){
-    ::__hidden_ui_glyph_sdf_tests::FocusUiPointerGestureValueHost(*this);
-}
-};
-
-namespace __hidden_ui_pointer_sources_tests{
-FOUNDATION_INLINE UiPointerSourceTests::UiPointerSourceTests()
-    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerSources))
-    , m_targets{
-        ::__hidden_ui_glyph_sdf_tests::MakeUiPointerSourceTarget(1u, 10.0f),
-        ::__hidden_ui_glyph_sdf_tests::MakeUiPointerSourceTarget(2u, 110.0f)
-    }
-{}
-FOUNDATION_INLINE void UiPointerSourceTests::cancelCommand(){
-    ::__hidden_ui_glyph_sdf_tests::CancelUiPointerSourceCommand(*this);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 HitTarget MakeUiPointerGestureTarget(in u64 idValue){
@@ -323,7 +81,7 @@ HitTarget MakeUiPointerGestureTarget(in u64 idValue){
     return target;
 }
 
-InputEvent MakeUiPointerGestureEvent(in InputEventTypeEnum type){
+InputEvent MakeUiPointerGestureEvent(in InputEventType type){
     return MakeUiPointerEvent(type, Point(15.0f, 25.0f));
 }
 
@@ -343,7 +101,7 @@ HitTarget MakeUiPointerHitTarget(in u64 idValue){
     return MakeUiPointerHitTargetWithRect(idValue, Rect(0.0f, 0.0f, 100.0f, 100.0f));
 }
 
-PointerInput MakeUiPointerContactFull(in PointerPhaseEnum phase, in InputSource source, in f32 x, in f32 y, in b8 hoverCapable, in PointerIntentEnum intent){
+PointerInput MakeUiPointerContactFull(in PointerPhase phase, in InputSource source, in f32 x, in f32 y, in b8 hoverCapable, in PointerIntent intent){
     PointerInput input = PointerInput();
     input.source = source;
     input.phase = phase;
@@ -353,15 +111,15 @@ PointerInput MakeUiPointerContactFull(in PointerPhaseEnum phase, in InputSource 
     return input;
 }
 
-PointerInput MakeUiPointerContactHover(in PointerPhaseEnum phase, in InputSource source, in f32 x, in f32 y, in b8 hoverCapable){
+PointerInput MakeUiPointerContactHover(in PointerPhase phase, in InputSource source, in f32 x, in f32 y, in b8 hoverCapable){
     return MakeUiPointerContactFull(phase, source, x, y, hoverCapable, PointerIntent::Activate);
 }
 
-PointerInput MakeUiPointerContactAt(in PointerPhaseEnum phase, in InputSource source, in f32 x, in f32 y){
+PointerInput MakeUiPointerContactAt(in PointerPhase phase, in InputSource source, in f32 x, in f32 y){
     return MakeUiPointerContactFull(phase, source, x, y, false, PointerIntent::Activate);
 }
 
-PointerInput MakeUiPointerContact(in PointerPhaseEnum phase, in InputSource source){
+PointerInput MakeUiPointerContact(in PointerPhase phase, in InputSource source){
     return MakeUiPointerContactFull(phase, source, 20.0f, 20.0f, false, PointerIntent::Activate);
 }
 
@@ -1309,10 +1067,10 @@ void VerifyUiPointerHitTests_VisibleOwnedPartCannotBypassItsClippedHostOrDisable
 void VerifyUiPointerHitTests_OutsideTouchDismissalRefreshesAnIndependentCursorsPopupHover(mut UiPointerHitTests self){
     const InputSource cursor = MakeUiInputSource(11u, 1u);
     const InputSource contact = MakeUiInputSource(13u, 1u);
-    Array<PointerIntentEnum, 2u> intents = Array<PointerIntentEnum, 2u>();
+    Array<PointerIntent, 2u> intents = Array<PointerIntent, 2u>();
     intents[0u] = PointerIntent::Activate;
     intents[1u] = PointerIntent::ContextMenu;
-    for(in PointerIntentEnum intent : intents){
+    for(in PointerIntent intent : intents){
         UiPointerHitPopupHarness harness = UiPointerHitPopupHarness();
         PopupScope scope = PopupScope();
         scope.token.widget.value = 100u;
@@ -1660,10 +1418,10 @@ void VerifyUiPointerSourceTests_DuplicatePressCannotRerouteOrReplaceTheAcceptedG
 
 void VerifyUiPointerSourceTests_QueuedTerminalDiscardedByResetRetiresTheContactWithoutSubmitting(mut UiPointerSourceTests self){
     const InputSource first = MakeUiInputSource(11u, 1u);
-    Array<PointerPhaseEnum, 2u> terminals = Array<PointerPhaseEnum, 2u>();
+    Array<PointerPhase, 2u> terminals = Array<PointerPhase, 2u>();
     terminals[0u] = PointerPhase::Release;
     terminals[1u] = PointerPhase::Cancel;
-    for(in PointerPhaseEnum terminal : terminals){
+    for(in PointerPhase terminal : terminals){
         ASSERT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Press, first)).pointerConsumed);
         ASSERT_TRUE(self.m_router.queuePointer(MakeUiPointerContact(terminal, first)).has_value());
         EXPECT_TRUE(self.m_router.ownsPointerSource(first));
@@ -1828,7 +1586,7 @@ void InitUiPointerGestureValueTargets(mut Array<HitTarget, 2u> targets){
 
 b8 PublishUiPointerGestureValueTargets(mut UiPointerGestureValueTests self, in usize count){
     const u64 generation = self.m_generation + 1u;
-    if(!self.m_router.commitTargets(Span<HitTarget>(self.m_targets.data(), count), generation))
+    if(!self.m_router.commitTargets(Span<HitTarget>(self.m_targets).subspan(0u, count), generation))
         return false;
     self.m_generation = generation;
     return true;

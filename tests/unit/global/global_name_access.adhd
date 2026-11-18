@@ -1,0 +1,68 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "global_text_access.adhd"
+#include <tests/common/name_symbols.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::MutableSymbolText")]
+extern class MutableSymbolText{
+    usize size()const;
+    void set(in usize index, in u8 byte);
+};
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ScopedNameCallbacks")]
+extern class ScopedNameCallbacks;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NameDetail::s_DebugNameCapacity")]
+extern const usize s_DebugNameSize;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NameDetail::s_SymbolTextBufferLength")]
+extern const usize s_ResolverSize;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ConstexprNameChecks::s_ViewName")]
+extern const Name s_ConstantViewName;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ConstexprNameChecks::s_Bounded")]
+extern const StringView s_ConstantBoundedText;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_DebugNameBuild")]
+extern const b8 s_DebugNameBuild;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_RuntimeWideName")]
+extern const WideView s_RuntimeWideName;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_InvalidWideNameText")]
+extern const WideView s_InvalidWideNameText;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::InteropNameText")]
+extern class InteropNameText;
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::TerminatorByte")]
+extern u8 TerminatorByte(in StringView value);
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::NullNameHash")]
+extern Expected<NameHash, NameTextError> NullNameHash();
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::NWB::Tests::GlobalCases::LiteralHash")]
+extern NameHash LiteralHash(in auto text);
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::Name::FromText<wchar>")]
+extern Expected<Name, NameTextError> WideNameFromText(in WideView value);
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::ToName<wchar>")]
+extern Expected<Optional<Name>, NameTextError> ToWideName(in WideView text);
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::ToName")]
+extern Expected<Optional<Name>, NameTextError> ToContainerName(in auto text);
+
+[cpp_header("<tests/unit/global/global_name_access.h>"), cpp_name("::MakeDiagnosticEventText")]
+extern DiagnosticEventText FormatDiagnosticName(in StringView format, in Name value);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

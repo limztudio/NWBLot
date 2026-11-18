@@ -27,8 +27,16 @@ extern class GpuCrashReport{
     usize binaryDumpSize;
 };
 
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::ResolvedMarker")]
+extern class ResolvedMarker{
+    b8 first()const;
+    StringView second()const;
+};
+
 [cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashTracker"), cpp_flags(no_copy, no_assign)]
-extern class GpuCrashTracker;
+extern class GpuCrashTracker{
+    ResolvedMarker resolveMarker(in usize hash);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,42 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class UiLayerResizeRenderPass : IRenderPass{
+    public UiLayerResizeRenderPass(mut GraphicsRuntime graphics){}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::Smoke{
-
-class UiLayerResizeRenderPass final : public Core::IRenderPass{
-public:
-    explicit UiLayerResizeRenderPass(Core::GraphicsRuntime& graphics)noexcept
-        : Core::IRenderPass(graphics)
-    {}
-
-    virtual b8 shouldRenderUnfocused()noexcept override{
+    public b8 shouldRenderUnfocused()override{
         return true;
     }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World>& world)noexcept{
-    if(!world)
-        return MakeUnexpected(Failure{});
-    return MakeNotNullUnique(Move(world));
 }
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class UiLayerSmokeModeFlags{
@@ -67,13 +38,13 @@ class UiLayerSmokeModeFlags{
 }
 
 
-class UiDefaultSmokeScene{
+class UiDefaultSmokeScene : IUiSmokeScene{
     private UiTextSmokeSamples m_textSamples;
     private u32 m_paintFrame = 0u;
 
     public UiDefaultSmokeScene();
 
-    public void paint(mut UiPaintContext paintContext);
+    public b8 paint(mut UiPaintContext paintContext)override;
 }
 
 
@@ -84,16 +55,17 @@ UiDefaultSmokeScene::UiDefaultSmokeScene(){
     this.m_textSamples = UiTextSmokeSamples();
 }
 
-void UiDefaultSmokeScene::paint(mut UiPaintContext paintContext){
+b8 UiDefaultSmokeScene::paint(mut UiPaintContext paintContext){
     if(this.m_paintFrame < 3u){
         ++this.m_paintFrame;
         if(this.m_paintFrame <= 2u)
-            return;
+            return true;
         [essential] info("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted");
     }
     PaintUiLayerSmokeScene(paintContext);
     if(!this.m_textSamples.paint(paintContext))
         error("UiLayerSmokeProject: text or glyph coverage painting failed");
+    return true;
 }
 
 
@@ -162,50 +134,48 @@ void LogActiveUiLayerSmokeSkins(in UiLayerSmokeModeFlags modes){
 }
 
 b8 CheckUiLayerSmokePersistentState(mut ProjectRuntimeContext context){
-    b8 passed = false;
-    native(mut context, mut passed){
-        Core::Alloc::ScratchArena scratch{Name(s_UiSmokeNameTestsUiLayerPersistentState)};
-        Core::BufferDesc desc;
-        desc.setDebugName(Name(s_UiSmokeNameTestsUiLayerPersistentStateBuffer)).setByteSize(16u);
-        const auto first = context.graphics.createBuffer(desc);
-        const auto second = context.graphics.createBuffer(desc);
-        auto& device = context.graphics.getDevice();
-        const auto list = device.createCommandList();
-        if(first && second && list){
-            Core::CommandListResourceStateHandoff state(context.objectArena);
-            (*list)->open();
-            (*list)->beginTrackingBufferState(first->get(), Core::ResourceStates::CopyDest);
-            (*list)->beginTrackingBufferState(second->get(), Core::ResourceStates::CopyDest);
-            (*list)->close(&state);
-            const Core::GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-            if(state.valid() && queue.valid() && !(*list)->commandRecordingFailed()){
-                Core::GpuPersistentResourceStateCache cache(context.objectArena);
-                Core::GpuPersistentResourceStateCache::Candidate candidate(cache);
-                const Array<Core::BufferHandle, 2u> buffers{ *first, *second };
-                if(
-                    cache.buildFilteredBufferSubset(state, buffers, scratch, candidate)
-                    && candidate.source() != nullptr
-                    && !cache.valid()
-                    && cache.buildFilteredBufferSubset(*candidate.source(), Span<const Core::BufferHandle>(buffers.data(), 1u), scratch, candidate)
-                ){
-                    const auto* filtered = candidate.source();
-                    if(
-                        filtered != nullptr
-                        && filtered->coversBufferWithOwnership(first->get(), queue, {})
-                        && !filtered->coversBufferWithOwnership(second->get(), queue, {})
-                        && !cache.valid()
-                        && cache.commit(candidate)
-                        && !candidate.valid()
-                        && cache.source() != nullptr
-                    ){
-                        passed = cache.source()->coversBufferWithOwnership(first->get(), queue, {})
-                            && !cache.source()->coversBufferWithOwnership(second->get(), queue, {});
-                    }
-                }
-            }
-        }
-    }
-    return passed;
+    BufferDesc desc();
+    desc.setDebugName(s_UiSmokeNameTestsUiLayerPersistentStateBuffer);
+    desc.setByteSize(16u);
+    const auto first = context.graphics.createBuffer(desc);
+    const auto second = context.graphics.createBuffer(desc);
+    mut Device device = context.graphics.getDevice();
+    const auto list = device.createCommandList();
+    if(!first.has_value() || !second.has_value() || !list.has_value())
+        return false;
+
+    CommandListResourceStateHandoff state(context.objectArena);
+    mut CommandList commands = list.value().deref();
+    commands.open();
+    commands.beginTrackingBufferState(first.value().deref(), ResourceStates::CopyDest);
+    commands.beginTrackingBufferState(second.value().deref(), ResourceStates::CopyDest);
+    commands.close(state);
+    const GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    if(!state.valid() || !queue.valid() || commands.commandRecordingFailed())
+        return false;
+
+    GpuPersistentResourceStateCache cache(context.objectArena);
+    GpuPersistentStateCandidate candidate(cache);
+    Array<BufferHandle, 2u> buffers();
+    buffers[0u] = first.value();
+    buffers[1u] = second.value();
+    const Span<TextureHandle> textures();
+    if(!cache.buildFilteredResourceSubset(state, textures, Span<BufferHandle>(buffers.data(), buffers.size()), candidate) || cache.valid())
+        return false;
+
+    const Optional<in CommandListResourceStateHandoff> source = candidate.borrowSource();
+    if(!source.has_value() || !cache.buildFilteredResourceSubset(source.value(), textures, Span<BufferHandle>(buffers.data(), 1u), candidate))
+        return false;
+    const Optional<in CommandListResourceStateHandoff> filtered = candidate.borrowSource();
+    const GpuPhysicalQueueId noRelease();
+    if(!filtered.has_value() || !filtered.value().coversBufferWithOwnership(first.value().deref(), queue, noRelease)
+        || filtered.value().coversBufferWithOwnership(second.value().deref(), queue, noRelease)
+        || cache.valid() || !cache.commit(candidate) || candidate.valid())
+        return false;
+
+    const Optional<in CommandListResourceStateHandoff> accepted = cache.borrowSource();
+    return accepted.has_value() && accepted.value().coversBufferWithOwnership(first.value().deref(), queue, noRelease)
+        && !accepted.value().coversBufferWithOwnership(second.value().deref(), queue, noRelease);
 }
 
 b8 ConfigureSmokeLayerInputProfile(mut UiLayerSystem layer){
@@ -252,206 +222,171 @@ void ConfigureSmokeLayerRecordingMode(mut UiLayerSystem layer){
 void SpawnManySmokeRootsIfEnabled(mut World world){
     if(!ReadSmokeEnvironmentFlag("NWB_UI_LAYER_MANY_ROOTS"))
         return;
-    native(mut world){
-        for(usize index = 0u; index < Impl::Ui::s_InputMaxTargets; ++index){
-            auto root = world.createEntity();
-            root.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext&){};
-        }
-        auto lastRoot = world.createEntity();
-        lastRoot.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext& paintContext){
-            const Core::ECS::EntityID id = paintContext.entity;
-            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root beyond target limit painted"));
-            paintContext.world->destroyEntity(id);
-            if(paintContext.world->entity(id).alive())
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: root removal during paint failed"));
-            else
-                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root removed during paint"));
-        };
+    for(usize index = 0u; index < s_InputMaxTargets; ++index){
+        auto root = world.createEntity();
+        mut UiPaintComponent paint = root.addComponent<UiPaintComponent>();
+        UiPaintCallback callback = lambda[](mut UiPaintContext paintContext) -> void{};
+        paint.paint.setCallback(callback);
+    }
+    auto lastRoot = world.createEntity();
+    mut UiPaintComponent lastPaint = lastRoot.addComponent<UiPaintComponent>();
+    UiPaintCallback last = lambda[](mut UiPaintContext paintContext) -> void{
+        const EntityID id = paintContext.entity;
+        [essential] info("UiLayerSmokeProject: root beyond target limit painted");
+        paintContext.world.destroyEntity(id);
+        if(paintContext.world.entity(id).alive())
+            error("UiLayerSmokeProject: root removal during paint failed");
+        else
+            [essential] info("UiLayerSmokeProject: root removed during paint");
+    };
+    lastPaint.paint.setCallback(last);
+}
+
+class UiSmokeInputSubscription<T : IUiSmokeInputScene> : IInputEventHandler, IUiSmokeScene{
+    private mut InputDispatcher m_input;
+    public Shared<T> scene;
+
+    public UiSmokeInputSubscription(mut InputDispatcher input, in Shared<T> scene){
+        this.m_input = input;
+        this.scene = scene;
+        input.addHandlerToBack(this);
+    }
+
+    public ~UiSmokeInputSubscription(){
+        this.m_input.removeHandler(this);
+    }
+
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
+        return this.scene.deref().keyboardUpdate(key, scancode, action, mods);
+    }
+
+    public b8 paint(mut UiPaintContext context)override{
+        return this.scene.deref().paint(context);
     }
 }
 
-void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world, in UiLayerSmokeModeFlags modes){
-    native(mut context, mut world, in modes){
-        auto entity = world.createEntity();
-        auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-        if(modes.textureImageSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiTextureImageSmokeScene>(context.objectArena, context.input, context.assetManager);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
-            };
-        }
-        else if(modes.imageSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiImageSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: image UI paint failed"));
-            };
-        }
-        else if(modes.progressSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiProgressSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: progress UI paint failed"));
-            };
-        }
-        else if(modes.sliderSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiSliderSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: slider UI paint failed"));
-            };
-        }
-        else if(modes.radioGroupSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiRadioGroupSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: radio group UI paint failed"));
-            };
-        }
-        else if(modes.textAreaSmoke){
-            const auto scene = CreateSmokeSceneBox<UiTextAreaSmokeScene>(context.objectArena, context.clipboard);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: text area UI paint failed"));
-            };
-        }
-        else if(modes.numericEditSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiNumericEditSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
-            };
-        }
-        else if(modes.nestedPopupSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiNestedPopupSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
-            };
-        }
-        else if(modes.popupToolsSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiPopupToolsSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
-            };
-        }
-        else if(modes.searchComboSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiSearchComboSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
-            };
-        }
-        else if(modes.comboSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiComboSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: combo UI paint failed"));
-            };
-        }
-        else if(modes.listSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiListSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: virtual list paint failed"));
-            };
-        }
-        else if(modes.popupSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiPopupSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: popup UI paint failed"));
-            };
-            auto laterEntity = world.createEntity();
-            auto& laterPaint = laterEntity.addComponent<Impl::UiPaintComponent>();
-            laterPaint.order = 100;
-            laterPaint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->scene.paintLaterRoot(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: later popup root paint failed"));
-            };
-        }
-        else if(modes.editSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiEditSmokeScene>(context.objectArena, context.input);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: edit UI paint failed"));
-            };
-        }
-        else if(modes.windowSmoke){
-            const auto scene = CreateSmokeSceneBox<UiWindowSmokeScene>(context.objectArena);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: window UI paint failed"));
-            };
-        }
-        else if(modes.interactionSmoke){
-            const auto scene = CreateSmokeSceneBox<UiInteractiveSmokeScene>(context.objectArena);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
-            };
-        }
-        else{
-            const auto scene = CreateSmokeSceneBox<UiDefaultSmokeScene>(context.objectArena);
-            paint.paint = [scene](Impl::UiPaintContext& paintContext){
-                scene->scene.paint(paintContext);
-            };
-        }
-    }
+b8 InstallUiSmokePaint<T : IUiSmokeScene>(mut UiPaintSlot slot, in Expected<Shared<T>> created, in StringView message){
+    if(!created.has_value())
+        return false;
+    const Shared<T> scene = created.value();
+    UiPaintCallback callback = lambda[in scene, in message](mut UiPaintContext paintContext) -> void{
+        if(!scene.deref().paint(paintContext))
+            error("UiLayerSmokeProject: {}", message);
+    };
+    slot.setCallback(callback);
+    return true;
 }
+
+Expected<Shared<UiSmokeInputSubscription<T>>> SubscribeUiSmokeInput<T : IUiSmokeInputScene>(
+    in SharedPool pool, mut InputDispatcher input, in Expected<Shared<T>> created
+){
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    return pool.make<UiSmokeInputSubscription<T>>(input, created.value());
+}
+
+b8 AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world, in UiLayerSmokeModeFlags modes){
+    SharedPool pool();
+    auto entity = world.createEntity();
+    mut UiPaintComponent paint = entity.addComponent<UiPaintComponent>();
+    if(modes.textureImageSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiTextureImageSmokeScene>(pool, context.input, pool.make<UiTextureImageSmokeScene>(context.assetManager));
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiTextureImageSmokeScene>>(paint.paint, subscribed, "texture-image UI paint failed");
+    }
+    if(modes.imageSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiImageSmokeScene>(pool, context.input, pool.make<UiImageSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiImageSmokeScene>>(paint.paint, subscribed, "image UI paint failed");
+    }
+    if(modes.progressSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiProgressSmokeScene>(pool, context.input, pool.make<UiProgressSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiProgressSmokeScene>>(paint.paint, subscribed, "progress UI paint failed");
+    }
+    if(modes.sliderSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiSliderSmokeScene>(pool, context.input, pool.make<UiSliderSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiSliderSmokeScene>>(paint.paint, subscribed, "slider UI paint failed");
+    }
+    if(modes.radioGroupSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiRadioGroupSmokeScene>(pool, context.input, pool.make<UiRadioGroupSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiRadioGroupSmokeScene>>(paint.paint, subscribed, "radio group UI paint failed");
+    }
+    if(modes.textAreaSmoke)
+        return InstallUiSmokePaint<UiTextAreaSmokeScene>(paint.paint, pool.make<UiTextAreaSmokeScene>(context.clipboard), "text area UI paint failed");
+    if(modes.numericEditSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiNumericEditSmokeScene>(pool, context.input, pool.make<UiNumericEditSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiNumericEditSmokeScene>>(paint.paint, subscribed, "numeric editor UI paint failed");
+    }
+    if(modes.nestedPopupSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiNestedPopupSmokeScene>(pool, context.input, pool.make<UiNestedPopupSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiNestedPopupSmokeScene>>(paint.paint, subscribed, "nested popup UI paint failed");
+    }
+    if(modes.popupToolsSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiPopupToolsSmokeScene>(pool, context.input, pool.make<UiPopupToolsSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiPopupToolsSmokeScene>>(paint.paint, subscribed, "tooltip/context menu UI paint failed");
+    }
+    if(modes.searchComboSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiSearchComboSmokeScene>(pool, context.input, pool.make<UiSearchComboSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiSearchComboSmokeScene>>(paint.paint, subscribed, "searchable combo UI paint failed");
+    }
+    if(modes.comboSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiComboSmokeScene>(pool, context.input, pool.make<UiComboSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiComboSmokeScene>>(paint.paint, subscribed, "combo UI paint failed");
+    }
+    if(modes.listSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiListSmokeScene>(pool, context.input, pool.make<UiListSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiListSmokeScene>>(paint.paint, subscribed, "virtual list paint failed");
+    }
+    if(modes.popupSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiPopupSmokeScene>(pool, context.input, pool.make<UiPopupSmokeScene>());
+        if(!subscribed.has_value())
+            return false;
+        const Shared<UiSmokeInputSubscription<UiPopupSmokeScene>> popup = subscribed.value();
+        auto laterEntity = world.createEntity();
+        mut UiPaintComponent laterPaint = laterEntity.addComponent<UiPaintComponent>();
+        laterPaint.order = 100;
+        UiPaintCallback later = lambda[in popup](mut UiPaintContext paintContext) -> void{
+            if(!popup.deref().scene.deref().paintLaterRoot(paintContext))
+                error("UiLayerSmokeProject: later popup root paint failed");
+        };
+        laterPaint.paint.setCallback(later);
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiPopupSmokeScene>>(paint.paint, subscribed, "popup UI paint failed");
+    }
+    if(modes.editSmoke){
+        const auto subscribed = SubscribeUiSmokeInput<UiEditSmokeScene>(pool, context.input, pool.make<UiEditSmokeScene>());
+        return InstallUiSmokePaint<UiSmokeInputSubscription<UiEditSmokeScene>>(paint.paint, subscribed, "edit UI paint failed");
+    }
+    if(modes.windowSmoke)
+        return InstallUiSmokePaint<UiWindowSmokeScene>(paint.paint, pool.make<UiWindowSmokeScene>(), "window UI paint failed");
+    if(modes.interactionSmoke)
+        return InstallUiSmokePaint<UiInteractiveSmokeScene>(paint.paint, pool.make<UiInteractiveSmokeScene>(), "interactive UI paint failed");
+    return InstallUiSmokePaint<UiDefaultSmokeScene>(paint.paint, pool.make<UiDefaultSmokeScene>(), "default UI paint failed");
+}
+
 
 b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut World world, in b8 alternateSkin){
-    b8 ok = false;
-    native(mut context, mut world, in alternateSkin, mut ok){
-        const Core::Assets::AssetRef<Impl::UiSkin> skin = alternateSkin
-            ? Core::Assets::AssetRef<Impl::UiSkin>("alternate_skin")
-            : Core::Assets::AssetRef<Impl::UiSkin>{};
-        auto& layer = world.addSystem<Impl::UiLayerSystem>(
-            world,
-            context.graphics,
-            context.input,
-            context.clipboard,
-            context.textInput,
-            context.assetManager,
-            context.shaderPathResolver,
-            skin,
-            Impl::UiLayerPresentation::Standalone
-        );
-        if(ConfigureSmokeLayerInputProfile(layer)){
-            ConfigureSmokeLayerRecordingMode(layer);
-            ok = true;
-        }
-    }
-    return ok;
+    AssetRef<UiSkin> skin();
+    if(alternateSkin)
+        skin = AssetRef<UiSkin>("alternate_skin");
+    mut UiLayerSystem layer = world.addSystem<UiLayerSystem>(
+        world, context.graphics, context.input, context.clipboard, context.textInput,
+        context.assetManager, context.shaderPathResolver, skin, UiLayerPresentation::Standalone
+    );
+    if(!ConfigureSmokeLayerInputProfile(layer))
+        return false;
+    ConfigureSmokeLayerRecordingMode(layer);
+    return true;
 }
 
 Expected<NotNullUniquePtr<World>> CreateUiLayerSmokeWorld(mut ProjectRuntimeContext context){
-    i32 initError = 0;
-    UniquePtr<World> allocatedWorld = UniquePtr<World>();
-    native(mut context, mut allocatedWorld, mut initError){
-        if(!context.shaderPathResolver){
-            initError = 1;
-        }
-        else{
-            allocatedWorld = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
-            if(!allocatedWorld)
-                initError = 2;
-        }
-    }
-    if(initError == 1){
+    if(!cast<b8>(context.shaderPathResolver)){
         error("UiLayerSmokeProject: shader path resolver is unavailable");
         return MakeUnexpected(Failure());
     }
-    if(initError == 2){
+    UniquePtr<World> allocatedWorld = MakeUnique<World>(context.objectArena, context.cpuTasks);
+    auto finalized = TryTakeNotNullUnique<World>(allocatedWorld);
+    if(!finalized.has_value()){
         error("UiLayerSmokeProject: ECS world allocation failed");
         return MakeUnexpected(Failure());
     }
-
-    Expected<NotNullUniquePtr<World>> finalized = FinalizeUiLayerSmokeWorld(allocatedWorld);
-    if(!finalized.has_value())
-        return MakeUnexpected(Failure());
     NotNullUniquePtr<World> world = TakeSmokeWorld(finalized.value());
 
     const UiLayerSmokeModeFlags modes = ResolveUiLayerSmokeModes();
@@ -460,21 +395,17 @@ Expected<NotNullUniquePtr<World>> CreateUiLayerSmokeWorld(mut ProjectRuntimeCont
         return MakeUnexpected(Failure());
 
     SpawnManySmokeRootsIfEnabled(SmokeWorldRef(world));
-    AttachUiLayerSmokeScene(context, SmokeWorldRef(world), modes);
+    if(!AttachUiLayerSmokeScene(context, SmokeWorldRef(world), modes))
+        return MakeUnexpected(Failure());
     return TakeSmokeWorld(world);
 }
 
 void ClearUiLayerSmokeWorld(mut ProjectRuntimeContext context, mut World world){
-    b8 hasLayer = false;
     world.taskScope().wait();
-    native(mut context, mut world, mut hasLayer){
-        if(auto* const layer = world.getSystem<Impl::UiLayerSystem>()){
-            context.graphics.removeRenderPass(*layer);
-            hasLayer = true;
-        }
-    }
-    if(!hasLayer)
+    Optional<mut UiLayerSystem> layer = world.borrowSystem<UiLayerSystem>();
+    if(!layer.has_value())
         return;
+    context.graphics.removeRenderPass(layer.value());
     const b8 deviceIdle = context.graphics.waitForIdle();
     [essential] assert(deviceIdle || context.graphics.isDeviceLost(), "UI smoke teardown requires device idle or terminal loss");
     world.clear();
@@ -488,10 +419,10 @@ b8 ConfigureUiLayerSmokeStartup(
     mut u64 outResizePresentationBaseline,
     mut UniquePtr<FramebufferCapture> outFramebufferCapture
 ){
-    native(mut context, mut world){
-        auto& layer = *MakeNotNull(world->getSystem<Impl::UiLayerSystem>());
-        context.graphics.addRenderPassToBack(layer);
-    }
+    Optional<mut UiLayerSystem> layer = world.deref().borrowSystem<UiLayerSystem>();
+    if(!layer.has_value())
+        return false;
+    context.graphics.addRenderPassToBack(layer.value());
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RESIZE_RENDER")){
         outResizePresentationBaseline = context.graphics.getSuccessfulPresentationCount();
         context.graphics.addRenderPassToBack(resizeRenderPass);

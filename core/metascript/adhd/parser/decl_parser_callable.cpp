@@ -319,6 +319,21 @@ b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attribu
             enabled = true;
             matchedAttr = true;
         }
+        if(attr.name == KeywordSemantics::s_CppBase){
+            if(!decl.initializedCppBase.empty() || attr.arguments.size() < 2u || attr.arguments[0].kind != TokenType::Identifier){
+                m_cursor.error(attr.line, attr.column, "'[cpp_base]' requires one base name and at least one constructor parameter name");
+                return false;
+            }
+            decl.initializedCppBase = attr.arguments[0].text;
+            for(usize i = 1u; i < attr.arguments.size(); ++i){
+                if(attr.arguments[i].kind != TokenType::Identifier){
+                    m_cursor.error(attr.line, attr.column, "'[cpp_base]' arguments must name constructor parameters");
+                    return false;
+                }
+                decl.cppBaseArguments.push_back(attr.arguments[i].text);
+            }
+            matchedAttr = true;
+        }
         if(attr.name == KeywordSemantics::s_CppRvalueOverload){
             if(decl.exportsRvalueOverload || !attr.arguments.empty() || decl.isExtern){
                 m_cursor.error(attr.line, attr.column, "'[cpp_rvalue_overload]' takes no arguments and may appear once on an ADHD instance method");

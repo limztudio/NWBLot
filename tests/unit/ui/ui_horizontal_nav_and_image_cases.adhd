@@ -3,473 +3,371 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_edit_and_navigation.adhd>
+#include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
+#include <tests/unit/ui/snapshot_fault_fixture.adhd>
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/asset_codec_fixture.adhd>
+#include <tests/common/memory.adhd>
+#include <impl/ecs_ui/toolkit/gpu/image_resources.adhd>
+#include <impl/ecs_ui/toolkit/images/image_loader.adhd>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
 
+[cpp_header("<type_traits>"), cpp_name("::std::is_move_assignable")]
+extern b8 ImageFixtureMoveAssignable<T>();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static_assert(!is_cpp_constructible<ImageSource>());
+static_assert(!is_cpp_constructible<ImageSource, mut AssetCodecFixtureStorage, in Texture>());
+static_assert(!is_cpp_constructible<ImageSource, mut AssetCodecFixtureStorage, in Texture, u64>());
+static_assert(!is_cpp_constructible<ImageSource, in ImageSource>());
+static_assert(!is_cpp_constructible<ImageSource, ImageSource>());
+static_assert(!ImageFixtureMoveAssignable<ImageSource>());
 
+type GpuTextureImageValidationFixture = PaintImageFixture;
+const Name s_ImageFixtureTexturePath = "tests/ui/image_loader/texture";
+const Name s_ImageFixtureTextureType = "texture";
 
-#include <tests/common/capturing_logger.adhd.h>
+class MisdirectedImageCodec : AssetCodecFixtureBase{
+    private b8 m_wrongType;
 
-#include <impl/assets_ui_skin/asset.adhd.h>
-#include <impl/ecs_ui/toolkit/gpu/image_resources.adhd.h>
-#include <impl/ecs_ui/toolkit/images/image_loader.adhd.h>
-#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
+    [cpp_base(AssetCodecFixtureBase, type)]
+    public MisdirectedImageCodec(in borrow Name type, in b8 wrongType){ this.m_wrongType = wrongType; }
 
-#include <global/binary.h>
-#include <global/bit.h>
-#include <global/limit.h>
+    [cpp_unwind]
+    public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> binary, mut AssetCodecFixtureStorage storage)const override{
+        if(this.m_wrongType){
+            UniquePtr<IAsset> skin = MakeUnique<UiSkin>(storage, path);
+            return skin;
+        }
+        DeclaredAssetCodec<Texture> codec = DeclaredAssetCodec<Texture>();
+        return codec.deserialize(s_UiCaseTestsUiImageLoaderOtherTexture, binary, storage);
+    }
+}
 
-#include <gtest/gtest.h>
+Vector<u8> MakeImageTextureBinary(in u8 seed){
+    Vector<u8> bytes;
+    bytes.reserve(s_TextureHeaderBinaryBytes + 2u * s_TextureMipLevelBinaryBytes + 32u);
+    AppendPOD(bytes, s_TextureBinaryMagic);
+    AppendPOD(bytes, s_TextureBinaryVersion);
+    AppendPOD(bytes, cast<u32>(TexturePayloadDimension::Texture2D));
+    AppendPOD(bytes, 2u);
+    AppendPOD(bytes, 1u);
+    AppendPOD(bytes, 1u);
+    AppendPOD(bytes, 2u);
+    AppendPOD(bytes, cast<u32>(TextureAlphaMode::EmbeddedLdr) | (255u << s_TextureAlphaInfoConstantShift));
+    AppendPOD(bytes, cast<u32>(TexturePayloadFormat::UastcLdr4x4));
+    AppendPOD(bytes, cast<u64>(32u));
+    for(u32 mip = 0u; mip < 2u; ++mip){
+        AppendPOD(bytes, 2u - mip);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 0u);
+        AppendPOD(bytes, cast<u64>(16u * mip));
+        AppendPOD(bytes, cast<u64>(16u));
+    }
+    for(usize i = 0u; i < 32u; ++i)
+        bytes.push_back(cast<u8>(seed + i));
+    return bytes;
+}
 
+class MemoryImageBinarySource : IAssetBinarySource{
+    public Vector<u8> m_binary;
+    public Name m_path = s_ImageFixtureTexturePath;
+    public TestObserved<usize> m_readCount;
+    public b8 m_available = true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public b8 readAssetBinary(in Name virtualPath, mut AssetByteBuffer outBinary)const override{
+        ++this.m_readCount.value();
+        outBinary.clear();
+        if(!this.m_available || virtualPath != this.m_path)
+            return false;
+        for(in u8 byteValue : this.m_binary)
+            outBinary.push_back(byteValue);
+        return true;
+    }
+}
 
-
-namespace __hidden_ui_gpu_texture_image_validation_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-[[nodiscard]] FOUNDATION_INLINE b8 ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
+b8 UiGpuValAllImageBindings(in DrawSnapshot snapshot){
     return ValidateGpuGlyphPages(snapshot) && ValidateGpuSdfPages(snapshot) && ValidateGpuTextureImages(snapshot);
 }
-
-FOUNDATION_INLINE void SetCommandTextureImageIndex(DrawSnapshot& snapshot, const usize commandIndex, const u32 imageIndex)noexcept{
-    const_cast<DrawCommand&>(snapshot.commands()[commandIndex]).textureImageIndex = imageIndex;
+void UiGpuValSetCommandTextureIndex(mut DrawSnapshot snapshot, in usize commandIndex, in u32 imageIndex){
+    DrawSnapshotFaultFixture access;
+    access.command(snapshot, commandIndex).textureImageIndex = imageIndex;
 }
-
-FOUNDATION_INLINE void ResetFirstSnapshotTextureImage(DrawSnapshot& snapshot)noexcept{
-    const_cast<SharedImageSource&>(snapshot.textureImages()[0u]).reset();
+void UiGpuValResetFirstTexture(mut DrawSnapshot snapshot){
+    DrawSnapshotFaultFixture access;
+    access.images(snapshot)[0u].reset();
 }
-
-FOUNDATION_INLINE void AppendSnapshotTextureImage(DrawSnapshot& snapshot, const SharedImageSource& image){
-    const_cast<Vector<SharedImageSource, ::ArenaBase>&>(snapshot.textureImages()).push_back(image);
+void UiGpuValAppendTexture(mut DrawSnapshot snapshot, in SharedImageSource image){
+    DrawSnapshotFaultFixture access;
+    access.images(snapshot).push_back(image);
 }
-
-FOUNDATION_INLINE void SetSnapshotCommandRaw(DrawSnapshot& snapshot, const usize commandIndex, const DrawCommand& command)noexcept{
-    const_cast<DrawCommand&>(snapshot.commands()[commandIndex]) = command;
+void UiGpuValSetCommand(mut DrawSnapshot snapshot, in usize index, in DrawCommand command){
+    DrawSnapshotFaultFixture access;
+    mut DrawCommand destination = access.command(snapshot, index);
+    destination = command;
 }
-
-FOUNDATION_INLINE void SetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noexcept{
-    DrawCommand& command = const_cast<DrawCommand&>(snapshot.commands()[0u]);
-    command.material = static_cast<PaintMaterial::Enum>(Limit<u8>::s_Max);
-    command.textureImageIndex = Limit<u32>::s_Max;
+void UiGpuValSetFirstCommandUnknownMaterial(mut DrawSnapshot snapshot){
+    DrawSnapshotFaultFixture access;
+    mut DrawCommand command = access.command(snapshot, 0u);
+    command.material = cast<PaintMaterial>(u8.max);
+    command.textureImageIndex = u32.max;
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 BuildMaxGlyphBudgetSnapshot(UiPaintImageTests::PaintImageFixture& self, const b8 withExtraImage, DrawSnapshot& outSnapshot){
-    FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
-    for(usize index = 0u; index < glyphs.max_size(); ++index){
-        auto glyphResult = self.makeGlyph(100u + index);
-        if(!glyphResult || !*glyphResult)
+b8 UiGpuValBuildMaxBudgetSnapshot(mut PaintImageFixture self, in b8 extraImage, mut DrawSnapshot outSnapshot){
+    Vector<SharedGlyphPage> glyphs;
+    for(usize i = 0u; i < s_PaintMaxImages - 2u; ++i){
+        const auto result = self.makeGlyph(100u + i);
+        if(!result.has_value() || !result.value().valid())
             return false;
-        glyphs.push_back(Move(*glyphResult));
+        glyphs.push_back(result.value());
     }
-    auto sdfResult = self.makeSdf();
-    auto imageResult = self.makeImage();
-    if(!sdfResult || !*sdfResult || !imageResult || !*imageResult)
+    const auto sdf = self.makeSdf();
+    const auto image = self.makeImage();
+    if(!sdf.has_value() || !sdf.value().valid() || !image.has_value() || !image.value().valid())
         return false;
-    const SharedSdfAtlasPage sdf = Move(*sdfResult);
-    const SharedImageSource image = Move(*imageResult);
-    if(!self.m_builder.prepareImages(glyphs, Span(&sdf, 1u), Span(&image, 1u)))
+    const Array<SharedSdfAtlasPage, 1u> pages(sdf.value());
+    const Array<SharedImageSource, 1u> images(image.value());
+    if(!self.m_builder.prepareImages(glyphs, pages, images))
         return false;
-    const Rect rectangle{ 2.0f, 3.0f, 16.0f, 8.0f };
-    const Rect uv{ 0.0f, 0.0f, 1.0f, 1.0f };
-    if(!withExtraImage){
-        if(!self.m_builder.drawGlyph(glyphs[0u], rectangle, uv) || !self.m_builder.drawSdfGlyph(sdf, 2u, rectangle, uv))
-            return false;
-    }
-    if(!self.m_builder.drawImage(image, rectangle))
+    const Rect rectangle(2.0f, 3.0f, 16.0f, 8.0f);
+    const Rect uv(0.0f, 0.0f, 1.0f, 1.0f);
+    if(!extraImage && (!self.m_builder.drawGlyph(glyphs[0u], rectangle, uv) || !self.m_builder.drawSdfGlyph(sdf.value(), 2u, rectangle, uv)))
+        return false;
+    if(!self.m_builder.drawImage(image.value(), rectangle))
         return false;
     outSnapshot = self.m_builder.freeze();
-    if(withExtraImage){
-        auto additionResult = self.makeImage("tests/ui/overflow_gpu_image", 73u);
-        if(!additionResult || !*additionResult)
+    if(extraImage){
+        const auto addition = self.makeImage("tests/ui/overflow_gpu_image", 73u);
+        if(!addition.has_value() || !addition.value().valid())
             return false;
-        const_cast<Vector<SharedImageSource, ::ArenaBase>&>(outSnapshot.textureImages()).push_back(Move(*additionResult));
+        UiGpuValAppendTexture(outSnapshot, addition.value());
     }
     return true;
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 PrepareSingleGlyphSdfAndImage(UiPaintImageTests::PaintImageFixture& self, SharedImageSource& outImage){
-    auto imageResult = self.makeImage();
-    auto glyphResult = self.makeGlyph();
-    auto sdfResult = self.makeSdf();
-    if(!imageResult || !*imageResult || !glyphResult || !*glyphResult || !sdfResult || !*sdfResult)
+b8 UiGpuValPrepareSingleGlyphSdfAndImage(mut PaintImageFixture self, mut SharedImageSource outImage){
+    const auto image = self.makeImage();
+    const auto glyph = self.makeGlyph();
+    const auto sdf = self.makeSdf();
+    if(!image.has_value() || !image.value().valid() || !glyph.has_value() || !glyph.value().valid() || !sdf.has_value() || !sdf.value().valid())
         return false;
-    outImage = Move(*imageResult);
-    const SharedGlyphPage glyph = Move(*glyphResult);
-    const SharedSdfAtlasPage sdf = Move(*sdfResult);
-    return self.m_builder.prepareImages(Span(&glyph, 1u), Span(&sdf, 1u), Span(&outImage, 1u));
+    outImage = image.value();
+    const Array<SharedGlyphPage, 1u> glyphs(glyph.value());
+    const Array<SharedSdfAtlasPage, 1u> pages(sdf.value());
+    const Array<SharedImageSource, 1u> images(outImage);
+    return self.m_builder.prepareImages(glyphs, pages, images);
 }
 
+void UiImageLoaderExpectPayload(in SharedImageSource image, in u8 value){
+    in Texture texture = image.deref().texture();
+    ASSERT_EQ(texture.payloadBytes().size(), 32u);
+    for(usize i = 0u; i < texture.payloadBytes().size(); ++i)
+        EXPECT_EQ(texture.payloadBytes()[i], cast<u8>(value + i));
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void UiImageSourceExpectCopy(in Texture original, in SharedImageSource source){
+    in Texture copied = source.deref().texture();
+    ASSERT_EQ(copied.mipLevels().size(), original.mipLevels().size());
+    ASSERT_EQ(copied.payloadBytes().size(), original.payloadBytes().size());
+    EXPECT_NE(TestDataAddress(copied.mipLevels()), TestDataAddress(original.mipLevels()));
+    EXPECT_NE(TestDataAddress(copied.payloadBytes()), TestDataAddress(original.payloadBytes()));
+    EXPECT_EQ(copied.payloadBytes(), original.payloadBytes());
+    EXPECT_TRUE(copied.validatePayload());
+}
+
+b8 UiSameTextureAddress(in SharedImageSource first, in SharedImageSource second){
+    return TestValueAddress<Texture>(first.deref().texture()) == TestValueAddress<Texture>(second.deref().texture());
+}
+
+b8 UiDistinctLoadedTextureStorage(in SharedImageSource first, in SharedImageSource second){
+    return TestDataAddress(first.deref().texture().payloadBytes()) != TestDataAddress(second.deref().texture().payloadBytes())
+        && TestDataAddress(first.deref().texture().mipLevels()) != TestDataAddress(second.deref().texture().mipLevels());
+}
+
+class UiImageBuilderTests : WidgetFixture{
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_image_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-constexpr AStringView s_SpriteRegionName = "image.sprite";
-
-class UiImageBuilderTests : public WidgetFixture{
-public:
-    virtual void SetUp()override{
-        WidgetFixture::SetUp();
-        if(HasFatalFailure())
+    public void setup(){
+        this.setUpWidgetBase();
+        if(HasFatalTestFailure())
             return;
-        configureImages();
+        this.configureImages();
     }
-
-    void configureImages(){
-        configureSkin();
-        UiSkin::RegionVector regions(m_arena);
-        for(const UiSkinRegion& region : m_skin.regions())
+    public void configureImages(){
+        this.configureSkin();
+        RegionVector regions;
+        for(in UiSkinRegion region : this.m_skin.regions())
             regions.push_back(region);
         UiSkinRegion sprite;
-        sprite.name = Name(s_SpriteRegionName);
-        sprite.rectangle = { 0u, 16u, 20u, 12u };
-        sprite.padding = { 9.0f, 9.0f, 9.0f, 9.0f };
-        regions.push_back(Move(sprite));
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 32u, 1.0f, Move(regions));
-        ASSERT_TRUE(m_skin.validatePayload());
-        m_builder.setSkin(m_skin);
+        sprite.name = Name("image.sprite");
+        sprite.rectangle.y = 16u;
+        sprite.rectangle.width = 20u;
+        sprite.rectangle.height = 12u;
+        sprite.padding = MakeFixtureSkinInsets(9.0f, 9.0f, 9.0f, 9.0f);
+        regions.push_back(sprite);
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 128u, 32u, 1.0f, regions);
+        ASSERT_TRUE(this.m_skin.validatePayload());
+        this.m_builder.setSkin(this.m_skin);
     }
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_image_loader_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Core::Assets;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-constexpr AStringView s_TexturePath = "tests/ui/image_loader/texture";
-
-[[nodiscard]] FOUNDATION_INLINE AssetBytes MakeTextureBinary(const u8 initialValue, AssetArena& arena){
-    TextureBinaryPayload::HeaderBinary header;
-    header.dimension = static_cast<u32>(TextureDimension::Texture2D);
-    header.width = 2u;
-    header.height = 1u;
-    header.depth = 1u;
-    header.mipCount = 2u;
-    header.alphaInfo = static_cast<u32>(TextureAlphaMode::EmbeddedLdr) | (255u << TextureBinaryPayload::s_AlphaInfoConstantShift);
-    header.payloadFormat = static_cast<u32>(TexturePayloadFormat::UastcLdr4x4);
-    header.payloadByteCount = 32u;
-
-    TextureBinaryPayload::MipLevelBinary mip;
-    mip.width = 2u;
-    mip.height = 1u;
-    mip.sliceCount = 1u;
-    mip.blockCountX = 1u;
-    mip.blockCountY = 1u;
-    mip.sizeBytes = 16u;
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + 2u * sizeof(mip) + 32u);
-    AppendPOD(binary, header);
-    AppendPOD(binary, mip);
-    mip.width = 1u;
-    mip.offsetBytes = 16u;
-    AppendPOD(binary, mip);
-    for(usize index = 0u; index < 32u; ++index)
-        binary.push_back(static_cast<u8>(initialValue + index));
-    return binary;
-}
-
-FOUNDATION_INLINE void ExpectPayload(const Texture& texture, const u8 initialValue){
-    ASSERT_EQ(texture.payloadBytes().size(), 32u);
-    for(usize index = 0u; index < texture.payloadBytes().size(); ++index)
-        EXPECT_EQ(texture.payloadBytes()[index], static_cast<u8>(initialValue + index));
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[ordered]
+class ImageLoaderTests{
+    public HeapStorage storage = HeapStorage(s_UiCaseTestsUiImageLoader);
+    public CapturingLogger m_logger;
+    public LoggerRegistrationGuard m_loggerGuard;
+    public TestValueSlot<SharedPool> poolSlot;
+    public mut SharedPool m_pool;
+    public TestValueSlot<AssetRegistry> registrySlot;
+    public mut AssetRegistry m_registry;
+    public mut AssetRegistry registry(){ return this.m_registry; }
+    public MemoryImageBinarySource m_source;
+    public TestValueSlot<AssetManager> assetSlot;
+    public mut AssetManager m_assets;
+    public mut AssetManager assets(){ return this.m_assets; }
+
+    public AssetRef<Texture> m_identity = AssetRef<Texture>("tests/ui/image_loader/texture");
+    public ImageLoaderTests(){
+        this.m_loggerGuard = LoggerRegistrationGuard(this.m_logger, LoggerBreakPolicy::BreakOnFatal);
+        this.m_pool = this.poolSlot.constructIn(this.storage);
+        this.m_registry = this.registrySlot.constructIn(this.storage);
+        this.m_assets = this.assetSlot.constructIn(this.storage, this.m_registry, this.m_source);
+    }
+    public void setup(){
+        ASSERT_TRUE(this.registry().registerCodec(MakeUnique<DeclaredAssetCodec<Texture>>()));
+        this.m_source.m_binary = MakeImageTextureBinary(3u);
+    }
+    public void rebuildBinary(in u8 initialValue){
+        this.m_source.m_binary = MakeImageTextureBinary(initialValue);
+    }
+    public void flipFirstBinaryByte(){
+        this.m_source.m_binary[0u] ^= 0xFFu;
+    }
+    public void zeroAndClearBinary(){
+        for(mut u8 byteValue : this.m_source.m_binary)
+            byteValue = 0u;
+        this.m_source.m_binary.clear();
+    }
+    public b8 unregisterTextureCodec(){
+        return this.registry().unregisterCodec(s_ImageFixtureTextureType);
+    }
+    public b8 registerMisdirectedCodec(in b8 wrongType){
+        return this.registry().registerCodec(MakeUnique<MisdirectedImageCodec>(s_ImageFixtureTextureType, wrongType), true);
+    }
+    public b8 sawError(in StringView substring)const{
+        return this.m_logger.sawErrorContainingUtf8(substring);
+    }
+    public b8 payloadDisjointFromSource(in SharedImageSource image)const{
+        const usize payloadOffset = s_TextureHeaderBinaryBytes + 2u * s_TextureMipLevelBinaryBytes;
+        return TestDataAddress(image.deref().texture().payloadBytes()) != TestDataAddress(this.m_source.m_binary) + payloadOffset;
+    }
+}
 
 
-class MemoryImageBinarySource final : public IAssetBinarySource{
-public:
-    explicit MemoryImageBinarySource(AssetArena& arena)noexcept
-        : m_binary(arena)
-    {}
+class UiImageSourceTextureDescription{
+    public u32 width = 9u;
+    public u32 height = 5u;
+    public u32 depth = 1u;
+    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
+    public TexturePayloadFormat format = TexturePayloadFormat::UastcLdr4x4;
+    public TextureAlphaMode alphaMode = TextureAlphaMode::EmbeddedLdr;
+    public u8 alphaConstant = s_TextureOpaqueAlphaUnorm8;
+    public u8 seed = 37u;
 
 
-public:
-    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
-        ++m_readCount;
-        outBinary.clear();
-        if(!m_available || virtualPath != m_path)
+}
+
+
+[ordered]
+class UiImageSourceTests{
+    public CapturingLogger m_logger;
+    public LoggerRegistrationGuard m_loggerGuard;
+    public HeapStorage m_inputArena = HeapStorage(s_UiCaseTestsUiImageSourceInput);
+    public HeapStorage m_sourceArena = HeapStorage(s_UiCaseTestsUiImageSourceOwned);
+    public TestValueSlot<SharedPool> poolSlot;
+    public mut SharedPool m_pool;
+
+    public UiImageSourceTests(){
+        this.m_loggerGuard = LoggerRegistrationGuard(this.m_logger, LoggerBreakPolicy::BreakOnFatal);
+        this.m_pool = this.poolSlot.constructIn(this.m_sourceArena);
+    }
+    public void install(in UiImageSourceTextureDescription description, in MipLevelVector mips, in Vector<u8> bytes, mut Texture texture)const{
+        texture.setPayload(description.width, description.height, mips, bytes, description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
+    }
+    public b8 prepareDefault(mut Texture texture)const{ return this.prepareCustom(texture, UiImageSourceTextureDescription()); }
+    public b8 prepareCustom(mut Texture texture, in UiImageSourceTextureDescription description)const{
+        const auto count = ComputeCompleteMipCount(description.dimension, description.width, description.height, description.depth);
+        if(!count.has_value())
             return false;
-        outBinary.assign(m_binary.begin(), m_binary.end());
-        return true;
-    }
-
-
-public:
-    AssetBytes m_binary;
-    Name m_path = Name(s_TexturePath);
-    mutable usize m_readCount = 0u;
-    b8 m_available = true;
-};
-
-// Codec doubles that return mismatched asset types or virtual paths.
-class MisdirectedImageCodec final : public IAssetCodec{
-public:
-    explicit MisdirectedImageCodec(const b8 wrongType)noexcept
-        : IAssetCodec(Texture::AssetTypeName())
-        , m_wrongType(wrongType)
-    {}
-
-
-public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(const Name& virtualPath, const Span<const u8> binary, AssetArena& arena)const override{
-        if(m_wrongType)
-            return UniquePtr<IAsset>(MakeUnique<UiSkin>(arena, virtualPath));
-        TextureAssetCodec codec;
-        return codec.deserialize(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageLoaderOtherTexture), binary, arena);
-    }
-
-
-private:
-    b8 m_wrongType = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ImageLoaderTests : public testing::Test{
-public:
-    ImageLoaderTests()
-        : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
-        , m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageLoader))
-        , m_pool(m_arena)
-        , m_registry(m_arena)
-        , m_source(m_arena)
-        , m_assets(m_arena, m_registry, m_source)
-    {}
-
-
-public:
-    virtual void SetUp()override{
-        ASSERT_TRUE(m_registry.registerCodec(MakeUnique<TextureAssetCodec>()));
-        m_source.m_binary = MakeTextureBinary(3u, m_arena);
-    }
-
-    void rebuildBinary(const u8 initialValue){
-        m_source.m_binary = MakeTextureBinary(initialValue, m_arena);
-    }
-
-    void flipFirstBinaryByte()noexcept{
-        m_source.m_binary[0u] ^= 0xFFu;
-    }
-
-    void zeroAndClearBinary()noexcept{
-        m_source.m_binary.assign(m_source.m_binary.size(), 0u);
-        m_source.m_binary.clear();
-    }
-
-    [[nodiscard]] b8 unregisterTextureCodec()noexcept{
-        return m_registry.unregisterCodec(Texture::AssetTypeName());
-    }
-
-    [[nodiscard]] b8 registerMisdirectedCodec(const b8 wrongType){
-        return m_registry.registerCodec(MakeUnique<MisdirectedImageCodec>(wrongType), true);
-    }
-
-    [[nodiscard]] b8 sawError(const StringView substring)const{
-        return m_logger.sawErrorContainingUtf8(substring);
-    }
-
-    [[nodiscard]] b8 payloadDisjointFromSource(const SharedImageSource& image)const noexcept{
-        const usize payloadOffset = sizeof(TextureBinaryPayload::HeaderBinary) + 2u * sizeof(TextureBinaryPayload::MipLevelBinary);
-        return image->texture().payloadBytes().data() != m_source.m_binary.data() + payloadOffset;
-    }
-
-
-public:
-    Tests::CapturingLogger m_logger;
-    Core::Common::LoggerRegistrationGuard m_loggerGuard;
-    AssetArena m_arena;
-    Core::Alloc::SharedPool m_pool;
-    AssetRegistry m_registry;
-    MemoryImageBinarySource m_source;
-    AssetManager m_assets;
-    const AssetRef<Texture> m_identity{ s_TexturePath };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_image_source_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-struct TextureDescription{
-    u32 width = 9u;
-    u32 height = 5u;
-    u32 depth = 1u;
-    TextureDimension::Enum dimension = TextureDimension::Texture2D;
-    TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
-    TextureAlphaMode::Enum alphaMode = TextureAlphaMode::EmbeddedLdr;
-    u8 alphaConstant = TextureFormat::s_OpaqueAlphaUnorm8;
-    u8 seed = 37u;
-};
-
-class UiImageSourceTests : public testing::Test{
-public:
-    static void Install(const TextureDescription& description, Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes, Texture& texture)noexcept{
-        texture.setPayload(description.width, description.height, Move(mips), Move(bytes), description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
-    }
-
-    [[nodiscard]] static b8 Prepare(Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}){
-        const auto count = TextureFormat::ComputeCompleteMipCount(description.dimension, description.width, description.height, description.depth);
-        if(!count)
-            return false;
-        Texture::MipLevelVector mips(arena);
-        mips.reserve(*count);
+        MipLevelVector mips;
+        mips.reserve(count.value());
         u32 width = description.width;
         u32 height = description.height;
         u32 depth = description.depth;
         u64 offset = 0u;
-        for(u32 index = 0u; index < *count; ++index){
-            const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(description.format, width, height);
-            if(!plane)
+        for(u32 index = 0u; index < count.value(); ++index){
+            const auto plane = ComputeMipPlaneBlockLayout(description.format, width, height);
+            const auto slices = ComputeMipSliceCount(description.dimension, depth);
+            if(!plane.has_value() || !slices.has_value())
                 return false;
-            const auto slices = TextureFormat::ComputeMipSliceCount(description.dimension, depth);
-            if(!slices)
-                return false;
-            const u64 size = plane->planeByteCount * *slices;
-            mips.push_back({ offset, size, width, height, plane->blocksX, plane->blocksY, *slices });
-            offset += size;
-            width = width > 1u ? width >> 1u : 1u;
-            height = height > 1u ? height >> 1u : 1u;
-            if(description.dimension == TextureDimension::Texture3D)
-                depth = depth > 1u ? depth >> 1u : 1u;
+            TextureMipLevel mip;
+            mip.offsetBytes = offset;
+            mip.sizeBytes = plane.value().planeByteCount * slices.value();
+            mip.width = width;
+            mip.height = height;
+            mip.blockCountX = plane.value().blocksX;
+            mip.blockCountY = plane.value().blocksY;
+            mip.sliceCount = slices.value();
+            mips.push_back(mip);
+            offset += mip.sizeBytes;
+            width = Max(1u, width >> 1u);
+            height = Max(1u, height >> 1u);
+            if(description.dimension == TexturePayloadDimension::Texture3D)
+                depth = Max(1u, depth >> 1u);
         }
-        Core::Assets::AssetBytes bytes(arena);
-        const u64 byteCount = description.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4 ? offset * 2u : offset;
-        if(byteCount > Limit<usize>::s_Max)
+        u64 byteCount = offset;
+        if(description.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4)
+            byteCount *= 2u;
+        if(byteCount > usize.max)
             return false;
-        bytes.resize(static_cast<usize>(byteCount));
+        Vector<u8> bytes;
+        bytes.resize(cast<usize>(byteCount));
         for(usize index = 0u; index < bytes.size(); ++index)
-            bytes[index] = static_cast<u8>(static_cast<u32>(description.seed) + index * 17u);
-        Install(description, Move(mips), Move(bytes), texture);
+            bytes[index] = cast<u8>(cast<u32>(description.seed) + index * 17u);
+        this.install(description, mips, bytes, texture);
         return true;
     }
-
-    static void ExpectCopy(const Texture& original, const Texture& copied){
-        ASSERT_EQ(copied.mipLevels().size(), original.mipLevels().size());
-        ASSERT_EQ(copied.payloadBytes().size(), original.payloadBytes().size());
-        EXPECT_NE(copied.mipLevels().data(), original.mipLevels().data());
-        EXPECT_NE(copied.payloadBytes().data(), original.payloadBytes().data());
-        EXPECT_EQ(copied.payloadBytes(), original.payloadBytes());
-        EXPECT_TRUE(copied.validatePayload());
+    public void installEmptyBytesKeepMips(mut Texture texture){
+        MipLevelVector mips = texture.mipLevels();
+        Vector<u8> bytes;
+        this.install(UiImageSourceTextureDescription(), mips, bytes, texture);
     }
-
-
-public:
-    UiImageSourceTests()
-        : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
-        , m_inputArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceInput))
-        , m_sourceArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceOwned))
-        , m_pool(m_sourceArena)
-    {}
-
-    [[nodiscard]] b8 prepareDefault(Core::Alloc::GlobalArena& arena, Texture& texture)const{
-        return Prepare(arena, texture);
-    }
-
-    [[nodiscard]] b8 prepareCustom(Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description)const{
-        return Prepare(arena, texture, description);
-    }
-
-    void installEmptyBytesKeepMips(Texture& texture){
-        Texture::MipLevelVector mips(m_inputArena);
-        mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
-        Core::Assets::AssetBytes bytes(m_inputArena);
-        Install({}, Move(mips), Move(bytes), texture);
-    }
-
-    void installShapeVariant(Texture& texture, const u32 variant){
-        TextureDescription description;
+    public void installShapeVariant(mut Texture texture, in u32 variant){
+        UiImageSourceTextureDescription description;
         switch(variant){
         case 0u: description.width = 0u; break;
         case 1u: description.height = 0u; break;
         case 2u: description.depth = 0u; break;
         case 3u: description.depth = 2u; break;
-        case 4u: description.dimension = static_cast<TextureDimension::Enum>(255u); break;
-        case 5u: description.format = static_cast<TexturePayloadFormat::Enum>(255u); break;
-        case 6u: description.alphaMode = static_cast<TextureAlphaMode::Enum>(255u); break;
+        case 4u: description.dimension = cast<TexturePayloadDimension>(255u); break;
+        case 5u: description.format = cast<TexturePayloadFormat>(255u); break;
+        case 6u: description.alphaMode = cast<TextureAlphaMode>(255u); break;
         }
-        Texture::MipLevelVector mips(m_inputArena);
-        mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
-        Core::Assets::AssetBytes bytes(m_inputArena);
-        bytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
-        Install(description, Move(mips), Move(bytes), texture);
+        MipLevelVector mips = texture.mipLevels();
+        Vector<u8> bytes = texture.payloadBytes();
+        this.install(description, mips, bytes, texture);
     }
-
-    void installMipVariant(Texture& texture, const u32 variant){
-        Texture::MipLevelVector mips(m_inputArena);
-        mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
-        Core::Assets::AssetBytes bytes(m_inputArena);
-        bytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
+    public void installMipVariant(mut Texture texture, in u32 variant){
+        MipLevelVector mips = texture.mipLevels();
+        Vector<u8> bytes = texture.payloadBytes();
         switch(variant){
         case 0u: mips.pop_back(); break;
         case 1u: mips[1u].width = 3u; break;
@@ -479,15 +377,12 @@ public:
         case 5u: mips[0u].sliceCount = 2u; break;
         case 6u: mips.push_back(mips.back()); break;
         }
-        Install({}, Move(mips), Move(bytes), texture);
+        this.install(UiImageSourceTextureDescription(), mips, bytes, texture);
     }
-
-    void installTransportVariant(Texture& texture, const u32 variant){
-        TextureDescription description;
-        Texture::MipLevelVector mips(m_inputArena);
-        mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
-        Core::Assets::AssetBytes bytes(m_inputArena);
-        bytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
+    public void installTransportVariant(mut Texture texture, in u32 variant){
+        UiImageSourceTextureDescription description;
+        MipLevelVector mips = texture.mipLevels();
+        Vector<u8> bytes = texture.payloadBytes();
         switch(variant){
         case 0u: bytes.pop_back(); break;
         case 1u: bytes.push_back(0u); break;
@@ -502,189 +397,17 @@ public:
             break;
         case 5u: description.alphaConstant = 77u; break;
         }
-        Install(description, Move(mips), Move(bytes), texture);
+        this.install(description, mips, bytes, texture);
     }
-
-    void expectSeparateHdrAlphaStream(const Texture& original, const SharedImageSource& source)const{
-        const Texture& copied = source->texture();
+    public void expectSeparateHdrAlphaStream(in Texture original, in SharedImageSource source)const{
+        in Texture copied = source.deref().texture();
         EXPECT_EQ(copied.primaryPayloadByteCount(), 144u);
         ASSERT_EQ(copied.payloadBytes().size(), 288u);
         ASSERT_FALSE(copied.alphaUastcBlocks().empty());
-        EXPECT_EQ(copied.alphaUastcBlocks().data(), copied.payloadBytes().data() + 144u);
-        EXPECT_NE(copied.alphaUastcBlocks().data(), original.alphaUastcBlocks().data());
-        EXPECT_EQ(copied.alphaUastcBlocks()[143u], static_cast<u8>(37u + 287u * 17u));
+        EXPECT_EQ(TestDataAddress(copied.alphaUastcBlocks()), TestDataAddress(copied.payloadBytes()) + 144u);
+        EXPECT_NE(TestDataAddress(copied.alphaUastcBlocks()), TestDataAddress(original.alphaUastcBlocks()));
+        EXPECT_EQ(copied.alphaUastcBlocks()[143u], cast<u8>(37u + 287u * 17u));
     }
-
-
-public:
-    Tests::CapturingLogger m_logger;
-    Core::Common::LoggerRegistrationGuard m_loggerGuard;
-    Core::Alloc::GlobalArena m_inputArena;
-    Core::Alloc::GlobalArena m_sourceArena;
-    Core::Alloc::SharedPool m_pool;
-};
-
-static_assert(!IsDefaultConstructible_V<ImageSource>);
-static_assert(!IsConstructible_V<ImageSource, Core::Alloc::GlobalArena&, const Texture&>);
-static_assert(!IsConstructible_V<ImageSource, Core::Alloc::GlobalArena&, const Texture&, u64>);
-static_assert(!IsConstructible_V<ImageSource, const ImageSource&>);
-static_assert(!IsConstructible_V<ImageSource, ImageSource&&>);
-static_assert(!IsAssignable_V<ImageSource&, ImageSource&&>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using GpuTextureImageValidationFixture = ::NWB::UiPaintImageTests::PaintImageFixture;
-using HorizontalNavigationFixture = ::NWB::UiHorizontalNavigationTests::HorizontalNavigationFixture;
-using UiImageBuilderTests = __hidden_ui_image_builder_tests::UiImageBuilderTests;
-using ImageLoaderTests = __hidden_ui_image_loader_tests::ImageLoaderTests;
-using UiImageSourceTests = __hidden_ui_image_source_tests::UiImageSourceTests;
-using UiImageSourceTextureDescription = __hidden_ui_image_source_tests::TextureDescription;
-
-using Color = ::NWB::Impl::Ui::Color;
-using ControlAction = ::NWB::Impl::Ui::ControlAction;
-using ControlToken = ::NWB::Impl::Ui::ControlToken;
-using GlobalArena = ::NWB::Core::Alloc::GlobalArena;
-struct UiImageSourceCallerArena{
-    ::NWB::Core::Alloc::GlobalArena arena;
-    explicit UiImageSourceCallerArena(const Name& scopeName) : arena(scopeName){}
-};
-using ImageMetrics = ::NWB::Impl::Ui::ImageMetrics;
-using ImageOptions = ::NWB::Impl::Ui::ImageOptions;
-using ImagePlacement = ::NWB::Impl::Ui::ImagePlacement;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
-using SharedImageSource = ::NWB::Impl::Ui::SharedImageSource;
-using SharedSdfAtlasPage = ::NWB::Impl::Ui::SharedSdfAtlasPage;
-using SkinPaintSample = ::NWB::UiWidgetTests::SkinPaintSample;
-using Texture = ::NWB::Impl::Texture;
-using TextureMipLevel = ::NWB::Impl::TextureMipLevel;
-using UiSkinRegion = ::NWB::Impl::UiSkinRegion;
-
-namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
-using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-namespace TextureAlphaMode = ::TextureAlphaMode;
-namespace AssetTextureDimension = ::TextureDimension;
-namespace TexturePayloadFormat = ::TexturePayloadFormat;
-namespace UiSkinDrawMode = ::NWB::Impl::UiSkinDrawMode;
-namespace CoreKey = ::NWB::Core::Key;
-
-using ::NWB::Impl::Ui::LoadImageSource;
-using ::NWB::Impl::Ui::MakeImageSource;
-using ::NWB::Impl::Ui::MeasureImage;
-using ::NWB::Impl::Ui::PlaceImage;
-using ::NWB::Impl::Ui::s_PaintMaxImages;
-using ::NWB::Tests::UiCases::s_UiCaseImageTest;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageHdr;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageInvalidMetadata;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageInvalidMips;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageInvalidTransport;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImagePaint;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageReplace;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageRetained;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageSharedPath;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceTemporary;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageSpatial;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiImageTemporary;
-using ::NWB::Tests::UiCases::s_UiFixtureNameTestsUiImageEmpty;
-using ::NWB::Tests::UiCases::s_UiFixtureNameTestsUiImageNoBytes;
-using ::NWB::Tests::UiCases::s_UiFixtureNameWhite;
-using ::NWB::Tests::UiCases::s_UiInputNameSprite;
-using ::NWB::Tests::UiCases::s_UiInputNameUnknownRegion;
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiGpuValGlyphPages(const DrawSnapshot& snapshot)noexcept{
-    return ::NWB::Impl::Ui::ValidateGpuGlyphPages(snapshot);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiGpuValSdfPages(const DrawSnapshot& snapshot)noexcept{
-    return ::NWB::Impl::Ui::ValidateGpuSdfPages(snapshot);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiGpuValTextureImages(const DrawSnapshot& snapshot)noexcept{
-    return ::NWB::Impl::Ui::ValidateGpuTextureImages(snapshot);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiGpuValAllImageBindings(const DrawSnapshot& snapshot)noexcept{
-    return __hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot);
-}
-FOUNDATION_INLINE void UiGpuValSetCommandTextureIndex(DrawSnapshot& snapshot, const usize commandIndex, const u32 imageIndex)noexcept{
-    __hidden_ui_gpu_texture_image_validation_tests::SetCommandTextureImageIndex(snapshot, commandIndex, imageIndex);
-}
-FOUNDATION_INLINE void UiGpuValResetFirstTexture(DrawSnapshot& snapshot)noexcept{
-    __hidden_ui_gpu_texture_image_validation_tests::ResetFirstSnapshotTextureImage(snapshot);
-}
-FOUNDATION_INLINE void UiGpuValAppendTexture(DrawSnapshot& snapshot, const SharedImageSource& image){
-    __hidden_ui_gpu_texture_image_validation_tests::AppendSnapshotTextureImage(snapshot, image);
-}
-FOUNDATION_INLINE void UiGpuValSetCommand(DrawSnapshot& snapshot, const usize commandIndex, const DrawCommand& command)noexcept{
-    __hidden_ui_gpu_texture_image_validation_tests::SetSnapshotCommandRaw(snapshot, commandIndex, command);
-}
-FOUNDATION_INLINE void UiGpuValSetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noexcept{
-    __hidden_ui_gpu_texture_image_validation_tests::SetFirstCommandUnknownMaterial(snapshot);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiGpuValBuildMaxBudgetSnapshot(GpuTextureImageValidationFixture& self, const b8 withExtraImage, DrawSnapshot& outSnapshot){
-    return __hidden_ui_gpu_texture_image_validation_tests::BuildMaxGlyphBudgetSnapshot(self, withExtraImage, outSnapshot);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiGpuValPrepareSingleGlyphSdfAndImage(GpuTextureImageValidationFixture& self, SharedImageSource& outImage){
-    return __hidden_ui_gpu_texture_image_validation_tests::PrepareSingleGlyphSdfAndImage(self, outImage);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiImageHandlePresent(const SharedImageSource& image)noexcept{ return static_cast<b8>(image); }
-[[nodiscard]] FOUNDATION_INLINE b8 UiGlyphHandlePresent(const SharedGlyphPage& page)noexcept{ return static_cast<b8>(page); }
-[[nodiscard]] FOUNDATION_INLINE b8 UiSdfHandlePresent(const SharedSdfAtlasPage& page)noexcept{ return static_cast<b8>(page); }
-FOUNDATION_INLINE void UiResetImageHandle(SharedImageSource& image)noexcept{ image.reset(); }
-FOUNDATION_INLINE void UiResetImageHandle(SharedImageSource&& image)noexcept{ image.reset(); }
-[[nodiscard]] FOUNDATION_INLINE ::NWB::Core::Assets::AssetRef<Texture> UiReadImageIdentity(const SharedImageSource& image)noexcept{ return image->identity(); }
-[[nodiscard]] FOUNDATION_INLINE u64 UiReadImageGeneration(const SharedImageSource& image)noexcept{ return image->generation(); }
-[[nodiscard]] FOUNDATION_INLINE const Texture& UiReadImageTexture(const SharedImageSource& image)noexcept{ return image->texture(); }
-[[nodiscard]] FOUNDATION_INLINE b8 UiSameImageHandlePtr(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{ return lhs.get() == rhs.get(); }
-[[nodiscard]] FOUNDATION_INLINE b8 UiSameTextureAddress(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{ return &lhs->texture() == &rhs->texture(); }
-[[nodiscard]] FOUNDATION_INLINE b8 UiDistinctLoadedTextureStorage(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{
-    return lhs->texture().payloadBytes().data() != rhs->texture().payloadBytes().data()
-        && lhs->texture().mipLevels().data() != rhs->texture().mipLevels().data();
-}
-FOUNDATION_INLINE void UiImageLoaderExpectPayload(const SharedImageSource& image, const u8 initialValue){
-    __hidden_ui_image_loader_tests::ExpectPayload(image->texture(), initialValue);
-}
-FOUNDATION_INLINE void UiImageSourceExpectCopy(const Texture& original, const SharedImageSource& copied){
-    __hidden_ui_image_source_tests::UiImageSourceTests::ExpectCopy(original, copied->texture());
-}
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget MakeUiHorizontalNavPart(const HitTarget& host)noexcept{
-    return ::NWB::UiHorizontalNavigationTests::Part(host);
-}
-[[nodiscard]] FOUNDATION_INLINE PopupScope MakeUiHorizontalNavPopup(const HitTarget& owner, const u64 openGeneration = 7u)noexcept{
-    return ::NWB::UiHorizontalNavigationTests::Popup(owner, openGeneration);
-}
-[[nodiscard]] FOUNDATION_INLINE ImageOptions MakeUiImageBuilderFixedOptions(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
-    return ::NWB::UiWidgetTests::WidgetFixture::Fixed(width, height);
-}
-[[nodiscard]] FOUNDATION_INLINE f32 UiHorizImageInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f32 UiHorizImageQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] FOUNDATION_INLINE ::NWB::Impl::Ui::LayoutSizePolicy::Enum MakeUiInvalidLayoutSizePolicy()noexcept{
-    return static_cast<::NWB::Impl::Ui::LayoutSizePolicy::Enum>(3u);
-}
-[[nodiscard]] FOUNDATION_INLINE ::NWB::Impl::UiSkinDrawMode::Enum MakeUiInvalidSkinDrawMode()noexcept{
-    return static_cast<::NWB::Impl::UiSkinDrawMode::Enum>(2u);
-}
-[[nodiscard]] FOUNDATION_INLINE ::NWB::Core::Assets::AssetRef<Texture> MakeUiMissingTextureAssetRef()noexcept{
-    return ::NWB::Core::Assets::AssetRef<Texture>("tests/ui/image_loader/missing");
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -731,25 +454,25 @@ void VerifyGpuTextureImageValidationFixture_SameIdentityDistinctGenerationsRemai
     const Expected<SharedImageSource> secondResult = self.makeImage(s_UiGpuVersionedImagePath, 73u);
     ASSERT_TRUE(secondResult.has_value());
     const SharedImageSource second = secondResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(first) && UiImageHandlePresent(second));
-    ASSERT_EQ(UiReadImageIdentity(first), UiReadImageIdentity(second));
-    ASSERT_NE(UiReadImageGeneration(first), UiReadImageGeneration(second));
+    ASSERT_TRUE(first.valid() && second.valid());
+    ASSERT_EQ(ImageSourceIdentity(first), ImageSourceIdentity(second));
+    ASSERT_NE(ImageSourceGeneration(first), ImageSourceGeneration(second));
     const Rect rectangle = Rect(2.0f, 3.0f, 16.0f, 8.0f);
     ASSERT_TRUE(self.m_builder.drawImage(first, rectangle));
     ASSERT_TRUE(self.m_builder.drawImage(second, rectangle));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
     ASSERT_EQ(snapshot.commands().size(), 2u);
-    EXPECT_TRUE(UiGpuValGlyphPages(snapshot));
-    EXPECT_TRUE(UiGpuValSdfPages(snapshot));
-    EXPECT_TRUE(UiGpuValTextureImages(snapshot));
+    EXPECT_TRUE(ValidateGpuGlyphPages(snapshot));
+    EXPECT_TRUE(ValidateGpuSdfPages(snapshot));
+    EXPECT_TRUE(ValidateGpuTextureImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_ImageIndexMustAddressAnOwnedTextureSource(mut GpuTextureImageValidationFixture self){
     const Expected<SharedImageSource> imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(image));
+    ASSERT_TRUE(image.valid());
     ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
@@ -758,7 +481,7 @@ void VerifyGpuTextureImageValidationFixture_ImageIndexMustAddressAnOwnedTextureS
     invalidIndices[1u] = u32.max;
     for(in u32 index : invalidIndices){
         UiGpuValSetCommandTextureIndex(snapshot, 0u, index);
-        EXPECT_FALSE(UiGpuValTextureImages(snapshot));
+        EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
         EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
     }
     UiGpuValSetCommandTextureIndex(snapshot, 0u, 0u);
@@ -769,12 +492,12 @@ void VerifyGpuTextureImageValidationFixture_NullTextureSourceRejectsTheSnapshot(
     const Expected<SharedImageSource> imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(image));
+    ASSERT_TRUE(image.valid());
     ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.textureImages().size(), 1u);
     UiGpuValResetFirstTexture(snapshot);
-    EXPECT_FALSE(UiGpuValTextureImages(snapshot));
+    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
     EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
 }
 
@@ -782,13 +505,13 @@ void VerifyGpuTextureImageValidationFixture_DuplicateSourceGenerationRejectsTheS
     const Expected<SharedImageSource> imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(image));
+    ASSERT_TRUE(image.valid());
     ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     UiGpuValAppendTexture(snapshot, image);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
-    ASSERT_EQ(UiReadImageGeneration(snapshot.textureImages()[0u]), UiReadImageGeneration(snapshot.textureImages()[1u]));
-    EXPECT_FALSE(UiGpuValTextureImages(snapshot));
+    ASSERT_EQ(ImageSourceGeneration(snapshot.textureImages()[0u]), ImageSourceGeneration(snapshot.textureImages()[1u]));
+    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
     EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
 }
 
@@ -796,41 +519,41 @@ void VerifyGpuTextureImageValidationFixture_TextureBindingCountOverflowRejectsEv
     const Expected<SharedImageSource> firstResult = self.makeImage();
     ASSERT_TRUE(firstResult.has_value());
     const SharedImageSource first = firstResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(first));
+    ASSERT_TRUE(first.valid());
     ASSERT_TRUE(self.m_builder.drawImage(first, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     for(usize index = 1u; index <= s_PaintMaxImages; ++index){
         const Expected<SharedImageSource> additionResult = self.makeImage(s_UiGpuOverflowImagePath, cast<u8>(index));
         ASSERT_TRUE(additionResult.has_value());
-        ASSERT_TRUE(UiImageHandlePresent(additionResult.value()));
+        ASSERT_TRUE(additionResult.value().valid());
         UiGpuValAppendTexture(snapshot, additionResult.value());
     }
     ASSERT_EQ(snapshot.textureImages().size(), s_PaintMaxImages + 1u);
     EXPECT_TRUE(snapshot.glyphPages().empty());
     EXPECT_TRUE(snapshot.sdfPages().empty());
-    EXPECT_FALSE(UiGpuValGlyphPages(snapshot));
-    EXPECT_FALSE(UiGpuValSdfPages(snapshot));
-    EXPECT_FALSE(UiGpuValTextureImages(snapshot));
+    EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
+    EXPECT_FALSE(ValidateGpuSdfPages(snapshot));
+    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_SharedImageBudgetAcceptsMixedSourcesAtCapacity(mut GpuTextureImageValidationFixture self){
-    DrawSnapshot snapshot = DrawSnapshot(self.m_arena);
+    DrawSnapshot snapshot = DrawSnapshot();
     ASSERT_TRUE(UiGpuValBuildMaxBudgetSnapshot(self, false, snapshot));
     ASSERT_EQ(snapshot.glyphPages().size() + snapshot.sdfPages().size() + snapshot.textureImages().size(), s_PaintMaxImages);
-    EXPECT_TRUE(UiGpuValGlyphPages(snapshot));
-    EXPECT_TRUE(UiGpuValSdfPages(snapshot));
-    EXPECT_TRUE(UiGpuValTextureImages(snapshot));
+    EXPECT_TRUE(ValidateGpuGlyphPages(snapshot));
+    EXPECT_TRUE(ValidateGpuSdfPages(snapshot));
+    EXPECT_TRUE(ValidateGpuTextureImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_SharedImageBudgetOverflowIncludesEveryImageKind(mut GpuTextureImageValidationFixture self){
-    DrawSnapshot snapshot = DrawSnapshot(self.m_arena);
+    DrawSnapshot snapshot = DrawSnapshot();
     ASSERT_TRUE(UiGpuValBuildMaxBudgetSnapshot(self, true, snapshot));
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 2u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
-    EXPECT_FALSE(UiGpuValGlyphPages(snapshot));
-    EXPECT_FALSE(UiGpuValSdfPages(snapshot));
-    EXPECT_FALSE(UiGpuValTextureImages(snapshot));
+    EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
+    EXPECT_FALSE(ValidateGpuSdfPages(snapshot));
+    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextureBindings(mut GpuTextureImageValidationFixture self){
@@ -843,7 +566,7 @@ void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextu
     const SharedImageSource image = imageResult.value();
     const SharedGlyphPage glyph = glyphResult.value();
     const SharedSdfAtlasPage sdf = sdfResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(image) && UiGlyphHandlePresent(glyph) && UiSdfHandlePresent(sdf));
+    ASSERT_TRUE(image.valid() && glyph.valid() && sdf.valid());
     const Rect rectangle = Rect(2.0f, 3.0f, 16.0f, 8.0f);
     const Rect uv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     self.m_builder.fillRect(rectangle);
@@ -860,7 +583,7 @@ void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextu
             continue;
         ++nonImageCount;
         UiGpuValSetCommandTextureIndex(snapshot, index, 0u);
-        EXPECT_FALSE(UiGpuValTextureImages(snapshot));
+        EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
         EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
         UiGpuValSetCommandTextureIndex(snapshot, index, u32.max);
     }
@@ -884,8 +607,8 @@ void VerifyGpuTextureImageValidationFixture_ImageCommandRejectsGlyphAndSdfMetada
         else
             mutated.sdfChannel = 1u;
         UiGpuValSetCommand(snapshot, 0u, mutated);
-        EXPECT_FALSE(UiGpuValTextureImages(snapshot));
-        EXPECT_FALSE(UiGpuValGlyphPages(snapshot));
+        EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
+        EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
         EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
     }
     UiGpuValSetCommand(snapshot, 0u, original);
@@ -895,12 +618,12 @@ void VerifyGpuTextureImageValidationFixture_ImageCommandRejectsGlyphAndSdfMetada
 void VerifyGpuTextureImageValidationFixture_UnknownMaterialRejectsCombinedImageValidation(mut GpuTextureImageValidationFixture self){
     const Expected<SharedImageSource> imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
-    ASSERT_TRUE(UiImageHandlePresent(imageResult.value()));
+    ASSERT_TRUE(imageResult.value().valid());
     ASSERT_TRUE(self.m_builder.drawImage(imageResult.value(), Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     UiGpuValSetFirstCommandUnknownMaterial(snapshot);
-    EXPECT_FALSE(UiGpuValGlyphPages(snapshot));
+    EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
     EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
 }
 
@@ -911,17 +634,17 @@ void VerifyGpuTextureImageValidationFixture_UnknownMaterialRejectsCombinedImageV
 void VerifyHorizontalNavigationFixture_CapabilityRemovalRetiresHorizontalIntentionsWhileVerticalHoldSurvives(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Left).commandConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Up).commandConsumed);
-    self.press(CoreKey::Right);
+    EXPECT_TRUE(self.keyDown(Key::Left).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Up).commandConsumed);
+    self.press(Key::Right);
     ASSERT_EQ(self.m_router.controlActions().size(), 3u);
     self.m_targets[0u].horizontalNavigation = false;
     ASSERT_TRUE(self.publish());
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     EXPECT_EQ(self.m_router.controlActions()[0u].kind, ControlActionKind::Up);
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Up, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Up, true).commandConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 2u);
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
@@ -931,15 +654,15 @@ void VerifyHorizontalNavigationFixture_CapabilityRemovalRetiresHorizontalIntenti
     EXPECT_EQ(actionResult2.value().kind, ControlActionKind::Up);
     self.m_targets[0u].horizontalNavigation = true;
     ASSERT_TRUE(self.publish());
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyDown(CoreKey::Up, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Up, true).commandConsumed);
     const Expected<ControlAction> actionResult3 = self.take();
     ASSERT_TRUE(actionResult3.has_value());
     EXPECT_EQ(actionResult3.value().kind, ControlActionKind::Up);
-    EXPECT_TRUE(self.keyUp(CoreKey::Left).commandConsumed);
-    EXPECT_TRUE(self.keyUp(CoreKey::Up).commandConsumed);
-    self.press(CoreKey::Left);
+    EXPECT_TRUE(self.keyUp(Key::Left).commandConsumed);
+    EXPECT_TRUE(self.keyUp(Key::Up).commandConsumed);
+    self.press(Key::Left);
     const Expected<ControlAction> actionResult4 = self.take();
     ASSERT_TRUE(actionResult4.has_value());
     EXPECT_EQ(actionResult4.value().kind, ControlActionKind::Left);
@@ -949,15 +672,15 @@ void VerifyHorizontalNavigationFixture_EnablingCapabilityCannotAdoptAnAlreadyHel
     self.m_targets[0u].horizontalNavigation = false;
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.m_targets[0u].horizontalNavigation = true;
     ASSERT_TRUE(self.publish());
-    EXPECT_TRUE(self.keyDown(CoreKey::Right, true).commandConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Right).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Right).commandConsumed);
-    self.press(CoreKey::Right);
+    EXPECT_TRUE(self.keyUp(Key::Right).commandConsumed);
+    self.press(Key::Right);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Right);
@@ -966,15 +689,15 @@ void VerifyHorizontalNavigationFixture_EnablingCapabilityCannotAdoptAnAlreadyHel
 void VerifyHorizontalNavigationFixture_FocusTransferCannotRedirectHeldHorizontalKeyToAnotherHost(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right).commandConsumed);
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().id.target, self.m_targets[0u].id);
     self.focusTarget(1u);
-    EXPECT_TRUE(self.keyDown(CoreKey::Right, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Right).commandConsumed);
-    self.press(CoreKey::Right);
+    EXPECT_TRUE(self.keyUp(Key::Right).commandConsumed);
+    self.press(Key::Right);
     const Expected<ControlAction> actionResult2 = self.take(1u);
     ASSERT_TRUE(actionResult2.has_value());
     EXPECT_EQ(actionResult2.value().kind, ControlActionKind::Right);
@@ -985,22 +708,22 @@ void VerifyHorizontalNavigationFixture_FocusTransferCannotRedirectHeldHorizontal
 void VerifyHorizontalNavigationFixture_RestoringOriginalControlTokenCannotReviveRetiredHorizontalHold(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Left).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left).commandConsumed);
     const ControlToken original = self.m_targets[0u].control;
     ++self.m_targets[0u].control.contentRevision;
     ASSERT_TRUE(self.publish());
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.m_targets[0u].control = original;
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Left).commandConsumed);
-    self.press(CoreKey::Left);
+    EXPECT_TRUE(self.keyUp(Key::Left).commandConsumed);
+    self.press(Key::Left);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Left);
@@ -1010,22 +733,22 @@ void VerifyHorizontalNavigationFixture_RestoringOriginalControlTokenCannotRevive
 void VerifyHorizontalNavigationFixture_RestoringOriginalDeclarationCannotReviveRetiredHorizontalHold(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right).commandConsumed);
     const u64 original = self.m_targets[0u].declarationGeneration;
     ++self.m_targets[0u].declarationGeneration;
     ASSERT_TRUE(self.publish());
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.m_targets[0u].declarationGeneration = original;
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Right).commandConsumed);
-    self.press(CoreKey::Right);
+    EXPECT_TRUE(self.keyUp(Key::Right).commandConsumed);
+    self.press(Key::Right);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Right);
@@ -1038,7 +761,7 @@ void VerifyHorizontalNavigationFixture_DisabledClippedOrOmittedHostCannotResumeI
         self.m_targets[0u] = original;
         ASSERT_TRUE(self.publish(1u));
         self.focusTarget();
-        EXPECT_TRUE(self.keyDown(CoreKey::Left).commandConsumed);
+        EXPECT_TRUE(self.keyDown(Key::Left).commandConsumed);
         ASSERT_EQ(self.m_router.controlActions().size(), 1u);
         usize publishCount = 1u;
         if(variant == 0u)
@@ -1053,10 +776,10 @@ void VerifyHorizontalNavigationFixture_DisabledClippedOrOmittedHostCannotResumeI
         self.m_targets[0u] = original;
         ASSERT_TRUE(self.publish(1u));
         self.focusTarget();
-        EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
+        EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
         EXPECT_TRUE(self.m_router.controlActions().empty());
-        EXPECT_TRUE(self.keyUp(CoreKey::Left).commandConsumed);
-        self.press(CoreKey::Left);
+        EXPECT_TRUE(self.keyUp(Key::Left).commandConsumed);
+        self.press(Key::Left);
         const Expected<ControlAction> actionResult = self.take();
         ASSERT_TRUE(actionResult.has_value());
         EXPECT_EQ(actionResult.value().kind, ControlActionKind::Left);
@@ -1064,12 +787,12 @@ void VerifyHorizontalNavigationFixture_DisabledClippedOrOmittedHostCannotResumeI
 }
 
 void VerifyHorizontalNavigationFixture_ClosingAndReopeningPopupRequiresFreshHorizontalPress(mut HorizontalNavigationFixture self){
-    PopupScope popup = MakeUiHorizontalNavPopup(self.m_targets[0u]);
+    PopupScope popup = MakeHorizontalNavigationPopup(self.m_targets[0u], 7u);
     self.m_targets[0u].popup = popup.token;
     self.m_targets[0u].layer = popup.layer;
     ASSERT_TRUE(self.publish(1u, MakeUiSinglePopupScopeArray(popup)));
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right).commandConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     self.m_router.closePopup(popup.token);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -1080,10 +803,10 @@ void VerifyHorizontalNavigationFixture_ClosingAndReopeningPopupRequiresFreshHori
     self.m_targets[0u].popup = popup.token;
     ASSERT_TRUE(self.publish(1u, MakeUiSinglePopupScopeArray(popup)));
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Right).commandConsumed);
-    self.press(CoreKey::Right);
+    EXPECT_TRUE(self.keyUp(Key::Right).commandConsumed);
+    self.press(Key::Right);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Right);
@@ -1093,23 +816,23 @@ void VerifyHorizontalNavigationFixture_ClosingAndReopeningPopupRequiresFreshHori
 void VerifyHorizontalNavigationFixture_PopupMaskCannotRedirectOrReviveLowerHostHorizontalHold(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Left).commandConsumed);
-    const PopupScope popup = MakeUiHorizontalNavPopup(self.m_targets[1u]);
+    EXPECT_TRUE(self.keyDown(Key::Left).commandConsumed);
+    const PopupScope popup = MakeHorizontalNavigationPopup(self.m_targets[1u], 7u);
     self.m_targets[1u].popup = popup.token;
     self.m_targets[1u].layer = popup.layer;
     ASSERT_TRUE(self.publish(2u, MakeUiSinglePopupScopeArray(popup)));
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.focusTarget(1u);
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.m_targets[1u].popup = PopupToken();
     self.m_targets[1u].layer = 0u;
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Left).commandConsumed);
-    self.press(CoreKey::Left);
+    EXPECT_TRUE(self.keyUp(Key::Left).commandConsumed);
+    self.press(Key::Left);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Left);
@@ -1125,7 +848,7 @@ void VerifyHorizontalNavigationFixture_PreservedTextFenceClearsHorizontalCapabil
     primaryDown.position.x = 10.0f;
     primaryDown.position.y = 10.0f;
     EXPECT_TRUE(self.send(primaryDown).pointerConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Left).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left).commandConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     self.m_router.fenceControl(self.m_targets[0u].id, self.m_targets[0u].declarationGeneration, self.m_targets[0u].control);
     EXPECT_TRUE(self.m_router.targets()[0u].horizontalNavigation);
@@ -1148,10 +871,10 @@ void VerifyHorizontalNavigationFixture_PreservedTextFenceClearsHorizontalCapabil
     ASSERT_TRUE(self.publish(1u));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Left).commandConsumed);
-    self.press(CoreKey::Right);
+    EXPECT_TRUE(self.keyUp(Key::Left).commandConsumed);
+    self.press(Key::Right);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Right);
@@ -1168,19 +891,19 @@ void VerifyHorizontalNavigationFixture_PreservedTextFenceClearsHorizontalCapabil
 void VerifyHorizontalNavigationFixture_HeldHorizontalNavigationRepeatsWhileSubmitIsOneShotInSequence(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Left).commandConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Enter).commandConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Enter, true).commandConsumed);
-    EXPECT_TRUE(self.keyUp(CoreKey::Enter).commandConsumed);
-    EXPECT_TRUE(self.keyUp(CoreKey::Left).commandConsumed);
-    Array<ControlActionKindEnum, 3u> kinds = Array<ControlActionKindEnum, 3u>();
+    EXPECT_TRUE(self.keyDown(Key::Left).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Enter).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Enter, true).commandConsumed);
+    EXPECT_TRUE(self.keyUp(Key::Enter).commandConsumed);
+    EXPECT_TRUE(self.keyUp(Key::Left).commandConsumed);
+    Array<ControlActionKind, 3u> kinds = Array<ControlActionKind, 3u>();
     kinds[0u] = ControlActionKind::Left;
     kinds[1u] = ControlActionKind::Left;
     kinds[2u] = ControlActionKind::Submit;
     ASSERT_EQ(self.m_router.controlActions().size(), kinds.size());
     u64 previous = 0u;
-    for(in ControlActionKindEnum kind : kinds){
+    for(in ControlActionKind kind : kinds){
         const Expected<ControlAction> actionResult = self.take();
         ASSERT_TRUE(actionResult.has_value());
         EXPECT_EQ(actionResult.value().kind, kind);
@@ -1203,11 +926,11 @@ void VerifyHorizontalNavigationFixture_VerticalOnlyNavigableHostKeepsHorizontalK
     self.m_targets[0u] = host;
     ASSERT_TRUE(self.publish(1u));
     self.focusTarget();
-    self.press(CoreKey::Left);
-    self.press(CoreKey::Right);
+    self.press(Key::Left);
+    self.press(Key::Right);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    self.press(CoreKey::Up);
-    self.press(CoreKey::Down);
+    self.press(Key::Up);
+    self.press(Key::Down);
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().kind, ControlActionKind::Up);
@@ -1221,18 +944,18 @@ void VerifyHorizontalNavigationFixture_CapabilityUsesAcceptedCopiedTargetsUntilS
     ASSERT_TRUE(self.publish());
     self.focusTarget();
     self.m_targets[0u].horizontalNavigation = false;
-    self.press(CoreKey::Left);
+    self.press(Key::Left);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     EXPECT_TRUE(self.m_router.targets()[0u].horizontalNavigation);
     const u64 sequence = self.m_router.controlActions()[0u].id.sequence;
     ASSERT_TRUE(self.publish());
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
-    self.press(CoreKey::Right);
+    self.press(Key::Right);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.m_targets[0u].horizontalNavigation = true;
     ASSERT_TRUE(self.publish());
-    self.press(CoreKey::Right);
+    self.press(Key::Right);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Right);
@@ -1245,22 +968,22 @@ void VerifyHorizontalNavigationFixture_DelegatedEditorKeepsCaretKeysLocalToAvoid
     ASSERT_TRUE(self.publish(3u));
     self.focusTarget(2u);
     Array<CoreKeyEnum, 6u> localKeys = Array<CoreKeyEnum, 6u>();
-    localKeys[0u] = CoreKey::Left;
-    localKeys[1u] = CoreKey::Right;
-    localKeys[2u] = CoreKey::Home;
-    localKeys[3u] = CoreKey::End;
-    localKeys[4u] = CoreKey::Space;
-    localKeys[5u] = CoreKey::Backspace;
+    localKeys[0u] = Key::Left;
+    localKeys[1u] = Key::Right;
+    localKeys[2u] = Key::Home;
+    localKeys[3u] = Key::End;
+    localKeys[4u] = Key::Space;
+    localKeys[5u] = Key::Backspace;
     for(in CoreKeyEnum key : localKeys){
         self.press(key);
         EXPECT_TRUE(self.m_router.controlActions().empty());
     }
-    EXPECT_TRUE(self.keyDown(CoreKey::Left).commandConsumed);
-    EXPECT_TRUE(self.keyDown(CoreKey::Left, true).commandConsumed);
-    EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Left));
+    EXPECT_TRUE(self.keyDown(Key::Left).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Left, true).commandConsumed);
+    EXPECT_TRUE(self.m_router.ownsKey(Key::Left));
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.keyUp(CoreKey::Left).commandConsumed);
-    self.press(CoreKey::Down);
+    EXPECT_TRUE(self.keyUp(Key::Left).commandConsumed);
+    self.press(Key::Down);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Down);
@@ -1273,7 +996,7 @@ void VerifyHorizontalNavigationFixture_DelegatedEditorKeepsCaretKeysLocalToAvoid
 void VerifyHorizontalNavigationFixture_InvalidHorizontalHostPublicationPreservesAcceptedFocusAndHeldAction(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    EXPECT_TRUE(self.keyDown(CoreKey::Right).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right).commandConsumed);
     const HitTarget accepted = self.m_targets[0u];
     for(usize variant = 0u; variant < 4u; ++variant){
         self.m_targets[0u] = accepted;
@@ -1292,25 +1015,25 @@ void VerifyHorizontalNavigationFixture_InvalidHorizontalHostPublicationPreserves
         EXPECT_EQ(self.m_router.focus(), accepted.id);
         ASSERT_EQ(self.m_router.controlActions().size(), 1u);
         EXPECT_TRUE(self.m_router.targets()[0u].horizontalNavigation);
-        EXPECT_TRUE(self.m_router.ownsKey(CoreKey::Right));
+        EXPECT_TRUE(self.m_router.ownsKey(Key::Right));
     }
     self.m_targets[0u] = accepted;
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().kind, ControlActionKind::Right);
     EXPECT_EQ(actionResult1.value().control, accepted.control);
-    EXPECT_TRUE(self.keyDown(CoreKey::Right, true).commandConsumed);
+    EXPECT_TRUE(self.keyDown(Key::Right, true).commandConsumed);
     const Expected<ControlAction> actionResult2 = self.take();
     ASSERT_TRUE(actionResult2.has_value());
     EXPECT_EQ(actionResult2.value().kind, ControlActionKind::Right);
-    EXPECT_TRUE(self.keyUp(CoreKey::Right).commandConsumed);
+    EXPECT_TRUE(self.keyUp(Key::Right).commandConsumed);
 }
 
 void VerifyHorizontalNavigationFixture_OwnedPartsRejectHorizontalCapabilityWithoutReplacingAcceptedActions(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
     self.focusTarget();
-    self.press(CoreKey::Right);
-    self.m_targets[2u] = MakeUiHorizontalNavPart(self.m_targets[0u]);
+    self.press(Key::Right);
+    self.m_targets[2u] = MakeHorizontalNavigationPart(self.m_targets[0u]);
     self.m_targets[2u].horizontalNavigation = true;
     EXPECT_FALSE(self.publish(3u));
     EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
@@ -1330,14 +1053,14 @@ void VerifyHorizontalNavigationFixture_OwnedPartsRejectHorizontalCapabilityWitho
 void VerifyUiImageBuilderTests_CallerMutationCannotChangeDeferredImageNameSizeOrStraightTint(mut UiImageBuilderTests self){
     ASSERT_TRUE(self.panel(1u));
     Name name = s_UiImageBuilderSpriteRegionName;
-    ImageOptions options = MakeUiImageBuilderFixedOptions(80.0f, 32.0f);
+    ImageOptions options = MakeFixedImageFixtureOptions(80.0f, 32.0f);
     options.tint = Color(0.8f, 1.0f, 0.6f, 0.5f);
     ASSERT_TRUE(self.m_builder.image("image", name, options));
     name = s_UiFixtureNameWhite;
-    options = MakeUiImageBuilderFixedOptions(20.0f, 20.0f);
+    options = MakeFixedImageFixtureOptions(20.0f, 20.0f);
     ASSERT_TRUE(self.finishPanel());
     const DrawSnapshot snapshot = self.m_paint.freeze();
-    const Expected<SkinPaintSample> sprite = self.sampleSkinPaint(snapshot, s_UiImageBuilderSpriteRegionName);
+    const Expected<UiFixtureSkinPaintSample> sprite = self.sampleSkinPaint(snapshot, s_UiImageBuilderSpriteRegionName);
     ASSERT_TRUE(sprite.has_value());
     EXPECT_FLOAT_EQ(sprite.value().bounds.width, 80.0f);
     EXPECT_FLOAT_EQ(sprite.value().bounds.height, 32.0f);
@@ -1349,13 +1072,13 @@ void VerifyUiImageBuilderTests_CallerMutationCannotChangeDeferredImageNameSizeOr
 
 void VerifyUiImageBuilderTests_ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack(mut UiImageBuilderTests self){
     ASSERT_TRUE(self.panel(1u));
-    ASSERT_TRUE(self.m_builder.image("image", s_UiImageBuilderSpriteRegionName, MakeUiImageBuilderFixedOptions()));
+    ASSERT_TRUE(self.m_builder.image("image", s_UiImageBuilderSpriteRegionName, MakeFixedImageFixtureOptions(96.0f, 40.0f)));
     self.m_paint.pushClip(Rect(20.0f, 0.0f, 20.0f, 600.0f));
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_paint.popClip());
     self.m_paint.fillRect(Rect(60.0f, 80.0f, 8.0f, 8.0f), Color(1.0f, 0.0f, 0.0f, 1.0f));
     const DrawSnapshot snapshot = self.m_paint.freeze();
-    const Expected<SkinPaintSample> sprite = self.sampleSkinPaint(snapshot, s_UiImageBuilderSpriteRegionName);
+    const Expected<UiFixtureSkinPaintSample> sprite = self.sampleSkinPaint(snapshot, s_UiImageBuilderSpriteRegionName);
     ASSERT_TRUE(sprite.has_value());
     EXPECT_FLOAT_EQ(sprite.value().bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(sprite.value().bounds.width, 20.0f);
@@ -1373,10 +1096,10 @@ void VerifyUiImageBuilderTests_ExternalClipUpdatesSpriteUvsAndRestoresThePaintSt
 
 void VerifyUiImageBuilderTests_FullyTransparentAndEmptyImagesRemainValidWithoutQuads(mut UiImageBuilderTests self){
     ASSERT_TRUE(self.panel(1u));
-    ImageOptions transparent = MakeUiImageBuilderFixedOptions();
+    ImageOptions transparent = MakeFixedImageFixtureOptions(96.0f, 40.0f);
     transparent.tint.a = 0.0f;
     ASSERT_TRUE(self.m_builder.image("transparent", s_UiImageBuilderSpriteRegionName, transparent));
-    ASSERT_TRUE(self.m_builder.image("empty", s_UiImageBuilderSpriteRegionName, MakeUiImageBuilderFixedOptions(0.0f, 20.0f)));
+    ASSERT_TRUE(self.m_builder.image("empty", s_UiImageBuilderSpriteRegionName, MakeFixedImageFixtureOptions(0.0f, 20.0f)));
     ASSERT_TRUE(self.finishPanel());
     const DrawSnapshot snapshot = self.m_paint.freeze();
     EXPECT_FALSE(self.sampleSkinPaint(snapshot, s_UiImageBuilderSpriteRegionName).has_value());
@@ -1473,24 +1196,24 @@ void VerifyUiImageLayoutTests_InvalidLayoutSizesTintsAndDensityRejectMeasurement
         ImageOptions options = ImageOptions();
         f32 density = 2.0f;
         switch(field){
-            case 0u: options.width.policy = MakeUiInvalidLayoutSizePolicy(); break;
-            case 1u: options.height.policy = MakeUiInvalidLayoutSizePolicy(); break;
+            case 0u: options.width.policy = cast<LayoutSizePolicy>(3u); break;
+            case 1u: options.height.policy = cast<LayoutSizePolicy>(3u); break;
             case 2u: options.width.value = -1.0f; break;
             case 3u:
                 options.height.policy = LayoutSizePolicy::Stretch;
                 options.height.value = 0.0f;
                 break;
-            case 4u: options.width.value = UiHorizImageQuietNaNF32(); break;
-            case 5u: options.height.value = UiHorizImageInfinityF32(); break;
+            case 4u: options.width.value = bit_cast<f32>(0x7fc00000u); break;
+            case 5u: options.height.value = bit_cast<f32>(0x7f800000u); break;
             case 6u: options.tint.r = -1.0f; break;
-            case 7u: options.tint.g = UiHorizImageInfinityF32(); break;
-            case 8u: options.tint.b = UiHorizImageQuietNaNF32(); break;
+            case 7u: options.tint.g = bit_cast<f32>(0x7f800000u); break;
+            case 8u: options.tint.b = bit_cast<f32>(0x7fc00000u); break;
             case 9u: options.tint.a = 1.01f; break;
             case 10u: options.tint.a = -0.01f; break;
             case 11u: density = 0.0f; break;
             case 12u: density = -1.0f; break;
-            case 13u: density = UiHorizImageInfinityF32(); break;
-            default: density = UiHorizImageQuietNaNF32(); break;
+            case 13u: density = bit_cast<f32>(0x7f800000u); break;
+            default: density = bit_cast<f32>(0x7fc00000u); break;
         }
         EXPECT_FALSE(MeasureImage(options, region, density).has_value());
     }
@@ -1504,9 +1227,9 @@ void VerifyUiImageLayoutTests_InvalidRegionExtentMinimumsAndSliceMetadataRejectM
             case 0u: region.rectangle.width = 0u; break;
             case 1u: region.rectangle.height = 0u; break;
             case 2u: region.minimumWidth = -1.0f; break;
-            case 3u: region.minimumHeight = UiHorizImageQuietNaNF32(); break;
-            case 4u: region.minimumWidth = UiHorizImageInfinityF32(); break;
-            case 5u: region.drawMode = MakeUiInvalidSkinDrawMode(); break;
+            case 3u: region.minimumHeight = bit_cast<f32>(0x7fc00000u); break;
+            case 4u: region.minimumWidth = bit_cast<f32>(0x7f800000u); break;
+            case 5u: region.drawMode = cast<UiSkinDrawMode>(2u); break;
             case 6u: region.sliceInsets.left = 1u; break;
             default:
                 region.drawMode = UiSkinDrawMode::NineSlice;
@@ -1531,8 +1254,8 @@ void VerifyUiImageLayoutTests_UnrepresentableNaturalExtentRejectsMeasurement(){
 void VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlacement(){
     const Rect normal = Rect(10.0f, 20.0f, 200.0f, 100.0f);
     Array<Rect, 7u> invalidList = Array<Rect, 7u>();
-    invalidList[0u] = Rect(UiHorizImageQuietNaNF32(), 0.0f, 1.0f, 1.0f);
-    invalidList[1u] = Rect(0.0f, UiHorizImageInfinityF32(), 1.0f, 1.0f);
+    invalidList[0u] = Rect(bit_cast<f32>(0x7fc00000u), 0.0f, 1.0f, 1.0f);
+    invalidList[1u] = Rect(0.0f, bit_cast<f32>(0x7f800000u), 1.0f, 1.0f);
     invalidList[2u] = Rect(0.0f, 0.0f, -1.0f, 1.0f);
     invalidList[3u] = Rect(0.0f, 0.0f, 1.0f, -1.0f);
     invalidList[4u] = Rect(f32.max, 0.0f, f32.max, 1.0f);
@@ -1549,49 +1272,49 @@ void VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlace
 
 
 void VerifyImageLoaderTests_RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone(mut ImageLoaderTests self){
-    const Expected<SharedImageSource> imageResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> imageResult = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(image));
+    ASSERT_TRUE(image.valid());
     EXPECT_TRUE(self.payloadDisjointFromSource(image));
     self.zeroAndClearBinary();
     UiImageLoaderExpectPayload(image, 3u);
-    EXPECT_TRUE(UiReadImageTexture(image).validatePayload());
+    EXPECT_TRUE(ImageSourceTexture(image).validatePayload());
 }
 
 void VerifyImageLoaderTests_EmptyReferenceFailsBeforeReadingTheBinarySource(mut ImageLoaderTests self){
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, AssetRef<Texture>()).has_value());
-    EXPECT_EQ(self.m_source.m_readCount, 0u);
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), AssetRef<Texture>()).has_value());
+    EXPECT_EQ(self.m_source.m_readCount.value(), 0u);
     EXPECT_TRUE(self.sawError("texture asset reference is empty"));
 }
 
 void VerifyImageLoaderTests_MissingPathAndFailedBinaryReadReturnNoSource(mut ImageLoaderTests self){
-    const AssetRef<Texture> missing = MakeUiMissingTextureAssetRef();
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, missing).has_value());
-    EXPECT_EQ(self.m_source.m_readCount, 1u);
+    const AssetRef<Texture> missing = AssetRef<Texture>("tests/ui/image_loader/missing");
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), missing).has_value());
+    EXPECT_EQ(self.m_source.m_readCount.value(), 1u);
     self.m_source.m_available = false;
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
-    EXPECT_EQ(self.m_source.m_readCount, 2u);
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), self.m_identity).has_value());
+    EXPECT_EQ(self.m_source.m_readCount.value(), 2u);
     EXPECT_TRUE(self.sawError("failed to read binary"));
 }
 
 void VerifyImageLoaderTests_MissingTextureCodecFailsAfterReadingAValidBinary(mut ImageLoaderTests self){
     ASSERT_TRUE(self.unregisterTextureCodec());
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
-    EXPECT_EQ(self.m_source.m_readCount, 1u);
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), self.m_identity).has_value());
+    EXPECT_EQ(self.m_source.m_readCount.value(), 1u);
     EXPECT_TRUE(self.sawError("failed to deserialize"));
 }
 
 void VerifyImageLoaderTests_RealTextureCodecRejectsWrongMagicTruncationAndTrailingBytes(mut ImageLoaderTests self){
     self.flipFirstBinaryByte();
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), self.m_identity).has_value());
     self.rebuildBinary(3u);
     self.m_source.m_binary.pop_back();
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), self.m_identity).has_value());
     self.rebuildBinary(3u);
     self.m_source.m_binary.push_back(0u);
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
-    EXPECT_EQ(self.m_source.m_readCount, 3u);
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), self.m_identity).has_value());
+    EXPECT_EQ(self.m_source.m_readCount.value(), 3u);
     EXPECT_TRUE(self.sawError("invalid texture asset format"));
     EXPECT_TRUE(self.sawError("texture payload is truncated"));
     EXPECT_TRUE(self.sawError("trailing bytes detected"));
@@ -1599,65 +1322,65 @@ void VerifyImageLoaderTests_RealTextureCodecRejectsWrongMagicTruncationAndTraili
 
 void VerifyImageLoaderTests_CodecReturningARealDifferentAssetTypeIsRejectedByTheTypedManager(mut ImageLoaderTests self){
     ASSERT_TRUE(self.registerMisdirectedCodec(true));
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
-    EXPECT_EQ(self.m_source.m_readCount, 1u);
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), self.m_identity).has_value());
+    EXPECT_EQ(self.m_source.m_readCount.value(), 1u);
     EXPECT_TRUE(self.sawError("is not a texture"));
 }
 
 void VerifyImageLoaderTests_CodecReturningAValidTextureAtAnotherIdentityIsRejected(mut ImageLoaderTests self){
     ASSERT_TRUE(self.registerMisdirectedCodec(false));
-    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
-    EXPECT_EQ(self.m_source.m_readCount, 1u);
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.assets(), self.m_identity).has_value());
+    EXPECT_EQ(self.m_source.m_readCount.value(), 1u);
     EXPECT_TRUE(self.sawError("loaded texture identity does not match"));
 }
 
 void VerifyImageLoaderTests_RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersions(mut ImageLoaderTests self){
-    const Expected<SharedImageSource> firstResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> firstResult = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     ASSERT_TRUE(firstResult.has_value());
     const SharedImageSource first = firstResult.value();
-    const Expected<SharedImageSource> secondResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> secondResult = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     ASSERT_TRUE(secondResult.has_value());
     const SharedImageSource second = secondResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(first));
-    ASSERT_TRUE(UiImageHandlePresent(second));
-    EXPECT_EQ(UiReadImageIdentity(first), UiReadImageIdentity(second));
-    EXPECT_FALSE(UiSameImageHandlePtr(first, second));
-    EXPECT_NE(UiReadImageGeneration(first), UiReadImageGeneration(second));
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    EXPECT_EQ(ImageSourceIdentity(first), ImageSourceIdentity(second));
+    EXPECT_FALSE((first == second));
+    EXPECT_NE(ImageSourceGeneration(first), ImageSourceGeneration(second));
     EXPECT_TRUE(UiDistinctLoadedTextureStorage(first, second));
     UiImageLoaderExpectPayload(first, 3u);
     UiImageLoaderExpectPayload(second, 3u);
-    EXPECT_EQ(self.m_source.m_readCount, 2u);
+    EXPECT_EQ(self.m_source.m_readCount.value(), 2u);
 }
 
 void VerifyImageLoaderTests_FailedReplacementPreservesRetainedSourceAndLaterSuccessPublishesAFreshVersion(mut ImageLoaderTests self){
-    const Expected<SharedImageSource> currentResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> currentResult = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     ASSERT_TRUE(currentResult.has_value());
     SharedImageSource current = currentResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(current));
+    ASSERT_TRUE(current.valid());
     const SharedImageSource retained = current;
-    const u64 oldGeneration = UiReadImageGeneration(retained);
+    const u64 oldGeneration = ImageSourceGeneration(retained);
 
     self.m_source.m_binary.pop_back();
-    Expected<SharedImageSource> replacement = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
+    Expected<SharedImageSource> replacement = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     EXPECT_FALSE(replacement.has_value());
     if(replacement.has_value())
         current = replacement.value();
-    EXPECT_TRUE(UiSameImageHandlePtr(current, retained));
-    EXPECT_EQ(UiReadImageGeneration(current), oldGeneration);
+    EXPECT_TRUE((current == retained));
+    EXPECT_EQ(ImageSourceGeneration(current), oldGeneration);
     UiImageLoaderExpectPayload(current, 3u);
 
     self.rebuildBinary(67u);
-    replacement = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
+    replacement = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     ASSERT_TRUE(replacement.has_value());
     current = replacement.value();
-    EXPECT_EQ(UiReadImageIdentity(current), UiReadImageIdentity(retained));
-    EXPECT_FALSE(UiSameImageHandlePtr(current, retained));
-    EXPECT_NE(UiReadImageGeneration(current), oldGeneration);
-    EXPECT_EQ(UiReadImageGeneration(retained), oldGeneration);
+    EXPECT_EQ(ImageSourceIdentity(current), ImageSourceIdentity(retained));
+    EXPECT_FALSE((current == retained));
+    EXPECT_NE(ImageSourceGeneration(current), oldGeneration);
+    EXPECT_EQ(ImageSourceGeneration(retained), oldGeneration);
     self.m_source.m_binary.clear();
     UiImageLoaderExpectPayload(current, 67u);
     UiImageLoaderExpectPayload(retained, 3u);
-    EXPECT_EQ(self.m_source.m_readCount, 3u);
+    EXPECT_EQ(self.m_source.m_readCount.value(), 3u);
 }
 
 
@@ -1665,14 +1388,15 @@ void VerifyImageLoaderTests_FailedReplacementPreservesRetainedSourceAndLaterSucc
 
 
 void VerifyUiImageSourceTests_NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds(mut UiImageSourceTests self){
-    Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImagePaint);
-    ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+    TestValueSlot<Texture> textureSlot;
+    mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImagePaint);
+    ASSERT_TRUE(self.prepareDefault(texture));
     ASSERT_TRUE(texture.validatePayload());
     const Expected<SharedImageSource> sourceResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(sourceResult.has_value());
     const SharedImageSource source = sourceResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(source));
-    const Span<TextureMipLevel> mips = UiReadImageTexture(source).mipLevels();
+    ASSERT_TRUE(source.valid());
+    const Span<TextureMipLevel> mips = ImageSourceTexture(source).mipLevels();
     ASSERT_EQ(mips.size(), 4u);
     EXPECT_EQ(mips[0u].width, 9u);
     EXPECT_EQ(mips[0u].height, 5u);
@@ -1684,129 +1408,137 @@ void VerifyUiImageSourceTests_NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds(m
     EXPECT_EQ(mips[1u].offsetBytes, 96u);
     EXPECT_EQ(mips[2u].offsetBytes, 112u);
     EXPECT_EQ(mips[3u].offsetBytes, 128u);
-    EXPECT_EQ(UiReadImageTexture(source).payloadBytes().size(), 144u);
+    EXPECT_EQ(ImageSourceTexture(source).payloadBytes().size(), 144u);
 }
 
 void VerifyUiImageSourceTests_RetainedSourceOutlivesCallerReplacementTextureAndItsArena(mut UiImageSourceTests self){
     SharedImageSource source = SharedImageSource();
     {
-        UiImageSourceCallerArena callerArena = UiImageSourceCallerArena(s_UiCaseTestsUiImageSourceTemporary);
-        Texture texture = Texture(callerArena.arena, s_UiCaseTestsUiImageTemporary);
-        ASSERT_TRUE(self.prepareDefault(callerArena.arena, texture));
+        HeapStorage callerArena = HeapStorage(s_UiCaseTestsUiImageSourceTemporary);
+        TestValueSlot<Texture> textureSlot;
+        mut Texture texture = textureSlot.constructIn(callerArena, s_UiCaseTestsUiImageTemporary);
+        ASSERT_TRUE(self.prepareDefault(texture));
         const Expected<SharedImageSource> sourceReplacement = MakeImageSource(self.m_pool, texture);
         ASSERT_TRUE(sourceReplacement.has_value());
         source = sourceReplacement.value();
-        ASSERT_TRUE(UiImageHandlePresent(source));
+        ASSERT_TRUE(source.valid());
         UiImageSourceExpectCopy(texture, source);
         UiImageSourceTextureDescription replacement = UiImageSourceTextureDescription();
         replacement.width = 1u;
         replacement.height = 1u;
         replacement.alphaMode = TextureAlphaMode::Opaque;
         replacement.seed = 91u;
-        ASSERT_TRUE(self.prepareCustom(callerArena.arena, texture, replacement));
+        ASSERT_TRUE(self.prepareCustom(texture, replacement));
         EXPECT_EQ(texture.payloadBytes().size(), 16u);
-        EXPECT_EQ(UiReadImageTexture(source).payloadBytes().size(), 144u);
-        EXPECT_EQ(UiReadImageTexture(source).width(), 9u);
+        EXPECT_EQ(ImageSourceTexture(source).payloadBytes().size(), 144u);
+        EXPECT_EQ(ImageSourceTexture(source).width(), 9u);
     }
-    const auto sourceIdentity = UiReadImageIdentity(source);
+    const AssetRef<Texture> sourceIdentity = ImageSourceIdentity(source);
     EXPECT_EQ(sourceIdentity.name(), s_UiImageSourceTempExpectedName);
-    EXPECT_EQ(UiReadImageTexture(source).height(), 5u);
-    EXPECT_EQ(UiReadImageTexture(source).alphaMode(), TextureAlphaMode::EmbeddedLdr);
-    ASSERT_EQ(UiReadImageTexture(source).payloadBytes().size(), 144u);
-    for(usize index = 0u; index < UiReadImageTexture(source).payloadBytes().size(); ++index)
-        EXPECT_EQ(UiReadImageTexture(source).payloadBytes()[index], cast<u8>(37u + index * 17u));
-    EXPECT_TRUE(UiReadImageTexture(source).validatePayload());
+    EXPECT_EQ(ImageSourceTexture(source).height(), 5u);
+    EXPECT_EQ(ImageSourceTexture(source).alphaMode(), TextureAlphaMode::EmbeddedLdr);
+    ASSERT_EQ(ImageSourceTexture(source).payloadBytes().size(), 144u);
+    for(usize index = 0u; index < ImageSourceTexture(source).payloadBytes().size(); ++index)
+        EXPECT_EQ(ImageSourceTexture(source).payloadBytes()[index], cast<u8>(37u + index * 17u));
+    EXPECT_TRUE(ImageSourceTexture(source).validatePayload());
 }
 
 void VerifyUiImageSourceTests_IdenticalLoadsAndSamePathReplacementReceiveFreshGenerations(mut UiImageSourceTests self){
-    Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageSharedPath);
-    ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+    TestValueSlot<Texture> textureSlot;
+    mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageSharedPath);
+    ASSERT_TRUE(self.prepareDefault(texture));
     const Expected<SharedImageSource> originalResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(originalResult.has_value());
     const SharedImageSource original = originalResult.value();
     const Expected<SharedImageSource> identicalResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(identicalResult.has_value());
     const SharedImageSource identical = identicalResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(original));
-    ASSERT_TRUE(UiImageHandlePresent(identical));
-    EXPECT_EQ(UiReadImageIdentity(original), UiReadImageIdentity(identical));
-    EXPECT_NE(UiReadImageGeneration(original), UiReadImageGeneration(identical));
+    ASSERT_TRUE(original.valid());
+    ASSERT_TRUE(identical.valid());
+    EXPECT_EQ(ImageSourceIdentity(original), ImageSourceIdentity(identical));
+    EXPECT_NE(ImageSourceGeneration(original), ImageSourceGeneration(identical));
     EXPECT_FALSE(UiSameTextureAddress(original, identical));
     UiImageSourceTextureDescription changed = UiImageSourceTextureDescription();
     changed.seed = 149u;
-    ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, changed));
+    ASSERT_TRUE(self.prepareCustom(texture, changed));
     const Expected<SharedImageSource> replacementResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(replacementResult.has_value());
     const SharedImageSource replacement = replacementResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(replacement));
-    EXPECT_EQ(UiReadImageIdentity(replacement), UiReadImageIdentity(original));
-    EXPECT_NE(UiReadImageGeneration(replacement), UiReadImageGeneration(original));
-    EXPECT_NE(UiReadImageGeneration(replacement), UiReadImageGeneration(identical));
-    EXPECT_EQ(UiReadImageTexture(replacement).payloadBytes()[0u], 149u);
-    EXPECT_EQ(UiReadImageTexture(original).payloadBytes()[0u], 37u);
-    EXPECT_EQ(UiReadImageTexture(identical).payloadBytes(), UiReadImageTexture(original).payloadBytes());
+    ASSERT_TRUE(replacement.valid());
+    EXPECT_EQ(ImageSourceIdentity(replacement), ImageSourceIdentity(original));
+    EXPECT_NE(ImageSourceGeneration(replacement), ImageSourceGeneration(original));
+    EXPECT_NE(ImageSourceGeneration(replacement), ImageSourceGeneration(identical));
+    EXPECT_EQ(ImageSourceTexture(replacement).payloadBytes()[0u], 149u);
+    EXPECT_EQ(ImageSourceTexture(original).payloadBytes()[0u], 37u);
+    EXPECT_EQ(ImageSourceTexture(identical).payloadBytes(), ImageSourceTexture(original).payloadBytes());
 }
 
 void VerifyUiImageSourceTests_CopiedSharedHandleRetainsTheSameImmutableVersionAfterOriginalRelease(mut UiImageSourceTests self){
-    Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageRetained);
-    ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+    TestValueSlot<Texture> textureSlot;
+    mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageRetained);
+    ASSERT_TRUE(self.prepareDefault(texture));
     const Expected<SharedImageSource> originalResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(originalResult.has_value());
     SharedImageSource original = originalResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(original));
-    const u64 generation = UiReadImageGeneration(original);
+    ASSERT_TRUE(original.valid());
+    const u64 generation = ImageSourceGeneration(original);
     const SharedImageSource retained = original;
-    EXPECT_TRUE(UiSameImageHandlePtr(retained, original));
-    UiResetImageHandle(original);
-    ASSERT_TRUE(UiImageHandlePresent(retained));
-    EXPECT_EQ(UiReadImageGeneration(retained), generation);
-    EXPECT_EQ(UiReadImageTexture(retained).payloadBytes()[143u], cast<u8>(37u + 143u * 17u));
-    EXPECT_TRUE(UiReadImageTexture(retained).validatePayload());
+    EXPECT_TRUE((retained == original));
+    original.reset();
+    ASSERT_TRUE(retained.valid());
+    EXPECT_EQ(ImageSourceGeneration(retained), generation);
+    EXPECT_EQ(ImageSourceTexture(retained).payloadBytes()[143u], cast<u8>(37u + 143u * 17u));
+    EXPECT_TRUE(ImageSourceTexture(retained).validatePayload());
 }
 
 void VerifyUiImageSourceTests_SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream(mut UiImageSourceTests self){
     UiImageSourceTextureDescription description = UiImageSourceTextureDescription();
     description.format = TexturePayloadFormat::UastcHdr4x4;
     description.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
-    Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageHdr);
-    ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, description));
+    TestValueSlot<Texture> textureSlot;
+    mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageHdr);
+    ASSERT_TRUE(self.prepareCustom(texture, description));
     ASSERT_TRUE(texture.validatePayload());
     const Expected<SharedImageSource> sourceResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(sourceResult.has_value());
-    ASSERT_TRUE(UiImageHandlePresent(sourceResult.value()));
+    ASSERT_TRUE(sourceResult.value().valid());
     self.expectSeparateHdrAlphaStream(texture, sourceResult.value());
 }
 
 void VerifyUiImageSourceTests_RejectsValidCubeAndVolumeAssetsRatherThanFlatteningTheirSlices(mut UiImageSourceTests self){
     Array<TextureDimensionEnum, 2u> dimensions = Array<TextureDimensionEnum, 2u>();
-    dimensions[0u] = AssetTextureDimension::TextureCube;
-    dimensions[1u] = AssetTextureDimension::Texture3D;
+    dimensions[0u] = TexturePayloadDimension::TextureCube;
+    dimensions[1u] = TexturePayloadDimension::Texture3D;
     for(in TextureDimensionEnum dimension : dimensions){
         UiImageSourceTextureDescription description = UiImageSourceTextureDescription();
         description.dimension = dimension;
-        if(dimension == AssetTextureDimension::TextureCube)
+        if(dimension == TexturePayloadDimension::TextureCube)
             description.height = 9u;
         else
             description.height = 5u;
-        if(dimension == AssetTextureDimension::Texture3D)
+        if(dimension == TexturePayloadDimension::Texture3D)
             description.depth = 4u;
         else
             description.depth = 1u;
-        Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageSpatial);
-        ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, description));
+        TestValueSlot<Texture> textureSlot;
+        mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageSpatial);
+        ASSERT_TRUE(self.prepareCustom(texture, description));
         ASSERT_TRUE(texture.validatePayload());
         EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
 }
 
 void VerifyUiImageSourceTests_RejectsMissingAssetIdentityAndEmptyTexturePayload(mut UiImageSourceTests self){
-    Texture unnamed = Texture(self.m_inputArena);
-    ASSERT_TRUE(self.prepareDefault(self.m_inputArena, unnamed));
+    TestValueSlot<Texture> unnamedSlot;
+    mut Texture unnamed = unnamedSlot.constructIn(self.m_inputArena);
+    ASSERT_TRUE(self.prepareDefault(unnamed));
     EXPECT_FALSE(MakeImageSource(self.m_pool, unnamed).has_value());
-    Texture empty = Texture(self.m_inputArena, s_UiFixtureNameTestsUiImageEmpty);
+    TestValueSlot<Texture> emptySlot;
+    mut Texture empty = emptySlot.constructIn(self.m_inputArena, s_UiFixtureNameTestsUiImageEmpty);
     EXPECT_FALSE(MakeImageSource(self.m_pool, empty).has_value());
-    Texture texture = Texture(self.m_inputArena, s_UiFixtureNameTestsUiImageNoBytes);
-    ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+    TestValueSlot<Texture> textureSlot;
+    mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiFixtureNameTestsUiImageNoBytes);
+    ASSERT_TRUE(self.prepareDefault(texture));
     self.installEmptyBytesKeepMips(texture);
     EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
 }
@@ -1814,8 +1546,9 @@ void VerifyUiImageSourceTests_RejectsMissingAssetIdentityAndEmptyTexturePayload(
 void VerifyUiImageSourceTests_RejectsInvalidShapeAndUnknownMetadataWithoutMintingUsableVersions(mut UiImageSourceTests self){
     for(u32 variant = 0u; variant < 7u; ++variant){
         const ScopedTestTrace trace = ScopedTestTrace(variant);
-        Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageInvalidMetadata);
-        ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+        TestValueSlot<Texture> textureSlot;
+        mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageInvalidMetadata);
+        ASSERT_TRUE(self.prepareDefault(texture));
         self.installShapeVariant(texture, variant);
         EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
@@ -1824,8 +1557,9 @@ void VerifyUiImageSourceTests_RejectsInvalidShapeAndUnknownMetadataWithoutMintin
 void VerifyUiImageSourceTests_RejectsIncompleteDiscontiguousOrMalformedMipMetadata(mut UiImageSourceTests self){
     for(u32 variant = 0u; variant < 7u; ++variant){
         const ScopedTestTrace trace = ScopedTestTrace(variant);
-        Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageInvalidMips);
-        ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+        TestValueSlot<Texture> textureSlot;
+        mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageInvalidMips);
+        ASSERT_TRUE(self.prepareDefault(texture));
         self.installMipVariant(texture, variant);
         EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
@@ -1834,38 +1568,40 @@ void VerifyUiImageSourceTests_RejectsIncompleteDiscontiguousOrMalformedMipMetada
 void VerifyUiImageSourceTests_RejectsPayloadLengthAndAlphaTransportMismatches(mut UiImageSourceTests self){
     for(u32 variant = 0u; variant < 6u; ++variant){
         const ScopedTestTrace trace = ScopedTestTrace(variant);
-        Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageInvalidTransport);
-        ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+        TestValueSlot<Texture> textureSlot;
+        mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageInvalidTransport);
+        ASSERT_TRUE(self.prepareDefault(texture));
         self.installTransportVariant(texture, variant);
         EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
 }
 
 void VerifyUiImageSourceTests_RejectedSamePathReplacementPreservesPreviouslyAcceptedOwnedVersion(mut UiImageSourceTests self){
-    Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageReplace);
-    ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
+    TestValueSlot<Texture> textureSlot;
+    mut Texture texture = textureSlot.constructIn(self.m_inputArena, s_UiCaseTestsUiImageReplace);
+    ASSERT_TRUE(self.prepareDefault(texture));
     const Expected<SharedImageSource> acceptedResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(acceptedResult.has_value());
     const SharedImageSource accepted = acceptedResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(accepted));
-    const u64 generation = UiReadImageGeneration(accepted);
+    ASSERT_TRUE(accepted.valid());
+    const u64 generation = ImageSourceGeneration(accepted);
     self.installTransportVariant(texture, 0u);
     EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
-    EXPECT_EQ(UiReadImageGeneration(accepted), generation);
-    const auto acceptedIdentity = UiReadImageIdentity(accepted);
+    EXPECT_EQ(ImageSourceGeneration(accepted), generation);
+    const AssetRef<Texture> acceptedIdentity = ImageSourceIdentity(accepted);
     EXPECT_EQ(acceptedIdentity.name(), texture.virtualPath());
-    ASSERT_EQ(UiReadImageTexture(accepted).payloadBytes().size(), 144u);
-    EXPECT_EQ(UiReadImageTexture(accepted).payloadBytes()[143u], cast<u8>(37u + 143u * 17u));
+    ASSERT_EQ(ImageSourceTexture(accepted).payloadBytes().size(), 144u);
+    EXPECT_EQ(ImageSourceTexture(accepted).payloadBytes()[143u], cast<u8>(37u + 143u * 17u));
     UiImageSourceTextureDescription replacement = UiImageSourceTextureDescription();
     replacement.seed = 73u;
-    ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, replacement));
+    ASSERT_TRUE(self.prepareCustom(texture, replacement));
     const Expected<SharedImageSource> nextResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(nextResult.has_value());
     const SharedImageSource next = nextResult.value();
-    ASSERT_TRUE(UiImageHandlePresent(next));
-    EXPECT_NE(UiReadImageGeneration(next), generation);
-    EXPECT_EQ(UiReadImageTexture(next).payloadBytes()[0u], 73u);
-    EXPECT_EQ(UiReadImageTexture(accepted).payloadBytes()[0u], 37u);
+    ASSERT_TRUE(next.valid());
+    EXPECT_NE(ImageSourceGeneration(next), generation);
+    EXPECT_EQ(ImageSourceTexture(next).payloadBytes()[0u], 73u);
+    EXPECT_EQ(ImageSourceTexture(accepted).payloadBytes()[0u], 37u);
 }
 
 

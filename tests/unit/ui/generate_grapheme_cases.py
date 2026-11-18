@@ -16,7 +16,7 @@ HEX_RADIX = 16
 CASES_PER_CHUNK = 500
 
 
-def write_cpp(path, text):
+def write_source(path, text):
     path.write_bytes(text.replace(LIT_CRLF, LIT_LF).replace(LIT_LF, LIT_CRLF).encode(LIT_UTF_8))
 
 
@@ -34,11 +34,28 @@ def generate_cases(data):
                 text.extend(chr(int(token, HEX_RADIX)).encode(LIT_UTF_8))
         encoded = "".join(f"\\x{value:02X}" for value in text)
         positions = ",".join(str(value) for value in boundaries)
-        cases.append(f'    {{ "{encoded}", "{positions}", {len(text)}u }},')
-    for index, start in enumerate(range(0, len(cases), CASES_PER_CHUNK)):
-        content = LIT_LF.join(cases[start:start + CASES_PER_CHUNK])
-        write_cpp(HERE / f"edit_grapheme_cases_{index}.inc", f"// limztudio@gmail.com\n{SEP}\n\n\n" f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see global/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
+        cases.append((encoded, positions, len(text)))
+    write_cases(cases)
     return len(cases)
+
+
+def write_cases(cases):
+    lines = ["// limztudio@gmail.com", SEP, "", "", "// Generated Unicode 17.0.0 GraphemeBreakTest cases; see global/unicode/LICENSE.txt."]
+    for group, start in enumerate(range(0, len(cases), CASES_PER_CHUNK)):
+        rows = cases[start:start + CASES_PER_CHUNK]
+        for name, column in [("Text", 0), ("Offsets", 1)]:
+            values = [f'    StringView("{row[0]}", {row[2]}u)' if column == 0 else f'    "{row[1]}"' for row in rows]
+            lines.append(f"const Array<StringView, {len(rows)}u> s_Grapheme{name}{group} = Array<StringView, {len(rows)}u>(")
+            lines.append(",\n".join(values))
+            lines.extend([");", ""])
+    for name in ("Text", "Offsets"):
+        lines.append(f"StringView GetUiGrapheme{name}(in usize index){{")
+        for group, start in enumerate(range(0, len(cases), CASES_PER_CHUNK)):
+            end = min(start + CASES_PER_CHUNK, len(cases))
+            lines.extend([f"    if(index < {end}u)", f"        return s_Grapheme{name}{group}[index - {start}u];"])
+        lines.extend(['    return "";', "}", ""])
+    lines.extend(["", SEP, ""])
+    write_source(HERE / "ui_grapheme_conformance_data.adhd", "\n".join(lines))
 
 
 def main():

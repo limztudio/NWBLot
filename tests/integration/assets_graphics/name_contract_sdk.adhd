@@ -1,0 +1,58 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_shader/asset.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::NamedAsset")]
+extern class NameProbeAsset;
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::ConcreteCodec")]
+extern class NameProbeCodec<T>;
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::NamedShader")]
+extern class NameProbeShader<Interface>;
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::ComparisonAsset")]
+extern class ComparisonAsset{
+    Name virtualPath()const;
+};
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Core::Assets::AssetArena"), cpp_flags(no_copy, no_assign)]
+extern class NativeAssetArena;
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::ExplicitConversion")]
+extern b8 ExplicitNameConversion<T>();
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::ImplicitConversion")]
+extern b8 ImplicitNameConversion<T>();
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::Compare")]
+extern b8 AssetNameCompareNoThrow<T>();
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::Cast")]
+extern b8 AssetNameCastNoThrow<T>();
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::CastAddress")]
+extern usize CastAssetAddress<T>(in T value);
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::CastNull")]
+extern usize CastNullAssetAddress<T>();
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::std::is_nothrow_default_constructible")]
+extern b8 DefaultNameConstructor<T>();
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::StorageNameConstructor")]
+extern b8 StorageNameConstructor<T, Arena>();
+[cpp_header("<tests/integration/assets_graphics/name_contract_sdk.h>"), cpp_name("::NWB::Tests::AssetNameAbi::PathNameConstructor")]
+extern b8 PathNameConstructor<T, Arena>();
+
+
+type NameProbeShaderAsset = NameProbeShader<IShader>;
+type NameProbeAssetCodec = NameProbeCodec<NameProbeAsset>;
+type NameProbeShaderCodec = ShaderAssetCodec<NameProbeShaderAsset>;
+
+static_assert(ExplicitNameConversion<NameProbeAsset>());
+static_assert(!ImplicitNameConversion<NameProbeAsset>());
+static_assert(!DefaultNameConstructor<NameProbeAsset>());
+static_assert(!DefaultNameConstructor<NameProbeAssetCodec>());
+static_assert(!StorageNameConstructor<NameProbeShaderAsset, NativeAssetArena>());
+static_assert(!PathNameConstructor<NameProbeShaderAsset, NativeAssetArena>());
+static_assert(!DefaultNameConstructor<NameProbeShaderCodec>());
+static_assert(AssetNameCompareNoThrow<ComparisonAsset>());
+static_assert(!AssetNameCastNoThrow<ComparisonAsset>());
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -11,282 +11,101 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/log.h>
-#include <core/task/cpu/scheduler.h>
-#include <core/os/linux/wayland/text_input_state.h>
-#include <core/os/linux/x11/text_input_dispatch.h>
-#include <core/os/linux/x11/text_input_key_history.h>
-#include <core/os/linux/x11/text_input_preedit.h>
-#include <core/os/text_input_text.h>
-
-#include <gtest/gtest.h>
-
-#if defined(FOUNDATION_PLATFORM_LINUX)
-#include <core/os/linux/pipe_io.h>
-#include <core/os/linux/x11/clipboard.h>
-#include <core/os/linux/x11/x11_checked.h>
-#include <global/environment.h>
-#include <global/thread.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <X11/Xatom.h>
-#include <X11/Xlib.h>
-#ifdef None
-#undef None
-#endif
-#ifdef Status
-#undef Status
-#endif
-#ifdef Bool
-#undef Bool
-#endif
-#ifdef Success
-#undef Success
-#endif
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_os_platform_cases_support{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
-using GlobalString = AString<Alloc::GlobalArena>;
-
-struct PreeditTestContext{
-    NWB::Tests::TestArena<> arena;
-    X11PreeditBuffer preedit;
-    GlobalString scratch;
-
-    PreeditTestContext()
-        : preedit(arena.arena)
-        , scratch(arena.arena)
-    {}
+[cpp_header("<core/os/linux/x11/text_input_dispatch.h>"), cpp_name("::NWB::Core::X11TextInputDispatchFence"), cpp_flags(self_defaulted)]
+extern class X11TextInputDispatchFence{
+    void enter();
+    b8 leave();
+    b8 retire();
+    void released();
 };
 
-struct WaylandStateContext{
-    NWB::Tests::TestArena<> arena;
-    GlobalString scratch;
-    WaylandTextInputSurroundingState wire;
-    WaylandTextInputSerialTracker tracker;
-    WaylandTextInputDeferredState deferred;
-
-    WaylandStateContext()
-        : scratch(arena.arena)
-    {}
+[cpp_header("<core/os/linux/x11/text_input_key_history.h>"), cpp_name("::NWB::Core::X11FilteredKeyHistory"), cpp_flags(self_defaulted)]
+extern class X11FilteredKeyHistory{
+    void synchronizeSession(in TextInputSessionToken token);
+    void recordFiltered(in u32 keycode, in b8 released, in u32 timestamp, in u32 serial, in u64 receivedAt);
+    b8 isForwardedDuplicate(in u32 keycode, in b8 released, in u32 timestamp, in u32 serial, in b8 sent, in u64 receivedAt)const;
+    b8 isRetiredDuplicate(in u32 keycode, in b8 released, in u32 timestamp, in u32 serial, in b8 sent, in u64 receivedAt)const;
+    void reset();
 };
 
-[[nodiscard]] FOUNDATION_INLINE TextInputSessionToken MakeSessionToken(const u64 service, const u64 generation)noexcept{
-    return TextInputSessionToken{ service, generation };
+[cpp_header("<core/os/linux/x11/text_input_preedit.h>"), cpp_name("::NWB::Core::X11PreeditBuffer"), cpp_flags(no_copy)]
+extern class X11PreeditBuffer{
+    StringView text()const;
+    usize caretByte()const;
+    void clear();
+    b8 replace(in usize start, in usize count, in StringView insertion, in usize caret);
+    b8 moveCaret(in usize character);
+    usize moveCaretToEnd();
+};
+
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurrounding"), cpp_flags(self_defaulted, brace_init)]
+extern class WaylandTextInputSurrounding{
+    StringView text;
+    usize offsetByte;
+    usize anchorByte;
+    usize caretByte;
+    b8 available;
+};
+
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputProvenance"), cpp_flags(self_defaulted, brace_init)]
+extern class WaylandTextInputProvenance{
+    TextInputSessionToken token;
+    u64 revision;
+    b8 revisionKnown;
+};
+
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurroundingState"), cpp_flags(self_defaulted)]
+extern class WaylandTextInputSurroundingState{
+    void reset();
+    u64 revision()const;
+    WaylandTextInputSurrounding update(in StringView text, in usize anchor, in usize caret, in u64 revision);
+};
+
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputDeferredState"), cpp_flags(self_defaulted)]
+extern class WaylandTextInputDeferredState{
+    void clear();
+    void caretChanged();
+    void surroundingChanged(in TextInputChangeCause cause);
+    b8 pending()const;
+    TextInputChangeCause cause()const;
+};
+
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSerialTracker"), cpp_flags(self_defaulted)]
+extern class WaylandTextInputSerialTracker{
+    void reset();
+    void record(in u32 serial, in TextInputSessionToken token, in u64 revision);
+    WaylandTextInputProvenance resolve(in u32 serial, in TextInputSessionToken current)const;
+};
+
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::SliceWaylandTextInputSurrounding")]
+extern WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(in StringView text, in usize anchor, in usize caret);
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::CanApplyWaylandTextInputDeletion")]
+extern b8 CanApplyWaylandTextInputDeletion(in WaylandTextInputProvenance stamp, in u64 revision, in WaylandTextInputSurroundingState wire, in usize anchor, in usize caret, in usize before, in usize after);
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputRectForPixels")]
+extern TextInputRect WaylandTextInputRectForPixels(in TextInputRect pixels, in i32 scale);
+[cpp_header("<core/os/linux/x11/text_input_preedit.h>"), cpp_name("::NWB::Core::X11PreeditBuffer::s_MaxBytes")]
+extern const usize s_MaxOsX11PreeditBytes;
+
+[ordered]
+class PreeditTestContext{
+    private HeapStorage storage = HeapStorage();
+    private TestValueSlot<X11PreeditBuffer> slot;
+    public mut X11PreeditBuffer preedit;
+    public String scratch;
+
+    public PreeditTestContext(){ this.preedit = this.slot.constructIn(this.storage); }
 }
 
-[[nodiscard]] FOUNDATION_INLINE WaylandTextInputProvenance MakeWaylandProvenance(const TextInputSessionToken token, const u64 revision, const b8 revisionKnown)noexcept{
-    return WaylandTextInputProvenance{ token, revision, revisionKnown };
+class WaylandStateContext{
+    public String scratch;
+    public WaylandTextInputSurroundingState wire;
+    public WaylandTextInputSerialTracker tracker;
+    public WaylandTextInputDeferredState deferred;
 }
 
-FOUNDATION_INLINE void AppendGlobalString(GlobalString& target, const AStringView text){
-    target.append(text.data(), text.size());
-}
-
-FOUNDATION_INLINE void ReplaceGlobalString(GlobalString& target, const usize pos, const usize count, const AStringView text){
-    target.replace(pos, count, text.data(), text.size());
-}
-
-FOUNDATION_INLINE void ClearAndShrinkGlobalString(GlobalString& target){
-    target.clear();
-    target.shrink_to_fit();
-}
-
-[[nodiscard]] inline constexpr usize GetX11PreeditMaxBytes()noexcept{
-    return X11PreeditBuffer::s_MaxBytes;
-}
-
-#if defined(FOUNDATION_PLATFORM_LINUX)
-inline constexpr u32 s_SelectionChangeTimeoutMS = 3000u;
-inline constexpr u32 s_ClipboardCompletionTimeoutMS = 6000u;
-inline constexpr u32 s_PollIntervalMS = 1u;
-inline constexpr AStringView s_ClipboardAtomName = "CLIPBOARD";
-
-struct OwnedPipe final : NoCopy{
-    int m_readFd = -1;
-    int m_writeFd = -1;
-
-    ~OwnedPipe()noexcept{
-        CloseClipboardPipe(m_readFd);
-        CloseClipboardPipe(m_writeFd);
-    }
-
-    void reset()noexcept{
-        CloseClipboardPipe(m_readFd);
-        CloseClipboardPipe(m_writeFd);
-    }
-
-    [[nodiscard]] b8 open()noexcept{
-        reset();
-        const auto pipe = OpenClipboardPipe();
-        if(!pipe)
-            return false;
-        m_readFd = pipe->readFd;
-        m_writeFd = pipe->writeFd;
-        return true;
-    }
-
-    [[nodiscard]] int releaseWrite()noexcept{
-        const int fd = m_writeFd;
-        m_writeFd = -1;
-        return fd;
-    }
-};
-
-struct ClipboardPipeContext{
-    NWB::Tests::TestArena<> arena;
-    OwnedPipe pipe;
-    ClipboardTextAccumulator received;
-    ClipboardPipeWriter writer;
-    GlobalString input;
-    GlobalString expected;
-
-    ClipboardPipeContext()
-        : received(arena.arena)
-        , writer(arena.arena)
-        , input(arena.arena)
-        , expected(arena.arena)
-    {}
-
-    [[nodiscard]] b8 openPipe()noexcept{ return pipe.open(); }
-    void closeWriteEnd()noexcept{ CloseClipboardPipe(pipe.m_writeFd); }
-    void closeReadEnd()noexcept{ CloseClipboardPipe(pipe.m_readFd); }
-    [[nodiscard]] i32 releaseWriteFd()noexcept{ return static_cast<i32>(pipe.releaseWrite()); }
-    [[nodiscard]] isize writeRaw(const AStringView bytes)noexcept{ return static_cast<isize>(write(pipe.m_writeFd, bytes.data(), bytes.size())); }
-    [[nodiscard]] Expected<b8, ClipboardPipeReadFailure> readPipe(){ return ReadClipboardPipe(pipe.m_readFd, received); }
-    [[nodiscard]] AStringView receivedText()const noexcept{ return received.text(); }
-    void clearReceived()noexcept{ received.clear(); }
-    [[nodiscard]] b8 beginWriter(const i32 fd, const AStringView text){ return writer.begin(static_cast<int>(fd), text); }
-    [[nodiscard]] ClipboardStatus::Enum advanceWriter()noexcept{ return writer.advance(); }
-    [[nodiscard]] b8 writerFinished()const noexcept{ return writer.finished(); }
-    [[nodiscard]] i32 queryFdFlags(const i32 fd)const noexcept{ return static_cast<i32>(fcntl(static_cast<int>(fd), F_GETFL)); }
-    [[nodiscard]] b8 hasNonblockFlag(const i32 flags)const noexcept{ return (flags & O_NONBLOCK) != 0; }
-    [[nodiscard]] i32 pollPipeWritable(const i32 fd)const noexcept{
-        pollfd writable{ .fd = static_cast<int>(fd), .events = POLLOUT, .revents = 0 };
-        return static_cast<i32>(poll(&writable, 1u, 0));
-    }
-};
-
-class X11ClipboardFixture : public testing::Test{
-public:
-    virtual void SetUp()override;
-    virtual void TearDown()override;
-
-    [[nodiscard]] b8 pumpAll();
-    [[nodiscard]] b8 awaitCompletion(ClipboardRequestToken token, IClipboardService& service, ClipboardCompletion& completion);
-    [[nodiscard]] b8 awaitServiceCompletion(const usize index, const ClipboardRequestToken token, ClipboardCompletion& completion){ return awaitCompletion(token, *m_services[index], completion); }
-    [[nodiscard]] b8 writeText(usize index, ClipboardChannel::Enum channel, AStringView text);
-    [[nodiscard]] b8 canReadPrimarySelection()const noexcept{ return m_services[0]->capabilities(ClipboardChannel::PrimarySelection).readText; }
-    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestRead(const usize index, const ClipboardChannel::Enum channel){ return m_services[index]->requestReadText(channel); }
-    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWrite(const usize index, const ClipboardChannel::Enum channel, const AStringView text){ return m_services[index]->requestWriteText(channel, text); }
-    [[nodiscard]] b8 pumpService(const usize index){ return m_services[index]->pump(); }
-    [[nodiscard]] b8 cancelService(const usize index, const ClipboardRequestToken token){ return m_services[index]->cancel(token); }
-    [[nodiscard]] ClipboardPollResult::Enum pollService(const usize index, const ClipboardRequestToken token, ClipboardCompletion& completion){ return m_services[index]->poll(token, completion); }
-    [[nodiscard]] b8 waitForSelectionRequest();
-
-public:
-    NWB::Tests::TestArena<> m_arena;
-    Array<_XDisplay*, 2u> m_displays{};
-    Array<GlobalUniquePtr<IClipboardService>, 2u> m_services;
-    b8 m_sawSelectionRequest = false;
-};
-#else
-struct ClipboardPipeReadFailure{
-    ClipboardStatus::Enum status = ClipboardStatus::NativeFailure;
-    b8 finished = false;
-};
-
-struct ClipboardPipeContext{
-    NWB::Tests::TestArena<> arena;
-    GlobalString input;
-    GlobalString expected;
-
-    ClipboardPipeContext()
-        : input(arena.arena)
-        , expected(arena.arena)
-    {}
-
-    [[nodiscard]] b8 openPipe()noexcept{ return false; }
-    void closeWriteEnd()noexcept{}
-    void closeReadEnd()noexcept{}
-    [[nodiscard]] i32 releaseWriteFd()noexcept{ return -1; }
-    [[nodiscard]] isize writeRaw(const AStringView)noexcept{ return -1; }
-    [[nodiscard]] Expected<b8, ClipboardPipeReadFailure> readPipe()noexcept{ return MakeUnexpected(ClipboardPipeReadFailure{}); }
-    [[nodiscard]] AStringView receivedText()const noexcept{ return {}; }
-    void clearReceived()noexcept{}
-    [[nodiscard]] b8 beginWriter(const i32, const AStringView)noexcept{ return false; }
-    [[nodiscard]] ClipboardStatus::Enum advanceWriter()noexcept{ return ClipboardStatus::NativeFailure; }
-    [[nodiscard]] b8 writerFinished()const noexcept{ return true; }
-    [[nodiscard]] i32 queryFdFlags(const i32)const noexcept{ return -1; }
-    [[nodiscard]] b8 hasNonblockFlag(const i32)const noexcept{ return false; }
-    [[nodiscard]] i32 pollPipeWritable(const i32)const noexcept{ return -1; }
-};
-
-class X11ClipboardFixture{
-public:
-    [[nodiscard]] b8 pumpAll()noexcept{ return false; }
-    [[nodiscard]] b8 awaitServiceCompletion(const usize, const ClipboardRequestToken, ClipboardCompletion&)noexcept{ return false; }
-    [[nodiscard]] b8 writeText(const usize, const ClipboardChannel::Enum, const AStringView)noexcept{ return false; }
-    [[nodiscard]] b8 canReadPrimarySelection()const noexcept{ return false; }
-    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestRead(const usize, const ClipboardChannel::Enum)noexcept{ return MakeUnexpected(ClipboardAdmission::QueueFull); }
-    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWrite(const usize, const ClipboardChannel::Enum, const AStringView)noexcept{ return MakeUnexpected(ClipboardAdmission::QueueFull); }
-    [[nodiscard]] b8 pumpService(const usize)noexcept{ return false; }
-    [[nodiscard]] b8 cancelService(const usize, const ClipboardRequestToken)noexcept{ return false; }
-    [[nodiscard]] ClipboardPollResult::Enum pollService(const usize, const ClipboardRequestToken, ClipboardCompletion&)noexcept{ return ClipboardPollResult::InvalidRequest; }
-    [[nodiscard]] b8 waitForSelectionRequest()noexcept{ return false; }
-
-public:
-    b8 m_sawSelectionRequest = false;
-};
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-namespace NWB::Tests::OS{
-#if defined(FOUNDATION_PLATFORM_LINUX)
-using NWB::Core::ClipboardPipeReadFailure;
-#else
-using __hidden_os_platform_cases_support::ClipboardPipeReadFailure;
-#endif
-using __hidden_os_platform_cases_support::PreeditTestContext;
-using __hidden_os_platform_cases_support::WaylandStateContext;
-using __hidden_os_platform_cases_support::MakeSessionToken;
-using __hidden_os_platform_cases_support::MakeWaylandProvenance;
-using __hidden_os_platform_cases_support::AppendGlobalString;
-using __hidden_os_platform_cases_support::ReplaceGlobalString;
-using __hidden_os_platform_cases_support::ClearAndShrinkGlobalString;
-using __hidden_os_platform_cases_support::GetX11PreeditMaxBytes;
-using __hidden_os_platform_cases_support::ClipboardPipeContext;
-using __hidden_os_platform_cases_support::X11ClipboardFixture;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void ClearAndShrinkGlobalString(mut String text){
+    text.clear();
+    text.shrink_to_fit();
 }
 
 
@@ -411,13 +230,13 @@ void VerifyX11FilteredKeyHistory_LongInactivityAndWindowResetCannotFenceFreshKey
 
 void VerifyX11FilteredKeyHistory_SessionReplacementRejectsOldEchoesBeforeTheyCanReachANewInputContext(){
     X11FilteredKeyHistory history = X11FilteredKeyHistory();
-    history.synchronizeSession(MakeSessionToken(1u, 1u));
+    history.synchronizeSession(TextInputSessionToken(1u, 1u));
     history.recordFiltered(73u, false, 100u, 50u, 1000u);
     history.recordFiltered(73u, true, 120u, 55u, 1020u);
-    history.synchronizeSession(MakeSessionToken(1u, 1u));
+    history.synchronizeSession(TextInputSessionToken(1u, 1u));
     EXPECT_FALSE(history.isRetiredDuplicate(73u, false, 100u, 50u, false, 1030u));
     EXPECT_TRUE(history.isForwardedDuplicate(73u, false, 100u, 50u, false, 1030u));
-    history.synchronizeSession(MakeSessionToken(1u, 2u));
+    history.synchronizeSession(TextInputSessionToken(1u, 2u));
     EXPECT_TRUE(history.isRetiredDuplicate(73u, false, 100u, 50u, false, 1040u));
     EXPECT_TRUE(history.isRetiredDuplicate(73u, true, 120u, 55u, false, 1040u));
     EXPECT_FALSE(history.isRetiredDuplicate(73u, false, 140u, 60u, false, 1040u));
@@ -429,12 +248,12 @@ void VerifyX11FilteredKeyHistory_SessionReplacementRejectsOldEchoesBeforeTheyCan
 
 void VerifyX11FilteredKeyHistory_InactiveSessionGapsAndServiceReplacementKeepOldSyntheticEchoesFenced(){
     X11FilteredKeyHistory history = X11FilteredKeyHistory();
-    history.synchronizeSession(MakeSessionToken(1u, 1u));
+    history.synchronizeSession(TextInputSessionToken(1u, 1u));
     history.recordFiltered(23u, false, 0u, 50u, 1000u);
     history.synchronizeSession(TextInputSessionToken());
     EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, 50u, false, 1010u));
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, 50u, true, 1010u));
-    history.synchronizeSession(MakeSessionToken(2u, 1u));
+    history.synchronizeSession(TextInputSessionToken(2u, 1u));
     history.recordFiltered(23u, false, 0u, 51u, 1010u);
     EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, 50u, false, 1020u));
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, 51u, false, 1020u));
@@ -443,22 +262,22 @@ void VerifyX11FilteredKeyHistory_InactiveSessionGapsAndServiceReplacementKeepOld
 
 void VerifyX11FilteredKeyHistory_RetiredFrontierAdvancesWithinOneHostMillisecondAndAcrossNativeTimestampWrap(){
     X11FilteredKeyHistory history = X11FilteredKeyHistory();
-    history.synchronizeSession(MakeSessionToken(1u, 1u));
+    history.synchronizeSession(TextInputSessionToken(1u, 1u));
     history.recordFiltered(23u, false, 0xfffffff0u, 50u, 1000u);
-    history.synchronizeSession(MakeSessionToken(1u, 2u));
+    history.synchronizeSession(TextInputSessionToken(1u, 2u));
     history.recordFiltered(23u, false, 5u, 50u, 1000u);
     EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0xfffffff0u, 50u, false, 1010u));
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 5u, 50u, false, 1010u));
-    history.synchronizeSession(MakeSessionToken(1u, 3u));
+    history.synchronizeSession(TextInputSessionToken(1u, 3u));
     EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 5u, 50u, false, 1010u));
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 6u, 50u, false, 1010u));
 }
 
 void VerifyX11FilteredKeyHistory_ZeroTimeEchoKeepsTheXimSerialUpperBitsAcrossTheWireSequenceBoundary(){
     X11FilteredKeyHistory history = X11FilteredKeyHistory();
-    history.synchronizeSession(MakeSessionToken(1u, 1u));
+    history.synchronizeSession(TextInputSessionToken(1u, 1u));
     history.recordFiltered(23u, false, 0u, 0x0000fff0u, 1000u);
-    history.synchronizeSession(MakeSessionToken(1u, 2u));
+    history.synchronizeSession(TextInputSessionToken(1u, 2u));
     // XIM forwards low sequence bits in the event and high bits in its separate protocol field.
     const u32 currentSerial = 0x00010010u;
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, currentSerial, false, 1010u));
@@ -466,7 +285,7 @@ void VerifyX11FilteredKeyHistory_ZeroTimeEchoKeepsTheXimSerialUpperBitsAcrossThe
     EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 0u, currentSerial, false, 1020u));
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, currentSerial, false, 1020u));
     EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, 0x0000fff0u, false, 1020u));
-    history.synchronizeSession(MakeSessionToken(1u, 3u));
+    history.synchronizeSession(TextInputSessionToken(1u, 3u));
     EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, currentSerial, false, 1030u));
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, 0x00020010u, false, 1030u));
 }
@@ -474,10 +293,10 @@ void VerifyX11FilteredKeyHistory_ZeroTimeEchoKeepsTheXimSerialUpperBitsAcrossThe
 void VerifyX11FilteredKeyHistory_SessionChangesDoNotRefreshRetiredStampExpirationAndResetClearsBothHistories(){
     X11FilteredKeyHistory history = X11FilteredKeyHistory();
     const u64 halfRange = cast<u64>(1u) << 31u;
-    history.synchronizeSession(MakeSessionToken(1u, 1u));
+    history.synchronizeSession(TextInputSessionToken(1u, 1u));
     history.recordFiltered(23u, false, 100u, 50u, 1000u);
-    history.synchronizeSession(MakeSessionToken(1u, 2u));
-    history.synchronizeSession(MakeSessionToken(1u, 3u));
+    history.synchronizeSession(TextInputSessionToken(1u, 2u));
+    history.synchronizeSession(TextInputSessionToken(1u, 3u));
     EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 100u, 50u, false, 1000u + halfRange - 1u));
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 100u, 50u, false, 1000u + halfRange));
     history.reset();
@@ -552,9 +371,9 @@ void VerifyX11PreeditBuffer_InvalidChangeOrCaretRangesAreFailureAtomic(){
 
 void VerifyX11PreeditBuffer_BoundedPreeditRejectsGrowthWithoutDiscardingText(){
     PreeditTestContext ctx = PreeditTestContext();
-    const usize maxBytes = GetX11PreeditMaxBytes();
+    const usize maxBytes = s_MaxOsX11PreeditBytes;
     FillGlobalString(ctx.scratch, maxBytes, 0x78u);
-    ASSERT_TRUE(ctx.preedit.replace(0u, 0u, ViewGlobalString(ctx.scratch), maxBytes));
+    ASSERT_TRUE(ctx.preedit.replace(0u, 0u, StringView(ctx.scratch), maxBytes));
     EXPECT_FALSE(ctx.preedit.replace(0u, 0u, "x", 0u));
     EXPECT_EQ(ctx.preedit.text().size(), maxBytes);
     EXPECT_EQ(ctx.preedit.caretByte(), maxBytes);
@@ -578,9 +397,9 @@ void VerifyWaylandTextInputState_ShortUtf8ReverseSelectionRetainsScalarByteEndpo
 void VerifyWaylandTextInputState_LongSurroundingClipsWithoutSplittingUnicode(){
     WaylandStateContext ctx = WaylandStateContext();
     for(usize index = 0u; index < 3000u; ++index){
-        AppendGlobalString(ctx.scratch, "\xED\x95\x9C");
+        ctx.scratch.append("\xED\x95\x9C");
     }
-    const WaylandTextInputSurrounding slice = SliceWaylandTextInputSurrounding(ViewGlobalString(ctx.scratch), 4500u, 4503u);
+    const WaylandTextInputSurrounding slice = SliceWaylandTextInputSurrounding(StringView(ctx.scratch), 4500u, 4503u);
     ASSERT_TRUE(slice.available);
     EXPECT_LE(slice.text.size(), 4000u);
     EXPECT_EQ(ValidateTextInputUtf8(slice.text, 4000u), TextInputAdmission::Accepted);
@@ -593,10 +412,10 @@ void VerifyWaylandTextInputState_LongSurroundingClipsWithoutSplittingUnicode(){
 void VerifyWaylandTextInputState_SelectionMustFitNativeMessageAndContainByteBoundaries(){
     WaylandStateContext ctx = WaylandStateContext();
     FillGlobalString(ctx.scratch, 5000u, 0x78u);
-    EXPECT_FALSE(SliceWaylandTextInputSurrounding(ViewGlobalString(ctx.scratch), 0u, 4001u).available);
-    EXPECT_FALSE(SliceWaylandTextInputSurrounding(ViewGlobalString(ctx.scratch), 5001u, 1u).available);
+    EXPECT_FALSE(SliceWaylandTextInputSurrounding(StringView(ctx.scratch), 0u, 4001u).available);
+    EXPECT_FALSE(SliceWaylandTextInputSurrounding(StringView(ctx.scratch), 5001u, 1u).available);
     EXPECT_FALSE(SliceWaylandTextInputSurrounding("\xED\x95\x9C", 1u, 3u).available);
-    const WaylandTextInputSurrounding exact = SliceWaylandTextInputSurrounding(ViewGlobalString(ctx.scratch), 500u, 4500u);
+    const WaylandTextInputSurrounding exact = SliceWaylandTextInputSurrounding(StringView(ctx.scratch), 500u, 4500u);
     ASSERT_TRUE(exact.available);
     EXPECT_EQ(exact.text.size(), 4000u);
     EXPECT_EQ(exact.anchorByte, 0u);
@@ -606,11 +425,11 @@ void VerifyWaylandTextInputState_SelectionMustFitNativeMessageAndContainByteBoun
 void VerifyWaylandTextInputState_EdgeCursorSlicesUseAvailableContext(){
     WaylandStateContext ctx = WaylandStateContext();
     FillGlobalString(ctx.scratch, 9000u, 0x78u);
-    const WaylandTextInputSurrounding first = SliceWaylandTextInputSurrounding(ViewGlobalString(ctx.scratch), 0u, 0u);
+    const WaylandTextInputSurrounding first = SliceWaylandTextInputSurrounding(StringView(ctx.scratch), 0u, 0u);
     ASSERT_TRUE(first.available);
     EXPECT_EQ(first.text.size(), 4000u);
     EXPECT_EQ(first.offsetByte, 0u);
-    const WaylandTextInputSurrounding last = SliceWaylandTextInputSurrounding(ViewGlobalString(ctx.scratch), 9000u, 9000u);
+    const WaylandTextInputSurrounding last = SliceWaylandTextInputSurrounding(StringView(ctx.scratch), 9000u, 9000u);
     ASSERT_TRUE(last.available);
     EXPECT_EQ(last.text.size(), 4000u);
     EXPECT_EQ(last.offsetByte, 5000u);
@@ -619,11 +438,11 @@ void VerifyWaylandTextInputState_EdgeCursorSlicesUseAvailableContext(){
 
 void VerifyWaylandTextInputState_UnavailableSurroundingNeverRetagsOldNativeSnapshot(){
     WaylandStateContext ctx = WaylandStateContext();
-    const TextInputSessionToken token = MakeSessionToken(7u, 8u);
+    const TextInputSessionToken token = TextInputSessionToken(7u, 8u);
     ASSERT_TRUE(ctx.wire.update("old", 1u, 1u, 1u).available);
     ctx.tracker.record(1u, token, ctx.wire.revision());
     FillGlobalString(ctx.scratch, 5000u, 0x78u);
-    EXPECT_FALSE(ctx.wire.update(ViewGlobalString(ctx.scratch), 0u, 5000u, 2u).available);
+    EXPECT_FALSE(ctx.wire.update(StringView(ctx.scratch), 0u, 5000u, 2u).available);
     EXPECT_EQ(ctx.wire.revision(), 1u);
     ctx.tracker.record(2u, token, ctx.wire.revision());
     EXPECT_EQ(ctx.tracker.resolve(2u, token).revision, 1u);
@@ -631,7 +450,7 @@ void VerifyWaylandTextInputState_UnavailableSurroundingNeverRetagsOldNativeSnaps
     ctx.tracker.record(3u, token, ctx.wire.revision());
     EXPECT_EQ(ctx.tracker.resolve(3u, token).revision, 3u);
     ctx.wire.reset();
-    EXPECT_FALSE(ctx.wire.update(ViewGlobalString(ctx.scratch), 0u, 5000u, 4u).available);
+    EXPECT_FALSE(ctx.wire.update(StringView(ctx.scratch), 0u, 5000u, 4u).available);
     ctx.tracker.record(4u, token, ctx.wire.revision());
     EXPECT_FALSE(ctx.tracker.resolve(4u, token).revisionKnown);
 }
@@ -639,7 +458,7 @@ void VerifyWaylandTextInputState_UnavailableSurroundingNeverRetagsOldNativeSnaps
 void VerifyWaylandTextInputState_NativeDeletionExcludesSelectionAndRequiresTheExactPublishedEndpoints(){
     WaylandStateContext ctx = WaylandStateContext();
     ASSERT_TRUE(ctx.wire.update("abcDEFghi", 3u, 6u, 7u).available);
-    const WaylandTextInputProvenance known = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, true);
+    const WaylandTextInputProvenance known = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, true);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 3u, 6u, 2u, 1u));
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 3u, 6u, 3u, 3u));
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 3u, 6u, 0u, 0u));
@@ -647,9 +466,9 @@ void VerifyWaylandTextInputState_NativeDeletionExcludesSelectionAndRequiresTheEx
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 3u, 6u, 0u, 4u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 1u, 3u, 2u, 1u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 8u, ctx.wire, 3u, 6u, 2u, 1u));
-    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(MakeWaylandProvenance(MakeSessionToken(1u, 2u), 0u, false), 7u, ctx.wire, 3u, 6u, 2u, 1u));
+    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 0u, false), 7u, ctx.wire, 3u, 6u, 2u, 1u));
     ASSERT_TRUE(ctx.wire.update("abcDEFghi", 6u, 3u, 8u).available);
-    const WaylandTextInputProvenance reverse = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 8u, true);
+    const WaylandTextInputProvenance reverse = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 8u, true);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(reverse, 8u, ctx.wire, 6u, 3u, 2u, 1u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(reverse, 8u, ctx.wire, 3u, 6u, 2u, 1u));
 }
@@ -657,14 +476,14 @@ void VerifyWaylandTextInputState_NativeDeletionExcludesSelectionAndRequiresTheEx
 void VerifyWaylandTextInputState_DeletionCannotReachBeyondTheSentSliceEvenWhenTheFullTextContainsThoseBytes(){
     WaylandStateContext ctx = WaylandStateContext();
     FillGlobalString(ctx.scratch, 9000u, 0x78u);
-    const WaylandTextInputSurrounding sent = ctx.wire.update(ViewGlobalString(ctx.scratch), 4500u, 4503u, 7u);
+    const WaylandTextInputSurrounding sent = ctx.wire.update(StringView(ctx.scratch), 4500u, 4503u, 7u);
     ASSERT_TRUE(sent.available);
     ASSERT_GT(sent.offsetByte, 0u);
     const usize before = Min(sent.anchorByte, sent.caretByte);
     const usize after = sent.text.size() - Max(sent.anchorByte, sent.caretByte);
     ASSERT_LT(before + 1u, 4500u);
     ASSERT_LT(after + 1u, ctx.scratch.size() - 4503u);
-    const WaylandTextInputProvenance known = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, true);
+    const WaylandTextInputProvenance known = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, true);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, before, after));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, before + 1u, after));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, before, after + 1u));
@@ -675,8 +494,8 @@ void VerifyWaylandTextInputState_DeletionCannotReachBeyondTheSentSliceEvenWhenTh
 void VerifyWaylandTextInputState_WireSelectionEndpointsMustMatchDirectionOffsetAndCurrentPositions(){
     WaylandStateContext ctx = WaylandStateContext();
     FillGlobalString(ctx.scratch, 9000u, 0x78u);
-    ASSERT_TRUE(ctx.wire.update(ViewGlobalString(ctx.scratch), 4500u, 4503u, 7u).available);
-    const WaylandTextInputProvenance known = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, true);
+    ASSERT_TRUE(ctx.wire.update(StringView(ctx.scratch), 4500u, 4503u, 7u).available);
+    const WaylandTextInputProvenance known = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, true);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, 2u, 1u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4501u, 4503u, 2u, 1u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4504u, 2u, 1u));
@@ -689,16 +508,16 @@ void VerifyWaylandTextInputState_WireSelectionEndpointsMustMatchDirectionOffsetA
 void VerifyWaylandTextInputState_WireEdgeCursorsAndASelectionFillingTheMessageHaveExactOuterLimits(){
     WaylandStateContext ctx = WaylandStateContext();
     FillGlobalString(ctx.scratch, 9000u, 0x78u);
-    const WaylandTextInputProvenance known = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, true);
-    ASSERT_TRUE(ctx.wire.update(ViewGlobalString(ctx.scratch), 0u, 0u, 7u).available);
+    const WaylandTextInputProvenance known = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, true);
+    ASSERT_TRUE(ctx.wire.update(StringView(ctx.scratch), 0u, 0u, 7u).available);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 0u, 0u, 0u, 4000u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 0u, 0u, 1u, 0u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 0u, 0u, 0u, 4001u));
-    ASSERT_TRUE(ctx.wire.update(ViewGlobalString(ctx.scratch), 9000u, 9000u, 7u).available);
+    ASSERT_TRUE(ctx.wire.update(StringView(ctx.scratch), 9000u, 9000u, 7u).available);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 9000u, 9000u, 4000u, 0u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 9000u, 9000u, 4001u, 0u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 9000u, 9000u, 0u, 1u));
-    ASSERT_TRUE(ctx.wire.update(ViewGlobalString(ctx.scratch), 500u, 4500u, 7u).available);
+    ASSERT_TRUE(ctx.wire.update(StringView(ctx.scratch), 500u, 4500u, 7u).available);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 500u, 4500u, 0u, 0u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 500u, 4500u, 1u, 0u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 500u, 4500u, 0u, 1u));
@@ -707,54 +526,54 @@ void VerifyWaylandTextInputState_WireEdgeCursorsAndASelectionFillingTheMessageHa
 void VerifyWaylandTextInputState_UnavailableReplacementPreservesEveryPreviouslySentNumericBound(){
     WaylandStateContext ctx = WaylandStateContext();
     FillGlobalString(ctx.scratch, 9000u, 0x78u);
-    const WaylandTextInputSurrounding sent = ctx.wire.update(ViewGlobalString(ctx.scratch), 4500u, 4503u, 7u);
+    const WaylandTextInputSurrounding sent = ctx.wire.update(StringView(ctx.scratch), 4500u, 4503u, 7u);
     ASSERT_TRUE(sent.available);
     const usize before = Min(sent.anchorByte, sent.caretByte);
     const usize after = sent.text.size() - Max(sent.anchorByte, sent.caretByte);
-    const WaylandTextInputProvenance known = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, true);
-    EXPECT_FALSE(ctx.wire.update(ViewGlobalString(ctx.scratch), 0u, 5000u, 8u).available);
+    const WaylandTextInputProvenance known = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, true);
+    EXPECT_FALSE(ctx.wire.update(StringView(ctx.scratch), 0u, 5000u, 8u).available);
     EXPECT_EQ(ctx.wire.revision(), 7u);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, before, after));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, before + 1u, after));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 8u, ctx.wire, 4500u, 4503u, 0u, 0u));
-    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(MakeWaylandProvenance(MakeSessionToken(1u, 2u), 8u, true), 8u, ctx.wire, 4500u, 4503u, 0u, 0u));
+    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 8u, true), 8u, ctx.wire, 4500u, 4503u, 0u, 0u));
     ctx.wire.reset();
     EXPECT_EQ(ctx.wire.revision(), 0u);
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, 0u, 0u));
-    EXPECT_FALSE(ctx.wire.update(ViewGlobalString(ctx.scratch), 0u, 5000u, 9u).available);
+    EXPECT_FALSE(ctx.wire.update(StringView(ctx.scratch), 0u, 5000u, 9u).available);
     EXPECT_EQ(ctx.wire.revision(), 0u);
 }
 
 void VerifyWaylandTextInputState_WireBoundsOwnNoViewOfTheCallerText(){
     WaylandStateContext ctx = WaylandStateContext();
     FillGlobalString(ctx.scratch, 9000u, 0x78u);
-    const WaylandTextInputSurrounding sent = ctx.wire.update(ViewGlobalString(ctx.scratch), 4500u, 4503u, 7u);
+    const WaylandTextInputSurrounding sent = ctx.wire.update(StringView(ctx.scratch), 4500u, 4503u, 7u);
     ASSERT_TRUE(sent.available);
     const usize before = Min(sent.anchorByte, sent.caretByte);
     const usize after = sent.text.size() - Max(sent.anchorByte, sent.caretByte);
     ClearAndShrinkGlobalString(ctx.scratch);
-    const WaylandTextInputProvenance known = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, true);
+    const WaylandTextInputProvenance known = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, true);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, before, after));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 4500u, 4503u, before + 1u, after));
 }
 
 void VerifyWaylandTextInputState_EmptyOrResetWireStillRequiresKnownNonzeroSnapshotProvenance(){
     WaylandStateContext ctx = WaylandStateContext();
-    const WaylandTextInputProvenance known = MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, true);
+    const WaylandTextInputProvenance known = WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, true);
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 0u, 0u, 0u, 0u));
     ASSERT_TRUE(ctx.wire.update(StringView(), 0u, 0u, 7u).available);
     EXPECT_TRUE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 0u, 0u, 0u, 0u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 0u, 0u, 1u, 0u));
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(known, 7u, ctx.wire, 0u, 0u, 0u, 1u));
-    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(MakeWaylandProvenance(TextInputSessionToken(), 7u, true), 7u, ctx.wire, 0u, 0u, 0u, 0u));
-    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(MakeWaylandProvenance(MakeSessionToken(1u, 2u), 7u, false), 7u, ctx.wire, 0u, 0u, 0u, 0u));
+    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(WaylandTextInputProvenance(TextInputSessionToken(), 7u, true), 7u, ctx.wire, 0u, 0u, 0u, 0u));
+    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 7u, false), 7u, ctx.wire, 0u, 0u, 0u, 0u));
     ASSERT_TRUE(ctx.wire.update(StringView(), 0u, 0u, 0u).available);
-    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(MakeWaylandProvenance(MakeSessionToken(1u, 2u), 0u, true), 0u, ctx.wire, 0u, 0u, 0u, 0u));
+    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(WaylandTextInputProvenance(TextInputSessionToken(1u, 2u), 0u, true), 0u, ctx.wire, 0u, 0u, 0u, 0u));
 }
 
 void VerifyWaylandTextInputState_DeferredSurroundingChangesCannotRetagUnsentSliceOrCurrentSerials(){
     WaylandStateContext ctx = WaylandStateContext();
-    const TextInputSessionToken token = MakeSessionToken(7u, 8u);
+    const TextInputSessionToken token = TextInputSessionToken(7u, 8u);
     ASSERT_TRUE(ctx.wire.update("abcDEFghi", 3u, 6u, 7u).available);
     ctx.tracker.record(42u, token, ctx.wire.revision());
     ctx.deferred.surroundingChanged(TextInputChangeCause::Other);
@@ -762,7 +581,7 @@ void VerifyWaylandTextInputState_DeferredSurroundingChangesCannotRetagUnsentSlic
     ASSERT_TRUE(ctx.deferred.pending());
     const WaylandTextInputProvenance old = ctx.tracker.resolve(42u, token);
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(old, 8u, ctx.wire, 3u, 6u, 2u, 1u));
-    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(MakeWaylandProvenance(token, 8u, true), 8u, ctx.wire, 3u, 6u, 2u, 1u));
+    EXPECT_FALSE(CanApplyWaylandTextInputDeletion(WaylandTextInputProvenance(token, 8u, true), 8u, ctx.wire, 3u, 6u, 2u, 1u));
     ctx.deferred.clear();
     ASSERT_TRUE(ctx.wire.update("aDEFhi", 1u, 4u, 8u).available);
     ctx.tracker.record(43u, token, ctx.wire.revision());
@@ -772,7 +591,7 @@ void VerifyWaylandTextInputState_DeferredSurroundingChangesCannotRetagUnsentSlic
 
 void VerifyWaylandTextInputState_DelayedSerialWithTheCurrentWireRevisionStillAdmitsDeletion(){
     WaylandStateContext ctx = WaylandStateContext();
-    const TextInputSessionToken token = MakeSessionToken(7u, 8u);
+    const TextInputSessionToken token = TextInputSessionToken(7u, 8u);
     ASSERT_TRUE(ctx.wire.update("abcDEFghi", 3u, 6u, 7u).available);
     ctx.tracker.record(42u, token, ctx.wire.revision());
     ctx.tracker.record(43u, token, ctx.wire.revision());
@@ -825,7 +644,7 @@ void VerifyWaylandTextInputState_DeferredCaretPreservesLatestSurroundingChangeCa
 
 void VerifyWaylandTextInputState_SerialTracksHistoricalCurrentSessionRevision(){
     WaylandStateContext ctx = WaylandStateContext();
-    const TextInputSessionToken token = MakeSessionToken(7u, 9u);
+    const TextInputSessionToken token = TextInputSessionToken(7u, 9u);
     ctx.tracker.record(10u, token, 1u);
     ctx.tracker.record(11u, token, 2u);
     const WaylandTextInputProvenance old = ctx.tracker.resolve(10u, token);
@@ -839,8 +658,8 @@ void VerifyWaylandTextInputState_SerialTracksHistoricalCurrentSessionRevision(){
 
 void VerifyWaylandTextInputState_NewSessionAndDisableFenceDelayedOldSerials(){
     WaylandStateContext ctx = WaylandStateContext();
-    const TextInputSessionToken first = MakeSessionToken(1u, 1u);
-    const TextInputSessionToken second = MakeSessionToken(1u, 2u);
+    const TextInputSessionToken first = TextInputSessionToken(1u, 1u);
+    const TextInputSessionToken second = TextInputSessionToken(1u, 2u);
     ctx.tracker.record(20u, first, 1u);
     ctx.tracker.record(22u, second, 1u);
     EXPECT_FALSE(ctx.tracker.resolve(20u, second).token.valid());
@@ -852,7 +671,7 @@ void VerifyWaylandTextInputState_NewSessionAndDisableFenceDelayedOldSerials(){
 
 void VerifyWaylandTextInputState_SerialWraparoundPreservesCurrentSessionInterval(){
     WaylandStateContext ctx = WaylandStateContext();
-    const TextInputSessionToken token = MakeSessionToken(2u, 3u);
+    const TextInputSessionToken token = TextInputSessionToken(2u, 3u);
     ctx.tracker.record(0xFFFFFFFEu, token, 1u);
     ctx.tracker.record(0xFFFFFFFFu, token, 2u);
     ctx.tracker.record(0u, token, 3u);
@@ -869,7 +688,7 @@ void VerifyWaylandTextInputState_SerialWraparoundPreservesCurrentSessionInterval
 
 void VerifyWaylandTextInputState_RingEvictionStillAdmitsDelayedCommitButMarksDeletionRevisionUnknown(){
     WaylandStateContext ctx = WaylandStateContext();
-    const TextInputSessionToken token = MakeSessionToken(3u, 5u);
+    const TextInputSessionToken token = TextInputSessionToken(3u, 5u);
     for(u32 serial = 100u; serial < 200u; ++serial){
         ctx.tracker.record(serial, token, cast<u64>(serial - 99u));
     }
@@ -884,341 +703,6 @@ void VerifyWaylandTextInputState_RingEvictionStillAdmitsDelayedCommitButMarksDel
     ctx.tracker.reset();
     EXPECT_FALSE(ctx.tracker.resolve(199u, token).token.valid());
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(ctx.tracker.resolve(199u, token), 100u, ctx.wire, 3u, 6u, 2u, 1u));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void VerifyClipboardPipe_PartialUnicodeStaysPendingUntilValidEof(){
-    ClipboardPipeContext ctx = ClipboardPipeContext();
-    ASSERT_TRUE(ctx.openPipe());
-    ASSERT_EQ(ctx.writeRaw("\xED"), 1);
-    const Expected<b8, ClipboardPipeReadFailure> step1 = ctx.readPipe();
-    ASSERT_TRUE(step1.has_value());
-    EXPECT_FALSE(step1.value());
-
-    ASSERT_EQ(ctx.writeRaw("\x95\x9C\xF0\x9F"), 4);
-    const Expected<b8, ClipboardPipeReadFailure> step2 = ctx.readPipe();
-    ASSERT_TRUE(step2.has_value());
-    EXPECT_FALSE(step2.value());
-
-    ASSERT_EQ(ctx.writeRaw("\x98\x80"), 2);
-    ctx.closeWriteEnd();
-    const Expected<b8, ClipboardPipeReadFailure> step3 = ctx.readPipe();
-    ASSERT_TRUE(step3.has_value());
-    EXPECT_TRUE(step3.value());
-    EXPECT_EQ(ctx.receivedText(), "\xED\x95\x9C\xF0\x9F\x98\x80");
-}
-
-void VerifyClipboardPipe_TruncatedUnicodeIsRejectedAtEof(){
-    ClipboardPipeContext ctx = ClipboardPipeContext();
-    ASSERT_TRUE(ctx.openPipe());
-    ASSERT_EQ(ctx.writeRaw("\xF0\x9F"), 2);
-    ctx.closeWriteEnd();
-    const Expected<b8, ClipboardPipeReadFailure> finished = ctx.readPipe();
-    ASSERT_FALSE(finished.has_value());
-    EXPECT_EQ(finished.error().status, ClipboardStatus::InvalidText);
-    EXPECT_TRUE(finished.error().finished);
-}
-
-void VerifyClipboardPipe_WriterOwnsLargeInputAndResumesAfterFullPipe(){
-    ClipboardPipeContext ctx = ClipboardPipeContext();
-    ASSERT_TRUE(ctx.openPipe());
-    FillGlobalString(ctx.input, 2u * 1024u * 1024u, 0x78u);
-    AssignGlobalString(ctx.expected, ViewGlobalString(ctx.input));
-    const i32 writeFd = ctx.releaseWriteFd();
-    ASSERT_TRUE(ctx.beginWriter(writeFd, ViewGlobalString(ctx.input)));
-    AssignGlobalString(ctx.input, "caller changed bytes");
-
-    const i32 writerFlags = ctx.queryFdFlags(writeFd);
-    ASSERT_GE(writerFlags, 0);
-    ASSERT_TRUE(ctx.hasNonblockFlag(writerFlags));
-    for(usize attempt = 0u; attempt < 64u; ++attempt)
-        ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
-    ASSERT_FALSE(ctx.writerFinished());
-    ASSERT_EQ(ctx.pollPipeWritable(writeFd), 0);
-
-    b8 finished = false;
-    for(usize attempt = 0u; attempt < 4096u && !finished; ++attempt){
-        const Expected<b8, ClipboardPipeReadFailure> read = ctx.readPipe();
-        ASSERT_TRUE(read.has_value());
-        finished = read.value();
-        ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
-    }
-    EXPECT_TRUE(finished);
-    EXPECT_TRUE(ctx.writerFinished());
-    EXPECT_EQ(ctx.receivedText(), ViewGlobalString(ctx.expected));
-}
-
-void VerifyClipboardPipe_ClosedReaderFailsWithoutSigpipeOrChangingThreadMask(){
-    ClipboardPipeContext ctx = ClipboardPipeContext();
-    ASSERT_TRUE(ctx.openPipe());
-    ctx.closeReadEnd();
-    i32 beforeStatus = -1;
-    i32 beforeSigpipe = -1;
-    native(mut beforeStatus, mut beforeSigpipe){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        sigset_t before;
-        beforeStatus = static_cast<i32>(pthread_sigmask(SIG_BLOCK, nullptr, &before));
-        if(beforeStatus == 0)
-            beforeSigpipe = static_cast<i32>(sigismember(&before, SIGPIPE));
-#endif
-    }
-    ASSERT_EQ(beforeStatus, 0);
-    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "reader is gone"));
-    EXPECT_EQ(ctx.advanceWriter(), ClipboardStatus::NativeFailure);
-    EXPECT_TRUE(ctx.writerFinished());
-
-    i32 afterStatus = -1;
-    i32 afterSigpipe = -2;
-    native(mut afterStatus, mut afterSigpipe){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        sigset_t after;
-        afterStatus = static_cast<i32>(pthread_sigmask(SIG_BLOCK, nullptr, &after));
-        if(afterStatus == 0)
-            afterSigpipe = static_cast<i32>(sigismember(&after, SIGPIPE));
-#endif
-    }
-    ASSERT_EQ(afterStatus, 0);
-    EXPECT_EQ(beforeSigpipe, afterSigpipe);
-}
-
-void VerifyClipboardPipe_WriterCanBeReusedForEmptyAndShorterTransfers(){
-    ClipboardPipeContext ctx = ClipboardPipeContext();
-    ASSERT_TRUE(ctx.openPipe());
-    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "old long contents"));
-    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
-    ASSERT_TRUE(ctx.writerFinished());
-    const Expected<b8, ClipboardPipeReadFailure> firstFinished = ctx.readPipe();
-    ASSERT_TRUE(firstFinished.has_value());
-    ASSERT_TRUE(firstFinished.value());
-    EXPECT_EQ(ctx.receivedText(), "old long contents");
-
-    ASSERT_TRUE(ctx.openPipe());
-    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), StringView()));
-    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
-    ASSERT_TRUE(ctx.writerFinished());
-    ctx.clearReceived();
-    const Expected<b8, ClipboardPipeReadFailure> emptyFinished = ctx.readPipe();
-    ASSERT_TRUE(emptyFinished.has_value());
-    EXPECT_TRUE(emptyFinished.value());
-    EXPECT_TRUE(ctx.receivedText().empty());
-
-    ASSERT_TRUE(ctx.openPipe());
-    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "new"));
-    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
-    ASSERT_TRUE(ctx.writerFinished());
-    ctx.clearReceived();
-    const Expected<b8, ClipboardPipeReadFailure> lastFinished = ctx.readPipe();
-    ASSERT_TRUE(lastFinished.has_value());
-    EXPECT_TRUE(lastFinished.value());
-    EXPECT_EQ(ctx.receivedText(), "new");
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void VerifyX11ClipboardFixture_PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults(mut X11ClipboardFixture self){
-    b8 createdOk = false;
-    b8 retiredNonZero = false;
-    b8 absentOk = false;
-    u64 absentType = 1u;
-    usize absentCount = 1u;
-    b8 destroyedOk = false;
-    b8 failedHasValue = true;
-    u8 failedErrorCode = 0u;
-    u8 expectedBadWindow = 1u;
-    native(mut self, mut createdOk, mut retiredNonZero, mut absentOk, mut absentType, mut absentCount, mut destroyedOk, mut failedHasValue, mut failedErrorCode, mut expectedBadWindow){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        expectedBadWindow = static_cast<u8>(BadWindow);
-        Window retired = 0u;
-        {
-            NWB::Core::X11CheckedOperation created(*self.m_displays[0]);
-            retired = XCreateSimpleWindow(self.m_displays[0], DefaultRootWindow(self.m_displays[0]), 0, 0, 1, 1, 0, 0, 0);
-            createdOk = created.succeeded();
-            retiredNonZero = retired != 0u;
-        }
-        if(createdOk && retiredNonZero){
-            const auto absent = NWB::Core::ReadX11Property(*self.m_displays[0], retired, XA_STRING, false, 16u);
-            absentOk = absent.has_value();
-            if(absent){
-                absentType = static_cast<u64>(absent->type);
-                absentCount = absent->count;
-            }
-            {
-                NWB::Core::X11CheckedOperation destroyed(*self.m_displays[0]);
-                XDestroyWindow(self.m_displays[0], retired);
-                destroyedOk = destroyed.succeeded();
-            }
-            const auto failed = NWB::Core::ReadX11Property(*self.m_displays[0], retired, XA_STRING, false, 16u);
-            failedHasValue = failed.has_value();
-            if(!failed)
-                failedErrorCode = failed.error().errorCode;
-        }
-#endif
-    }
-    ASSERT_TRUE(createdOk);
-    ASSERT_TRUE(retiredNonZero);
-    ASSERT_TRUE(absentOk);
-    EXPECT_EQ(absentType, 0u);
-    EXPECT_EQ(absentCount, 0u);
-    ASSERT_TRUE(destroyedOk);
-    ASSERT_FALSE(failedHasValue);
-    EXPECT_EQ(failedErrorCode, expectedBadWindow);
-}
-
-void VerifyX11ClipboardFixture_WritingPrimarySelectionDoesNotOverwriteClipboardUtf8(mut X11ClipboardFixture self){
-    const StringView clipboard = "clipboard \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x99\x82";
-    const StringView primary = "primary caf\xc3\xa9";
-    ASSERT_TRUE(self.canReadPrimarySelection());
-    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, clipboard));
-    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::PrimarySelection, primary));
-
-    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
-    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> clipAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
-    ASSERT_TRUE(clipAdmission.has_value());
-    ASSERT_TRUE(self.awaitServiceCompletion(1u, clipAdmission.value(), out.completion));
-    ASSERT_EQ(out.completion.status, ClipboardStatus::Success);
-    EXPECT_EQ(out.completion.text, clipboard);
-
-    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> primaryAdmission = self.requestRead(1u, ClipboardChannel::PrimarySelection);
-    ASSERT_TRUE(primaryAdmission.has_value());
-    ASSERT_TRUE(self.awaitServiceCompletion(1u, primaryAdmission.value(), out.completion));
-    ASSERT_EQ(out.completion.status, ClipboardStatus::Success);
-    EXPECT_EQ(out.completion.text, primary);
-}
-
-void VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSelection(mut X11ClipboardFixture self){
-    ClipboardPipeContext scratchCtx = ClipboardPipeContext();
-    FillGlobalString(scratchCtx.input, 200000u, 0x78u);
-    ReplaceGlobalString(scratchCtx.input, 65534u, 1u, "\xf0\x9f\x99\x82");
-    const StringView originalView = ViewGlobalString(scratchCtx.input);
-    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, originalView));
-    self.m_sawSelectionRequest = false;
-
-    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> tokenAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
-    ASSERT_TRUE(tokenAdmission.has_value());
-    const ClipboardRequestToken token = tokenAdmission.value();
-    ASSERT_TRUE(self.waitForSelectionRequest());
-    ASSERT_TRUE(self.m_sawSelectionRequest);
-
-    u64 replacementWindow = 0u;
-    b8 ownerReplaced = false;
-    native(mut self, mut replacementWindow, mut ownerReplaced){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        using namespace __hidden_os_platform_cases_support;
-        const Window replacement = XCreateSimpleWindow(self.m_displays[1], DefaultRootWindow(self.m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
-        replacementWindow = static_cast<u64>(replacement);
-        if(replacement != 0u){
-            const Atom clipboard = XInternAtom(self.m_displays[1], s_ClipboardAtomName.data(), False);
-            XSetSelectionOwner(self.m_displays[1], clipboard, replacement, CurrentTime);
-            XSync(self.m_displays[1], False);
-            ownerReplaced = XGetSelectionOwner(self.m_displays[1], clipboard) == replacement;
-        }
-#endif
-    }
-    ASSERT_NE(replacementWindow, 0u);
-    ASSERT_TRUE(ownerReplaced);
-
-    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
-    ASSERT_TRUE(self.awaitServiceCompletion(1u, token, out.completion));
-    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
-    EXPECT_EQ(out.completion.text, originalView);
-
-    native(mut self, in replacementWindow){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        XDestroyWindow(self.m_displays[1], static_cast<Window>(replacementWindow));
-        XSync(self.m_displays[1], False);
-#endif
-    }
-}
-
-void VerifyX11ClipboardFixture_CancelledRequestWindowCannotCompleteFreshRequest(mut X11ClipboardFixture self){
-    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "first"));
-    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> cancelledAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
-    ASSERT_TRUE(cancelledAdmission.has_value());
-    const ClipboardRequestToken cancelled = cancelledAdmission.value();
-    ASSERT_TRUE(self.pumpService(1u));
-    ASSERT_TRUE(self.cancelService(1u, cancelled));
-    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "after cancellation"));
-
-    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
-    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> freshAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
-    ASSERT_TRUE(freshAdmission.has_value());
-    ASSERT_TRUE(self.awaitServiceCompletion(1u, freshAdmission.value(), out.completion));
-    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
-    EXPECT_EQ(out.completion.text, "after cancellation");
-    EXPECT_EQ(self.pollService(1u, cancelled, out.completion), ClipboardPollResult::InvalidRequest);
-}
-
-void VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText(mut X11ClipboardFixture self){
-    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "before ownership loss"));
-
-    u64 temporaryWindow = 0u;
-    b8 temporaryOwned = false;
-    b8 queuedLoss = false;
-    b8 selectionMatched = false;
-    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
-
-    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> writeAdmission = self.requestWrite(0u, ClipboardChannel::Clipboard, "after reacquisition");
-    ASSERT_TRUE(writeAdmission.has_value());
-    const ClipboardRequestToken writeToken = writeAdmission.value();
-    ASSERT_TRUE(writeToken.valid());
-
-    b8 reacquiredOk = false;
-    b8 ownerMovedAway = false;
-    b8 lossDispatched = false;
-    native(mut self, in writeToken, mut out, mut temporaryWindow, mut temporaryOwned, mut queuedLoss, mut selectionMatched, mut reacquiredOk, mut ownerMovedAway, mut lossDispatched){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        using namespace __hidden_os_platform_cases_support;
-        const Atom clipboard = XInternAtom(self.m_displays[1], s_ClipboardAtomName.data(), False);
-        const Window temporaryOwner = XCreateSimpleWindow(self.m_displays[1], DefaultRootWindow(self.m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
-        temporaryWindow = static_cast<u64>(temporaryOwner);
-        if(temporaryOwner != 0u){
-            XSetSelectionOwner(self.m_displays[1], clipboard, temporaryOwner, CurrentTime);
-            XSync(self.m_displays[1], False);
-            temporaryOwned = XGetSelectionOwner(self.m_displays[1], clipboard) == temporaryOwner;
-        }
-        XEvent ownershipLoss{};
-        if(temporaryOwned){
-            const Timer lossDeadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
-            while(!queuedLoss && TimerNow() < lossDeadline){
-                queuedLoss = XCheckTypedEvent(self.m_displays[0], SelectionClear, &ownershipLoss) != False;
-                if(!queuedLoss)
-                    SleepMS(s_PollIntervalMS);
-            }
-            selectionMatched = ownershipLoss.xselectionclear.selection == clipboard;
-        }
-        if(queuedLoss && selectionMatched){
-            reacquiredOk = self.awaitCompletion(writeToken, *self.m_services[0], out.completion) && out.completion.status == NWB::Core::ClipboardStatus::Success;
-            ownerMovedAway = XGetSelectionOwner(self.m_displays[1], clipboard) != temporaryOwner;
-            lossDispatched = NWB::Core::DispatchX11ClipboardEvent(*self.m_services[0], ownershipLoss);
-        }
-#endif
-    }
-    ASSERT_NE(temporaryWindow, 0u);
-    ASSERT_TRUE(temporaryOwned);
-    ASSERT_TRUE(queuedLoss);
-    ASSERT_TRUE(selectionMatched);
-    ASSERT_TRUE(reacquiredOk);
-    ASSERT_TRUE(ownerMovedAway);
-    ASSERT_TRUE(lossDispatched);
-    ASSERT_TRUE(self.pumpAll());
-
-    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> readAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
-    ASSERT_TRUE(readAdmission.has_value());
-    ASSERT_TRUE(self.awaitServiceCompletion(1u, readAdmission.value(), out.completion));
-    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
-    EXPECT_EQ(out.completion.text, "after reacquisition");
-
-    native(mut self, in temporaryWindow){
-#if defined(FOUNDATION_PLATFORM_LINUX)
-        XDestroyWindow(self.m_displays[1], static_cast<Window>(temporaryWindow));
-        XSync(self.m_displays[1], False);
-#endif
-    }
 }
 
 
@@ -1272,135 +756,3 @@ NWB_ADHD_GTEST(WaylandTextInputState, RingEvictionStillAdmitsDelayedCommitButMar
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_LINUX)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_os_platform_cases_support{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void X11ClipboardFixture::SetUp(){
-    const auto isolated = EnvironmentVariableEquals(m_arena.arena, "NWB_X11_CLIPBOARD_TEST_ISOLATED", "1");
-    ASSERT_TRUE(isolated);
-    if(!*isolated)
-        GTEST_SKIP() << "Native clipboard tests require the isolated Xvfb CTest entry";
-    for(usize index = 0u; index < m_displays.size(); ++index){
-        m_displays[index] = XOpenDisplay(nullptr);
-        ASSERT_NE(m_displays[index], nullptr);
-        auto serviceResult = CreateX11ClipboardService(m_arena.arena, *m_displays[index]);
-        ASSERT_TRUE(serviceResult);
-        m_services[index] = Move(*serviceResult);
-        ASSERT_TRUE(m_services[index]);
-    }
-}
-
-void X11ClipboardFixture::TearDown(){
-    for(auto& service : m_services)
-        service.reset();
-    for(_XDisplay*& display : m_displays){
-        if(display){
-            EXPECT_EQ(XCloseDisplay(display), 0);
-            display = nullptr;
-        }
-    }
-}
-
-b8 X11ClipboardFixture::pumpAll(){
-    for(usize index = 0u; index < m_displays.size(); ++index){
-        if(!m_services[index]->pump())
-            return false;
-        usize dispatched = 0u;
-        while(XPending(m_displays[index]) > 0 && dispatched < 256u){
-            XEvent event{};
-            if(XNextEvent(m_displays[index], &event) != 0)
-                return false;
-            if(event.type == SelectionRequest)
-                m_sawSelectionRequest = true;
-            if(DispatchX11ClipboardEvent(*m_services[index], event)){
-                ++dispatched;
-                continue;
-            }
-            ++dispatched;
-        }
-    }
-    return true;
-}
-
-b8 X11ClipboardFixture::awaitCompletion(const ClipboardRequestToken token, IClipboardService& service, ClipboardCompletion& completion){
-    const Timer deadline = TimerAddMS(TimerNow(), s_ClipboardCompletionTimeoutMS);
-    while(TimerNow() < deadline){
-        if(!pumpAll())
-            return false;
-        const ClipboardPollResult::Enum result = service.poll(token, completion);
-        if(result == ClipboardPollResult::Completed)
-            return true;
-        if(result != ClipboardPollResult::Pending)
-            return false;
-        SleepMS(s_PollIntervalMS);
-    }
-    return false;
-}
-
-b8 X11ClipboardFixture::writeText(const usize index, const ClipboardChannel::Enum channel, const AStringView text){
-    ClipboardCompletion completion(m_arena.arena);
-    const auto request = m_services[index]->requestWriteText(channel, text);
-    return request && request->valid() && awaitCompletion(*request, *m_services[index], completion) && completion.status == ClipboardStatus::Success;
-}
-
-b8 X11ClipboardFixture::waitForSelectionRequest(){
-    const Timer deadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
-    while(!m_sawSelectionRequest && TimerNow() < deadline){
-        if(!pumpAll())
-            return false;
-        SleepMS(s_PollIntervalMS);
-    }
-    return m_sawSelectionRequest;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-TEST(ClipboardPipe, PartialUnicodeStaysPendingUntilValidEof){ VerifyClipboardPipe_PartialUnicodeStaysPendingUntilValidEof(); }
-TEST(ClipboardPipe, TruncatedUnicodeIsRejectedAtEof){ VerifyClipboardPipe_TruncatedUnicodeIsRejectedAtEof(); }
-TEST(ClipboardPipe, WriterOwnsLargeInputAndResumesAfterFullPipe){ VerifyClipboardPipe_WriterOwnsLargeInputAndResumesAfterFullPipe(); }
-TEST(ClipboardPipe, ClosedReaderFailsWithoutSigpipeOrChangingThreadMask){ VerifyClipboardPipe_ClosedReaderFailsWithoutSigpipeOrChangingThreadMask(); }
-TEST(ClipboardPipe, WriterCanBeReusedForEmptyAndShorterTransfers){ VerifyClipboardPipe_WriterCanBeReusedForEmptyAndShorterTransfers(); }
-
-TEST_F(X11ClipboardFixture, PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults){ VerifyX11ClipboardFixture_PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults(*this); }
-TEST_F(X11ClipboardFixture, WritingPrimarySelectionDoesNotOverwriteClipboardUtf8){ VerifyX11ClipboardFixture_WritingPrimarySelectionDoesNotOverwriteClipboardUtf8(*this); }
-TEST_F(X11ClipboardFixture, IncrementalReadRetainsSnapshotAfterOwnerLosesSelection){ VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSelection(*this); }
-TEST_F(X11ClipboardFixture, CancelledRequestWindowCannotCompleteFreshRequest){ VerifyX11ClipboardFixture_CancelledRequestWindowCannotCompleteFreshRequest(*this); }
-TEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText){ VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText(*this); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

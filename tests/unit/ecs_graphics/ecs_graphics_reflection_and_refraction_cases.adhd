@@ -3,328 +3,264 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/ecs_test_world.adhd>
+#include <tests/common/value_storage.adhd>
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd>
+#include <impl/ecs_render/mesh/runtime_mesh_pruning.adhd>
+#include <impl/ecs_render/reflection/feedback.adhd>
+#include <impl/ecs_render/reflection/feedback_resources.adhd>
+#include <impl/ecs_render/reflection/history.adhd>
+#include <impl/ecs_render/reflection/reflection_system.adhd>
+#include <impl/ecs_render/reflection/settings.adhd>
+#include <impl/ecs_render/reflection/statistics_readback.adhd>
+#include <impl/ecs_render/refraction/statistics_readback.adhd>
+#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd>
 #include <tests/unit/ecs_graphics/suite.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type ReflectionCounterArray = Array<u32, s_ReflectionReadbackCounterCount>;
+type RefractionCounterArray = Array<u32, s_RefractionReadbackCounterCount>;
+type ReflectionPendingEntry = Expected<StatisticsPendingReadback>;
+type ReflectionTraceModeEnum = ReflectionTraceMode;
+type ReflectionDebugViewEnum = ReflectionDebugView;
+type RenderableMeshStatusResult = Expected<RenderableMeshDesc, RenderableMeshResolution>;
+type SceneLightSpan = Span<SceneLightGpuData>;
+type PruneMeshAssetRef = AssetRef<Mesh>;
 
+ReflectionSceneContentStamp Stamp(){ return ReflectionSceneContentStamp(1u, 2u, 3u, 4u, true); }
+QueueSubmissionToken Token(in u64 value){
+    QueueSubmissionToken token;
+    token.value = value;
+    token.physicalQueueIndex = 0u;
+    token.deviceGeneration = 1u;
+    token.queue = CommandQueue::Graphics;
+    return token;
+}
+QueueSubmissionToken Token(){ return Token(20u); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/assets/graphics/refraction/diagnostics_layout.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
-#include <impl/ecs_render/mesh/runtime_mesh_pruning.adhd.h>
-#include <impl/ecs_render/reflection/feedback.adhd.h>
-#include <impl/ecs_render/reflection/feedback_resources.adhd.h>
-#include <impl/ecs_render/reflection/history.adhd.h>
-#include <impl/ecs_render/reflection/reflection_system.adhd.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
-#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
-#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
-#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/ecs/entity.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/limit.h>
-#include <global/name.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsReflectionRefractionDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
-inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32);
-
-using ReflectionCounterArray = Array<u32, s_ReflectionCounterWordCount>;
-using RefractionCounterArray = Array<u32, s_RefractionCounterWordCount>;
-
-[[nodiscard]] FOUNDATION_INLINE ReflectionCounterArray MakeSampleReflectionCounters()noexcept{
-    constexpr ReflectionCounterArray s_Counters = {
-        100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u,
-    };
-    static_assert(sizeof(s_Counters) == NWB_REFLECTION_COUNTER_SIZE);
-    return s_Counters;
+ReflectionCounterArray MakeSampleReflectionCounters(){
+    return ReflectionCounterArray(100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u);
+}
+RefractionCounterArray MakeSampleRefractionCounters(){
+    return RefractionCounterArray(23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
+        59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u);
+}
+static_assert(size_of<ReflectionCounterArray>() == s_ReflectionReadbackCounterBytes);
+void ExpectRefractionDiagnosticCountersMatch(in RefractionStatistics statistics, in RefractionCounterArray counters){
+    EXPECT_EQ(statistics.hardwarePixels, counters[0u]);
+    EXPECT_EQ(statistics.entryQueries, counters[1u]);
+    EXPECT_EQ(statistics.entryAssociationMisses, counters[2u]);
+    EXPECT_EQ(statistics.entryWrongEntities, counters[3u]);
+    EXPECT_EQ(statistics.entryFailures, counters[4u]);
+    EXPECT_EQ(statistics.associatedEntries, counters[5u]);
+    EXPECT_EQ(statistics.invalidEntryDirections, counters[6u]);
+    EXPECT_EQ(statistics.exitQueries, counters[7u]);
+    EXPECT_EQ(statistics.exitMisses, counters[8u]);
+    EXPECT_EQ(statistics.exitFailures, counters[9u]);
+    EXPECT_EQ(statistics.tirEvents, counters[10u]);
+    EXPECT_EQ(statistics.tirCappedPixels, counters[11u]);
+    EXPECT_EQ(statistics.volumeExits, counters[12u]);
+    EXPECT_EQ(statistics.backgroundQueries, counters[13u]);
+    EXPECT_EQ(statistics.backgroundMisses, counters[14u]);
+    EXPECT_EQ(statistics.backgroundFailures, counters[15u]);
+    EXPECT_EQ(statistics.secondaryGlassPixels, counters[16u]);
+    EXPECT_EQ(statistics.transparentHits, counters[17u]);
+    EXPECT_EQ(statistics.backgroundLayerCapPixels, counters[18u]);
+    EXPECT_EQ(statistics.cachedOpaqueReturns, counters[19u]);
+    EXPECT_EQ(statistics.shadedOpaqueReturns, counters[20u]);
+    EXPECT_EQ(statistics.exitScreenBackgroundReturns, counters[21u]);
+    EXPECT_EQ(statistics.exitStraightFallbackPixels, counters[22u]);
+    EXPECT_EQ(statistics.materialShadeCalls, counters[23u]);
+    EXPECT_EQ(statistics.cachedHitAttempts, counters[24u]);
+    EXPECT_EQ(statistics.cachedHitMisses, counters[25u]);
+    EXPECT_EQ(statistics.physicalQueries, counters[26u]);
+    EXPECT_EQ(statistics.queryBudgetUnits, counters[27u]);
+    EXPECT_EQ(statistics.overflowFlags, counters[28u]);
 }
 
-[[nodiscard]] FOUNDATION_INLINE RefractionCounterArray MakeSampleRefractionCounters()noexcept{
-    constexpr RefractionCounterArray s_Counters = {
-        23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
-        59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u,
-    };
-    return s_Counters;
+[ordered]
+class StatisticsTestControl<TState>{
+    public HeapStorage arena;
+    public SharedPool versions;
+    public Shared<TState> control;
+    public StatisticsTestControl(){
+        this.arena = HeapStorage(s_EcsGraphicsCaseTestsStatistics);
+        this.versions = this.arena.makeValue<SharedPool>();
+        const auto created = this.versions.make<TState>(cast<u16>(1u));
+        if(!created.has_value()){
+            ADD_FAILURE();
+            return;
+        }
+        this.control = created.value();
+    }
 }
 
-FOUNDATION_INLINE void ExpectRefractionDiagnosticCountersMatch(const RefractionStatistics& statistics, const RefractionCounterArray& counters){
-#define NWB_CHECK_REFRACTION_COUNTER(field, byteOffset) EXPECT_EQ(statistics.field, counters[(byteOffset) / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES]);
-    NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_CHECK_REFRACTION_COUNTER)
-#undef NWB_CHECK_REFRACTION_COUNTER
+class ReflectionStatisticsLeaseTask{
+    public ReflectionStatisticsReservation reservation;
+    public ReflectionStatisticsLeaseTask(in ReflectionStatisticsControlHandle control, in ReflectionStatistics metadata){ this.reservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(control, metadata); }
+    public void discarded(){ this.reservation.discard(); }
 }
+class ReflectionFeedbackLeaseTask{
+    public ReflectionFeedbackReservation reservation;
+    public ReflectionFeedbackLeaseTask(in ReflectionFeedbackControlHandle control, in ReflectionFeedbackPlan metadata){ this.reservation = ReflectionFeedbackReservation(control, metadata); }
+    public void discarded(){ this.reservation.discard(); }
+}
+class ReflectionHistoryLeaseTask{
+    public ReflectionHistoryReservation reservation;
+    public ReflectionHistoryLeaseTask(in ReflectionHistoryControlHandle control, in ReflectionHistoryPlan metadata){ this.reservation = ReflectionHistoryReservation(control, metadata); }
+    public void discarded(){ this.reservation.discard(); }
+}
+class ReflectionStatsDestructorLeaseTask{ public ReflectionStatisticsReservation reservation;
+    public ReflectionStatsDestructorLeaseTask(in ReflectionStatisticsControlHandle control, in ReflectionStatistics metadata){ this.reservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(control, metadata); } }
 
-struct ReflectionStatsContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionStatisticsState> inner;
-    Core::GpuTaskGraph graph{ inner.arena };
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
-    [[nodiscard]] auto reserve(const ReflectionStatistics& metadata){ return inner.control->reserve(metadata); }
-    [[nodiscard]] ReflectionStatisticsReservation makeReservation(const ReflectionStatistics& metadata){
-        return ReflectionStatisticsReservation(inner.control, metadata);
+[ordered]
+class ReflectionStatsContext{
+    public StatisticsTestControl<ReflectionStatisticsState> inner;
+    public GpuTaskGraph graph;
+    public ReflectionStatsContext(){
+        this.inner = StatisticsTestControl<ReflectionStatisticsState>();
+        this.graph = GpuTaskGraph(this.inner.arena);
     }
-    [[nodiscard]] Expected<Core::GpuTaskId> addLeaseTask(const Core::GpuTaskDesc& desc, const ReflectionStatistics& metadata){
-        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionStatisticsReservation>;
-        return graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionStatisticsReservation(inner.control, metadata) });
+    public b8 valid()const{ return this.inner.control.valid(); }
+    public StatisticsReservationKey reserve(in ReflectionStatistics metadata){ return this.inner.control.deref().reserve(metadata); }
+    public void discard(in StatisticsReservationKey key){ this.inner.control.deref().discard(key); }
+    public void accept(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady){
+        this.inner.control.deref().accept(key, token, hardwareReady);
     }
-    [[nodiscard]] Expected<Core::GpuTaskId> addDestructorLeaseTask(const Core::GpuTaskDesc& desc, const ReflectionStatistics& metadata){
-        using DestructorLeaseTask = ReflectionStatisticsTestHelpers::DestructorReservationLeaseTask<ReflectionStatisticsReservation>;
-        return graph.addTask<DestructorLeaseTask>(desc, DestructorLeaseTask::Payload{ ReflectionStatisticsReservation(inner.control, metadata) });
+    public void complete(in StatisticsReservationKey key, in QueueSubmissionToken token, in Span<u32> counters){
+        this.inner.control.deref().complete(key, token, counters);
     }
-    void discard(const StatisticsReservationKey& key){ inner.control->discard(key); }
-    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady){
-        inner.control->accept(key, token, hardwareReady);
+    public void completeEmpty(in StatisticsReservationKey key, in QueueSubmissionToken token){
+        this.complete(key, token, Span<u32>());
     }
-    void acceptWithFeedback(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionFeedbackOutcome& feedback){
+    public void reset(in u16 generation){ this.inner.control.deref().reset(generation); }
+    public Expected<ReflectionStatistics> tryGetLatestStatistics(){ return this.inner.control.deref().tryGetLatestStatistics(); }
+    public ReflectionPendingEntry pending(in u32 slot){ return this.inner.control.deref().pending(slot); }
+    public ReflectionStatisticsReservation makeReservation(in ReflectionStatistics metadata){
+        return StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(this.inner.control, metadata);
+    }
+    public void acceptWithFeedback(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady, in ReflectionFeedbackOutcome feedback){
         ReflectionStatisticsOutcome outcome;
         outcome.feedback = feedback;
-        inner.control->accept(key, token, hardwareReady, outcome);
+        this.inner.control.deref().accept(key, token, hardwareReady, outcome);
     }
-    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters){
-        inner.control->complete(key, token, counters);
+    public Expected<GpuTaskId> addLeaseTask(in GpuTaskDesc desc, in ReflectionStatistics metadata){
+        ReflectionStatisticsLeaseTask task(this.inner.control, metadata);
+        return this.graph.addPayloadTask(desc, task);
     }
-    void completeEmpty(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token){
-        inner.control->complete(key, token, {});
+    public Expected<GpuTaskId> addDestructorLeaseTask(in GpuTaskDesc desc, in ReflectionStatistics metadata){
+        ReflectionStatsDestructorLeaseTask task(this.inner.control, metadata);
+        return this.graph.addPayloadTask(desc, task);
     }
-    void reset(const u16 generation){ inner.control->reset(generation); }
-    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics(){ return inner.control->tryGetLatestStatistics(); }
-    [[nodiscard]] auto pending(const u32 slot){ return inner.control->pending(slot); }
-};
+}
 
-struct RefractionStatsContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<RefractionStatisticsState> inner;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
-    [[nodiscard]] auto reserve(const RefractionStatistics& metadata){ return inner.control->reserve(metadata); }
-    void discard(const StatisticsReservationKey& key){ inner.control->discard(key); }
-    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady){
-        inner.control->accept(key, token, hardwareReady);
+[ordered]
+class RefractionStatsContext{
+    public StatisticsTestControl<RefractionStatisticsState> inner;
+    public b8 valid()const{ return this.inner.control.valid(); }
+    public StatisticsReservationKey reserve(in RefractionStatistics metadata){ return this.inner.control.deref().reserve(metadata); }
+    public void discard(in StatisticsReservationKey key){ this.inner.control.deref().discard(key); }
+    public void accept(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady){
+        this.inner.control.deref().accept(key, token, hardwareReady);
     }
-    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters){
-        inner.control->complete(key, token, counters);
+    public void complete(in StatisticsReservationKey key, in QueueSubmissionToken token, in Span<u32> counters){
+        this.inner.control.deref().complete(key, token, counters);
     }
-    void completeEmpty(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token){
-        inner.control->complete(key, token, {});
+    public void completeEmpty(in StatisticsReservationKey key, in QueueSubmissionToken token){
+        this.complete(key, token, Span<u32>());
     }
-    void reset(const u16 generation){ inner.control->reset(generation); }
-    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestStatistics(){ return inner.control->tryGetLatestStatistics(); }
-    [[nodiscard]] auto pending(const u32 slot){ return inner.control->pending(slot); }
-};
+    public void reset(in u16 generation){ this.inner.control.deref().reset(generation); }
+    public Expected<RefractionStatistics> tryGetLatestStatistics(){ return this.inner.control.deref().tryGetLatestStatistics(); }
+    public ReflectionPendingEntry pending(in u32 slot){ return this.inner.control.deref().pending(slot); }
+}
 
-struct ReflectionFeedbackControlContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionFeedbackState> inner;
-    Core::GpuTaskGraph graph{ inner.arena };
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
-    [[nodiscard]] ReflectionFeedbackPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const b8 enabled, const u64 graphicsFrame){
-        return inner.control->plan(stamp, settings, enabled, graphicsFrame);
+[ordered]
+class ReflectionFeedbackControlContext{
+    public StatisticsTestControl<ReflectionFeedbackState> inner;
+    public GpuTaskGraph graph;
+    public ReflectionFeedbackControlContext(){
+        this.inner = StatisticsTestControl<ReflectionFeedbackState>();
+        this.graph = GpuTaskGraph(this.inner.arena);
     }
-    [[nodiscard]] b8 reserve(const ReflectionFeedbackPlan& plan){ return inner.control->reserve(plan); }
-    void discard(const ReflectionFeedbackPlan& plan){ inner.control->discard(plan); }
-    [[nodiscard]] ReflectionFeedbackReservation makeReservation(const ReflectionFeedbackPlan& plan){
-        return ReflectionFeedbackReservation(inner.control, plan);
+    public b8 valid()const{ return this.inner.control.valid(); }
+    public ReflectionFeedbackPlan plan(in ReflectionSceneContentStamp stamp, in ReflectionSettings settings, in b8 enabled, in u64 graphicsFrame){
+        return this.inner.control.deref().plan(stamp, settings, enabled, graphicsFrame);
     }
-    [[nodiscard]] Expected<Core::GpuTaskId> addLeaseTask(const Core::GpuTaskDesc& desc, const ReflectionFeedbackPlan& plan){
-        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionFeedbackReservation>;
-        return graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionFeedbackReservation(inner.control, plan) });
+    public b8 reserve(in ReflectionFeedbackPlan plan){ return this.inner.control.deref().reserve(plan); }
+    public void discard(in ReflectionFeedbackPlan plan){ this.inner.control.deref().discard(plan); }
+    public ReflectionFeedbackReservation makeReservation(in ReflectionFeedbackPlan plan){ return ReflectionFeedbackReservation(this.inner.control, plan); }
+    public Expected<GpuTaskId> addLeaseTask(in GpuTaskDesc desc, in ReflectionFeedbackPlan plan){
+        ReflectionFeedbackLeaseTask task(this.inner.control, plan);
+        return this.graph.addPayloadTask(desc, task);
     }
-};
+}
 
-struct ReflectionHistoryControlContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionHistoryState> inner;
-    Core::GpuTaskGraph graph{ inner.arena };
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
-    [[nodiscard]] ReflectionHistoryPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const u64 graphicsFrame){
-        return inner.control->plan(stamp, settings, graphicsFrame);
+[ordered]
+class ReflectionHistoryControlContext{
+    public StatisticsTestControl<ReflectionHistoryState> inner;
+    public GpuTaskGraph graph;
+    public ReflectionHistoryControlContext(){
+        this.inner = StatisticsTestControl<ReflectionHistoryState>();
+        this.graph = GpuTaskGraph(this.inner.arena);
     }
-    [[nodiscard]] b8 reserve(const ReflectionHistoryPlan& plan){ return inner.control->reserve(plan); }
-    void discard(const ReflectionHistoryPlan& plan){ inner.control->discard(plan); }
-    [[nodiscard]] ReflectionHistoryReservation makeReservation(const ReflectionHistoryPlan& plan){
-        return ReflectionHistoryReservation(inner.control, plan);
+    public b8 valid()const{ return this.inner.control.valid(); }
+    public ReflectionHistoryPlan plan(in ReflectionSceneContentStamp stamp, in ReflectionSettings settings, in u64 graphicsFrame){
+        return this.inner.control.deref().plan(stamp, settings, graphicsFrame);
     }
-    [[nodiscard]] Expected<Core::GpuTaskId> addLeaseTask(const Core::GpuTaskDesc& desc, const ReflectionHistoryPlan& plan){
-        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionHistoryReservation>;
-        return graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionHistoryReservation(inner.control, plan) });
+    public b8 reserve(in ReflectionHistoryPlan plan){ return this.inner.control.deref().reserve(plan); }
+    public void discard(in ReflectionHistoryPlan plan){ this.inner.control.deref().discard(plan); }
+    public ReflectionHistoryReservation makeReservation(in ReflectionHistoryPlan plan){ return ReflectionHistoryReservation(this.inner.control, plan); }
+    public Expected<GpuTaskId> addLeaseTask(in GpuTaskDesc desc, in ReflectionHistoryPlan plan){
+        ReflectionHistoryLeaseTask task(this.inner.control, plan);
+        return this.graph.addPayloadTask(desc, task);
     }
-};
+}
 
-struct PruneContext : Tests::EcsTestWorld{
-    MeshSystem& meshSystem = world.addSystem<MeshSystem>(world);
-
-
-public:
-    [[nodiscard]] Core::ECS::EntityID addMeshEntity(){
-        auto entity = world.createEntity();
+[ordered]
+class PruneContext{
+    public EcsTestWorld testWorld;
+    public mut MeshSystem meshSystem;
+    public PruneContext(){
+        this.testWorld = EcsTestWorld();
+        this.meshSystem = this.testWorld.world.addSystem<MeshSystem>(this.testWorld.world);
+    }
+    public EntityID addMeshEntity(){
+        auto entity = this.testWorld.world.createEntity();
         entity.addComponent<MeshComponent>();
         return entity.id();
     }
-
-    void setMeshAsset(const Core::ECS::EntityID entity, const AStringView path){
-        world.entity(entity).getComponent<MeshComponent>().mesh = Core::Assets::AssetRef<Mesh>::FromText(path).value_or(Core::Assets::AssetRef<Mesh>{});
+    public void setMeshAsset(in EntityID entity, in StringView path){
+        const auto parsed = NameFromText(path);
+        mut MeshComponent mesh = this.testWorld.world.entity(entity).getComponent<MeshComponent>();
+        mesh.mesh = PruneMeshAssetRef(parsed.value_or(s_NameNone));
     }
-
-    [[nodiscard]] Core::ECS::EntityID addSkinnedEntity(){
-        auto entity = world.createEntity();
+    public EntityID addSkinnedEntity(){
+        auto entity = this.testWorld.world.createEntity();
         entity.addComponent<SkinnedMeshBindingComponent>();
         return entity.id();
     }
-};
+}
 
-[[nodiscard]] FOUNDATION_INLINE Name MakeVariantPruningName(const usize index)noexcept{
-    NameHash hash = ComputeNameHash(MakeNotNull("tests/runtime_mesh_pruning/full_identity"));
+Name MakeVariantPruningName(in usize index){
+    const Name base = "tests/runtime_mesh_pruning/full_identity";
+    NameHash hash = base.hash();
     hash.qwords[s_NameHashLaneCount - 1u] ^= index + 1u;
     return Name(hash);
 }
 
-struct RuntimeMeshPruningContext{
-    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch) };
-    RuntimeMeshRequestSet requests;
-
-
-public:
-    explicit RuntimeMeshPruningContext(const usize capacityHint)
-        : requests(scratch, capacityHint)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::EcsGraphicsCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ReflectionStatisticsTestHelpers::Stamp;
-using ReflectionStatisticsTestHelpers::Token;
-using QueueSubmissionToken = Core::QueueSubmissionToken;
-namespace CommandQueue = Core::CommandQueue;
-
-using ReflectionFeedbackExtent = Impl::ReflectionFeedbackExtent;
-using ReflectionFeedbackState = Impl::ReflectionFeedbackState;
-using ReflectionFeedbackPlan = Impl::ReflectionFeedbackPlan;
-using ReflectionFeedbackOutcome = Impl::ReflectionFeedbackOutcome;
-using ReflectionFeedbackState = Impl::ReflectionFeedbackState;
-using ReflectionFeedbackReservation = Impl::ReflectionFeedbackReservation;
-namespace ReflectionFeedbackResetReason = Impl::ReflectionFeedbackResetReason;
-using Impl::TryComputeReflectionFeedbackExtent;
-using Impl::ResolveReflectionFeedbackOutcome;
-
-using ReflectionFeedbackControlContext = EcsGraphicsReflectionRefractionDetail::ReflectionFeedbackControlContext;
-using ReflectionHistoryState = Impl::ReflectionHistoryState;
-using ReflectionHistoryPlan = Impl::ReflectionHistoryPlan;
-using ReflectionHistoryOutcome = Impl::ReflectionHistoryOutcome;
-using ReflectionHistoryState = Impl::ReflectionHistoryState;
-using ReflectionHistoryReservation = Impl::ReflectionHistoryReservation;
-using ReflectionHistoryControlContext = EcsGraphicsReflectionRefractionDetail::ReflectionHistoryControlContext;
-namespace ReflectionHistoryResetReason = Impl::ReflectionHistoryResetReason;
-using Impl::ResolveReflectionHistoryOutcome;
-
-using ReflectionSceneContentStamp = Impl::ReflectionSceneContentStamp;
-using ReflectionSettings = Impl::ReflectionSettings;
-using ReflectionFrameSnapshot = Impl::ReflectionFrameSnapshot;
-namespace ReflectionTraceMode = Impl::ReflectionTraceMode;
-using ReflectionTraceModeEnum = Impl::ReflectionTraceMode::Enum;
-namespace ReflectionDebugView = Impl::ReflectionDebugView;
-using ReflectionDebugViewEnum = Impl::ReflectionDebugView::Enum;
-using Impl::ValidateReflectionSettings;
-
-using StatisticsReservationKey = Impl::StatisticsReservationKey;
-using ReflectionStatistics = Impl::ReflectionStatistics;
-using RefractionStatistics = Impl::RefractionStatistics;
-using ReflectionPendingEntry = decltype(DeclVal<EcsGraphicsReflectionRefractionDetail::ReflectionStatsContext&>().pending(0u));
-using ReflectionStatsContext = EcsGraphicsReflectionRefractionDetail::ReflectionStatsContext;
-using RefractionStatsContext = EcsGraphicsReflectionRefractionDetail::RefractionStatsContext;
-using ReflectionCounterArray = EcsGraphicsReflectionRefractionDetail::ReflectionCounterArray;
-using RefractionCounterArray = EcsGraphicsReflectionRefractionDetail::RefractionCounterArray;
-using Impl::s_StatisticsReadbackSlotCount;
-using EcsGraphicsReflectionRefractionDetail::MakeSampleReflectionCounters;
-using EcsGraphicsReflectionRefractionDetail::MakeSampleRefractionCounters;
-using EcsGraphicsReflectionRefractionDetail::ExpectRefractionDiagnosticCountersMatch;
-
-using GpuTaskId = Core::GpuTaskId;
-using ReflectionStatisticsReservation = Impl::ReflectionStatisticsReservation;
-using PruneContext = EcsGraphicsReflectionRefractionDetail::PruneContext;
-namespace RenderableMeshResolution = Impl::RenderableMeshResolution;
-using RenderableMeshStatusResult = decltype(DeclVal<Impl::MeshSystem&>().resolveRenderableMeshStatus(Core::ECS::EntityID{}));
-using RuntimeMeshRequestSet = Impl::RuntimeMeshRequestSet;
-using RuntimeMeshPruningContext = EcsGraphicsReflectionRefractionDetail::RuntimeMeshPruningContext;
-using EcsGraphicsReflectionRefractionDetail::MakeVariantPruningName;
-
-using SceneShadingUploadTracker = Impl::SceneShadingUploadTracker;
-using SceneShadingGpuData = Impl::SceneShadingGpuData;
-using SceneLightSpan = Span<const Impl::SceneLightGpuData>;
-
-using ShadowMaterialContextPolicy = Impl::ShadowMaterialContextPolicy;
-namespace PreparedShadowMaterialContextRoute = Impl::PreparedShadowMaterialContextRoute;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[ordered]
+class RuntimeMeshPruningContext{
+    public ScratchStorage scratch;
+    public RuntimeMeshRequestSet requests;
+    public RuntimeMeshPruningContext(in usize capacityHint){
+        this.scratch = ScratchStorage(s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch);
+        this.requests = this.scratch.makeValue<RuntimeMeshRequestSet>(capacityHint);
+    }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void ReflectionFeedback_AcceptWithHardware(in ReflectionFeedbackPlan plan, mut ReflectionFeedbackState state, in b8 hardwareReady){
@@ -627,11 +563,12 @@ void VerifyReflectionFeedback_MovedLeasePublishesOnceAndInvalidAcceptanceRetains
     b8 originalValidAfterMove = true;
     b8 movedValidBeforeAccept = false;
     b8 movedValidAfterAccept = true;
-    native(mut context, in first, mut originalInitiallyValid, mut originalValidAfterMove, mut movedValidBeforeAccept, mut movedValidAfterAccept){
+    {
         ReflectionFeedbackReservation original(context.inner.control, first);
         originalInitiallyValid = original.valid();
         if(originalInitiallyValid){
-            ReflectionFeedbackReservation moved(Move(original));
+            TestValueSlot<ReflectionFeedbackReservation> movedStorage;
+            mut ReflectionFeedbackReservation moved = movedStorage.take(original);
             originalValidAfterMove = original.valid();
             movedValidBeforeAccept = moved.valid();
             moved.accept(Token(first.sequence), true);
@@ -1193,15 +1130,16 @@ void VerifyReflectionStatistics_InvalidAcceptedTokenQuarantinesSlotUntilReset(){
 void VerifyReflectionStatistics_MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination(){
     ReflectionStatsContext context = ReflectionStatsContext();
     ASSERT_TRUE(context.valid());
-    native(mut context){
-        Impl::ReflectionStatisticsReservation first(context.inner.control, MakeReflectionStatisticsMetadata());
+    {
+        ReflectionStatisticsReservation first(context.inner.control, MakeReflectionStatisticsMetadata());
         const u32 firstSlot = first.slotIndex();
-        Impl::ReflectionStatisticsReservation second(Move(first));
+        TestValueSlot<ReflectionStatisticsReservation> secondStorage;
+        mut ReflectionStatisticsReservation second = secondStorage.take(first);
         EXPECT_FALSE(first.valid());
         EXPECT_EQ(second.slotIndex(), firstSlot);
-        Impl::ReflectionStatisticsReservation third(context.inner.control, MakeReflectionStatisticsMetadata());
+        ReflectionStatisticsReservation third(context.inner.control, MakeReflectionStatisticsMetadata());
         const u32 replacedSlot = third.slotIndex();
-        third = Move(second);
+        TestMoveAssign<ReflectionStatisticsReservation>(third, second);
         EXPECT_FALSE(second.valid());
         EXPECT_EQ(third.slotIndex(), firstSlot);
         EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, replacedSlot);

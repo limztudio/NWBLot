@@ -2,7 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/skinning/deformation_state.adhd>
+#include <impl/ecs_mesh/skinning/graph_resource_uses.adhd>
+#include <impl/ecs_mesh/skinning/skin_payload.adhd>
+#include <impl/ecs_mesh/skinning/skinning_state_handoff.adhd>
 #include <tests/common/capturing_logger.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/unit/mesh/skinning_name_cases.adhd>
@@ -11,183 +16,51 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKIN_JOINT_MASK")]
+extern const u32 s_SkinnedMeshSkinJointMask;
 
+[cpp_header("<tests/unit/mesh/graph_callbacks.h>"), cpp_name("::NWB::Tests::SkinningCases::InvokeRecordedWithoutState")]
+extern b8 InvokeRecordedWithoutState(in GpuTaskGraphTaskRecordedCallback callback, in b8 hasObserver);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<tests/unit/mesh/graph_callbacks.h>"), cpp_name("::NWB::Tests::SkinningCases::InvokeAcceptedWithEmptyToken")]
+extern b8 InvokeAcceptedWithEmptyToken(in GpuTaskGraphTaskAcceptedCallback callback, in b8 hasObserver);
 
-
-#include <core/task/gpu/packet_runtime.h>
-#include <impl/ecs_mesh/skinning/deformation_state.adhd.h>
-#include <impl/ecs_mesh/skinning/graph_resource_uses.adhd.h>
-#include <impl/ecs_mesh/skinning/skin_payload.adhd.h>
-#include <impl/ecs_mesh/skinning/skinning_state_handoff.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/alloc/scratch.h>
-#include <core/mesh/tangent_frame_rebuild.h>
-
-#include <global/bit.h>
-#include <global/simd/type.h>
-#include <global/simd/vector.h>
-#include <global/simdmath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::SkinningCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GlobalArena = Core::Alloc::GlobalArena;
-using ScratchArena = Core::Alloc::ScratchArena;
-
-struct SkinningScratchTestArena{
-    ScratchArena scratch;
-    explicit SkinningScratchTestArena(const Name& scopeName) : scratch(scopeName){}
-    [[nodiscard]] ArenaMemoryStats memoryStats()const noexcept{ return scratch.memoryStats(); }
-};
-struct SkinningGlobalTestArena{
-    GlobalArena arena;
-    explicit SkinningGlobalTestArena(const Name& scopeName) : arena(scopeName){}
-    [[nodiscard]] ArenaMemoryStats memoryStats()const noexcept{ return arena.memoryStats(); }
-};
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-using GpuPersistentResourceStateCache = Core::GpuPersistentResourceStateCache;
-using GpuGraphResourceId = Core::GpuGraphResourceId;
-
-using MeshSkinningGraphDispatchPlan = Impl::MeshSkinningGraphDispatchPlan;
-using MeshSkinningGraphResourceUses = Impl::MeshSkinningGraphResourceUses;
-using SkinningStateHandoff = Impl::SkinningStateHandoff;
-using SkeletonJointMatrix = Impl::SkeletonJointMatrix;
-using SkinInfluence4 = Impl::SkinInfluence4;
-using MeshSkinningInfluenceGpu = Impl::MeshSkinningInfluenceGpu;
-using MeshSkinningInfluenceGpuScratchVector = Vector<Impl::MeshSkinningInfluenceGpu, ::ArenaBase>;
-using ConstSkeletonJointMatrixSpan = Span<const Impl::SkeletonJointMatrix>;
-using MeshSkinningRuntimeInstance = Impl::MeshSkinningRuntimeInstance;
-using SkeletonJointPaletteComponent = Impl::SkeletonJointPaletteComponent;
-using SkeletonPoseComponent = Impl::SkeletonPoseComponent;
-namespace SkeletonSkinningMode = Impl::SkeletonSkinningMode;
-using RuntimeSkinPayloadScratch = Impl::RuntimeSkinPayloadScratch;
-using MeshSkinningDeformationState = Impl::MeshSkinningDeformationState;
-using MeshSkinningDeformationInputs = Impl::MeshSkinningDeformationInputs;
-
-using TangentFrameRebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
-using TangentFrameRebuildResult = Core::Mesh::TangentFrameRebuildResult;
-using Core::Mesh::RebuildTangentFrames;
-
-using Impl::BuildMeshSkinningGraphResourceUses;
-using Impl::s_SkeletonInvalidJointIndex;
-using Impl::BuildRuntimeSkinPayload;
-using Impl::SkinningComponentView;
-using Impl::BuildSkinInfluences;
-using Impl::BuildMeshSkinningJointPalette;
-using Impl::ResolveMeshSkinningGpuJointPalette;
-
-inline constexpr u32 s_SkinnedMeshSkinJointMask = NWB_SKINNED_MESH_SKIN_JOINT_MASK;
-inline constexpr f32 s_QuietNaNF32 = Limit<f32>::s_QuietNaN;
-
-[[nodiscard]] inline constexpr GpuGraphResourceId MakeGraphResourceId(const u64 generation, const u32 index)noexcept{
-    return GpuGraphResourceId{ .generation = generation, .index = index };
+class SkinningGraphResourceStorage{
+    [owner_result]
+    public Expected<MeshSkinningGraphResourceUses> build(in Span<MeshSkinningGraphDispatchPlan> plans){
+        return BuildMeshSkinningGraphResourceUses(plans);
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE Span<const MeshSkinningGraphDispatchPlan> FirstDispatchPlan(const Span<const MeshSkinningGraphDispatchPlan> plans)noexcept{
-    return Span<const MeshSkinningGraphDispatchPlan>(plans.data(), 1u);
+GpuGraphResourceId MakeGraphResourceId(in u64 generation, in u32 index){
+    GpuGraphResourceId id;
+    id.generation = generation;
+    id.index = index;
+    return id;
 }
 
-[[nodiscard]] inline b8 PrepareSkinningStateHandoff(SkinningStateHandoff& handoff, const b8 hasObserver){
-    const auto callback = Core::MakeGpuTaskRecordedCallback({}, handoff);
-    return callback.invoke(hasObserver ? callback.context : nullptr, nullptr);
+Span<MeshSkinningGraphDispatchPlan> FirstDispatchPlan(in Span<MeshSkinningGraphDispatchPlan> plans){
+    return plans.subspan(0u, 1u);
 }
 
-[[nodiscard]] inline b8 AcceptSkinningStateHandoff(SkinningStateHandoff& handoff, const b8 hasObserver){
-    const auto callback = Core::MakeGpuTaskAcceptedCallback({}, handoff);
-    return callback.invoke(hasObserver ? callback.context : nullptr, {});
+b8 PrepareSkinningStateHandoff(mut SkinningStateHandoff handoff, in b8 hasObserver){
+    return InvokeRecordedWithoutState(MakeGpuTaskRecordedCallback(GpuTaskId(), handoff), hasObserver);
 }
 
-[[nodiscard]] FOUNDATION_INLINE MeshSkinningRuntimeInstance MakeRuntimeInstance(){
-    return MeshSkinningRuntimeInstance(Tests::TestDetail::Arena());
+b8 AcceptSkinningStateHandoff(mut SkinningStateHandoff handoff, in b8 hasObserver){
+    return InvokeAcceptedWithEmptyToken(MakeGpuTaskAcceptedCallback(GpuTaskId(), handoff), hasObserver);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromNone(const MeshSkinningRuntimeInstance& instance, RuntimeSkinPayloadScratch& payload){
-    return BuildRuntimeSkinPayload(instance, {}, {}, payload);
+b8 BuildRuntimeSkinPayloadFromNone(in MeshSkinningRuntimeInstance instance, mut RuntimeSkinPayloadScratch payload){
+    return BuildRuntimeSkinPayload(instance, Optional<SkinningComponentView<SkeletonJointPaletteComponent>>(), Optional<SkinningComponentView<SkeletonPoseComponent>>(), payload);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromPalette(
-    const MeshSkinningRuntimeInstance& instance,
-    const SkeletonJointPaletteComponent& palette,
-    RuntimeSkinPayloadScratch& payload
-){
-    return BuildRuntimeSkinPayload(instance, SkinningComponentView<SkeletonJointPaletteComponent>(palette), {}, payload);
+b8 BuildRuntimeSkinPayloadFromPalette(in MeshSkinningRuntimeInstance instance, in SkeletonJointPaletteComponent palette, mut RuntimeSkinPayloadScratch payload){
+    return BuildRuntimeSkinPayload(instance, SkinningComponentView<SkeletonJointPaletteComponent>(palette), Optional<SkinningComponentView<SkeletonPoseComponent>>(), payload);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromPose(
-    const MeshSkinningRuntimeInstance& instance,
-    const SkeletonJointPaletteComponent& palette,
-    const SkeletonPoseComponent& pose,
-    RuntimeSkinPayloadScratch& payload
-){
+b8 BuildRuntimeSkinPayloadFromPose(in MeshSkinningRuntimeInstance instance, in SkeletonJointPaletteComponent palette, in SkeletonPoseComponent pose, mut RuntimeSkinPayloadScratch payload){
     return BuildRuntimeSkinPayload(instance, SkinningComponentView<SkeletonJointPaletteComponent>(palette), SkinningComponentView<SkeletonPoseComponent>(pose), payload);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SharesJointMatrixStorage(const Span<const SkeletonJointMatrix> upload, const RuntimeSkinPayloadScratch& payload)noexcept{
-    return upload.data() == payload.jointMatrices.data();
-}
-
-template<typename ScratchT, typename VertexVectorT>
-[[nodiscard]] FOUNDATION_INLINE Expected<TangentFrameRebuildResult> RebuildTangentFramesForVertices(
-    ScratchT&& scratchArena,
-    const Span<const u32> indices,
-    VertexVectorT& vertices
-){
-    return RebuildTangentFrames(scratchArena, indices, Span<TangentFrameRebuildVertex>(vertices.data(), vertices.size()));
-}
-
-template<typename ScratchT, typename VertexVectorT>
-[[nodiscard]] FOUNDATION_INLINE Expected<TangentFrameRebuildResult> RebuildTangentFramesForVerticesWithEpsilon(
-    ScratchT&& scratchArena,
-    const Span<const u32> indices,
-    VertexVectorT& vertices,
-    const f64 minimumTriangleAreaLengthSquared
-){
-    return RebuildTangentFrames(scratchArena, indices, Span<TangentFrameRebuildVertex>(vertices.data(), vertices.size()), minimumTriangleAreaLengthSquared);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<MeshSkinningGraphResourceUses> BuildGraphResourceUses(const Span<const MeshSkinningGraphDispatchPlan> plans, ScratchArena& scratch){
-    return BuildMeshSkinningGraphResourceUses(scratch, plans);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<MeshSkinningInfluenceGpuScratchVector> EncodeSkinInfluences(const MeshSkinningRuntimeInstance& instance, ScratchArena& scratchArena){
-    return BuildSkinInfluences(scratchArena, instance);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -238,13 +111,6 @@ SkeletonJointMatrix MakeTranslationJoint(in f32 x, in f32 y, in f32 z){
     return joint;
 }
 
-void ZeroJointMatrixRow0(mut SkeletonJointMatrix joint){
-    joint._11 = 0.0f;
-    joint._12 = 0.0f;
-    joint._13 = 0.0f;
-    joint._14 = 0.0f;
-}
-
 SkinInfluence4 MakeSkinInfluence(in u16 joint){
     SkinInfluence4 influence = SkinInfluence4();
     influence.joint[0u] = joint;
@@ -269,7 +135,6 @@ TangentFrameRebuildVertex MakeTangentVertex(in f32 x, in f32 y, in f32 z, in f32
 }
 
 void VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence(){
-    SkinningScratchTestArena scratch(s_SkinningCaseSkinningGraphUsesRepeated);
     Array<MeshSkinningGraphDispatchPlan, 3> plans = Array<MeshSkinningGraphDispatchPlan, 3>();
     plans[0u] = MakePlan();
     plans[1u] = MakePlan();
@@ -280,7 +145,7 @@ void VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithou
     plans[1u].restNormalResource = swappedRestPosition;
     plans[2u].meshletDescResource = plans[0u].meshletDescResource;
 
-    const Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(plans, scratch.scratch);
+    const Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(plans);
     ASSERT_TRUE(uses.has_value());
     ASSERT_EQ(uses.value().deformation.size(), 25u);
     ASSERT_EQ(uses.value().postDispatch.size(), 21u);
@@ -294,12 +159,11 @@ void VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithou
 }
 
 void VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsChangedFlags(){
-    SkinningScratchTestArena scratch(s_SkinningCaseSkinningGraphUsesGeneration);
     Array<MeshSkinningGraphDispatchPlan, 2> plans = Array<MeshSkinningGraphDispatchPlan, 2>();
     plans[0u] = MakePlan();
     plans[1u] = MakePlan(0u, cast<u64>(1u) << 40u);
 
-    Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(plans, scratch.scratch);
+    Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(plans);
     ASSERT_TRUE(uses.has_value());
     ASSERT_EQ(uses.value().deformation.size(), 26u);
     ASSERT_EQ(uses.value().postDispatch.size(), 22u);
@@ -311,7 +175,7 @@ void VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsC
     plans[0u].hasActiveSkin = false;
     plans[0u].repacksNormals = false;
     plans[0u].updatesMeshletBounds = false;
-    uses = BuildGraphResourceUses(FirstDispatchPlan(plans), scratch.scratch);
+    uses = BuildMeshSkinningGraphResourceUses(FirstDispatchPlan(plans));
     ASSERT_TRUE(uses.has_value());
     EXPECT_TRUE(uses.value().deformation.empty());
     EXPECT_EQ(uses.value().postDispatch.size(), 7u);
@@ -320,13 +184,13 @@ void VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsC
 
     plans[0u].copiedRestStreams = false;
     plans[0u].updatesMeshletBounds = true;
-    uses = BuildGraphResourceUses(FirstDispatchPlan(plans), scratch.scratch);
+    uses = BuildMeshSkinningGraphResourceUses(FirstDispatchPlan(plans));
     ASSERT_TRUE(uses.has_value());
     ASSERT_EQ(uses.value().localBounds.size(), 3u);
     ASSERT_EQ(uses.value().finalizer.size(), 2u);
     EXPECT_EQ(uses.value().finalizer[0u].resource, plans[0u].meshletBoundsResource);
 
-    uses = BuildGraphResourceUses(Span<MeshSkinningGraphDispatchPlan>(), scratch.scratch);
+    uses = BuildMeshSkinningGraphResourceUses(Span<MeshSkinningGraphDispatchPlan>());
     ASSERT_TRUE(uses.has_value());
     EXPECT_TRUE(uses.value().deformation.empty());
     EXPECT_TRUE(uses.value().postDispatch.empty());
@@ -337,7 +201,6 @@ void VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsC
 void VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceAndRecovers(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
-    SkinningScratchTestArena scratch(s_SkinningCaseSkinningGraphUsesRejections);
 
     for(u32 failure = 0u; failure < 10u; ++failure){
         Array<MeshSkinningGraphDispatchPlan, 1> singlePlan = Array<MeshSkinningGraphDispatchPlan, 1>();
@@ -380,10 +243,10 @@ void VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceA
             singlePlan[0u].localBoundsResource = singlePlan[0u].bindlessResourceSlotsResource;
             break;
         }
-        Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(singlePlan, scratch.scratch);
+        Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(singlePlan);
         EXPECT_FALSE(uses.has_value());
         singlePlan[0u] = MakePlan();
-        uses = BuildGraphResourceUses(singlePlan, scratch.scratch);
+        uses = BuildMeshSkinningGraphResourceUses(singlePlan);
         ASSERT_TRUE(uses.has_value());
         EXPECT_EQ(uses.value().deformation.size(), 13u);
         EXPECT_EQ(uses.value().postDispatch.size(), 11u);
@@ -397,7 +260,6 @@ void VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceA
 void VerifySkinningGraphResourceUses_PromotedCollectionsRejectLaterPhaseConflictsAndRebuildAfterFailure(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
-    SkinningScratchTestArena scratch(s_SkinningCaseSkinningGraphUsesPromotedFailures);
 
     for(u32 failure = 0u; failure < 3u; ++failure){
         Array<MeshSkinningGraphDispatchPlan, 3> plans = Array<MeshSkinningGraphDispatchPlan, 3>();
@@ -405,7 +267,7 @@ void VerifySkinningGraphResourceUses_PromotedCollectionsRejectLaterPhaseConflict
         plans[1u] = MakePlan(100u);
         plans[2u] = MakePlan(200u);
 
-        Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(plans, scratch.scratch);
+        Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(plans);
         ASSERT_TRUE(uses.has_value());
         if(failure == 0u)
             plans[2u].restPositionResource = plans[1u].skinnedPositionResource;
@@ -416,10 +278,10 @@ void VerifySkinningGraphResourceUses_PromotedCollectionsRejectLaterPhaseConflict
             plans[2u].repacksNormals = false;
             plans[2u].skinnedNormalResource = GpuGraphResourceId();
         }
-        uses = BuildGraphResourceUses(plans, scratch.scratch);
+        uses = BuildMeshSkinningGraphResourceUses(plans);
         EXPECT_FALSE(uses.has_value());
         plans[2u] = MakePlan(200u);
-        uses = BuildGraphResourceUses(plans, scratch.scratch);
+        uses = BuildMeshSkinningGraphResourceUses(plans);
         ASSERT_TRUE(uses.has_value());
         EXPECT_EQ(uses.value().deformation.size(), 39u);
         EXPECT_EQ(uses.value().postDispatch.size(), 33u);
@@ -431,15 +293,19 @@ void VerifySkinningGraphResourceUses_PromotedCollectionsRejectLaterPhaseConflict
 }
 
 void VerifySkinningGraphResourceUses_RepeatedPlansUseTheSameScratchCapacityAsOnePlan(){
-    SkinningScratchTestArena singleScratch(s_SkinningCaseSkinningGraphUsesSingleStorage);
-    SkinningScratchTestArena repeatedScratch(s_SkinningCaseSkinningGraphUsesRepeatedStorage);
+    ScratchStorage singleScratch(s_SkinningCaseSkinningGraphUsesSingleStorage);
+    TestValueSlot<SkinningGraphResourceStorage> singleSlot;
+    mut SkinningGraphResourceStorage singleBuilder = singleSlot.constructIn(singleScratch);
+    ScratchStorage repeatedScratch(s_SkinningCaseSkinningGraphUsesRepeatedStorage);
+    TestValueSlot<SkinningGraphResourceStorage> repeatedSlot;
+    mut SkinningGraphResourceStorage repeatedBuilder = repeatedSlot.constructIn(repeatedScratch);
     Array<MeshSkinningGraphDispatchPlan, 64> plans = Array<MeshSkinningGraphDispatchPlan, 64>();
     for(mut MeshSkinningGraphDispatchPlan plan : plans)
         plan = MakePlan();
 
-    const Expected<MeshSkinningGraphResourceUses> singleUses = BuildGraphResourceUses(FirstDispatchPlan(plans), singleScratch.scratch);
+    const Expected<MeshSkinningGraphResourceUses> singleUses = singleBuilder.build(FirstDispatchPlan(plans));
     ASSERT_TRUE(singleUses.has_value());
-    const Expected<MeshSkinningGraphResourceUses> repeatedUses = BuildGraphResourceUses(plans, repeatedScratch.scratch);
+    const Expected<MeshSkinningGraphResourceUses> repeatedUses = repeatedBuilder.build(plans);
     ASSERT_TRUE(repeatedUses.has_value());
 
     const ArenaMemoryStats single = singleScratch.memoryStats();
@@ -450,8 +316,9 @@ void VerifySkinningGraphResourceUses_RepeatedPlansUseTheSameScratchCapacityAsOne
 }
 
 void VerifySkinningStateHandoff_RejectsUnpreparedAcceptanceAndMissingRecordedState(){
-    SkinningGlobalTestArena arena(s_TestArena);
-    GpuPersistentResourceStateCache cache(arena.arena);
+    HeapStorage arena(s_TestArena);
+    TestValueSlot<GpuPersistentResourceStateCache> cacheSlot;
+    mut GpuPersistentResourceStateCache cache = cacheSlot.constructIn(arena);
 
     GpuPersistentStateCandidate candidate(cache);
     SkinningStateHandoff handoff(cache, candidate, Span<BufferHandle>());
@@ -469,8 +336,9 @@ void VerifySkinningStateHandoff_RejectsUnpreparedAcceptanceAndMissingRecordedSta
 }
 
 void VerifySkinningPayload_EmptyPoseClearsPreviousDualQuaternionPayloadAndUsesCurrentPalette(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
     palette.joints.push_back(MakeTranslationJoint(1.0f, 0.0f, 0.0f));
     palette.joints.push_back(MakeTranslationJoint(0.0f, 2.0f, 0.0f));
@@ -483,7 +351,7 @@ void VerifySkinningPayload_EmptyPoseClearsPreviousDualQuaternionPayloadAndUsesCu
     pose.localJoints.push_back(MakeTranslationJoint(0.0f, 5.0f, 0.0f));
     pose.skinningMode = SkeletonSkinningMode::DualQuaternion;
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skin.assign(4u, MakeSkinInfluence(1u));
     instance.skeletonJointCount = 2u;
     instance.inverseBindMatrices.assign(2u, MakeTranslationJoint(-0.25f, 0.0f, 0.0f));
@@ -500,12 +368,13 @@ void VerifySkinningPayload_EmptyPoseClearsPreviousDualQuaternionPayloadAndUsesCu
 }
 
 void VerifySkinningPayload_RuntimePayloadClearsWhenSkinOrPoseIsRemoved(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
     palette.joints.push_back(MatrixIdentity<f32x3x4>());
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skin.assign(3u, MakeSkinInfluence(0u));
     instance.skeletonJointCount = 1u;
 
@@ -535,10 +404,11 @@ void VerifySkinningPayload_RuntimePayloadClearsWhenSkinOrPoseIsRemoved(){
 void VerifySkinningPayload_GpuJointUploadBoundsFollowSkinWhileSourceTailStillValidates(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 2u;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
@@ -547,10 +417,10 @@ void VerifySkinningPayload_GpuJointUploadBoundsFollowSkinWhileSourceTailStillVal
 
     palette.joints.assign(3u, MakeTranslationJoint(7.0f, 0.0f, 0.0f));
     ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
-    const Expected<ConstSkeletonJointMatrixSpan> upload = ResolveMeshSkinningGpuJointPalette(instance, payload);
+    const Expected<Span<SkeletonJointMatrix>> upload = ResolveMeshSkinningGpuJointPalette(instance, payload);
     ASSERT_TRUE(upload.has_value());
     EXPECT_EQ(upload.value().size(), 2u);
-    EXPECT_TRUE(SharesJointMatrixStorage(upload.value(), payload));
+    EXPECT_TRUE(TestDataAddress(upload.value()) == TestDataAddress(payload.jointMatrices));
     EXPECT_EQ(payload.jointMatrices.size(), 3u);
     EXPECT_FLOAT_EQ(upload.value()[1u]._14, 7.0f);
 
@@ -561,7 +431,11 @@ void VerifySkinningPayload_GpuJointUploadBoundsFollowSkinWhileSourceTailStillVal
         payload.jointMatrices.pop_back();
     EXPECT_FALSE(ResolveMeshSkinningGpuJointPalette(instance, payload).has_value());
 
-    ZeroJointMatrixRow0(palette.joints[2u]);
+    palette.joints[2u]._11 = 0.0f;
+    palette.joints[2u]._12 = 0.0f;
+
+    palette.joints[2u]._13 = 0.0f;
+    palette.joints[2u]._14 = 0.0f;
     EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
     EXPECT_FALSE(ResolveMeshSkinningGpuJointPalette(instance, payload).has_value());
 
@@ -569,10 +443,11 @@ void VerifySkinningPayload_GpuJointUploadBoundsFollowSkinWhileSourceTailStillVal
 }
 
 void VerifySkinningPayload_RuntimePayloadFollowsReplacementMeshAndJointCounts(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.handle.value = 13u;
     instance.sourceName = s_SkinningCaseSkinningPayloadFirstSource;
     instance.skin.assign(3u, MakeSkinInfluence(0u));
@@ -606,33 +481,31 @@ void VerifySkinningPayload_RuntimePayloadFollowsReplacementMeshAndJointCounts(){
 }
 
 void VerifySkinningPayload_EmptySkinProducesEmptyInfluencePayload(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 5u;
     instance.skin.assign(2u, MakeSkinInfluence(0u));
-    Expected<MeshSkinningInfluenceGpuScratchVector> influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    Expected<Vector<MeshSkinningInfluenceGpu>> influences = BuildSkinInfluences(instance);
     ASSERT_TRUE(influences.has_value());
     ASSERT_EQ(influences.value().size(), 2u);
 
     instance.skin.clear();
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    influences = BuildSkinInfluences(instance);
     ASSERT_TRUE(influences.has_value());
     EXPECT_TRUE(influences.value().empty());
 }
 
 void VerifySkinningPayload_GpuInfluencesPreserveUpperU16JointBitsAndFp32WeightBits(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
     SkinInfluence4 skin = SkinInfluence4();
     skin.joint[1u] = u16.max;
     skin.joint[2u] = 0x8000u;
     skin.joint[3u] = 0xfffeu;
     skin.weight = f32x4u(bit_cast<f32>(0x3e000001u), bit_cast<f32>(0x3ebfffffu), 0.5f, -0.0f);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = cast<u32>(u16.max) + 1u;
     instance.skin.push_back(skin);
 
-    const Expected<MeshSkinningInfluenceGpuScratchVector> influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    const Expected<Vector<MeshSkinningInfluenceGpu>> influences = BuildSkinInfluences(instance);
     ASSERT_TRUE(influences.has_value());
     ASSERT_EQ(influences.value().size(), 1u);
     const MeshSkinningInfluenceGpu gpuSkin = influences.value().front();
@@ -645,10 +518,11 @@ void VerifySkinningPayload_GpuInfluencesPreserveUpperU16JointBitsAndFp32WeightBi
 }
 
 void VerifySkinningPayload_PaletteCanExceedSkeletonWithoutInverseBindMatrices(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 1u;
     instance.skin.assign(3u, MakeSkinInfluence(0u));
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
@@ -662,10 +536,11 @@ void VerifySkinningPayload_PaletteCanExceedSkeletonWithoutInverseBindMatrices(){
 }
 
 void VerifySkinningPayload_RuntimeScratchAllocationDoesNotScaleWithInfluenceCount(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 2u;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
@@ -689,9 +564,9 @@ void VerifySkinningPayload_RuntimeScratchAllocationDoesNotScaleWithInfluenceCoun
 }
 
 void VerifySkinningPayload_PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes(){
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 2u;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
@@ -701,13 +576,15 @@ void VerifySkinningPayload_PayloadScopeDestructionReclaimsScratchUsageAcrossMesh
     pose.parentJoints.assign(2u, s_SkeletonInvalidJointIndex);
 
     if(true){
-        RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+        TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+        mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
         ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
         ASSERT_TRUE(payload.hasActiveSkin());
     }
     const ArenaMemoryStats initialMemory = scratchArena.memoryStats();
     for(u32 meshIndex = 0u; meshIndex < 64u; ++meshIndex){
-        RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+        TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+        mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
         if((meshIndex % 2u) == 0u){
             ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
         }
@@ -724,10 +601,11 @@ void VerifySkinningPayload_PayloadScopeDestructionReclaimsScratchUsageAcrossMesh
 void VerifySkinningPayload_RuntimePayloadRejectsInvalidDynamicInputs(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger);
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 2u;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
@@ -742,7 +620,10 @@ void VerifySkinningPayload_RuntimePayloadRejectsInvalidDynamicInputs(){
     ExpectEmptyRuntimePayload(payload);
 
     palette.skinningMode = SkeletonSkinningMode::LinearBlend;
-    ZeroJointMatrixRow0(palette.joints[1u]);
+    palette.joints[1u]._11 = 0.0f;
+    palette.joints[1u]._12 = 0.0f;
+    palette.joints[1u]._13 = 0.0f;
+    palette.joints[1u]._14 = 0.0f;
     EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
     ExpectEmptyRuntimePayload(payload);
 
@@ -770,10 +651,11 @@ void VerifySkinningPayload_RuntimePayloadRejectsInvalidDynamicInputs(){
 void VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePayload(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger);
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    RuntimeSkinPayloadScratch payload(scratchArena.scratch);
+    ScratchStorage scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
+    TestValueSlot<RuntimeSkinPayloadScratch> payloadSlot;
+    mut RuntimeSkinPayloadScratch payload = payloadSlot.constructIn(scratchArena);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 2u;
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     instance.inverseBindMatrices.assign(2u, MatrixIdentity<f32x3x4>());
@@ -798,7 +680,10 @@ void VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePaylo
     ExpectEmptyRuntimePayload(payload);
 
     instance.inverseBindMatrices.assign(2u, MatrixIdentity<f32x3x4>());
-    ZeroJointMatrixRow0(instance.inverseBindMatrices[1u]);
+    instance.inverseBindMatrices[1u]._11 = 0.0f;
+    instance.inverseBindMatrices[1u]._12 = 0.0f;
+    instance.inverseBindMatrices[1u]._13 = 0.0f;
+    instance.inverseBindMatrices[1u]._14 = 0.0f;
     EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
     ExpectEmptyRuntimePayload(payload);
 
@@ -837,44 +722,43 @@ void VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePaylo
 void VerifySkinningPayload_StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger);
-    SkinningScratchTestArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
 
-    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    MeshSkinningRuntimeInstance instance = MeshSkinningRuntimeInstance();
     instance.skeletonJointCount = 2u;
     instance.skin.assign(2u, MakeSkinInfluence(1u));
-    Expected<MeshSkinningInfluenceGpuScratchVector> influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    Expected<Vector<MeshSkinningInfluenceGpu>> influences = BuildSkinInfluences(instance);
     ASSERT_TRUE(influences.has_value());
     ASSERT_EQ(influences.value().size(), 2u);
 
     ++instance.editRevision;
     instance.skin[1u].weight.x = 0.5f;
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    influences = BuildSkinInfluences(instance);
     EXPECT_FALSE(influences.has_value());
 
     instance.skin[1u].weight = f32x4u(-0.5f, 1.5f, 0.0f, 0.0f);
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    influences = BuildSkinInfluences(instance);
     EXPECT_FALSE(influences.has_value());
 
-    instance.skin[1u].weight = f32x4u(s_QuietNaNF32, 0.0f, 0.0f, 0.0f);
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    instance.skin[1u].weight = f32x4u(bit_cast<f32>(0x7fc00000u), 0.0f, 0.0f, 0.0f);
+    influences = BuildSkinInfluences(instance);
     EXPECT_FALSE(influences.has_value());
 
     instance.skin[1u] = MakeSkinInfluence(1u);
     instance.skin[1u].joint[3u] = 2u;
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    influences = BuildSkinInfluences(instance);
     EXPECT_FALSE(influences.has_value());
 
     instance.skin[1u] = MakeSkinInfluence(1u);
     instance.skeletonJointCount = 0u;
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    influences = BuildSkinInfluences(instance);
     EXPECT_FALSE(influences.has_value());
 
     instance.skeletonJointCount = cast<u32>(u16.max) + 2u;
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    influences = BuildSkinInfluences(instance);
     EXPECT_FALSE(influences.has_value());
 
     instance.skeletonJointCount = 2u;
-    influences = EncodeSkinInfluences(instance, scratchArena.scratch);
+    influences = BuildSkinInfluences(instance);
     ASSERT_TRUE(influences.has_value());
     ASSERT_EQ(influences.value().size(), 2u);
     EXPECT_EQ(influences.value()[1u].packedJoint[0u] & s_SkinnedMeshSkinJointMask, 1u);
@@ -886,8 +770,9 @@ void VerifySkinningPayload_StaticInfluenceEncodingRejectsInvalidMeshEditsAndReco
 void VerifySkinningDeformation_MissingResourceRejectsWithoutCandidateOrArenaPublication(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
-    SkinningGlobalTestArena arena(s_SkinningCaseSkinningDeformationRejectedCandidate);
-    MeshSkinningDeformationState state(arena.arena);
+    HeapStorage arena(s_SkinningCaseSkinningDeformationRejectedCandidate);
+    TestValueSlot<MeshSkinningDeformationState> stateSlot;
+    mut MeshSkinningDeformationState state = stateSlot.constructIn(arena);
     const ArenaMemoryStats before = arena.memoryStats();
 
     const Expected<u64> rejected = state.stage(MeshSkinningDeformationInputs(), Span<SkeletonJointMatrix>());
@@ -901,8 +786,11 @@ void VerifySkinningDeformation_MissingResourceRejectsWithoutCandidateOrArenaPubl
     EXPECT_EQ(after.allocationCount, before.allocationCount);
 }
 
+Expected<TangentFrameRebuildResult> RebuildTestTangentFrames(in Span<u32> indices, mut Span<TangentFrameRebuildVertex> vertices, in f64 threshold){
+    return RebuildTangentFrames(indices, vertices, threshold);
+}
+
 void VerifyMesh_DegenerateUvsUseStableTangentFallback(){
-    SkinningScratchTestArena scratchArena(s_TestArena);
     Vector<TangentFrameRebuildVertex> vertices = Vector<TangentFrameRebuildVertex>();
     vertices.reserve(4u);
     vertices.push_back(MakeTangentVertex(-1.0f, -1.0f, 0.0f, 0.0f, 0.0f));
@@ -910,7 +798,7 @@ void VerifyMesh_DegenerateUvsUseStableTangentFallback(){
     vertices.push_back(MakeTangentVertex(1.0f, 1.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(MakeTangentVertex(-1.0f, 1.0f, 0.0f, 0.0f, 0.0f));
 
-    const Expected<TangentFrameRebuildResult> result = RebuildTangentFramesForVertices(scratchArena.scratch, s_QuadTriangleIndices, vertices);
+    const Expected<TangentFrameRebuildResult> result = RebuildTestTangentFrames(s_QuadTriangleIndices, vertices, cast<f64>(s_FrameDirectionEpsilon));
     ASSERT_TRUE(result.has_value());
     const TangentFrameRebuildResult stats = result.value();
 
@@ -928,18 +816,16 @@ void VerifyMesh_DegenerateUvsUseStableTangentFallback(){
 }
 
 void VerifyMesh_RejectsDegenerateTangentFrameTriangle(){
-    SkinningScratchTestArena scratchArena(s_TestArena);
     Vector<TangentFrameRebuildVertex> vertices = Vector<TangentFrameRebuildVertex>();
     vertices.reserve(3u);
     vertices.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
 
-    EXPECT_FALSE(RebuildTangentFramesForVertices(scratchArena.scratch, s_TriangleIndices, vertices).has_value());
+    EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, vertices, cast<f64>(s_FrameDirectionEpsilon)).has_value());
 }
 
 void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
-    SkinningScratchTestArena scratchArena(s_TestArena);
 
     // Default 3-arg epsilon still rejects triangles at the 1e-8 area-normal length-squared boundary.
     Vector<TangentFrameRebuildVertex> cmTriangle = Vector<TangentFrameRebuildVertex>();
@@ -947,7 +833,7 @@ void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
     cmTriangle.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     cmTriangle.push_back(MakeTangentVertex(0.01f, 0.0f, 0.0f, 1.0f, 0.0f));
     cmTriangle.push_back(MakeTangentVertex(0.0f, 0.01f, 0.0f, 0.0f, 1.0f));
-    EXPECT_FALSE(RebuildTangentFramesForVertices(scratchArena.scratch, s_TriangleIndices, cmTriangle).has_value());
+    EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, cmTriangle, cast<f64>(s_FrameDirectionEpsilon)).has_value());
 
     // Explicit small epsilon preserves unit normals, tangents, and handedness on tiny meshes.
     Vector<TangentFrameRebuildVertex> rightHanded = Vector<TangentFrameRebuildVertex>();
@@ -955,7 +841,7 @@ void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
     rightHanded.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     rightHanded.push_back(MakeTangentVertex(0.0001f, 0.0f, 0.0f, 1.0f, 0.0f));
     rightHanded.push_back(MakeTangentVertex(0.0f, 0.0001f, 0.0f, 0.0f, 1.0f));
-    const Expected<TangentFrameRebuildResult> rightResult = RebuildTangentFramesForVerticesWithEpsilon(scratchArena.scratch, s_TriangleIndices, rightHanded, 0.0);
+    const Expected<TangentFrameRebuildResult> rightResult = RebuildTestTangentFrames(s_TriangleIndices, rightHanded, 0.0);
     ASSERT_TRUE(rightResult.has_value());
     EXPECT_EQ(rightResult.value().degenerateUvTriangleCount, 0u);
     EXPECT_EQ(rightResult.value().fallbackTangentVertexCount, 0u);
@@ -972,7 +858,7 @@ void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
     leftHanded.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     leftHanded.push_back(MakeTangentVertex(0.0001f, 0.0f, 0.0f, 0.0f, 1.0f));
     leftHanded.push_back(MakeTangentVertex(0.0f, 0.0001f, 0.0f, 1.0f, 0.0f));
-    const Expected<TangentFrameRebuildResult> leftResult = RebuildTangentFramesForVerticesWithEpsilon(scratchArena.scratch, s_TriangleIndices, leftHanded, 0.0);
+    const Expected<TangentFrameRebuildResult> leftResult = RebuildTestTangentFrames(s_TriangleIndices, leftHanded, 0.0);
     ASSERT_TRUE(leftResult.has_value());
     EXPECT_EQ(leftResult.value().degenerateUvTriangleCount, 0u);
     EXPECT_EQ(leftResult.value().fallbackTangentVertexCount, 0u);
@@ -990,14 +876,13 @@ void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
     smallFallback.push_back(MakeTangentVertex(0.0001f, -0.0001f, 0.0f, 0.0f, 0.0f));
     smallFallback.push_back(MakeTangentVertex(0.0001f, 0.0001f, 0.0f, 0.0f, 0.0f));
     smallFallback.push_back(MakeTangentVertex(-0.0001f, 0.0001f, 0.0f, 0.0f, 0.0f));
-    const Expected<TangentFrameRebuildResult> fallbackResult = RebuildTangentFramesForVerticesWithEpsilon(scratchArena.scratch, s_QuadTriangleIndices, smallFallback, 0.0);
+    const Expected<TangentFrameRebuildResult> fallbackResult = RebuildTestTangentFrames(s_QuadTriangleIndices, smallFallback, 0.0);
     ASSERT_TRUE(fallbackResult.has_value());
     EXPECT_EQ(fallbackResult.value().degenerateUvTriangleCount, 2u);
     EXPECT_EQ(fallbackResult.value().fallbackTangentVertexCount, smallFallback.size());
 }
 
 void VerifyMesh_RebuildTangentFramesRejectsInvalidEpsilonAndSubThresholdTriangles(){
-    SkinningScratchTestArena scratchArena(s_TestArena);
     Vector<TangentFrameRebuildVertex> vertices = Vector<TangentFrameRebuildVertex>();
     vertices.reserve(3u);
     vertices.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
@@ -1005,16 +890,16 @@ void VerifyMesh_RebuildTangentFramesRejectsInvalidEpsilonAndSubThresholdTriangle
     vertices.push_back(MakeTangentVertex(0.0f, 0.0001f, 0.0f, 0.0f, 1.0f));
 
     const f64 nanEpsilon = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
-    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena.scratch, s_TriangleIndices, vertices, -1e-12).has_value());
-    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena.scratch, s_TriangleIndices, vertices, nanEpsilon).has_value());
-    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena.scratch, s_TriangleIndices, vertices, 1e-12).has_value());
+    EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, vertices, -1e-12).has_value());
+    EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, vertices, nanEpsilon).has_value());
+    EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, vertices, 1e-12).has_value());
 
     Vector<TangentFrameRebuildVertex> zeroArea = Vector<TangentFrameRebuildVertex>();
     zeroArea.reserve(3u);
     zeroArea.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     zeroArea.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     zeroArea.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
-    EXPECT_FALSE(RebuildTangentFramesForVerticesWithEpsilon(scratchArena.scratch, s_TriangleIndices, zeroArea, 0.0).has_value());
+    EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, zeroArea, 0.0).has_value());
 }
 
 NWB_ADHD_GTEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence, VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence)
@@ -1037,34 +922,9 @@ NWB_ADHD_GTEST(SkinningPayload, PayloadScopeDestructionReclaimsScratchUsageAcros
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_FINAL)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(SkinningPayload, RuntimePayloadRejectsInvalidDynamicInputs){ VerifySkinningPayload_RuntimePayloadRejectsInvalidDynamicInputs(); }
-TEST(SkinningPayload, InverseBindBoundsAndPartialFailuresLeaveNoActivePayload){ VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePayload(); }
-TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers){ VerifySkinningPayload_StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+registration GoogleTestFinalCase(SkinningPayload, RuntimePayloadRejectsInvalidDynamicInputs, VerifySkinningPayload_RuntimePayloadRejectsInvalidDynamicInputs);
+registration GoogleTestFinalCase(SkinningPayload, InverseBindBoundsAndPartialFailuresLeaveNoActivePayload, VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePayload);
+registration GoogleTestFinalCase(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers, VerifySkinningPayload_StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

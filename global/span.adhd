@@ -10,5 +10,9 @@ extern const usize s_DynamicExtent;
 extern b8 HasSpanStorage<T>(in Span<T> values);
 
 
+[cpp_header("<global/span.h>"), cpp_name("::SpanOf")]
+extern Span<T> SpanOf<T>(in borrow T value);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

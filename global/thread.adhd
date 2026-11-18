@@ -9,7 +9,9 @@ extern class JoiningThread;
 extern class Latch;
 
 [cpp_name("::StopToken"), cpp_flags(self_defaulted, brace_init, equality_switch)]
-extern class StopToken;
+extern class StopToken{
+    b8 stop_requested()const;
+};
 
 [cpp_name("::Thread"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
 extern class Thread;

@@ -1,0 +1,109 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/process_capture.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::MeasuredPath")]
+extern class MeasuredPath{
+    PathComponent begin()const;
+    PathComponent end()const;
+    PlatformStringView native()const;
+    PlatformStringView filenameView()const;
+    PlatformStringView parentPathView()const;
+    PlatformStringView stemView()const;
+    PlatformStringView extensionView()const;
+    void replaceExtension(...);
+};
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::PathComponent")]
+extern class PathComponent{
+    PlatformStringView nativeComponent()const;
+};
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::NextComponent")]
+extern void NextComponent(mut PathComponent cursor);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OwnedComponent")]
+extern MeasuredPath OwnedComponent(in PathComponent cursor);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::SameComponent")]
+extern b8 SameComponent(in PathComponent lhs, in PathComponent rhs);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::WithinPath")]
+extern b8 WithinPath(in PlatformStringView text, in PlatformStringView whole);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::AppendPathText")]
+extern void AppendPathText(mut MeasuredPath path, in PlatformStringView text);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::AppendSubpath")]
+extern void AppendSubpath(mut MeasuredPath path, in PlatformStringView text);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OversizedBinarySource")]
+extern class OversizedBinarySource;
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::WriteBinaryFile")]
+extern b8 WriteOversizedFile(in Path path, in OversizedBinarySource source);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CreateTestHardLink")]
+extern b8 CreateTestHardLink(in Path target, in Path linkPath);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CreateTestSymlink")]
+extern i32 CreateTestSymlink(in auto target, in Path linkPath);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ChildPoll")]
+extern class ChildPoll{
+    i32 result;
+    b8 noChild;
+};
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::PollChild")]
+extern ChildPoll PollChild(in i64 pid);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::RetireTestChild")]
+extern void RetireTestChild(in i64 pid);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ProcessMilliseconds")]
+extern Expected<u64, ErrorCondition> ProcessMilliseconds();
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::s_MaxChildPid")]
+extern const u64 s_MaxChildPid;
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ProcessIdFunction")]
+extern class ProcessIdFunction;
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CallProcessId")]
+extern u32 CallProcessId(in ProcessIdFunction function);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::OpenTestLibrary")]
+extern Expected<void, SharedLibraryFailure> OpenTestLibrary(mut SharedLibrary library, mut HeapStorage storage, in PlatformStringView name);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ResolveProcessId")]
+extern Expected<ProcessIdFunction, SharedLibraryFailure> ResolveProcessId(mut SharedLibrary library, mut HeapStorage storage, in StringView name);
+
+[cpp_header("<global/filesystem/retention.h>"), cpp_name("::ApplyDirectoryRetention"), cpp_flags(scratch_arena)]
+extern Expected<void, ErrorCode> RetainWithPredicate(in Path path, in usize count, in auto predicate);
+
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ThrowCaptureError")]
+extern void ThrowCaptureError(in auto message);
+
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::PathHasListedExtension")]
+extern b8 MeasuredHasExtension(in MeasuredPath path, in Span<StringView> extensions);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CreateStagedFile")]
+extern Expected<void, ErrorCode> CreateStagedFile(in Path path, in Span<u8> bytes, mut b8 created);
+
+[cpp_header("<tests/unit/global/global_file_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ReserveStagedPath")]
+extern Expected<Path, ErrorCode> ReserveStagedPath(in Path path);
+
+[cpp_header("<global/filesystem/file_staging.h>"), cpp_name("::GlobalFilesystemStagingDetail::AcceptPreCommitValidation")]
+extern b8 AcceptPreCommitValidation(in StagedFilePairResult check, mut StagedFilePairResult state);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

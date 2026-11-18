@@ -3,7 +3,13 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include "ui_edit_test_inputs.adhd"
+#include "ui_grapheme_conformance_data.adhd"
+#include <tests/common/arena_owner_fixture.adhd>
+#include <impl/ecs_ui/toolkit/edit/commands.adhd>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd>
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd>
 #include <tests/unit/ui/multiline_fixture.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
@@ -11,324 +17,56 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class UiEditModelFixture{
+    public EditModel m_model = EditModel();
+}
 
+type UiEditModelTests = UiEditModelFixture;
+type UiEditCompositionTests = UiEditModelFixture;
+type UiEditSurroundingSelectionTests = UiEditModelFixture;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiEditCommandTests{
+    public EditModel m_model = EditModel();
+    private InputBindings m_bindings = InputBindings();
 
+    public EditCommandRequest translate(in i32 key, in b8 control, in b8 shift, in b8 alt, in b8 repeat){
+        i32 modifiers = 0;
+        if(control)
+            modifiers |= cast<i32>(InputModifier::Control);
+        if(shift)
+            modifiers |= cast<i32>(InputModifier::Shift);
+        if(alt)
+            modifiers |= cast<i32>(InputModifier::Alt);
+        return TranslateEditCommand(this.m_bindings.resolve(key, modifiers), repeat, EditTextMode::SingleLine);
+    }
+}
 
-#include <tests/common/test_context.adhd.h>
+[arena]
+class UiEditGraphemeTests{
+    public EditModel m_model = EditModel();
 
-#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
-#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
-
-#include <global/bit.h>
-#include <global/limit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_command_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiEditTests;
-
-class UiEditCommandTests : public EditFixture{
-public:
-    UiEditCommandTests()
-        : m_bindings(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] EditCommandRequest translate(const i32 key, const b8 control = false, const b8 shift = false, const b8 alt = false, const b8 repeat = false)noexcept{
-        const i32 modifiers = (control ? Core::InputModifier::Control : 0) | (shift ? Core::InputModifier::Shift : 0) | (alt ? Core::InputModifier::Alt : 0);
-        return TranslateEditCommand(m_bindings.resolve(key, modifiers), repeat, EditTextMode::SingleLine);
+    [owner_result]
+    public Expected<EditBoundaryVector> buildBoundaries(in StringView text, in b8 singleLine){
+        return BuildEditGraphemeBoundaries(text, singleLine);
     }
 
-
-public:
-    InputBindings m_bindings;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_composition_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiEditTests;
-
-class UiEditCompositionTests : public EditFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_grapheme_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiEditTests;
-
-struct GraphemeCase{
-    AStringView text;
-    AStringView expectedOffsets;
-
-
-public:
-    template<usize TextSize, usize OffsetSize>
-    constexpr GraphemeCase(const char (&textValue)[TextSize], const char (&offsetValue)[OffsetSize], const usize byteCount)noexcept
-        : text(textValue, byteCount)
-        , expectedOffsets(offsetValue, OffsetSize - 1u)
-    {}
-};
-
-inline constexpr Array<GraphemeCase, 766> s_ConformanceCases = {{
-#include "edit_grapheme_cases_0.inc"
-#include "edit_grapheme_cases_1.inc"
-}};
-
-class UiEditGraphemeTests : public EditFixture{
-public:
-    [[nodiscard]] AStringView conformanceText(const usize index)const noexcept{ return s_ConformanceCases[index].text; }
-    [[nodiscard]] AStringView conformanceExpectedOffsets(const usize index)const noexcept{ return s_ConformanceCases[index].expectedOffsets; }
-    [[nodiscard]] Expected<EditBoundaryVector> buildBoundaries(const AStringView text, const b8 singleLine = false){
-        return BuildEditGraphemeBoundaries(m_arena, text, singleLine);
+    public usize allocationCount()const{
+        return OwnerStats(Name("UiEditGraphemeTests")).allocationCount;
     }
-    [[nodiscard]] usize allocationCount()const noexcept{ return m_arena.memoryStats().allocationCount; }
-};
+}
 
+class UiEditHistoryTests{
+    public EditModel m_model = EditModel();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_history_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiEditTests;
-
-class UiEditHistoryTests : public EditFixture{
-public:
-    [[nodiscard]] b8 replaceSelectionWithNormalizedMultiline(EditModel& model, const AStringView rawText){
-        auto canonical = NormalizeMultilineText(m_arena, rawText, model.limits().maxBytes);
-        if(!canonical)
-            return false;
-        return model.replaceSelection(*canonical);
+    public b8 replaceSelectionWithNormalizedMultiline(mut EditModel model, in StringView rawText){
+        const auto normalized = NormalizeMultilineText(rawText, model.limits().maxBytes);
+        return normalized.has_value() && model.replaceSelection(normalized.value());
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_model_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiEditTests;
-
-class UiEditModelTests : public EditFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_surrounding_selection_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiEditTests;
-
-class UiEditSurroundingSelectionTests : public EditFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_float_model_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiNumericTests;
-using FloatModelTests = NumericModelFixture<FloatEditModel>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiEditCommandTests = __hidden_ui_edit_command_tests::UiEditCommandTests;
-using UiEditCompositionTests = __hidden_ui_edit_composition_tests::UiEditCompositionTests;
-using UiEditGraphemeTests = __hidden_ui_edit_grapheme_tests::UiEditGraphemeTests;
-using UiEditHistoryTests = __hidden_ui_edit_history_tests::UiEditHistoryTests;
-using UiEditModelTests = __hidden_ui_edit_model_tests::UiEditModelTests;
-using UiEditSurroundingSelectionTests = __hidden_ui_edit_surrounding_selection_tests::UiEditSurroundingSelectionTests;
-using FloatModelTests = __hidden_ui_float_model_tests::FloatModelTests;
-using MultilineSnapshot = ::NWB::UiMultilineTests::MultilineSnapshot;
-
-using EditBoundaryVector = ::NWB::Impl::Ui::EditBoundaryVector;
-using EditCommandRequest = ::NWB::Impl::Ui::EditCommandRequest;
-using EditCommandResult = ::NWB::Impl::Ui::EditCommandResult;
-using EditCompositionView = ::NWB::Impl::Ui::EditCompositionView;
-using EditLimits = ::NWB::Impl::Ui::EditLimits;
-using EditModel = ::NWB::Impl::Ui::EditModel;
-using EditNavigationSnapshot = ::NWB::Impl::Ui::EditNavigationSnapshot;
-using EditNavigationState = ::NWB::Impl::Ui::EditNavigationState;
-using EditWordRange = ::NWB::Impl::Ui::EditWordRange;
-using FloatBounds = ::NWB::Impl::Ui::FloatBounds;
-using GlobalArena = ::NWB::Core::Alloc::GlobalArena;
-using InputBindings = ::NWB::Impl::Ui::InputBindings;
-using InputCommandIntent = ::NWB::Impl::Ui::InputCommandIntent;
-using InputKeyBinding = ::NWB::Impl::Ui::InputKeyBinding;
-using MultilineSnapshot = ::NWB::UiMultilineTests::MultilineSnapshot;
-using TestArena = ::NWB::Tests::TestArena<>;
-
-namespace EditClipboardAction = ::NWB::Impl::Ui::EditClipboardAction;
-namespace EditCommand = ::NWB::Impl::Ui::EditCommand;
-using EditCommandEnum = ::NWB::Impl::Ui::EditCommand::Enum;
-namespace EditMove = ::NWB::Impl::Ui::EditMove;
-namespace EditTextMode = ::NWB::Impl::Ui::EditTextMode;
-using EditTextModeEnum = ::NWB::Impl::Ui::EditTextMode::Enum;
-namespace EditTextStatus = ::NWB::Impl::Ui::EditTextStatus;
-using EditTextStatusEnum = ::NWB::Impl::Ui::EditTextStatus::Enum;
-namespace InputCommand = ::NWB::Impl::Ui::InputCommand;
-using InputCommandEnum = ::NWB::Impl::Ui::InputCommand::Enum;
-namespace NumericBoundsPolicy = ::NWB::Impl::Ui::NumericBoundsPolicy;
-using NumericBoundsPolicyEnum = ::NWB::Impl::Ui::NumericBoundsPolicy::Enum;
-namespace NumericParseStatus = ::NWB::Impl::Ui::NumericParseStatus;
-using NumericParseStatusEnum = ::NWB::Impl::Ui::NumericParseStatus::Enum;
-namespace CoreKey = ::NWB::Core::Key;
-namespace CoreInputModifier = ::NWB::Core::InputModifier;
-
-using ::NWB::Impl::Ui::ApplyEditCommand;
-using ::NWB::Impl::Ui::ParseFloatDraft;
-using ::NWB::Impl::Ui::TranslateEditCommand;
-using ::NWB::Impl::Ui::TryTranslateEditNavigation;
-using ::NWB::Tests::UiCases::s_UiCaseTestsUiEditNavigation;
-
-[[nodiscard]] FOUNDATION_INLINE i32 MakeUiEditOutOfBoundsKeyCode()noexcept{ return static_cast<i32>(::NWB::Core::Key::Menu) + 1; }
-[[nodiscard]] FOUNDATION_INLINE InputCommandEnum MakeUiEditInvalidInputCommand()noexcept{ return static_cast<InputCommandEnum>(255u); }
-[[nodiscard]] FOUNDATION_INLINE EditCommandEnum MakeUiEditInvalidEditCommand()noexcept{ return static_cast<EditCommandEnum>(255u); }
-[[nodiscard]] FOUNDATION_INLINE EditTextModeEnum MakeUiEditInvalidTextMode()noexcept{ return static_cast<EditTextModeEnum>(255u); }
-[[nodiscard]] FOUNDATION_INLINE AStringView MakeUiEditSingleNullView()noexcept{ return AStringView("\0", 1u); }
-[[nodiscard]] FOUNDATION_INLINE AStringView MakeUiEditEmbeddedNullView()noexcept{ return AStringView("a\0b", 3u); }
-[[nodiscard]] FOUNDATION_INLINE b8 UiEditValidateGraphemes(const AStringView text, const b8 singleLine = false)noexcept{
-    return ::NWB::Impl::Ui::ValidateGraphemeText(text, singleLine);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiEditIsAsciiDigit(const u8 ch)noexcept{ return ::IsAsciiDigit(static_cast<char>(ch)); }
-FOUNDATION_INLINE void UiKeepEditArenaAlive(const GlobalArena&)noexcept{}
-FOUNDATION_INLINE void UiKeepEditTestArenaAlive(const TestArena&)noexcept{}
-[[nodiscard]] FOUNDATION_INLINE Expected<::AString<::ArenaBase>, EditTextStatusEnum> UiNormalizeSingleLineToString(TestArena& arena, const AStringView text, const usize maxBytes){
-    auto result = ::NWB::Impl::Ui::NormalizeSingleLineText(arena.arena, text, maxBytes);
-    if(!result)
-        return MakeUnexpected(result.error());
-    return ::AString<::ArenaBase>(AStringView(*result), static_cast<::ArenaBase&>(arena.arena));
-}
-[[nodiscard]] FOUNDATION_INLINE b8 VerifyUiSingleLineAliasedInputCopy(){
-    ::NWB::Tests::TestArena<> arena;
-    ::AString<::ArenaBase> output("prefix a\r\nb", arena.arena);
-    const ::AStringView source(output.data() + 7u, output.size() - 7u);
-    auto normalized = ::NWB::Impl::Ui::NormalizeSingleLineText(arena.arena, source, 3u);
-    if(!normalized)
-        return false;
-    output = Move(*normalized);
-    return output == "a b";
-}
-[[nodiscard]] FOUNDATION_INLINE f64 UiFloatModelInfinity()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f64 UiFloatModelQuietNaN()noexcept{ return ::Limit<f64>::s_QuietNaN; }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+class FloatModelTests{
+    public FloatEditModel m_model = FloatEditModel();
+}
 
 const StringView s_UiEditSelectionSampleText = "abcDEFghi";
 
@@ -362,7 +100,7 @@ UiEditSeamMergeCase MakeUiEditSeamMergeCase(in StringView inText, in usize inAnc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditCommandRequest MakeUiEditCommandRequest(in EditCommandEnum command, in b8 extend, in b8 repeat){
+EditCommandRequest MakeUiEditCommandRequest(in EditCommand command, in b8 extend, in b8 repeat){
     EditCommandRequest request = EditCommandRequest();
     request.command = command;
     request.extend = extend;
@@ -412,16 +150,16 @@ void ExpectUiEditRetainedHistory(in StringView text, mut EditModel model){
 
 void VerifyUiEditCommandTests_ShortcutTranslationPreservesWordSelectionAndLeavesAltGrWithOs(mut UiEditCommandTests self){
     ASSERT_TRUE(self.m_model.setText("one two"));
-    const EditCommandRequest left = self.translate(CoreKey::Left, true, true, false, true);
+    const EditCommandRequest left = self.translate(Key::Left, true, true, false, true);
     EXPECT_TRUE(ApplyEditCommand(self.m_model, left).selectionChanged);
     EXPECT_EQ(self.m_model.selectedText(), "two");
     const u64 revision = self.m_model.revision();
     const u64 selection = self.m_model.selectionGeneration();
     Array<EditCommandRequest, 4u> rejectedList = Array<EditCommandRequest, 4u>();
-    rejectedList[0u] = self.translate(CoreKey::V);
-    rejectedList[1u] = self.translate(CoreKey::V, true, false, true);
-    rejectedList[2u] = self.translate(CoreKey::Left, true, true, true);
-    rejectedList[3u] = self.translate(MakeUiEditOutOfBoundsKeyCode());
+    rejectedList[0u] = self.translate(Key::V, false, false, false, false);
+    rejectedList[1u] = self.translate(Key::V, true, false, true, false);
+    rejectedList[2u] = self.translate(Key::Left, true, true, true, false);
+    rejectedList[3u] = self.translate(cast<i32>(Key::Menu) + 1, false, false, false, false);
     for(in EditCommandRequest rejected : rejectedList){
         EXPECT_FALSE(ApplyEditCommand(self.m_model, rejected).handled);
         EXPECT_EQ(self.m_model.text(), "one two");
@@ -434,18 +172,18 @@ void VerifyUiEditCommandTests_ShortcutTranslationPreservesWordSelectionAndLeaves
 void VerifyUiEditCommandTests_AlternateClipboardChordsRejectAmbiguousModifiersRepeatsAndPreedit(mut UiEditCommandTests self){
     ASSERT_TRUE(self.m_model.setText("selected"));
     ASSERT_TRUE(self.m_model.selectAll());
-    const EditCommandRequest copy = self.translate(CoreKey::Insert, true);
-    const EditCommandRequest paste = self.translate(CoreKey::Insert, false, true);
-    const EditCommandRequest cut = self.translate(CoreKey::Delete, false, true);
-    EXPECT_EQ(self.translate(CoreKey::Insert, true, true).command, EditCommand::None);
-    EXPECT_EQ(self.translate(CoreKey::Insert, true, false, true).command, EditCommand::None);
-    EXPECT_EQ(self.translate(CoreKey::Delete, false, true, true).command, EditCommand::None);
+    const EditCommandRequest copy = self.translate(Key::Insert, true, false, false, false);
+    const EditCommandRequest paste = self.translate(Key::Insert, false, true, false, false);
+    const EditCommandRequest cut = self.translate(Key::Delete, false, true, false, false);
+    EXPECT_EQ(self.translate(Key::Insert, true, true, false, false).command, EditCommand::None);
+    EXPECT_EQ(self.translate(Key::Insert, true, false, true, false).command, EditCommand::None);
+    EXPECT_EQ(self.translate(Key::Delete, false, true, true, false).command, EditCommand::None);
     EXPECT_EQ(ApplyEditCommand(self.m_model, copy, true).clipboard, EditClipboardAction::Copy);
     EXPECT_EQ(ApplyEditCommand(self.m_model, paste, true).clipboard, EditClipboardAction::None);
     EXPECT_EQ(ApplyEditCommand(self.m_model, cut, true).clipboard, EditClipboardAction::None);
-    EXPECT_EQ(ApplyEditCommand(self.m_model, self.translate(CoreKey::Insert, true, false, false, true)).clipboard, EditClipboardAction::None);
-    EXPECT_EQ(ApplyEditCommand(self.m_model, self.translate(CoreKey::Insert, false, true, false, true)).clipboard, EditClipboardAction::None);
-    EXPECT_EQ(ApplyEditCommand(self.m_model, self.translate(CoreKey::Delete, false, true, false, true)).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(self.m_model, self.translate(Key::Insert, true, false, false, true)).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(self.m_model, self.translate(Key::Insert, false, true, false, true)).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(self.m_model, self.translate(Key::Delete, false, true, false, true)).clipboard, EditClipboardAction::None);
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("draft", 0u, 5u));
     Array<EditCommandRequest, 3u> requests = Array<EditCommandRequest, 3u>();
@@ -470,7 +208,7 @@ void VerifyUiEditCommandTests_NonEditingMalformedAndUnrelatedIntentsCannotMutate
     rejected[4u] = MakeUiCommandIntent(InputCommand::None, false, true);
     rejected[5u] = MakeUiCommandIntent(InputCommand::Activate, false, true);
     rejected[6u] = MakeUiCommandIntent(InputCommand::ContextMenu, false, true);
-    rejected[7u] = MakeUiCommandIntent(MakeUiEditInvalidInputCommand(), true, true);
+    rejected[7u] = MakeUiCommandIntent(cast<InputCommand>(255u), true, true);
     for(in InputCommandIntent intent : rejected){
         const EditCommandResult result = ApplyEditCommand(self.m_model, TranslateEditCommand(intent, false, EditTextMode::SingleLine));
         EXPECT_FALSE(result.handled);
@@ -483,7 +221,7 @@ void VerifyUiEditCommandTests_NonEditingMalformedAndUnrelatedIntentsCannotMutate
         EXPECT_EQ(self.m_model.revision(), revision);
         EXPECT_EQ(self.m_model.selectionGeneration(), selection);
     }
-    EXPECT_FALSE(ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Backspace, false, true), false, MakeUiEditInvalidTextMode())).handled);
+    EXPECT_FALSE(ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Backspace, false, true), false, cast<EditTextMode>(255u))).handled);
     EXPECT_EQ(self.m_model.revision(), revision);
     EXPECT_EQ(self.m_model.selectionGeneration(), selection);
 }
@@ -506,7 +244,7 @@ void VerifyUiEditCommandTests_ShiftMovementSelectsWholeGraphemesAndArrowsCollaps
 
 void VerifyUiEditCommandTests_ReadOnlyConsumesMutationsAndAllowsSelectionAndCopy(mut UiEditCommandTests self){
     ASSERT_TRUE(self.m_model.setText("abcd"));
-    Array<EditCommandEnum, 8u> mutations = Array<EditCommandEnum, 8u>();
+    Array<EditCommand, 8u> mutations = Array<EditCommand, 8u>();
     mutations[0u] = EditCommand::Backspace;
     mutations[1u] = EditCommand::Delete;
     mutations[2u] = EditCommand::WordBackspace;
@@ -515,7 +253,7 @@ void VerifyUiEditCommandTests_ReadOnlyConsumesMutationsAndAllowsSelectionAndCopy
     mutations[5u] = EditCommand::Paste;
     mutations[6u] = EditCommand::Undo;
     mutations[7u] = EditCommand::Redo;
-    for(in EditCommandEnum command : mutations){
+    for(in EditCommand command : mutations){
         const EditCommandResult result = ApplyEditCommand(self.m_model, MakeUiEditCommandRequest(command, false, false), true);
         EXPECT_TRUE(result.handled);
         EXPECT_FALSE(result.textChanged);
@@ -530,14 +268,14 @@ void VerifyUiEditCommandTests_RepeatsEditTextButNeverDuplicateClipboardSubmitOrC
     ASSERT_TRUE(self.m_model.setText("abcd"));
     EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiEditCommandRequest(EditCommand::Backspace, false, true)).textChanged);
     EXPECT_EQ(self.m_model.text(), "abc");
-    Array<EditCommandEnum, 6u> oneShot = Array<EditCommandEnum, 6u>();
+    Array<EditCommand, 6u> oneShot = Array<EditCommand, 6u>();
     oneShot[0u] = EditCommand::Copy;
     oneShot[1u] = EditCommand::Cut;
     oneShot[2u] = EditCommand::Paste;
     oneShot[3u] = EditCommand::SelectAll;
     oneShot[4u] = EditCommand::Submit;
     oneShot[5u] = EditCommand::Cancel;
-    for(in EditCommandEnum command : oneShot){
+    for(in EditCommand command : oneShot){
         const EditCommandResult result = ApplyEditCommand(self.m_model, MakeUiEditCommandRequest(command, false, true));
         EXPECT_TRUE(result.handled);
         EXPECT_FALSE(result.submitted);
@@ -551,7 +289,7 @@ void VerifyUiEditCommandTests_PreeditOwnsCommandsAndEnterWhileEscapeFirstCancels
     ASSERT_TRUE(self.m_model.setText("base"));
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("draft", 0u, 5u));
-    Array<EditCommandEnum, 8u> nativeOwned = Array<EditCommandEnum, 8u>();
+    Array<EditCommand, 8u> nativeOwned = Array<EditCommand, 8u>();
     nativeOwned[0u] = EditCommand::Backspace;
     nativeOwned[1u] = EditCommand::Right;
     nativeOwned[2u] = EditCommand::SelectAll;
@@ -560,7 +298,7 @@ void VerifyUiEditCommandTests_PreeditOwnsCommandsAndEnterWhileEscapeFirstCancels
     nativeOwned[5u] = EditCommand::Paste;
     nativeOwned[6u] = EditCommand::Undo;
     nativeOwned[7u] = EditCommand::Submit;
-    for(in EditCommandEnum command : nativeOwned){
+    for(in EditCommand command : nativeOwned){
         const EditCommandResult result = ApplyEditCommand(self.m_model, MakeUiEditCommandRequest(command, false, false));
         EXPECT_TRUE(result.handled);
         EXPECT_FALSE(result.textChanged);
@@ -580,7 +318,7 @@ void VerifyUiEditCommandTests_EmptyAndUnknownCommandsPreserveTextAndSelection(mu
     ASSERT_TRUE(self.m_model.setText("abcd"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 3u));
     EXPECT_FALSE(ApplyEditCommand(self.m_model, EditCommandRequest()).handled);
-    EXPECT_FALSE(ApplyEditCommand(self.m_model, MakeUiEditCommandRequest(MakeUiEditInvalidEditCommand(), false, false)).handled);
+    EXPECT_FALSE(ApplyEditCommand(self.m_model, MakeUiEditCommandRequest(cast<EditCommand>(255u), false, false)).handled);
     EXPECT_EQ(self.m_model.text(), "abcd");
     EXPECT_EQ(self.m_model.selectedText(), "bc");
 }
@@ -739,15 +477,15 @@ void VerifyUiEditCompositionTests_AcceptedSurroundingDeleteCancelsPreeditWithout
 void VerifyUiEditGraphemeTests_PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCase(mut UiEditGraphemeTests self){
     for(usize index = 0u; index < 766u; ++index){
         const ScopedTestTrace trace = ScopedTestTrace(index);
-        const Expected<EditBoundaryVector> actualResult = self.buildBoundaries(self.conformanceText(index));
+        const Expected<EditBoundaryVector> actualResult = self.buildBoundaries(GetUiGraphemeText(index), false);
         ASSERT_TRUE(actualResult.has_value());
         const EditBoundaryVector actual = actualResult.value();
-        const StringView expectedOffsets = self.conformanceExpectedOffsets(index);
+        const StringView expectedOffsets = GetUiGraphemeOffsets(index);
         usize cursor = 0u;
         usize offsetIndex = 0u;
         while(cursor < expectedOffsets.size()){
             usize expected = 0u;
-            while(cursor < expectedOffsets.size() && UiEditIsAsciiDigit(cast<u8>(expectedOffsets[cursor]))){
+            while(cursor < expectedOffsets.size() && IsAsciiDigit(cast<u8>(expectedOffsets[cursor]))){
                 expected = expected * 10u + cast<usize>(cast<u8>(expectedOffsets[cursor]) - 48u);
                 ++cursor;
             }
@@ -763,7 +501,7 @@ void VerifyUiEditGraphemeTests_PassesEveryPinnedOfficialUnicode17ExtendedGraphem
 
 void VerifyUiEditGraphemeTests_RegionalIndicatorsPairAndEmojiModifierZwjSequencesRemainWhole(mut UiEditGraphemeTests self){
     const StringView flags = "\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8\xF0\x9F\x87\xAF";
-    Expected<EditBoundaryVector> boundaries = self.buildBoundaries(flags);
+    Expected<EditBoundaryVector> boundaries = self.buildBoundaries(flags, false);
     ASSERT_TRUE(boundaries.has_value());
     ASSERT_EQ(boundaries.value().size(), 4u);
     EXPECT_EQ(boundaries.value()[0u], 0u);
@@ -771,7 +509,7 @@ void VerifyUiEditGraphemeTests_RegionalIndicatorsPairAndEmojiModifierZwjSequence
     EXPECT_EQ(boundaries.value()[2u], 16u);
     EXPECT_EQ(boundaries.value()[3u], 20u);
     const StringView emoji = "\xF0\x9F\x91\xA9\xF0\x9F\x8F\xBD\xE2\x80\x8D\xF0\x9F\x92\xBB";
-    boundaries = self.buildBoundaries(emoji);
+    boundaries = self.buildBoundaries(emoji, false);
     ASSERT_TRUE(boundaries.has_value());
     ASSERT_EQ(boundaries.value().size(), 2u);
     EXPECT_EQ(boundaries.value()[1u], 15u);
@@ -781,7 +519,7 @@ void VerifyUiEditGraphemeTests_RegionalIndicatorsPairAndEmojiModifierZwjSequence
 }
 
 void VerifyUiEditGraphemeTests_GeneralSegmentationAcceptsCrLfButSingleLineValidationRejectsIt(mut UiEditGraphemeTests self){
-    const Expected<EditBoundaryVector> boundaries = self.buildBoundaries("x\r\ny");
+    const Expected<EditBoundaryVector> boundaries = self.buildBoundaries("x\r\ny", false);
     ASSERT_TRUE(boundaries.has_value());
     ASSERT_EQ(boundaries.value().size(), 4u);
     EXPECT_EQ(boundaries.value()[0u], 0u);
@@ -790,17 +528,17 @@ void VerifyUiEditGraphemeTests_GeneralSegmentationAcceptsCrLfButSingleLineValida
     EXPECT_EQ(boundaries.value()[3u], 4u);
     EXPECT_FALSE(self.buildBoundaries("x\r\ny", true).has_value());
     EXPECT_EQ(boundaries.value()[2u], 3u);
-    EXPECT_TRUE(UiEditValidateGraphemes(MakeUiEditSingleNullView()));
-    EXPECT_FALSE(UiEditValidateGraphemes(MakeUiEditSingleNullView(), true));
+    EXPECT_TRUE(ValidateGraphemeText(StringView("\0", 1u), false));
+    EXPECT_FALSE(ValidateGraphemeText(StringView("\0", 1u), true));
 }
 
 void VerifyUiEditGraphemeTests_InvalidUtf8FailsBeforeAllocatingBoundaries(mut UiEditGraphemeTests self){
-    const Expected<EditBoundaryVector> boundaries = self.buildBoundaries("ok");
+    const Expected<EditBoundaryVector> boundaries = self.buildBoundaries("ok", false);
     ASSERT_TRUE(boundaries.has_value());
     const usize before = self.allocationCount();
-    EXPECT_FALSE(self.buildBoundaries("\xED\xA0\x80").has_value());
-    EXPECT_FALSE(self.buildBoundaries("\xF5\x80\x80\x80").has_value());
-    EXPECT_FALSE(self.buildBoundaries("\x80").has_value());
+    EXPECT_FALSE(self.buildBoundaries("\xED\xA0\x80", false).has_value());
+    EXPECT_FALSE(self.buildBoundaries("\xF5\x80\x80\x80", false).has_value());
+    EXPECT_FALSE(self.buildBoundaries("\x80", false).has_value());
     EXPECT_EQ(self.allocationCount(), before);
     ASSERT_EQ(boundaries.value().size(), 3u);
     EXPECT_EQ(boundaries.value()[0u], 0u);
@@ -810,7 +548,7 @@ void VerifyUiEditGraphemeTests_InvalidUtf8FailsBeforeAllocatingBoundaries(mut Ui
 
 void VerifyUiEditGraphemeTests_ScalarPositionsDifferFromGraphemePositionsWithoutSplittingUtf8(mut UiEditGraphemeTests self){
     const StringView text = "a\xCC\x81";
-    ASSERT_TRUE(UiEditValidateGraphemes(text));
+    ASSERT_TRUE(ValidateGraphemeText(text, false));
     EXPECT_TRUE(IsUtf8ScalarBoundary(text, 0u));
     EXPECT_TRUE(IsUtf8ScalarBoundary(text, 1u));
     EXPECT_FALSE(IsUtf8ScalarBoundary(text, 2u));
@@ -985,7 +723,7 @@ void VerifyUiEditModelTests_InvalidUtf8AndMultilineValuesPreserveAllCommittedSta
     invalid[5u] = "x\ry";
     invalid[6u] = "\xE2\x80\xA8";
     invalid[7u] = "\xE2\x80\xA9";
-    invalid[8u] = MakeUiEditEmbeddedNullView();
+    invalid[8u] = StringView("a\0b", 3u);
     for(in StringView value : invalid){
         EXPECT_FALSE(self.m_model.setText(value));
         EXPECT_FALSE(self.m_model.replaceSelection(value));
@@ -1131,17 +869,16 @@ void VerifyUiEditNavigationStateTests_FiniteExtremeColumnsRemainFiniteAuthoritat
 }
 
 void VerifyUiEditNavigationStateTests_OsModifiersAndUnrelatedIntentsRejectNavigation(){
-    TestArena arena = TestArena(s_UiCaseTestsUiEditNavigation);
-    InputBindings bindings = InputBindings(arena.arena);
+    InputBindings bindings = InputBindings();
     Array<InputKeyBinding, 8u> chords = Array<InputKeyBinding, 8u>();
-    chords[0u] = MakeUiEditKeyChord(CoreKey::Up, CoreInputModifier::Control);
-    chords[1u] = MakeUiEditKeyChord(CoreKey::Down, CoreInputModifier::Alt);
-    chords[2u] = MakeUiEditKeyChord(CoreKey::PageUp, CoreInputModifier::Control | CoreInputModifier::Shift);
-    chords[3u] = MakeUiEditKeyChord(CoreKey::PageDown, CoreInputModifier::Shift | CoreInputModifier::Alt);
-    chords[4u] = MakeUiEditKeyChord(CoreKey::Unknown, 0);
-    chords[5u] = MakeUiEditKeyChord(CoreKey::Enter, 0);
-    chords[6u] = MakeUiEditKeyChord(CoreKey::Left, 0);
-    chords[7u] = MakeUiEditKeyChord(MakeUiEditOutOfBoundsKeyCode(), 0);
+    chords[0u] = MakeUiEditKeyChord(Key::Up, InputModifier::Control);
+    chords[1u] = MakeUiEditKeyChord(Key::Down, InputModifier::Alt);
+    chords[2u] = MakeUiEditKeyChord(Key::PageUp, cast<i32>(InputModifier::Control) | cast<i32>(InputModifier::Shift));
+    chords[3u] = MakeUiEditKeyChord(Key::PageDown, cast<i32>(InputModifier::Shift) | cast<i32>(InputModifier::Alt));
+    chords[4u] = MakeUiEditKeyChord(Key::Unknown, 0);
+    chords[5u] = MakeUiEditKeyChord(Key::Enter, 0);
+    chords[6u] = MakeUiEditKeyChord(Key::Left, 0);
+    chords[7u] = MakeUiEditKeyChord(cast<i32>(Key::Menu) + 1, 0);
     for(in InputKeyBinding chord : chords)
         EXPECT_FALSE(TryTranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers)).has_value());
 
@@ -1151,10 +888,9 @@ void VerifyUiEditNavigationStateTests_OsModifiersAndUnrelatedIntentsRejectNaviga
     rejected[2u] = MakeUiCommandIntent(InputCommand::PageUp, false, false);
     rejected[3u] = MakeUiCommandIntent(InputCommand::PageDown, true, false);
     rejected[4u] = MakeUiCommandIntent(InputCommand::FocusNext, false, true);
-    rejected[5u] = MakeUiCommandIntent(MakeUiEditInvalidInputCommand(), true, true);
+    rejected[5u] = MakeUiCommandIntent(cast<InputCommand>(255u), true, true);
     for(in InputCommandIntent intent : rejected)
         EXPECT_FALSE(TryTranslateEditNavigation(intent).has_value());
-    UiKeepEditTestArenaAlive(arena);
 }
 
 
@@ -1162,24 +898,21 @@ void VerifyUiEditNavigationStateTests_OsModifiersAndUnrelatedIntentsRejectNaviga
 
 
 void VerifyUiSingleLineText_NormalizedByteLimitsRejectWholeScalarsAndBreakPairs(){
-    TestArena arena = TestArena();
-    const Expected<String, EditTextStatusEnum> normalized1 = UiNormalizeSingleLineToString(arena, "a\r\nb", 3u);
+    const Expected<String, EditTextStatus> normalized1 = NormalizeSingleLineText("a\r\nb", 3u);
     ASSERT_TRUE(normalized1.has_value());
     EXPECT_EQ(normalized1.value(), "a b");
-    const Expected<String, EditTextStatusEnum> tooLarge1 = UiNormalizeSingleLineToString(arena, "\xED\x95\x9C", 2u);
+    const Expected<String, EditTextStatus> tooLarge1 = NormalizeSingleLineText("\xED\x95\x9C", 2u);
     ASSERT_FALSE(tooLarge1.has_value());
     EXPECT_EQ(tooLarge1.error(), EditTextStatus::TooLarge);
-    const Expected<String, EditTextStatusEnum> tooLarge2 = UiNormalizeSingleLineToString(arena, "\r\n\r\n", 1u);
+    const Expected<String, EditTextStatus> tooLarge2 = NormalizeSingleLineText("\r\n\r\n", 1u);
     ASSERT_FALSE(tooLarge2.has_value());
     EXPECT_EQ(tooLarge2.error(), EditTextStatus::TooLarge);
-    const Expected<String, EditTextStatusEnum> normalized2 = UiNormalizeSingleLineToString(arena, "", 0u);
+    const Expected<String, EditTextStatus> normalized2 = NormalizeSingleLineText("", 0u);
     ASSERT_TRUE(normalized2.has_value());
     EXPECT_TRUE(normalized2.value().empty());
-    UiKeepEditTestArenaAlive(arena);
 }
 
 void VerifyUiSingleLineText_RejectsMalformedUtf8NulAndUnrenderableAsciiControlsAtomically(){
-    TestArena arena = TestArena();
     Array<StringView, 7u> invalid = Array<StringView, 7u>();
     invalid[0u] = "\xC0\xAF";
     invalid[1u] = "\xED\xA0\x80";
@@ -1187,17 +920,21 @@ void VerifyUiSingleLineText_RejectsMalformedUtf8NulAndUnrenderableAsciiControlsA
     invalid[3u] = "\xE2\x82";
     invalid[4u] = "x\x1By";
     invalid[5u] = "\x7F";
-    invalid[6u] = MakeUiEditEmbeddedNullView();
+    invalid[6u] = StringView("a\0b", 3u);
     for(in StringView value : invalid){
-        const Expected<String, EditTextStatusEnum> result = UiNormalizeSingleLineToString(arena, value, 64u);
+        const Expected<String, EditTextStatus> result = NormalizeSingleLineText(value, 64u);
         ASSERT_FALSE(result.has_value());
         EXPECT_EQ(result.error(), EditTextStatus::InvalidText);
     }
-    UiKeepEditTestArenaAlive(arena);
 }
 
 void VerifyUiSingleLineText_CopiesAliasedInputBeforePublishingOutput(){
-    EXPECT_TRUE(VerifyUiSingleLineAliasedInputCopy());
+    String output = "prefix a\r\nb";
+    const StringView source = StringView(output).substr(7u);
+    const auto normalized = NormalizeSingleLineText(source, 3u);
+    ASSERT_TRUE(normalized.has_value());
+    output = normalized.value();
+    EXPECT_EQ(output, "a b");
 }
 
 
@@ -1491,9 +1228,9 @@ void VerifyFloatModelTests_NonfiniteExternalAssignmentsPreserveEveryExistingDraf
     const MultilineSnapshot before = MultilineSnapshot(self.m_model.draft());
     const u64 epoch = self.m_model.revision();
     Array<f64, 3u> values = Array<f64, 3u>();
-    values[0u] = UiFloatModelInfinity();
-    values[1u] = -UiFloatModelInfinity();
-    values[2u] = UiFloatModelQuietNaN();
+    values[0u] = bit_cast<f64>(0x7FF0000000000000ull);
+    values[1u] = -bit_cast<f64>(0x7FF0000000000000ull);
+    values[2u] = bit_cast<f64>(0x7FF8000000000000ull);
     for(in f64 value : values){
         EXPECT_FALSE(self.m_model.setValue(value));
         EXPECT_EQ(self.m_model.revision(), epoch);
@@ -1522,7 +1259,7 @@ void VerifyFloatModelTests_ExtremeSubnormalAndAdjacentUlpValuesRoundtripWithExac
         EXPECT_EQ(bit_cast<u64>(self.m_model.value()), bits);
         ASSERT_TRUE(self.m_model.setDraft("-"));
         ASSERT_TRUE(self.m_model.cancel().valid);
-        const Expected<f64, NumericParseStatusEnum> parsed = ParseFloatDraft(self.m_model.draft().text());
+        const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(self.m_model.draft().text());
         ASSERT_TRUE(parsed.has_value());
         EXPECT_EQ(bit_cast<u64>(parsed.value()), bits);
     }

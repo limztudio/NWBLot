@@ -70,7 +70,7 @@ b8 TryParseTextureMetadata(in StringView metadata, in StringView caseName, mut T
 
 void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
@@ -113,7 +113,7 @@ void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnpla
     ASSERT_TRUE(WriteTextFile(sourcePath, validSource));
     EXPECT_TRUE(GatherShaderDependencies(sourcePath, includeDirectories, scratch, dependencies));
     EXPECT_EQ(logger.errorCount(), failureErrors);
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
@@ -155,12 +155,12 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
         unaliasedDependencies.push_back(unaliasedDependency);
 
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+        LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
         EXPECT_FALSE(ComputeSingleAliasShaderDependencyChecksum(unaliasedDependencies, includeDirectories, firstGeneratedRoot, s_MaterialBindIncludesDirectory, scratch).has_value());
         EXPECT_TRUE(SawCapturedError(logger, "outside the declared dependency root aliases"));
     }
 
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameFileUnion(){
@@ -221,7 +221,7 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWith
     ASSERT_TRUE(upperCaseSearch.has_value());
     ASSERT_TRUE(lowerCaseSearch.has_value());
     EXPECT_NE(upperCaseSearch.value(), lowerCaseSearch.value());
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAliasedRoots(){
@@ -248,14 +248,12 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumPreservesPhysicalPathCaseAcros
     ASSERT_TRUE(upperKey.has_value());
     ASSERT_TRUE(lowerKey.has_value());
     EXPECT_NE(upperKey.value(), lowerKey.value());
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs(){
     if(IsWindowsPlatformHost()){
-        native{
-            GTEST_SKIP() << "Windows shader path duplicate policy is case insensitive";
-        }
+        SkipTest("Windows shader path duplicate policy is case insensitive");
         return;
     }
 
@@ -275,10 +273,8 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
     b8 caseDistinct = false;
     ASSERT_TRUE(ReadTextFileMatches(upperPath, upperExpected, scratch, caseDistinct));
     if(!caseDistinct){
-        EXPECT_TRUE(RemoveAllIfExists(root));
-        native{
-            GTEST_SKIP() << "Filesystem provider cannot store case-distinct shader inputs";
-        }
+        EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
+        SkipTest("Filesystem provider cannot store case-distinct shader inputs");
         return;
     }
 
@@ -296,7 +292,7 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
     const Expected<u64> changedKey = ComputeSingleAliasShaderDependencyChecksum(dependencies, noDirectories, root, "source", scratch);
     ASSERT_TRUE(changedKey.has_value());
     EXPECT_NE(firstKey.value(), changedKey.value());
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias(){
@@ -304,7 +300,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_default_variant_alias");
     ASSERT_TRUE(rootResult.has_value());
@@ -319,12 +315,12 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias(){
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     EXPECT_FALSE(CanParseIncludeEntryFile(includeMetaPath, testArena, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field 'default_variant'"));
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
@@ -352,12 +348,12 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField()
         ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
         EXPECT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     }
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalFlags(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
@@ -407,12 +403,12 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
     }
     ASSERT_TRUE(WriteTextFile(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
     ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithRealVariants(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
@@ -434,8 +430,10 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
     validIncludeMetadata.append("include asset;\n");
     validIncludeMetadata.append(realDefines);
 
-    ShaderCookShaderEntry shaderEntry(testArena.arena);
-    ShaderCookIncludeEntry includeEntry(testArena.arena);
+    TestValueSlot<ShaderCookShaderEntry> shaderEntryStorage;
+    mut ShaderCookShaderEntry shaderEntry = shaderEntryStorage.constructIn(testArena);
+    TestValueSlot<ShaderCookIncludeEntry> includeEntryStorage;
+    mut ShaderCookIncludeEntry includeEntry = includeEntryStorage.constructIn(testArena);
 
     Vector<StringView> transportNames = Vector<StringView>();
     transportNames.reserve(2u);
@@ -517,12 +515,12 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             EXPECT_TRUE(ValidateIncludeEntryVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry, scratch));
         }
     }
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
@@ -535,12 +533,12 @@ void VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape(){
     EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "must be an ASCII shader identifier"));
     EXPECT_FALSE(SawCapturedError(logger, "values must be a list of strings"));
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSignatures(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
@@ -560,8 +558,10 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
     invalidDefinesList.push_back("\"PROJECT_QUALITY\": [\" 1\"]");
     invalidDefinesList.push_back("\"PROJECT_QUALITY\": [\"1 \"]");
 
-    ShaderCookShaderEntry shaderEntry(testArena.arena);
-    ShaderCookIncludeEntry includeEntry(testArena.arena);
+    TestValueSlot<ShaderCookShaderEntry> shaderEntryStorage;
+    mut ShaderCookShaderEntry shaderEntry = shaderEntryStorage.constructIn(testArena);
+    TestValueSlot<ShaderCookIncludeEntry> includeEntryStorage;
+    mut ShaderCookIncludeEntry includeEntry = includeEntryStorage.constructIn(testArena);
 
     for(u32 modeIndex = 0u; modeIndex < 2u; ++modeIndex){
         const b8 isInclude = modeIndex == 1u;
@@ -626,12 +626,12 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
             }
         }
     }
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifySkeletonPayload_RejectsLaterSelfAndMissingParentsAndRecoversWithValidParents(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
         const ScopedTestTrace trace(invalidCase);
         SkeletonInputs inputs = SkeletonInputs();
@@ -654,7 +654,7 @@ void VerifySkeletonPayload_RejectsLaterSelfAndMissingParentsAndRecoversWithValid
 
 void VerifySkeletonPayload_RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     for(u32 duplicateIndex = 0u; duplicateIndex < 2u; ++duplicateIndex){
         Name duplicate = Name(s_SkeletonJointLeft);
         if(duplicateIndex == 1u)
@@ -670,7 +670,7 @@ void VerifySkeletonPayload_RejectsDuplicateCanonicalIdsAfterResolvingEarlierPare
 
 void VerifySkeletonPayload_CodecRejectsEveryTruncatedTablePrefixWithoutReplacingPriorJoints(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     SkeletonInputs inputs = SkeletonInputs();
     ASSERT_TRUE(inputs.buildIntoSkeleton());
 
@@ -694,7 +694,7 @@ void VerifySkeletonPayload_CodecRejectsEveryTruncatedTablePrefixWithoutReplacing
 
 void VerifySkeletonPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndInvalidLookup(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     SkeletonInputs inputs = SkeletonInputs();
     ASSERT_TRUE(inputs.buildIntoSkeleton());
     ASSERT_TRUE(inputs.validate());
@@ -716,7 +716,7 @@ void VerifySkeletonPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAn
 
 void VerifyAssetsGraphics_Rgba8FallbackMipSizeRejectsAddressOverflow(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     const Expected<usize> zeroBytes = TryComputeRgba8FallbackMipBytes(0u, u32.max);
     ASSERT_TRUE(zeroBytes.has_value());
     EXPECT_EQ(zeroBytes.value(), 0u);
@@ -726,11 +726,12 @@ void VerifyAssetsGraphics_Rgba8FallbackMipSizeRejectsAddressOverflow(){
 
 void VerifyAssetsGraphics_TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixAndOversizedCount(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
 
     const AssetBytes validBinary = BuildPartialBlockTextureBytes(testArena);
-    TextureAsset texture(testArena.arena, Name(s_AssetCaseProjectTexturesMipTableAdmission));
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesMipTableAdmission));
     ASSERT_TRUE(LoadTextureAssetBinary(texture, validBinary));
     TextureAssetCodec codec = TextureAssetCodec();
 
@@ -743,7 +744,7 @@ void VerifyAssetsGraphics_TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixA
         EXPECT_EQ(retained, validBinary);
     }
 
-    AssetBytes oversized = CopyAssetBytesPrefix(validBinary, s_TextureHeaderBinaryBytes, testArena);
+    AssetBytes oversized = CopyAssetBytesPrefix(validBinary, s_TestTextureHeaderBytes, testArena);
     ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderMipCountOffset, u32.max, oversized));
     EXPECT_FALSE(LoadTextureAssetBinary(texture, oversized));
     AssetBytes retained = MakeAssetBytes(testArena);
@@ -754,11 +755,12 @@ void VerifyAssetsGraphics_TextureMipAdmissionRejectsEveryTruncatedPayloadPrefixA
 
 void VerifyAssetsGraphics_TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPublishedPayload(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
 
     const AssetBytes original = BuildPartialBlockTextureBytes(testArena);
-    TextureAsset texture(testArena.arena, Name(s_AssetCaseProjectTexturesPayloadFormatAdmission));
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesPayloadFormatAdmission));
     ASSERT_TRUE(LoadTextureAssetBinary(texture, original));
     TextureAssetCodec codec = TextureAssetCodec();
 
@@ -788,22 +790,23 @@ void VerifyAssetsGraphics_TextureCodecRejectsPayloadFormatNarrowingWithoutReplac
 
 void VerifyAssetsGraphics_TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutReplacingPublishedPayload(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
 
     AssetBytes original = BuildPartialBlockTextureBytes(testArena);
-    const u32 hdrFormat = cast<u32>(s_UastcHdrFormat);
-    const u32 alphaInfo = cast<u32>(s_TextureAlphaConstantUnorm8) | (s_MaxConstantAlphaUnorm8 << s_TextureAlphaInfoConstantShift);
+    const u32 hdrFormat = cast<u32>(TexturePayloadFormat::UastcHdr4x4);
+    const u32 alphaInfo = cast<u32>(TextureAlphaMode::ConstantUnorm8) | (s_MaxConstantAlphaUnorm8 << s_AlphaInfoConstantShift);
     ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderPayloadFormatOffset, hdrFormat, original));
     ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderAlphaInfoOffset, alphaInfo, original));
 
-    TextureAsset texture(testArena.arena, Name(s_AssetCaseProjectTexturesConstantAlphaAdmission));
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesConstantAlphaAdmission));
     ASSERT_TRUE(LoadTextureAssetBinary(texture, original));
     TextureAssetCodec codec = TextureAssetCodec();
 
     AssetBytes malformed = MakeAssetBytes(testArena);
     CopyAssetBytes(original, malformed);
-    const u32 opaqueConstantInfo = cast<u32>(s_TextureAlphaConstantUnorm8) | (cast<u32>(s_OpaqueAlphaUnorm8) << s_TextureAlphaInfoConstantShift);
+    const u32 opaqueConstantInfo = cast<u32>(TextureAlphaMode::ConstantUnorm8) | (cast<u32>(s_OpaqueAlphaUnorm8) << s_AlphaInfoConstantShift);
     ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderAlphaInfoOffset, opaqueConstantInfo, malformed));
     EXPECT_FALSE(CanDeserializeTextureAsset(codec, texture.virtualPath(), malformed, testArena));
     EXPECT_FALSE(LoadTextureAssetBinary(texture, malformed));
@@ -817,11 +820,12 @@ void VerifyAssetsGraphics_TextureCodecRejectsOpaqueValueInConstantAlphaModeWitho
 
 void VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEncodingAfterRejectedLoads(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
 
     const AssetBytes validBinary = BuildPartialBlockTextureBytes(testArena);
-    TextureAsset texture(testArena.arena, Name(s_AssetCaseProjectTexturesMipRecordAdmission));
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesMipRecordAdmission));
     ASSERT_TRUE(LoadTextureAssetBinary(texture, validBinary));
     TextureAssetCodec codec = TextureAssetCodec();
 
@@ -838,7 +842,7 @@ void VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExac
         const ScopedTestTrace trace(corruption.m_fieldOffset);
         AssetBytes malformed = MakeAssetBytes(testArena);
         CopyAssetBytes(validBinary, malformed);
-        ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderBinaryBytes + corruption.m_fieldOffset, corruption.m_value, malformed));
+        ASSERT_TRUE(OverwriteU32InAssetBytes(s_TestTextureHeaderBytes + corruption.m_fieldOffset, corruption.m_value, malformed));
         EXPECT_FALSE(LoadTextureAssetBinary(texture, malformed));
         AssetBytes retained = MakeAssetBytes(testArena);
         ASSERT_TRUE(SerializeTextureAsset(codec, texture, retained));
@@ -857,17 +861,17 @@ void VerifyAssetsGraphics_TextureMipAdmissionRejectsCorruptRecordsAndRetainsExac
 }
 
 void VerifyAssetsGraphics_TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips(){
-    const Expected<u32> mipCount = ComputeCompleteMipCount(s_TextureDimension2D, 7u, 5u, 1u);
+    const Expected<u32> mipCount = ComputeCompleteMipCount(TexturePayloadDimension::Texture2D, 7u, 5u, 1u);
     ASSERT_TRUE(mipCount.has_value());
     EXPECT_EQ(mipCount.value(), 3u);
 
-    const Expected<TextureMipPlaneBlockLayout> ldrPlane = ComputeMipPlaneBlockLayout(s_UastcLdrFormat, 7u, 5u);
+    const Expected<TextureMipPlaneBlockLayout> ldrPlane = ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, 7u, 5u);
     ASSERT_TRUE(ldrPlane.has_value());
     EXPECT_EQ(ldrPlane.value().blocksX, 2u);
     EXPECT_EQ(ldrPlane.value().blocksY, 2u);
     EXPECT_EQ(ldrPlane.value().planeByteCount, 64u);
 
-    const Expected<TextureMipPlaneBlockLayout> hdrPlane = ComputeMipPlaneBlockLayout(s_UastcHdrFormat, 4u, 2u);
+    const Expected<TextureMipPlaneBlockLayout> hdrPlane = ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcHdr4x4, 4u, 2u);
     ASSERT_TRUE(hdrPlane.has_value());
     EXPECT_EQ(hdrPlane.value().blocksX, 1u);
     EXPECT_EQ(hdrPlane.value().blocksY, 1u);
@@ -876,11 +880,12 @@ void VerifyAssetsGraphics_TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips()
 
 void VerifyAssetsGraphics_TextureCodecRejectsUnsupportedBinaryVersions(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
 
-    TextureAsset texture(testArena.arena, Name(s_AssetCaseProjectTexturesVersionAdmission));
-    SetStandardTestTexturePayload(testArena, s_TextureAlphaEmbeddedLdr, s_OpaqueAlphaUnorm8, texture);
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesVersionAdmission));
+    SetStandardTestTexturePayload(testArena, TextureAlphaMode::EmbeddedLdr, s_OpaqueAlphaUnorm8, texture);
     TextureAssetCodec codec = TextureAssetCodec();
     AssetBytes binary = MakeAssetBytes(testArena);
     ASSERT_TRUE(SerializeTextureAsset(codec, texture, binary));
@@ -891,7 +896,7 @@ void VerifyAssetsGraphics_TextureCodecRejectsUnsupportedBinaryVersions(){
     versions.push_back(1u);
     versions.push_back(2u);
     versions.push_back(3u);
-    versions.push_back(s_CurrentTextureVersion + 1u);
+    versions.push_back(s_TextureVersion + 1u);
 
     for(in u32 version : versions){
         const ScopedTestTrace trace(version);
@@ -901,17 +906,18 @@ void VerifyAssetsGraphics_TextureCodecRejectsUnsupportedBinaryVersions(){
     EXPECT_EQ(logger.errorCount(), 5u);
     EXPECT_TRUE(SawCapturedError(logger, "unsupported texture payload version"));
 
-    ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderVersionOffset, s_CurrentTextureVersion, binary));
+    ASSERT_TRUE(OverwriteU32InAssetBytes(s_TextureHeaderVersionOffset, s_TextureVersion, binary));
     ASSERT_TRUE(CanDeserializeTextureAsset(codec, texture.virtualPath(), binary, testArena));
 }
 
 void VerifyAssetsGraphics_TexturePayloadRejectsAlphaTransportIncompatibleWithFormat(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
 
-    TextureAsset texture(testArena.arena, Name(s_AssetCaseProjectTexturesInvalidAlphaMode));
-    SetStandardTestTexturePayload(testArena, s_TextureAlphaConstantUnorm8, 77u, texture);
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesInvalidAlphaMode));
+    SetStandardTestTexturePayload(testArena, TextureAlphaMode::ConstantUnorm8, 77u, texture);
     EXPECT_FALSE(texture.validatePayload());
     EXPECT_TRUE(SawCapturedError(logger, "invalid alpha transport for its payload format"));
 }
@@ -940,7 +946,8 @@ void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodin
     }
     EXPECT_EQ(entry.payloadBytes, original);
 
-    TextureAsset texture(testArena.arena);
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena);
     {
         Expected<TextureAsset> builtTexture = BuildTestTextureAsset(entry, testArena);
         ASSERT_TRUE(builtTexture.has_value());
@@ -953,15 +960,15 @@ void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodin
     TextureAssetCodec codec = TextureAssetCodec();
     AssetBytes packaged = MakeAssetBytes(testArena);
     ASSERT_TRUE(SerializeTextureAsset(codec, texture, packaged));
-    const usize rawOffset = s_TextureHeaderBinaryBytes + texture.mipLevels().size() * s_TextureMipRecordBinaryBytes;
+    const usize rawOffset = s_TestTextureHeaderBytes + texture.mipLevels().size() * s_TextureMipRecordBinaryBytes;
     ASSERT_EQ(packaged.size(), rawOffset + original.size());
     EXPECT_TRUE(AssetByteRangeEquals(packaged, rawOffset, original));
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
 
     const AssetBytes original = MakeTestTextureUastcPayload(testArena);
@@ -969,7 +976,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBy
     entry.virtualPath = Name(s_AssetCaseProjectTexturesTruncatedRaw);
     entry.width = 7u;
     entry.height = 5u;
-    entry.alphaMode = s_TextureAlphaEmbeddedLdr;
+    entry.alphaMode = TextureAlphaMode::EmbeddedLdr;
 
     for(usize prefix = 0u; prefix < original.size(); ++prefix){
         const ScopedTestTrace trace(prefix);
@@ -1000,15 +1007,15 @@ void VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetaini
 
     Vector<OverflowLayoutCase> layouts = Vector<OverflowLayoutCase>();
     layouts.reserve(4u);
-    layouts.push_back(OverflowLayoutCase(s_TextureDimension2D, u32.max, u32.max, 1u, "block layout exceeds supported limits"));
-    layouts.push_back(OverflowLayoutCase(s_TextureDimensionCube, 2147483648u, 2147483648u, 1u, "block layout exceeds supported limits"));
-    layouts.push_back(OverflowLayoutCase(s_TextureDimension3D, 65536u, 65536u, u32.max, "mip byte offsets overflow"));
-    layouts.push_back(OverflowLayoutCase(s_TextureDimension3D, 131072u, 131072u, u32.max, "block layout exceeds supported limits"));
+    layouts.push_back(OverflowLayoutCase(TexturePayloadDimension::Texture2D, u32.max, u32.max, 1u, "block layout exceeds supported limits"));
+    layouts.push_back(OverflowLayoutCase(TexturePayloadDimension::TextureCube, 2147483648u, 2147483648u, 1u, "block layout exceeds supported limits"));
+    layouts.push_back(OverflowLayoutCase(TexturePayloadDimension::Texture3D, 65536u, 65536u, u32.max, "mip byte offsets overflow"));
+    layouts.push_back(OverflowLayoutCase(TexturePayloadDimension::Texture3D, 131072u, 131072u, u32.max, "block layout exceeds supported limits"));
 
     for(in OverflowLayoutCase layout : layouts){
         const ScopedTestTrace trace(layout.m_diagnostic);
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
         TextureCookEntry entry(testArena.arena);
         entry.virtualPath = Name(s_AssetCaseProjectTexturesOverflowingRawLayout);
         entry.dimension = layout.m_dimension;
@@ -1025,7 +1032,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetaini
 
 void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
 
@@ -1042,29 +1049,30 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSel
     EXPECT_FALSE(ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratch).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "failed to read raw texture sidecar"));
     EXPECT_TRUE(SawCapturedError(logger, "checker.tex"));
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
 
     const Expected<AssetBytes> prepared = MakeTestTextureRuntimeBinary(testArena);
     ASSERT_TRUE(prepared.has_value());
-    TextureAsset texture(testArena.arena, Name(s_AssetCaseProjectTexturesLinearDecode));
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesLinearDecode));
     ASSERT_TRUE(LoadTextureAssetBinary(texture, prepared.value()));
     TextureMipDecoder decoder = TextureMipDecoder();
 
     Vector<FormatEnum> formats = Vector<FormatEnum>();
     formats.reserve(6u);
-    formats.push_back(s_FormatAstc4x4Srgb);
-    formats.push_back(s_FormatBc7Srgb);
-    formats.push_back(s_FormatRgba8Srgb);
-    formats.push_back(s_FormatUnknown);
-    formats.push_back(s_FormatR8Unorm);
-    formats.push_back(s_FormatRgba16Float);
+    formats.push_back(Format::ASTC_4x4_UNORM_SRGB);
+    formats.push_back(Format::BC7_UNORM_SRGB);
+    formats.push_back(Format::RGBA8_UNORM_SRGB);
+    formats.push_back(Format::UNKNOWN);
+    formats.push_back(Format::R8_UNORM);
+    formats.push_back(Format::RGBA16_FLOAT);
 
     for(in FormatEnum format : formats)
         EXPECT_FALSE(CanDecodeFirstTextureMip(decoder, texture, format, scratch));
@@ -1102,7 +1110,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsObsoleteAndDerivedMetadata(){
     for(in TextureMetadataDiagnosticCase field : obsoleteFields){
         const ScopedTestTrace trace(field.m_assignment);
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
         TestArena testArena = TestArena();
         GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         String metadata(s_TextureTestMetadata);
@@ -1124,7 +1132,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingRequiredRawLayoutDescriptor
     for(in TextureMetadataDiagnosticCase field : requiredFields){
         const ScopedTestTrace trace(field.m_assignment);
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
         TestArena testArena = TestArena();
         GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         const usize fieldOffset = baseMetadata.find(field.m_assignment);
@@ -1162,7 +1170,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeR
     for(in TextureMetadataDiagnosticCase invalid : invalidLayouts){
         const ScopedTestTrace trace(invalid.m_assignment);
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
         TestArena testArena = TestArena();
         GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         String metadata(s_TextureTestMetadata);

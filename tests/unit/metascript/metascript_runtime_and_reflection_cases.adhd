@@ -2,277 +2,109 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/gtest_macros.adhd>
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <tests/common/test_helpers.adhd>
 #include <tests/unit/metascript/suite.adhd>
+#include <tests/unit/metascript/runtime_access.adhd>
+#include <tests/unit/metascript/generated/borrowed_value.adhd>
+#include <tests/unit/metascript/generated/owner_result.adhd>
+#include <tests/unit/metascript/generated/builtin_shadow_global.adhd>
+#include <tests/unit/metascript/generated/compact_string.adhd>
+#include <tests/unit/metascript/generated/cpp_unwind.adhd>
+#include <tests/unit/metascript/generated/reflection_container.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type SourceArena = AdhdTestArena;
+type DestinationArena = AdhdTestArena;
+type ReaderArena = AdhdTestArena;
+type Document = MetascriptDocument;
+type Value = MetascriptValue;
+const StringView s_MetaRuntimeItemsField = s_MetascriptValueItemsField;
+const usize s_MetaRuntimeInitialCount = s_MetascriptValueInitialCount;
 
+static_assert(!s_InvalidCharacterDecoded && s_InvalidCharacterValue == 7);
+static_assert(!s_CountsCopyConstructible && !s_CountsCopyAssignable);
+static_assert(s_CountsMoveConstructible && s_CountsMoveAssignable);
+static_assert(s_ReadyNothrow && !s_ConcreteRecordNothrow && !s_VirtualRecordNothrow);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/metascript/lexer.h>
-#include <core/metascript/literal_decoder.h>
-#include <core/metascript/parser.h>
-#include <core/metascript/value.h>
-
-#include <global/algorithm.h>
-#include <global/filesystem/utility.h>
-#include <global/floating_point_environment.h>
-#include <global/text_utils.h>
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/floating_point_environment_guard.adhd.h>
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/metascript/generated/borrowed_value.adhd.h>
-#include <tests/unit/metascript/generated/owner_result.adhd.h>
-#include <tests/unit/metascript/generated/builtin_shadow_global.adhd.h>
-#include <tests/unit/metascript/generated/compact_string.adhd.h>
-#include <tests/unit/metascript/generated/cpp_unwind.adhd.h>
-#include <tests/unit/metascript/generated/reflection_container.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert([]()noexcept{
-    i64 value = 7;
-    return !NWB::Core::Metascript::LiteralDecoder::TryDecodeCharLiteral("'\\U100000000'", value) && value == 7;
-}());
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::Metascript{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MetaRuntimeSourceArenaTag{};
-struct MetaRuntimeDestinationArenaTag{};
-struct MetaRuntimeReaderArenaTag{};
-
-using SourceArena = Tests::TestArena<MetaRuntimeSourceArenaTag>;
-using DestinationArena = Tests::TestArena<MetaRuntimeDestinationArenaTag>;
-using ReaderArena = Tests::TestArena<MetaRuntimeReaderArenaTag>;
-using Document = Core::Metascript::Document;
-using Value = Core::Metascript::Value;
-using ScopedTestTrace = Tests::ScopedTestTrace;
-FOUNDATION_INLINE void MetaRuntime_MakeSingleStringList(Value& list, Core::Metascript::MetaArena& arena, const AStringView text){
-    list.makeList();
-    list.append(Value(text, arena));
-}
-[[nodiscard]] FOUNDATION_INLINE b8 TryDecodeCharLiteral(const MStringView text, i64& outValue)noexcept{
-    return Core::Metascript::LiteralDecoder::TryDecodeCharLiteral(text, outValue);
-}
-
-inline constexpr AStringView s_MetaRuntimeItemsField = Tests::s_MetascriptValueItemsField;
-inline constexpr usize s_MetaRuntimeInitialCount = Tests::s_MetascriptValueInitialCount;
-
-struct InvalidTargetCase{
-    MStringView source;
-    MStringView message;
-    i64 retainedValue = 0;
-};
-
-inline constexpr Array<InvalidTargetCase, 2u> s_InvalidAssignmentTargetCases = {
-    InvalidTargetCase{ "float asset = 7;\nmissing.value = 2;", "assignments must target a declared variable", 7 },
-    InvalidTargetCase{ "float asset = 9;\nasset.value = 2;", "cannot access field on non-map value", 9 },
-};
-
-class UnexpectedReadFailure final : public GeneralException{
-public:
-    [[nodiscard]] virtual const char* what()const noexcept override{ return "unexpected reader failure"; }
-};
-
-class ThrowingReader final : public Core::Metascript::IMetaReader{
-public:
-    [[nodiscard]] virtual Expected<usize> read(Core::Metascript::MChar*, usize)override{ throw UnexpectedReadFailure{}; }
-};
-
-class EndOfFileReader final : public Core::Metascript::IMetaReader{
-public:
-    [[nodiscard]] virtual Expected<usize> read(Core::Metascript::MChar*, usize)noexcept override{ return 0u; }
-};
-
-class RejectedReader final : public Core::Metascript::IMetaReader{
-public:
-    explicit RejectedReader(const b8 oversized)noexcept
-        : m_oversized(oversized)
-    {}
-
-
-public:
-    [[nodiscard]] virtual Expected<usize> read(Core::Metascript::MChar*, const usize maxBytes)noexcept override{
-        if(m_oversized)
-            return maxBytes + 1u;
-        return MakeUnexpected(Failure{});
+class InvalidTargetCase{
+    public StringView source;
+    public StringView message;
+    public i64 retainedValue;
+    public InvalidTargetCase(in StringView source, in StringView message, in i64 expected){
+        this.source = source;
+        this.message = message;
+        this.retainedValue = expected;
     }
-
-
-private:
-    b8 m_oversized;
-};
-
-struct LerpMoveOnlyOperand{
-    i32 value = 10;
-    LerpMoveOnlyOperand() = default;
-    explicit LerpMoveOnlyOperand(const i32 v) : value(v){}
-    LerpMoveOnlyOperand(const LerpMoveOnlyOperand&) = delete;
-    LerpMoveOnlyOperand(LerpMoveOnlyOperand&&) = default;
-    LerpMoveOnlyOperand operator-(const LerpMoveOnlyOperand& rhs)&&{ return LerpMoveOnlyOperand(value - rhs.value); }
-    LerpMoveOnlyOperand operator*(LerpMoveOnlyOperand&& rhs)&&{ return LerpMoveOnlyOperand(value * rhs.value); }
-    LerpMoveOnlyOperand operator+(LerpMoveOnlyOperand&& rhs)&{ return LerpMoveOnlyOperand(value + rhs.value); }
-    LerpMoveOnlyOperand operator+(LerpMoveOnlyOperand&& rhs)&&{ return LerpMoveOnlyOperand(value + rhs.value + 100); }
-};
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasVariable(const Document& doc, const MStringView name)noexcept{
-    return doc.findVariable(name) != nullptr;
 }
 
-[[nodiscard]] FOUNDATION_INLINE const Value& RequireVariable(const Document& doc, const MStringView name)noexcept{
-    return *doc.findVariable(name);
+class UnexpectedReadFailure{}
+class ThrowingReader : ReaderWithSpan{
+    [cpp_unwind]
+    public Expected<usize> readBytes(mut Span<u8> buffer)override{
+        ThrowTestException<UnexpectedReadFailure>(UnexpectedReadFailure());
+        return MakeUnexpected(Failure());
+    }
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasDeclaration(const Document& doc, const MStringView name)noexcept{
-    return doc.findDeclaration(name) != nullptr;
+class EndOfFileReader : ReaderWithSpan{
+    public Expected<usize> readBytes(mut Span<u8> buffer)override{ return cast<usize>(0u); }
 }
-
-[[nodiscard]] FOUNDATION_INLINE MStringView DeclarationType(const Document& doc, const MStringView name)noexcept{
-    return doc.findDeclaration(name)->type;
+class RejectedReader : ReaderWithSpan{
+    private b8 m_oversized;
+    public RejectedReader(in b8 oversized){ this.m_oversized = oversized; }
+    public Expected<usize> readBytes(mut Span<u8> buffer)override{
+        if(this.m_oversized)
+            return buffer.size() + 1u;
+        return MakeUnexpected(Failure());
+    }
 }
-
-[[nodiscard]] FOUNDATION_INLINE MStringView DeclarationVariable(const Document& doc, const MStringView name)noexcept{
-    return doc.findDeclaration(name)->variable;
+class ScopedHeldFloatingPointEnvironment : NoCopy{
+    private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
+    public b8 valid()const{ return this.m_original.has_value(); }
+    public ~ScopedHeldFloatingPointEnvironment(){
+        if(this.valid())
+            EXPECT_TRUE(SetFloatingPointEnvironment(this.m_original.value()).has_value());
+    }
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasStruct(const Document& doc, const MStringView name)noexcept{
-    return doc.structs().find(name) != doc.structs().end();
+const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+const i32 s_FeAllExcept = FE_ALL_EXCEPT;
+const i32 s_FeInvalid = FE_INVALID;
+void MetaRuntime_MakeSingleStringList(mut Value list, mut HeapStorage arena, in StringView text){
+    list.makeList();
+    Value item(text, arena);
+    AppendMovedValue(list, item);
 }
-
-[[nodiscard]] FOUNDATION_INLINE const Value& StructMetadata(const Document& doc, const MStringView name)noexcept{
-    return doc.structs().find(name).value();
+b8 HasVariable(in Document doc, in StringView name){ return doc.hasVariable(name); }
+in Value RequireVariable(in Document doc, in StringView name){ return doc.borrowVariable(name).value(); }
+b8 HasDeclaration(in Document doc, in StringView name){ return doc.declarationType(name).has_value(); }
+StringView DeclarationType(in Document doc, in StringView name){ return doc.declarationType(name).value(); }
+StringView DeclarationVariable(in Document doc, in StringView name){
+    StringView result = "";
+    doc.forEachDeclaration(lambda[in name, mut result](in StringView type, in StringView variable) -> b8{
+        if(name == variable){ result = variable; return false; }
+        return true;
+    });
+    return result;
 }
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasValueField(const Value& value, const MStringView name)noexcept{
-    return value.findField(name) != nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE const Value& RequireValueField(const Value& value, const MStringView name)noexcept{
-    return *value.findField(name);
-}
-
-[[nodiscard]] FOUNDATION_INLINE MStringView DocumentErrorMessage(const Document& doc, const usize index)noexcept{
-    return MStringView(doc.errors()[index].message);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Tests::TestAString MakeRepeatedCharString(const usize count, const char ch){
-    return Tests::TestAString(count, ch);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Tests::TestAString BuildStructGrowthDocumentSource(){
-    Tests::TestAString source("struct Description{ float value; }; Description runtime;\n");
+b8 HasStruct(in Document doc, in StringView name){ return BorrowStructMetadata(doc, name).has_value(); }
+in Value StructMetadata(in Document doc, in StringView name){ return BorrowStructMetadata(doc, name).value(); }
+b8 HasValueField(in Value value, in StringView name){ return value.hasField(name); }
+in Value RequireValueField(in Value value, in StringView name){ return value.borrowField(name).value(); }
+StringView DocumentErrorMessage(in Document doc, in usize index){ return StringView(doc.errors()[index].message); }
+String MakeRepeatedCharString(in usize count, in u8 ch){ String result; result.assign(count, ch); return result; }
+String BuildStructGrowthDocumentSource(){
+    String source("struct Description{ float value; }; Description runtime;\n");
     for(usize index = 0u; index < 128u; ++index){
-        Array<char, s_DecimalTextBufferBytes> indexText = {};
-        const AStringView indexView = FormatDecimal(index, indexText);
         source.append("float extra");
-        source.append(indexView.data(), indexView.size());
+        AppendUnsignedU64Text(source, index);
         source.append(";\n");
     }
     return source;
 }
-
-using Tests::FindCompact;
-using Tests::FirstCompact;
-using Tests::LastCompact;
-using Tests::LerpWithCounter;
-using Tests::CallShadowedMax;
-using Tests::CallShadowedVectorMax;
-using Tests::CallBuiltinVectorMin;
-using Tests::CallShadowedLocalMin;
-using Tests::CallNestedShadowedVector;
-using Tests::CallShadowedMatrixMul;
-using Tests::CallShadowedLocalDot;
-using Tests::CallShadowedEntityConstant;
-using Tests::ReadBuiltinEntityConstant;
-using Tests::TrimLocalCompact;
-using Tests::ExtractLongStringSubstrOnce;
-using Tests::ExtractCompactSubstr;
-using Tests::ExerciseHighByteStringOps;
-using Tests::BorrowLocalStringAcrossValueCall;
-using Tests::AnyLaneGreater3Single;
-using Tests::AnyLaneGreater3Double;
-using Tests::AnyLaneGreater2Single;
-using Tests::FiniteLane3Single;
-using Tests::FiniteLane3Double;
-using Tests::ReadShadowedGlobalConstant;
-using Tests::ReflectionContainerFixture;
-
-struct ScopedHeldFloatingPointEnvironment final : NoCopy{
-public:
-    ScopedHeldFloatingPointEnvironment() = default;
-    ScopedHeldFloatingPointEnvironment(ScopedHeldFloatingPointEnvironment&&) = delete;
-    ~ScopedHeldFloatingPointEnvironment()noexcept{
-        if(m_original && !SetFloatingPointEnvironment(*m_original))
-            FOUNDATION_ASSERT(false);
-    }
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_original.has_value(); }
-
-
-private:
-    Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
-};
-
-inline constexpr Array<i32, 4u> s_FloatingPointRoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-inline constexpr i32 s_FeAllExcept = FE_ALL_EXCEPT;
-inline constexpr i32 s_FeInvalid = FE_INVALID;
-
-[[nodiscard]] FOUNDATION_INLINE i32 RunGeneratedLerpMoveOnly(LerpMoveOnlyOperand& operand){
-    return Tests::LerpMoveOnly(operand).value;
-}
-
-[[nodiscard]] FOUNDATION_INLINE i32 RunGeneratedLerpTemporary(){
-    return Tests::LerpTemporary<LerpMoveOnlyOperand>().value;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const StringView s_MetaRuntimeAssetVariable = "asset";
 const StringView s_MetaRuntimeNameField = "name";
 
@@ -298,23 +130,23 @@ void MetaRuntime_CheckStringListElement(in Value value, in StringView expected){
 
 void MetaRuntime_CheckSingleStringListValue(in Value value, in StringView text){
     ASSERT_TRUE(value.isList());
-    ASSERT_EQ(value.asList().size(), 1u);
-    MetaRuntime_CheckStringListElement(value.asList()[0u], text);
+    ASSERT_EQ(value.listView().size(), 1u);
+    MetaRuntime_CheckStringListElement(value.listView()[0u], text);
 }
 
 void VerifyMetascript_EmptyAndStructOnlyDocumentsHaveNoImplicitVariables(){
     DestinationArena arena = DestinationArena();
     Document document = Document(arena.arena);
     ASSERT_TRUE(document.parse(""));
-    EXPECT_TRUE(document.declarations().empty());
-    EXPECT_TRUE(document.structs().empty());
+    EXPECT_TRUE(document.declarationCount() == 0u);
+    EXPECT_TRUE(document.structCount() == 0u);
     EXPECT_FALSE(HasVariable(document, s_MetaRuntimeAssetVariable));
 
     ASSERT_TRUE(document.parse("[custom(\"argument\")] struct Description{ [field] float value; };"));
-    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_TRUE(document.declarationCount() == 0u);
     EXPECT_FALSE(HasVariable(document, s_MetaRuntimeAssetVariable));
     EXPECT_FALSE(HasVariable(document, "Description"));
-    ASSERT_EQ(document.structs().size(), 1u);
+    ASSERT_EQ(document.structCount(), 1u);
     EXPECT_TRUE(HasStruct(document, "Description"));
 }
 
@@ -322,8 +154,8 @@ void VerifyMetascript_StructNamesAndVariablesUseSeparateNamespaces(){
     DestinationArena arena = DestinationArena();
     Document document = Document(arena.arena);
     ASSERT_TRUE(document.parse("number Parameters = 3; struct Parameters{ float value; }; Parameters runtime; runtime.value = 4;"));
-    ASSERT_EQ(document.structs().size(), 1u);
-    ASSERT_EQ(document.declarations().size(), 2u);
+    ASSERT_EQ(document.structCount(), 1u);
+    ASSERT_EQ(document.declarationCount(), 2u);
     ASSERT_TRUE(HasVariable(document, "Parameters"));
     EXPECT_EQ(RequireVariable(document, "Parameters").asInteger(), 3);
     ASSERT_TRUE(HasDeclaration(document, "runtime"));
@@ -345,13 +177,13 @@ void VerifyMetascript_StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth()
         const auto source = BuildStructGrowthDocumentSource();
         ASSERT_TRUE(document.parse(source));
     }
-    ASSERT_EQ(document.declarations().size(), 129u);
+    ASSERT_EQ(document.declarationCount(), 129u);
     ASSERT_TRUE(HasStruct(document, "Description"));
     ASSERT_TRUE(HasValueField(StructMetadata(document, "Description"), "fields"));
     ASSERT_TRUE(RequireValueField(StructMetadata(document, "Description"), "fields").isList());
-    ASSERT_EQ(RequireValueField(StructMetadata(document, "Description"), "fields").asList().size(), 1u);
-    ASSERT_TRUE(HasValueField(RequireValueField(StructMetadata(document, "Description"), "fields").asList()[0u], s_MetaRuntimeNameField));
-    EXPECT_EQ(RequireValueField(RequireValueField(StructMetadata(document, "Description"), "fields").asList()[0u], s_MetaRuntimeNameField).asString(), "value");
+    ASSERT_EQ(RequireValueField(StructMetadata(document, "Description"), "fields").listView().size(), 1u);
+    ASSERT_TRUE(HasValueField(RequireValueField(StructMetadata(document, "Description"), "fields").listView()[0u], s_MetaRuntimeNameField));
+    EXPECT_EQ(RequireValueField(RequireValueField(StructMetadata(document, "Description"), "fields").listView()[0u], s_MetaRuntimeNameField).asString(), "value");
     ASSERT_TRUE(HasDeclaration(document, "runtime"));
     EXPECT_EQ(DeclarationType(document, "runtime"), "Description");
     ASSERT_TRUE(HasVariable(document, "runtime"));
@@ -373,20 +205,21 @@ void VerifyMetascript_ReparsingClearsStructsVariablesDeclarationsAndErrors(){
     ASSERT_TRUE(document.hasErrors());
     ASSERT_TRUE(document.parse("text current = \"new\";"));
     EXPECT_FALSE(document.hasErrors());
-    EXPECT_TRUE(document.structs().empty());
-    ASSERT_EQ(document.declarations().size(), 1u);
+    EXPECT_TRUE(document.structCount() == 0u);
+    ASSERT_EQ(document.declarationCount(), 1u);
     EXPECT_FALSE(HasDeclaration(document, "previous"));
     EXPECT_FALSE(HasVariable(document, "previous"));
     EXPECT_FALSE(HasVariable(document, "value"));
     ASSERT_TRUE(HasVariable(document, "current"));
     EXPECT_EQ(RequireVariable(document, "current").asString(), "new");
     ASSERT_TRUE(document.parse(""));
-    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_TRUE(document.declarationCount() == 0u);
     EXPECT_FALSE(HasVariable(document, "current"));
 }
 
 void VerifyMetascript_InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue(){
-    for(in InvalidTargetCase testCase : s_InvalidAssignmentTargetCases){
+    const Array<InvalidTargetCase, 2u> cases = Array<InvalidTargetCase, 2u>(InvalidTargetCase("float asset = 7;\nmissing.value = 2;", "assignments must target a declared variable", 7), InvalidTargetCase("float asset = 9;\nasset.value = 2;", "cannot access field on non-map value", 9));
+    for(in InvalidTargetCase testCase : cases){
         ScopedTestTrace trace = ScopedTestTrace(testCase.message);
         DestinationArena arena = DestinationArena();
         Document document = Document(arena.arena);
@@ -404,11 +237,11 @@ void VerifyMetascript_InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValu
 
 void VerifyMetascript_UnicodeCharLiteralRejectsWideValueBeforeNarrowing(){
     i64 value = 7;
-    EXPECT_FALSE(TryDecodeCharLiteral("'\\UD800'", value));
+    EXPECT_FALSE(MetascriptLiteralDecoderTryDecodeCharLiteral("'\\UD800'", value));
     EXPECT_EQ(value, 7);
-    EXPECT_FALSE(TryDecodeCharLiteral("'\\U110000'", value));
+    EXPECT_FALSE(MetascriptLiteralDecoderTryDecodeCharLiteral("'\\U110000'", value));
     EXPECT_EQ(value, 7);
-    EXPECT_TRUE(TryDecodeCharLiteral("'\\U10FFFF'", value));
+    EXPECT_TRUE(MetascriptLiteralDecoderTryDecodeCharLiteral("'\\U10FFFF'", value));
     EXPECT_EQ(value, 0x10FFFF);
 }
 
@@ -420,9 +253,7 @@ void VerifyMetascript_CrossArenaMoveAssignmentCopiesIntoDestinationArena(){
     Value source = Value(text, sourceArena.arena);
     Value destination = Value(destinationArena.arena);
 
-    native(mut destination, mut source){
-        destination = Move(source);
-    }
+    TestMoveAssign<Value>(destination, source);
 
     EXPECT_TRUE(source.isNull());
     EXPECT_EQ(destination.asString(), text);
@@ -470,9 +301,7 @@ void VerifyMetascript_CrossArenaAppendCopiesIntoDestinationArena(){
     Value destination = Value(destinationArena.arena);
     destination.makeList();
 
-    native(mut destination, mut source){
-        destination.append(Move(source));
-    }
+    AppendMovedValue(destination, source);
 
     EXPECT_TRUE(source.isNull());
     MetaRuntime_CheckSingleStringListValue(destination, text);
@@ -499,9 +328,7 @@ void VerifyMetascript_AppendSelfMoveCopiesOriginalValue(){
     Value list = Value(arena.arena);
     MetaRuntime_MakeSingleStringList(list, arena.arena, text);
 
-    native(mut list){
-        list.append(Move(list));
-    }
+    AppendMovedValue(list, list);
 
     ASSERT_TRUE(list.isList());
     ASSERT_EQ(list.asList().size(), 2u);
@@ -518,9 +345,7 @@ void VerifyMetascript_AppendExistingListElementMoveCopiesBeforeDestroy(){
     Value list = Value(arena.arena);
     MetaRuntime_MakeSingleStringList(list, arena.arena, text);
 
-    native(mut list){
-        list.append(Move(list.asList()[0u]));
-    }
+    AppendMovedValue(list, list.asList()[0u]);
 
     ASSERT_TRUE(list.isList());
     ASSERT_EQ(list.asList().size(), 2u);
@@ -562,9 +387,7 @@ void VerifyMetascript_AppendsFirstMiddleAndLastElementsAcrossReallocation(){
                 list.append(Value(cast<i64>(index), arena.arena));
 
             if(moveSource){
-                native(mut list, in sourceIndex){
-                    list.append(Move(list.asList()[sourceIndex]));
-                }
+                AppendMovedValue(list, list.asList()[sourceIndex]);
             }
             else
                 list += list.asList()[sourceIndex];
@@ -611,14 +434,13 @@ void VerifyMetascript_ConcatenatesNestedListElementsAcrossReallocation(){
     }
 }
 
+[cpp_unwind]
 void VerifyMetascript_UnexpectedReaderExceptionsPropagateWithoutBecomingParseErrors(){
     ReaderArena arena = ReaderArena();
     Document document = Document(arena.arena);
     ThrowingReader reader = ThrowingReader();
 
-    native(mut document, mut reader){
-        EXPECT_THROW(EXPECT_TRUE(document.parse(reader)), UnexpectedReadFailure);
-    }
+    EXPECT_TRUE(ThrowsException<UnexpectedReadFailure>(lambda[mut document, mut reader]() -> void{ EXPECT_TRUE(document.parse(reader)); }));
     EXPECT_FALSE(document.hasErrors());
 }
 
@@ -640,8 +462,8 @@ void VerifyMetascript_SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure()
     ASSERT_TRUE(document.parse("struct Previous{}; number prior;"));
     EXPECT_TRUE(document.parse(reader));
     EXPECT_FALSE(document.hasErrors());
-    EXPECT_TRUE(document.declarations().empty());
-    EXPECT_TRUE(document.structs().empty());
+    EXPECT_TRUE(document.declarationCount() == 0u);
+    EXPECT_TRUE(document.structCount() == 0u);
     EXPECT_FALSE(HasVariable(document, "prior"));
 }
 
@@ -688,7 +510,7 @@ void VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNa
 
     ReflectionContainerFixture value = ReflectionContainerFixture();
     value.fixedNames[1u] = Name("fixed/retained");
-    ASSERT_TRUE(value.deserializeNwb(input));
+    ASSERT_TRUE(DeserializeReflected<ReflectionContainerFixture>(value, input));
     ASSERT_EQ(value.names.size(), 2u);
     EXPECT_EQ(value.names[0u], Name("first"));
     EXPECT_EQ(value.names[1u], Name("last"));
@@ -707,7 +529,7 @@ void VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNa
     ASSERT_EQ(value.enumAssets.size(), 1u);
 
     Vector<Name> dependencies = Vector<Name>();
-    const b8 extracted = value.extractNwbAssetDependencies(input, lambda[mut dependencies](in Name name) -> void{
+    const b8 extracted = VisitReflectedDependencies<ReflectionContainerFixture>(input, lambda[mut dependencies](in Name name) -> void{
         dependencies.push_back(name);
     });
     ASSERT_TRUE(extracted);
@@ -740,7 +562,7 @@ void VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce(){
 
 void VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories(){
     LerpMoveOnlyOperand value = LerpMoveOnlyOperand(2);
-    EXPECT_EQ(RunGeneratedLerpMoveOnly(value), 82);
+    EXPECT_EQ(LerpMoveOnly<LerpMoveOnlyOperand>(value).value, 82);
     EXPECT_EQ(value.value, 2);
 }
 
@@ -777,7 +599,7 @@ void VerifyAdhdCompiler_LocalParameterShadowsBuiltinConstant(){
 }
 
 void VerifyAdhdCompiler_UnshadowedBuiltinConstantStillResolves(){
-    EXPECT_TRUE(ReadBuiltinEntityConstant() == s_InvalidEntityId);
+    EXPECT_TRUE(ReadBuiltinEntityConstant() == EntityID());
 }
 
 void VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference(){
@@ -785,7 +607,7 @@ void VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference(){
 }
 
 void VerifyAdhdCompiler_ScalarLerpKeepsFirstTemporaryCategory(){
-    EXPECT_EQ(RunGeneratedLerpTemporary(), 110);
+    EXPECT_EQ(LerpTemporary<LerpMoveOnlyOperand>().value, 110);
 }
 
 void VerifyAdhdCompiler_TrimViewBorrowsLocalCompactString(){
@@ -797,7 +619,7 @@ void VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluati
     i32 recvCounter = 0;
     i32 posCounter = 0;
     i32 countCounter = 0;
-    const String result = ExtractLongStringSubstrOnce(arena.arena, recvCounter, posCounter, countCounter);
+    const String result = ExtractLongStringSubstrOnce(recvCounter, posCounter, countCounter);
     EXPECT_EQ(recvCounter, 1);
     EXPECT_EQ(posCounter, 1);
     EXPECT_EQ(countCounter, 1);
@@ -834,9 +656,9 @@ void VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortC
     VectorDouble inactive64 = zero64;
     VectorDouble shortCircuit64 = zero64;
     VectorDouble active64 = zero64;
-    native(mut inactive32, mut shortCircuit32, mut active32, mut inactive64, mut shortCircuit64, mut active64){
-        volatile u32 snan32 = 0x7f800123u;
-        volatile u64 snan64 = 0x7ff0000000000123ull;
+    {
+        const u32 snan32 = ObserveValue<u32>(0x7f800123u);
+        const u64 snan64 = ObserveValue<u64>(0x7ff0000000000123ull);
         inactive32 = VectorSetInt(0u, 0u, 0u, snan32);
         shortCircuit32 = VectorSetInt(0x3f800000u, snan32, 0u, snan32);
         active32 = VectorSetInt(0u, snan32, 0u, 0u);
@@ -919,195 +741,200 @@ NWB_ADHD_GTEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_METASCRIPT_GENERATED_TESTS)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames){ VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames(); }
-TEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText){ VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText(); }
-TEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce){ VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce(); }
-
-TEST(AdhdCompiler, DiagnosticPathsBorrowUntilFormattingAndCaptureUtf8){
+void VerifyDiagnosticPathsBorrowUntilFormattingAndCaptureUtf8(){
     AdhdTestArena arena;
-    ::NWB::Tests::CapturingLogger logger;
-    ::NWB::Core::Common::LoggerRegistrationGuard registration(logger, ::NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-
+    CapturingLogger logger;
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::ReportOnly);
     i32 evaluations = 0;
-    ::NWB::Tests::EmitDiagnosticPathOnce(evaluations);
+    EmitDiagnosticPathOnce(evaluations);
     EXPECT_EQ(evaluations, 1);
     EXPECT_TRUE(logger.sawErrorContainingUtf8("한글"));
-
-    const auto verifyCapture = [&arena](const AStringView text, const b8 truncated){
-        const ::Path<::NWB::Core::Alloc::GlobalArena> path(arena.arena, text);
-        const auto owned = ::PathToString<char>(arena.arena, path);
-        const DiagnosticEventText baseline = MakeDiagnosticEventText(AStringView("{}"), AStringView(owned));
-        const DiagnosticEventText deferred = MakeDiagnosticEventText(AStringView("{}"), ::PathToString<char>(path));
-        const DiagnosticEventText wide = MakeDiagnosticEventText(WStringView(L"{}"), ::PathToString<char>(path));
+    const auto verifyCapture = lambda[mut arena](in StringView text, in b8 truncated) -> void{
+        const Path path(text);
+        const auto baseline = FormatOwnedDiagnosticPath(path, arena.arena);
+        const auto deferred = FormatDeferredDiagnosticPath(path);
+        const auto wide = FormatWideDiagnosticPath(path);
         EXPECT_EQ(deferred.view(), baseline.view());
         EXPECT_EQ(wide.view(), baseline.view());
-        EXPECT_NE(deferred.view().find("한글"), AStringView::npos);
-        EXPECT_EQ(deferred.value.back(), '\0');
+        EXPECT_NE(deferred.view().find("한글"), usize.max);
+        EXPECT_EQ(DiagnosticTerminator(deferred), 0u);
         if(truncated)
             EXPECT_EQ(deferred.view().size(), s_MaxEventTextBytes - 1u);
     };
     verifyCapture("diag/한글/leaf", false);
-    AString<::NWB::Core::Alloc::GlobalArena> longPath(arena.arena);
-    longPath.append("diag/한글/");
+    String longPath("diag/한글/");
     longPath.append(s_MaxEventTextBytes * 2u, 'x');
-    verifyCapture(AStringView(longPath), true);
+    verifyCapture(StringView(longPath), true);
 }
-
-TEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories){ VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories(); }
-TEST(AdhdCompiler, OptionalAndExpectedBorrowTheOriginalValue){
-    u32 original = 7u;
-    const ::NWB::Tests::BorrowedCount retained(original);
-    const auto fromSpan = ::NWB::Tests::BorrowFirstCount({ &original, 1u });
-    Optional<NotNull<const u32*>> read;
-    EXPECT_EQ(::NWB::Tests::ReadOptionalCount(read), 0u);
-    read = ::NWB::Tests::BorrowOptionalCount(original);
-    Expected<NotNull<u32*>> write = ::NWB::Tests::BorrowExpectedCount(original);
-    ::NWB::Tests::UpdateExpectedCount(write, 23u);
+void VerifyOptionalAndExpectedBorrowTheOriginalValue(){
+    Array<u32, 1u> data(7u);
+    mut u32 original = data[0u];
+    const BorrowedCount retained(original);
+    const auto fromSpan = BorrowFirstCount(data);
+    Optional<in u32> read;
+    EXPECT_EQ(ReadOptionalCount(read), 0u);
+    read = BorrowOptionalCount(original);
+    Expected<mut u32> write = BorrowExpectedCount(original);
+    UpdateExpectedCount(write, 23u);
     EXPECT_EQ(original, 23u);
     EXPECT_EQ(retained.current(), 23u);
     EXPECT_EQ(fromSpan.current(), 23u);
-    EXPECT_EQ(::NWB::Tests::ReadOptionalCount(read), 23u);
+    EXPECT_EQ(ReadOptionalCount(read), 23u);
 }
-
-TEST(AdhdCompiler, CheckedMapLookupRetainsTheOriginalElement){
-    ::NWB::Core::Alloc::ScratchArena arena(Name("tests/metascript/borrowed_map_value"));
-    HashMap<u32, u32, ::ArenaBase> counts(arena);
+void VerifyCheckedMapLookupRetainsTheOriginalElement(){
+    HashMap<u32, u32> counts;
     counts[42u] = 11u;
-    const auto retained = ::NWB::Tests::BorrowMappedCount(counts, 42u);
+    const auto retained = BorrowMappedCount(counts, 42u);
     counts.at(42u) = 23u;
     EXPECT_EQ(retained.current(), 23u);
 }
-
-TEST(AdhdCompiler, ExpectedStateChangesRetainValueAndErrorInTheirDestinationArena){
-    using ::NWB::Tests::CachedCountResult;
-    ::NWB::Core::Alloc::GlobalArena destination(Name("tests/metascript/cached_result"));
-    CachedCountResult retained(destination);
+void VerifyExpectedStateChangesRetainValueAndErrorInTheirDestinationArena(){
+    HeapStorage destination(Name("tests/metascript/cached_result"));
+    TestValueSlot<CachedCountResult> resultSlot;
+    mut CachedCountResult retained = resultSlot.constructIn(destination);
     {
-        ::NWB::Core::Alloc::ScratchArena source(Name("tests/metascript/transient_counts"));
-        Expected<Vector<u32, ::ArenaBase>, u8> counts(s_InPlace, source);
-        counts->push_back(17u);
-        Vector<u8, ::ArenaBase> message(source);
-        message.push_back(4u);
-        Expected<u64, Vector<u8, ::ArenaBase>> issue = MakeUnexpected(Move(message));
-        CachedCountResult local(source);
+        ScratchStorage source(Name("tests/metascript/transient_counts"));
+        TestValueSlot<Vector<u32>> countSlot;
+        mut Vector<u32> values = countSlot.constructIn(source);
+        values.push_back(17u);
+        Expected<Vector<u32>, u8> counts = values;
+        TestValueSlot<Vector<u8>> messageSlot;
+        mut Vector<u8> message = messageSlot.constructIn(source);
+        message.push_back(cast<u8>(4u));
+        Expected<u64, Vector<u8>> issue = MakeUnexpected(message);
+        TestValueSlot<CachedCountResult> localSlot;
+        mut CachedCountResult local = localSlot.constructIn(source);
         local.update(counts, issue);
-        retained = Move(local);
+        TestMoveAssign<CachedCountResult>(retained, local);
         ASSERT_TRUE(retained.counts.has_value());
         ASSERT_FALSE(retained.issue.has_value());
-        EXPECT_EQ(retained.counts->get_allocator().arenaPtr(), &destination);
-        EXPECT_EQ(retained.issue.error().get_allocator().arenaPtr(), &destination);
+        EXPECT_TRUE(TestUsesStorage(retained.counts.value(), destination));
+        EXPECT_TRUE(TestUsesStorage(retained.issue.error(), destination));
     }
-    EXPECT_EQ(retained.counts->front(), 17u);
+    EXPECT_EQ(retained.counts.value().front(), 17u);
     EXPECT_EQ(retained.issue.error().front(), 4u);
 }
-
-TEST(AdhdCompiler, BorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena){
-    using ::NWB::Tests::CountPublisher;
-    using ::NWB::Tests::OwnedCounts;
-    static_assert(!std::is_copy_constructible_v<OwnedCounts> && !std::is_copy_assignable_v<OwnedCounts>);
-    static_assert(std::is_move_constructible_v<OwnedCounts> && std::is_move_assignable_v<OwnedCounts>);
-    ::NWB::Core::Alloc::GlobalArena destination(Name("tests/metascript/owned_counts"));
-    OwnedCounts retained(destination);
+class CountStorageObserver : ICountSnapshotObserver{
+    private mut ScratchStorage m_expected;
+    public CountStorageObserver(mut ScratchStorage expected){ this.m_expected = expected; }
+    public b8 inspect(in OwnedCounts counts)override{ return TestUsesStorage(counts.values, this.m_expected); }
+}
+void VerifyBorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena(){
+    HeapStorage destination(Name("tests/metascript/owned_counts"));
+    TestValueSlot<OwnedCounts> retainedSlot;
+    mut OwnedCounts retained = retainedSlot.constructIn(destination);
     {
-        ::NWB::Core::Alloc::ScratchArena owner(Name("tests/metascript/borrowed_publisher"));
+        ScratchStorage owner(Name("tests/metascript/borrowed_publisher"));
         u32 value = 13u;
-        CountPublisher publisher(owner, value);
-        struct Observer final : ::NWB::Tests::ICountSnapshotObserver{
-            explicit Observer(::ArenaBase& arena) : expected(arena){}
-            b8 inspect(const OwnedCounts& counts)noexcept override{ return counts.values.get_allocator().arenaPtr() == &expected; }
-            ::ArenaBase& expected;
-        } observer(owner);
+        TestValueSlot<CountPublisher> publisherSlot;
+        mut CountPublisher publisher = publisherSlot.constructIn(owner, value);
+        CountStorageObserver observer(owner);
         EXPECT_TRUE(publisher.inspectLocal(observer));
-        ::NWB::Tests::CountPublication publication(owner, value);
+        TestValueSlot<CountPublication> publicationSlot;
+        mut CountPublication publication = publicationSlot.constructIn(owner, value);
         EXPECT_TRUE(publication.inspect(observer));
-        auto published = publisher.snapshot();
-        EXPECT_EQ(&published.values.get_allocator().arena(), &owner);
+        TestValueSlot<OwnedCounts> publishedSlot;
+        mut OwnedCounts published = CaptureReturnedValue<OwnedCounts>(publishedSlot, publisher.snapshot());
+        EXPECT_TRUE(TestUsesStorage(published.values, owner));
         value = 21u;
-        retained = Move(published);
-        EXPECT_EQ(retained.values[0], 13u);
+        TestMoveAssign<OwnedCounts>(retained, published);
+        EXPECT_EQ(retained.values[0u], 13u);
         publisher.replace(retained);
         ASSERT_EQ(retained.values.size(), 1u);
-        EXPECT_EQ(retained.values[0], 22u);
+        EXPECT_EQ(retained.values[0u], 22u);
         published.values.clear();
         published.values.push_back(5u);
-        auto sameArena = publisher.snapshot();
-        const u32* const storage = published.values.data();
+        TestValueSlot<OwnedCounts> sameArenaSlot;
+        mut OwnedCounts sameArena = CaptureReturnedValue<OwnedCounts>(sameArenaSlot, publisher.snapshot());
+        const usize storage = TestDataAddress(published.values);
         sameArena.replaceWith(published);
-        EXPECT_EQ(sameArena.values.data(), storage);
+        EXPECT_EQ(TestDataAddress(sameArena.values), storage);
         retained.replaceWith(sameArena);
         retained.replaceWith(retained);
     }
-    EXPECT_EQ(&retained.values.get_allocator().arena(), &destination);
+    EXPECT_TRUE(TestUsesStorage(retained.values, destination));
     ASSERT_EQ(retained.values.size(), 1u);
-    EXPECT_EQ(retained.values[0], 5u);
+    EXPECT_EQ(retained.values[0u], 5u);
+}
+[cpp_unwind]
+void VerifyCppUnwindPreservesExceptionAcrossNestedLambdas(){
+    const CppUnwindCallback probe = CppUnwindCallback();
+    Func<u32()> callback = lambda[]() -> u32{ ThrowTestException<UnexpectedReadFailure>(UnexpectedReadFailure()); return 0u; };
+    in IUnwindCallback dispatch = probe;
+    EXPECT_TRUE(ThrowsException<UnexpectedReadFailure>(lambda[in dispatch, mut callback]() -> void{ dispatch.record(callback); }));
 }
 
-TEST(AdhdCompiler, CppUnwindPreservesExceptionAcrossNestedLambdas){
-    const ::NWB::Tests::CppUnwindCallback probe;
-    InplaceFunction<0u, u32()> callback([]() -> u32{ throw UnexpectedReadFailure{}; });
-    static_assert(noexcept(probe.ready()));
-    static_assert(!noexcept(probe.record(callback)));
-    const ::NWB::Tests::IUnwindCallback& dispatch = probe;
-    static_assert(!noexcept(dispatch.record(callback)));
-    EXPECT_THROW((void)dispatch.record(callback), UnexpectedReadFailure);
-}
+NWB_ADHD_GTEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames, VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames)
+NWB_ADHD_GTEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText, VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText)
+NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce, VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce)
+NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories, VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories)
+NWB_ADHD_GTEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode, VerifyAdhdCompiler_UserCallableShadowsBuiltinInGeneratedCode)
+NWB_ADHD_GTEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd, VerifyAdhdCompiler_UserCallableShadowsBuiltinForSimd)
+NWB_ADHD_GTEST(AdhdCompiler, ResolvedBuiltinStillUsesSimdImplementation, VerifyAdhdCompiler_ResolvedBuiltinStillUsesSimdImplementation)
+NWB_ADHD_GTEST(AdhdCompiler, LocalCallableShadowsBuiltin, VerifyAdhdCompiler_LocalCallableShadowsBuiltin)
+NWB_ADHD_GTEST(AdhdCompiler, NestedSimdCallKeepsUserCallableIdentity, VerifyAdhdCompiler_NestedSimdCallKeepsUserCallableIdentity)
+NWB_ADHD_GTEST(AdhdCompiler, TransposeDoesNotFuseUserDefinedMultiply, VerifyAdhdCompiler_TransposeDoesNotFuseUserDefinedMultiply)
+NWB_ADHD_GTEST(AdhdCompiler, LocalCallableShadowsSimdReduction, VerifyAdhdCompiler_LocalCallableShadowsSimdReduction)
+NWB_ADHD_GTEST(AdhdCompiler, LocalParameterShadowsBuiltinConstant, VerifyAdhdCompiler_LocalParameterShadowsBuiltinConstant)
+NWB_ADHD_GTEST(AdhdCompiler, UnshadowedBuiltinConstantStillResolves, VerifyAdhdCompiler_UnshadowedBuiltinConstantStillResolves)
+NWB_ADHD_GTEST(AdhdCompiler, GlobalConstantShadowsBuiltinInTypeInference, VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference)
+NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpKeepsFirstTemporaryCategory, VerifyAdhdCompiler_ScalarLerpKeepsFirstTemporaryCategory)
+NWB_ADHD_GTEST(AdhdCompiler, TrimViewBorrowsLocalCompactString, VerifyAdhdCompiler_TrimViewBorrowsLocalCompactString)
+NWB_ADHD_GTEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation, VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation)
+NWB_ADHD_GTEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation, VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation)
+NWB_ADHD_GTEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs, VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs)
+NWB_ADHD_GTEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking, VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking)
+NWB_ADHD_GTEST(AdhdCompiler, NestedMotherArenaRebindsAcrossTransientScratchDestruction, VerifyAdhdCompiler_NestedMotherArenaRebindsAcrossTransientScratchDestruction)
+NWB_ADHD_GTEST(AdhdCompiler, DiagnosticPathsBorrowUntilFormattingAndCaptureUtf8, VerifyDiagnosticPathsBorrowUntilFormattingAndCaptureUtf8)
+NWB_ADHD_GTEST(AdhdCompiler, OptionalAndExpectedBorrowTheOriginalValue, VerifyOptionalAndExpectedBorrowTheOriginalValue)
+NWB_ADHD_GTEST(AdhdCompiler, CheckedMapLookupRetainsTheOriginalElement, VerifyCheckedMapLookupRetainsTheOriginalElement)
+NWB_ADHD_GTEST(AdhdCompiler, ExpectedStateChangesRetainValueAndErrorInTheirDestinationArena, VerifyExpectedStateChangesRetainValueAndErrorInTheirDestinationArena)
+NWB_ADHD_GTEST(AdhdCompiler, BorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena, VerifyBorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena)
+NWB_ADHD_GTEST(AdhdCompiler, CppUnwindPreservesExceptionAcrossNestedLambdas, VerifyCppUnwindPreservesExceptionAcrossNestedLambdas)
 
-TEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode){ VerifyAdhdCompiler_UserCallableShadowsBuiltinInGeneratedCode(); }
-TEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd){ VerifyAdhdCompiler_UserCallableShadowsBuiltinForSimd(); }
-TEST(AdhdCompiler, ResolvedBuiltinStillUsesSimdImplementation){ VerifyAdhdCompiler_ResolvedBuiltinStillUsesSimdImplementation(); }
-TEST(AdhdCompiler, LocalCallableShadowsBuiltin){ VerifyAdhdCompiler_LocalCallableShadowsBuiltin(); }
-TEST(AdhdCompiler, NestedSimdCallKeepsUserCallableIdentity){ VerifyAdhdCompiler_NestedSimdCallKeepsUserCallableIdentity(); }
-TEST(AdhdCompiler, TransposeDoesNotFuseUserDefinedMultiply){ VerifyAdhdCompiler_TransposeDoesNotFuseUserDefinedMultiply(); }
-TEST(AdhdCompiler, LocalCallableShadowsSimdReduction){ VerifyAdhdCompiler_LocalCallableShadowsSimdReduction(); }
-TEST(AdhdCompiler, LocalParameterShadowsBuiltinConstant){ VerifyAdhdCompiler_LocalParameterShadowsBuiltinConstant(); }
-TEST(AdhdCompiler, UnshadowedBuiltinConstantStillResolves){ VerifyAdhdCompiler_UnshadowedBuiltinConstantStillResolves(); }
-TEST(AdhdCompiler, GlobalConstantShadowsBuiltinInTypeInference){ VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference(); }
-TEST(AdhdCompiler, ScalarLerpKeepsFirstTemporaryCategory){ VerifyAdhdCompiler_ScalarLerpKeepsFirstTemporaryCategory(); }
-TEST(AdhdCompiler, TrimViewBorrowsLocalCompactString){ VerifyAdhdCompiler_TrimViewBorrowsLocalCompactString(); }
-TEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation){ VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation(); }
-TEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation){ VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation(); }
-TEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs){ VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs(); }
-
-TEST(AdhdCompiler, SimdZeroAdditionPreservesSignedZeroAndSignalingNan){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdZeroAdditionPreservesSignedZeroAndSignalingNan(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    volatile u32 values32[] = { 0x80000000u, 0x7f800123u };
-    volatile u64 values64[] = { 0x8000000000000000ull, 0x7ff0000000000123ull };
-    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    const Array<u32, 2u> values32(0x80000000u, 0x7f800123u);
+    const Array<u64, 2u> values64(0x8000000000000000ull, 0x7ff0000000000123ull);
+    for(in i32 rounding : s_FloatingPointRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
         for(usize i = 0u; i < 2u; ++i){
-            const SIMDVectorSingle value32 = VectorSetInt(values32[i], values32[i], values32[i], values32[i]);
-            const SIMDVectorDouble value64 = VectorDoubleSetInt(values64[i], values64[i], values64[i], values64[i]);
+            const VectorSingle value32 = VectorSetInt(ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]));
+            const VectorDouble value64 = VectorDoubleSetInt(ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]));
             for(u32 left = 0u; left < 2u; ++left){
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorSingle expected32 = left ? VectorAdd(VectorZero(), value32) : VectorAdd(value32, VectorZero());
+                VectorSingle expected32 = VectorZero();
+                if(left != 0u)
+                    expected32 = VectorAdd(VectorZero(), value32);
+                else
+                    expected32 = VectorAdd(value32, VectorZero());
                 const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorSingle actual32 = left ? ::NWB::Tests::AddZeroLeftSingle(value32) : ::NWB::Tests::AddZeroRightSingle(value32);
+                VectorSingle actual32 = VectorZero();
+                if(left != 0u)
+                    actual32 = AddZeroLeftSingle(value32);
+                else
+                    actual32 = AddZeroRightSingle(value32);
                 const i32 actualFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 EXPECT_EQ(VectorGetIntX(actual32), VectorGetIntX(expected32));
                 EXPECT_EQ(actualFlags32, expectedFlags32);
 
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorDouble expected64 = left ? VectorDoubleAdd(VectorDoubleZero(), value64) : VectorDoubleAdd(value64, VectorDoubleZero());
+                VectorDouble expected64 = VectorDoubleZero();
+                if(left != 0u)
+                    expected64 = VectorDoubleAdd(VectorDoubleZero(), value64);
+                else
+                    expected64 = VectorDoubleAdd(value64, VectorDoubleZero());
                 const i32 expectedFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorDouble actual64 = left ? ::NWB::Tests::AddZeroLeftDouble(value64) : ::NWB::Tests::AddZeroRightDouble(value64);
+                VectorDouble actual64 = VectorDoubleZero();
+                if(left != 0u)
+                    actual64 = AddZeroLeftDouble(value64);
+                else
+                    actual64 = AddZeroRightDouble(value64);
                 const i32 actualFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 EXPECT_EQ(VectorDoubleGetIntX(actual64), VectorDoubleGetIntX(expected64));
                 EXPECT_EQ(actualFlags64, expectedFlags64);
@@ -1115,44 +942,60 @@ TEST(AdhdCompiler, SimdZeroAdditionPreservesSignedZeroAndSignalingNan){
         }
     }
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdZeroAdditionPreservesSignedZeroAndSignalingNan, VerifySimdZeroAdditionPreservesSignedZeroAndSignalingNan)
 
-TEST(AdhdCompiler, SimdNegatedZeroPreservesSignAndAdditionFlags){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdNegatedZeroPreservesSignAndAdditionFlags(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    EXPECT_EQ(VectorGetIntX(::NWB::Tests::NegateZeroSingle()), 0x80000000u);
-    EXPECT_EQ(VectorGetIntX(::NWB::Tests::NegateNegativeZeroSingle()), 0u);
-    EXPECT_EQ(VectorGetIntX(::NWB::Tests::DoubleNegateZeroSingle()), 0u);
-    EXPECT_EQ(VectorGetIntX(::NWB::Tests::TripleNegateZeroSingle()), 0x80000000u);
-    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::NegateZeroDouble()), 0x8000000000000000ull);
-    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::NegateNegativeZeroDouble()), 0ull);
-    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::DoubleNegateZeroDouble()), 0ull);
-    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::TripleNegateZeroDouble()), 0x8000000000000000ull);
-    volatile u32 values32[] = { 0u, 0x80000000u, 0x7f800123u };
-    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x7ff0000000000123ull };
-    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    EXPECT_EQ(VectorGetIntX(NegateZeroSingle()), 0x80000000u);
+    EXPECT_EQ(VectorGetIntX(NegateNegativeZeroSingle()), 0u);
+    EXPECT_EQ(VectorGetIntX(DoubleNegateZeroSingle()), 0u);
+    EXPECT_EQ(VectorGetIntX(TripleNegateZeroSingle()), 0x80000000u);
+    EXPECT_EQ(VectorDoubleGetIntX(NegateZeroDouble()), 0x8000000000000000ull);
+    EXPECT_EQ(VectorDoubleGetIntX(NegateNegativeZeroDouble()), 0ull);
+    EXPECT_EQ(VectorDoubleGetIntX(DoubleNegateZeroDouble()), 0ull);
+    EXPECT_EQ(VectorDoubleGetIntX(TripleNegateZeroDouble()), 0x8000000000000000ull);
+    const Array<u32, 3u> values32(0u, 0x80000000u, 0x7f800123u);
+    const Array<u64, 3u> values64(0ull, 0x8000000000000000ull, 0x7ff0000000000123ull);
+    for(in i32 rounding : s_FloatingPointRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
         for(usize i = 0u; i < 3u; ++i){
-            const SIMDVectorSingle value32 = VectorSetInt(values32[i], values32[i], values32[i], values32[i]);
-            const SIMDVectorDouble value64 = VectorDoubleSetInt(values64[i], values64[i], values64[i], values64[i]);
-            const SIMDVectorSingle zero32 = VectorNegate(VectorZero());
-            const SIMDVectorDouble zero64 = VectorDoubleNegate(VectorDoubleZero());
+            const VectorSingle value32 = VectorSetInt(ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]));
+            const VectorDouble value64 = VectorDoubleSetInt(ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]));
+            const VectorSingle zero32 = VectorNegate(VectorZero());
+            const VectorDouble zero64 = VectorDoubleNegate(VectorDoubleZero());
             for(u32 left = 0u; left < 2u; ++left){
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorSingle expected32 = left ? VectorAdd(zero32, value32) : VectorAdd(value32, zero32);
+                VectorSingle expected32 = VectorZero();
+                if(left != 0u)
+                    expected32 = VectorAdd(zero32, value32);
+                else
+                    expected32 = VectorAdd(value32, zero32);
                 const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorSingle actual32 = left ? ::NWB::Tests::AddNegativeZeroLeftSingle(value32) : ::NWB::Tests::AddNegativeZeroRightSingle(value32);
+                VectorSingle actual32 = VectorZero();
+                if(left != 0u)
+                    actual32 = AddNegativeZeroLeftSingle(value32);
+                else
+                    actual32 = AddNegativeZeroRightSingle(value32);
                 const i32 actualFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 EXPECT_EQ(VectorGetIntX(actual32), VectorGetIntX(expected32));
                 EXPECT_EQ(actualFlags32, expectedFlags32);
 
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorDouble expected64 = left ? VectorDoubleAdd(zero64, value64) : VectorDoubleAdd(value64, zero64);
+                VectorDouble expected64 = VectorDoubleZero();
+                if(left != 0u)
+                    expected64 = VectorDoubleAdd(zero64, value64);
+                else
+                    expected64 = VectorDoubleAdd(value64, zero64);
                 const i32 expectedFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorDouble actual64 = left ? ::NWB::Tests::AddNegativeZeroLeftDouble(value64) : ::NWB::Tests::AddNegativeZeroRightDouble(value64);
+                VectorDouble actual64 = VectorDoubleZero();
+                if(left != 0u)
+                    actual64 = AddNegativeZeroLeftDouble(value64);
+                else
+                    actual64 = AddNegativeZeroRightDouble(value64);
                 const i32 actualFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 EXPECT_EQ(VectorDoubleGetIntX(actual64), VectorDoubleGetIntX(expected64));
                 EXPECT_EQ(actualFlags64, expectedFlags64);
@@ -1160,101 +1003,117 @@ TEST(AdhdCompiler, SimdNegatedZeroPreservesSignAndAdditionFlags){
         }
     }
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdNegatedZeroPreservesSignAndAdditionFlags, VerifySimdNegatedZeroPreservesSignAndAdditionFlags)
 
-TEST(AdhdCompiler, SimdZeroArithmeticPreservesExceptionalValuesAndFlags){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdZeroArithmeticPreservesExceptionalValuesAndFlags(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    volatile u32 values32[] = { 0u, 0x80000000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0xbf800000u };
-    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0xbff0000000000000ull };
-    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
+    const Array<u32, 6u> values32(0u, 0x80000000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0xbf800000u);
+    const Array<u64, 6u> values64(0ull, 0x8000000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0xbff0000000000000ull);
+    for(in i32 rounding : s_FloatingPointRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
         for(usize i = 0u; i < 6u; ++i){
-            const SIMDVectorSingle value32 = VectorSetInt(values32[i], values32[i], values32[i], values32[i]);
-            const SIMDVectorDouble value64 = VectorDoubleSetInt(values64[i], values64[i], values64[i], values64[i]);
-            const SIMDVectorSingle zero32 = VectorZero();
-            const SIMDVectorDouble zero64 = VectorDoubleZero();
-            const SIMDVectorSingle negativeZero32 = VectorNegate(zero32);
-            const SIMDVectorDouble negativeZero64 = VectorDoubleNegate(zero64);
+            const VectorSingle value32 = VectorSetInt(ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]), ObserveValue<u32>(values32[i]));
+            const VectorDouble value64 = VectorDoubleSetInt(ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]), ObserveValue<u64>(values64[i]));
+            const VectorSingle zero32 = VectorZero();
+            const VectorDouble zero64 = VectorDoubleZero();
+            const VectorSingle negativeZero32 = VectorNegate(zero32);
+            const VectorDouble negativeZero64 = VectorDoubleNegate(zero64);
             for(u32 operation = 0u; operation < 7u; ++operation){
-                const auto apply32 = [&](const b8 reference)noexcept -> SIMDVectorSingle{
+                ScopedTestTrace traceOperation(operation);
+                ScopedTestTrace traceIndex(i);
+                ScopedTestTrace traceRounding(rounding);
+                const auto apply32 = lambda[in operation, in value32, in zero32, in negativeZero32](in b8 reference) -> VectorSingle{
                     switch(operation){
-                    case 0u: return reference ? VectorSubtract(value32, zero32) : ::NWB::Tests::SubZeroRightSingle(value32);
-                    case 1u: return reference ? VectorSubtract(zero32, value32) : ::NWB::Tests::SubZeroLeftSingle(value32);
-                    case 2u: return reference ? VectorMultiply(value32, zero32) : ::NWB::Tests::MulZeroRightSingle(value32);
-                    case 3u: return reference ? VectorMultiply(zero32, value32) : ::NWB::Tests::MulZeroLeftSingle(value32);
-                    case 4u: return reference ? VectorDivide(zero32, value32) : ::NWB::Tests::ZeroDivideSingle(value32);
-                    case 5u: return reference ? VectorAdd(VectorSubtract(zero32, value32), VectorSubtract(negativeZero32, zero32)) : ::NWB::Tests::NestedZeroSubSingle(value32, negativeZero32);
-                    default: return reference ? VectorNegate(VectorSubtract(zero32, value32)) : ::NWB::Tests::NegateZeroSubSingle(value32);
+                    case 0u:
+                        if(reference) return VectorSubtract(value32, zero32);
+                        return SubZeroRightSingle(value32);
+                    case 1u:
+                        if(reference) return VectorSubtract(zero32, value32);
+                        return SubZeroLeftSingle(value32);
+                    case 2u:
+                        if(reference) return VectorMultiply(value32, zero32);
+                        return MulZeroRightSingle(value32);
+                    case 3u:
+                        if(reference) return VectorMultiply(zero32, value32);
+                        return MulZeroLeftSingle(value32);
+                    case 4u:
+                        if(reference) return VectorDivide(zero32, value32);
+                        return ZeroDivideSingle(value32);
+                    case 5u:
+                        if(reference) return VectorAdd(VectorSubtract(zero32, value32), VectorSubtract(negativeZero32, zero32));
+                        return NestedZeroSubSingle(value32, negativeZero32);
+                    default:
+                        if(reference) return VectorNegate(VectorSubtract(zero32, value32));
+                        return NegateZeroSubSingle(value32);
                     }
                 };
-                const auto apply64 = [&](const b8 reference)noexcept -> SIMDVectorDouble{
+                const auto apply64 = lambda[in operation, in value64, in zero64, in negativeZero64](in b8 reference) -> VectorDouble{
                     switch(operation){
-                    case 0u: return reference ? VectorDoubleSubtract(value64, zero64) : ::NWB::Tests::SubZeroRightDouble(value64);
-                    case 1u: return reference ? VectorDoubleSubtract(zero64, value64) : ::NWB::Tests::SubZeroLeftDouble(value64);
-                    case 2u: return reference ? VectorDoubleMultiply(value64, zero64) : ::NWB::Tests::MulZeroRightDouble(value64);
-                    case 3u: return reference ? VectorDoubleMultiply(zero64, value64) : ::NWB::Tests::MulZeroLeftDouble(value64);
-                    case 4u: return reference ? VectorDoubleDivide(zero64, value64) : ::NWB::Tests::ZeroDivideDouble(value64);
-                    case 5u: return reference ? VectorDoubleAdd(VectorDoubleSubtract(zero64, value64), VectorDoubleSubtract(negativeZero64, zero64)) : ::NWB::Tests::NestedZeroSubDouble(value64, negativeZero64);
-                    default: return reference ? VectorDoubleNegate(VectorDoubleSubtract(zero64, value64)) : ::NWB::Tests::NegateZeroSubDouble(value64);
+                    case 0u:
+                        if(reference) return VectorDoubleSubtract(value64, zero64);
+                        return SubZeroRightDouble(value64);
+                    case 1u:
+                        if(reference) return VectorDoubleSubtract(zero64, value64);
+                        return SubZeroLeftDouble(value64);
+                    case 2u:
+                        if(reference) return VectorDoubleMultiply(value64, zero64);
+                        return MulZeroRightDouble(value64);
+                    case 3u:
+                        if(reference) return VectorDoubleMultiply(zero64, value64);
+                        return MulZeroLeftDouble(value64);
+                    case 4u:
+                        if(reference) return VectorDoubleDivide(zero64, value64);
+                        return ZeroDivideDouble(value64);
+                    case 5u:
+                        if(reference) return VectorDoubleAdd(VectorDoubleSubtract(zero64, value64), VectorDoubleSubtract(negativeZero64, zero64));
+                        return NestedZeroSubDouble(value64, negativeZero64);
+                    default:
+                        if(reference) return VectorDoubleNegate(VectorDoubleSubtract(zero64, value64));
+                        return NegateZeroSubDouble(value64);
                     }
                 };
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorSingle expected32 = apply32(true);
+                const VectorSingle expected32 = apply32(true);
                 const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorSingle actual32 = apply32(false);
+                const VectorSingle actual32 = apply32(false);
                 const i32 actualFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                EXPECT_EQ(VectorGetIntX(actual32), VectorGetIntX(expected32)) << operation << ", " << i << ", " << rounding;
-                EXPECT_EQ(actualFlags32, expectedFlags32) << operation << ", " << i << ", " << rounding;
+                EXPECT_EQ(VectorGetIntX(actual32), VectorGetIntX(expected32));
+                EXPECT_EQ(actualFlags32, expectedFlags32);
 
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorDouble expected64 = apply64(true);
+                const VectorDouble expected64 = apply64(true);
                 const i32 expectedFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const SIMDVectorDouble actual64 = apply64(false);
+                const VectorDouble actual64 = apply64(false);
                 const i32 actualFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                EXPECT_EQ(VectorDoubleGetIntX(actual64), VectorDoubleGetIntX(expected64)) << operation << ", " << i << ", " << rounding;
-                EXPECT_EQ(actualFlags64, expectedFlags64) << operation << ", " << i << ", " << rounding;
+                EXPECT_EQ(VectorDoubleGetIntX(actual64), VectorDoubleGetIntX(expected64));
+                EXPECT_EQ(actualFlags64, expectedFlags64);
             }
         }
     }
 }
+NWB_ADHD_GTEST(AdhdCompiler, SimdZeroArithmeticPreservesExceptionalValuesAndFlags, VerifySimdZeroArithmeticPreservesExceptionalValuesAndFlags)
 
-TEST(AdhdCompiler, SimdProductPlusZeroPreservesNegativeZeroAddition){
-#pragma STDC FENV_ACCESS ON
+void VerifySimdProductPlusZeroPreservesNegativeZeroAddition(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
     ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
-    volatile u32 negativeZero32 = 0x80000000u;
-    volatile u64 negativeZero64 = 0x8000000000000000ull;
-    const SIMDVectorSingle value32 = VectorSetInt(negativeZero32, negativeZero32, negativeZero32, negativeZero32);
-    const SIMDVectorDouble value64 = VectorDoubleSetInt(negativeZero64, negativeZero64, negativeZero64, negativeZero64);
-    const SIMDVectorSingle one32 = VectorReplicate(1.0f);
-    const SIMDVectorDouble one64 = VectorDoubleReplicate(1.0);
-    EXPECT_EQ(VectorGetIntX(::NWB::Tests::AddProductZeroRightSingle(value32, one32)), 0u);
-    EXPECT_EQ(VectorGetIntX(::NWB::Tests::AddProductZeroLeftSingle(value32, one32)), 0u);
-    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::AddProductZeroRightDouble(value64, one64)), 0ull);
-    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::AddProductZeroLeftDouble(value64, one64)), 0ull);
+    const u32 negativeZero32 = ObserveValue<u32>(0x80000000u);
+    const u64 negativeZero64 = ObserveValue<u64>(0x8000000000000000ull);
+    const VectorSingle value32 = VectorSetInt(negativeZero32, negativeZero32, negativeZero32, negativeZero32);
+    const VectorDouble value64 = VectorDoubleSetInt(negativeZero64, negativeZero64, negativeZero64, negativeZero64);
+    const VectorSingle one32 = VectorReplicate(1.0f);
+    const VectorDouble one64 = VectorDoubleReplicate(1.0);
+    EXPECT_EQ(VectorGetIntX(AddProductZeroRightSingle(value32, one32)), 0u);
+    EXPECT_EQ(VectorGetIntX(AddProductZeroLeftSingle(value32, one32)), 0u);
+    EXPECT_EQ(VectorDoubleGetIntX(AddProductZeroRightDouble(value64, one64)), 0ull);
+    EXPECT_EQ(VectorDoubleGetIntX(AddProductZeroLeftDouble(value64, one64)), 0ull);
 }
-
-TEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking){ VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking(); }
-TEST(AdhdCompiler, NestedMotherArenaRebindsAcrossTransientScratchDestruction){ VerifyAdhdCompiler_NestedMotherArenaRebindsAcrossTransientScratchDestruction(); }
+NWB_ADHD_GTEST(AdhdCompiler, SimdProductPlusZeroPreservesNegativeZeroAddition, VerifySimdProductPlusZeroPreservesNegativeZeroAddition)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

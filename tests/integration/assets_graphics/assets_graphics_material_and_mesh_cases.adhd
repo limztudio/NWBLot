@@ -69,7 +69,7 @@ void ExpectMeshCookFailure(in StringView metaText, in StringView caseName, mut T
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
     EXPECT_FALSE(CookSingleMeshMeta(metaText, prepared, testArena));
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void ExpectMaterialBindParseFailure(in StringView bindText, in StringView caseName, in StringView expectedError, mut TestArena testArena, mut GraphicsScratchArena scratch){
@@ -79,12 +79,12 @@ void ExpectMaterialBindParseFailure(in StringView bindText, in StringView caseNa
     const GraphicsTestPath invalidRoot = invalidRootResult.value();
     {
         CapturingLogger failureLogger = CapturingLogger();
-        LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
+        LoggerRegistrationGuard failureLoggerGuard(failureLogger, LoggerBreakPolicy::ReportOnly);
 
         EXPECT_FALSE(ParseTestMaterialBindFromText(bindText, invalidRoot, testArena, scratch).has_value());
         EXPECT_TRUE(SawCapturedError(failureLogger, expectedError));
     }
-    EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(invalidRoot));
 }
 
 void VerifyAssetsGraphics_ResourceParameterCandidateRejectsExpressionsButPreservesBytes(){
@@ -97,7 +97,7 @@ void VerifyAssetsGraphics_ResourceParameterCandidateRejectsExpressionsButPreserv
 
 void VerifyAssetsGraphics_MaterialCookAdmissionRejectsMissingInputsAndCountOverflow(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     EXPECT_FALSE(ValidateMaterialBindIncludePath("", "source.bind"));
     EXPECT_TRUE(SawCapturedError(logger, "virtual path is empty for 'source.bind'"));
     EXPECT_FALSE(ValidateDeferredBxdfSource("project/material", ""));
@@ -135,7 +135,7 @@ void VerifyAssetsGraphics_MaterialKeyHashPreservesHighBytesAndPathSeparators(){
 
 void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutation(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
@@ -166,7 +166,7 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
         EXPECT_EQ(MaterialBindInterfaceHashSymbol(lane), expectedSymbols[lane]);
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
@@ -217,7 +217,7 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     {
         const ScopedTestTrace trace("material_bind_float1_default_include");
         CapturingLogger failureLogger = CapturingLogger();
-        LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
+        LoggerRegistrationGuard failureLoggerGuard(failureLogger, LoggerBreakPolicy::ReportOnly);
 
         EXPECT_FALSE(CanBuildMaterialBindIncludeSource(float1DefaultEntry, testArena, scratch));
         EXPECT_TRUE(SawCapturedError(failureLogger, "default 'float1(1.0)'"));
@@ -228,7 +228,7 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     {
         const ScopedTestTrace trace("material_bind_float1_default_cache");
         CapturingLogger failureLogger = CapturingLogger();
-        LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
+        LoggerRegistrationGuard failureLoggerGuard(failureLogger, LoggerBreakPolicy::ReportOnly);
 
         EXPECT_FALSE(CanFindOrBuildMaterialBindTypedLayout(cacheInterface, float1DefaultEntry, scratch, layoutCache));
         EXPECT_TRUE(SawCapturedError(failureLogger, "default 'float1(1.0)'"));
@@ -251,18 +251,18 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     EXPECT_EQ(layoutCache.lookup.size(), 1u);
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot));
-    EXPECT_TRUE(RemoveAllIfExists(validCacheRoot));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(float1DefaultRoot));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(validCacheRoot));
 }
 
 void VerifyAssetsGraphics_MaterialBindEngineAndProjectResourceValidation(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
-    EXPECT_FALSE(IsSupportedMaterialResourceReference(s_MaterialResourceSampledImage2D, "builtin/textures/checker"));
-    EXPECT_FALSE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, "project/samplers/../linear_clamp"));
-    EXPECT_FALSE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, "engine/samplers/../linear_clamp"));
-    EXPECT_TRUE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, "project/samplers/linear_clamp"));
-    EXPECT_TRUE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, s_EngineSamplersLinearClampPath));
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    EXPECT_FALSE(IsSupportedMaterialResourceReference(MaterialResourceKind::SampledImage2D, "builtin/textures/checker"));
+    EXPECT_FALSE(IsSupportedMaterialResourceReference(MaterialResourceKind::Sampler, "project/samplers/../linear_clamp"));
+    EXPECT_FALSE(IsSupportedMaterialResourceReference(MaterialResourceKind::Sampler, "engine/samplers/../linear_clamp"));
+    EXPECT_TRUE(IsSupportedMaterialResourceReference(MaterialResourceKind::Sampler, "project/samplers/linear_clamp"));
+    EXPECT_TRUE(IsSupportedMaterialResourceReference(MaterialResourceKind::Sampler, s_EngineSamplersLinearClampPath));
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
@@ -271,7 +271,7 @@ void VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterface
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
 
     Vector<StringView> integrationCaseNames = Vector<StringView>();
@@ -314,7 +314,7 @@ void VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterface
         const b8 cooked = CookMaterialBindIntegration(bindSource, materialMeta, prepared, testArena);
         EXPECT_FALSE(cooked);
         EXPECT_TRUE(SawCapturedError(logger, integrationDiagnostics[caseIndex]));
-        EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+        EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
     }
 
     const Expected<CookCase> interfaceShaderMismatchCookCase = PrepareCookCase(testArena, "material_bind_interface_without_bind_shader");
@@ -332,7 +332,7 @@ void VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterface
     EXPECT_TRUE(wroteUnboundAssets);
     EXPECT_FALSE(cookedUnbound);
     EXPECT_TRUE(SawCapturedError(logger, "does not include a generated material bind"));
-    EXPECT_TRUE(RemoveAllIfExists(shaderMismatchCase.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(shaderMismatchCase.root));
 
     const Expected<CookCase> interfaceIdentityMismatchCookCase = PrepareCookCase(testArena, "material_bind_interface_identity_mismatch");
     ASSERT_TRUE(interfaceIdentityMismatchCookCase.has_value());
@@ -351,12 +351,12 @@ void VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterface
     EXPECT_TRUE(wroteOtherBind);
     EXPECT_FALSE(cookedIdentity);
     EXPECT_TRUE(SawCapturedError(logger, "includes generated material bind interface 'project/material_interfaces/other_surface'"));
-    EXPECT_TRUE(RemoveAllIfExists(identityMismatchCase.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(identityMismatchCase.root));
 }
 
 void VerifyAssetsGraphics_ShadowSurfaceDispatchIsolatesOverlappingBindApis(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "shadow_transmittance_dispatch_overlapping_bind_apis");
     ASSERT_TRUE(cookCase.has_value());
@@ -379,7 +379,7 @@ void VerifyAssetsGraphics_ShadowSurfaceDispatchIsolatesOverlappingBindApis(){
     const b8 cooked = CookTwoAssetRoots(testArena, prepared.root, prepared.outputDirectory, engineAssetRoot, assetRoot);
     EXPECT_TRUE(cooked);
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MaterialRejectsMissingInterfaceCookIntegration(){
@@ -387,7 +387,7 @@ void VerifyAssetsGraphics_MaterialRejectsMissingInterfaceCookIntegration(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "material_missing_interface_rejection");
     ASSERT_TRUE(cookCase.has_value());
@@ -405,12 +405,12 @@ void VerifyAssetsGraphics_MaterialRejectsMissingInterfaceCookIntegration(){
     EXPECT_TRUE(wroteAssets);
     EXPECT_FALSE(cooked);
     EXPECT_TRUE(SawCapturedError(logger, "interface is required"));
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MaterialBindDependencyInvalidation(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "material_bind_dependency_invalidation");
     ASSERT_TRUE(cookCase.has_value());
@@ -427,7 +427,8 @@ void VerifyAssetsGraphics_MaterialBindDependencyInvalidation(){
 
     EXPECT_TRUE(CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot));
 
-    MaterialAsset initialMaterial(testArena.arena);
+    TestValueSlot<MaterialAsset> initialMaterialStorage;
+    mut MaterialAsset initialMaterial = initialMaterialStorage.constructIn(testArena);
     {
         Expected<MaterialAsset> loadedMaterial = LoadCookedMaterialAsset(testArena, prepared.outputDirectory, Name(s_ProjectMaterialsTestMaterial));
         ASSERT_TRUE(loadedMaterial.has_value());
@@ -448,7 +449,8 @@ void VerifyAssetsGraphics_MaterialBindDependencyInvalidation(){
     EXPECT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename), s_UpdatedDefaultMaterialBindSource));
     EXPECT_TRUE(CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot));
 
-    MaterialAsset updatedMaterial(testArena.arena);
+    TestValueSlot<MaterialAsset> updatedMaterialStorage;
+    mut MaterialAsset updatedMaterial = updatedMaterialStorage.constructIn(testArena);
     {
         Expected<MaterialAsset> loadedMaterial2 = LoadCookedMaterialAsset(testArena, prepared.outputDirectory, Name(s_ProjectMaterialsTestMaterial));
         ASSERT_TRUE(loadedMaterial2.has_value());
@@ -467,12 +469,12 @@ void VerifyAssetsGraphics_MaterialBindDependencyInvalidation(){
     EXPECT_NE(updatedChecksumResult.value(), initialPixelSourceChecksum);
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MaterialBindDiscoveryValidation(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "material_bind_valid");
     ASSERT_TRUE(cookCase.has_value());
@@ -484,15 +486,15 @@ void VerifyAssetsGraphics_MaterialBindDiscoveryValidation(){
 
     // Removing the last bind source clears its generated include on recook.
     const GraphicsTestPath assetRoot = JoinGraphicsPath(prepared.root, s_AssetsDirectory);
-    const Expected<b8, ErrorCode> removedBind = RemoveFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename));
+    const Expected<b8, ErrorCode> removedBind = GraphicsRemoveFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename));
     ASSERT_TRUE(removedBind.has_value());
     ASSERT_TRUE(removedBind.value());
     ASSERT_TRUE(CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot));
-    const Expected<b8, ErrorCode> generatedIncludeExists = FileExists(generatedIncludePath);
+    const Expected<b8, ErrorCode> generatedIncludeExists = GraphicsFileExists(generatedIncludePath);
     ASSERT_TRUE(generatedIncludeExists.has_value());
     EXPECT_FALSE(generatedIncludeExists.value());
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 
     if(AssetsGraphicsTestConfigurationName() == "fin"){
         const Expected<CookCase> duplicateIncludeCookCase = PrepareCookCase(testArena, "material_bind_duplicate_include_path");
@@ -500,14 +502,14 @@ void VerifyAssetsGraphics_MaterialBindDiscoveryValidation(){
         const CookCase duplicateCase = duplicateIncludeCookCase.value();
         EXPECT_FALSE(CanEmitDuplicateMaterialBindIncludePath(testArena, duplicateCase));
         EXPECT_TRUE(SawCapturedError(logger, "duplicate material bind include path 'project/material_interfaces/test_surface.bind'"));
-        EXPECT_TRUE(RemoveAllIfExists(duplicateCase.root));
+        EXPECT_TRUE(GraphicsRemoveAllIfExists(duplicateCase.root));
 
         const Expected<CookCase> invalidCookCase = PrepareCookCase(testArena, "material_bind_duplicate_field");
         ASSERT_TRUE(invalidCookCase.has_value());
         const CookCase invalidCase = invalidCookCase.value();
         EXPECT_FALSE(CookMinimalMeshWithMaterialBind(s_DuplicateFieldMaterialBindSource, invalidCase, testArena));
         EXPECT_TRUE(SawCapturedError(logger, "duplicate struct field declaration"));
-        EXPECT_TRUE(RemoveAllIfExists(invalidCase.root));
+        EXPECT_TRUE(GraphicsRemoveAllIfExists(invalidCase.root));
     }
 }
 
@@ -516,7 +518,7 @@ void VerifyAssetsGraphics_MaterialCookRejectsMissingAvboitPixelShaders(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
     const b8 transparentBuilt = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_TransparentMaterialMeta, "material_cook_missing_avboit_transparent", testArena, scratch).has_value();
@@ -532,7 +534,7 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsMissingShaderVariant(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     const StringView missingShaderVariantMeta = "material asset;\n\nasset.interface = \"project/material_interfaces/test_surface.bind\";\nasset.bxdf = \"project/shaders/material_bxdf.bxdf\";\nasset.transparent = 0;\nasset.two_sided = 0;\nasset.refractive = 0;\n\nasset.shaders = {\n    \"mesh\": \"project/shaders/material_mesh\",\n    \"ps\": \"project/shaders/material_ps\",\n};\n";
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
@@ -545,7 +547,7 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsMissingRenderProperties(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     const StringView missingRefractiveMeta = "material asset;\n\nasset.interface = \"project/material_interfaces/test_surface.bind\";\nasset.bxdf = \"project/shaders/material_bxdf.bxdf\";\nasset.transparent = 0;\nasset.two_sided = 0;\n\nasset.shaders = {\n    \"mesh\": \"project/shaders/material_mesh\",\n    \"ps\": \"project/shaders/material_ps\",\n};\nasset.shader_variant = \"default\";\n";
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
@@ -561,7 +563,7 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsExplicitOpticalStages(){
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
     for(u32 opticalIndex = 0u; opticalIndex < 2u; ++opticalIndex){
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+        LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
         StringView metaText = s_ExplicitRefractiveMaterialMeta;
         if(opticalIndex == 0u)
             metaText = s_ExplicitTransparentMaterialMeta;
@@ -575,7 +577,7 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsEngineRootedPolicySelectors(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
@@ -611,11 +613,12 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
 
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
-    MaterialAsset material(testArena.arena);
+    TestValueSlot<MaterialAsset> materialStorage;
+    mut MaterialAsset material = materialStorage.constructIn(testArena);
 
     {
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+        LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
         Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_codec_typed_layout_boundary", testArena, scratch);
         EXPECT_TRUE(built.has_value());
         if(!built.has_value())
@@ -635,7 +638,7 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
 
     {
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+        LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
         MaterialAssetCodec codec = MaterialAssetCodec();
         AssetBytes binary = MakeAssetBytes(testArena);
         EXPECT_TRUE(SerializeMaterialAsset(codec, material, binary));
@@ -681,11 +684,12 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
 
 void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboitReferences(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
-    MaterialAsset material(testArena.arena);
+    TestValueSlot<MaterialAsset> materialStorage;
+    mut MaterialAsset material = materialStorage.constructIn(testArena);
     {
         Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_reload_admission", testArena, scratch);
         ASSERT_TRUE(built.has_value());
@@ -750,13 +754,14 @@ void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAnd
 
 void VerifyAssetsGraphics_MeshAcceptanceHardEdgeCubeZippedRefs(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "hard_edge_cube");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    MeshAsset loadedMesh(testArena.arena);
+    TestValueSlot<MeshAsset> loadedMeshStorage;
+    mut MeshAsset loadedMesh = loadedMeshStorage.constructIn(testArena);
     if(CookAndLoadSmokeMeshInto("cube_hard_edges.nwb", s_AssetCaseProjectMeshesCubeHardEdges, prepared, testArena, loadedMesh)){
         ASSERT_EQ(loadedMesh.meshlets().size(), 1u);
         EXPECT_TRUE(MeshAssetHasPositionNormal(loadedMesh, 0u, -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 0.0f));
@@ -764,35 +769,37 @@ void VerifyAssetsGraphics_MeshAcceptanceHardEdgeCubeZippedRefs(){
         EXPECT_TRUE(MeshAssetHasPositionNormal(loadedMesh, 0u, -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 0.0f));
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_OpposedSphereNormalsDisableMeshletCone(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "sphere_smooth");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    MeshAsset loadedMesh(testArena.arena);
+    TestValueSlot<MeshAsset> loadedMeshStorage;
+    mut MeshAsset loadedMesh = loadedMeshStorage.constructIn(testArena);
     if(CookAndLoadSmokeMeshInto("sphere_smooth.nwb", s_AssetCaseProjectMeshesSphereSmooth, prepared, testArena, loadedMesh)){
         ASSERT_EQ(loadedMesh.meshletBounds().size(), 1u);
         EXPECT_FALSE(MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MeshAcceptanceUvSeamQuad(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "uv_seam_quad");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    MeshAsset loadedMesh(testArena.arena);
+    TestValueSlot<MeshAsset> loadedMeshStorage;
+    mut MeshAsset loadedMesh = loadedMeshStorage.constructIn(testArena);
     if(CookAndLoadSmokeMeshInto("uv_seam_quad.nwb", s_AssetCaseProjectMeshesUvSeamQuad, prepared, testArena, loadedMesh)){
         ASSERT_EQ(loadedMesh.meshlets().size(), 1u);
         ASSERT_GE(loadedMesh.meshletLocalVertexRefs().size(), 5u);
@@ -820,18 +827,19 @@ void VerifyAssetsGraphics_MeshAcceptanceUvSeamQuad(){
         EXPECT_EQ(attributeRef4.value().tangent, 1u);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MeshAcceptanceMirroredUvQuad(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "mirrored_uv_quad");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    MeshAsset loadedMesh(testArena.arena);
+    TestValueSlot<MeshAsset> loadedMeshStorage;
+    mut MeshAsset loadedMesh = loadedMeshStorage.constructIn(testArena);
     if(CookAndLoadSmokeMeshInto("mirrored_uv_quad.nwb", s_AssetCaseProjectMeshesMirroredUvQuad, prepared, testArena, loadedMesh)){
         ASSERT_EQ(loadedMesh.tangentStream().size(), 2u);
         EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[0u]).w, 1.0f);
@@ -846,18 +854,19 @@ void VerifyAssetsGraphics_MeshAcceptanceMirroredUvQuad(){
         EXPECT_EQ(attributeRef3.value().tangent, 1u);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MeshAcceptanceTwoSidedPlane(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "two_sided_plane");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    MeshAsset loadedMesh(testArena.arena);
+    TestValueSlot<MeshAsset> loadedMeshStorage;
+    mut MeshAsset loadedMesh = loadedMeshStorage.constructIn(testArena);
     if(CookAndLoadSmokeMeshInto("two_sided_plane.nwb", s_AssetCaseProjectMeshesTwoSidedPlane, prepared, testArena, loadedMesh)){
         usize positionRefCount = 0u;
         usize attributeRefCount = 0u;
@@ -870,18 +879,19 @@ void VerifyAssetsGraphics_MeshAcceptanceTwoSidedPlane(){
         EXPECT_FALSE(MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MeshAcceptanceLargeManyMeshlets(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "large_mesh_many_meshlets");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    MeshAsset loadedMesh(testArena.arena);
+    TestValueSlot<MeshAsset> loadedMeshStorage;
+    mut MeshAsset loadedMesh = loadedMeshStorage.constructIn(testArena);
     if(CookAndLoadSmokeMeshInto("large_mesh_many_meshlets.nwb", s_AssetCaseProjectMeshesLargeMeshManyMeshlets, prepared, testArena, loadedMesh)){
         const usize expectedPrimitiveCount = cast<usize>(s_MeshMaxMeshletTriangles) + 1u;
         const usize expectedMeshletCount = 2u;
@@ -893,18 +903,19 @@ void VerifyAssetsGraphics_MeshAcceptanceLargeManyMeshlets(){
         }
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MeshFailedReloadPreservesEveryPreviouslyPublishedStream(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "mesh_failed_reload");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    MeshAsset mesh(testArena.arena);
+    TestValueSlot<MeshAsset> meshStorage;
+    mut MeshAsset mesh = meshStorage.constructIn(testArena);
     ASSERT_TRUE(CookAndLoadSmokeMeshInto("uv_seam_quad.nwb", Name(s_AssetCaseProjectMeshesUvSeamQuad), prepared, testArena, mesh));
 
     MeshAssetCodec codec = MeshAssetCodec();
@@ -929,7 +940,7 @@ void VerifyAssetsGraphics_MeshFailedReloadPreservesEveryPreviouslyPublishedStrea
         ASSERT_TRUE(SerializeMeshAsset(codec, mesh, retained));
         EXPECT_EQ(retained, original);
     }
-    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
@@ -947,7 +958,7 @@ void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
     for(in StringView indexList : indexLists){
         const ScopedTestTrace trace(indexList);
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
         TestArena testArena = TestArena();
         const Expected<CookCase> cookCase = PrepareCookCase(testArena, "mesh_index_corner_order");
         ASSERT_TRUE(cookCase.has_value());
@@ -957,7 +968,8 @@ void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
         ASSERT_TRUE(CookSingleMeshMeta(ViewTestString(meta), prepared, testArena));
 
         GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsIntegrationAssetsGraphicsMeshIndexCornerOrder);
-        MeshAsset mesh(testArena.arena);
+        TestValueSlot<MeshAsset> meshStorage;
+        mut MeshAsset mesh = meshStorage.constructIn(testArena);
         {
             Expected<MeshAsset> loadedMesh = LoadCookedMeshAsset(testArena, prepared.outputDirectory, Name(s_AssetCaseProjectMeshesMinimalMesh), 1u);
             ASSERT_TRUE(loadedMesh.has_value());
@@ -981,7 +993,7 @@ void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
             EXPECT_EQ(actualPositions[corner].z, expectedPositions[corner].z);
         }
         EXPECT_EQ(logger.errorCount(), 0u);
-        EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+        EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
     }
 }
 
@@ -998,7 +1010,7 @@ void VerifyAssetsGraphics_MeshCookerReportsFirstInvalidNestedIndex(){
     for(in MeshIndexDiagnosticCase testCase : cases){
         const ScopedTestTrace trace(testCase.m_indices);
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
         TestArena testArena = TestArena();
         const Expected<CookCase> cookCase = PrepareCookCase(testArena, "invalid_nested_mesh_index");
         ASSERT_TRUE(cookCase.has_value());
@@ -1006,7 +1018,7 @@ void VerifyAssetsGraphics_MeshCookerReportsFirstInvalidNestedIndex(){
         const TestAString meta = BuildMeshIndexMeta(testCase.m_indices);
         const b8 cooked = CookSingleMeshMeta(ViewTestString(meta), prepared, testArena);
         EXPECT_FALSE(cooked);
-        EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+        EXPECT_TRUE(GraphicsRemoveAllIfExists(prepared.root));
         EXPECT_TRUE(SawCapturedError(logger, testCase.m_diagnostic));
         EXPECT_FALSE(SawCapturedError(logger, "'indices[1][1][1]'"));
         EXPECT_FALSE(SawCapturedError(logger, "'indices[2]'"));
@@ -1018,7 +1030,7 @@ void VerifyAssetsGraphics_MeshCookerValidationFailures(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
 
     ExpectMeshCookFailure(s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields", testArena);
@@ -1045,7 +1057,7 @@ void VerifyAssetsGraphics_MeshCookerValidationFailures(){
 
 void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "object_geometry_metadata");
@@ -1081,7 +1093,7 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
         else
             EXPECT_GT(logger.errorCount(), priorErrors);
     }
-    EXPECT_TRUE(RemoveAllIfExists(root));
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
 

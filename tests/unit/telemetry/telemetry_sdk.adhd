@@ -1,0 +1,97 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+#include <logger/telemetry/report_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::TelemetryHeapStorage")]
+extern in TelemetryPayloadStorage TelemetryHeapStorage(in HeapStorage storage);
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::s_PlatformUnitBytes")]
+extern const usize s_TelemetryPlatformUnitBytes;
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::TelemetryPlatformUnits")]
+extern class TelemetryPlatformUnits{ PlatformStringView view()const; };
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::PlatformUnitBytes")]
+extern Span<u8> PlatformUnitBytes(in PlatformStringView text);
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::BorrowPlatformUnits")]
+extern PlatformStringView BorrowPlatformUnits(in Span<u8> bytes);
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::TestReplaceWithMovedPayload")]
+extern void TestReplaceWithMovedPayload(mut TelemetryBytes destination, mut TelemetryBytes source);
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::AppendMovedTelemetryPayload")]
+extern b8 AppendMovedTelemetryPayload(mut Recorder recorder, in EventHeader header, mut TelemetryBytes bytes);
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodeEvent")]
+extern b8 EncodeTelemetryData(in EventHeader header, in TestArrayData<u8> data, in usize count, mut TelemetryBytes output);
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::s_CaptureIsNothrow")]
+extern const b8 s_TelemetryGuardCaptureIsNothrow;
+[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::LogString")]
+extern class TelemetryLogString;
+[cpp_header("<global/diagnostics.h>"), cpp_name("::SetDiagnosticEventCallback")]
+extern void InstallTelemetryDiagnosticCallback(in auto callback);
+[cpp_header("<global/diagnostics.h>"), cpp_name("::ClearDiagnosticEventCallback")]
+extern void RemoveTelemetryDiagnosticCallback(in auto callback);
+
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::AString<::NWB::Core::Telemetry::TelemetryArena>")]
+extern class TelemetryLabelString{
+    void assign(in StringView text);
+};
+
+[cpp_header("<logger/telemetry/report.adhd.h>"), cpp_name("::NWB::Log::TelemetryReport")]
+extern class TelemetryReport{
+    TelemetryReportSummary summary;
+    String json;
+    String graph;
+    String perfCsv;
+};
+
+[cpp_header("<logger/telemetry/report.adhd.h>"), cpp_name("::NWB::Log::BuildTelemetryReport")]
+extern Expected<TelemetryReport> BuildTestTelemetryReport(in EventView events, mut HeapStorage arena, mut ScratchStorage scratch);
+
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::TelemetryArena"), cpp_flags(no_copy, no_assign)]
+extern class TelemetryPayloadStorage{
+    ArenaMemoryStats memoryStats()const;
+};
+
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::RecordTextLog")]
+extern b8 RecordPlatformText(mut Recorder recorder, in LogType type, in PlatformStringView message, in u64 frame, in u32 stream);
+
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::BuildTextLogPayload")]
+extern b8 BuildPlatformTextPayload(in LogType type, in PlatformStringView message, mut ScratchStorage scratch, mut TelemetryBytes payload);
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::ParsePerfMemoryPayload")]
+extern Expected<PerfMemoryPayload> ParsePerfMemoryPayloadData(in TestArrayData<u8> data, in usize size);
+
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::ParsePerfTimingPayload")]
+extern Expected<PerfTimingPayload> ParsePerfTimingPayloadData(in TestArrayData<u8> data, in usize size);
+
+[cpp_header("<core/telemetry/diagnostic.h>"), cpp_name("::NWB::Core::Telemetry::ParseDiagnosticPayload")]
+extern Expected<DiagnosticPayload> ParseDiagnosticPayloadData(in TestArrayData<u8> data, in usize size);
+
+[cpp_header("<core/telemetry/text_log.h>"), cpp_name("::NWB::Core::Telemetry::ParseTextLogPayload")]
+extern Expected<TextLogPayload> ParseTextLogPayloadData(in TestArrayData<u8> data, in usize size);
+
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::ParseFrameGraphPayload")]
+extern Expected<FrameGraphPayload> ParseFrameGraphPayloadData(mut HeapStorage arena, mut ScratchStorage scratch, in TestArrayData<u8> data, in usize size);
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodeEvent")]
+extern Expected<DecodedEvent, DecodeResult> DecodeEventData(mut HeapStorage arena, in TestArrayData<u8> data, in usize size);
+
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::DecodeEventStream")]
+extern Expected<usize, DecodeResult> DecodeEventStreamData(in TestArrayData<u8> data, in usize size, mut HeapStorage arena, mut Recorder recorder);
+
+[cpp_header("<tests/unit/telemetry/recorder_access.h>"), cpp_name("::NWB::Tests::TelemetryCases::RecordMovedPayloadImpl")]
+extern b8 RecordMovedPayloadImpl(mut Recorder recorder, in EventKind kind, in u64 frame, mut TelemetryBytes bytes, in u32 stream);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

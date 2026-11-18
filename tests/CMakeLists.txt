@@ -1,11 +1,20 @@
 nwb_declare_static_library(nwb_test_common_names)
 nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests::CommonCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/common/name_cases.adhd")
 nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/common/memory.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/name_symbols.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/backend_allocation.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/asset_codec_fixture.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/threads.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/posix_child.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/process_capture.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/value_storage.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/gtest_macros.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/test_helpers.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/arena_owner_fixture.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/capturing_logger.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/ecs_test_world.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/filesystem_platform.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/filesystem_helpers.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/floating_point_environment_guard.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/font_fixture.adhd"
@@ -21,6 +30,7 @@ target_link_libraries(nwb_test_common_names PUBLIC nwb::gtest nwb_common nwb_all
 # Use the engine entry point so all GoogleTest suites share runtime initialization.
 function(nwb_declare_gtest_executable target)
     nwb_declare_executable(${target})
+    target_sources(${target} PRIVATE "${CMAKE_SOURCE_DIR}/tests/common/gtest_entry.cpp")
     nwb_target_adhd_sources(${target} NAMESPACE "NWB::Tests::GTestMain" SOURCES "${CMAKE_SOURCE_DIR}/tests/common/gtest_nwb_main.adhd")
     target_link_libraries(${target} PRIVATE nwb::gtest nwb_common nwb_alloc nwb_test_common_names)
     add_test(NAME ${target} COMMAND ${target})

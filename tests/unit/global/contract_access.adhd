@@ -1,0 +1,81 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/process_capture.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::CollisionMap")]
+extern class CollisionMap{
+    b8 valid()const;
+    b8 insertOrAssign(in u32 key, in usize value);
+};
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::OrdinaryMap")]
+extern class OrdinaryMap{
+    b8 valid()const;
+    b8 insertOrAssign(in u32 key, in usize value);
+};
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::FindIndex")]
+extern Optional<usize> FindIndex(in auto map, in u32 key);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::ContractNotNull")]
+extern class ContractNotNull;
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::ThrowingPointerConversion")]
+extern class ThrowingPointerConversion;
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::ThrowingPointer")]
+extern ThrowingPointerConversion ThrowingPointer(mut i32 value);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::NonNullAddress")]
+extern ContractNotNull NonNullAddress(mut i32 value);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::PointedValue")]
+extern mut i32 PointedValue(in ContractNotNull pointer);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::AssignPointer")]
+extern void AssignPointer(mut ContractNotNull target, in ThrowingPointerConversion source);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::StatefulValueDeleter")]
+extern class StatefulValueDeleter<T>{
+    u32 tag;
+    u32 deleteCount;
+};
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::ContractOwner")]
+extern class ContractOwner<T>{
+    in StatefulValueDeleter<T> getDeleter()const;
+};
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::AdoptProbe")]
+extern ContractOwner<T> AdoptProbe<T>(mut u32 destroyed, in u32 tag, mut u32 deleted);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::Target")]
+extern mut T ContractTarget<T>(in ContractOwner<T> owner);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::SameProbe")]
+extern b8 SameProbe(in auto lhs, in auto rhs);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::WStringView")]
+extern class ContractWideView;
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::NWB::Tests::GlobalContractCases::s_WideDecimal")]
+extern const ContractWideView s_WideDecimal;
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::ParseDecimalPrefixU64<wchar_t>")]
+extern u64 ParseWideDecimal(in ContractWideView text);
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("::testing::ExitedWithCode")]
+extern class ContractExitCode;
+
+[cpp_header("<tests/unit/global/contract_access.h>"), cpp_name("NWB_CONTRACT_LINUX_CASE")]
+extern registration LinuxContractCase(suite, caseName, verifier);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

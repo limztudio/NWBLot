@@ -9,131 +9,47 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class GpuCmdIrOwnerReleaseProbe : NoCopy{
+    private mut u32 m_releases;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/task/gpu/capture/command_ir_raster.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GpuCmdIrCompiledGraphReadView = Core::GpuCompiledGraph::ReadView;
-using GpuCmdIrValidationErrorEnum = Core::GpuCommandIrStreamValidationError::Enum;
-using GpuCmdIrReadStatusEnum = Core::GpuCommandIrStreamReadStatus::Enum;
-using GpuCmdIrWireOpcodeEnum = Core::GpuCommandIrWireOpcode::Enum;
-using GpuCmdIrRasterReplayState = Core::GpuCommandIrDetail::RasterReplayState;
-using Core::GpuCommandIrDetail::ValidateRasterGraphOperation;
-using Core::GpuCommandIrDetail::ValidateReplayCommandListQueue;
-
-struct GpuCmdIrOwnerReleaseProbe{
-    u32* releases = nullptr;
-
-
-public:
-    explicit GpuCmdIrOwnerReleaseProbe(u32& value)noexcept
-        : releases(&value)
-    {}
-    GpuCmdIrOwnerReleaseProbe(const GpuCmdIrOwnerReleaseProbe&) = delete;
-    GpuCmdIrOwnerReleaseProbe(GpuCmdIrOwnerReleaseProbe&& other)noexcept
-        : releases(Exchange(other.releases, nullptr))
-    {}
-    ~GpuCmdIrOwnerReleaseProbe()noexcept{
-        if(releases)
-            ++*releases;
+    public GpuCmdIrOwnerReleaseProbe(mut u32 releases){
+        this.m_releases = releases;
     }
-};
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuCommandIrOwnerAnchor> MakeOwnerReleaseProbeAnchor(TestArena& ownerArena, u32& releases)noexcept{
-    return Core::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, GpuCmdIrOwnerReleaseProbe(releases));
+    public ~GpuCmdIrOwnerReleaseProbe(){ ++this.m_releases; }
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuUploadBlobId> CopyU32AlignedUploadBytes(Core::GpuTaskGraph& graph, const GraphicsBytes& caller){
-    return graph.copyUploadData(caller.data(), caller.size(), alignof(u32));
-}
-
-inline constexpr usize s_GpuCmdIrStreamHeaderBytes = sizeof(Core::GpuCommandIrStreamHeader);
-inline constexpr usize s_GpuCmdIrRecordHeaderBytes = sizeof(Core::GpuCommandIrHeader);
-inline constexpr usize s_GpuCmdIrCopyBufferRecordBytes = sizeof(Core::GpuCommandIrCopyBufferRecord);
-inline constexpr usize s_GpuCmdIrCopyTextureRecordBytes = sizeof(Core::GpuCommandIrCopyTextureRecord);
-inline constexpr usize s_GpuCmdIrClearBufferRecordBytes = sizeof(Core::GpuCommandIrClearBufferRecord);
-inline constexpr usize s_GpuCmdIrSetGraphicsStateRecordBytes = sizeof(Core::GpuCommandIrSetGraphicsStateRecord);
-inline constexpr usize s_GpuCmdIrUploadBufferRecordBytes = sizeof(Core::GpuCommandIrUploadBufferRecord);
-
-inline constexpr usize s_GpuCmdIrHdrMagicOffset = offsetof(Core::GpuCommandIrStreamHeader, magic);
-inline constexpr usize s_GpuCmdIrHdrVersionOffset = offsetof(Core::GpuCommandIrStreamHeader, version);
-inline constexpr usize s_GpuCmdIrPrefixVersionOffset = offsetof(Core::GpuCommandIrStreamHeaderPrefix, version);
-inline constexpr usize s_GpuCmdIrHdrReservedOffset = offsetof(Core::GpuCommandIrStreamHeader, reserved);
-inline constexpr usize s_GpuCmdIrHdrCommandBytesOffset = offsetof(Core::GpuCommandIrStreamHeader, commandBytes);
-inline constexpr usize s_GpuCmdIrHdrBlobBytesOffset = offsetof(Core::GpuCommandIrStreamHeader, blobBytes);
-inline constexpr usize s_GpuCmdIrHdrGraphGenOffset = offsetof(Core::GpuCommandIrStreamHeader, graphGeneration);
-inline constexpr usize s_GpuCmdIrHdrPlanGenOffset = offsetof(Core::GpuCommandIrStreamHeader, planGeneration);
-inline constexpr usize s_GpuCmdIrHdrRecordCountOffset = offsetof(Core::GpuCommandIrStreamHeader, recordCount);
-
-inline constexpr usize s_GpuCmdIrRecByteSizeOffset = offsetof(Core::GpuCommandIrHeader, byteSize);
-inline constexpr usize s_GpuCmdIrRecOpcodeOffset = offsetof(Core::GpuCommandIrHeader, opcode);
-
-inline constexpr usize s_GpuCmdIrPushBlobOffsetOffset = offsetof(Core::GpuCommandIrSetPushConstantsRecord, blobOffsetBytes);
-inline constexpr usize s_GpuCmdIrGfxViewportMaxXOffset = offsetof(Core::GpuCommandIrSetGraphicsStateRecord, viewportMaxX);
-inline constexpr usize s_GpuCmdIrCopyBufDataSizeOffset = offsetof(Core::GpuCommandIrCopyBufferRecord, dataSizeBytes);
-inline constexpr usize s_GpuCmdIrCopyBufSrcResOffset = offsetof(Core::GpuCommandIrCopyBufferRecord, sourceResourceIndex);
-inline constexpr usize s_GpuCmdIrCopyBufQueueGenOffset =
-    offsetof(Core::GpuCommandIrCopyBufferRecord, context) + offsetof(Core::GpuCommandIrRecordContext, queueDeviceGeneration);
-inline constexpr usize s_GpuCmdIrCopyTexDstResOffset = offsetof(Core::GpuCommandIrCopyTextureRecord, destinationResourceIndex);
-inline constexpr usize s_GpuCmdIrClearBufDstResOffset = offsetof(Core::GpuCommandIrClearBufferRecord, destinationResourceIndex);
-inline constexpr usize s_GpuCmdIrClearTexNumMipsOffset =
-    offsetof(Core::GpuCommandIrClearTextureRecord, destinationSubresources) + offsetof(Core::GpuCommandIrTextureSubresourceSet, numMipLevels);
-inline constexpr usize s_GpuCmdIrClearTexValueTypeOffset = offsetof(Core::GpuCommandIrClearTextureRecord, clearTextureValueType);
-inline constexpr usize s_GpuCmdIrClearTexFlagsOffset = offsetof(Core::GpuCommandIrClearTextureRecord, clearFlags);
-inline constexpr usize s_GpuCmdIrClearTexReservedOffset = offsetof(Core::GpuCommandIrClearTextureRecord, reserved);
-inline constexpr usize s_GpuCmdIrUploadTexBlobOffsetOffset = offsetof(Core::GpuCommandIrUploadTextureRecord, blobOffsetBytes);
-inline constexpr usize s_GpuCmdIrUploadTexBlobSizeOffset = offsetof(Core::GpuCommandIrUploadTextureRecord, blobSizeBytes);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+const usize s_GpuCmdIrStreamHeaderBytes = size_of<GpuCommandIrStreamHeader>();
+const usize s_GpuCmdIrRecordHeaderBytes = size_of<GpuCommandIrHeader>();
+const usize s_GpuCmdIrCopyBufferRecordBytes = size_of<GpuCommandIrCopyBufferRecord>();
+const usize s_GpuCmdIrCopyTextureRecordBytes = size_of<GpuCommandIrCopyTextureRecord>();
+const usize s_GpuCmdIrClearBufferRecordBytes = size_of<GpuCommandIrClearBufferRecord>();
+const usize s_GpuCmdIrSetGraphicsStateRecordBytes = size_of<GpuCommandIrSetGraphicsStateRecord>();
+const usize s_GpuCmdIrUploadBufferRecordBytes = size_of<GpuCommandIrUploadBufferRecord>();
+const usize s_GpuCmdIrHdrMagicOffset = offset_of<GpuCommandIrStreamHeader>(magic);
+const usize s_GpuCmdIrHdrVersionOffset = offset_of<GpuCommandIrStreamHeader>(version);
+const usize s_GpuCmdIrPrefixVersionOffset = offset_of<GpuCommandIrStreamHeaderPrefix>(version);
+const usize s_GpuCmdIrHdrReservedOffset = offset_of<GpuCommandIrStreamHeader>(reserved);
+const usize s_GpuCmdIrHdrCommandBytesOffset = offset_of<GpuCommandIrStreamHeader>(commandBytes);
+const usize s_GpuCmdIrHdrBlobBytesOffset = offset_of<GpuCommandIrStreamHeader>(blobBytes);
+const usize s_GpuCmdIrHdrGraphGenOffset = offset_of<GpuCommandIrStreamHeader>(graphGeneration);
+const usize s_GpuCmdIrHdrPlanGenOffset = offset_of<GpuCommandIrStreamHeader>(planGeneration);
+const usize s_GpuCmdIrHdrRecordCountOffset = offset_of<GpuCommandIrStreamHeader>(recordCount);
+const usize s_GpuCmdIrRecByteSizeOffset = offset_of<GpuCommandIrHeader>(byteSize);
+const usize s_GpuCmdIrRecOpcodeOffset = offset_of<GpuCommandIrHeader>(opcode);
+const usize s_GpuCmdIrPushBlobOffsetOffset = offset_of<GpuCommandIrSetPushConstantsRecord>(blobOffsetBytes);
+const usize s_GpuCmdIrGfxViewportMaxXOffset = offset_of<GpuCommandIrSetGraphicsStateRecord>(viewportMaxX);
+const usize s_GpuCmdIrCopyBufDataSizeOffset = offset_of<GpuCommandIrCopyBufferRecord>(dataSizeBytes);
+const usize s_GpuCmdIrCopyBufSrcResOffset = offset_of<GpuCommandIrCopyBufferRecord>(sourceResourceIndex);
+const usize s_GpuCmdIrCopyBufQueueGenOffset = offset_of<GpuCommandIrCopyBufferRecord>(context) + offset_of<GpuCommandIrRecordContext>(queueDeviceGeneration);
+const usize s_GpuCmdIrCopyTexDstResOffset = offset_of<GpuCommandIrCopyTextureRecord>(destinationResourceIndex);
+const usize s_GpuCmdIrClearBufDstResOffset = offset_of<GpuCommandIrClearBufferRecord>(destinationResourceIndex);
+const usize s_GpuCmdIrClearTexNumMipsOffset = offset_of<GpuCommandIrClearTextureRecord>(destinationSubresources) + offset_of<GpuCommandIrTextureSubresourceSet>(numMipLevels);
+const usize s_GpuCmdIrClearTexValueTypeOffset = offset_of<GpuCommandIrClearTextureRecord>(clearTextureValueType);
+const usize s_GpuCmdIrClearTexFlagsOffset = offset_of<GpuCommandIrClearTextureRecord>(clearFlags);
+const usize s_GpuCmdIrClearTexReservedOffset = offset_of<GpuCommandIrClearTextureRecord>(reserved);
+const usize s_GpuCmdIrUploadTexBlobOffsetOffset = offset_of<GpuCommandIrUploadTextureRecord>(blobOffsetBytes);
+const usize s_GpuCmdIrUploadTexBlobSizeOffset = offset_of<GpuCommandIrUploadTextureRecord>(blobSizeBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -314,7 +230,8 @@ void VerifyGpuCmdIr_RetainedOwnerAnchorOutlivesIndependentCaptureArena(){
     {
         TestArena captureArena = TestArena();
         GpuCommandIrCapture capture = GpuCommandIrCapture(captureArena.arena);
-        const auto source = MakeOwnerReleaseProbeAnchor(ownerArena, releases);
+        const auto source = MakeGpuCommandIrOwnerFrom<GpuCmdIrOwnerReleaseProbe>(ownerArena.arena,
+            lambda[mut releases]() -> GpuCmdIrOwnerReleaseProbe{ return GpuCmdIrOwnerReleaseProbe(releases); });
         ASSERT_TRUE(source.has_value());
         exported = source.value();
         capture.reset();
@@ -354,7 +271,7 @@ void VerifyGpuCmdIr_DrawWithoutHeapBindingRejectsWholePacket(){
     SingleQueueCompile compiled = SingleQueueCompile(testArena);
     ASSERT_TRUE(compiled.compile(graph));
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-    const GpuCmdIrCompiledGraphReadView plan = GpuCmdIrCompiledGraphReadView(compiled.compiledGraph);
+    const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiled.compiledGraph);
     const GpuSubmissionPacketId packet = plan.packetForTask(task);
     ASSERT_TRUE(packet.valid());
     const Optional<GpuSubmissionPacket> packetPlan = PacketPlan(plan.packet(packet));
@@ -429,7 +346,7 @@ void VerifyGpuCmdIr_DrawWithoutHeapBindingRejectsWholePacket(){
     EXPECT_EQ(raw.error, GpuCommandIrReplayError::MissingOwnedSidecar);
     EXPECT_TRUE(raw.streamValidation.valid());
 
-    GpuCmdIrRasterReplayState graphState = GpuCmdIrRasterReplayState();
+    GpuRasterReplayState graphState = GpuRasterReplayState();
     GpuCommandIrRasterTaskRecord stateRecord = GpuCommandIrRasterTaskRecord();
     stateRecord.opcode = GpuCommandIrWireOpcode::SetGraphicsState;
     stateRecord.task = task;
@@ -595,7 +512,7 @@ void VerifyGpuCmdIr_EmptyAndExhaustedStreamsReportEndWithoutProducingARecord(){
     EXPECT_EQ(reader.validation().recordIndex, 4u);
 }
 
-void GpuCmdIr_AssertHeaderError(in GraphicsBytes corruptedBytes, in GpuCmdIrValidationErrorEnum expectedError){
+void GpuCmdIr_AssertHeaderError(in GraphicsBytes corruptedBytes, in GpuCommandIrStreamValidationError expectedError){
     const GpuCommandIrStreamValidationResult result = ValidateGpuCommandIrStream(MakeGraphicsByteView(corruptedBytes));
     EXPECT_EQ(result.error, expectedError);
     EXPECT_TRUE(result.complete);
@@ -673,7 +590,7 @@ void GpuCmdIr_AssertRecordError(
     in GraphicsBytes corruptedBytes,
     in usize validPrefixCount,
     in usize expectedByteOffset,
-    in GpuCmdIrValidationErrorEnum expectedError
+    in GpuCommandIrStreamValidationError expectedError
 ){
     GpuCommandIrStreamReader reader = GpuCommandIrStreamReader(MakeGraphicsByteView(corruptedBytes));
     for(usize recordIndex = 0u; recordIndex < validPrefixCount; ++recordIndex)
@@ -840,7 +757,7 @@ void VerifyGpuCmdIr_PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLoweri
     SingleQueueCompile singleQueueCompile = SingleQueueCompile(testArena);
     ASSERT_TRUE(singleQueueCompile.compile(graph));
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-    const GpuCmdIrCompiledGraphReadView compiledPlan = GpuCmdIrCompiledGraphReadView(singleQueueCompile.compiledGraph);
+    const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(singleQueueCompile.compiledGraph);
 
     const GpuSubmissionPacketId packet = compiledPlan.packetForTask(task);
     const GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(secondTask);
@@ -1104,7 +1021,7 @@ void VerifyGpuCmdIr_OwnsLargeGraphBlobAfterCallerMutationAndGraphReset(){
         expected[index] = b;
     }
 
-    const auto blobResult = CopyU32AlignedUploadBytes(graph, caller);
+    const auto blobResult = graph.copyUploadBytes<u32>(Span<u8>(caller));
     ASSERT_TRUE(blobResult.has_value());
     const GpuUploadBlobId blob = blobResult.value();
     ASSERT_TRUE(blob.valid());

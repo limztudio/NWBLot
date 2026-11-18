@@ -1,0 +1,201 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "memory_probe_kernels.adhd"
+#include <utilities/cli/tool_cli.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::AccumulateMemoryChecksum")]
+extern void AccumulateMemoryChecksum(in u64 value);
+
+[cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::InlineCandidateCopy")]
+extern void InvokeMeasuredCandidateCopy<const usize FixedCount>(in ReadAddress source, in usize count, in usize capacity, in ByteAddress destination);
+
+
+[cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::RunMemoryBatch")]
+extern void RunCopyBatch(in auto batch, in ReadAddress source, in usize slots, in usize stride, in usize bytes, in usize iterations, in ByteAddress destination);
+
+[cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::RunMemoryBatch")]
+extern u64 RunEqualityBatch(in auto batch, in ByteAddress lhs, in ByteAddress rhs, in usize slots, in usize stride, in usize iterations);
+
+
+class CopyBatch<const b8 Candidate, const usize FixedCount>{
+    public void run(in ReadAddress source, in usize slots, in usize stride, in usize bytes, in usize iterations, in ByteAddress destination)const{
+        usize count = bytes;
+        if(FixedCount != 0u)
+            count = FixedCount;
+        usize slot = 0u;
+        for(usize iteration = 0u; iteration < iterations; ++iteration){
+            AtomicSignalFence(MemoryOrder::seq_cst);
+            const usize offset = slot * stride;
+            if(Candidate)
+                InvokeMeasuredCandidateCopy<FixedCount>(GuardAddress(source, offset), count, count, GuardAddress(destination, offset));
+            else
+                CopyTestBytes(GuardAddress(destination, offset), count, GuardAddress(source, offset), count);
+            ++slot;
+            if(slot == slots)
+                slot = 0u;
+        }
+    }
+}
+
+class EqualityBatch<const b8 Candidate, const b8 FirstWord>{
+    public u64 run(in ByteAddress lhs, in ByteAddress rhs, in usize slots, in usize stride, in usize iterations)const{
+        usize slot = 0u;
+        u64 total = 0u;
+        for(usize iteration = 0u; iteration < iterations; ++iteration){
+            AtomicSignalFence(MemoryOrder::seq_cst);
+            const usize offset = slot * stride * 8u;
+            const ByteAddress left = GuardAddress(lhs, offset);
+            const ByteAddress right = GuardAddress(rhs, offset);
+            if(Candidate){
+                if(FirstWord)
+                    total += cast<u64>(CandidateEqualFirstWord<4u>(left, right));
+                else
+                    total += cast<u64>(CandidateEqual<4u>(left, right));
+            }
+            else
+                total += cast<u64>(BaselineEqual<4u>(left, right));
+            ++slot;
+            if(slot == slots)
+                slot = 0u;
+        }
+        return total;
+    }
+}
+
+f64 TimeCopy<TBatch>(in TBatch batch, in ReadAddress source, in usize slots, in usize stride, in usize bytes, in usize iterations, in ByteAddress destination){
+    const Timer start = TimerNow();
+    RunCopyBatch(batch, source, slots, stride, bytes, iterations, destination);
+    const Timer end = TimerNow();
+    AccumulateMemoryChecksum(LoadByte(destination, ((iterations - 1u) % slots) * stride));
+    return DurationInNS<f64>(end, start) / cast<f64>(iterations);
+}
+
+f64 TimeEquality<TBatch>(in TBatch batch, in ByteAddress lhs, in ByteAddress rhs, in usize slots, in usize iterations){
+    const Timer start = TimerNow();
+    const u64 result = RunEqualityBatch(batch, lhs, rhs, slots, 8u, iterations);
+    const Timer end = TimerNow();
+    AccumulateMemoryChecksum(result);
+    return DurationInNS<f64>(end, start) / cast<f64>(iterations);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MemoryCopyBenchmarkBuffers : NoCopy{
+    private usize m_slots;
+    private usize m_stride;
+    private AlignedProbeBytes m_source;
+    private AlignedProbeBytes m_destination;
+
+    public MemoryCopyBenchmarkBuffers(in usize slots, in usize stride, in u8 poisonByte){
+        this.m_slots = slots;
+        this.m_stride = stride;
+        this.m_source = AlignedProbeBytes(slots * stride + 128u);
+        this.m_destination = AlignedProbeBytes(slots * stride + 128u);
+        const usize total = slots * stride + 128u;
+        const ByteAddress source = this.m_source.data();
+        for(usize index = 0u; index < total; ++index)
+            StoreByte(source, index, PatternByte(index));
+        FillTestBytes(this.m_destination.data(), poisonByte, total);
+    }
+
+    public void warmup(in usize bytes, in usize sourceOffset, in usize destinationOffset)const{
+        const ByteAddress src = GuardAddress(this.m_source.data(), sourceOffset);
+        const ByteAddress dst = GuardAddress(this.m_destination.data(), destinationOffset);
+        if(bytes == 5120u){
+            RunCopyBatch(CopyBatch<false, 5120u>(), src, this.m_slots, this.m_stride, bytes, 1024u, dst);
+            RunCopyBatch(CopyBatch<true, 5120u>(), src, this.m_slots, this.m_stride, bytes, 1024u, dst);
+        }
+        else{
+            RunCopyBatch(CopyBatch<false, 0u>(), src, this.m_slots, this.m_stride, bytes, 1024u, dst);
+            RunCopyBatch(CopyBatch<true, 0u>(), src, this.m_slots, this.m_stride, bytes, 1024u, dst);
+        }
+    }
+
+    public f64 timeSample(in b8 useCandidate, in usize bytes, in usize sourceOffset, in usize destinationOffset, in usize iterations)const{
+        const ByteAddress src = GuardAddress(this.m_source.data(), sourceOffset);
+        const ByteAddress dst = GuardAddress(this.m_destination.data(), destinationOffset);
+        if(bytes == 5120u){
+            if(useCandidate)
+                return TimeCopy(CopyBatch<true, 5120u>(), src, this.m_slots, this.m_stride, bytes, iterations, dst);
+            return TimeCopy(CopyBatch<false, 5120u>(), src, this.m_slots, this.m_stride, bytes, iterations, dst);
+        }
+        if(useCandidate)
+            return TimeCopy(CopyBatch<true, 0u>(), src, this.m_slots, this.m_stride, bytes, iterations, dst);
+        return TimeCopy(CopyBatch<false, 0u>(), src, this.m_slots, this.m_stride, bytes, iterations, dst);
+    }
+}
+
+
+class MemoryEqualityBenchmarkBuffers : NoCopy{
+    private usize m_slots;
+    private AlignedProbeBytes m_left;
+    private AlignedProbeBytes m_right;
+    private ByteAddress m_lhs;
+    private ByteAddress m_rhs;
+
+    public MemoryEqualityBenchmarkBuffers(in usize slots){
+        this.m_slots = slots;
+        this.m_left = AlignedProbeBytes(slots * 64u + 64u);
+        this.m_right = AlignedProbeBytes(slots * 64u + 64u);
+        this.m_lhs = BeginProbeWords(this.m_left.data(), slots * 8u + 8u);
+        this.m_rhs = BeginProbeWords(this.m_right.data(), slots * 8u + 8u);
+    }
+
+    public void prepareAndWarmup(in b8 firstWord, in usize comparisonCase, in usize offset)const{
+        for(usize slot = 0u; slot < this.m_slots; ++slot){
+            const usize first = slot * 8u + offset;
+            for(usize lane = 0u; lane < 4u; ++lane){
+                const u64 value = cast<u64>(slot) * 0x0123456789ABCDEFull + lane;
+                ProbeWord(this.m_lhs, first + lane) = value;
+                ProbeWord(this.m_rhs, first + lane) = value;
+            }
+            if(comparisonCase != 0u){
+                usize difference = 0u;
+                if(firstWord)
+                    difference = comparisonCase - 1u;
+                else if(comparisonCase != 1u)
+                    difference = 3u;
+                mut u64 changed = ProbeWord(this.m_rhs, first + difference);
+                changed ^= 1u;
+            }
+        }
+        const ByteAddress lhs = GuardAddress(this.m_lhs, offset * 8u);
+        const ByteAddress rhs = GuardAddress(this.m_rhs, offset * 8u);
+        const usize iterations = 1024u;
+        const u64 baseline = RunEqualityBatch(EqualityBatch<false, false>(), lhs, rhs, this.m_slots, 8u, iterations);
+        u64 candidate = 0u;
+        if(firstWord)
+            candidate = RunEqualityBatch(EqualityBatch<true, true>(), lhs, rhs, this.m_slots, 8u, iterations);
+        else
+            candidate = RunEqualityBatch(EqualityBatch<true, false>(), lhs, rhs, this.m_slots, 8u, iterations);
+        u64 expected = 0u;
+        if(comparisonCase == 0u)
+            expected = iterations;
+        if(baseline != expected || candidate != expected){
+            ConsoleWriteError("equality warm-up produced an incorrect result\n");
+            AbortMemoryProbe();
+        }
+        AccumulateMemoryChecksum(baseline + candidate);
+    }
+
+    public f64 timeSample(in b8 useCandidate, in b8 firstWord, in usize offset, in usize iterations)const{
+        const ByteAddress lhs = GuardAddress(this.m_lhs, offset * 8u);
+        const ByteAddress rhs = GuardAddress(this.m_rhs, offset * 8u);
+        if(!useCandidate)
+            return TimeEquality(EqualityBatch<false, false>(), lhs, rhs, this.m_slots, iterations);
+        if(firstWord)
+            return TimeEquality(EqualityBatch<true, true>(), lhs, rhs, this.m_slots, iterations);
+        return TimeEquality(EqualityBatch<true, false>(), lhs, rhs, this.m_slots, iterations);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

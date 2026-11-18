@@ -11,6 +11,9 @@ extern Expected<Name> DeriveName(in Name a0, in StringView a1);
 [cpp_name("::FinishDerivedNameHash")]
 extern Expected<Name> FinishDerivedNameHash(in NameHash a0);
 
+[cpp_name("::Name::FromText<char>")]
+extern Expected<Name, NameTextError> NameFromText(in StringView text);
+
 [cpp_name("::ParseNameText")]
 extern Expected<Name> ParseName(in StringView a0);
 

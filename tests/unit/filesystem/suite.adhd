@@ -5,176 +5,7 @@
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
-#include <tests/unit/filesystem/name_cases.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/filesystem/factory.h>
-#include <core/filesystem/volume_file_system.h>
-#include <core/filesystem/volume_naming.h>
-#include <core/filesystem/volume_staging.h>
-#include <core/filesystem/volume_storage_detail.h>
-
-#include <global/binary.h>
-#include <global/filesystem.h>
-#include <global/filesystem/cleanup.h>
-#include <global/scope_exit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::FilesystemTest{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ThrowingPublishLogger final : public Core::Common::ILogger{
-public:
-    explicit ThrowingPublishLogger(Core::Common::LogArena& arena)noexcept
-        : m_arena(arena)
-    {}
-
-
-public:
-    virtual Core::Common::LogArena& arena()noexcept override{ return m_arena; }
-
-    virtual void enqueue(Core::Common::LogString&&, Core::Common::LogType::Enum)override;
-    virtual void enqueue(const Core::Common::LogString&, Core::Common::LogType::Enum)override;
-
-
-private:
-    Core::Common::LogArena& m_arena;
-};
-
-class BlockingRestoreLogger final : public Core::Common::ILogger{
-public:
-    template<typename PathArenaT>
-    BlockingRestoreLogger(Core::Common::LogArena& arena, const ::Path<PathArenaT>& blockedPath, const b8 throwAfterBlock = false)
-        : m_arena(arena)
-        , m_blockedPath(arena, blockedPath)
-        , m_throwAfterBlock(throwAfterBlock)
-    {}
-
-
-public:
-    virtual Core::Common::LogArena& arena()noexcept override{ return m_arena; }
-    virtual void enqueue(Core::Common::LogString&&, Core::Common::LogType::Enum)override{ block(); }
-    virtual void enqueue(const Core::Common::LogString&, Core::Common::LogType::Enum)override{ block(); }
-    [[nodiscard]] b8 blocked()const noexcept{ return m_blocked; }
-
-
-private:
-    void block();
-
-
-private:
-    Core::Common::LogArena& m_arena;
-    NWB::Path m_blockedPath;
-    b8 m_throwAfterBlock;
-    b8 m_blocked = false;
-};
-
-class CreatedFilesystem final : NoCopy{
-public:
-    CreatedFilesystem(Core::Alloc::GlobalArena& arena, const Core::Filesystem::VolumeMountDesc& desc)
-        : m_filesystem(Core::Filesystem::CreateFilesystem(arena, desc))
-    {}
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_filesystem.has_value() && static_cast<b8>(*m_filesystem); }
-    [[nodiscard]] Core::Filesystem::IFilesystem& get()noexcept{ return **m_filesystem; }
-    [[nodiscard]] const Core::Filesystem::IFilesystem& get()const noexcept{ return **m_filesystem; }
-    void reset()noexcept{
-        if(m_filesystem)
-            m_filesystem->reset();
-    }
-
-
-private:
-    Expected<UniquePtr<Core::Filesystem::IFilesystem>> m_filesystem;
-};
-
-class FilesystemVolumeTest : public testing::Test{
-public:
-    FilesystemVolumeTest();
-
-
-public:
-    virtual void SetUp()override;
-    virtual void TearDown()override;
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    NWB::Path m_directory;
-    Core::Filesystem::VolumeMountDesc m_desc;
-    Tests::CapturingLogger m_logger;
-    Core::Common::LoggerRegistrationGuard m_loggerGuard;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::FilesystemCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core::Filesystem;
-using GlobalArena = Core::Alloc::GlobalArena;
-using ScratchArena = Core::Alloc::ScratchArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-using DiskPath = NWB::Path;
-using CreatedFilesystem = Tests::FilesystemTest::CreatedFilesystem;
-using FilesystemVolumeTest = Tests::FilesystemTest::FilesystemVolumeTest;
-using ThrowingPublishLogger = Tests::FilesystemTest::ThrowingPublishLogger;
-using BlockingRestoreLogger = Tests::FilesystemTest::BlockingRestoreLogger;
-static_assert(IsNothrowDestructible_V<VolumeFileSystem>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include "fixture.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,15 +20,12 @@ void VerifyFilesystemVolumeTest_SegmentProbePreservesInspectionErrors(mut Filesy
     ASSERT_TRUE(missing.has_value());
     EXPECT_FALSE(missing.value());
 
-    DiskPath invalidPath(self.m_arena);
-    native(mut self, mut invalidPath){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        invalidPath = DiskPath(self.m_arena, "invalid|volume");
-#else
-        TString<GlobalArena> longName(self.m_arena);
-        longName.resize(40000u, static_cast<tchar>('a'));
-        invalidPath = DiskPath(self.m_arena, longName);
-#endif
+    Path invalidPath;
+    if(s_WindowsFilesystem) invalidPath = Path("invalid|volume");
+    else{
+        String longName;
+        longName.resize(40000u, 97u);
+        invalidPath = Path(longName);
     }
     const Expected<b8, ErrorCode> inspection = IsDirectory(invalidPath);
     ASSERT_FALSE(inspection.has_value());
@@ -360,9 +188,7 @@ void VerifyFilesystemVolumeTest_ReadsAcrossSegmentsAndSeeksAtBoundaries(mut File
 
     Array<u8, 64> buffer = Array<u8, 64>();
     Expected<usize> bytesRead = MakeUnexpected(Failure());
-    native(mut filesystem, mut cursor, mut buffer, mut bytesRead){
-        bytesRead = filesystem.get().readFile(cursor, buffer.data(), buffer.size());
-    }
+    bytesRead = ReadTestCursor(filesystem.get(), cursor, buffer);
     ASSERT_TRUE(bytesRead.has_value());
     ASSERT_EQ(bytesRead.value(), buffer.size());
     for(usize i = 0u; i < bytesRead.value(); ++i)
@@ -370,17 +196,13 @@ void VerifyFilesystemVolumeTest_ReadsAcrossSegmentsAndSeeksAtBoundaries(mut File
     EXPECT_EQ(cursor.offset, 3634u);
 
     ASSERT_TRUE(filesystem.get().seekFile(cursor, -10, FileSeekOrigin::End));
-    native(mut filesystem, mut cursor, mut buffer, mut bytesRead){
-        bytesRead = filesystem.get().readFile(cursor, buffer.data(), buffer.size());
-    }
+    bytesRead = ReadTestCursor(filesystem.get(), cursor, buffer);
     ASSERT_TRUE(bytesRead.has_value());
     ASSERT_EQ(bytesRead.value(), 10u);
     for(usize i = 0u; i < bytesRead.value(); ++i)
         EXPECT_EQ(buffer[i], payload[9990u + i]);
 
-    native(mut filesystem, mut cursor, mut buffer, mut bytesRead){
-        bytesRead = filesystem.get().readFile(cursor, buffer.data(), buffer.size());
-    }
+    bytesRead = ReadTestCursor(filesystem.get(), cursor, buffer);
     ASSERT_TRUE(bytesRead.has_value());
     EXPECT_EQ(bytesRead.value(), 0u);
     EXPECT_EQ(cursor.offset, 10000u);
@@ -391,16 +213,12 @@ void VerifyFilesystemVolumeTest_ReadsAcrossSegmentsAndSeeksAtBoundaries(mut File
     EXPECT_FALSE(filesystem.get().seekFile(cursor, i64.max, FileSeekOrigin::Current));
 
     b8 invalidOriginSeek = true;
-    native(mut filesystem, mut cursor, mut invalidOriginSeek){
-        invalidOriginSeek = filesystem.get().seekFile(cursor, 0, static_cast<FileSeekOrigin::Enum>(255));
-    }
+    invalidOriginSeek = filesystem.get().seekFile(cursor, 0, cast<FileSeekOrigin>(255u));
     EXPECT_FALSE(invalidOriginSeek);
     EXPECT_EQ(cursor.offset, 10000u);
 
     filesystem.get().closeFile(cursor);
-    native(mut filesystem, mut cursor, mut buffer, mut bytesRead){
-        bytesRead = filesystem.get().readFile(cursor, buffer.data(), buffer.size());
-    }
+    bytesRead = ReadTestCursor(filesystem.get(), cursor, buffer);
     EXPECT_FALSE(bytesRead.has_value());
     ASSERT_TRUE(filesystem.get().unmount());
 }
@@ -536,9 +354,7 @@ void VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles(mut Filesystem
     ASSERT_TRUE(filesystem.get().writeFile(s_FilesystemNameProjectTestsPayload, payload));
 
     b8 wroteEmpty = false;
-    native(mut filesystem, mut wroteEmpty){
-        wroteEmpty = filesystem.get().writeFile(s_FilesystemNameProjectTestsPayload, nullptr, 0u);
-    }
+    wroteEmpty = WriteTestNull(filesystem.get(), s_FilesystemNameProjectTestsPayload, 0u);
     ASSERT_TRUE(wroteEmpty);
 
     Vector<u8> loaded;
@@ -548,10 +364,8 @@ void VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles(mut Filesystem
 
     b8 wroteNullNonzero = true;
     b8 readPastEmpty = true;
-    native(mut filesystem, mut wroteNullNonzero, mut readPastEmpty){
-        wroteNullNonzero = filesystem.get().writeFile(s_FilesystemNameProjectTestsPayload, nullptr, 1u);
-        readPastEmpty = filesystem.get().readFile(s_FilesystemNameProjectTestsPayload, 1u, nullptr, 0u).has_value();
-    }
+    wroteNullNonzero = WriteTestNull(filesystem.get(), s_FilesystemNameProjectTestsPayload, 1u);
+    readPastEmpty = ReadTestNull(filesystem.get(), s_FilesystemNameProjectTestsPayload, 1u, 0u).has_value();
     EXPECT_FALSE(wroteNullNonzero);
     EXPECT_FALSE(filesystem.get().writeFile(s_NameNone, payload));
     EXPECT_FALSE(readPastEmpty);
@@ -565,10 +379,9 @@ void VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles(mut Filesystem
 
 StagedDirectoryPaths BuildStagedVolumePathsForTest(in Path outputDirectory, in StringView volumeName){
     StagedDirectoryPaths paths = StagedDirectoryPaths();
-    native(in outputDirectory, in volumeName, mut paths){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-        paths = decltype(paths)(paths.stageDirectory.arena(), FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, volumeName, scratchArena));
-    }
+    HeapStorage storage(s_FilesystemNameTestsFilesystem);
+    ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
+    ReadTestStagedPaths(storage, outputDirectory, volumeName, scratch, paths);
     return paths;
 }
 
@@ -612,14 +425,8 @@ void VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories(m
 }
 
 void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mut FilesystemVolumeTest self){
-    b8 windowsSupported = false;
-    native(mut windowsSupported){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        windowsSupported = true;
-#endif
-    }
-    if(!windowsSupported){
-        EXPECT_TRUE(self.m_desc.createIfMissing);
+    if(!s_WindowsFilesystem){
+        SkipTest("Requires a Windows file handle that denies deletion");
         return;
     }
 
@@ -642,38 +449,26 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
     b8 compactSucceeded = true;
     b8 loggerBlocked = false;
     b8 backupMatchedOriginal = false;
-    native(mut self, mut filesystem, mut handleOpened, mut compactSucceeded, mut loggerBlocked, mut backupMatchedOriginal){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+    {
         const auto first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
         const auto second = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
-        Vector<u8, ScratchArena> original(scratchArena);
+        Vector<u8> original;
         ASSERT_TRUE(ReadBinaryFile(first, original));
-        const auto paths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(self.m_directory, self.m_desc.volumeName.view(), scratchArena);
+        const auto paths = BuildStagedVolumePathsForTest(self.m_directory, self.m_desc.volumeName.view());
         const auto backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
-        const HANDLE held = CreateFile(second.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        handleOpened = held != INVALID_HANDLE_VALUE;
+        HeldFile held(second);
+        handleOpened = held.open();
         if(handleOpened){
-            ScopeExit closeHeld([held]()noexcept{ CloseHandle(held); });
-            BlockingRestoreLogger logger(self.m_logger.arena(), first);
+            BlockingRestoreLogger logger(first, false);
             {
                 LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
                 compactSucceeded = filesystem.compact(false);
             }
             loggerBlocked = logger.blocked();
-            Vector<u8, ScratchArena> loaded(scratchArena);
+            Vector<u8> loaded;
             if(ReadBinaryFile(backup, loaded) && loaded.size() == original.size())
-                backupMatchedOriginal = FOUNDATION_MEMCMP(loaded.data(), original.data(), original.size()) == 0;
+                backupMatchedOriginal = SameVolumeBytes(loaded, original);
         }
-#else
-        static_cast<void>(self);
-        static_cast<void>(filesystem);
-        static_cast<void>(scratchArena);
-        static_cast<void>(handleOpened);
-        static_cast<void>(compactSucceeded);
-        static_cast<void>(loggerBlocked);
-        static_cast<void>(backupMatchedOriginal);
-#endif
     }
 
     ASSERT_TRUE(handleOpened);
@@ -691,51 +486,41 @@ void VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloa
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
 
-    native(mut self, mut filesystem){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-        Vector<u8, ScratchArena> first(static_cast<usize>(self.m_desc.segmentSize - self.m_desc.metadataSize), 31u, scratchArena);
-        const Array<u8, 128u> gap{};
-        Array<u8, 256u> payload{};
+    {
+        Vector<u8> first;
+        first.resize(cast<usize>(self.m_desc.segmentSize - self.m_desc.metadataSize), 31u);
+        const Array<u8, 128u> gap = Array<u8, 128u>();
+        Array<u8, 256u> payload;
         for(usize index = 0u; index < payload.size(); ++index)
-            payload[index] = static_cast<u8>(index);
+            payload[index] = cast<u8>(index);
         ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsCompactFirst, first));
         ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsCompactGap, gap));
         ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsCompactTarget, payload));
         ASSERT_TRUE(filesystem.removeFile(s_FilesystemNameProjectTestsCompactGap));
-        const ::Path<ScratchArena> directory(scratchArena, self.m_directory);
+        const Path directory = self.m_directory;
         const auto metadataSegment = MakeVolumeSegmentPath(directory, self.m_desc.volumeName.view(), 0u);
-        auto backupSegment = metadataSegment;
+        Path backupSegment = metadataSegment;
         backupSegment += s_HeldFileSuffix;
         b8 restored = false;
         {
             ASSERT_TRUE(RenamePath(metadataSegment, backupSegment));
-            ScopeExit restore([&]()noexcept{
-                const auto removed = RemoveAllForCleanup(metadataSegment);
-                if(removed)
-                    restored = static_cast<b8>(RenamePath(backupSegment, metadataSegment));
-            });
+            RestoreSegment restore(metadataSegment, backupSegment, restored);
             ASSERT_TRUE(EnsureDirectories(metadataSegment));
             EXPECT_FALSE(filesystem.compact(false));
         }
         ASSERT_TRUE(restored);
-        Vector<u8, ScratchArena> loaded(scratchArena);
+        Vector<u8> loaded;
         ASSERT_TRUE(filesystem.readFile(s_FilesystemNameProjectTestsCompactTarget, loaded));
         ASSERT_EQ(loaded.size(), payload.size());
-        EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+        EXPECT_TRUE(SameVolumeBytes(loaded, payload));
     }
 
     ASSERT_TRUE(filesystem.unmount());
 }
 
 void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership(mut FilesystemVolumeTest self){
-    b8 warningsEnabled = false;
-    native(mut warningsEnabled){
-#if FOUNDATION_OCCUR_WARNING
-        warningsEnabled = true;
-#endif
-    }
-    if(!warningsEnabled){
-        EXPECT_TRUE(self.m_desc.createIfMissing);
+    if(!s_FilesystemWarnings){
+        SkipTest("Requires filesystem warning diagnostics");
         return;
     }
 
@@ -766,35 +551,22 @@ void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsA
     Vector<u8> loaded;
     for(u32 operation = 0u; operation < 3u; ++operation){
         b8 restored = false;
-        native(in operation, in replacement, mut self, mut filesystem, mut restored){
-#if FOUNDATION_OCCUR_WARNING
-            ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-            const ::Path<ScratchArena> directory(scratchArena, self.m_directory);
+        {
+            const Path directory = self.m_directory;
             const auto metadataSegment = MakeVolumeSegmentPath(directory, self.m_desc.volumeName.view(), 0u);
-            auto backupSegment = metadataSegment;
+            Path backupSegment = metadataSegment;
             backupSegment += s_HeldFileSuffix;
             ASSERT_TRUE(RenamePath(metadataSegment, backupSegment));
-            ScopeExit restore([&]()noexcept{
-                const auto removed = RemoveAllForCleanup(metadataSegment);
-                if(removed)
-                    restored = static_cast<b8>(RenamePath(backupSegment, metadataSegment));
-            });
+            RestoreSegment restore(metadataSegment, backupSegment, restored);
             ASSERT_TRUE(EnsureDirectories(metadataSegment));
-            ThrowingPublishLogger throwingLogger(self.m_logger.arena());
+            ThrowingPublishLogger throwingLogger;
             LoggerRegistrationGuard throwingLoggerGuard(throwingLogger, LoggerBreakPolicy::ReportOnly);
             if(operation == 0u)
-                EXPECT_THROW({ const b8 written = filesystem.writeFile(s_FilesystemNameProjectTestsPayload, replacement); EXPECT_FALSE(written); }, i32);
+                ExpectSignedException(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, replacement));
             else if(operation == 1u)
-                EXPECT_THROW({ const b8 written = filesystem.writeFile(s_FilesystemNameProjectTestsMutationNew, replacement); EXPECT_FALSE(written); }, i32);
+                ExpectSignedException(filesystem.writeFile(s_FilesystemNameProjectTestsMutationNew, replacement));
             else
-                EXPECT_THROW({ const b8 removed = filesystem.removeFile(s_FilesystemNameProjectTestsPayload); EXPECT_FALSE(removed); }, i32);
-#else
-            static_cast<void>(operation);
-            static_cast<void>(replacement);
-            static_cast<void>(self);
-            static_cast<void>(filesystem);
-            static_cast<void>(restored);
-#endif
+                ExpectSignedException(filesystem.removeFile(s_FilesystemNameProjectTestsPayload));
         }
         ASSERT_TRUE(restored);
         EXPECT_EQ(filesystem.fileCount(), 2u);
@@ -839,9 +611,7 @@ void VerifyFilesystemVolumeTest_CompactionPreservesCapacityUntilRequestedTrimAnd
 
     Array<u8, 3> loaded = Array<u8, 3>();
     Expected<usize> read = MakeUnexpected(Failure());
-    native(mut filesystem, mut cursor, mut loaded, mut read){
-        read = filesystem.readFile(cursor, loaded.data(), loaded.size());
-    }
+    read = ReadTestCursor(filesystem, cursor, loaded);
     ASSERT_TRUE(read.has_value());
     EXPECT_EQ(read.value(), payload.size());
     for(usize i = 0u; i < payload.size(); ++i)
@@ -858,84 +628,79 @@ void VerifyFilesystemVolumeTest_CompactionPreservesCapacityUntilRequestedTrimAnd
 }
 
 void VerifyFilesystemVolumeTest_RejectsInvalidPathHashFromMetadataIndex(mut FilesystemVolumeTest self){
-    native(mut self){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-        using FilesystemVolumeDetail::VolumeHeaderDisk;
-        using FilesystemVolumeDetail::VolumeIndexEntryDisk;
-        auto filesystemResult = CreateFilesystem(self.m_arena, self.m_desc);
-        ASSERT_TRUE(filesystemResult);
-        auto filesystem = Move(*filesystemResult);
-        const Array<u8, 3u> payload{ 4u, 5u, 6u };
-        ASSERT_TRUE(filesystem->writeFile(s_FilesystemNameProjectTestsPayload, payload));
-        ASSERT_EQ(filesystem->fileCount(), 1u);
-        ASSERT_TRUE(filesystem->unmount());
+    {
+        CreatedFilesystem filesystem(self.m_arena, self.m_desc);
+        ASSERT_TRUE(filesystem.valid());
+        const Array<u8, 3u> payload(4u, 5u, 6u);
+        ASSERT_TRUE(filesystem.get().writeFile(s_FilesystemNameProjectTestsPayload, payload));
+        ASSERT_EQ(filesystem.get().fileCount(), 1u);
+        ASSERT_TRUE(filesystem.get().unmount());
 
-        const ::Path<ScratchArena> directory(scratchArena, self.m_directory);
-        const auto segmentPath = MakeVolumeSegmentPath(directory, self.m_desc.volumeName.view(), 0u);
-        Vector<u8, ScratchArena> bytes(scratchArena);
-        ASSERT_TRUE(ReadBinaryFile(segmentPath, bytes));
-        ASSERT_GE(bytes.size(), sizeof(VolumeHeaderDisk) + sizeof(VolumeIndexEntryDisk));
-        VolumeIndexEntryDisk entry{};
-        FOUNDATION_MEMCPY(&entry, sizeof(entry), bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry));
-        ASSERT_TRUE(Name(entry.hash));
-        entry.hash = NameHash{};
-        FOUNDATION_MEMCPY(bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry), &entry, sizeof(entry));
+        const auto segmentPath = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+        Vector<u8> bytes;
+        ASSERT_TRUE(ReadBinaryFile(segmentPath, bytes).has_value());
+        ASSERT_GE(bytes.size(), size_of<VolumeHeaderDisk>() + size_of<VolumeIndexEntryDisk>());
+        usize cursor = size_of<VolumeHeaderDisk>();
+        auto decoded = ReadPOD<VolumeIndexEntryDisk>(bytes, cursor);
+        ASSERT_TRUE(decoded.has_value());
+        VolumeIndexEntryDisk entry = decoded.value();
+        ASSERT_TRUE(cast<b8>(Name(entry.hash)));
+        entry.hash = NameHash();
+        ASSERT_TRUE(OverwritePOD(size_of<VolumeHeaderDisk>(), entry, bytes));
         ASSERT_TRUE(WriteBinaryFile(segmentPath, bytes));
     }
 
     self.m_desc.createIfMissing = false;
     self.m_desc.usage = VolumeUsage::RuntimeReadOnly;
-    EXPECT_FALSE(CreateFilesystem(self.m_arena, self.m_desc).has_value());
+    EXPECT_FALSE(CreateVolumeFilesystem(self.m_arena, self.m_desc).has_value());
 }
 
 void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRemovedRecords(mut FilesystemVolumeTest self){
     CreatedFilesystem filesystem(self.m_arena, self.m_desc);
     ASSERT_TRUE(filesystem.valid());
 
-    native(mut self, mut filesystem){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-        using FilesystemVolumeDetail::VolumeHeaderDisk;
-        using FilesystemVolumeDetail::VolumeIndexEntryDisk;
-        Array<NameHash, 3u> hashes{};
-        for(NameHash& hash : hashes)
+    {
+
+        Array<NameHash, 3u> hashes;
+        for(mut NameHash hash : hashes)
             hash.qwords[0u] = 7u;
         hashes[0u].qwords[s_NameHashLaneCount - 1u] = 30u;
         hashes[1u].qwords[s_NameHashLaneCount - 1u] = 10u;
         hashes[2u].qwords[s_NameHashLaneCount - 1u] = 20u;
-        const Array<u8, 3u> payload{ 4u, 5u, 6u };
+        const Array<u8, 3u> payload(4u, 5u, 6u);
         ASSERT_TRUE(filesystem.get().writeFileDeferred(Name(hashes[0u]), payload));
         ASSERT_TRUE(filesystem.get().writeFileDeferred(Name(hashes[2u]), payload));
-        ASSERT_TRUE(filesystem.get().writeFileDeferred(Name(hashes[1u]), nullptr, 0u));
+        ASSERT_TRUE(filesystem.get().writeFileDeferred(Name(hashes[1u]), Span<u8>()));
         ASSERT_TRUE(filesystem.get().flush());
 
-        Vector<u8, ScratchArena> expected(scratchArena);
-        Vector<u8, ScratchArena> actual(scratchArena);
-        expected.reserve(static_cast<usize>(self.m_desc.segmentSize));
-        actual.reserve(static_cast<usize>(self.m_desc.segmentSize));
-        const Array<VolumeIndexEntryDisk, 3u> records{
-            VolumeIndexEntryDisk{ hashes[1u], 518u, 0u },
-            VolumeIndexEntryDisk{ hashes[2u], 515u, 3u },
-            VolumeIndexEntryDisk{ hashes[0u], 512u, 3u }
-        };
+        Vector<u8> expected;
+        Vector<u8> actual;
+        expected.reserve(cast<usize>(self.m_desc.segmentSize));
+        actual.reserve(cast<usize>(self.m_desc.segmentSize));
+        const Array<VolumeIndexEntryDisk, 3u> records(
+            VolumeIndexEntryDisk(hashes[1u], 518u, 0u),
+            VolumeIndexEntryDisk(hashes[2u], 515u, 3u),
+            VolumeIndexEntryDisk(hashes[0u], 512u, 3u)
+        );
         const auto segmentPath = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        const auto verifyImage = [&](const usize firstRecord){
-            VolumeHeaderDisk header{};
-            header.magic = FilesystemVolumeDetail::s_VolumeMagic;
+        const auto verifyImage = lambda[mut expected, mut actual, mut self, in records, in segmentPath, in payload](in usize firstRecord) -> void{
+            VolumeHeaderDisk header;
+            header.magic = s_DiskMagic;
             header.segmentSize = self.m_desc.segmentSize;
             header.metadataBytes = self.m_desc.metadataSize;
             header.fileCount = records.size() - firstRecord;
-            header.indexBytes = header.fileCount * sizeof(VolumeIndexEntryDisk);
+            header.indexBytes = header.fileCount * size_of<VolumeIndexEntryDisk>();
             header.nextFreeOffset = 518u;
             expected.clear();
             AppendPOD(expected, header);
             for(usize index = firstRecord; index < records.size(); ++index)
                 AppendPOD(expected, records[index]);
-            expected.resize(static_cast<usize>(self.m_desc.metadataSize), 0u);
-            expected.insert(expected.end(), payload.begin(), payload.end());
-            expected.insert(expected.end(), payload.begin(), payload.end());
+            expected.resize(cast<usize>(self.m_desc.metadataSize), 0u);
+            for(in u8 byte : payload) expected.push_back(byte);
+            for(in u8 byte : payload) expected.push_back(byte);
             ASSERT_TRUE(ReadBinaryFile(segmentPath, actual));
             ASSERT_EQ(actual.size(), expected.size());
-            EXPECT_EQ(FOUNDATION_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
+            EXPECT_TRUE(SameVolumeBytes(actual, expected));
         };
         verifyImage(0u);
         ASSERT_TRUE(filesystem.get().unmount());
@@ -943,13 +708,13 @@ void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRem
         self.m_desc.usage = VolumeUsage::RuntimeReadOnly;
         ASSERT_TRUE(filesystem.get().mount(self.m_desc));
         for(usize index = 0u; index < hashes.size(); ++index){
-            VolumeBytes loaded(self.m_arena);
+            Vector<u8> loaded;
             ASSERT_TRUE(filesystem.get().readFile(Name(hashes[index]), loaded));
             if(index == 1u)
                 EXPECT_TRUE(loaded.empty());
             else{
                 ASSERT_EQ(loaded.size(), payload.size());
-                EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+                EXPECT_TRUE(SameVolumeBytes(loaded, payload));
             }
         }
         ASSERT_TRUE(filesystem.get().unmount());
@@ -969,19 +734,11 @@ void VerifyFilesystemFactory_PropagatesFactoryAndMountFailures(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
 
-    native(){
-        GlobalArena arena(s_FilesystemNameTestsFilesystem);
-        VolumeMountDesc desc(arena);
-        const FilesystemFactory emptyFactory = []([[maybe_unused]] GlobalArena& objectArena, [[maybe_unused]] const VolumeMountDesc& mount)noexcept{
-            return Expected<UniquePtr<IFilesystem>>(UniquePtr<IFilesystem>());
-        };
-        EXPECT_FALSE(CreateFilesystem(arena, desc, emptyFactory));
-        const FilesystemFactory failedFactory = []([[maybe_unused]] GlobalArena& objectArena, [[maybe_unused]] const VolumeMountDesc& mount)noexcept -> Expected<UniquePtr<IFilesystem>>{
-            return MakeUnexpected(Failure{});
-        };
-        EXPECT_FALSE(CreateFilesystem(arena, desc, failedFactory));
-        EXPECT_FALSE(CreateFilesystem(arena, desc).has_value());
-    }
+    HeapStorage arena(s_FilesystemNameTestsFilesystem);
+    VolumeMountDesc desc(arena);
+    EXPECT_FALSE(CreateWithFactory<EmptyVolumeFactory>(arena, desc).has_value());
+    EXPECT_FALSE(CreateWithFactory<FailedVolumeFactory>(arena, desc).has_value());
+    EXPECT_FALSE(CreateVolumeFilesystem(arena, desc).has_value());
 }
 
 void VerifyFilesystem_VolumeNamesRejectEmptySeparatorsAndWhitespace(){
@@ -999,11 +756,12 @@ void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectorie
     ASSERT_TRUE(EnsureDirectories(paths.backupDirectory).has_value());
 
     b8 published = true;
-    native(in paths, mut self, mut published){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+    {
+        ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
         StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
         StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
-        published = PublishStagedVolume(paths, self.m_directory, self.m_desc.volumeName.view(), 0u, scratchArena, {}, &stageCleanup, &backupCleanup);
+        VolumePublicationObserver observer;
+        published = PublishTestStaged(paths, self.m_directory, self.m_desc.volumeName.view(), 0u, scratch, observer, stageCleanup, backupCleanup);
     }
 
     EXPECT_FALSE(published);
@@ -1019,35 +777,34 @@ void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFi
     StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 rollbackFailed = false;
 
-    native(mut self, mut paths, mut rollbackFailed){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+    {
+        ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
         paths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
         paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
         ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
         ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
         const auto output = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
         const auto backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
-        const Array<u8, 3u> oldBytes{ 1u, 2u, 3u };
+        const Array<u8, 3u> oldBytes(1u, 2u, 3u);
         ASSERT_TRUE(WriteBinaryFile(output, oldBytes));
-        const VolumePublicationObserver observer{
-            .context = &rollbackFailed,
-            .rollbackFailed = [](void* context)noexcept{ *static_cast<b8*>(context) = true; },
-        };
+        RollbackSignal signal;
+        const VolumePublicationObserver observer = BindVolumeObserver(signal);
         {
             StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
             StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
-            BlockingRestoreLogger logger(self.m_logger.arena(), output);
+            BlockingRestoreLogger logger(output, false);
             LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
-            EXPECT_FALSE(PublishStagedVolume(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratchArena, observer, &stageCleanup, &backupCleanup));
+            EXPECT_FALSE(PublishTestStaged(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratch, observer, stageCleanup, backupCleanup));
             EXPECT_TRUE(logger.blocked());
         }
-        Vector<u8, ScratchArena> loaded(scratchArena);
+        Vector<u8> loaded;
         ASSERT_TRUE(ReadBinaryFile(backup, loaded));
         ASSERT_EQ(loaded.size(), oldBytes.size());
-        EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+        EXPECT_TRUE(SameVolumeBytes(loaded, oldBytes));
         const auto stageExists = IsDirectory(paths.stageDirectory);
         ASSERT_TRUE(stageExists);
-        EXPECT_TRUE(*stageExists);
+        EXPECT_TRUE(stageExists.value());
+        rollbackFailed = signal.triggered;
     }
 
     EXPECT_TRUE(rollbackFailed);
@@ -1057,35 +814,34 @@ void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback
     StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 rollbackFailed = false;
 
-    native(mut self, mut paths, mut rollbackFailed){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+    {
+        ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
         paths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
         paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
         ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
         ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
         const auto output = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
         const auto backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
-        const Array<u8, 3u> oldBytes{ 1u, 2u, 3u };
+        const Array<u8, 3u> oldBytes(1u, 2u, 3u);
         ASSERT_TRUE(WriteBinaryFile(output, oldBytes));
-        const VolumePublicationObserver observer{
-            .context = &rollbackFailed,
-            .rollbackFailed = [](void* context)noexcept{ *static_cast<b8*>(context) = true; },
-        };
+        RollbackSignal signal;
+        const VolumePublicationObserver observer = BindVolumeObserver(signal);
         {
             StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
             StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
-            BlockingRestoreLogger logger(self.m_logger.arena(), output, true);
+            BlockingRestoreLogger logger(output, true);
             LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
-            EXPECT_THROW(PublishStagedVolume(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratchArena, observer, &stageCleanup, &backupCleanup), i32);
+            ExpectSignedException(PublishTestStaged(paths, self.m_directory, self.m_desc.volumeName.view(), 1u, scratch, observer, stageCleanup, backupCleanup));
             EXPECT_TRUE(logger.blocked());
         }
-        Vector<u8, ScratchArena> loaded(scratchArena);
+        Vector<u8> loaded;
         ASSERT_TRUE(ReadBinaryFile(backup, loaded));
         ASSERT_EQ(loaded.size(), oldBytes.size());
-        EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+        EXPECT_TRUE(SameVolumeBytes(loaded, oldBytes));
         const auto stageExists = IsDirectory(paths.stageDirectory);
         ASSERT_TRUE(stageExists);
-        EXPECT_TRUE(*stageExists);
+        EXPECT_TRUE(stageExists.value());
+        rollbackFailed = signal.triggered;
     }
 
     EXPECT_TRUE(rollbackFailed);
@@ -1121,9 +877,9 @@ void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedByte
     ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
 
     b8 published = true;
-    native(in stagedPaths, mut self, mut published){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-        published = PublishStagedVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratchArena);
+    {
+        ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
+        published = PublishTestVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratch.arena);
     }
     EXPECT_FALSE(published);
     EXPECT_TRUE(SawCapturedError(self.m_logger, "failed to promote staged segment"));
@@ -1175,11 +931,11 @@ void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedByte
     ASSERT_TRUE(WriteBinaryFile(secondOutput, secondOld));
     ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
 
-    native(in stagedPaths, mut self){
-        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-        ThrowingPublishLogger throwingLogger(self.m_logger.arena());
+    {
+        ScratchStorage scratch(s_FilesystemNameTestsFilesystem);
+        ThrowingPublishLogger throwingLogger;
         LoggerRegistrationGuard throwingLoggerGuard(throwingLogger, LoggerBreakPolicy::ReportOnly);
-        EXPECT_THROW({ const b8 published = PublishStagedVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratchArena); EXPECT_FALSE(published); }, i32);
+        ExpectSignedException(PublishTestVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratch.arena));
     }
 
     Vector<u8> loaded;
@@ -1192,118 +948,6 @@ void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedByte
     ASSERT_EQ(loaded.size(), secondOld.size());
     for(usize i = 0u; i < secondOld.size(); ++i)
         EXPECT_EQ(loaded[i], secondOld[i]);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::FilesystemTest{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ThrowingPublishLogger::enqueue(Core::Common::LogString&&, Core::Common::LogType::Enum){
-    throw Tests::FilesystemCases::s_FilesystemPublishLogFailure;
-}
-
-void ThrowingPublishLogger::enqueue(const Core::Common::LogString&, Core::Common::LogType::Enum){
-    throw Tests::FilesystemCases::s_FilesystemPublishLogFailure;
-}
-
-void BlockingRestoreLogger::block(){
-    m_blocked = static_cast<b8>(EnsureDirectories(m_blockedPath));
-    if(m_throwAfterBlock)
-        throw Tests::FilesystemCases::s_FilesystemPublishLogFailure;
-}
-
-FilesystemVolumeTest::FilesystemVolumeTest()
-    : m_arena(Tests::FilesystemCases::s_FilesystemNameTestsFilesystem)
-    , m_directory(m_arena, "filesystem_unit_test_volume")
-    , m_desc(m_arena)
-    , m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::ReportOnly)
-{}
-
-void FilesystemVolumeTest::SetUp(){
-    ASSERT_TRUE(RemoveAllIfExists(m_directory));
-    ASSERT_TRUE(m_desc.volumeName.assign("test"));
-    m_desc.mountDirectory = m_directory;
-    m_desc.segmentSize = 4096;
-    m_desc.metadataSize = 512;
-    m_desc.createIfMissing = true;
-    m_desc.usage = Core::Filesystem::VolumeUsage::CookWrite;
-}
-
-void FilesystemVolumeTest::TearDown(){
-    EXPECT_TRUE(RemoveAllIfExists(m_directory));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){ VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(*this); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if FOUNDATION_OCCUR_WARNING
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership){ VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership(*this); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -1337,3 +981,6 @@ NWB_ADHD_GTEST_F(FilesystemVolumeTest, ThrowingPromotionDiagnosticRestoresPublis
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume, VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership, VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership)

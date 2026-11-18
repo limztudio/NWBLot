@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+#include <tests/common/value_storage.adhd>
+
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::ReadCursor")]
+extern Expected<usize> ReadTestCursor(in auto fs, mut FileCursor cursor, mut Span<u8> bytes);
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::WriteNull")]
+extern b8 WriteTestNull(mut IFilesystem fs, in Name path, in usize count);
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::ReadNull")]
+extern Expected<usize> ReadTestNull(in IFilesystem fs, in Name path, in u64 offset, in usize count);
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::StagedPaths")]
+extern void ReadTestStagedPaths(mut HeapStorage storage, in Path directory, in StringView name, mut ScratchStorage scratch, mut StagedDirectoryPaths output);
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::BindObserver")]
+extern VolumePublicationObserver BindVolumeObserver(mut auto state);
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::Publish")]
+extern b8 PublishTestStaged(in StagedDirectoryPaths paths, in Path directory, in StringView name, in usize count, mut ScratchStorage scratch, in VolumePublicationObserver observer, mut StagedDirectoryCleanupGuard stage, mut StagedDirectoryCleanupGuard backup);
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::PublishStagedVolume")]
+extern b8 PublishTestVolume(in StagedDirectoryPaths paths, in Path directory, in StringView name, in usize count, mut TestScratchAllocator scratch);
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::CreateWithFactory")]
+extern Expected<UniquePtr<IFilesystem>> CreateWithFactory<Factory>(mut HeapStorage storage, in VolumeMountDesc desc);
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::s_Windows")]
+extern const b8 s_WindowsFilesystem;
+[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::s_WarningsEnabled")]
+extern const b8 s_FilesystemWarnings;
+[cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::VolumeHeaderDisk"), cpp_flags(self_defaulted, binary_serializable)]
+extern class VolumeHeaderDisk{
+    Array<i8, 8u> magic;
+    u64 segmentSize;
+    u64 metadataBytes;
+    u64 fileCount;
+    u64 indexBytes;
+    u64 nextFreeOffset;
+};
+[cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::VolumeIndexEntryDisk"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class VolumeIndexEntryDisk{
+    NameHash hash;
+    u64 offset;
+    u64 size;
+};
+[cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::s_VolumeMagic")]
+extern const Array<i8, 8u> s_DiskMagic;
+
+static_assert(TestNothrowDestructible<VolumeFileSystem>());
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

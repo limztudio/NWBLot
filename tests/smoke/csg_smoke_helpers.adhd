@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_csg/built_in_shapes.adhd>
 #include <impl/ecs_csg/components.adhd>
 #include "scene_types.adhd"
 
@@ -9,161 +10,52 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-
-#include <core/ecs/entity.h>
-#include <core/ecs/world.h>
-
-#include <global/simd/frame.h>
-
-namespace NWB::Tests::Smoke{
-using Core::ECS::EntityID;
-using Core::ECS::World;
-using Impl::CsgCutterComponent;
-using Impl::StaticCsgMeshComponent;
-using Impl::SkinnedCsgMeshComponent;
-using Impl::s_CsgPlaneShapeName;
-using Impl::s_CsgBoxShapeName;
-using Impl::s_CsgSphereShapeName;
-using Impl::s_CsgCapsuleShapeName;
-
-template<typename ParameterT>
-FOUNDATION_INLINE void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
-    cutter.parameterBytes.resize(sizeof(ParameterT));
-    FOUNDATION_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
-}
-
-template<typename ParameterT>
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const ParameterT& parameters,
-    const SIMDVectorSingle center,
-    const SIMDVectorSingle rotation,
-    Core::ECS::World& world
-){
-    auto entity = world.createEntity();
-    auto& component = entity.addComponent<Impl::CsgCutterComponent>();
-    component.receiverGroup = receiverGroup;
-    component.shapeType = shapeType;
-    component.active = active;
-    AssignCsgCutterParameters(parameters, component);
-    SIMDMatrix worldToShape{};
-    SIMDMatrix shapeToWorld{};
-    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
-    StoreFloat(worldToShape, component.worldToShape);
-    StoreFloat(shapeToWorld, component.shapeToWorld);
+EntityID CreateSmokeCsgCutter<T>(in Name receiverGroup, in Name shapeType, in b8 active, in T parameters, in VectorSingle center, in VectorSingle rotation, mut World world){
+    Entity entity = world.createEntity();
+    mut CsgCutterComponent cutter = entity.addComponent<CsgCutterComponent>();
+    cutter.receiverGroup = receiverGroup;
+    cutter.shapeType = shapeType;
+    cutter.active = active;
+    cutter.parameterBytes.clear();
+    AppendPOD(cutter.parameterBytes, parameters);
+    AssignCsgCutterTransform(center, rotation, cutter);
     return entity.id();
 }
 
-template<typename ParameterT>
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgFieldCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    Float4 ParameterT::* const field,
-    const Float4& value,
-    const SIMDVectorSingle center,
-    const SIMDVectorSingle rotation,
-    Core::ECS::World& world
-){
-    ParameterT parameters{};
-    parameters.*field = value;
-    return CreateSmokeCsgCutter(receiverGroup, shapeType, active, parameters, center, rotation, world);
+EntityID CreateSmokeCsgBoxCutter(in Name receiverGroup, in Name shapeType, in b8 active, in VectorSingle halfExtents, in VectorSingle center, in VectorSingle rotation, mut World world){
+    CsgBoxShapeParameters parameters = CsgBoxShapeParameters();
+    parameters.halfExtents = f32x4(halfExtents);
+    return CreateSmokeCsgCutter<CsgBoxShapeParameters>(receiverGroup, shapeType, active, parameters, center, rotation, world);
 }
 
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgBoxCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const Float4& halfExtents,
-    const SIMDVectorSingle center,
-    const SIMDVectorSingle rotation,
-    Core::ECS::World& world
-){
-    return CreateSmokeCsgFieldCutter<Impl::CsgBoxShapeParameters>(receiverGroup, shapeType, active, &Impl::CsgBoxShapeParameters::halfExtents, halfExtents, center, rotation, world);
+EntityID CreateSmokeCsgPlaneCutter(in Name receiverGroup, in Name shapeType, in b8 active, in VectorSingle normalDistance, in VectorSingle center, in VectorSingle rotation, mut World world){
+    CsgPlaneShapeParameters parameters = CsgPlaneShapeParameters();
+    parameters.normalDistance = f32x4(normalDistance);
+    return CreateSmokeCsgCutter<CsgPlaneShapeParameters>(receiverGroup, shapeType, active, parameters, center, rotation, world);
 }
 
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const Float4& normalDistance,
-    const SIMDVectorSingle center,
-    const SIMDVectorSingle rotation,
-    Core::ECS::World& world
-){
-    return CreateSmokeCsgFieldCutter<Impl::CsgPlaneShapeParameters>(receiverGroup, shapeType, active, &Impl::CsgPlaneShapeParameters::normalDistance, normalDistance, center, rotation, world);
-}
-
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const Float4& normalDistance,
-    Core::ECS::World& world
-){
+EntityID CreateSmokeCsgPlaneCutter(in Name receiverGroup, in Name shapeType, in b8 active, in VectorSingle normalDistance, mut World world){
     return CreateSmokeCsgPlaneCutter(receiverGroup, shapeType, active, normalDistance, VectorZero(), QuaternionIdentity(), world);
 }
 
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgSphereCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const Float4& radius,
-    const SIMDVectorSingle center,
-    const SIMDVectorSingle rotation,
-    Core::ECS::World& world
-){
-    return CreateSmokeCsgFieldCutter<Impl::CsgSphereShapeParameters>(receiverGroup, shapeType, active, &Impl::CsgSphereShapeParameters::radius, radius, center, rotation, world);
+EntityID CreateSmokeCsgSphereCutter(in Name receiverGroup, in Name shapeType, in b8 active, in VectorSingle radius, in VectorSingle center, in VectorSingle rotation, mut World world){
+    CsgSphereShapeParameters parameters = CsgSphereShapeParameters();
+    parameters.radius = f32x4(radius);
+    return CreateSmokeCsgCutter<CsgSphereShapeParameters>(receiverGroup, shapeType, active, parameters, center, rotation, world);
 }
 
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgSphereCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const Float4& radius,
-    Core::ECS::World& world
-){
+EntityID CreateSmokeCsgSphereCutter(in Name receiverGroup, in Name shapeType, in b8 active, in VectorSingle radius, mut World world){
     return CreateSmokeCsgSphereCutter(receiverGroup, shapeType, active, radius, VectorZero(), QuaternionIdentity(), world);
 }
 
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgCapsuleCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const Float4& radiusHalfHeight,
-    const SIMDVectorSingle center,
-    const SIMDVectorSingle rotation,
-    Core::ECS::World& world
-){
-    return CreateSmokeCsgFieldCutter<Impl::CsgCapsuleShapeParameters>(receiverGroup, shapeType, active, &Impl::CsgCapsuleShapeParameters::radiusHalfHeight, radiusHalfHeight, center, rotation, world);
+EntityID CreateSmokeCsgCapsuleCutter(in Name receiverGroup, in Name shapeType, in b8 active, in VectorSingle radiusHalfHeight, in VectorSingle center, in VectorSingle rotation, mut World world){
+    CsgCapsuleShapeParameters parameters = CsgCapsuleShapeParameters();
+    parameters.radiusHalfHeight = f32x4(radiusHalfHeight);
+    return CreateSmokeCsgCutter<CsgCapsuleShapeParameters>(receiverGroup, shapeType, active, parameters, center, rotation, world);
 }
 
-FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgCapsuleCutter(
-    const Name receiverGroup,
-    const Name shapeType,
-    const b8 active,
-    const Float4& radiusHalfHeight,
-    Core::ECS::World& world
-){
+EntityID CreateSmokeCsgCapsuleCutter(in Name receiverGroup, in Name shapeType, in b8 active, in VectorSingle radiusHalfHeight, mut World world){
     return CreateSmokeCsgCapsuleCutter(receiverGroup, shapeType, active, radiusHalfHeight, VectorZero(), QuaternionIdentity(), world);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -3,217 +3,80 @@
 
 
 #include "case_types.adhd"
+#include "power_environment.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/compile.h>
-#include <global/simd/vector_clamp_ordered.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::MathPowerRoundingDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct alignas(SIMDVectorSingle) PowerObservation{
-    SIMDVectorSingle value;
-    u64 rawNativeStatus = 0u;
-    i32 flags = 0;
-    i32 error = 0;
-    u32 nativeStatus = 0u;
-};
-static_assert(alignof(Expected<PowerObservation>) >= alignof(PowerObservation));
-
-class PowerEnvironmentGuard final : NoCopy{
-public:
-    PowerEnvironmentGuard()noexcept
-        : m_originalError(errno)
-        , m_originalEnvironment(HoldFloatingPointExceptions())
-    {
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-        __asm__ __volatile__("mrs %0, fpsr" : "=r"(m_originalNativeStatus));
-#endif
-    }
-
-    PowerEnvironmentGuard(PowerEnvironmentGuard&&) = delete;
-
-    ~PowerEnvironmentGuard()noexcept{
-        if(!m_originalEnvironment)
-            return;
-        if(!SetFloatingPointEnvironment(*m_originalEnvironment))
-            __builtin_trap();
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-        __asm__ __volatile__("msr fpsr, %0" : : "r"(m_originalNativeStatus));
-#endif
-        errno = m_originalError;
-    }
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_originalEnvironment.has_value(); }
-
-
-private:
-    i32 m_originalError = 0;
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    u64 m_originalNativeStatus = 0u;
-#endif
-    Expected<FloatingPointEnvironment> m_originalEnvironment;
-};
-
-class MxcsrEnvironmentGuard final : NoCopy{
-public:
-    MxcsrEnvironmentGuard()noexcept
-#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
-        : m_originalControl(_mm_getcsr())
-        , m_originalEnvironment(HoldFloatingPointExceptions())
-#else
-        : m_originalEnvironment(HoldFloatingPointExceptions())
-#endif
-    {
-#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
-        m_heldControl = _mm_getcsr();
-#endif
-    }
-
-    MxcsrEnvironmentGuard(MxcsrEnvironmentGuard&&) = delete;
-
-    ~MxcsrEnvironmentGuard()noexcept{
-        if(m_originalEnvironment && !SetFloatingPointEnvironment(*m_originalEnvironment))
-            FOUNDATION_ASSERT(false);
-#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
-        _mm_setcsr(m_originalControl);
-#endif
-    }
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_originalEnvironment.has_value(); }
-
-    void applyMode([[maybe_unused]] const u32 mode)const noexcept{
-#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
-        _mm_setcsr((m_heldControl & ~(0x8040u | 0x3fu)) | mode);
-#endif
-    }
-
-
-private:
-#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
-    u32 m_originalControl = 0u;
-    u32 m_heldControl = 0u;
-#endif
-    Expected<FloatingPointEnvironment> m_originalEnvironment;
-};
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-inline constexpr Array<u32, 2u> s_PowerDenormalModes = { _DN_SAVE, _DN_FLUSH };
-inline constexpr Array<u64, 4u> s_PowerNativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
-#else
-inline constexpr Array<u32, 1u> s_PowerDenormalModes = { 0u };
-inline constexpr Array<u64, 1u> s_PowerNativeSeeds = { 0u };
-#endif
-inline constexpr Array<i32, 2u> s_PowerInitialFlags = { 0, FE_INEXACT };
-
-#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
-inline constexpr Array<u32, 4u> s_OrderedClampModes = { 0u, 0x40u, 0x8000u, 0x8040u };
-#else
-inline constexpr Array<u32, 1u> s_OrderedClampModes = { 0u };
-#endif
-
-[[nodiscard]] inline constexpr b8 ShouldSkipNeon32SqrtCase()noexcept{
-#if defined(FOUNDATION_HAS_NEON) && !defined(FOUNDATION_HAS_NEON64)
-    return true;
-#else
-    return false;
-#endif
+[layout(16)]
+class PowerObservation{
+    public u32x4 bits = u32x4(0u, 0u, 0u, 0u);
+    public u64 rawNativeStatus = 0u;
+    public i32 flags = 0;
+    public i32 error = 0;
+    public u32 nativeStatus = 0u;
 }
 
-[[nodiscard]] inline constexpr b8 HasDoubleFmaResidual()noexcept{
-#if defined(FOUNDATION_HAS_FMA3) || defined(FOUNDATION_HAS_NEON)
-    return true;
-#else
-    return false;
-#endif
+static_assert(align_of<Expected<PowerObservation>>() >= align_of<PowerObservation>());
+
+[ordered]
+class PowerEnvironmentGuard{
+    private i32 m_originalError = ReadPowerError();
+    private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
+    private u64 m_originalStatus = ReadRawStatus();
+
+    public b8 valid()const{ return this.m_original.has_value(); }
+    public ~PowerEnvironmentGuard(){
+        if(this.m_original.has_value()){
+            if(!SetFloatingPointEnvironment(this.m_original.value()).has_value())
+                TerminateInvariant();
+            WriteRawStatus(this.m_originalStatus);
+            WritePowerError(this.m_originalError);
+        }
+    }
 }
 
-[[nodiscard]] inline constexpr b8 HasSingleFmaResidual()noexcept{
-#if defined(FOUNDATION_HAS_FMA3) || defined(FOUNDATION_HAS_NEON64)
-    return true;
-#else
-    return false;
-#endif
+[ordered]
+class MxcsrEnvironmentGuard{
+    private u32 m_originalControl = ReadMxcsr();
+    private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
+    private u32 m_heldControl = ReadMxcsr();
+
+    public b8 valid()const{ return this.m_original.has_value(); }
+    public void applyMode(in u32 mode)const{ WriteMxcsr((this.m_heldControl & ~0x807fu) | mode); }
+    public ~MxcsrEnvironmentGuard(){
+        if(this.m_original.has_value() && !SetFloatingPointEnvironment(this.m_original.value()).has_value())
+            TerminateInvariant();
+        WriteMxcsr(this.m_originalControl);
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 ConfigurePowerDenormalMode([[maybe_unused]] const u32 denormalMode, [[maybe_unused]] const b8 unmaskInvalid)noexcept{
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    u32 control = 0u;
-    if(_controlfp_s(&control, denormalMode, _MCW_DN) != 0)
-        return false;
-    if((control & _MCW_DN) != denormalMode)
-        return false;
-    if(unmaskInvalid && _controlfp_s(&control, control & ~_EM_INVALID, _MCW_EM) != 0)
-        return false;
-#endif
-    return true;
+const Array<i32, 2u> s_PowerInitialFlags = Array<i32, 2u>(0, s_FeInexact);
+
+VectorSingle ScalarPower(in VectorSingle x, in VectorSingle y){
+    return VectorSingle(Pow(x.x, y.x), Pow(x.y, y.y), Pow(x.z, y.z), Pow(x.w, y.w));
 }
 
-FOUNDATION_NOINLINE SIMDVectorSingle FrozenPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
-FOUNDATION_NOINLINE SIMDVectorSingle CurrentPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
-[[nodiscard]] Expected<PowerObservation> ObserveFrozenPower(SIMDVectorSingle x, SIMDVectorSingle y, i32 initialFlags, u64 initialNativeFlags)noexcept;
-[[nodiscard]] Expected<PowerObservation> ObserveCurrentPower(SIMDVectorSingle x, SIMDVectorSingle y, i32 initialFlags, u64 initialNativeFlags)noexcept;
-
-FOUNDATION_NOINLINE f32 LegacyMultiplyAddExpression(f32 first, f32 second, f32 addend)noexcept;
-FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyAddExpression(f64 first, f64 second, f64 addend)noexcept;
-FOUNDATION_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(f32 first, f32 second, f32 addend)noexcept;
-FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyThenAdd(f64 first, f64 second, f64 addend)noexcept;
-FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
-FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-namespace NWB::Tests::MathCases{
-using MathPowerRoundingDetail::PowerObservation;
-using MathPowerRoundingDetail::PowerEnvironmentGuard;
-using MathPowerRoundingDetail::MxcsrEnvironmentGuard;
-using MathPowerRoundingDetail::s_PowerDenormalModes;
-using MathPowerRoundingDetail::s_PowerNativeSeeds;
-using MathPowerRoundingDetail::s_PowerInitialFlags;
-using MathPowerRoundingDetail::s_OrderedClampModes;
-using MathPowerRoundingDetail::ShouldSkipNeon32SqrtCase;
-using MathPowerRoundingDetail::HasDoubleFmaResidual;
-using MathPowerRoundingDetail::HasSingleFmaResidual;
-using MathPowerRoundingDetail::ConfigurePowerDenormalMode;
-using MathPowerRoundingDetail::ObserveFrozenPower;
-using MathPowerRoundingDetail::ObserveCurrentPower;
-using MathPowerRoundingDetail::LegacyMultiplyAddExpression;
-using MathPowerRoundingDetail::LegacyDoubleMultiplyAddExpression;
-using MathPowerRoundingDetail::LegacyNegativeMultiplySubtractExpression;
-using MathPowerRoundingDetail::LegacyDoubleMultiplyThenAdd;
-using MathPowerRoundingDetail::DoubleMultiplyAddExpression;
-using MathPowerRoundingDetail::DoubleMultiplyThenAdd;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<PowerObservation> ObservePower(in b8 reference, in VectorSingle x, in VectorSingle y, in i32 initialFlags, in u64 initialNativeFlags){
+    WriteRawStatus(0u);
+    ClearNativeStatus();
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value() || !RaiseFloatingPointExceptions(initialFlags).has_value())
+        return MakeUnexpected(Failure());
+    WriteRawStatus(ReadRawStatus() | initialNativeFlags);
+    WritePowerError(s_SeedPowerError);
+    VectorSingle value = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    if(reference)
+        value = ScalarPower(x, y);
+    else
+        value = VectorPow(x, y);
+    PowerObservation result;
+    result.error = ReadPowerError();
+    result.flags = TestFloatingPointExceptions(s_FeAllExcept);
+    result.nativeStatus = ReadNativeStatus();
+    result.rawNativeStatus = ReadRawStatus();
+    StoreInt(value, result.bits);
+    return result;
 }
 
 
@@ -273,18 +136,16 @@ VectorDouble EvalPowerVectorDoubleTruncate(in VectorDouble value){
 }
 
 void CheckPowerObservationPair(in VectorSingle x, in VectorSingle y, in i32 seed, in u64 nativeSeed){
-    const Expected<PowerObservation> expected = ObserveFrozenPower(x, y, seed, nativeSeed);
-    const Expected<PowerObservation> actual = ObserveCurrentPower(x, y, seed, nativeSeed);
+    const Expected<PowerObservation> expected = ObservePower(true, x, y, seed, nativeSeed);
+    const Expected<PowerObservation> actual = ObservePower(false, x, y, seed, nativeSeed);
     ASSERT_TRUE(expected.has_value());
     ASSERT_TRUE(actual.has_value());
     EXPECT_EQ(actual.value().flags, expected.value().flags);
     EXPECT_EQ(actual.value().error, expected.value().error);
     EXPECT_EQ(actual.value().nativeStatus, expected.value().nativeStatus);
     EXPECT_EQ(actual.value().rawNativeStatus, expected.value().rawNativeStatus);
-    u32x4 expectedBits = u32x4(0u, 0u, 0u, 0u);
-    u32x4 actualBits = u32x4(0u, 0u, 0u, 0u);
-    StoreInt(expected.value().value, expectedBits);
-    StoreInt(actual.value().value, actualBits);
+    const u32x4 expectedBits = expected.value().bits;
+    const u32x4 actualBits = actual.value().bits;
     EXPECT_EQ(actualBits.x, expectedBits.x);
     EXPECT_EQ(actualBits.y, expectedBits.y);
     EXPECT_EQ(actualBits.z, expectedBits.z);
@@ -317,11 +178,21 @@ void VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeed
     casesY[6u] = u32x4(0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0x3ed55555u);
     casesY[7u] = u32x4(0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0xc13fc46au);
 
-    for(in u32 denormalMode : s_PowerDenormalModes){
+    const Array<u32, 2u> modes(s_DenormalSave, s_DenormalFlush);
+    const Array<u64, 4u> seeds(0u, 0x80u, 0x08000000u, 0x08000080u);
+    usize modeCount = 1u;
+    usize seedCount = 1u;
+    if(s_HasPowerStatus){
+        modeCount = modes.size();
+        seedCount = seeds.size();
+    }
+    for(usize modeIndex = 0u; modeIndex < modeCount; ++modeIndex){
+        const u32 denormalMode = modes[modeIndex];
         ASSERT_TRUE(ConfigurePowerDenormalMode(denormalMode, false));
         for(in i32 mode : s_FloatingPointRoundingModes){
             ASSERT_TRUE(SetFloatingPointRoundingMode(mode).has_value());
-            for(in u64 nativeSeed : s_PowerNativeSeeds){
+            for(usize seedIndex = 0u; seedIndex < seedCount; ++seedIndex){
+                const u64 nativeSeed = seeds[seedIndex];
                 for(in i32 seed : s_PowerInitialFlags){
                     for(usize index = 0u; index < 8u; ++index){
                         ScopedTestTrace trace(index);
@@ -346,11 +217,21 @@ void VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(){
 
     const VectorSingle x = MakeVolatileSingleBits(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u);
     const VectorSingle y = VectorSingle(2.0f, 1.0f, 1.0f, 1.0f);
-    for(in u32 denormalMode : s_PowerDenormalModes){
+    const Array<u32, 2u> modes(s_DenormalSave, s_DenormalFlush);
+    const Array<u64, 4u> seeds(0u, 0x80u, 0x08000000u, 0x08000080u);
+    usize modeCount = 1u;
+    usize seedCount = 1u;
+    if(s_HasPowerStatus){
+        modeCount = modes.size();
+        seedCount = seeds.size();
+    }
+    for(usize modeIndex = 0u; modeIndex < modeCount; ++modeIndex){
+        const u32 denormalMode = modes[modeIndex];
         ASSERT_TRUE(ConfigurePowerDenormalMode(denormalMode, true));
         for(in i32 mode : s_FloatingPointRoundingModes){
             ASSERT_TRUE(SetFloatingPointRoundingMode(mode).has_value());
-            for(in u64 nativeSeed : s_PowerNativeSeeds){
+            for(usize seedIndex = 0u; seedIndex < seedCount; ++seedIndex){
+                const u64 nativeSeed = seeds[seedIndex];
                 for(in i32 seed : s_PowerInitialFlags){
                     CheckPowerObservationPair(x, y, seed, nativeSeed);
                 }
@@ -375,7 +256,7 @@ void VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero()
 
     for(usize lane = 0u; lane < 4u; ++lane){
         ScopedTestTrace trace(lane);
-        EXPECT_EQ(GetSingleLaneBits(sum, lane), bit_cast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane])));
+        EXPECT_EQ(GetSingleLaneBits(sum, lane), bit_cast<u32>(ScalarMultiplyAddReference<f32>(first[lane], second[lane], addend[lane])));
         EXPECT_EQ(GetSingleLaneBits(subtraction, lane), bit_cast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane])));
     }
 }
@@ -396,7 +277,12 @@ void VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads(){
 
     const VectorDouble clampMin = VectorDouble(-1.0, -1.0, -1.0, -1.0);
     const VectorDouble clampMax = VectorDouble(1.0, 1.0, 1.0, 1.0);
-    for(in u32 mode : s_OrderedClampModes){
+    const Array<u32, 4u> modes(0u, 0x40u, 0x8000u, 0x8040u);
+    usize modeCount = 1u;
+    if(s_HasMxcsr)
+        modeCount = modes.size();
+    for(usize index = 0u; index < modeCount; ++index){
+        const u32 mode = modes[index];
         envGuard.applyMode(mode);
         for(usize row = 0u; row < 2u; ++row){
             const VectorDouble input = MakeVolatileDoubleBits(inputBits[row][0u], inputBits[row][1u], inputBits[row][2u], inputBits[row][3u]);
@@ -532,7 +418,7 @@ void VerifyMath_DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero(
         const f64 firstLane = GetDoubleLaneFloat(first, lane);
         const f64 secondLane = GetDoubleLaneFloat(second, lane);
         const f64 addendLane = GetDoubleLaneFloat(addend, lane);
-        const u64 expectedExpression = bit_cast<u64>(LegacyDoubleMultiplyAddExpression(firstLane, secondLane, addendLane));
+        const u64 expectedExpression = bit_cast<u64>(ScalarMultiplyAddReference<f64>(firstLane, secondLane, addendLane));
         EXPECT_EQ(GetDoubleLaneBits(expression, lane), expectedExpression);
         EXPECT_EQ(GetDoubleLaneBits(namedExpression, lane), expectedExpression);
         EXPECT_EQ(GetDoubleLaneBits(separate, lane), bit_cast<u64>(LegacyDoubleMultiplyThenAdd(firstLane, secondLane, addendLane)));
@@ -725,125 +611,7 @@ void VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTie
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::MathPowerRoundingDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using PowerEvaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noexcept;
-
-[[nodiscard]] static Expected<PowerObservation> ObservePowerImpl(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, [[maybe_unused]] const u64 initialNativeFlags)noexcept{
-#pragma STDC FENV_ACCESS ON
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    const u64 clearNativeStatus = 0u;
-    __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
-#endif
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    _clearfp();
-#endif
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT) || !RaiseFloatingPointExceptions(initialFlags))
-        return MakeUnexpected(Failure{});
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    u64 seededNativeStatus{};
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(seededNativeStatus));
-    seededNativeStatus |= initialNativeFlags;
-    __asm__ __volatile__("msr fpsr, %0" : : "r"(seededNativeStatus));
-#endif
-    errno = E2BIG;
-    const SIMDVectorSingle value = evaluate.get()(x, y);
-    const i32 errCode = errno;
-    const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    u32 nativeStatus = 0u;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    nativeStatus = _statusfp();
-#endif
-    u64 rawNativeStatus{};
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(rawNativeStatus));
-#endif
-    return PowerObservation{ value, rawNativeStatus, flags, errCode, nativeStatus };
-}
-
-FOUNDATION_NOINLINE SIMDVectorSingle FrozenPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
-    return VectorSet(Pow(VectorGetX(x), VectorGetX(y)), Pow(VectorGetY(x), VectorGetY(y)), Pow(VectorGetZ(x), VectorGetZ(y)), Pow(VectorGetW(x), VectorGetW(y)));
-}
-
-FOUNDATION_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
-    return VectorPow(x, y);
-}
-
-Expected<PowerObservation> ObserveFrozenPower(const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, const u64 initialNativeFlags)noexcept{
-    return ObservePowerImpl(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, initialFlags, initialNativeFlags);
-}
-
-Expected<PowerObservation> ObserveCurrentPower(const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, const u64 initialNativeFlags)noexcept{
-    return ObservePowerImpl(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, initialFlags, initialNativeFlags);
-}
-
-#pragma STDC FENV_ACCESS OFF
-FOUNDATION_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, const f32 addend)noexcept{
-    return first * second + addend;
-}
-
-FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyAddExpression(const f64 first, const f64 second, const f64 addend)noexcept{
-    return first * second + addend;
-}
-
-FOUNDATION_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(const f32 first, const f32 second, const f32 addend)noexcept{
-    return addend - first * second;
-}
-
-FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyThenAdd(const f64 first, const f64 second, const f64 addend)noexcept{
-    const f64 product = first * second;
-    return product + addend;
-}
-
-FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
-    return first * second + addend;
-}
-
-FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
-    const SIMDVectorDouble product = first * second;
-    return product + addend;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ NWB::Tests::MathCases::VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+registration GoogleTestPowerStatusCase(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled, VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

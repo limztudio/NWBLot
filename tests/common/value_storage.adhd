@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestProcessValue")]
+extern mut T TestProcessValue<T>();
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestObserved"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+extern class TestObserved<T>{
+    mut T value()const;
+};
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestValueSlot"), cpp_flags(no_copy, no_assign)]
+extern class TestValueSlot<T>{
+    mut T value();
+    in T value()const;
+    mut T constructIn(...);
+    mut T takeIn(mut auto storage, mut T source);
+    mut T take(mut T source);
+    mut T copy(in T source);
+};
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::CheckedTestValue")]
+extern mut T CheckedTestValue<T, E>(mut Expected<T, E> result);
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestNothrowDestructible")]
+extern b8 TestNothrowDestructible<T>();
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestValueAddress")]
+extern usize TestValueAddress<T>(in borrow T value);
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestDataAddress")]
+extern usize TestDataAddress(in auto values);
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestByteView")]
+extern BinaryByteView TestByteView(in Span<u8> source, in usize reportedSize, in b8 present);
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestMoveAssign")]
+extern void TestMoveAssign<T>(mut T destination, mut T source);
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestUsesStorage")]
+extern b8 TestUsesStorage(in auto sequence, in auto storage);
+
+
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestReflectedMethodCount")]
+extern usize TestReflectedMethodCount<T>();
+
+
+b8 OverwritePOD<T>(in usize offset, in T value, mut Span<u8> bytes){
+    const Span<u8> payload = PodBytes(value);
+    if(offset > bytes.size() || payload.size() > bytes.size() - offset)
+        return false;
+    for(usize i = 0u; i < payload.size(); ++i)
+        bytes[offset + i] = payload[i];
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

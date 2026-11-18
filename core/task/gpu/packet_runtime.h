@@ -62,6 +62,8 @@ struct GpuTaskGraphTaskAcceptedCallback{
     GpuTaskId task;
     void* context = nullptr;
     [[nodiscard]] b8 (*invoke)(void* context, const QueueSubmissionToken& token) = nullptr;
+
+    [[nodiscard]] b8 notify(const QueueSubmissionToken& token)const{ return invoke && invoke(context, token); }
 };
 
 // Runs after a task records and exports packet state, before submit. The anchor checks final-state candidates.
@@ -69,6 +71,10 @@ struct GpuTaskGraphTaskRecordedCallback{
     GpuTaskId task;
     void* context = nullptr;
     [[nodiscard]] b8 (*invoke)(void* context, const CommandListResourceStateHandoff* finalState) = nullptr;
+
+    [[nodiscard]] b8 notify(const Optional<NotNull<const CommandListResourceStateHandoff*>>& finalState)const{
+        return invoke && invoke(context, finalState ? finalState->get() : nullptr);
+    }
 };
 
 

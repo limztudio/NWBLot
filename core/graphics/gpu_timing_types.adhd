@@ -70,6 +70,9 @@ extern class GpuTimingSampleListener{
     b8 valid(...)const;
 };
 
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::MakeGpuTimingSampleListener")]
+extern GpuTimingSampleListener MakeGpuTimingSampleListener(mut auto receiver);
+
 [cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleSubscription"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class GpuTimingSampleSubscription{
     b8 valid(...)const;

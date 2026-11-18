@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "memory.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/process_capture.h>"), cpp_name("::NWB::Tests::CaptureForTest")]
+extern Expected<void, ProcessCaptureFailure> CaptureForTest(mut String output, mut HeapStorage storage, in Span<StringView> command, in usize limit, in usize buffer, in usize timeout);
+
+[cpp_header("<tests/common/process_capture.h>"), cpp_name("::NWB::Tests::CaptureDefault")]
+extern Expected<void, ProcessCaptureFailure> CaptureDefault(mut String output, mut HeapStorage storage, in Span<StringView> command);
+
+[cpp_header("<tests/common/process_capture.h>"), cpp_name("::NWB::Tests::CaptureToSink")]
+extern Expected<void, ProcessCaptureFailure> CaptureToSink(mut auto output, mut HeapStorage storage, in Span<StringView> command, in usize limit, in usize buffer, in usize timeout);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

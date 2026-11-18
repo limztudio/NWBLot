@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/backend_allocation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/allocation_size.h>"), cpp_name("::Alignment")]
+extern usize AlignedAllocationSize(in usize alignment, in usize size);
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::SortAllocationKeys")]
+extern void SortAllocationKeys(mut Vector<u64> keys);
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::AllocateTypedBytes")]
+extern RawAllocation AllocateTypedBytes(mut auto storage, in usize count);
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::AllocateCBytes")]
+extern RawAllocation AllocateCBytes(mut auto storage, in usize count);
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::ResizeCBytes")]
+extern RawAllocation ResizeCBytes(mut auto storage, in RawAllocation block, in usize count);
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::FreeCBytes")]
+extern void FreeCBytes(mut auto storage, in RawAllocation block);
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::s_DebugAllocator")]
+extern const b8 s_DebugAllocator;
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::s_MaxAlignment")]
+extern const usize s_MaxAlignment;
+
+[cpp_header("<core/alloc/persistent.h>"), cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
+extern usize PersistentStructureAlignedSize(...);
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::PersistentTestArray"), cpp_flags(no_copy, no_assign)]
+extern class PersistentTestArray<T>;
+
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::MakePersistentTestArray")]
+extern PersistentTestArray<T> MakePersistentTestArray<T>(mut PersistentStorage storage, in usize count);
+
+[cpp_header("<global/exception.h>"), cpp_name("::AllocationSizeException")]
+extern class AllocationSizeException;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

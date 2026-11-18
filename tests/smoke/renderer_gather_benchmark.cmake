@@ -17,6 +17,6 @@ if(NWB_BUILD_RENDERER_GATHER_BENCHMARK)
             "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_scene_and_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/renderer_gather_benchmark_project.adhd"
         )
-    nwb_configure_runtime_smoke_target(nwb_renderer_gather_benchmark "${_nwb_gather_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
+    nwb_configure_runtime_smoke_target(nwb_renderer_gather_benchmark "${_nwb_gather_runtime_root}" renderer_gather_benchmark_scene_and_runtime nwb_ecs_model nwb_ecs_mesh_skinning)
     add_dependencies(nwb_renderer_gather_benchmark nwb_renderer_gather_benchmark_assets)
 endif()

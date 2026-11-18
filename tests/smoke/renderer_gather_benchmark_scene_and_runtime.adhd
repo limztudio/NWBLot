@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/module.adhd>
+#include <impl/ecs_mesh/skinning/system.adhd>
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "renderer_gather_benchmark_probes.adhd"
 #include "smoke_environment.adhd"
 #include "smoke_project_helpers.adhd"
@@ -12,66 +16,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-#include <core/common/log.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/simd/convert.h>
-#include <global/simd/frame.h>
-#include <global/simd/vector.h>
-
-namespace NWB::Tests::Smoke{
-[[nodiscard]] FOUNDATION_INLINE AStringView GatherBenchmarkProjectName()noexcept{
+StringView GatherBenchmarkProjectName(){
     return "RendererGatherBenchmark";
 }
 
-class GatherBenchmarkTimingPass final : public Core::IRenderPass{
-private:
-    static constexpr u32 s_InFlightRanges = 32u;
-    static constexpr Array<StringView, 18> s_GpuNames = {
-        "render.frame", "render.opaque_regular", "render.shadow_visibility", "render.deferred_lighting",
-        "render.deferred_composite", "render.deferred_present", "render.avboit_clear", "render.avboit_occupancy",
-        "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate",
-        "render.reflection_classify", "render.reflection_build_args", "render.reflection_hardware",
-        "render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial",
-    };
+class GatherBenchmarkTimingPass : IRenderPass{
+    public GatherBenchmarkTimingPass(mut GraphicsRuntime graphics){}
 
-public:
-    explicit GatherBenchmarkTimingPass(Core::GraphicsRuntime& graphics)noexcept
-        : IRenderPass(graphics)
-    {}
-
-public:
-    [[nodiscard]] b8 prepareQueries(){
-        auto& graphics = getGraphics();
-        for(const StringView scope : s_GpuNames){
+    public b8 prepareQueries(){
+        mut GraphicsRuntime graphics = this.getGraphics();
+        for(u32 i = 0u; i < s_GatherBenchmarkGpuScopeCount; ++i){
+            const StringView scope = GatherBenchmarkGpuScopeName(i);
             if(scope == "render.reflection_depth_pyramid")
                 continue;
-            const auto scopeName = Name::FromText(scope);
-            if(!scopeName)
-                return false;
-            if(!graphics.gpuTiming().prepareScopeQueries(*scopeName, graphics.getDevice(), s_InFlightRanges))
+            const auto name = ParseName(scope);
+            if(!name.has_value() || !graphics.gpuTiming().prepareScopeQueries(name.value(), graphics.getDevice(), s_GatherBenchmarkInFlightRanges))
                 return false;
         }
         return true;
     }
 
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 shouldRenderUnfocused()override{ return true; }
 }
 
 
@@ -128,8 +93,8 @@ class RendererGatherBenchmarkScene{
                 }
                 AppendUnsignedU64Text(meshPath, cast<u64>(index));
                 AppendUnsignedU64Text(materialPath, cast<u64>(index));
-                const Expected<SmokeMeshRef, NameTextErrorEnum> meshReference = SmokeMeshRefFromText(meshPath.view());
-                const Expected<SmokeMaterialRef, NameTextErrorEnum> materialReference = SmokeMaterialRefFromText(materialPath.view());
+                const Expected<SmokeMeshRef, NameTextError> meshReference = SmokeMeshRefFromText(meshPath.view());
+                const Expected<SmokeMaterialRef, NameTextError> materialReference = SmokeMaterialRefFromText(materialPath.view());
                 if(!meshReference.has_value() || !materialReference.has_value())
                     return false;
                 mesh = meshReference.value();
@@ -232,13 +197,13 @@ class RendererGatherBenchmarkScene{
 
 [arena]
 class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
-    public RendererGatherBenchmarkProjectImpl(mut ProjectRuntimeContext context){
+    public RendererGatherBenchmarkProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSmokeWorldOrDie(GatherBenchmarkProjectName(), context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_scene = RendererGatherBenchmarkScene();
         this.m_timingPass = GatherBenchmarkTimingPass(context.graphics);
         this.m_probe = RendererGatherBenchmarkProbe();
-        this.m_compilerProbe = RendererCompilerStatisticsProbe(context.graphics, context.objectArena);
+        this.m_compilerProbe = RendererCompilerStatisticsProbe(context.graphics);
     }
 
     public ~RendererGatherBenchmarkProjectImpl(){
@@ -370,20 +335,17 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
     private b8 readActualCounts(){
         u32 readyRenderers = 0u;
         u32 readyRuntimeRenderers = 0u;
-        native(mut world = this.m_world, mut readyRenderers, mut readyRuntimeRenderers){
-            Impl::MeshSystem& meshes = *MakeNotNull(world->getSystem<Impl::MeshSystem>());
-            auto view = world->view<Impl::RendererComponent>();
-            for(auto&& [entity, renderer] : view){
-                if(!renderer.visible)
-                    continue;
-                const auto meshResult = meshes.resolveRenderableMeshStatus(entity);
-                if(!meshResult)
-                    continue;
-                const auto& mesh = *meshResult;
-                ++readyRenderers;
-                if(mesh.runtime)
-                    ++readyRuntimeRenderers;
-            }
+        mut World world = SmokeWorldRef(this.m_world);
+        const Optional<mut MeshSystem> meshes = world.borrowSystem<MeshSystem>();
+        for(in auto row : world.view<RendererComponent>()){
+            if(!Get<1>(row).visible)
+                continue;
+            const auto mesh = meshes.value().resolveRenderableMeshStatus(Get<0>(row));
+            if(!mesh.has_value())
+                continue;
+            ++readyRenderers;
+            if(mesh.value().runtime)
+                ++readyRuntimeRenderers;
         }
         this.m_scene.setResolvedCounts(readyRenderers, readyRuntimeRenderers);
         const RendererGatherBenchmarkSceneCounts sceneCounts = this.m_scene.counts();
@@ -438,25 +400,17 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+ProjectFrameClientSize GetProjectFrameClientSize(){ return ProjectFrameClientSize(960u, 720u); }
 
+PlatformStringView GetProjectWindowTitle(){ return PlatformTextLiteral("NWB Renderer Gather Benchmark"); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
-
-TStringView NWB::QueryProjectWindowTitle()noexcept{ return FOUNDATION_TEXT("NWB Renderer Gather Benchmark"); }
-
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::RendererGatherBenchmarkProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateSmokeWorld(GatherBenchmarkProjectName(), context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<RendererGatherBenchmarkProjectImpl>(owner, context);
 }
 
 

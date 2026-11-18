@@ -2,14 +2,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/task/gpu/task_graph_nodes.h>"), cpp_name("::NWB::Core::GpuTaskGraphDetail::GpuGraphResourceNode"), cpp_flags(self_defaulted)]
+extern class GpuGraphResourceNode{
+    Name identity;
+};
+
+[cpp_header("<core/task/gpu/task_graph_nodes.h>"), cpp_name("::NWB::Core::GpuTaskGraphDetail::ResourcePointerKey"), cpp_flags(self_defaulted)]
+extern class GpuResourcePointerKey;
+
+[cpp_header("<core/task/gpu/task_graph_nodes.h>"), cpp_name("::NWB::Core::GpuTaskGraphDetail::ResourcePointerKey::FromObject")]
+extern GpuResourcePointerKey GpuResourcePointerKeyFromObject(in borrow auto object, in GpuGraphResourceType type);
+
+[cpp_header("<core/task/gpu/task_graph_nodes.h>"), cpp_name("::NWB::Core::GpuTaskGraphDetail::ResourceImportMatch"), cpp_flags(self_defaulted, small_value)]
+extern class GpuResourceImportMatch{
+    u32 index;
+    b8 samePointer;
+};
+
+[cpp_header("<core/task/gpu/task_graph_resource_import_index.h>"), cpp_name("::NWB::Core::GpuGraphResourceImportIndex::Publication"), cpp_flags(self_defaulted)]
+extern class GpuResourceImportPublication{
+    b8 identity;
+    b8 pointer;
+};
+
 [cpp_header("<core/task/gpu/task_graph_resource_import_index.h>"), cpp_name("::NWB::Core::GpuGraphResourceImportIndex"), cpp_flags(no_copy, no_assign)]
 extern class GpuGraphResourceImportIndex{
-    void clearResourceSets(...);
-    void clearResources(...);
-    b8 publishResourceSet(...);
-    void rollbackResourceSet(...);
+    void prepareResourceIndexes(in Span<GpuGraphResourceNode> resources, in GpuResourcePointerKey pointer);
+    b8 publishResource(in NameHash identity, in GpuResourcePointerKey pointer, in u32 index, mut GpuResourceImportPublication publication);
+    void rollbackResource(in NameHash identity, in GpuResourcePointerKey pointer, in GpuResourceImportPublication publication);
+    u32 findResourceIdentity(in Span<GpuGraphResourceNode> resources, in Name name)const;
+    GpuResourceImportMatch findPointerMatch(in Span<GpuGraphResourceNode> resources, in GpuResourcePointerKey pointer)const;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

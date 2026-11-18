@@ -8,62 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/algorithm.h>
-
-NWB_BEGIN
-
-namespace Tests::UiFixtureText{
-
-using Impl::Ui::FontMetrics;
-using Impl::Ui::Point;
-using Impl::Ui::Rect;
-using Impl::Ui::ShapedGlyph;
-using Impl::Ui::ShapedRun;
-using Impl::Ui::ShapeRequest;
-using Impl::Ui::SharedFontFace;
-namespace TextDirection = Impl::Ui::TextDirection;
-
-b8 PopulateFixtureShapedRun(const ShapeRequest& request, ShapedRun& run)noexcept;
-
-class FixtureShaper final : public Impl::Ui::ITextShaper{
-public:
-    explicit FixtureShaper(Core::Alloc::GlobalArena&)noexcept{}
-    virtual ~FixtureShaper()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<Impl::Ui::ShapedRun, Impl::Ui::TextLayoutStatus::Enum> shape(::ArenaBase& resultArena, const Impl::Ui::ShapeRequest& request)override{
-        if(request.text == "FAIL")
-            return MakeUnexpected(Impl::Ui::TextLayoutStatus::MissingGlyph);
-        Impl::Ui::ShapedRun run(resultArena);
-        if(!PopulateFixtureShapedRun(request, run))
-            return MakeUnexpected(Impl::Ui::TextLayoutStatus::MissingGlyph);
-        return run;
-    }
-};
-
-};
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void AppendCodePointGlyphs(in AStringView text, in Rect ink, mut ShapedRun run){
+void AppendCodePointGlyphs(in StringView text, in Rect ink, mut ShapedRun run){
     usize begin = 0u;
     while(begin < text.size()){
         usize end = begin + 1u;
@@ -102,6 +47,17 @@ b8 PopulateFixtureShapedRun(in ShapeRequest request, mut ShapedRun run){
     if(request.direction == TextDirection::RightToLeft)
         ReverseGlyphs(run);
     return true;
+}
+
+
+class FixtureShaper : ITextShaper{
+    [cpp_unwind]
+    public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
+        ShapedRun run;
+        if(!PopulateFixtureShapedRun(request, run))
+            return MakeUnexpected(TextLayoutStatus::MissingGlyph);
+        return run;
+    }
 }
 
 

@@ -75,7 +75,10 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ClassDecl;
+
 struct FieldDecl{
+    const ClassDecl* declaringClass = nullptr;
     AccessSpecifier::Enum access = AccessSpecifier::None;
     TypeRef* type = nullptr;
     MStringView name;
@@ -118,6 +121,7 @@ namespace AssetCookRole{
 };
 
 struct MethodDecl{
+    const ClassDecl* declaringClass = nullptr;
     AccessSpecifier::Enum access = AccessSpecifier::None;
     MStringView ownerClassName;
     MVector<MStringView> ownerTemplateParams;
@@ -140,6 +144,8 @@ struct MethodDecl{
     b8 exportsExplicitBool = false;
     b8 exportsTakingAssignment = false;
     b8 exportsRvalueOverload = false;
+    MStringView initializedCppBase;
+    MVector<MStringView> cppBaseArguments;
     MVector<Expr*> exceptionProbes;
     b8 probesReturnValue = false;
     b8 isReflect = false;
@@ -177,6 +183,7 @@ public:
         , templateParams(arena)
         , params(arena)
         , body(arena)
+        , cppBaseArguments(arena)
         , exceptionProbes(arena)
     {}
 
@@ -234,6 +241,8 @@ struct ClassDecl{
     usize totalSize = 1u;
     usize totalAlign = 1u;
     usize recordAlignment = 0u;
+    const ClassDecl* concreteBase = nullptr;
+    b8 isExtensible = false;
     b8 preserveFieldOrder = false;
     b8 isSerialize = false;
     b8 isMoveOnly = false;
@@ -353,6 +362,18 @@ struct AssetRegistration{
     SourceSpan span;
 };
 
+struct RegistrationBinding{
+    MStringView name;
+    MStringView cppName;
+    MStringView header;
+    usize parameterCount = 0u;
+};
+
+struct RegistrationCall{
+    MStringView cppName;
+    MVector<MStringView> arguments;
+};
+
 struct StaticAssertion{
     Expr* condition;
     Expr* message;
@@ -369,6 +390,9 @@ struct TranslationUnit{
     MStringView cppNamespace;
     MVector<StaticAssertion> staticAssertions;
     MVector<AssetRegistration> assetRegistrations;
+    MVector<RegistrationBinding> registrationBindings;
+    MVector<RegistrationCall> registrationCalls;
+    MVector<MStringView> registrationHeaders;
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MStringView> sourceNativeBlocks;
     MVector<MStringView> requiredGlobalHeaders;
@@ -392,6 +416,9 @@ public:
         : substitutedConstantTexts(arena)
         , staticAssertions(arena)
         , assetRegistrations(arena)
+        , registrationBindings(arena)
+        , registrationCalls(arena)
+        , registrationHeaders(arena)
         , topLevelNativeBlocks(arena)
         , sourceNativeBlocks(arena)
         , requiredGlobalHeaders(arena)

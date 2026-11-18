@@ -9,58 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_cpu_task_submission_tests{
-
-using namespace NWB::Core;
-
-inline constexpr u32 s_ConstructionException = 0xE101u;
-inline constexpr u32 s_WorkerException = 0xE102u;
-
-struct ThrowingMoveTask{
-    ThrowingMoveTask()noexcept = default;
-    ThrowingMoveTask(ThrowingMoveTask&&){ throw s_ConstructionException; }
-
-
-public:
-    void operator()()const noexcept{}
-};
-
-struct ThrowingCopyTask{
-    ThrowingCopyTask()noexcept = default;
-    ThrowingCopyTask(const ThrowingCopyTask&){ throw s_ConstructionException; }
-    ThrowingCopyTask(ThrowingCopyTask&&)noexcept = default;
-
-
-public:
-    void operator()()const noexcept{}
-};
-
-struct NonCallableTask{};
-
-static_assert(!IsConstructible_V<InplaceFunction<128u>, ThrowingMoveTask>);
-static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
-
-};
-
-namespace NWB::Tests::CpuTaskSuite{
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+class NonCallableTask{}
+static_assert(!TaskConstructible<ThrowingMoveTask>());
+static_assert(!TaskConstructible<NonCallableTask>());
 
 type CpuAffinityEnum = CpuAffinity;
 
@@ -183,6 +134,7 @@ void VerifyCpuTaskRangeTests_InvalidBatchOptionsPublishNoTasks(){
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
+[cpp_unwind]
 void VerifyCpuTaskRangeTests_InlineFailureRetiresSubmittedDescendantsBeforeTerminalHandling(){
     Atomic<u32> retirements(0u);
     u32 callbacks = 0u;
@@ -191,27 +143,24 @@ void VerifyCpuTaskRangeTests_InlineFailureRetiresSubmittedDescendantsBeforeTermi
     usize outstandingOnCatch = 1u;
     CpuTaskScheduler scheduler(0u);
     i32 result = 0;
-    native(mut retirements, mut callbacks, mut retiredOnCatch, mut callbacksOnCatch, mut outstandingOnCatch, mut scheduler, mut result){
-        using RangeFailure = CpuTaskSchedulerTestSupport::InlineRangeFailure;
-        result = ::InvokeTerminalEntry<RangeFailure>([&]()->int {
-            EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize) {
-                const auto cpuTaskAdmission = scheduler.submit([&, capture = LifetimeProbe(retirements)]() {
-                    EXPECT_TRUE(capture.retirements != nullptr);
-                    ++callbacks;
-                });
-                EXPECT_TRUE(cpuTaskAdmission);
-                if(cpuTaskAdmission)
-                    EXPECT_TRUE(cpuTaskAdmission->valid());
-                throw RangeFailure{ .code = 73 };
-            })));
-            return 0;
-        }, [&](const RangeFailure& failure) {
-            retiredOnCatch = retirements.load(MemoryOrder::acquire);
-            callbacksOnCatch = callbacks;
-            outstandingOnCatch = scheduler.statistics().outstandingTasks;
-            return failure.code;
-        }, []()noexcept { return -1; });
-    }
+    result = CatchTaskFailure<InlineRangeFailure>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
+        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, lambda[mut scheduler, mut retirements, mut callbacks](in usize index) -> void{
+            const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe capture, in b8 active) -> void{
+                EXPECT_TRUE(active);
+                ++callbacks;
+            }));
+            EXPECT_TRUE(cpuTaskAdmission.has_value());
+            if(cpuTaskAdmission.has_value())
+                EXPECT_TRUE(cpuTaskAdmission.value().valid());
+            ThrowTestException<InlineRangeFailure>(InlineRangeFailure(73));
+        })));
+        return 0;
+    }, lambda[mut scheduler, mut retirements, mut callbacks, mut retiredOnCatch, mut outstandingOnCatch, mut callbacksOnCatch](in InlineRangeFailure failure) -> i32{
+        retiredOnCatch = retirements.load(MemoryOrder::acquire);
+        callbacksOnCatch = callbacks;
+        outstandingOnCatch = scheduler.statistics().outstandingTasks;
+        return failure.code;
+    }, lambda[]() -> i32{ return -1; });
     EXPECT_EQ(retiredOnCatch, 1u);
     EXPECT_EQ(callbacksOnCatch, 0u);
     EXPECT_EQ(outstandingOnCatch, 0u);
@@ -271,14 +220,12 @@ void VerifyCpuTaskSchedulerTests_CanceledScopeSkipsQueuedBodiesAndTheirDependent
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     CpuTaskHandle dependent = CpuTaskHandle();
-    native(mut scope, mut scheduler, mut invoked, mut retired, mut dependent){
-        const auto predecessorTaskAdmission = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)]()noexcept { invoked += capture.value; });
-        ASSERT_TRUE(predecessorTaskAdmission);
-        const auto predecessor = *predecessorTaskAdmission;
-        const auto dependentTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 2u)]()noexcept { invoked += capture.value; }, predecessor);
-        ASSERT_TRUE(dependentTaskAdmission);
-        dependent = *dependentTaskAdmission;
-    }
+    const auto predecessorTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retired, 1u), lambda[mut invoked](mut LifetimeProbe capture, in b8 active) -> void{ invoked += capture.value; }));
+    ASSERT_TRUE(predecessorTaskAdmission.has_value());
+    const auto predecessor = predecessorTaskAdmission.value();
+    const auto dependentTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retired, 2u), lambda[mut invoked](mut LifetimeProbe capture, in b8 active) -> void{ invoked += capture.value; }), predecessor);
+    ASSERT_TRUE(dependentTaskAdmission.has_value());
+    dependent = dependentTaskAdmission.value();
     scope.cancel();
     const auto cpuTaskAdmission = scope.submit(lambda[mut invoked]() -> void{
         ++invoked;
@@ -699,26 +646,24 @@ void VerifyCpuTaskSchedulerTests_ParentCompletionRetainsAncestorCapturesUntilGra
         grandchildGate.open();
     });
     CpuTaskHandle parent = CpuTaskHandle();
-    native(mut scheduler, mut grandchildGate, mut retirements, mut total, mut rejected, mut parent){
-        const auto cpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)]() mutable {
-            const auto secondCpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, &parentCapture, childCapture = LifetimeProbe(retirements, 13u)]() mutable {
-                const auto thirdCpuTaskAdmission = scheduler.submit([&grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)]()noexcept {
-                    grandchildGate.block();
-                    total.store(parentCapture.value + childCapture.value + grandchildCapture.value, MemoryOrder::release);
-                });
-                ASSERT_TRUE(thirdCpuTaskAdmission);
-                const auto grandchild = *thirdCpuTaskAdmission;
-                if(!grandchild.valid())
-                    rejected.store(true, MemoryOrder::release);
-            });
-            ASSERT_TRUE(secondCpuTaskAdmission);
-            const auto child = *secondCpuTaskAdmission;
-            if(!child.valid())
+    const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 11u), lambda[mut scheduler, mut retirements, mut grandchildGate, mut total, mut rejected](mut LifetimeProbe parentCapture, in b8 active) -> void{
+        const auto secondCpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 13u), lambda[mut scheduler, mut retirements, mut grandchildGate, mut total, mut rejected, mut parentCapture](mut LifetimeProbe childCapture, in b8 active) -> void{
+            const auto thirdCpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 17u), lambda[mut grandchildGate, mut total, mut parentCapture, mut childCapture](mut LifetimeProbe grandchildCapture, in b8 active) -> void{
+                grandchildGate.block();
+                total.store(parentCapture.value + childCapture.value + grandchildCapture.value, MemoryOrder::release);
+            }));
+            ASSERT_TRUE(thirdCpuTaskAdmission.has_value());
+            const auto grandchild = thirdCpuTaskAdmission.value();
+            if(!grandchild.valid())
                 rejected.store(true, MemoryOrder::release);
-        });
-        ASSERT_TRUE(cpuTaskAdmission);
-        parent = *cpuTaskAdmission;
-    }
+        }));
+        ASSERT_TRUE(secondCpuTaskAdmission.has_value());
+        const auto child = secondCpuTaskAdmission.value();
+        if(!child.valid())
+            rejected.store(true, MemoryOrder::release);
+    }));
+    ASSERT_TRUE(cpuTaskAdmission.has_value());
+    parent = cpuTaskAdmission.value();
     const auto fourthCpuTaskAdmission = scheduler.submit(lambda[mut retirementsSeenByDependent, mut retirements]() -> void{
         retirementsSeenByDependent.store(retirements.load(MemoryOrder::acquire), MemoryOrder::release);
     }, parent);
@@ -781,18 +726,16 @@ void VerifyCpuTaskSchedulerTests_ScopeDestructionIncludesChildrenSubmittedDirect
     CpuTaskScheduler scheduler(config);
     {
         CpuTaskScope scope(scheduler);
-        native(mut scope, mut scheduler, mut retired, mut invoked, mut rejected){
-            const auto cpuTaskAdmission = scope.submit([&]() {
-                const auto secondCpuTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 23u)]()noexcept {
-                    invoked.store(capture.value, MemoryOrder::release);
-                });
-                if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
-                    rejected.store(true, MemoryOrder::release);
-            });
-            EXPECT_TRUE(cpuTaskAdmission);
-            if(cpuTaskAdmission)
-                EXPECT_TRUE(cpuTaskAdmission->valid());
-        }
+        const auto cpuTaskAdmission = scope.submit(lambda[mut scheduler, mut rejected, mut invoked, mut retired]() -> void{
+            const auto secondCpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retired, 23u), lambda[mut invoked](mut LifetimeProbe capture, in b8 active) -> void{
+                invoked.store(capture.value, MemoryOrder::release);
+            }));
+            if(!secondCpuTaskAdmission.has_value() || !secondCpuTaskAdmission.value().valid())
+                rejected.store(true, MemoryOrder::release);
+        });
+        EXPECT_TRUE(cpuTaskAdmission.has_value());
+        if(cpuTaskAdmission.has_value())
+            EXPECT_TRUE(cpuTaskAdmission.value().valid());
     }
     EXPECT_FALSE(rejected.load(MemoryOrder::acquire));
     EXPECT_EQ(invoked.load(MemoryOrder::acquire), 23u);
@@ -864,32 +807,30 @@ void VerifyCpuTaskSchedulerTests_MainThreadTasksSubmittedByWorkersExecuteOnlyOnT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 void VerifyCpuTaskSubmissionTests_CallableConstructionFailurePublishesNoSchedulerOrScopeWork(){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     i32 schedulerResult = 0;
     i32 scopeResult = 0;
     u32 handled = 0u;
-    native(mut scheduler, mut scope, mut schedulerResult, mut scopeResult, mut handled){
-        using namespace __hidden_cpu_task_submission_tests;
-        ThrowingCopyTask callable;
-        const auto handleError = [&handled](const u32 err)noexcept {
-            ++handled;
-            return static_cast<int>(err);
-        };
-        schedulerResult = InvokeTerminalEntry<u32>([&]()->int {
-            const auto task = scheduler.submit(callable);
-            EXPECT_FALSE(task);
-            return -1;
-        }, handleError, []()noexcept { return -2; });
-        EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+    ThrowingCopyTask callable(0xE101u);
+    const auto handleError = lambda[mut handled](in u32 err) -> i32{
+        ++handled;
+        return cast<i32>(err);
+    };
+    schedulerResult = CatchTaskFailure<u32>(lambda[mut scheduler, mut callable]() -> i32{
+        const auto task = scheduler.submit(callable);
+        EXPECT_FALSE(task);
+        return -1;
+    }, handleError, lambda[]() -> i32{ return -2; });
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 
-        scopeResult = InvokeTerminalEntry<u32>([&]()->int {
-            const auto task = scope.submit(callable);
-            EXPECT_FALSE(task);
-            return -1;
-        }, handleError, []()noexcept { return -2; });
-    }
+    scopeResult = CatchTaskFailure<u32>(lambda[mut scope, mut callable]() -> i32{
+        const auto task = scope.submit(callable);
+        EXPECT_FALSE(task);
+        return -1;
+    }, handleError, lambda[]() -> i32{ return -2; });
     const auto stats = scheduler.statistics();
     scope.wait();
     scheduler.wait();
@@ -906,9 +847,7 @@ void VerifyCpuTaskSubmissionTests_ExpectedAdmissionErrorsPreservePublicationAndC
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope canceled(scheduler);
     Expected<CpuTaskHandle, CpuTaskAdmissionErrorEnum> invalidDependencies = MakeUnexpected(CpuTaskAdmissionError::Aborting);
-    native(mut scheduler, mut callbacks, mut invalidDependencies){
-        invalidDependencies = scheduler.submit([&]()noexcept { ++callbacks; }, {}, nullptr, 1u);
-    }
+    invalidDependencies = SubmitNullDependencies(scheduler, lambda[mut callbacks]() -> void{ ++callbacks; }, 1u);
     ASSERT_FALSE(invalidDependencies.has_value());
     EXPECT_EQ(invalidDependencies.error(), CpuTaskAdmissionError::InvalidDependencies);
     CpuTaskOptions options = CpuTaskOptions();
@@ -943,26 +882,25 @@ void VerifyCpuTaskSubmissionTests_ExpectedAdmissionErrorsPreservePublicationAndC
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
+[cpp_unwind]
 void ExecuteWorkerCallbackFailureDeath(in u32 workerCount, in u32 exceptionCode){
     DeadlineGuard deadline(true, s_TestTimeoutMS);
     i32 result = 0;
-    native(in workerCount, in exceptionCode, mut result){
-        result = InvokeTerminalEntry<u32>([&]()->int {
-            CpuTaskScheduler scheduler(workerCount);
-            const auto cpuTaskAdmission = scheduler.submit([&]() {
-                if(scheduler.currentWorkerIndex() == 0u)
-                    ExitTestProcess(0u);
-                throw exceptionCode;
-            });
-            if(!cpuTaskAdmission)
+    result = CatchTaskFailure<u32>(lambda[in workerCount, in exceptionCode]() -> i32{
+        CpuTaskScheduler scheduler(workerCount);
+        const auto cpuTaskAdmission = scheduler.submit(lambda[mut scheduler, in exceptionCode]() -> void{
+            if(scheduler.currentWorkerIndex() == 0u)
                 ExitTestProcess(0u);
-            const auto task = *cpuTaskAdmission;
-            if(!task.valid())
-                return 0;
-            scheduler.wait(task);
+            ThrowTestException<u32>(exceptionCode);
+        });
+        if(!cpuTaskAdmission.has_value())
+            ExitTestProcess(0u);
+        const auto task = cpuTaskAdmission.value();
+        if(!task.valid())
             return 0;
-        }, [](const u32)noexcept { return 0; }, []()noexcept { return 0; });
-    }
+        scheduler.wait(task);
+        return 0;
+    }, lambda[](in u32 index) -> i32{ return 0; }, lambda[]() -> i32{ return 0; });
     ExitTestProcess(cast<u32>(result));
 }
 
@@ -972,26 +910,25 @@ void VerifyCpuTaskSubmissionTests_WorkerCallbackFailureTerminatesWithoutDeferred
     EXPECT_DEATH(ExecuteWorkerCallbackFailureDeath(workerCount, exceptionCode), "");
 }
 
+[cpp_unwind]
 void ExecuteParallelRangeWorkerFailureDeath(in u32 workerCount, in usize itemCount, in u32 exceptionCode){
     DeadlineGuard deadline(true, s_TestTimeoutMS);
     i32 result = 0;
-    native(in workerCount, in itemCount, in exceptionCode, mut result){
-        result = InvokeTerminalEntry<u32>([&]()->int {
-            CpuTaskScheduler scheduler(workerCount);
-            AtomicFlag workerEntered;
-            EXPECT_TRUE((scheduler.parallelFor(0u, itemCount, [&](const usize) {
-                if(scheduler.currentWorkerIndex() == 0u){
-                    while(!workerEntered.test(MemoryOrder::acquire))
-                        workerEntered.wait(false, MemoryOrder::acquire);
-                    return;
-                }
-                workerEntered.testAndSet(MemoryOrder::release);
-                workerEntered.notifyAll();
-                throw exceptionCode;
-            })));
-            return 0;
-        }, [](const u32)noexcept { return 0; }, []()noexcept { return 0; });
-    }
+    result = CatchTaskFailure<u32>(lambda[in workerCount, in exceptionCode, in itemCount]() -> i32{
+        CpuTaskScheduler scheduler(workerCount);
+        AtomicFlag workerEntered;
+        EXPECT_TRUE((scheduler.parallelFor(0u, itemCount, lambda[mut scheduler, in exceptionCode, mut workerEntered](in usize index) -> void{
+            if(scheduler.currentWorkerIndex() == 0u){
+                while(!workerEntered.test(MemoryOrder::acquire))
+                    workerEntered.wait(false, MemoryOrder::acquire);
+                return;
+            }
+            workerEntered.testAndSet(MemoryOrder::release);
+            workerEntered.notifyAll();
+            ThrowTestException<u32>(exceptionCode);
+        })));
+        return 0;
+    }, lambda[](in u32 index) -> i32{ return 0; }, lambda[]() -> i32{ return 0; });
     ExitTestProcess(cast<u32>(result));
 }
 
@@ -1006,17 +943,16 @@ void VerifyCpuTaskSubmissionTests_ParallelRangeWorkerFailureTerminatesWithoutDef
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 void VerifyCpuTaskWaitTests_ScopeRejectsAnIndependentTaskDependingOnTheCaller(){
     u32 callbacks = 0u;
     DeadlineGuard deadline(false, s_WaitWatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     CpuTaskHandle caller = CpuTaskHandle();
-    native(mut scheduler, mut scope, mut caller){
-        const auto callerTaskAdmission = scheduler.submit([&]() { scope.wait(); });
-        ASSERT_TRUE(callerTaskAdmission);
-        caller = *callerTaskAdmission;
-    }
+    const auto callerTaskAdmission = scheduler.submit(lambda[mut scope]() -> void{ scope.wait(); });
+    ASSERT_TRUE(callerTaskAdmission.has_value());
+    caller = callerTaskAdmission.value();
     ASSERT_TRUE(caller.valid());
     const auto cpuTaskAdmission = scope.submit(lambda[mut callbacks]() -> void{
         ++callbacks;
@@ -1029,21 +965,20 @@ void VerifyCpuTaskWaitTests_ScopeRejectsAnIndependentTaskDependingOnTheCaller(){
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
+[cpp_unwind]
 void VerifyCpuTaskWaitTests_ScopeRejectsTransitiveDependentsOfTheCallersAncestor(){
     DeadlineGuard deadline(false, s_WaitWatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     CpuTaskHandle ancestor = CpuTaskHandle();
-    native(mut scheduler, mut scope, mut ancestor){
-        const auto cpuTaskAdmission = scheduler.submit([&]() {
-            const auto secondCpuTaskAdmission = scheduler.submit([&]() { scope.wait(); });
-            ASSERT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                ASSERT_TRUE(secondCpuTaskAdmission->valid());
-        });
-        ASSERT_TRUE(cpuTaskAdmission);
-        ancestor = *cpuTaskAdmission;
-    }
+    const auto cpuTaskAdmission = scheduler.submit(lambda[mut scheduler, mut scope]() -> void{
+        const auto secondCpuTaskAdmission = scheduler.submit(lambda[mut scope]() -> void{ scope.wait(); });
+        ASSERT_TRUE(secondCpuTaskAdmission.has_value());
+        if(secondCpuTaskAdmission.has_value())
+            ASSERT_TRUE(secondCpuTaskAdmission.value().valid());
+    });
+    ASSERT_TRUE(cpuTaskAdmission.has_value());
+    ancestor = cpuTaskAdmission.value();
     ASSERT_TRUE(ancestor.valid());
     const auto middleTaskAdmission = scheduler.submit(lambda[]() -> void{}, ancestor);
     ASSERT_TRUE(middleTaskAdmission.has_value());
@@ -1057,17 +992,16 @@ void VerifyCpuTaskWaitTests_ScopeRejectsTransitiveDependentsOfTheCallersAncestor
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
+[cpp_unwind]
 void VerifyCpuTaskWaitTests_ScopeRechecksDependenciesPublishedByCooperativeWork(){
     u32 callbacks = 0u;
     DeadlineGuard deadline(false, s_WaitWatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     CpuTaskHandle caller = CpuTaskHandle();
-    native(mut scheduler, mut scope, mut caller){
-        const auto callerTaskAdmission = scheduler.submit([&]() { scope.wait(); });
-        ASSERT_TRUE(callerTaskAdmission);
-        caller = *callerTaskAdmission;
-    }
+    const auto callerTaskAdmission = scheduler.submit(lambda[mut scope]() -> void{ scope.wait(); });
+    ASSERT_TRUE(callerTaskAdmission.has_value());
+    caller = callerTaskAdmission.value();
     ASSERT_TRUE(caller.valid());
     const auto cpuTaskAdmission = scope.submit(lambda[mut scope, mut callbacks, in caller]() -> void{
         ++callbacks;

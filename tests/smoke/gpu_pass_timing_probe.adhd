@@ -154,23 +154,10 @@ class GpuPassTimingProbe{
                 line.sampleAvgMs
             );
         }
-        b8 openFailed = false;
-        b8 closeFailed = false;
-        native(in timingPath, in reportBlock, mut openFailed, mut closeFailed){
-            // Append formatted interval timings to the optional file sink for A/B scripts.
-            OutputFileStream timingFile(timingPath.value().c_str(), s_FileOpenAppend);
-            if(!timingFile.is_open()){
-                openFailed = true;
-            }
-            else{
-                timingFile.write(reportBlock.data(), static_cast<StreamSize>(reportBlock.size()));
-                timingFile.close();
-                closeFailed = !timingFile.good();
-            }
-        }
-        if(openFailed)
+        const FileWriteStatus status = WritePlatformTextFile(Path(timingPath.value()), reportBlock, true);
+        if(status == FileWriteStatus::OpenFailed)
             error("GpuPassTimingProbe: failed to open requested timing output");
-        if(closeFailed)
+        if(status == FileWriteStatus::WriteFailed)
             error("GpuPassTimingProbe: timing output write or close failed");
     }
 

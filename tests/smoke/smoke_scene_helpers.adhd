@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <impl/assets_material/asset.adhd>
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_render/module.adhd>
 #include <impl/ecs_mesh/components.adhd>
 #include <impl/ecs_render/components.adhd>
 #include <impl/ecs_render/material/material_instance.adhd>
@@ -13,89 +18,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type SmokeMaterialRef = AssetRef<Material>;
+type SmokeMeshRef = AssetRef<Mesh>;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/assets_mesh/asset.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/reflection/statistics_types.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/assets/ref.h>
-#include <core/common/log.h>
-#include <core/ecs/entity.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/telemetry/frame_graph_registry.h>
-
-#include <global/limit.h>
-#include <global/simd/convert.h>
-
-namespace NWB::Tests::Smoke{
-using SmokeMaterialRef = Core::Assets::AssetRef<Impl::Material>;
-using SmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
-using NameTextAscii = NameText<char>;
-using NameTextErrorEnum = NameTextError::Enum;
-
-[[nodiscard]] FOUNDATION_INLINE Expected<SmokeMeshRef, NameTextError::Enum> SmokeMeshRefFromText(const AStringView path){
+Expected<SmokeMeshRef, NameTextError> SmokeMeshRefFromText(in StringView path){
     return SmokeMeshRef::FromText(path);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<SmokeMaterialRef, NameTextError::Enum> SmokeMaterialRefFromText(const AStringView path){
+Expected<SmokeMaterialRef, NameTextError> SmokeMaterialRefFromText(in StringView path){
     return SmokeMaterialRef::FromText(path);
 }
-using Impl::CausticQualitySettings;
-using Impl::SurfelGiQualitySettings;
-namespace SurfelGiResolveResolution = Impl::SurfelGiResolveResolution;
-using Impl::ShadowQualitySettings;
-namespace ShadowReceiverResolution = Impl::ShadowReceiverResolution;
-namespace TransparentShadowSampling = Impl::TransparentShadowSampling;
-using Impl::SoftwareShadowSettings;
-namespace SoftwareShadowBackend = Impl::SoftwareShadowBackend;
-namespace SoftwareShadowBlockerSearch = Impl::SoftwareShadowBlockerSearch;
-namespace SoftwareShadowCaptureCadence = Impl::SoftwareShadowCaptureCadence;
-namespace SoftwareShadowCoverage = Impl::SoftwareShadowCoverage;
-using Impl::ReflectionSettings;
-namespace ReflectionTraceMode = Impl::ReflectionTraceMode;
-using Impl::PresentationSettings;
-namespace PresentationToneMap = Impl::PresentationToneMap;
-namespace OpticalBoundaryMode = Impl::OpticalBoundaryMode;
-namespace OpticalVolumeCoincidence = Impl::OpticalVolumeCoincidence;
-namespace ReflectionDebugView = Impl::ReflectionDebugView;
-using Impl::ReflectionStatistics;
-using Impl::RendererSystem;
-using Impl::MeshSystem;
 
-[[nodiscard]] FOUNDATION_INLINE Impl::RendererSystem& SmokeRendererSystemRef(Core::ECS::World& world)noexcept{
-    return *MakeNotNull(world.getSystem<Impl::RendererSystem>());
+mut RendererSystem SmokeRendererSystemRef(mut World world){
+    const Optional<mut RendererSystem> system = world.borrowSystem<RendererSystem>();
+    return system.value();
 }
 
-[[nodiscard]] FOUNDATION_INLINE Impl::MeshSystem& SmokeMeshSystemRef(Core::ECS::World& world)noexcept{
-    return *MakeNotNull(world.getSystem<Impl::MeshSystem>());
+mut MeshSystem SmokeMeshSystemRef(mut World world){
+    const Optional<mut MeshSystem> system = world.borrowSystem<MeshSystem>();
+    return system.value();
 }
 
-struct SmokeRenderSystems{
-    Impl::MeshSystem& mesh;
-    Impl::RendererSystem& renderer;
-};
+class SmokeRenderSystems{
+    public mut MeshSystem mesh;
+    public mut RendererSystem renderer;
 
-Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context)noexcept;
-[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(AStringView projectName, ProjectRuntimeContext& context);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public SmokeRenderSystems(mut MeshSystem mesh, mut RendererSystem renderer){
+        this.mesh = mesh;
+        this.renderer = renderer;
+    }
 }
 
 
@@ -677,15 +628,13 @@ EntityID CreateTintedStaticMeshEntity(
 }
 
 SmokeRenderSystems CreateSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context, in SmokeRenderQualitySettings baseSettings){
-    native(mut world, mut context, in baseSettings){
-        auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
-        auto& rendererSystem = world.addSystem<Impl::RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
-        FOUNDATION_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, baseSettings.caustic), FOUNDATION_TEXT("Invalid caustic quality smoke settings"));
-        FOUNDATION_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, baseSettings.surfelGi), FOUNDATION_TEXT("Invalid surfel GI quality smoke settings"));
-        FOUNDATION_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, baseSettings.softwareShadow), FOUNDATION_TEXT("Invalid software shadow smoke settings"));
-        FOUNDATION_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, baseSettings.shadow), FOUNDATION_TEXT("Invalid shadow quality smoke settings"));
-        return SmokeRenderSystems{ meshSystem, rendererSystem };
-    }
+    mut MeshSystem meshSystem = world.addSystem<MeshSystem>(world);
+    mut RendererSystem rendererSystem = world.addSystem<RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
+    [essential] assert(ApplyCausticQualitySmokeSettings(rendererSystem, baseSettings.caustic), "Invalid caustic quality smoke settings");
+    [essential] assert(ApplySurfelGiQualitySmokeSettings(rendererSystem, baseSettings.surfelGi), "Invalid surfel GI quality smoke settings");
+    [essential] assert(ApplySoftwareShadowSmokeSettings(rendererSystem, baseSettings.softwareShadow), "Invalid software shadow smoke settings");
+    [essential] assert(ApplyShadowQualitySmokeSettings(rendererSystem, baseSettings.shadow), "Invalid shadow quality smoke settings");
+    return SmokeRenderSystems(meshSystem, rendererSystem);
 }
 
 SmokeRenderSystems CreateSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context){
@@ -695,7 +644,8 @@ SmokeRenderSystems CreateSmokeRenderSystems(mut World world, mut ProjectRuntimeC
 void SetupSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context, in SmokeRenderQualitySettings baseSettings){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
     context.graphics.addRenderPassToBack(systems.renderer);
-    context.frameGraphRegistry.registerContributor(systems.renderer);
+    mut FrameGraphRegistry registry = context.frameGraphRegistry;
+    registry.registerContributor(systems.renderer);
 }
 
 void SetupSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context){
@@ -712,7 +662,8 @@ void FinishDestroyingSmokeWorld(mut ProjectRuntimeContext context, mut NotNullUn
 
 void RemoveSmokeRendererSystem(mut ProjectRuntimeContext context, mut World world){
     mut auto rendererSystem = SmokeRendererSystemRef(world);
-    context.frameGraphRegistry.unregisterContributor(rendererSystem);
+    mut FrameGraphRegistry registry = context.frameGraphRegistry;
+    registry.unregisterContributor(rendererSystem);
     context.graphics.removeRenderPass(rendererSystem);
 }
 
@@ -733,30 +684,19 @@ void DestroyCapturedSmokeRenderWorld(mut ProjectRuntimeContext context, mut NotN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::Smoke{
-Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context)noexcept{
+mut RendererSystem AddSmokeRenderSystems(mut World world, mut ProjectRuntimeContext context){
     SetupSmokeRenderSystems(world, context);
-    return *MakeNotNull(world.getSystem<Impl::RendererSystem>());
+    return SmokeRendererSystemRef(world);
 }
 
-NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
-    auto world = CreateSmokeWorldOrDie(projectName, context);
-    SetupSmokeRenderSystems(*world, context);
-    return world;
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+Expected<NotNullUniquePtr<World>> CreateSmokeRenderWorld(in StringView projectName, mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(projectName, context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
+    SetupSmokeRenderSystems(SmokeWorldRef(world), context);
+    return TakeSmokeWorld(world);
 }
 
 

@@ -12,11 +12,11 @@ extern class IRenderPass{
     void backBufferResizing(...);
     void displayScaleChanged(...);
     mut GraphicsRuntime getGraphics(...)const;
-    void invalidateResources(...);
+    void invalidateResources();
     b8 prepareResources(...);
     void render(...);
-    b8 shouldRenderUnfocused(...);
-    b8 validateResources(...);
+    b8 shouldRenderUnfocused();
+    b8 validateResources(in u32 width, in u32 height, in u32 samples);
 };
 
 [cpp_header("<core/graphics/runtime/render_pass.h>"), cpp_name("::NWB::Core::TexturePtr"), cpp_flags(self_defaulted, small_value, brace_init)]

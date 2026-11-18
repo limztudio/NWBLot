@@ -51,6 +51,10 @@ public:
 
     [[nodiscard]] const TaskCallback* find(GpuTaskId task)const noexcept;
 
+    [[nodiscard]] Optional<NotNull<const TaskCallback*>> findCallback(GpuTaskId task)const noexcept{
+        return BorrowOptionalResult<&TaskCallbackBindings::find>(*this, task);
+    }
+
 
 private:
     Alloc::ScratchArena& m_scratchArena;

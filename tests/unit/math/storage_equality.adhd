@@ -1,0 +1,205 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "case_types.adhd"
+#include "storage_access.adhd"
+#include "power_environment.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ExactFloatingPointEnvironmentGuard{
+    private Expected<FloatingPointEnvironment> m_original = GetFloatingPointEnvironment();
+    public b8 valid()const{ return this.m_original.has_value(); }
+    public ~ExactFloatingPointEnvironmentGuard(){
+        if(this.m_original.has_value() && !SetFloatingPointEnvironment(this.m_original.value()).has_value())
+            TerminateInvariant();
+    }
+}
+
+[ordered]
+class MxcsrEqualityEnvironmentGuard{
+    private Expected<FloatingPointEnvironment> m_original = GetFloatingPointEnvironment();
+    private u32 m_originalMxcsr = ReadMxcsr();
+    private Expected<FloatingPointEnvironment> m_held = HoldFloatingPointExceptions();
+    private u32 m_heldMxcsr = ReadMxcsr();
+
+    public b8 valid()const{ return this.m_original.has_value() && this.m_held.has_value(); }
+    public void applyMode(in u32 mode)const{ WriteMxcsr((this.m_heldMxcsr & ~0x807fu) | mode); }
+    public ~MxcsrEqualityEnvironmentGuard(){
+        if(this.m_original.has_value()){
+            if(!SetFloatingPointEnvironment(this.m_original.value()).has_value())
+                TerminateInvariant();
+            WriteMxcsr(this.m_originalMxcsr);
+        }
+    }
+}
+
+b8 CompareStorageLanes<T>(in T lhs, in T rhs, in usize count, in b8 strict){
+    for(usize lane = 0u; lane < count; ++lane){
+        if(strict){
+            if(!StrictLaneEqual(lhs, rhs, lane))
+                return false;
+        }
+        else if(!DefaultLaneEqual(lhs, rhs, lane))
+            return false;
+    }
+    return true;
+}
+
+void PrepareStoragePair<T>(mut T lhs, mut T rhs, in usize count, in u32 bits, in usize exceptional, in usize mismatch, in b8 compareZero){
+    for(usize lane = 0u; lane < count; ++lane){
+        SetStorageLane(lhs, lane, cast<f32>(lane + 1u));
+        SetStorageLane(rhs, lane, cast<f32>(lane + 1u));
+    }
+    SetStorageLane(lhs, exceptional, bit_cast<f32>(bits));
+    if(compareZero)
+        SetStorageLane(rhs, exceptional, 0.0f);
+    else
+        SetStorageLane(rhs, exceptional, bit_cast<f32>(bits));
+    if(mismatch < count && mismatch != exceptional)
+        SetStorageLane(rhs, mismatch, StorageFloatLane(rhs, mismatch) + 1.0f);
+}
+
+b8 ObserveNaNComparisonPair<T, const usize Count>(in u32 bits, in usize exceptional, in usize mismatch, mut b8 expected, mut i32 expectedFlags, mut b8 actual, mut i32 actualFlags){
+    T lhs = ZeroStorage<T>();
+    T rhs = ZeroStorage<T>();
+    PrepareStoragePair<T>(lhs, rhs, Count, bits, exceptional, mismatch, false);
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
+        return false;
+    expected = CompareStorageLanes<T>(lhs, rhs, Count, true);
+    expectedFlags = TestFloatingPointExceptions(s_FeAllExcept);
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
+        return false;
+    actual = EqualStorage(lhs, rhs);
+    actualFlags = TestFloatingPointExceptions(s_FeAllExcept);
+    return true;
+}
+
+b8 ObserveStorageComparison<T>(in T lhs, in T rhs, in usize count, in b8 reference, in b8 strict, mut EqualityObservation result){
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
+        return false;
+    WriteMxcsr(ReadMxcsr() & ~0x3fu);
+    if(reference)
+        result.equal = CompareStorageLanes<T>(lhs, rhs, count, strict);
+    else
+        result.equal = EqualStorage(lhs, rhs);
+    result.flags = TestFloatingPointExceptions(s_FeAllExcept);
+    result.rawFlags = ReadMxcsr() & 0x3fu;
+    return true;
+}
+
+b8 ObserveMxcsrEquality<T, const usize Count>(in u32 bits, in usize exceptional, in usize mismatch, in b8 compareZero, mut EqualityObservation strict, mut EqualityObservation actual, mut EqualityObservation defaultContext, mut EqualityObservation actualDefault){
+    T lhs = ZeroStorage<T>();
+    T rhs = ZeroStorage<T>();
+    PrepareStoragePair<T>(lhs, rhs, Count, bits, exceptional, mismatch, compareZero);
+    return ObserveStorageComparison<T>(lhs, rhs, Count, true, true, strict)
+        && ObserveStorageComparison<T>(lhs, rhs, Count, false, true, actual)
+        && ObserveStorageComparison<T>(lhs, rhs, Count, true, false, defaultContext)
+        && ObserveStorageComparison<T>(lhs, rhs, Count, false, false, actualDefault);
+}
+
+void BooleanFallback<const usize Count>(in usize flip, mut b8 initial, mut b8 flipped, mut b8 legacy, mut b8 restored){
+    RawEqualityStorage<b8, Count> lhs;
+    RawEqualityStorage<b8, Count> rhs;
+    for(usize lane = 0u; lane < Count; ++lane){
+        lhs.raw[lane] = (lane & 1u) != 0u;
+        rhs.raw[lane] = lhs.raw[lane];
+    }
+    initial = EqualStorage(lhs, rhs);
+    rhs.raw[flip] = !rhs.raw[flip];
+    flipped = EqualStorage(lhs, rhs);
+    legacy = CompareStorageLanes<RawEqualityStorage<b8, Count>>(lhs, rhs, Count, true);
+    rhs.raw[flip] = lhs.raw[flip];
+    restored = EqualStorage(lhs, rhs);
+}
+
+void RunBooleanFallbackStepByIndex(in usize kind, in usize lane, mut b8 initial, mut b8 flipped, mut b8 legacy, mut b8 restored){
+    if(kind == 0u)
+        BooleanFallback<1u>(lane, initial, flipped, legacy, restored);
+    else if(kind == 1u)
+        BooleanFallback<2u>(lane, initial, flipped, legacy, restored);
+    else if(kind == 2u)
+        BooleanFallback<7u>(lane, initial, flipped, legacy, restored);
+    else if(kind == 3u)
+        BooleanFallback<16u>(lane, initial, flipped, legacy, restored);
+    else if(kind == 4u)
+        BooleanFallback<17u>(lane, initial, flipped, legacy, restored);
+    else
+        BooleanFallback<33u>(lane, initial, flipped, legacy, restored);
+}
+
+class PageBoundaryCaseResult{
+    public b8 pageSizePositive = false;
+    public b8 mapped = false;
+    public i32 protectStatus = -1;
+    public b8 equalMatch = false;
+    public b8 unequalMismatch = true;
+    public i32 unmapStatus = -1;
+}
+
+PageBoundaryCaseResult ObservePageBoundary<T>(in usize count, in b8 boolean){
+    PageBoundaryCaseResult result;
+    const usize pageSize = VirtualPageSize();
+    result.pageSizePositive = pageSize != 0u;
+    if(!result.pageSizePositive)
+        return result;
+    const usize mappedBytes = pageSize * 2u;
+    ByteAddress mapping = ReserveVirtualPages(mappedBytes);
+    result.mapped = HasByteAddress(mapping);
+    if(!result.mapped)
+        return result;
+    if(MakeVirtualPagesWritable(mapping, pageSize)){
+        result.protectStatus = 0;
+        mut T lhs = BeginStorage<T>(GuardAddress(mapping, pageSize - size_of<T>()));
+        T rhs = ZeroStorage<T>();
+        for(usize lane = 0u; lane < count; ++lane){
+            SetStorageLane(lhs, lane, lane + 1u);
+            SetStorageLane(rhs, lane, lane + 1u);
+        }
+        result.equalMatch = EqualStorage(lhs, rhs);
+        if(boolean)
+            SetStorageLane(rhs, count - 1u, false);
+        else
+            SetStorageLane(rhs, count - 1u, count + 1u);
+        result.unequalMismatch = EqualStorage(lhs, rhs);
+        EndStorage<T>(lhs);
+    }
+    if(ReleaseVirtualPages(mapping, mappedBytes))
+        result.unmapStatus = 0;
+    return result;
+}
+
+PageBoundaryCaseResult RunPageBoundaryCase(in u32 kind){
+    if(kind == 0u)
+        return ObservePageBoundary<RawEqualityStorage<b8, 1u>>(1u, true);
+    if(kind == 1u)
+        return ObservePageBoundary<RawEqualityStorage<b8, 16u>>(16u, true);
+    if(kind == 2u)
+        return ObservePageBoundary<RawEqualityStorage<b8, 17u>>(17u, true);
+    if(kind == 3u)
+        return ObservePageBoundary<RawEqualityStorage<b8, 33u>>(33u, true);
+    if(kind == 4u)
+        return ObservePageBoundary<f16x2u>(2u, false);
+    if(kind == 5u)
+        return ObservePageBoundary<f16x4u>(4u, false);
+    if(kind == 6u)
+        return ObservePageBoundary<f32x2u>(2u, false);
+    if(kind == 7u)
+        return ObservePageBoundary<f32x3u>(3u, false);
+    if(kind == 8u)
+        return ObservePageBoundary<f32x3x3u>(9u, false);
+    if(kind == 9u)
+        return ObservePageBoundary<i32x2u>(2u, false);
+    if(kind == 10u)
+        return ObservePageBoundary<i32x3u>(3u, false);
+    if(kind == 11u)
+        return ObservePageBoundary<u32x2u>(2u, false);
+    return ObservePageBoundary<u32x3u>(3u, false);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

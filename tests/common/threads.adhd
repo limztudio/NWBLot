@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/thread.h>"), cpp_name("::JoiningThread"), cpp_flags(no_copy, no_assign)]
+extern class TestThread{
+    void join();
+    b8 request_stop();
+};
+
+[cpp_header("<global/thread.h>"), cpp_name("::Latch"), cpp_flags(no_copy, no_assign)]
+extern class TestLatch{
+    void count_down();
+    void wait()const;
+    void arrive_and_wait();
+};
+
+
+[cpp_header("<global/atomic.h>"), cpp_name("::Atomic"), cpp_flags(no_copy, no_assign)]
+extern class TestAtomic<T>{
+    T load(in MemoryOrder order)const;
+    void store(in T value, in MemoryOrder order);
+    T exchange(in T value, in MemoryOrder order);
+    void wait(in T value, in MemoryOrder order)const;
+    void notify_all();
+    void notify_one();
+    T fetch_add(in T value, in MemoryOrder order);
+    T fetch_sub(in T value, in MemoryOrder order);
+    b8 compare_exchange_weak(mut T expected, in T value, in MemoryOrder order);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

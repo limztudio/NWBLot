@@ -1,0 +1,85 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "service_sdk.adhd"
+
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::Window"), cpp_flags(self_defaulted, small_value)]
+extern class Win32Window;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::ImeContext"), cpp_flags(self_defaulted, small_value)]
+extern class Win32ImeContext;
+[cpp_header("<core/os/win32/text_input_context.h>"), cpp_name("::NWB::Core::Win32TextInputContextGuard"), cpp_flags(no_copy, no_assign)]
+extern class Win32ImeGuard{
+    Expected<void> release();
+};
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::RegisterWindowClass")]
+extern b8 RegisterOsTestWindow(in PlatformStringView name, mut auto handler);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::CreateWindowFor")]
+extern Win32Window CreateOsTestWindow(in PlatformStringView name, in u32 style, in i32 width, in i32 height, mut auto handler);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::PlatformWindow")]
+extern OsWindowHandle OsPlatformWindow(in Win32Window window);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::Present")]
+extern b8 OsWindowPresent(in Win32Window window);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::Present")]
+extern b8 OsImeContextPresent(in Win32ImeContext context);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::s_EmptyWindow")]
+extern const Win32Window s_EmptyOsWindow;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::SendMessageW")]
+extern isize SendWindowMessage(in Win32Window window, in u32 message, in usize wParam, in isize lParam);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::DefWindowProcW")]
+extern isize DefaultWindowMessage(in Win32Window window, in u32 message, in usize wParam, in isize lParam);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::DestroyWindow")]
+extern i32 DestroyOsWindow(in Win32Window window);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::ImmGetContext")]
+extern Win32ImeContext GetOsImeContext(in Win32Window window);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Core::DispatchWin32TextInputMessage")]
+extern b8 DispatchWin32TextInputMessage(mut ITextInputService service, in u32 message, in usize wParam, in isize lParam);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Core::ResolveWin32TextInputContextMessage")]
+extern Expected<isize> ResolveWin32TextInputContextMessage(mut ITextInputService service, in u32 message, in usize wParam, in isize lParam);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Core::DecodeWin32FallbackCharInput")]
+extern Expected<u32> DecodeWin32FallbackCharInput(mut ITextInputService service, in u32 unit);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Core::ResetWin32FallbackCharInput")]
+extern b8 ResetWin32FallbackCharInput(mut ITextInputService service);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("FOUNDATION_OCCUR_WARNING")]
+extern const b8 s_CheckWin32Warnings;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("UNICODE_NOCHAR")]
+extern const u32 s_Win32UnicodeNoChar;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("TRUE")]
+extern const isize s_Win32TrueResult;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("GCS_RESULTSTR")]
+extern const isize s_Win32GcsResultStr;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("CS_INSERTCHAR")]
+extern const isize s_Win32CsInsertChar;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("CS_NOMOVECARET")]
+extern const isize s_Win32CsNoMoveCaret;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("ISC_SHOWUICOMPOSITIONWINDOW")]
+extern const isize s_Win32ShowUiCompositionWindowFlag;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("ISC_SHOWUICANDIDATEWINDOW")]
+extern const isize s_Win32ShowUiCandidateWindowFlag;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WS_POPUP")]
+extern const u32 s_Win32PopupStyle;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_CHAR")]
+extern const u32 s_Win32Char;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_SYSCHAR")]
+extern const u32 s_Win32Syschar;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_UNICHAR")]
+extern const u32 s_Win32Unichar;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_IME_STARTCOMPOSITION")]
+extern const u32 s_Win32ImeStartcomposition;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_IME_ENDCOMPOSITION")]
+extern const u32 s_Win32ImeEndcomposition;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_IME_CHAR")]
+extern const u32 s_Win32ImeChar;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_IME_COMPOSITION")]
+extern const u32 s_Win32ImeComposition;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_IME_SETCONTEXT")]
+extern const u32 s_Win32ImeSetcontext;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_KILLFOCUS")]
+extern const u32 s_Win32Killfocus;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_SETFOCUS")]
+extern const u32 s_Win32Setfocus;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_MOUSEMOVE")]
+extern const u32 s_Win32Mousemove;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

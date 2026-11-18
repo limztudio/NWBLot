@@ -2,44 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_timing_feedback.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/reflection/statistics_readback.adhd>
+#include <impl/ecs_render/refraction/statistics_readback.adhd>
 #include <tests/common/gtest_macros.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
-#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
-#include <core/task/gpu/task_graph.h>
-
-namespace NWB::Tests::EcsGraphicsCases{
-using MeshRayTracingResourceSnapshot = NWB::Impl::MeshRayTracingResourceSnapshot;
-using ReflectionStatistics = NWB::Impl::ReflectionStatistics;
-constexpr NWB::Impl::ReflectionTraceMode::Enum s_HybridReflectionTraceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
-using RefractionStatistics = NWB::Impl::RefractionStatistics;
-using GpuTaskDesc = NWB::Core::GpuTaskDesc;
-using QueueSubmissionToken = NWB::Core::QueueSubmissionToken;
-using GpuTaskTimingKey = NWB::Core::GpuTaskTimingKey;
-using GpuPhysicalQueueId = NWB::Core::GpuPhysicalQueueId;
-using GpuTimingSample = NWB::Core::GpuTimingSample;
-using GpuTimingSampleAttribution = NWB::Core::GpuTimingSampleAttribution;
-using GpuTaskTimingFeedbackPolicy = NWB::Core::GpuTaskTimingFeedbackPolicy;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,7 +126,7 @@ ReflectionStatistics MakeReflectionStatisticsMetadataAt(in u32 frameIndex){
     value.effectiveHardwareBudget = 64u;
     value.queueCapacity = 64u;
     value.maxOpticalQueries = 8u;
-    value.traceMode = s_HybridReflectionTraceMode;
+    value.traceMode = ReflectionTraceMode::Hybrid;
     value.hardwareRequested = true;
     value.hardwareAvailable = true;
     return value;

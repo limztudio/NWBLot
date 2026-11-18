@@ -6,6 +6,7 @@
 
 
 #include "assert.h"
+#include "optional.h"
 #include "type_properties.h"
 
 #include <functional>
@@ -84,6 +85,19 @@ private:
 template<typename T>
 [[nodiscard]] constexpr NotNull<T> MakeNotNull(T ptr)noexcept{
     return NotNull<T>(ptr);
+}
+
+
+template<typename Collection>
+[[nodiscard]] constexpr decltype(auto) BorrowPointerAt(const Collection& values, usize index)noexcept{
+    return *values[index];
+}
+
+template<auto Callable, typename... Args>
+[[nodiscard]] constexpr auto BorrowOptionalResult(Args&&... args)noexcept(noexcept(std::invoke(Callable, Forward<Args>(args)...))){
+    auto* const result = std::invoke(Callable, Forward<Args>(args)...);
+    using Borrow = decltype(MakeNotNull(result));
+    return result ? Optional<Borrow>(MakeNotNull(result)) : Optional<Borrow>();
 }
 
 

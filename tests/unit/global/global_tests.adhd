@@ -3,6 +3,8 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/value_storage.adhd>
+#include <tests/unit/global/global_algorithm_access.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/unit/global/algorithm_case_types.adhd>
 #include <tests/unit/global/name_case_types.adhd>
@@ -11,126 +13,74 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type BinaryVectorVoidResult = Expected<void, BinaryVectorPayloadFailure>;
+type BinaryVectorPayloadFailureEnum = BinaryVectorPayloadFailure;
 
+class DiagnosticCapture{
+    public u32 count = 0u;
+    public CapturedField name;
+    public CapturedField category;
+    public CapturedField expression;
+    public CapturedField message;
+    public CapturedField file;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void record(in DiagnosticEventRecord event){
+        ++this.count;
+        this.name.assign(event.event);
+        this.category.assign(event.category);
+        this.expression.assign(event.expression);
+        this.message.assign(event.message);
+        this.file.assign(event.file);
+    }
+}
 
+void RecordTestDiagnostic(in borrow DiagnosticEventRecord event){
+    mut DiagnosticCapture capture = TestProcessValue<DiagnosticCapture>();
+    capture.record(event);
+    CaptureDiagnosticMessage("recursive", "ignored");
+}
 
-#include <core/alloc/scratch.h>
+[cpp_unwind]
+b8 FailDirectionalMatch(in u64 index){
+    ThrowTestException<RuntimeException>(RuntimeException("directional predicate failure"));
+    return false;
+}
 
-#include <global/algorithm.h>
-#include <global/atomic_identity.h>
-#include <global/base64.h>
-#include <global/binary.h>
-#include <global/containers.h>
-#include <global/diagnostics.h>
-#include <global/disjoint_set.h>
-#include <global/fixed_buffer.h>
-#include <global/interval.h>
-#include <global/limit.h>
-#include <global/not_null.h>
-#include <global/projected_index.h>
-#include <global/range_algorithms.h>
-#include <global/text_utils.h>
+[cpp_unwind]
+u64 FailDirectionalCount(){
+    ThrowTestException<RuntimeException>(RuntimeException("directional count failure"));
+    return 0u;
+}
 
+[cpp_unwind]
+b8 FailValidityCheck(in u32 value){
+    ThrowTestException<RuntimeException>(RuntimeException("validity predicate failure"));
+    return false;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_unwind]
+b8 FailDedupKey(in StableDedupValue lhs, in StableDedupValue rhs){
+    ThrowTestException<RuntimeException>(RuntimeException("deduplication predicate failure"));
+    return false;
+}
 
+[cpp_unwind]
+b8 FailIntervalEligibility(in IntervalProbe interval){
+    ThrowTestException<RuntimeException>(RuntimeException("interval predicate failure"));
+    return false;
+}
 
-namespace __hidden_global_binary_tests{
+[cpp_unwind]
+void FailIntervalVisit(in IntervalProbe interval){
+    ThrowTestException<RuntimeException>(RuntimeException("interval visitor failure"));
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct U32VectorView{
-public:
-    using value_type = u32;
-
-
-public:
-    const u32* values = nullptr;
-    usize valueCount = 0u;
-
-
-public:
-    [[nodiscard]] u32 operator[](const usize index)const noexcept{ return values[index]; }
-
-
-public:
-    [[nodiscard]] b8 empty()const noexcept{ return valueCount == 0u; }
-
-    [[nodiscard]] usize size()const noexcept{ return valueCount; }
-
-    [[nodiscard]] const u32* data()const noexcept{ return values; }
-
-    [[nodiscard]] const u32* begin()const noexcept{ return values; }
-
-    [[nodiscard]] const u32* end()const noexcept{ return values + valueCount; }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_diagnostic_event_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct DiagnosticCaptureSnapshot{
-public:
-    u32 captureCount = 0u;
-    AStringView name = {};
-    AStringView category = {};
-    AStringView expression = {};
-    AStringView message = {};
-    AStringView file = {};
-};
-
-void ResetDiagnosticEventCapture()noexcept;
-void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept;
-[[nodiscard]] DiagnosticCaptureSnapshot ReadDiagnosticCaptureSnapshot()noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::GlobalCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using BinaryVectorPayloadFailureEnum = ::BinaryVectorPayloadFailure::Enum;
-using BinaryVectorVoidResult = Expected<void, ::BinaryVectorPayloadFailure::Enum>;
-namespace BinaryVectorPayloadFailure = ::BinaryVectorPayloadFailure;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+IntervalProbe MakeInterval(in u64 first, in u64 last, in u32 index){
+    IntervalProbe item;
+    item.first = first;
+    item.last = last;
+    item.index = index;
+    return item;
 }
 
 
@@ -168,25 +118,16 @@ void VerifyBase64_RejectsMalformedAlphabetLengthPaddingAndUnusedBits(){
         const Expected<usize> sizeResult = Base64DecodedSize(text, 1024u);
         EXPECT_FALSE(sizeResult.has_value());
         b8 decodedOk = true;
-        native(in text, mut decodedOk){
-            NWB::Tests::TestArena<> context;
-            using Bytes = ::Vector<u8, NWB::Core::Alloc::GlobalArena>;
-            const typename Bytes::allocator_type allocator(context.arena);
-            decodedOk = DecodeBase64<Bytes>(text, allocator, 1024u).has_value();
-        }
+        HeapStorage storage(s_TestArena);
+        decodedOk = DecodeMeasuredBase64(text, storage, 1024u).has_value();
         EXPECT_FALSE(decodedOk);
     }
-    native{
-        NWB::Tests::TestArena<> context;
-        using Bytes = ::Vector<u8, NWB::Core::Alloc::GlobalArena>;
-        const typename Bytes::allocator_type allocator(context.arena);
-        const Array<AStringView, 2u> binaryInvalid = {
-            AStringView("Zg\0=", 4u),
-            AStringView("Zg\xff=", 4u),
-        };
-        for(const AStringView text : binaryInvalid){
-            EXPECT_FALSE(Base64DecodedSize(text, 1024u));
-            EXPECT_FALSE(DecodeBase64<Bytes>(text, allocator, 1024u));
+    {
+        HeapStorage storage(s_TestArena);
+        const Array<StringView, 2u> binaryInvalid(StringView("Zg\0=", 4u), StringView("Zg\xff=", 4u));
+        for(in StringView text : binaryInvalid){
+            EXPECT_FALSE(Base64DecodedSize(text, 1024u).has_value());
+            EXPECT_FALSE(DecodeMeasuredBase64(text, storage, 1024u).has_value());
         }
     }
 }
@@ -196,20 +137,18 @@ void VerifyBase64_ExactDecodedBoundsAreCheckedBeforeAllocation(){
     const Expected<usize> size = Base64DecodedSize("Zm9v", 3u);
     ASSERT_TRUE(size.has_value());
     EXPECT_EQ(size.value(), 3u);
-    native{
-        NWB::Tests::TestArena<> context;
-        using Bytes = ::Vector<u8, NWB::Core::Alloc::GlobalArena>;
-        const typename Bytes::allocator_type allocator(context.arena);
-        const auto before = context.arena.memoryStats();
-        EXPECT_FALSE(DecodeBase64<Bytes>("Zm9v", allocator, 2u));
-        EXPECT_EQ(context.arena.memoryStats().allocationCount, before.allocationCount);
-        const auto output = DecodeBase64<Bytes>("Zm9v", allocator, 3u);
-        ASSERT_TRUE(output);
-        ASSERT_EQ(output->size(), 3u);
-        EXPECT_EQ((*output)[0u], static_cast<u8>('f'));
-        const auto empty = DecodeBase64<Bytes>("", allocator, 0u);
-        ASSERT_TRUE(empty);
-        EXPECT_TRUE(empty->empty());
+    {
+        HeapStorage storage(s_TestArena);
+        const auto before = storage.memoryStats();
+        EXPECT_FALSE(DecodeMeasuredBase64("Zm9v", storage, 2u).has_value());
+        EXPECT_EQ(storage.memoryStats().allocationCount, before.allocationCount);
+        const auto output = DecodeMeasuredBase64("Zm9v", storage, 3u);
+        ASSERT_TRUE(output.has_value());
+        ASSERT_EQ(output.value().size(), 3u);
+        EXPECT_EQ(output.value()[0u], cast<u8>('f'));
+        const auto empty = DecodeMeasuredBase64("", storage, 0u);
+        ASSERT_TRUE(empty.has_value());
+        EXPECT_TRUE(empty.value().empty());
     }
 }
 
@@ -220,20 +159,18 @@ void VerifyBase64_InvalidEncodeInputAndSizeOverflowDoNotAllocate(){
     u64 afterInvalidAllocations = 1u;
     b8 emptySucceeded = false;
     String emptyEncoded = "nonempty";
-    native(mut encodedNullNonzero, mut encodedSizeOverflow, mut beforeAllocations, mut afterInvalidAllocations, mut emptySucceeded, mut emptyEncoded){
-        NWB::Tests::TestArena<> context;
-        using Text = ::AString<NWB::Core::Alloc::GlobalArena>;
-        const typename Text::allocator_type allocator(context.arena);
-        const auto before = context.arena.memoryStats();
-        beforeAllocations = before.allocationCount;
-        encodedNullNonzero = EncodeBase64<Text>({ nullptr, 1u }, allocator).has_value();
-        const u8 byte = 0u;
-        encodedSizeOverflow = EncodeBase64<Text>({ &byte, Limit<usize>::s_Max }, allocator).has_value();
-        afterInvalidAllocations = context.arena.memoryStats().allocationCount;
-        const auto empty = EncodeBase64<Text>({}, allocator);
+    {
+        HeapStorage storage(s_TestArena);
+        const Array<u8, 1u> bytes(0u);
+        const Span<u8> source = bytes;
+        beforeAllocations = storage.memoryStats().allocationCount;
+        encodedNullNonzero = EncodeMeasuredBase64(TestByteView(source, 1u, false), storage).has_value();
+        encodedSizeOverflow = EncodeMeasuredBase64(TestByteView(source, usize.max, true), storage).has_value();
+        afterInvalidAllocations = storage.memoryStats().allocationCount;
+        const auto empty = EncodeMeasuredBase64(BinaryByteView(), storage);
         emptySucceeded = empty.has_value();
-        if(empty)
-            emptyEncoded.assign(*empty);
+        if(emptySucceeded)
+            emptyEncoded.assign(Base64View(empty.value()));
     }
     EXPECT_FALSE(encodedNullNonzero);
     EXPECT_FALSE(encodedSizeOverflow);
@@ -431,9 +368,10 @@ void VerifyGlobal_TriviallyCopyableVectorPreservesOverlappingSourceRanges(){
     values.push_back(3u);
     values.push_back(4u);
 
-    native(mut values){
-        const __hidden_global_binary_tests::U32VectorView middle{ values.data() + 1u, 2u };
-        AppendTriviallyCopyableVector(values, middle);
+    {
+        const Span<u32> source = values;
+        const U32VectorView middle(source.subspan(1u, 2u));
+        AppendVectorView(values, middle);
     }
 
     EXPECT_EQ(values.size(), 6u);
@@ -444,9 +382,10 @@ void VerifyGlobal_TriviallyCopyableVectorPreservesOverlappingSourceRanges(){
     EXPECT_EQ(values[4u], 2u);
     EXPECT_EQ(values[5u], 3u);
 
-    native(mut values){
-        const __hidden_global_binary_tests::U32VectorView assignedMiddle{ values.data() + 1u, 3u };
-        AssignTriviallyCopyableVector(values, assignedMiddle);
+    {
+        const Span<u32> source = values;
+        const U32VectorView middle(source.subspan(1u, 3u));
+        AssignVectorView(values, middle);
     }
 
     EXPECT_EQ(values.size(), 3u);
@@ -499,15 +438,12 @@ void VerifyGlobal_DirectionalSearchHandlesChangingCountsAndThrows(){
     };
     EXPECT_FALSE(FindDirectionalIndex(u64.max - 1u, false, maximumRowCount, matchNone).has_value());
 
-    native{
-        const auto nativeCountRows = []()noexcept{ return u64(3u); };
-        const auto nativeMatchNone = [](const u64)noexcept{ return false; };
-        const auto throwingMatch = [](const u64) -> b8{ throw RuntimeException("directional predicate failure"); };
-        static_assert(!noexcept(FindDirectionalIndex(0u, false, nativeCountRows, throwingMatch)));
-        EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, nativeCountRows, throwingMatch)), RuntimeException);
-        const auto throwingCount = []() -> u64{ throw RuntimeException("directional count failure"); };
-        static_assert(!noexcept(FindDirectionalIndex(0u, false, throwingCount, nativeMatchNone)));
-        EXPECT_THROW(static_cast<void>(FindDirectionalIndex(0u, false, throwingCount, nativeMatchNone)), RuntimeException);
+    {
+        const auto threeRows = lambda[]() -> u64{ return 3u; };
+        RequireThrowingExpression(FindDirectionalIndex(0u, false, threeRows, FailDirectionalMatch));
+        ExpectRuntimeException(FindDirectionalIndex(0u, false, threeRows, FailDirectionalMatch));
+        RequireThrowingExpression(FindDirectionalIndex(0u, false, FailDirectionalCount, matchNone));
+        ExpectRuntimeException(FindDirectionalIndex(0u, false, FailDirectionalCount, matchNone));
     }
 }
 
@@ -577,65 +513,32 @@ void VerifyGlobal_CollectionValidationAndOrderingPreserveBoundaries(){
     EXPECT_EQ(duplicates[1u].order, 1u);
     EXPECT_EQ(duplicates[2u].order, 4u);
 
-    native(in valuesToValidate, mut duplicates){
-        const auto recordDuplicateNoexcept = [](const u32 current, const u32 previous)noexcept{ return current == previous; };
-        const auto throwingValid = [](const u32) -> b8{ throw RuntimeException("validity predicate failure"); };
-        static_assert(!noexcept(AllValidAndDistinct(Span<const u32>{}, throwingValid, recordDuplicateNoexcept)));
-        EXPECT_THROW(static_cast<void>(AllValidAndDistinct(Span<const u32>(valuesToValidate), throwingValid, recordDuplicateNoexcept)), RuntimeException);
-
-        using KeyedValue = NWB::Tests::GlobalCases::StableDedupValue;
-        const auto throwingSameKey = [](const KeyedValue&, const KeyedValue&) -> b8{ throw RuntimeException("deduplication predicate failure"); };
-        EXPECT_THROW(StableDeduplicate(duplicates, throwingSameKey), RuntimeException);
-
-        struct ThrowingAssignment{
-            u32 key = 0u;
-            ThrowingAssignment& operator=(ThrowingAssignment& other)noexcept{ key = other.key; return *this; }
-            ThrowingAssignment& operator=(const ThrowingAssignment&){ throw RuntimeException("const assignment failure"); }
-        };
-        struct SmallSequence{
-            Array<ThrowingAssignment, 3u> entries{ ThrowingAssignment{ 1u }, ThrowingAssignment{ 1u }, ThrowingAssignment{ 2u } };
-            usize count = 3u;
-            [[nodiscard]] usize size()const noexcept{ return count; }
-            ThrowingAssignment& operator[](const usize index)noexcept{ return entries[index]; }
-            void resize(const usize value)noexcept{ count = value; }
-        };
-        struct ThrowingComparison{
-            [[nodiscard]] b8 operator()(ThrowingAssignment& lhs, ThrowingAssignment& rhs)const noexcept{ return lhs.key == rhs.key; }
-            [[nodiscard]] b8 operator()(ThrowingAssignment&, const ThrowingAssignment&)const{ throw RuntimeException("const comparison failure"); }
-        };
-        const auto sameAssignmentKey = [](const ThrowingAssignment& lhs, const ThrowingAssignment& rhs)noexcept{ return lhs.key == rhs.key; };
+    {
+        const auto sameNumber = lambda[](in u32 lhs, in u32 rhs) -> b8{ return lhs == rhs; };
+        RequireThrowingExpression(AllValidAndDistinct(emptyValues, FailValidityCheck, sameNumber));
+        ExpectRuntimeException(AllValidAndDistinct(allValues, FailValidityCheck, sameNumber));
+        ExpectRuntimeException(StableDeduplicate(duplicates, FailDedupKey));
+        const auto sameAssignmentKey = lambda[](in ThrowingAssignment lhs, in ThrowingAssignment rhs) -> b8{ return lhs.key == rhs.key; };
         SmallSequence assignmentValues;
-        static_assert(!noexcept(StableDeduplicate(assignmentValues, sameAssignmentKey)));
-        EXPECT_THROW(StableDeduplicate(assignmentValues, sameAssignmentKey), RuntimeException);
+        assignmentValues[0u].key = 1u;
+        assignmentValues[1u].key = 1u;
+        assignmentValues[2u].key = 2u;
+        RequireThrowingExpression(StableDeduplicate(assignmentValues, sameAssignmentKey));
+        ExpectRuntimeException(StableDeduplicate(assignmentValues, sameAssignmentKey));
         SmallSequence comparisonValues;
-        const ThrowingComparison throwingComparison;
-        static_assert(!noexcept(StableDeduplicate(comparisonValues, throwingComparison)));
-        EXPECT_THROW(StableDeduplicate(comparisonValues, throwingComparison), RuntimeException);
-
-        struct ThrowingIndexSequence{
-            KeyedValue value{};
-            [[nodiscard]] usize size()const noexcept{ return 1u; }
-            KeyedValue& operator[](usize&){ throw RuntimeException("lvalue index failure"); }
-            KeyedValue& operator[](usize&&)noexcept{ return value; }
-            void resize(usize&)noexcept{}
-            void resize(usize&&)noexcept{}
-        };
-        const auto sameKeyedValue = [](const KeyedValue& lhs, const KeyedValue& rhs)noexcept{ return lhs.key == rhs.key; };
+        comparisonValues[0u].key = 1u;
+        comparisonValues[1u].key = 1u;
+        comparisonValues[2u].key = 2u;
+        const ThrowingComparison comparison = ThrowingComparison();
+        RequireThrowingExpression(StableDeduplicate(comparisonValues, comparison));
+        ExpectRuntimeException(StableDeduplicate(comparisonValues, comparison));
+        const auto sameKey = lambda[](in StableDedupValue lhs, in StableDedupValue rhs) -> b8{ return lhs.key == rhs.key; };
         ThrowingIndexSequence indexValues;
-        static_assert(!noexcept(StableDeduplicate(indexValues, sameKeyedValue)));
-        EXPECT_THROW(StableDeduplicate(indexValues, sameKeyedValue), RuntimeException);
-
-        struct ThrowingResizeSequence{
-            KeyedValue value{};
-            [[nodiscard]] usize size()const noexcept{ return 0u; }
-            KeyedValue& operator[](usize&)noexcept{ return value; }
-            KeyedValue& operator[](usize&&)noexcept{ return value; }
-            void resize(usize&){ throw RuntimeException("lvalue resize failure"); }
-            void resize(usize&&)noexcept{}
-        };
+        RequireThrowingExpression(StableDeduplicate(indexValues, sameKey));
+        ExpectRuntimeException(StableDeduplicate(indexValues, sameKey));
         ThrowingResizeSequence resizeValues;
-        static_assert(!noexcept(StableDeduplicate(resizeValues, sameKeyedValue)));
-        EXPECT_THROW(StableDeduplicate(resizeValues, sameKeyedValue), RuntimeException);
+        RequireThrowingExpression(StableDeduplicate(resizeValues, sameKey));
+        ExpectRuntimeException(StableDeduplicate(resizeValues, sameKey));
     }
     EXPECT_EQ(duplicates.size(), 3u);
 
@@ -653,26 +556,28 @@ void VerifyGlobal_CollectionValidationAndOrderingPreserveBoundaries(){
 
     FixedVector<u32, 4> sortedValues = FixedVector<u32, 4>();
     b8 pointerIdentitiesMatched = false;
-    native(mut sortedValues, mut pointerIdentitiesMatched){
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    {
         const u32 one = 1u;
         const u32 two = 2u;
         const u32 three = 3u;
-        const Array<const u32*, 4u> items{ &one, &two, nullptr, &three };
-        ::Vector<u8, NWB::Core::Alloc::ScratchArena> state(items.size(), 0u, scratchArena);
-        ::Vector<const u32*, NWB::Core::Alloc::ScratchArena> sorted(scratchArena);
-        TopologicallySortPointers(Span<const u32* const>(items.data(), items.size()), [](const u32 current, const u32 dependency)noexcept{
+        const Array<NullableU32, 4u> items(AddressU32(one), AddressU32(two), NullableU32(), AddressU32(three));
+        Vector<u8> state;
+        state.resize(items.size(), 0u);
+        Vector<NullableU32> sorted;
+        SortU32Pointers(NullableU32View(items), lambda[](in u32 current, in u32 dependency) -> b8{
             return (current == 1u && dependency == 2u) || (current == 2u && dependency == 1u);
         }, state, sorted);
-        for(const u32* const ptr : sorted)
-            sortedValues.push_back(ptr != nullptr ? *ptr : 0u);
-        pointerIdentitiesMatched =
-            sorted.size() == 4u
-            && sorted[0u] == &two
-            && sorted[1u] == &one
-            && sorted[2u] == nullptr
-            && sorted[3u] == &three
-        ;
+        for(in NullableU32 address : sorted){
+            if(SameU32Address(address, NullableU32()))
+                sortedValues.push_back(0u);
+            else
+                sortedValues.push_back(ReadU32Address(address));
+        }
+        pointerIdentitiesMatched = sorted.size() == 4u
+            && SameU32Address(sorted[0u], AddressU32(two))
+            && SameU32Address(sorted[1u], AddressU32(one))
+            && SameU32Address(sorted[2u], NullableU32())
+            && SameU32Address(sorted[3u], AddressU32(three));
     }
     ASSERT_EQ(sortedValues.size(), 4u);
     EXPECT_EQ(sortedValues[0u], 2u);
@@ -684,33 +589,28 @@ void VerifyGlobal_CollectionValidationAndOrderingPreserveBoundaries(){
 
 void VerifyGlobal_IntervalCoverageHandlesOverlapAndThrows(){
     Array<u8, 5> overlapFlags = Array<u8, 5>();
-    native(mut overlapFlags){
-        using TestInterval = NWB::Tests::GlobalCases::IntervalProbe;
-        auto makeInterval = [](const u64 first, const u64 last, const u32 index)noexcept{
-            TestInterval item;
-            item.first = first;
-            item.last = last;
-            item.index = index;
-            return item;
-        };
-        const Array<TestInterval, 3u> unsortedIntervals{ makeInterval(5u, 10u, 0u), makeInterval(0u, 5u, 1u), makeInterval(2u, 3u, 2u) };
-        const auto eligible = [](const TestInterval&)noexcept{ return true; };
-        const auto intervalBegin = [](const TestInterval& interval)noexcept{ return interval.first; };
-        const auto intervalEnd = [](const TestInterval& interval)noexcept{ return interval.last; };
-        static_assert(noexcept(CoversHalfOpenRange(0u, 0u, Span<const TestInterval>{}, eligible, intervalBegin, intervalEnd)));
-        EXPECT_TRUE(CoversHalfOpenRange(0u, 0u, Span<const TestInterval>{}, eligible, intervalBegin, intervalEnd));
-        const auto throwingEligible = [](const TestInterval&) -> b8{ throw RuntimeException("interval predicate failure"); };
-        static_assert(!noexcept(CoversHalfOpenRange(0u, 1u, Span<const TestInterval>{}, throwingEligible, intervalBegin, intervalEnd)));
-        EXPECT_THROW(static_cast<void>(CoversHalfOpenRange(0u, 10u, Span<const TestInterval>(unsortedIntervals), throwingEligible, intervalBegin, intervalEnd)), RuntimeException);
-        EXPECT_TRUE(CoversHalfOpenRange(0u, 10u, Span<const TestInterval>(unsortedIntervals), eligible, intervalBegin, intervalEnd));
-        EXPECT_FALSE(CoversHalfOpenRange(0u, 11u, Span<const TestInterval>(unsortedIntervals), eligible, intervalBegin, intervalEnd));
-        const Array<TestInterval, 5u> sortedIntervals{ makeInterval(0u, 10u, 0u), makeInterval(1u, 2u, 1u), makeInterval(3u, 4u, 2u), makeInterval(10u, 11u, 3u), makeInterval(10u, 11u, 4u) };
-        const auto noVisit = [](const TestInterval&)noexcept{};
-        static_assert(noexcept(VisitOverlappingSortedIntervals(Span<const TestInterval>{}, intervalBegin, intervalEnd, noVisit)));
-        const auto throwingVisit = [](const TestInterval&){ throw RuntimeException("interval visitor failure"); };
-        static_assert(!noexcept(VisitOverlappingSortedIntervals(Span<const TestInterval>{}, intervalBegin, intervalEnd, throwingVisit)));
-        EXPECT_THROW(VisitOverlappingSortedIntervals(Span<const TestInterval>(sortedIntervals), intervalBegin, intervalEnd, throwingVisit), RuntimeException);
-        VisitOverlappingSortedIntervals(Span<const TestInterval>(sortedIntervals), intervalBegin, intervalEnd, [&overlapFlags](const TestInterval& interval)noexcept{ overlapFlags[interval.index] = 1u; });
+    {
+        const Array<IntervalProbe, 3u> unsorted(MakeInterval(5u, 10u, 0u), MakeInterval(0u, 5u, 1u), MakeInterval(2u, 3u, 2u));
+        const Span<IntervalProbe> empty = Span<IntervalProbe>();
+        const Span<IntervalProbe> unsortedIntervals = unsorted;
+        const auto eligible = lambda[](in IntervalProbe interval) -> b8{ return true; };
+        const auto begin = lambda[](in IntervalProbe interval) -> u64{ return interval.first; };
+        const auto end = lambda[](in IntervalProbe interval) -> u64{ return interval.last; };
+        RequireNothrowExpression(CoversHalfOpenRange(0u, 0u, empty, eligible, begin, end));
+        EXPECT_TRUE(CoversHalfOpenRange(0u, 0u, empty, eligible, begin, end));
+        RequireThrowingExpression(CoversHalfOpenRange(0u, 1u, empty, FailIntervalEligibility, begin, end));
+        ExpectRuntimeException(CoversHalfOpenRange(0u, 10u, unsortedIntervals, FailIntervalEligibility, begin, end));
+        EXPECT_TRUE(CoversHalfOpenRange(0u, 10u, unsortedIntervals, eligible, begin, end));
+        EXPECT_FALSE(CoversHalfOpenRange(0u, 11u, unsortedIntervals, eligible, begin, end));
+        const Array<IntervalProbe, 5u> sorted(MakeInterval(0u, 10u, 0u), MakeInterval(1u, 2u, 1u), MakeInterval(3u, 4u, 2u), MakeInterval(10u, 11u, 3u), MakeInterval(10u, 11u, 4u));
+        const Span<IntervalProbe> sortedIntervals = sorted;
+        const auto noVisit = lambda[](in IntervalProbe interval) -> void{};
+        RequireNothrowExpression(VisitOverlappingSortedIntervals(empty, begin, end, noVisit));
+        RequireThrowingExpression(VisitOverlappingSortedIntervals(empty, begin, end, FailIntervalVisit));
+        ExpectRuntimeException(VisitOverlappingSortedIntervals(sortedIntervals, begin, end, FailIntervalVisit));
+        VisitOverlappingSortedIntervals(sortedIntervals, begin, end, lambda[mut overlapFlags](in IntervalProbe interval) -> void{
+            overlapFlags[interval.index] = 1u;
+        });
     }
     for(in u8 overlap : overlapFlags)
         EXPECT_EQ(overlap, 1u);
@@ -739,11 +639,8 @@ void VerifyGlobal_DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters(
 
     DiagnosticEventText wide = DiagnosticEventText();
     DiagnosticEventText nullFormatted = DiagnosticEventText();
-    native(mut wide, mut nullFormatted){
-        constexpr WStringView s_ValueFormatTrailingWide = L"value {}.trailing";
-        wide = MakeDiagnosticEventText(s_ValueFormatTrailingWide.substr(0u, 8u), 42u);
-        nullFormatted = MakeDiagnosticEventText(static_cast<const char*>(nullptr), 42u);
-    }
+    wide = FormatWideDiagnostic(s_WideFormat.substr(0u, 8u), 42u);
+    nullFormatted = FormatNullableDiagnostic(s_NullFormat, 42u);
     EXPECT_EQ(wide.view(), expected);
     EXPECT_EQ(nullFormatted.view(), StringView());
 }
@@ -772,33 +669,20 @@ void VerifyGlobal_DiagnosticEventHookRejectsReentryAndHonorsBoundedText(){
     StringView capturedCategory = StringView();
     StringView capturedExpression = StringView();
     StringView capturedMessage = StringView();
-    native(in unitCategory, mut captureCount, mut nonNullFields, mut capturedName, mut capturedCategory, mut capturedExpression, mut capturedMessage){
-        using namespace __hidden_diagnostic_event_tests;
-        ResetDiagnosticEventCapture();
-
-        const auto callback = MakeNotNull<DiagnosticEventCallback>([](const DiagnosticEventRecord& record)noexcept{
-            RecordDiagnosticEvent(record);
-            CaptureDiagnosticEvent("recursive", "ignored");
-        });
-
-        SetDiagnosticEventCallback(callback.get());
-        CaptureDiagnosticEvent(AStringView("unit.trailing").substr(0u, 4u), AStringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
-        ClearDiagnosticEventCallback(callback.get());
-        CaptureDiagnosticEvent(unitCategory, "ignored");
-
-        const DiagnosticCaptureSnapshot snapshot = ReadDiagnosticCaptureSnapshot();
-        captureCount = snapshot.captureCount;
-        nonNullFields =
-            snapshot.name.data() != nullptr
-            && snapshot.category.data() != nullptr
-            && snapshot.expression.data() != nullptr
-            && snapshot.message.data() != nullptr
-            && snapshot.file.data() != nullptr
-        ;
-        capturedName = snapshot.name;
-        capturedCategory = snapshot.category;
-        capturedExpression = snapshot.expression;
-        capturedMessage = snapshot.message;
+    {
+        mut DiagnosticCapture capture = TestProcessValue<DiagnosticCapture>();
+        capture = DiagnosticCapture();
+        SetCaseDiagnosticHook(RecordTestDiagnostic);
+        CaptureDiagnosticAt(StringView("unit.trailing").substr(0u, 4u), StringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
+        ClearCaseDiagnosticHook(RecordTestDiagnostic);
+        CaptureDiagnosticMessage(unitCategory, "ignored");
+        captureCount = capture.count;
+        capturedName = capture.name.view();
+        capturedCategory = capture.category.view();
+        capturedExpression = capture.expression.view();
+        capturedMessage = capture.message.view();
+        nonNullFields = HasTextAddress(capturedName) && HasTextAddress(capturedCategory)
+            && HasTextAddress(capturedExpression) && HasTextAddress(capturedMessage) && HasTextAddress(capture.file.view());
     }
     EXPECT_EQ(captureCount, 1u);
     ASSERT_TRUE(nonNullFields);
@@ -807,86 +691,6 @@ void VerifyGlobal_DiagnosticEventHookRejectsReentryAndHonorsBoundedText(){
     EXPECT_EQ(capturedExpression, StringView(""));
     EXPECT_EQ(capturedMessage, StringView("message"));
     EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), StringView());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_diagnostic_event_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static u32 s_DiagnosticEventCaptureCount = 0u;
-static AStringView s_DiagnosticEventName = {};
-static AStringView s_DiagnosticEventCategory = {};
-static AStringView s_DiagnosticEventExpression = {};
-static AStringView s_DiagnosticEventMessage = {};
-static AStringView s_DiagnosticEventFile = {};
-static Array<char, s_MaxEventTextBytes> s_DiagnosticEventNameText = {};
-static Array<char, s_MaxEventTextBytes> s_DiagnosticEventCategoryText = {};
-static Array<char, s_MaxEventTextBytes> s_DiagnosticEventExpressionText = {};
-static Array<char, s_MaxEventTextBytes> s_DiagnosticEventMessageText = {};
-static Array<char, s_MaxEventTextBytes> s_DiagnosticEventFileText = {};
-
-void ResetDiagnosticEventCapture()noexcept{
-    s_DiagnosticEventCaptureCount = 0u;
-    s_DiagnosticEventName = {};
-    s_DiagnosticEventCategory = {};
-    s_DiagnosticEventExpression = {};
-    s_DiagnosticEventMessage = {};
-    s_DiagnosticEventFile = {};
-    s_DiagnosticEventNameText[0u] = 0;
-    s_DiagnosticEventCategoryText[0u] = 0;
-    s_DiagnosticEventExpressionText[0u] = 0;
-    s_DiagnosticEventMessageText[0u] = 0;
-    s_DiagnosticEventFileText[0u] = 0;
-}
-
-void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
-    ++s_DiagnosticEventCaptureCount;
-    CopyFixedBuffer(s_DiagnosticEventNameText, record.event);
-    CopyFixedBuffer(s_DiagnosticEventCategoryText, record.category);
-    CopyFixedBuffer(s_DiagnosticEventExpressionText, record.expression);
-    CopyFixedBuffer(s_DiagnosticEventMessageText, record.message);
-    CopyFixedBuffer(s_DiagnosticEventFileText, record.file);
-    s_DiagnosticEventName = AStringView(s_DiagnosticEventNameText.data());
-    s_DiagnosticEventCategory = AStringView(s_DiagnosticEventCategoryText.data());
-    s_DiagnosticEventExpression = AStringView(s_DiagnosticEventExpressionText.data());
-    s_DiagnosticEventMessage = AStringView(s_DiagnosticEventMessageText.data());
-    s_DiagnosticEventFile = AStringView(s_DiagnosticEventFileText.data());
-}
-
-DiagnosticCaptureSnapshot ReadDiagnosticCaptureSnapshot()noexcept{
-    DiagnosticCaptureSnapshot snapshot;
-    snapshot.captureCount = s_DiagnosticEventCaptureCount;
-    snapshot.name = s_DiagnosticEventName;
-    snapshot.category = s_DiagnosticEventCategory;
-    snapshot.expression = s_DiagnosticEventExpression;
-    snapshot.message = s_DiagnosticEventMessage;
-    snapshot.file = s_DiagnosticEventFile;
-    return snapshot;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

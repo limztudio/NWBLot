@@ -21,6 +21,7 @@ target_link_libraries(nwb_global_tests PRIVATE nwb_common nwb_alloc nwb_global_h
 nwb_declare_gtest_executable(nwb_global_contract_boundary_tests)
 nwb_target_adhd_sources(nwb_global_contract_boundary_tests NAMESPACE "NWB::Tests::GlobalContractCases" SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/contract_name_cases.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/contract_access.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/contract_boundary_tests.adhd"
 )
 target_link_libraries(nwb_global_contract_boundary_tests PRIVATE nwb_common nwb_alloc)

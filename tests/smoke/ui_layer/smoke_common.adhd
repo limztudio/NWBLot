@@ -3,6 +3,7 @@
 
 
 #include "snapshots.adhd"
+#include <loader/project_entry.adhd>
 #include <tests/smoke/presentation_types.adhd>
 #include <tests/smoke/framebuffer_capture.adhd>
 #include <tests/smoke/smoke_project_helpers.adhd>
@@ -39,858 +40,350 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Tests::Smoke::UiListSmokeSource")]
-extern class UiListSmokeSource : IListDataSource{
-    u64 instanceGeneration()const;
-    u64 revision()const;
-    u64 rowCount()const;
-    u64 key(in u64 index)const;
-    Expected<u64> indexOf(in u64 keyValue)const;
-    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
-    StringView text(in u64 index)const;
-    b8 enabled(in u64 index)const;
-    void reverse();
-    void remove(in u64 keyValue);
-    void beginFrame();
-    b8 reversed()const;
-    u64 removedKey()const;
-    u32 labelReads()const;
-};
-
-[cpp_name("::NWB::Tests::Smoke::UiComboSmokeSource")]
-extern class UiComboSmokeSource : IListDataSource{
-    u64 instanceGeneration()const;
-    u64 revision()const;
-    u64 rowCount()const;
-    u64 key(in u64 index)const;
-    Expected<u64> indexOf(in u64 keyValue)const;
-    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
-    StringView text(in u64 index)const;
-    b8 enabled(in u64 index)const;
-    void reverse();
-    void remove(in u64 keyValue);
-    void beginFrame();
-    void toggleEmpty();
-    void replace();
-    b8 reversed()const;
-    u64 removedKey()const;
-    u32 labelReads()const;
-};
-
-[cpp_name("::NWB::Tests::Smoke::UiNestedPopupSmokeSource")]
-extern class UiNestedPopupSmokeSource : ISearchableListDataSource{
-    u64 instanceGeneration()const;
-    u64 revision()const;
-    u64 rowCount()const;
-    u64 key(in u64 index)const;
-    Expected<u64> indexOf(in u64 keyValue)const;
-    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
-    StringView text(in u64 index)const;
-    b8 enabled(in u64 index)const;
-    b8 filter(in StringView query);
-    in IListDataSource filtered()const;
-    void beginFrame();
-    u32 labelReads()const;
-};
-
-[cpp_name("::NWB::Tests::Smoke::UiPopupToolsSmokeSource")]
-extern class UiPopupToolsSmokeSource : IListDataSource{
-    u64 instanceGeneration()const;
-    u64 revision()const;
-    u64 rowCount()const;
-    u64 key(in u64 index)const;
-    Expected<u64> indexOf(in u64 keyValue)const;
-    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
-    StringView text(in u64 index)const;
-    b8 enabled(in u64 index)const;
-    void reverse();
-    void replace();
-    void beginFrame();
-    b8 reversed()const;
-    u32 labelReads()const;
-};
-
-[cpp_name("::NWB::Tests::Smoke::UiRadioGroupSmokeSource")]
-extern class UiRadioGroupSmokeSource : IListDataSource{
-    u64 instanceGeneration()const;
-    u64 revision()const;
-    u64 rowCount()const;
-    u64 key(in u64 index)const;
-    Expected<u64> indexOf(in u64 keyValue)const;
-    Expected<u64> findEnabled(in u64 start, in b8 reverseValue)const;
-    StringView text(in u64 index)const;
-    b8 enabled(in u64 index)const;
-    void reverse();
-    void remove(in u64 keyValue);
-    void replace();
-    void beginFrame();
-    b8 reversed()const;
-    u64 removedKey()const;
-    u32 labelReads()const;
-    void invalidateText()const;
-};
-
-[cpp_name("::NWB::Tests::Smoke::UiSearchComboSmokeSource")]
-extern class UiSearchComboSmokeSource : ISearchableListDataSource{
-    u64 instanceGeneration()const;
-    u64 revision()const;
-    u64 rowCount()const;
-    u64 key(in u64 index)const;
-    Expected<u64> indexOf(in u64 keyValue)const;
-    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
-    StringView text(in u64 index)const;
-    b8 enabled(in u64 index)const;
-    b8 filter(in StringView query);
-    in IListDataSource filtered()const;
-    void reverse();
-    void remove(in u64 keyValue);
-    void beginFrame();
-    b8 reversed()const;
-    u64 removedKey()const;
-    u32 labelReads()const;
-};
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <engine_namespace.h>
-
-#include <core/alloc/general.h>
-#include <core/common/log.h>
-#include <core/ecs/entity.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/render_pass.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/input/module.h>
-#include <core/os/clipboard.h>
-#include <core/task/gpu/persistent_state.h>
-#include <loader/project_entry.adhd.h>
-
-#include <global/array.h>
-#include <global/assert.h>
-#include <global/bit.h>
-#include <global/hash_utils.h>
-#include <global/simd/vector.h>
-#include <global/simd/vector_arithmetic.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-#include <global/termination.h>
-#include <global/text_utils.h>
-
-
-NWB_BEGIN
-namespace Tests::Smoke{
-
-using Core::Alloc::GlobalArena;
-using Core::Assets::AssetManager;
-using Core::ClipboardCompletion;
-using Core::ClipboardRequestToken;
-using Core::IClipboardService;
-using Core::IInputEventHandler;
-using Core::InputDispatcher;
-using Core::KeyboardInputResult;
-namespace Key = Core::Key;
-namespace InputAction = Core::InputAction;
-namespace ClipboardAdmission = Core::ClipboardAdmission;
-namespace ClipboardChannel = Core::ClipboardChannel;
-namespace ClipboardPollResult = Core::ClipboardPollResult;
-namespace ClipboardOperation = Core::ClipboardOperation;
-namespace ClipboardStatus = Core::ClipboardStatus;
-
-using Impl::UiPaintContext;
-using Impl::UiLayerSystem;
-namespace UiLayerPresentation = Impl::UiLayerPresentation;
-
-using Impl::Ui::Builder;
-using Impl::Ui::CalculateScrollRowBounds;
-using Impl::Ui::ComboOptions;
-using Impl::Ui::ComboResult;
-using Impl::Ui::ComboState;
-using Impl::Ui::ContainerOptions;
-using Impl::Ui::ContextMenuOptions;
-using Impl::Ui::ContextMenuResult;
-using Impl::Ui::ContextMenuState;
-using Impl::Ui::EditBoxOptions;
-using Impl::Ui::EditBoxPlacement;
-using Impl::Ui::EditBoxRange;
-using Impl::Ui::EditBoxResult;
-using Impl::Ui::EditBoxState;
-using Impl::Ui::EditBoxView;
-using Impl::Ui::EditCaretGeometry;
-using Impl::Ui::EditModel;
-using Impl::Ui::FloatBounds;
-using Impl::Ui::FloatEditModel;
-using Impl::Ui::FloatEditOptions;
-using Impl::Ui::HitTarget;
-using Impl::Ui::IListDataSource;
-using Impl::Ui::ISearchableListDataSource;
-using Impl::Ui::ImageOptions;
-using Impl::Ui::InputBindings;
-using Impl::Ui::InputKeyBinding;
-using Impl::Ui::InputRouter;
-using Impl::Ui::IntegerEditModel;
-using Impl::Ui::IntegerEditOptions;
-using Impl::Ui::Label;
-using Impl::Ui::ListOptions;
-using Impl::Ui::ListResult;
-using Impl::Ui::ListState;
-using Impl::Ui::NumericEditBoxResult;
-using Impl::Ui::NumericEditResult;
-using Impl::Ui::PaintBuilder;
-using Impl::Ui::PopupToken;
-using Impl::Ui::PopupOptions;
-using Impl::Ui::PopupPlacement;
-using Impl::Ui::PopupScope;
-using Impl::Ui::PopupState;
-using Impl::Ui::ProgressOptions;
-using Impl::Ui::ProgressStyle;
-using Impl::Ui::RadioGroupChoicePlacement;
-using Impl::Ui::RadioGroupOptions;
-using Impl::Ui::RadioGroupPlacement;
-using Impl::Ui::RadioGroupResult;
-using Impl::Ui::RadioGroupState;
-using Impl::Ui::ResolveVisibleWindowBounds;
-using Impl::Ui::ResolveWindowCollapseBounds;
-using Impl::Ui::ResolveWindowContentBounds;
-using Impl::Ui::ResolveWindowResizeBounds;
-using Impl::Ui::ScrollPlacement;
-using Impl::Ui::ScrollViewportPlacement;
-using Impl::Ui::SearchComboOptions;
-using Impl::Ui::SearchComboResult;
-using Impl::Ui::SearchComboState;
-using Impl::Ui::SeparatorOptions;
-using Impl::Ui::ShapeRequest;
-using Impl::Ui::SharedGlyphPage;
-using Impl::Ui::SharedImageSource;
-using Impl::Ui::SharedSdfAtlasPage;
-using Impl::Ui::SliderOptions;
-using Impl::Ui::SliderPlacement;
-using Impl::Ui::SliderState;
-using Impl::Ui::StoreRect;
-using Impl::Ui::TextAreaOptions;
-using Impl::Ui::TextAreaState;
-using Impl::Ui::TextService;
-using Impl::Ui::TooltipOptions;
-using Impl::Ui::TooltipState;
-using Impl::Ui::TryIntersectUiRects;
-using Impl::Ui::WidgetOptions;
-using Impl::Ui::WindowMetrics;
-using Impl::Ui::WindowOptions;
-using Impl::Ui::WindowState;
-
-using Impl::Ui::EditLimits;
-namespace EditTextMode = Impl::Ui::EditTextMode;
-namespace GpuCommandRecordingMode = Impl::Ui::GpuCommandRecordingMode;
-namespace InputCommand = Impl::Ui::InputCommand;
-namespace LayoutSizePolicy = Impl::Ui::LayoutSizePolicy;
-namespace NumericBoundsPolicy = Impl::Ui::NumericBoundsPolicy;
-namespace PopupPlacementSide = Impl::Ui::PopupPlacementSide;
-namespace TextLayoutStatus = Impl::Ui::TextLayoutStatus;
-namespace UiRectPrecision = Impl::Ui::UiRectPrecision;
-
-using ::ComputeFnv32TextHash;
-using ::PackFourCharTag;
-using ::TerminateInvariant;
-
-inline constexpr i32 s_SmokeKeyTab = Core::Key::Tab;
-inline constexpr i32 s_SmokeKeyQ = Core::Key::Q;
-inline constexpr i32 s_SmokeKeyW = Core::Key::W;
-inline constexpr i32 s_SmokeKeyR = Core::Key::R;
-inline constexpr i32 s_SmokeKeyT = Core::Key::T;
-inline constexpr i32 s_SmokeKeyF4 = Core::Key::F4;
-inline constexpr i32 s_SmokeKeyF5 = Core::Key::F5;
-inline constexpr i32 s_SmokeKeyF6 = Core::Key::F6;
-inline constexpr i32 s_SmokeKeyF7 = Core::Key::F7;
-inline constexpr i32 s_SmokeKeyF8 = Core::Key::F8;
-inline constexpr i32 s_SmokeKeyF9 = Core::Key::F9;
-inline constexpr i32 s_SmokeKeyF10 = Core::Key::F10;
-inline constexpr i32 s_SmokeKeyF11 = Core::Key::F11;
-inline constexpr i32 s_SmokeKeyF12 = Core::Key::F12;
-inline constexpr i32 s_SmokeActionPress = Core::InputAction::Press;
-
-struct SmokeArenaRef final{
-    Core::Alloc::GlobalArena* ptr = nullptr;
-    SmokeArenaRef()noexcept = default;
-    explicit SmokeArenaRef(Core::Alloc::GlobalArena& arena)noexcept : ptr(&arena){}
-};
-
-[[nodiscard]] FOUNDATION_INLINE Core::Alloc::GlobalArena& SmokeFallbackArena()noexcept{
-    static Core::Alloc::GlobalArena s_Arena{ Name("tests/smoke/ui_layer") };
-    return s_Arena;
+interface IUiSmokeScene{
+    b8 paint(mut UiPaintContext context);
 }
 
-inline thread_local Core::Alloc::GlobalArena* s_ActiveSmokeArena = nullptr;
-
-[[nodiscard]] FOUNDATION_INLINE Core::Alloc::GlobalArena& ActiveSmokeArena()noexcept{
-    return s_ActiveSmokeArena != nullptr ? *s_ActiveSmokeArena : SmokeFallbackArena();
+interface IUiSmokeInputScene : IUiSmokeScene{
+    b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
 }
 
-struct SmokeActiveArenaScope final : NoCopy{
-    Core::Alloc::GlobalArena* previous = nullptr;
-    explicit SmokeActiveArenaScope(Core::Alloc::GlobalArena& arena)noexcept
-        : previous(s_ActiveSmokeArena)
-    {
-        s_ActiveSmokeArena = &arena;
-    }
-    ~SmokeActiveArenaScope()noexcept{
-        s_ActiveSmokeArena = previous;
-    }
-};
 
-[[nodiscard]] FOUNDATION_INLINE SmokeArenaRef MakeSmokeArenaRef()noexcept{
-    return SmokeArenaRef(ActiveSmokeArena());
+StringView FormatSmokeRowLabel(in u64 rowKey, mut CompactString label){
+    if(rowKey == 0u)
+        return "";
+    label.assign("Row ");
+    AppendUnsignedDecimal(label, rowKey);
+    return label.view();
 }
 
-[[nodiscard]] FOUNDATION_INLINE EditBoxView CreateSmokeEditBoxView()noexcept{
-    return EditBoxView(ActiveSmokeArena());
+
+class UiListSmokeSource : IListDataSource, NoCopy{
+    private UiListSmokeSourceState m_storage;
+    private mut UiListSmokeSourceState m_state;
+    private CompactString m_buffer;
+    private mut CompactString m_label;
+
+    public UiListSmokeSource(){
+        this.m_state = this.m_storage;
+        this.m_label = this.m_buffer;
+    }
+
+    public u64 instanceGeneration()const override{ return this.m_state.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_state.revision(); }
+    public u64 rowCount()const override{ return this.m_state.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_state.key(index); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.indexOf(keyValue); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.findEnabled(start, reverse); }
+    public StringView text(in u64 index)const override{ return FormatSmokeRowLabel(this.m_state.readRowKey(index), this.m_label); }
+    public b8 enabled(in u64 index)const override{ return this.m_state.enabled(index); }
+    public void reverse(){ this.m_state.reverse(); }
+    public void remove(in u64 keyValue){ this.m_state.remove(keyValue); }
+    public void beginFrame(){ this.m_state.beginFrame(); }
+    public b8 reversed()const{ return this.m_state.reversed(); }
+    public u64 removedKey()const{ return this.m_state.removedKey(); }
+    public u32 labelReads()const{ return this.m_state.labelReads(); }
 }
 
-[[nodiscard]] FOUNDATION_INLINE ClipboardCompletion CreateSmokeClipboardCompletion()noexcept{
-    return ClipboardCompletion(ActiveSmokeArena());
+
+class UiComboSmokeSource : IListDataSource, NoCopy{
+    private UiComboSmokeSourceState m_storage;
+    private mut UiComboSmokeSourceState m_state;
+    private CompactString m_buffer;
+    private mut CompactString m_label;
+
+    public UiComboSmokeSource(){
+        this.m_state = this.m_storage;
+        this.m_label = this.m_buffer;
+    }
+
+    public u64 instanceGeneration()const override{ return this.m_state.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_state.revision(); }
+    public u64 rowCount()const override{ return this.m_state.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_state.key(index); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.indexOf(keyValue); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.findEnabled(start, reverse); }
+    public StringView text(in u64 index)const override{ return FormatSmokeRowLabel(this.m_state.readRowKey(index), this.m_label); }
+    public b8 enabled(in u64 index)const override{ return this.m_state.enabled(index); }
+    public void reverse(){ this.m_state.reverse(); }
+    public void remove(in u64 keyValue){ this.m_state.remove(keyValue); }
+    public void beginFrame(){ this.m_state.beginFrame(); }
+    public void toggleEmpty(){ this.m_state.toggleEmpty(); }
+    public void replace(){ this.m_state.replace(); }
+    public b8 reversed()const{ return this.m_state.reversed(); }
+    public u64 removedKey()const{ return this.m_state.removedKey(); }
+    public u32 labelReads()const{ return this.m_state.labelReads(); }
 }
 
-struct SmokeClipboardRef final{
-    Core::IClipboardService* ptr = nullptr;
-    SmokeClipboardRef()noexcept = default;
-    explicit SmokeClipboardRef(Core::IClipboardService& clipboard)noexcept : ptr(&clipboard){}
 
-    [[nodiscard]] b8 valid()const noexcept{ return ptr != nullptr; }
+class UiNestedPopupSmokeSourceView : IListDataSource, NoCopy{
+    private mut UiNestedPopupSmokeSourceState m_state;
 
-    [[nodiscard]] b8 cancel(const Core::ClipboardRequestToken token)const{
-        return ptr != nullptr && ptr->cancel(token);
+    public UiNestedPopupSmokeSourceView(mut UiNestedPopupSmokeSourceState state){
+        this.m_state = state;
     }
 
-    [[nodiscard]] Expected<Core::ClipboardRequestToken, Core::ClipboardAdmission::Enum> requestWriteText(
-        const Core::ClipboardChannel::Enum channel,
-        const AStringView text
-    )const{
-        if(ptr == nullptr)
-            return MakeUnexpected(Core::ClipboardAdmission::WrongThread);
-        return ptr->requestWriteText(channel, text);
+    public u64 instanceGeneration()const override{ return 2u; }
+
+    public u64 revision()const override{ return this.m_state.viewRevision(); }
+
+    public u64 rowCount()const override{ return this.m_state.viewRowCount(); }
+
+    public u64 key(in u64 index)const override{ return this.m_state.viewKey(index); }
+
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.viewIndexOf(keyValue); }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.viewFindEnabled(start, reverse); }
+
+    public StringView text(in u64 index)const override{ return this.m_state.readViewText(index); }
+
+    public b8 enabled(in u64 index)const override{ return this.m_state.viewEnabled(index); }
+}
+
+
+class UiNestedPopupSmokeSource : ISearchableListDataSource, NoCopy{
+    private UiNestedPopupSmokeSourceState m_storage;
+    private mut UiNestedPopupSmokeSourceState m_state;
+    private UiNestedPopupSmokeSourceView m_view(this.m_storage);
+
+    public UiNestedPopupSmokeSource(){
+        this.m_state = this.m_storage;
     }
 
-    [[nodiscard]] Core::ClipboardPollResult::Enum poll(const Core::ClipboardRequestToken token, Core::ClipboardCompletion& completion)const{
-        if(ptr == nullptr)
-            return Core::ClipboardPollResult::InvalidRequest;
-        return ptr->poll(token, completion);
-    }
-};
+    public u64 instanceGeneration()const override{ return this.m_state.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_state.revision(); }
+    public u64 rowCount()const override{ return this.m_state.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_state.key(index); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.indexOf(keyValue); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.findEnabled(start, reverse); }
+    public StringView text(in u64 index)const override{ return this.m_state.readText(index); }
+    public b8 enabled(in u64 index)const override{ return this.m_state.enabled(index); }
+    public b8 filter(in StringView query)override{ return this.m_state.filter(query); }
+    public in IListDataSource filtered()const override{ return this.m_view; }
+    public void beginFrame(){ this.m_state.beginFrame(); }
+    public u32 labelReads()const{ return this.m_state.labelReads(); }
+}
 
-[[nodiscard]] FOUNDATION_INLINE b8 SmokePopupMatchesParentGeneration(
-    const Impl::Ui::InputRouter& input,
-    const Impl::Ui::PopupToken& popup,
-    const u64 parentGen
-)noexcept{
+
+class UiPopupToolsSmokeSource : IListDataSource, NoCopy{
+    private UiPopupToolsSmokeSourceState m_storage;
+    private mut UiPopupToolsSmokeSourceState m_state;
+
+    public UiPopupToolsSmokeSource(){
+        this.m_state = this.m_storage;
+    }
+
+    public u64 instanceGeneration()const override{ return this.m_state.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_state.revision(); }
+    public u64 rowCount()const override{ return this.m_state.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_state.key(index); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.indexOf(keyValue); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.findEnabled(start, reverse); }
+    public StringView text(in u64 index)const override{ return this.m_state.readText(index); }
+    public b8 enabled(in u64 index)const override{ return this.m_state.enabled(index); }
+    public void reverse(){ this.m_state.reverse(); }
+    public void replace(){ this.m_state.replace(); }
+    public void beginFrame(){ this.m_state.beginFrame(); }
+    public b8 reversed()const{ return this.m_state.reversed(); }
+    public u32 labelReads()const{ return this.m_state.labelReads(); }
+}
+
+
+class UiRadioGroupSmokeSource : IListDataSource, NoCopy{
+    private UiRadioGroupSmokeSourceState m_storage;
+    private mut UiRadioGroupSmokeSourceState m_state;
+    private CompactString m_buffer;
+    private mut CompactString m_label;
+
+    public UiRadioGroupSmokeSource(){
+        this.m_state = this.m_storage;
+        this.m_label = this.m_buffer;
+    }
+
+    public u64 instanceGeneration()const override{ this.invalidateText(); return this.m_state.instanceGeneration(); }
+    public u64 revision()const override{ this.invalidateText(); return this.m_state.revision(); }
+    public u64 rowCount()const override{ this.invalidateText(); return this.m_state.rowCount(); }
+    public u64 key(in u64 index)const override{ this.invalidateText(); return this.m_state.key(index); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ this.invalidateText(); return this.m_state.indexOf(keyValue); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverseValue)const override{ this.invalidateText(); return this.m_state.findEnabled(start, reverseValue); }
+    public StringView text(in u64 index)const override{ this.invalidateText();
+        const StringView label = this.m_state.readText(index);
+        this.m_label.assign(label);
+        return this.m_label.view();
+    }
+    public b8 enabled(in u64 index)const override{ this.invalidateText(); return this.m_state.enabled(index); }
+    public void reverse(){ this.m_state.reverse(); }
+    public void remove(in u64 keyValue){ this.m_state.remove(keyValue); }
+    public void replace(){ this.m_state.replace(); }
+    public void beginFrame(){ this.m_state.beginFrame(); }
+    public b8 reversed()const{ return this.m_state.reversed(); }
+    public u64 removedKey()const{ return this.m_state.removedKey(); }
+    public u32 labelReads()const{ return this.m_state.labelReads(); }
+    private void invalidateText()const{ this.m_label.assign("????????????????????????????????"); }
+}
+
+
+class UiSearchComboSmokeSourceView : IListDataSource, NoCopy{
+    private mut UiSearchComboSmokeSourceState m_state;
+    private mut CompactString m_label;
+
+    public UiSearchComboSmokeSourceView(mut UiSearchComboSmokeSourceState state, mut CompactString label){
+        this.m_state = state;
+        this.m_label = label;
+    }
+
+    public u64 instanceGeneration()const override{ return 2u; }
+
+    public u64 revision()const override{ return this.m_state.viewRevision(); }
+
+    public u64 rowCount()const override{ return this.m_state.viewRowCount(); }
+
+    public u64 key(in u64 index)const override{ return this.m_state.viewKey(index); }
+
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.viewIndexOf(keyValue); }
+
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.viewFindEnabled(start, reverse); }
+
+    public StringView text(in u64 index)const override{ return FormatSmokeRowLabel(this.m_state.readViewRowKey(index), this.m_label); }
+
+    public b8 enabled(in u64 index)const override{ return this.m_state.viewEnabled(index); }
+}
+
+
+class UiSearchComboSmokeSource : ISearchableListDataSource, NoCopy{
+    private UiSearchComboSmokeSourceState m_storage;
+    private mut UiSearchComboSmokeSourceState m_state;
+    private CompactString m_buffer;
+    private mut CompactString m_label;
+    private UiSearchComboSmokeSourceView m_view(this.m_storage, this.m_buffer);
+
+    public UiSearchComboSmokeSource(){
+        this.m_state = this.m_storage;
+        this.m_label = this.m_buffer;
+    }
+
+    public u64 instanceGeneration()const override{ return this.m_state.instanceGeneration(); }
+    public u64 revision()const override{ return this.m_state.revision(); }
+    public u64 rowCount()const override{ return this.m_state.rowCount(); }
+    public u64 key(in u64 index)const override{ return this.m_state.key(index); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return this.m_state.indexOf(keyValue); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return this.m_state.findEnabled(start, reverse); }
+    public StringView text(in u64 index)const override{ return FormatSmokeRowLabel(this.m_state.readRowKey(index), this.m_label); }
+    public b8 enabled(in u64 index)const override{ return this.m_state.enabled(index); }
+    public b8 filter(in StringView query)override{ return this.m_state.filter(query); }
+    public in IListDataSource filtered()const override{ return this.m_view; }
+    public void reverse(){ this.m_state.reverse(); }
+    public void remove(in u64 keyValue){ this.m_state.remove(keyValue); }
+    public void beginFrame(){ this.m_state.beginFrame(); }
+    public b8 reversed()const{ return this.m_state.reversed(); }
+    public u64 removedKey()const{ return this.m_state.removedKey(); }
+    public u32 labelReads()const{ return this.m_state.labelReads(); }
+}
+
+
+const i32 s_SmokeKeyTab = cast<i32>(Key::Tab);
+const i32 s_SmokeKeyQ = cast<i32>(Key::Q);
+const i32 s_SmokeKeyW = cast<i32>(Key::W);
+const i32 s_SmokeKeyR = cast<i32>(Key::R);
+const i32 s_SmokeKeyT = cast<i32>(Key::T);
+const i32 s_SmokeKeyF4 = cast<i32>(Key::F4);
+const i32 s_SmokeKeyF5 = cast<i32>(Key::F5);
+const i32 s_SmokeKeyF6 = cast<i32>(Key::F6);
+const i32 s_SmokeKeyF7 = cast<i32>(Key::F7);
+const i32 s_SmokeKeyF8 = cast<i32>(Key::F8);
+const i32 s_SmokeKeyF9 = cast<i32>(Key::F9);
+const i32 s_SmokeKeyF10 = cast<i32>(Key::F10);
+const i32 s_SmokeKeyF11 = cast<i32>(Key::F11);
+const i32 s_SmokeKeyF12 = cast<i32>(Key::F12);
+const i32 s_SmokeActionPress = s_InputActionPress;
+
+
+
+b8 SmokePopupMatchesParentGeneration(in InputRouter input, in PopupToken popup, in u64 parentGeneration){
     const auto scope = input.popupScope(popup);
-    return scope && (*scope)->parent.instanceGeneration == parentGen;
+    return scope.has_value() && scope.value().parent.instanceGeneration == parentGeneration;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 CreateSmokeTextAtlasPages(
-    const Span<const u8> coverageBytes,
-    const Array<Array<u8, 192u>, 4u>& sdfBytes,
-    Impl::Ui::SharedGlyphPage& outCoverage,
-    Array<Impl::Ui::SharedSdfAtlasPage, 4u>& outSdf
+b8 CreateSmokeTextAtlasPages(
+    in Span<u8> coverageBytes, in Array<Array<u8, 192u>, 4u> sdfBytes,
+    mut SharedGlyphPage outCoverage, mut Array<SharedSdfAtlasPage, 4u> outSdf
 ){
-    Core::Alloc::GlobalArena& arena = ActiveSmokeArena();
-    const Core::Alloc::SharedPool pages(arena);
-    constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
-    constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
-
-    const Impl::Ui::GlyphPageBinding coverageBinding{
-        .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
-        .fontGeneration = 1u,
-        .atlasIdentity = s_CoverageAtlasIdentity,
-        .generation = 1u,
-        .index = static_cast<u32>(Impl::Ui::s_GlyphAtlasMaxPages - 1u),
-        .width = 12u,
-        .height = 4u
-    };
-    Impl::Ui::GlyphPagePixels coveragePixels(arena);
-    coveragePixels.assign(coverageBytes.begin(), coverageBytes.end());
-    auto coverageResult = Impl::Ui::CreateGlyphPage(pages, coverageBinding, coveragePixels);
-    if(coverageResult)
-        outCoverage = Move(*coverageResult);
+    SharedPool pages();
+    GlyphPageBindingRecord<Font> coverage();
+    coverage.font = AssetRef<Font>("tests/smoke/ui_layer/coverage_font");
+    coverage.fontGeneration = 1u;
+    coverage.atlasIdentity = 0x5549534D4F4B45u;
+    coverage.generation = 1u;
+    coverage.index = cast<u32>(s_GlyphAtlasMaxPages - 1u);
+    coverage.width = 12u;
+    coverage.height = 4u;
+    const auto covered = CopyGlyphPage(pages, coverage, coverageBytes);
+    if(covered.has_value())
+        outCoverage = covered.value();
 
     b8 allSdfValid = true;
     for(u32 channels = 1u; channels <= 4u; ++channels){
-        const Impl::Ui::SdfAtlasPageBinding sdfBinding{
-            .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
-            .fontGeneration = 1u,
-            .atlasIdentity = s_CoverageAtlasIdentity,
-            .generation = 1u,
-            .index = channels - 1u,
-            .width = 12u,
-            .height = 4u,
-            .channelCount = channels,
-            .spreadPixels = 8u
-        };
-        const usize byteCount = 48u * static_cast<usize>(channels);
-        Impl::Ui::SdfAtlasPixels sdfPixels(arena);
-        sdfPixels.assign(sdfBytes[channels - 1u].data(), sdfBytes[channels - 1u].data() + byteCount);
-        auto pageResult = Impl::Ui::CreateSdfAtlasPage(pages, sdfBinding, sdfPixels);
-        if(pageResult)
-            outSdf[channels - 1u] = Move(*pageResult);
-        if(!outSdf[channels - 1u])
+        SdfAtlasPageBindingRecord<Font> sdf();
+        sdf.font = coverage.font;
+        sdf.fontGeneration = coverage.fontGeneration;
+        sdf.atlasIdentity = coverage.atlasIdentity;
+        sdf.generation = coverage.generation;
+        sdf.index = channels - 1u;
+        sdf.width = coverage.width;
+        sdf.height = coverage.height;
+        sdf.channelCount = channels;
+        sdf.spreadPixels = 8u;
+        const usize count = 48u * cast<usize>(channels);
+        const auto page = CopySdfAtlasPage(pages, sdf, Span<u8>(sdfBytes[channels - 1u].data(), count));
+        if(page.has_value())
+            outSdf[channels - 1u] = page.value();
+        if(!outSdf[channels - 1u].valid())
             allSdfValid = false;
     }
-
-    return static_cast<b8>(outCoverage) && allSdfValid;
+    return outCoverage.valid() && allSdfValid;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 SmokeImageSourceValid(const Impl::Ui::SharedImageSource& source)noexcept{
-    return static_cast<b8>(source);
+Expected<SharedImageSource> LoadSmokeSkinImageSource(in SharedPool pool, in AssetManager assets, in AssetRef<UiSkin> skinRef){
+    if(!skinRef.valid())
+        return MakeUnexpected(Failure());
+    const auto skin = LoadTypedAssetSync<UiSkin>(assets, skinRef.name(), "UiTextureImageSmokeScene");
+    if(!skin.has_value() || !skin.value().valid() || !skin.value().deref().texture().valid())
+        return MakeUnexpected(Failure());
+    return LoadImageSource(pool, assets, skin.value().deref().texture());
 }
 
-[[nodiscard]] FOUNDATION_INLINE u32 SmokeImageSourceWidth(const Impl::Ui::SharedImageSource& source)noexcept{
-    return source ? source->texture().width() : 0u;
-}
+[arena]
+class UiSmokeImageAssetLoader{
+    private ActiveSceneSubsystems m_subsystems = ActiveSceneSubsystems();
+    private SharedPool m_pool = SharedPool();
 
-[[nodiscard]] FOUNDATION_INLINE u32 SmokeImageSourceHeight(const Impl::Ui::SharedImageSource& source)noexcept{
-    return source ? source->texture().height() : 0u;
-}
-
-[[nodiscard]] FOUNDATION_INLINE u64 SmokeImageSourceGeneration(const Impl::Ui::SharedImageSource& source)noexcept{
-    return source ? source->generation() : 0u;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Name SmokeImageSourceIdentityName(const Impl::Ui::SharedImageSource& source)noexcept{
-    return source ? source->identity().name() : Name{};
-}
-
-FOUNDATION_INLINE void ResetSmokeImageSource(Impl::Ui::SharedImageSource& source)noexcept{
-    source.reset();
-}
-
-FOUNDATION_INLINE void LoadSmokeSkinImageSources(
-    Core::Assets::AssetManager& assets,
-    const Name& alternateSkinName,
-    Impl::Ui::SharedImageSource& outDefault,
-    Impl::Ui::SharedImageSource& outAlternate
-){
-    Core::Alloc::GlobalArena& arena = ActiveSmokeArena();
-    auto loadSkinSource = [&](const Core::Assets::AssetRef<Impl::UiSkin>& skinRef) -> Expected<Impl::Ui::SharedImageSource>{
-        if(!skinRef.valid())
-            return MakeUnexpected(Failure{});
-        const auto skin = assets.loadTypedSync<Impl::UiSkin>(skinRef.name(), FOUNDATION_TEXT("UiTextureImageSmokeScene"));
-        if(!skin || !*skin || !(*skin)->texture().valid())
-            return MakeUnexpected(Failure{});
-        return Impl::Ui::LoadImageSource(Core::Alloc::SharedPool(arena), assets, (*skin)->texture());
-    };
-
-    Impl::ActiveSceneSubsystems sceneSubsystems(arena);
-    if(sceneSubsystems.loadProjectStartScene(assets)){
-        if(const auto uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
-            auto loadedDefault = loadSkinSource((*uiSubsystem)->basicSkin);
-            if(loadedDefault)
-                outDefault = Move(*loadedDefault);
+    public void load(in AssetManager assets, in Name alternate, mut SharedImageSource outDefault, mut SharedImageSource outAlternate){
+        if(!this.m_subsystems.loadProjectStartScene(assets))
+            return;
+        const auto uiSubsystem = this.m_subsystems.findSubsystem<UiSubsystem>();
+        if(uiSubsystem.has_value()){
+            const auto basic = LoadSmokeSkinImageSource(this.m_pool, assets, uiSubsystem.value().basicSkin);
+            if(basic.has_value())
+                outDefault = basic.value();
         }
-        auto loadedAlternate = loadSkinSource(sceneSubsystems.findSceneAsset<Impl::UiSkin>(alternateSkinName));
-        if(loadedAlternate)
-            outAlternate = Move(*loadedAlternate);
+        const auto other = LoadSmokeSkinImageSource(this.m_pool, assets, this.m_subsystems.findSceneAsset<UiSkin>(alternate));
+        if(other.has_value())
+            outAlternate = other.value();
     }
 }
 
-[[nodiscard]] FOUNDATION_INLINE Impl::Ui::SharedImageSource CloneSmokeImageSourcePayload(
-    const SmokeArenaRef& arenaRef,
-    const Impl::Ui::SharedImageSource& identitySource,
-    const Impl::Ui::SharedImageSource& payloadSource
-){
-    if(arenaRef.ptr == nullptr || !identitySource || !payloadSource)
-        return {};
-    Core::Alloc::GlobalArena& arena = *arenaRef.ptr;
-    const Impl::Texture& payload = payloadSource->texture();
-    Impl::Texture replacement(arena, identitySource->identity().name());
-    Impl::Texture::MipLevelVector mipLevels(arena);
-    mipLevels.assign(payload.mipLevels().begin(), payload.mipLevels().end());
-    Core::Assets::AssetBytes bytes(arena);
-    bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
-    replacement.setPayload(
-        payload.width(),
-        payload.height(),
-        Move(mipLevels),
-        Move(bytes),
-        payload.dimension(),
-        payload.depth(),
-        payload.payloadFormat(),
-        payload.alphaMode(),
-        payload.alphaConstantUnorm8()
-    );
-    auto nextSource = Impl::Ui::MakeImageSource(Core::Alloc::SharedPool(arena), replacement);
-    if(!nextSource)
-        return {};
-    return Move(*nextSource);
+SharedImageSource CloneSmokeImageSourcePayload(in SharedImageSource identity, in SharedImageSource source){
+    if(!identity.valid() || !source.valid())
+        return SharedImageSource();
+    in Texture payload = source.deref().texture();
+    Texture replacement(identity.deref().identity().name());
+    replacement.setPayload(payload.width(), payload.height(), payload.mipLevels(), payload.payloadBytes(), payload.dimension(), payload.depth(), payload.payloadFormat(), payload.alphaMode(), payload.alphaConstantUnorm8());
+    SharedPool pool();
+    const auto result = MakeImageSource(pool, replacement);
+    if(!result.has_value())
+        return SharedImageSource();
+    return result.value();
 }
-
-
-[[nodiscard]] FOUNDATION_INLINE StringView FormatSmokeRowLabel(const u64 rowKey, Array<char, 32u>& outBuffer)noexcept{
-    if(rowKey == 0u)
-        return {};
-    outBuffer[0] = 'R';
-    outBuffer[1] = 'o';
-    outBuffer[2] = 'w';
-    outBuffer[3] = ' ';
-    Array<char, s_UsizeDecimalDigitCount> digits{};
-    const AStringView formatted = FormatDecimal(rowKey, digits);
-    FOUNDATION_MEMCPY(outBuffer.data() + 4u, outBuffer.size() - 4u, formatted.data(), formatted.size());
-    return { outBuffer.data(), 4u + formatted.size() };
-}
-
-
-template<typename BoxT>
-using SharedSmokeBox = RefCountPtr<RefCounter<BoxT>, ArenaRefDeleter<RefCounter<BoxT>, Core::Alloc::GlobalArena>>;
-
-template<typename SceneT>
-class SmokeSceneBox : NoCopy{
-public:
-    template<typename... Args>
-        requires ::LeadingArenaConstructible<SceneT>
-    explicit SmokeSceneBox(::ArenaBase& motherArena, Args&&... args)
-        : scene(motherArena, Forward<Args>(args)...)
-    {}
-
-    template<typename... Args>
-        requires (!::LeadingArenaConstructible<SceneT>)
-    explicit SmokeSceneBox(Args&&... args)
-        : scene(Forward<Args>(args)...)
-    {}
-
-
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context){ return scene.paint(context); }
-
-
-public:
-    SceneT scene;
-};
-
-template<typename SceneT>
-class SmokeInputSceneBox : public Core::IInputEventHandler, NoCopy{
-public:
-    template<typename... Args>
-        requires ::LeadingArenaConstructible<SceneT>
-    explicit SmokeInputSceneBox(Core::InputDispatcher& input, ::ArenaBase& motherArena, Args&&... args)
-        : scene(motherArena, Forward<Args>(args)...)
-        , m_input(input)
-    {
-        m_input.addHandlerToBack(*this);
-    }
-
-    template<typename... Args>
-        requires (!::LeadingArenaConstructible<SceneT>)
-    explicit SmokeInputSceneBox(Core::InputDispatcher& input, Args&&... args)
-        : scene(Forward<Args>(args)...)
-        , m_input(input)
-    {
-        m_input.addHandlerToBack(*this);
-    }
-
-    virtual ~SmokeInputSceneBox()noexcept override{
-        m_input.removeHandler(*this);
-    }
-
-
-public:
-    [[nodiscard]] b8 paint(Impl::UiPaintContext& context){ return scene.paint(context); }
-
-    virtual Core::KeyboardInputResult keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept override{
-        return scene.keyboardUpdate(key, scancode, action, mods);
-    }
-
-
-public:
-    SceneT scene;
-
-
-private:
-    Core::InputDispatcher& m_input;
-};
-
-template<typename SceneT, typename... Args>
-[[nodiscard]] SharedSmokeBox<SmokeSceneBox<SceneT>> CreateSmokeSceneBox(Core::Alloc::GlobalArena& arena, Args&&... args){
-    const SmokeActiveArenaScope activeArena(arena);
-    if constexpr(::LeadingArenaConstructible<SceneT>){
-        return SharedSmokeBox<SmokeSceneBox<SceneT>>(
-            NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
-            ArenaRefDeleter<RefCounter<SmokeSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
-            s_AdoptRef
-        );
-    }
-    else{
-        return SharedSmokeBox<SmokeSceneBox<SceneT>>(
-            NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, Forward<Args>(args)...),
-            ArenaRefDeleter<RefCounter<SmokeSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
-            s_AdoptRef
-        );
-    }
-}
-
-template<typename SceneT, typename... Args>
-[[nodiscard]] SharedSmokeBox<SmokeInputSceneBox<SceneT>> CreateSmokeInputSceneBox(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Args&&... args){
-    const SmokeActiveArenaScope activeArena(arena);
-    if constexpr(::LeadingArenaConstructible<SceneT>){
-        return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
-            NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
-            ArenaRefDeleter<RefCounter<SmokeInputSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
-            s_AdoptRef
-        );
-    }
-    else{
-        return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
-            NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, Forward<Args>(args)...),
-            ArenaRefDeleter<RefCounter<SmokeInputSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
-            s_AdoptRef
-        );
-    }
-}
-
-
-class UiListSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
-public:
-    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
-    virtual u64 revision()const noexcept override{ return m_state.revision(); }
-    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
-    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
-    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
-    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
-    virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readRowKey(index), m_label); }
-    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
-
-
-public:
-    void reverse()noexcept{ m_state.reverse(); }
-    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
-    void beginFrame()noexcept{ m_state.beginFrame(); }
-    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
-    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
-
-
-private:
-    mutable UiListSmokeSourceState m_state;
-    mutable Array<char, 32u> m_label{};
-};
-
-
-class UiComboSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
-public:
-    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
-    virtual u64 revision()const noexcept override{ return m_state.revision(); }
-    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
-    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
-    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
-    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
-    virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readRowKey(index), m_label); }
-    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
-
-
-public:
-    void reverse()noexcept{ m_state.reverse(); }
-    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
-    void beginFrame()noexcept{ m_state.beginFrame(); }
-    void toggleEmpty()noexcept{ m_state.toggleEmpty(); }
-    void replace()noexcept{ m_state.replace(); }
-    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
-    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
-
-
-private:
-    mutable UiComboSmokeSourceState m_state;
-    mutable Array<char, 32u> m_label{};
-};
-
-
-class UiNestedPopupSmokeSource final : public Impl::Ui::ISearchableListDataSource, NoCopy{
-private:
-    class View final : public Impl::Ui::IListDataSource, NoCopy{
-    public:
-        explicit View(UiNestedPopupSmokeSourceState& state)noexcept : m_state(state){}
-
-
-    public:
-        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
-        virtual u64 revision()const noexcept override{ return m_state.viewRevision(); }
-        virtual u64 rowCount()const noexcept override{ return m_state.viewRowCount(); }
-        virtual u64 key(const u64 index)const noexcept override{ return m_state.viewKey(index); }
-        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.viewIndexOf(keyValue); }
-        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.viewFindEnabled(start, reverse); }
-        virtual StringView text(const u64 index)const noexcept override{ return m_state.readViewText(index); }
-        virtual b8 enabled(const u64 index)const noexcept override{ return m_state.viewEnabled(index); }
-
-
-    private:
-        UiNestedPopupSmokeSourceState& m_state;
-    };
-
-
-public:
-    UiNestedPopupSmokeSource()noexcept : UiNestedPopupSmokeSource(ActiveSmokeArena()){}
-    explicit UiNestedPopupSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state){}
-
-
-public:
-    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
-    virtual u64 revision()const noexcept override{ return m_state.revision(); }
-    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
-    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
-    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
-    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
-    virtual StringView text(const u64 index)const noexcept override{ return m_state.readText(index); }
-    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
-    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{ return m_state.filter(query); }
-    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
-
-
-public:
-    void beginFrame()noexcept{ m_state.beginFrame(); }
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
-
-
-private:
-    mutable UiNestedPopupSmokeSourceState m_state;
-    View m_view;
-};
-
-
-class UiPopupToolsSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
-public:
-    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
-    virtual u64 revision()const noexcept override{ return m_state.revision(); }
-    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
-    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
-    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
-    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
-    virtual StringView text(const u64 index)const noexcept override{ return m_state.readText(index); }
-    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
-
-
-public:
-    void reverse()noexcept{ m_state.reverse(); }
-    void replace()noexcept{ m_state.replace(); }
-    void beginFrame()noexcept{ m_state.beginFrame(); }
-    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
-
-
-private:
-    mutable UiPopupToolsSmokeSourceState m_state;
-};
-
-
-class UiRadioGroupSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ invalidateText(); return m_state.instanceGeneration(); }
-    [[nodiscard]] virtual u64 revision()const noexcept override{ invalidateText(); return m_state.revision(); }
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ invalidateText(); return m_state.rowCount(); }
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ invalidateText(); return m_state.key(index); }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ invalidateText(); return m_state.indexOf(keyValue); }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverseValue)const noexcept override{ invalidateText(); return m_state.findEnabled(start, reverseValue); }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        invalidateText();
-        const StringView label = m_state.readText(index);
-        if(label.empty())
-            return {};
-        FOUNDATION_MEMCPY(m_label.data(), m_label.size(), label.data(), label.size());
-        return { m_label.data(), label.size() };
-    }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ invalidateText(); return m_state.enabled(index); }
-
-
-public:
-    void reverse()noexcept{ m_state.reverse(); }
-    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
-    void replace()noexcept{ m_state.replace(); }
-    void beginFrame()noexcept{ m_state.beginFrame(); }
-    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
-    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
-
-
-private:
-    void invalidateText()const noexcept{ m_label.fill('?'); }
-
-
-private:
-    mutable UiRadioGroupSmokeSourceState m_state;
-    mutable Array<char, 32u> m_label{};
-};
-
-
-class UiSearchComboSmokeSource final : public Impl::Ui::ISearchableListDataSource, NoCopy{
-private:
-    class View final : public Impl::Ui::IListDataSource, NoCopy{
-    public:
-        explicit View(UiSearchComboSmokeSourceState& state, Array<char, 32u>& label)noexcept : m_state(state), m_label(label){}
-
-
-    public:
-        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
-        virtual u64 revision()const noexcept override{ return m_state.viewRevision(); }
-        virtual u64 rowCount()const noexcept override{ return m_state.viewRowCount(); }
-        virtual u64 key(const u64 index)const noexcept override{ return m_state.viewKey(index); }
-        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.viewIndexOf(keyValue); }
-        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.viewFindEnabled(start, reverse); }
-        virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readViewRowKey(index), m_label); }
-        virtual b8 enabled(const u64 index)const noexcept override{ return m_state.viewEnabled(index); }
-
-
-    private:
-        UiSearchComboSmokeSourceState& m_state;
-        Array<char, 32u>& m_label;
-    };
-
-
-public:
-    UiSearchComboSmokeSource()noexcept : UiSearchComboSmokeSource(ActiveSmokeArena()){}
-    explicit UiSearchComboSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state, m_label){}
-
-
-public:
-    virtual u64 instanceGeneration()const noexcept override{ return m_state.instanceGeneration(); }
-    virtual u64 revision()const noexcept override{ return m_state.revision(); }
-    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
-    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
-    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
-    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
-    virtual StringView text(const u64 index)const noexcept override{ return FormatSmokeRowLabel(m_state.readRowKey(index), m_label); }
-    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
-    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{ return m_state.filter(query); }
-    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
-
-
-public:
-    void reverse()noexcept{ m_state.reverse(); }
-    void remove(const u64 keyValue)noexcept{ m_state.remove(keyValue); }
-    void beginFrame()noexcept{ m_state.beginFrame(); }
-    [[nodiscard]] b8 reversed()const noexcept{ return m_state.reversed(); }
-    [[nodiscard]] u64 removedKey()const noexcept{ return m_state.removedKey(); }
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_state.labelReads(); }
-
-
-private:
-    mutable UiSearchComboSmokeSourceState m_state;
-    mutable Array<char, 32u> m_label{};
-    View m_view;
-};
-
-};
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 type ClipboardAdmissionEnum = ClipboardAdmission;

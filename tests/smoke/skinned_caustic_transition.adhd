@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "frame_graph_observation.adhd"
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
 #include "framebuffer_capture.adhd"
@@ -22,12 +23,12 @@ const Name s_SkinnedCausticPlaneShapeName = "engine/csg/plane";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SkinnedCausticTransition{
+class SkinnedCausticTransition : ISmokeCapturePredicate{
     public SkinnedCausticTransition(mut ProjectRuntimeContext context){
         this.m_context = context;
     }
 
-    public b8 shouldCaptureFrame(in u64 frame)const{
+    public b8 shouldCaptureFrame(in u64 frame)const override{
         return this.m_transitionStarted && frame >= this.m_nextCaptureFrame;
     }
 
@@ -78,7 +79,7 @@ class SkinnedCausticTransition{
             s_SmokeNameProjectSmokeSkinnedCausticTransitionReceiver,
             s_SkinnedCausticPlaneShapeName,
             false,
-            f32x4(1.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(1.0f, 0.0f, 0.0f, 0.0f),
             world
         );
         return true;
@@ -209,59 +210,41 @@ class SkinnedCausticTransition{
         u32 packetQueueIndex = 0u;
         u32 graphicsQueueIndex = 0u;
         u64 packetDeviceGeneration = 0u;
-        native(
-            in sourceFrame,
-            mut ctx = this.m_context,
-            mut world,
-            mut appendFailed,
-            mut matchedPacket,
-            mut offGraphics,
-            mut packetQueueIndex,
-            mut graphicsQueueIndex,
-            mut packetDeviceGeneration
-        ){
-            auto& renderer = *MakeNotNull(world.getSystem<Impl::RendererSystem>());
-            Core::Telemetry::FrameGraphNodeDescs nodes(ctx.objectArena);
-            Core::Telemetry::FrameGraphEdgeDescs edges(ctx.objectArena);
-            Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(ctx.objectArena);
-            Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(ctx.objectArena);
-            Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(ctx.objectArena);
-            Core::Alloc::ScratchArena scratchArena(s_SmokeNameTestsSmokeSkinnedCausticFrameGraph);
-            Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
-            if(!renderer.appendFrameGraph(builder)){
-                appendFailed = true;
-            }
-            else{
-                const auto primaryGraphics = ctx.graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-                graphicsQueueIndex = primaryGraphics.index;
-                for(const auto& node : nodes){
+        mut RendererSystem renderer = SmokeRendererSystemRef(world);
+        SmokeFrameGraphObservation graph(this.m_context, s_SmokeNameTestsSmokeSkinnedCausticFrameGraph, sourceFrame);
+        if(!graph.append(renderer)){
+            appendFailed = true;
+        }
+        else{
+            const auto primaryGraphics = this.m_context.graphics.getDevice().getPrimaryPhysicalQueue(CommandQueue::Graphics);
+            graphicsQueueIndex = primaryGraphics.index;
+            for(in FrameGraphNodeDesc node : graph.nodes){
+                if(
+                    node.name != s_SmokeTimingNameRenderHardwareCausticsPhotons
+                    || !node.queueAssignment.present
+                    || !node.compiledTask.present
+                    || !node.queueAssignment.acceptedQueue.valid()
+                    || node.queueAssignment.acceptance == FrameGraphQueueAssignmentAcceptance::NotAccepted
+                )
+                    continue;
+                for(in FrameGraphPacketSubmissionStatisticsRecord packet : graph.packets){
                     if(
-                        node.name != s_SmokeTimingNameRenderHardwareCausticsPhotons
-                        || !node.queueAssignment.present
-                        || !node.compiledTask.present
-                        || !node.queueAssignment.acceptedQueue.valid()
-                        || node.queueAssignment.acceptance == Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted
+                        packet.packetIndex != node.compiledTask.packetIndex
+                        || packet.packetGeneration != node.compiledTask.planGeneration
+                        || packet.queue != node.queueAssignment.acceptedQueue
+                        || packet.taskCount == 0u
+                        || packet.commandListCount == 0u
+                        || packet.recoverySubmission
                     )
                         continue;
-                    for(const auto& packet : packetStatistics){
-                        if(
-                            packet.packetIndex != node.compiledTask.packetIndex
-                            || packet.packetGeneration != node.compiledTask.planGeneration
-                            || packet.queue != node.queueAssignment.acceptedQueue
-                            || packet.taskCount == 0u
-                            || packet.commandListCount == 0u
-                            || packet.recoverySubmission
-                        )
-                            continue;
-                        offGraphics = packet.queue.index != primaryGraphics.index || packet.queue.deviceGeneration != primaryGraphics.deviceGeneration;
-                        packetQueueIndex = packet.queue.index;
-                        packetDeviceGeneration = packet.queue.deviceGeneration;
-                        matchedPacket = true;
-                        break;
-                    }
-                    if(matchedPacket)
-                        break;
+                    offGraphics = packet.queue.index != primaryGraphics.index || packet.queue.deviceGeneration != primaryGraphics.deviceGeneration;
+                    packetQueueIndex = packet.queue.index;
+                    packetDeviceGeneration = packet.queue.deviceGeneration;
+                    matchedPacket = true;
+                    break;
                 }
+                if(matchedPacket)
+                    break;
             }
         }
         if(appendFailed){

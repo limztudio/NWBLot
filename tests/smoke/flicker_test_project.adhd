@@ -2,53 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/skinning/system.adhd>
+#include <impl/ecs_render/material/material_instance.adhd>
+#include <impl/ecs_render/module.adhd>
+#include <impl/ecs_model_renderer/model_renderer.adhd>
+#include <impl/ecs_model/system.adhd>
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_scene/module.adhd>
+#include <impl/assets_material/asset.adhd>
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
 #include "smoke_project_helpers.adhd"
 #include "smoke_scene_helpers.adhd"
 #include "smoke_skinned_scene_helpers.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_model_renderer/model_renderer.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/input/module.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/simd/frame.h>
-
-namespace NWB::Tests::Smoke{
-
-
-namespace ModelObjectKind = Impl::ModelObjectKind;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,15 +61,16 @@ const f32 s_FlickerMaxSpinDelta = 1.0f / 15.0f;
 [arena]
 class FlickerTestSmokeProject : IProjectEntryCallbacks{
 
-    public FlickerTestSmokeProject(mut ProjectRuntimeContext context){
+    public FlickerTestSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_FlickerProjectName, SmokeRenderQualitySettings(), context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_fpsProbe = FpsProbe(s_FlickerProjectName);
         this.m_frozenYaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
     }
 
     public ~FlickerTestSmokeProject(){
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         this.destroyWorld();
     }
 
@@ -183,7 +152,8 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
     }
 
     public void onShutdown()override{
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         this.destroyWorld();
         [essential] info("FlickerTestSmokeProject: shutdown");
     }
@@ -196,7 +166,7 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
         // Yaw priority: fixed override, manual scrub, then automatic spin.
         this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
         this.spinCharacters();
-        SetSmokeWindowTitleSuffix(this.m_context, FormatSmokeYawWindowTitleSuffix(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI));
+        SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI));
         return TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world));
     }
 
@@ -225,29 +195,21 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Flicker Test");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB Flicker Test");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::FlickerTestSmokeProject>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateSmokeSkinnedRenderWorld(s_FlickerProjectName, SmokeRenderQualitySettings(), context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<FlickerTestSmokeProject>(owner, context);
 }
 
 

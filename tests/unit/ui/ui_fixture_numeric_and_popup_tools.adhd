@@ -3,449 +3,243 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include "ui_edit_test_inputs.adhd"
 #include "ui_core_and_list_fixtures.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const StringView s_NumericPanelKey = "panel";
+const StringView s_IntegerEditKey = "integer";
+const StringView s_DecimalEditKey = "decimal";
+const StringView s_PopupToolsPanelKey = "panel";
+const StringView s_AnchorKey = "anchor";
+const StringView s_TooltipKey = "tip";
+const StringView s_MenuKey = "menu";
 
+class NumericEvent{
+    public String text;
+    public InputCommandIntent intent;
+    public EditAction action = EditAction::Submit;
+    public UiFixtureNumericEventKind kind = UiFixtureNumericEventKind::Text;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class NumericHost : IEditBoxHost{
+    public String displayed;
+    public Optional<mut IntegerEditModel> onLoanInteger;
+    public Optional<mut IntegerEditModel> onPublishInteger;
+    public Optional<mut FloatEditModel> onPublishFloat;
+    public Optional<mut Builder> resetBuilder;
+    public PopupToken lastPopup;
+    public i64 mutationValue = 99;
+    public usize loans = 0u;
+    public usize ordinaryLoans = 0u;
+    public usize publishes = 0u;
+    public b8 focused = true;
+    public b8 mutationApplied = false;
+    private Vector<NumericEvent> m_events;
+    private InputBindings m_bindings;
 
-
-#include <tests/unit/ui/multiline_fixture.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiNumericEditTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiComboTests;
-
-inline constexpr AStringView s_NumericPanelKey = "panel";
-inline constexpr AStringView s_IntegerEditKey = "integer";
-inline constexpr AStringView s_DecimalEditKey = "decimal";
-
-namespace NumericEventKind = ::__hidden_ui_glyph_sdf_tests::UiFixtureNumericEventKind;
-
-struct NumericEvent{
-    AString<Core::Alloc::GlobalArena> text;
-    InputCommandIntent intent;
-    EditAction::Enum action = EditAction::Submit;
-    NumericEventKind::Enum kind = NumericEventKind::Text;
-
-
-public:
-    explicit NumericEvent(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
-};
-
-class NumericHost final : public IEditBoxHost{
-public:
-    explicit NumericHost(Core::Alloc::GlobalArena& arena)
-        : displayed(arena)
-        , m_arena(arena)
-        , m_events(arena)
-        , m_bindings(arena)
-    {}
-    virtual ~NumericHost()noexcept override = default;
-
-
-public:
-    void text(const AStringView value){
-        NumericEvent event(m_arena);
-        event.text.assign(value.data(), value.size());
-        m_events.push_back(Move(event));
+    public void text(in StringView value){
+        NumericEvent event;
+        event.text.assign(value);
+        this.m_events.push_back(event);
     }
-    void key(const i32 key, const b8 control = false){
-        NumericEvent event(m_arena);
-        event.kind = NumericEventKind::Key;
-        event.intent = m_bindings.resolve(key, control ? Core::InputModifier::Control : 0);
-        m_events.push_back(Move(event));
+    public void key(in i32 key){ this.key(key, false); }
+    public void key(in i32 key, in b8 control){
+        NumericEvent event;
+        event.kind = UiFixtureNumericEventKind::Key;
+        i32 modifiers = 0;
+        if(control)
+            modifiers = cast<i32>(InputModifier::Control);
+        event.intent = this.m_bindings.resolve(key, modifiers);
+        this.m_events.push_back(event);
     }
-    void replace(const AStringView value){
-        key(Core::Key::A, true);
-        text(value);
+    public void replace(in StringView value){
+        this.key(cast<i32>(Key::A), true);
+        this.text(value);
     }
-    void preedit(const AStringView value){
-        NumericEvent event(m_arena);
-        event.kind = NumericEventKind::Preedit;
-        event.text.assign(value.data(), value.size());
-        m_events.push_back(Move(event));
+    public void preedit(in StringView value){
+        NumericEvent event;
+        event.kind = UiFixtureNumericEventKind::Preedit;
+        event.text.assign(value);
+        this.m_events.push_back(event);
     }
-    void action(const EditAction::Enum action){
-        NumericEvent event(m_arena);
-        event.kind = NumericEventKind::Action;
+    public void action(in EditAction action){
+        NumericEvent event;
+        event.kind = UiFixtureNumericEventKind::Action;
         event.action = action;
-        m_events.push_back(Move(event));
+        this.m_events.push_back(event);
     }
-
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel&)noexcept override{
-        ++ordinaryLoans;
+    public EditBoxResult edit(in WidgetState widget, in EditBoxOptions options, mut EditModel model)override{
+        ++this.ordinaryLoans;
         EditBoxResult result;
         result.valid = true;
         return result;
     }
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)noexcept override;
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
-        ++publishes;
-        displayed.assign(view.displayText().data(), view.displayText().size());
-        if(onPublishInteger)
-            mutationApplied = onPublishInteger->setValue(mutationValue);
-        if(onPublishFloat)
-            mutationApplied = onPublishFloat->setValue(static_cast<f64>(mutationValue));
+    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model)override{
+        return EditBoxResult();
+    }
+    public EditBoxResult editNavigated(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model,
+        mut EditNavigationState navigation, mut IEditNavigationResolver resolver, mut IEditActionSink sink)override{
+        return EditBoxResult();
+    }
+    public EditBoxResult editActions(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel draft, mut IEditActionSink sink)override{
+        ++this.loans;
+        this.lastPopup = popup;
+        EditBoxResult result;
+        result.valid = true;
+        result.focused = options.enabled && this.focused;
+        const u64 revision = draft.revision();
+        const usize anchor = draft.anchor();
+        const usize caret = draft.caret();
+        for(in NumericEvent event : this.m_events){
+            if(!ApplyNumericHostEvent(event, options, draft, sink, result))
+                break;
+        }
+        this.m_events.clear();
+        if(this.onLoanInteger.has_value())
+            this.mutationApplied = this.onLoanInteger.value().setValue(this.mutationValue);
+        if(this.resetBuilder.has_value())
+            this.resetBuilder.value().reset();
+        result.textChanged = revision != draft.revision();
+        result.selectionChanged = anchor != draft.anchor() || caret != draft.caret();
+        return result;
+    }
+    public b8 publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions options)override{
+        ++this.publishes;
+        this.displayed.assign(view.displayText());
+        if(this.onPublishInteger.has_value())
+            this.mutationApplied = this.onPublishInteger.value().setValue(this.mutationValue);
+        if(this.onPublishFloat.has_value())
+            this.mutationApplied = this.onPublishFloat.value().setValue(cast<f64>(this.mutationValue));
         return true;
     }
+}
 
+[extensible]
+class NumericFixture : WidgetFixture{
+    public IntegerEditModel m_integer;
+    public FloatEditModel m_float;
+    public EditBoxState m_integerState;
+    public EditBoxState m_floatState;
+    public PopupState m_parent;
+    public PopupState m_child;
+    public NumericHost m_host;
 
-public:
-    AString<Core::Alloc::GlobalArena> displayed;
-    IntegerEditModel* onLoanInteger = nullptr;
-    IntegerEditModel* onPublishInteger = nullptr;
-    FloatEditModel* onPublishFloat = nullptr;
-    Builder* resetBuilder = nullptr;
-    PopupToken lastPopup;
-    i64 mutationValue = 99;
-    usize loans = 0u;
-    usize ordinaryLoans = 0u;
-    usize publishes = 0u;
-    b8 focused = true;
-    b8 mutationApplied = false;
-
-
-public:
-    Core::Alloc::GlobalArena& m_arena;
-    PaintVector<NumericEvent> m_events;
-    InputBindings m_bindings;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class NumericFixture : public WidgetFixture{
-public:
-    NumericFixture()
-        : m_integer(m_arena)
-        , m_float(m_arena)
-        , m_host(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 beginNumeric(const u64 generation){
-        return begin(generation) && m_builder.beginPanel(s_NumericPanelKey, { 20.0f, 20.0f, 740.0f, 520.0f });
+    public b8 beginNumeric(in u64 generation){
+        return this.begin(generation) && this.m_builder.beginPanel(s_NumericPanelKey, Rect(20.0f, 20.0f, 740.0f, 520.0f));
     }
-    [[nodiscard]] b8 beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
+    public b8 beginParent(in u64 generation){
+        return this.begin(generation) && this.m_builder.beginPopup("parent", this.m_parent, MakeLargeLoanParentPopupOptions());
     }
-    [[nodiscard]] b8 acceptNumeric(){
-        return finishPanel() && m_context.commitFrame(m_context.readyGeneration());
-    }
-    void useHost()noexcept{ m_builder.setEditHost(m_host); }
+    public b8 acceptNumeric(){ return this.finishPanel() && this.m_context.commitFrame(this.m_context.readyGeneration()); }
+    public void useHost(){ this.m_builder.setEditHost(this.m_host); }
+}
 
+class NumericModelFixture<Model>{ public Model m_model; }
 
-public:
-    IntegerEditModel m_integer;
-    FloatEditModel m_float;
-    EditBoxState m_integerState;
-    EditBoxState m_floatState;
-    PopupState m_parent;
-    PopupState m_child;
-    NumericHost m_host;
-};
+class PopupToolsSource : IListDataSource{
+    public u64 generation = 1401u;
+    public u64 count = 5u;
+    public u64 selectListKey = 4u;
+    public TestObserved<u64> contentRevision = TestObserved<u64>(1u);
+    public TestObserved<Optional<mut ContextMenuState>> closeOnText;
+    public TestObserved<Optional<mut TooltipState>> resetTooltipOnText;
+    public TestObserved<Optional<mut ListState>> selectListOnText;
+    public TestObserved<Optional<mut ComboState>> closeComboOnRevision;
+    public TestObserved<b8> changeRevisionOnText;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiNumericTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-using DraftSnapshot = UiMultilineTests::MultilineSnapshot;
-
-template<typename Model>
-class NumericModelFixture : public testing::Test{
-public:
-    NumericModelFixture()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiNumericModelsFixture))
-        , m_model(m_arena)
-    {}
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Model m_model;
-};
-
-void ExpectRejected(const NumericEditResult& result, b8 restored = false);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPopupToolsTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-using namespace UiWidgetTests;
-
-inline constexpr AStringView s_PopupToolsPanelKey = "panel";
-inline constexpr AStringView s_AnchorKey = "anchor";
-inline constexpr AStringView s_TooltipKey = "tip";
-inline constexpr AStringView s_MenuKey = "menu";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class PopupToolsSource final : public IListDataSource{
-public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        if(closeComboOnRevision){
-            ComboState& state = *MakeNotNull(Exchange(closeComboOnRevision, nullptr));
+    public u64 instanceGeneration()const override{ return this.generation; }
+    public u64 revision()const override{
+        if(this.closeComboOnRevision.value().has_value()){
+            mut ComboState state = this.closeComboOnRevision.value().value();
+            this.closeComboOnRevision.value().reset();
             state.close();
         }
-        return contentRevision;
+        return this.contentRevision.value();
     }
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? index + 1u : 0u; }
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, false, value);
+    public u64 rowCount()const override{ return this.count; }
+    public u64 key(in u64 index)const override{
+        if(index < this.count)
+            return index + 1u;
+        return 0u;
     }
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        return UiWidgetTests::FindSingleDisabledFixtureRow(count, 0u, false, start, reverse, 3u);
-    }
-    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
-
-
-public:
-    u64 generation = 1401u;
-    u64 count = 5u;
-    u64 selectListKey = 4u;
-    mutable u64 contentRevision = 1u;
-    mutable ContextMenuState* closeOnText = nullptr;
-    mutable TooltipState* resetTooltipOnText = nullptr;
-    mutable ListState* selectListOnText = nullptr;
-    mutable ComboState* closeComboOnRevision = nullptr;
-    mutable b8 changeRevisionOnText = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class PopupToolsFixture : public WidgetFixture{
-public:
-    void setUpWidgetBase(){ WidgetFixture::SetUp(); }
-    virtual void SetUp()override;
-    [[nodiscard]] b8 declareTools(u64 generation, b8 tooltip = true, b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f });
-    [[nodiscard]] b8 prepareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
-        return declareTools(generation, tooltip, menu, bounds) && finishPanel();
-    }
-    [[nodiscard]] b8 acceptTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
-        return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
-    }
-    [[nodiscard]] b8 acceptPopupTooltip(u64 generation);
-    [[nodiscard]] const HitTarget* menuHost()const noexcept{
-        for(const HitTarget& entry : m_context.input().targets()){
-            if(entry.navigable && entry.popup.instanceGeneration == m_menu.instanceGeneration())
-                return &entry;
+    public Expected<u64> indexOf(in u64 value)const override{ return FindArithmeticFixtureRowIndex(this.count, 0u, false, value); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindSingleDisabledFixtureRow(this.count, 0u, false, start, reverse, 3u); }
+    public b8 enabled(in u64 index)const override{ return index < this.count && index + 1u != 3u; }
+    public StringView text(in u64 index)const override{
+        if(this.changeRevisionOnText.value()){
+            this.changeRevisionOnText.value() = false;
+            ++this.contentRevision.value();
         }
-        return nullptr;
-    }
-    [[nodiscard]] const HitTarget* menuRow(const u64 key)const noexcept{
-        for(const HitTarget& entry : m_context.input().targets()){
-            if(entry.value == key && entry.popup.instanceGeneration == m_menu.instanceGeneration())
-                return &entry;
+        if(this.closeOnText.value().has_value()){
+            mut ContextMenuState state = this.closeOnText.value().value();
+            this.closeOnText.value().reset();
+            state.close();
         }
-        return nullptr;
+        if(this.resetTooltipOnText.value().has_value()){
+            mut TooltipState state = this.resetTooltipOnText.value().value();
+            this.resetTooltipOnText.value().reset();
+            state.reset();
+        }
+        if(this.selectListOnText.value().has_value()){
+            mut ListState state = this.selectListOnText.value().value();
+            this.selectListOnText.value().reset();
+            state.select(this.selectListKey);
+        }
+        return FormatPopupToolsRowLabel(this.count, index);
     }
-    [[nodiscard]] b8 moveToAnchor(AStringView parent = s_PopupToolsPanelKey);
-    void secondaryClick(const Point& point);
-    [[nodiscard]] b8 openBySecondary(u64 generation);
-
-
-public:
-    PopupToolsSource m_source;
-    TooltipState m_tooltip;
-    ContextMenuState m_menu;
-    PopupState m_plainPopup;
-    WidgetOptions m_anchorOptions;
-    TooltipOptions m_tooltipOptions;
-    ContextMenuOptions m_menuOptions;
-    ContextMenuResult m_menuResult;
-    f32 m_deltaSeconds = 0.0f;
-    b8 m_anchorActivated = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-namespace __hidden_ui_glyph_sdf_tests{
-using Insets = ::NWB::Impl::Ui::Insets;
-using NumericEvent = ::NWB::UiNumericEditTests::NumericEvent;
-using NumericHost = ::NWB::UiNumericEditTests::NumericHost;
-using PopupToolsFixture = ::NWB::UiPopupToolsTests::PopupToolsFixture;
-using ContextMenuResult = ::NWB::Impl::Ui::ContextMenuResult;
-using IEditActionSink = ::NWB::Impl::Ui::IEditActionSink;
-using EditCommandResult = ::NWB::Impl::Ui::EditCommandResult;
-namespace EditAction = ::NWB::Impl::Ui::EditAction;
-namespace EditTextMode = ::NWB::Impl::Ui::EditTextMode;
-using ::NWB::Impl::Ui::ApplyEditCommand;
-using ::NWB::Impl::Ui::TranslateEditCommand;
-using ::NWB::UiPopupToolsTests::s_PopupToolsPanelKey;
-using ::NWB::UiPopupToolsTests::s_AnchorKey;
-using ::NWB::UiPopupToolsTests::s_TooltipKey;
-using ::NWB::UiPopupToolsTests::s_MenuKey;
-
-void ExpectNumericEditRejected(const NumericEditResult& result, b8 restored)noexcept;
-PopupOptions MakePopupTooltipFixtureOptions()noexcept;
-b8 ApplyNumericHostEvent(const NumericEvent& event, const EditBoxOptions& options, EditModel& draft, IEditActionSink& sink, EditBoxResult& result)noexcept;
-StringView FormatPopupToolsRowLabel(u64 count, u64 index)noexcept;
-void SetUpPopupToolsFixture(PopupToolsFixture& self)noexcept;
-b8 DeclarePopupToolsFixture(PopupToolsFixture& self, u64 generation, b8 tooltip, b8 menu, const Rect& bounds)noexcept;
-b8 AcceptPopupTooltipFixture(PopupToolsFixture& self, u64 generation)noexcept;
-b8 MovePopupToolsToAnchor(PopupToolsFixture& self, AStringView parent)noexcept;
-void SecondaryClickPopupTools(PopupToolsFixture& self, const Point& point)noexcept;
-b8 OpenPopupToolsBySecondary(PopupToolsFixture& self, u64 generation)noexcept;
-};
-
-NWB_BEGIN
-namespace UiNumericEditTests{
-FOUNDATION_INLINE EditBoxResult NumericHost::editActions(const WidgetState&, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)noexcept{
-    ++loans;
-    lastPopup = popup;
-    EditBoxResult result;
-    result.valid = true;
-    result.focused = options.enabled && focused;
-    const u64 revision = draft.revision();
-    const usize anchor = draft.anchor();
-    const usize caret = draft.caret();
-    for(const auto& event : m_events){
-        if(!::__hidden_ui_glyph_sdf_tests::ApplyNumericHostEvent(event, options, draft, sink, result))
-            break;
-    }
-    m_events.clear();
-    if(onLoanInteger)
-        mutationApplied = onLoanInteger->setValue(mutationValue);
-    if(resetBuilder)
-        resetBuilder->reset();
-    result.textChanged = revision != draft.revision();
-    result.selectionChanged = anchor != draft.anchor() || caret != draft.caret();
-    return result;
-}
-};
-namespace UiNumericTests{
-FOUNDATION_INLINE void ExpectRejected(const NumericEditResult& result, const b8 restored){
-    ::__hidden_ui_glyph_sdf_tests::ExpectNumericEditRejected(result, restored);
-}
-};
-namespace UiPopupToolsTests{
-FOUNDATION_INLINE StringView PopupToolsSource::text(const u64 index)const noexcept{
-    if(changeRevisionOnText){
-        changeRevisionOnText = false;
-        ++contentRevision;
-    }
-    if(closeOnText){
-        ContextMenuState& state = *MakeNotNull(Exchange(closeOnText, nullptr));
-        state.close();
-    }
-    if(resetTooltipOnText){
-        TooltipState& state = *MakeNotNull(Exchange(resetTooltipOnText, nullptr));
-        state.reset();
-    }
-    if(selectListOnText){
-        ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
-        state.select(selectListKey);
-    }
-    return ::__hidden_ui_glyph_sdf_tests::FormatPopupToolsRowLabel(count, index);
-}
-FOUNDATION_INLINE void PopupToolsFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpPopupToolsFixture(*this); }
-FOUNDATION_INLINE b8 PopupToolsFixture::declareTools(const u64 generation, const b8 tooltip, const b8 menu, const Rect& bounds){
-    return ::__hidden_ui_glyph_sdf_tests::DeclarePopupToolsFixture(*this, generation, tooltip, menu, bounds);
-}
-FOUNDATION_INLINE b8 PopupToolsFixture::acceptPopupTooltip(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::AcceptPopupTooltipFixture(*this, generation); }
-FOUNDATION_INLINE b8 PopupToolsFixture::moveToAnchor(const AStringView parent){ return ::__hidden_ui_glyph_sdf_tests::MovePopupToolsToAnchor(*this, parent); }
-FOUNDATION_INLINE void PopupToolsFixture::secondaryClick(const Point& point){ ::__hidden_ui_glyph_sdf_tests::SecondaryClickPopupTools(*this, point); }
-FOUNDATION_INLINE b8 PopupToolsFixture::openBySecondary(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenPopupToolsBySecondary(*this, generation); }
-};
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
+[extensible]
+class PopupToolsFixture : WidgetFixture{
+    public PopupToolsSource m_source;
+    public TooltipState m_tooltip;
+    public ContextMenuState m_menu;
+    public PopupState m_plainPopup;
+    public WidgetOptions m_anchorOptions;
+    public TooltipOptions m_tooltipOptions;
+    public ContextMenuOptions m_menuOptions;
+    public ContextMenuResult m_menuResult;
+    public f32 m_deltaSeconds = 0.0f;
+    public b8 m_anchorActivated = false;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ExpectNumericEditRejected(in NumericEditResult result, in b8 restored){
-    EXPECT_TRUE(result.valid);
-    EXPECT_TRUE(result.rejected);
-    EXPECT_FALSE(result.committed);
-    EXPECT_FALSE(result.valueChanged);
-    EXPECT_FALSE(result.cancelled);
-    EXPECT_FALSE(result.clamped);
-    EXPECT_EQ(result.restored, restored);
+    public void setup(){ SetUpPopupToolsFixture(this); }
+    public b8 declareTools(in u64 generation){ return this.declareTools(generation, true); }
+    public b8 declareTools(in u64 generation, in b8 tooltip){ return this.declareTools(generation, tooltip, true); }
+    public b8 declareTools(in u64 generation, in b8 tooltip, in b8 menu){ return this.declareTools(generation, tooltip, menu, Rect(10.0f, 10.0f, 360.0f, 280.0f)); }
+    public b8 declareTools(in u64 generation, in b8 tooltip, in b8 menu, in Rect bounds){ return DeclarePopupToolsFixture(this, generation, tooltip, menu, bounds); }
+    public b8 prepareTools(in u64 generation){ return this.prepareTools(generation, true); }
+    public b8 prepareTools(in u64 generation, in b8 tooltip){ return this.prepareTools(generation, tooltip, true); }
+    public b8 prepareTools(in u64 generation, in b8 tooltip, in b8 menu){ return this.prepareTools(generation, tooltip, menu, Rect(10.0f, 10.0f, 360.0f, 280.0f)); }
+    public b8 prepareTools(in u64 generation, in b8 tooltip, in b8 menu, in Rect bounds){ return this.declareTools(generation, tooltip, menu, bounds) && this.finishPanel(); }
+    public b8 acceptTools(in u64 generation){ return this.acceptTools(generation, true); }
+    public b8 acceptTools(in u64 generation, in b8 tooltip){ return this.acceptTools(generation, tooltip, true); }
+    public b8 acceptTools(in u64 generation, in b8 tooltip, in b8 menu){ return this.acceptTools(generation, tooltip, menu, Rect(10.0f, 10.0f, 360.0f, 280.0f)); }
+    public b8 acceptTools(in u64 generation, in b8 tooltip, in b8 menu, in Rect bounds){ return this.prepareTools(generation, tooltip, menu, bounds) && this.m_context.commitFrame(generation); }
+    public b8 acceptPopupTooltip(in u64 generation){ return AcceptPopupTooltipFixture(this, generation); }
+    public Optional<in HitTarget> menuHost()const{
+        for(in HitTarget entry : this.m_context.input().targets()){
+            if(entry.navigable && entry.popup.instanceGeneration == this.m_menu.instanceGeneration())
+                return Optional<in HitTarget>(entry);
+        }
+        return Optional<in HitTarget>();
+    }
+    public Optional<in HitTarget> menuRow(in u64 key)const{
+        for(in HitTarget entry : this.m_context.input().targets()){
+            if(entry.value == key && entry.popup.instanceGeneration == this.m_menu.instanceGeneration())
+                return Optional<in HitTarget>(entry);
+        }
+        return Optional<in HitTarget>();
+    }
+    public b8 moveToAnchor(){ return this.moveToAnchor(s_PopupToolsPanelKey); }
+    public b8 moveToAnchor(in StringView parent){ return MovePopupToolsToAnchor(this, parent); }
+    public void secondaryClick(in Point point){ SecondaryClickPopupTools(this, point); }
+    public b8 openBySecondary(in u64 generation){ return OpenPopupToolsBySecondary(this, generation); }
 }
+
 
 PopupOptions MakePopupTooltipFixtureOptions(){
     PopupOptions options = PopupOptions();
@@ -471,14 +265,14 @@ b8 ApplyNumericHostEvent(in NumericEvent event, in EditBoxOptions options, mut E
         return true;
     }
     if(options.enabled && event.kind == UiFixtureNumericEventKind::Text && !options.readOnly){
-        if(!draft.replaceSelection(StringView(event.text.data(), event.text.size()))){
+        if(!draft.replaceSelection(StringView(event.text))){
             result.valid = false;
             return false;
         }
         return true;
     }
     if(options.enabled && event.kind == UiFixtureNumericEventKind::Preedit && !options.readOnly){
-        const StringView textView = StringView(event.text.data(), event.text.size());
+        const StringView textView = StringView(event.text);
         if(!draft.beginComposition() || !draft.updateComposition(textView, textView.size(), textView.size())){
             result.valid = false;
             return false;

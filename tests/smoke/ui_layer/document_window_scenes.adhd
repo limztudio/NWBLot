@@ -23,13 +23,13 @@ const f32 s_UiWindowSmokeGap = 4.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiTextAreaSmokeScene{
-    private SmokeClipboardRef m_clipboard;
+class UiTextAreaSmokeScene : IUiSmokeScene{
+    private mut IClipboardService m_clipboard;
     private String m_longText = "";
     private EditModel m_model(EditLimits(), EditTextMode::Multiline);
     private TextAreaState m_state = TextAreaState();
     private EditBoxView m_observed;
-    private ClipboardCompletion m_completion;
+    private ClipboardCompletion m_completion = ClipboardCompletion();
     private ClipboardRequestToken m_clipboardToken = ClipboardRequestToken();
     private UiTextAreaSnapshot m_snapshot = UiTextAreaSnapshot();
     private u32 m_submits = 0u;
@@ -46,7 +46,7 @@ class UiTextAreaSmokeScene{
     public UiTextAreaSmokeScene(mut IClipboardService clipboard);
     public ~UiTextAreaSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
+    public b8 paint(mut UiPaintContext context)override;
 
     private void resetModel();
     private void longDocument();
@@ -71,8 +71,7 @@ class UiTextSmokeSamples{
 
 
 // Scene fixture for primitive and Builder texture image declarations.
-class UiTextureImageSmokeScene{
-    private SmokeArenaRef m_arena;
+class UiTextureImageSmokeScene : IUiSmokeInputScene{
     private SharedImageSource m_default = SharedImageSource();
     private SharedImageSource m_alternate = SharedImageSource();
     private SharedImageSource m_replacement = SharedImageSource();
@@ -91,8 +90,8 @@ class UiTextureImageSmokeScene{
 
     public UiTextureImageSmokeScene(mut AssetManager assets);
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private b8 replaceVersion();
     private b8 paintControls(mut Builder ui, in Rect bounds);
@@ -104,7 +103,7 @@ class UiTextureImageSmokeScene{
 }
 
 
-class UiWindowSmokeScene{
+class UiWindowSmokeScene : IUiSmokeScene{
     private WindowState m_window = WindowState();
     private WindowState m_lastWindow = WindowState();
     private DisplayMetrics m_lastDisplay = DisplayMetrics();
@@ -116,7 +115,7 @@ class UiWindowSmokeScene{
     private b8 m_lastLocked = false;
     private b8 m_displayChanged = false;
 
-    public b8 paint(mut UiPaintContext context);
+    public b8 paint(mut UiPaintContext context)override;
 
     private void observeState(in WindowMetrics metrics);
     private void logAction(in StringView action);
@@ -207,14 +206,12 @@ StringView UiTextureImageSmokeRectName(in usize index){
     }
 }
 
-void CancelSmokeClipboardTokenOnExit(in SmokeClipboardRef clipRef, in ClipboardRequestToken token){
+void CancelSmokeClipboardTokenOnExit(mut IClipboardService clipRef, in ClipboardRequestToken token){
     if(token.valid() && !clipRef.cancel(token))
         TerminateInvariant();
 }
 
-b8 RequestSmokeClipboardSeed(in SmokeClipboardRef clipRef, mut ClipboardRequestToken token){
-    if(!clipRef.valid())
-        return false;
+b8 RequestSmokeClipboardSeed(mut IClipboardService clipRef, mut ClipboardRequestToken token){
     if(token.valid() && !clipRef.cancel(token))
         return false;
     token = ClipboardRequestToken();
@@ -225,12 +222,10 @@ b8 RequestSmokeClipboardSeed(in SmokeClipboardRef clipRef, mut ClipboardRequestT
     return true;
 }
 
-b8 PollSmokeClipboardSeed(in SmokeClipboardRef clipRef, mut ClipboardRequestToken token, mut ClipboardCompletion completion, mut b8 outSeeded){
+b8 PollSmokeClipboardSeed(mut IClipboardService clipRef, mut ClipboardRequestToken token, mut ClipboardCompletion completion, mut b8 outSeeded){
     outSeeded = false;
     if(!token.valid())
         return true;
-    if(!clipRef.valid())
-        return false;
     const ClipboardPollResultEnum status = clipRef.poll(token, completion);
     if(status == ClipboardPollResult::Pending)
         return true;
@@ -347,7 +342,7 @@ b8 InitUiTextSmokeSamples(
         }
     }
 
-    const b8 atlasesCreated = CreateSmokeTextAtlasPages(coveragePixels, sdfPixels, coverage, sdf);
+    const b8 atlasesCreated = CreateSmokeTextAtlasPages(Span<u8>(coveragePixels.data(), coveragePixels.size()), sdfPixels, coverage, sdf);
 
     ShapeRequest latinRequest();
     latinRequest.text = "office ffi e\xCC\x81 gqyp";
@@ -385,38 +380,38 @@ void InitUiTextureImageSmokeSources(
     mut SharedImageSource replacementSource,
     mut b8 sourcesValid
 ){
-    LoadSmokeSkinImageSources(assets, s_SmokeNameAlternateSkin, defaultSource, alternateSource);
+    UiSmokeImageAssetLoader loader();
+    loader.load(assets, s_SmokeNameAlternateSkin, defaultSource, alternateSource);
     replacementSource = defaultSource;
-    sourcesValid = SmokeImageSourceValid(defaultSource)
-        && SmokeImageSourceValid(alternateSource)
-        && SmokeImageSourceWidth(defaultSource) == 256u
-        && SmokeImageSourceHeight(defaultSource) == 256u
-        && SmokeImageSourceWidth(alternateSource) == 256u
-        && SmokeImageSourceHeight(alternateSource) == 256u
-        && SmokeImageSourceGeneration(defaultSource) != SmokeImageSourceGeneration(alternateSource);
+    sourcesValid = defaultSource.valid()
+        && alternateSource.valid()
+        && defaultSource.deref().texture().width() == 256u
+        && defaultSource.deref().texture().height() == 256u
+        && alternateSource.deref().texture().width() == 256u
+        && alternateSource.deref().texture().height() == 256u
+        && defaultSource.deref().generation() != alternateSource.deref().generation();
 }
 
 b8 ReplaceUiTextureImageSmokeSource(
-    in SmokeArenaRef arenaRef,
     in b8 replacementAlternate,
     in SharedImageSource defaultSource,
     in SharedImageSource alternateSource,
     mut SharedImageSource replacementSource
 ){
-    if(!SmokeImageSourceValid(defaultSource) || !SmokeImageSourceValid(alternateSource) || !SmokeImageSourceValid(replacementSource))
+    if(!defaultSource.valid() || !alternateSource.valid() || !replacementSource.valid())
         return false;
     SharedImageSource payloadSource = alternateSource;
     if(replacementAlternate)
         payloadSource = defaultSource;
-    const SharedImageSource next = CloneSmokeImageSourcePayload(arenaRef, defaultSource, payloadSource);
-    if(!SmokeImageSourceValid(next))
+    const SharedImageSource next = CloneSmokeImageSourcePayload(defaultSource, payloadSource);
+    if(!next.valid())
         return false;
-    const u64 nextGeneration = SmokeImageSourceGeneration(next);
+    const u64 nextGeneration = next.deref().generation();
     if(
-        nextGeneration == SmokeImageSourceGeneration(replacementSource)
-        || nextGeneration == SmokeImageSourceGeneration(defaultSource)
-        || nextGeneration == SmokeImageSourceGeneration(alternateSource)
-        || SmokeImageSourceIdentityName(next) != SmokeImageSourceIdentityName(defaultSource)
+        nextGeneration == replacementSource.deref().generation()
+        || nextGeneration == defaultSource.deref().generation()
+        || nextGeneration == alternateSource.deref().generation()
+        || next.deref().identity().name() != defaultSource.deref().identity().name()
     )
         return false;
     replacementSource = next;
@@ -424,10 +419,22 @@ b8 ReplaceUiTextureImageSmokeSource(
 }
 
 u64 ResetAndCheckNullSmokeImageSource(mut SharedImageSource source){
-    ResetSmokeImageSource(source);
-    if(!SmokeImageSourceValid(source))
+    source.reset();
+    if(!source.valid())
         return 1u;
     return 0u;
+}
+
+u64 SmokeImageSourceGeneration(in SharedImageSource source){
+    if(source.valid())
+        return source.deref().generation();
+    return 0u;
+}
+
+Name SmokeImageSourceName(in SharedImageSource source){
+    if(source.valid())
+        return source.deref().identity().name();
+    return Name();
 }
 
 void ReadSmokeTextureGenerations(
@@ -441,7 +448,7 @@ void ReadSmokeTextureGenerations(
     generations[1u] = SmokeImageSourceGeneration(alternateSource);
     generations[2u] = SmokeImageSourceGeneration(replacementSource);
     outSameIdentity = 0u;
-    if(SmokeImageSourceIdentityName(replacementSource) == SmokeImageSourceIdentityName(defaultSource))
+    if(SmokeImageSourceName(replacementSource) == SmokeImageSourceName(defaultSource))
         outSameIdentity = 1u;
 }
 
@@ -455,9 +462,8 @@ Rect ResolveSmokeWindowButtonRect(in WindowState state, in WindowMetrics metrics
 
 
 UiTextAreaSmokeScene::UiTextAreaSmokeScene(mut IClipboardService clipboard){
-    this.m_clipboard = SmokeClipboardRef(clipboard);
-    this.m_observed = CreateSmokeEditBoxView();
-    this.m_completion = CreateSmokeClipboardCompletion();
+    this.m_clipboard = clipboard;
+    this.m_observed = EditBoxView();
     this.m_longText.reserve(1044u);
     for(u32 line = 0u; line < 16u; ++line)
         this.m_longText.append("abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl\n");
@@ -784,7 +790,6 @@ b8 UiTextSmokeSamples::paint(mut UiPaintContext context){
 
 
 UiTextureImageSmokeScene::UiTextureImageSmokeScene(mut AssetManager assets){
-    this.m_arena = MakeSmokeArenaRef();
     InitUiTextureImageSmokeSources(assets, this.m_default, this.m_alternate, this.m_replacement, this.m_sourcesValid);
 }
 
@@ -846,7 +851,7 @@ b8 UiTextureImageSmokeScene::keyboardUpdate(in i32 key, in i32 scancode, in i32 
 }
 
 b8 UiTextureImageSmokeScene::replaceVersion(){
-    if(!ReplaceUiTextureImageSmokeSource(this.m_arena, this.m_replacementAlternate, this.m_default, this.m_alternate, this.m_replacement))
+    if(!ReplaceUiTextureImageSmokeSource(this.m_replacementAlternate, this.m_default, this.m_alternate, this.m_replacement))
         return false;
     ++this.m_replacementCount;
     this.m_replacementAlternate = !this.m_replacementAlternate;

@@ -8,339 +8,160 @@
 #include <CoolStuff/Testbed/fly_camera_motion.adhd>
 #include <impl/ecs_scene/camera_types.adhd>
 #include <tests/unit/scene/name_cases.adhd>
+#include <impl/assets_graphics/components.adhd>
+#include <impl/assets_graphics/renderer_subsystem.adhd>
+#include <impl/assets_graphics/transparent_subsystem.adhd>
+#include <impl/assets_mesh/skin_types.adhd>
+#include <impl/assets_scene/asset.adhd>
+#include <impl/assets_scene/component_assets.adhd>
+#include <impl/assets_subsystem/asset.adhd>
+#include <impl/assets_ui_skin/types.adhd>
+#include <impl/ecs_scene/module.adhd>
+#include <tests/common/value_storage.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_graphics/components.adhd.h>
-#include <impl/assets_graphics/renderer_subsystem.adhd.h>
-#include <impl/assets_graphics/transparent_subsystem.adhd.h>
-#include <impl/assets_mesh/skin_types.adhd.h>
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_scene/component_assets.adhd.h>
-#include <impl/assets_subsystem/asset.adhd.h>
-#include <impl/assets_ui_skin/types.adhd.h>
-#include <impl/ecs_scene/camera_types.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/assets/manager.h>
-#include <core/ecs/entity.h>
-#include <core/input/module.h>
-
-#include <global/binary.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::SceneAssetTestHelpers{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core::Assets;
-using namespace Impl;
-
-template<typename CodecT>
-[[nodiscard]] FOUNDATION_INLINE b8 RegisterTestCodec(AssetRegistry& registry){
-    return registry.registerCodec(MakeUnique<CodecT>());
+b8 RegisterTestCodec<Codec>(mut AssetRegistry registry){
+    return registry.registerCodec(MakeUnique<Codec>());
 }
 
-template<typename SubsystemT>
-[[nodiscard]] FOUNDATION_INLINE b8 HasActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
-    return active.hasSubsystem<SubsystemT>();
-}
-
-template<typename SubsystemT>
-[[nodiscard]] FOUNDATION_INLINE const SubsystemT& RequireActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
-    return *active.findSubsystem<SubsystemT>().value();
-}
-
-template<typename ComponentT, typename PayloadT>
-[[nodiscard]] FOUNDATION_INLINE AssetBytes MakeComponentBinary(const PayloadT& payload, AssetArena& arena){
+Vector<u8> MakeComponentBinary<Payload>(in Name componentType, in Payload payload){
     ComponentHeaderBinary header;
-    header.componentTypeHash = ComponentT::AssetTypeName().hash();
-    header.payloadByteCount = sizeof(PayloadT);
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + sizeof(PayloadT));
+    header.componentTypeHash = componentType.hash();
+    header.payloadByteCount = size_of<Payload>();
+    Vector<u8> binary;
+    binary.reserve(size_of<ComponentHeaderBinary>() + size_of<Payload>());
     AppendPOD(binary, header);
     AppendPOD(binary, payload);
     return binary;
 }
 
-template<typename SubsystemT>
-FOUNDATION_INLINE void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
-    const usize count = subsystem.fieldCount();
-    for(usize i = 0u; i < count; ++i){
-        const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
-        if(descriptor.isArray){
+void AppendSceneParent(mut ISubsystem subsystem, in Name path){
+    subsystem.editParentRefs().push_back(SubsystemRef(path));
+}
+
+in Vector<SubsystemRef> SceneParents(in ISubsystem subsystem){
+    return subsystem.parentRefs();
+}
+
+void PopulateRequiredSubsystemFields(mut ISubsystem subsystem){
+    for(usize i = 0u; i < subsystem.fieldCount(); ++i){
+        if(subsystem.fieldDescriptor(i).isArray){
             if(subsystem.fieldValueCount(i) == 0u)
-                subsystem.appendFieldValue(i, Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset);
+                subsystem.appendFieldValue(i, s_SceneAssetNameEngineTestDefaultAsset);
         }
-        else if(!subsystem.fieldValue(i, 0u))
-            subsystem.appendFieldValue(i, Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset);
+        else if(subsystem.fieldValue(i, 0u) == s_NameNone)
+            subsystem.appendFieldValue(i, s_SceneAssetNameEngineTestDefaultAsset);
     }
 }
 
-template<typename SubsystemT>
-[[nodiscard]] FOUNDATION_INLINE AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
+Vector<u8> MakeSubsystemBinary(in ISubsystem subsystem){
     const usize subsystemCount = subsystem.parentRefs().size();
     const usize fieldCount = subsystem.fieldCount();
     u64 totalAssetCount = 0u;
     for(usize i = 0u; i < fieldCount; ++i)
-        totalAssetCount += static_cast<u64>(subsystem.fieldValueCount(i));
+        totalAssetCount += cast<u64>(subsystem.fieldValueCount(i));
 
     SubsystemHeaderBinary header;
-    header.subsystemTypeHash = SubsystemT::AssetTypeName().hash();
-    header.subsystemCount = static_cast<u64>(subsystemCount);
-    header.fieldCount = static_cast<u64>(fieldCount);
+    header.subsystemTypeHash = subsystem.assetType().hash();
+    header.subsystemCount = cast<u64>(subsystemCount);
+    header.fieldCount = cast<u64>(fieldCount);
     header.assetCount = totalAssetCount;
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + subsystemCount * sizeof(NameHash) + fieldCount * sizeof(u64) + static_cast<usize>(totalAssetCount) * sizeof(NameHash));
+    Vector<u8> binary;
+    binary.reserve(size_of<SubsystemHeaderBinary>() + subsystemCount * size_of<NameHash>() + fieldCount * size_of<u64>() + cast<usize>(totalAssetCount) * size_of<NameHash>());
     AppendPOD(binary, header);
-    for(const auto& ref : subsystem.parentRefs())
+    for(in SubsystemRef ref : subsystem.parentRefs())
         AppendPOD(binary, ref.name().hash());
     for(usize i = 0u; i < fieldCount; ++i){
-        const u64 valueCount = static_cast<u64>(subsystem.fieldValueCount(i));
+        const u64 valueCount = cast<u64>(subsystem.fieldValueCount(i));
         AppendPOD(binary, valueCount);
     }
     for(usize i = 0u; i < fieldCount; ++i){
-        const usize valueCount = subsystem.fieldValueCount(i);
-        for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex)
+        for(usize elementIndex = 0u; elementIndex < subsystem.fieldValueCount(i); ++elementIndex)
             AppendPOD(binary, subsystem.fieldValue(i, elementIndex).hash());
     }
     return binary;
 }
 
-class MapAssetBinarySource final : public IAssetBinarySource{
-public:
-    struct Entry{
-        AssetBytes binary;
-        Name path = s_NameNone;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    public:
-        Entry(const Name& inPath, AssetBytes&& inBinary)noexcept
-            : binary(Move(inBinary))
-            , path(inPath)
-        {}
-    };
+class SceneBinaryRecord{
+    public Name path = s_NameNone;
+    public Vector<u8> binary;
+}
 
+class MapAssetBinarySource : IAssetBinarySource{
+    private Vector<SceneBinaryRecord> m_entries;
 
-public:
-    explicit MapAssetBinarySource(AssetArena& arena)noexcept
-        : m_arena(arena)
-        , m_entries(arena)
-    {}
-
-
-public:
-    void setBinary(const Name& virtualPath, const Span<const u8> binary){
-        for(Entry& entry : m_entries){
-            if(entry.path == virtualPath){
-                entry.binary.assign(binary.begin(), binary.end());
+    public void setBinary(in Name path, in Span<u8> bytes){
+        for(mut SceneBinaryRecord entry : this.m_entries){
+            if(entry.path == path){
+                AssignTriviallyCopyableVector(entry.binary, bytes);
                 return;
             }
         }
-        AssetBytes copy(m_arena);
-        copy.assign(binary.begin(), binary.end());
-        m_entries.emplace_back(virtualPath, Move(copy));
+        AppendArenaElement<SceneBinaryRecord>(this.m_entries);
+        this.m_entries.back().path = path;
+        AssignTriviallyCopyableVector(this.m_entries.back().binary, bytes);
     }
 
-    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
-        outBinary.clear();
-        for(const Entry& entry : m_entries){
-            if(entry.path == virtualPath){
-                outBinary.assign(entry.binary.begin(), entry.binary.end());
+    public b8 readAssetBinary(in Name path, mut AssetByteBuffer bytes)const override{
+        bytes.clear();
+        for(in SceneBinaryRecord entry : this.m_entries){
+            if(entry.path == path){
+                AssignTriviallyCopyableVector(bytes, entry.binary);
                 return true;
             }
         }
         return false;
     }
+}
 
 
-public:
-    AssetArena& m_arena;
-    AssetVector<Entry> m_entries;
-};
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct SceneTestArena{
-    AssetArena arena;
-    explicit SceneTestArena(const Name& scopeName) : arena(scopeName){}
-};
 
-[[nodiscard]] FOUNDATION_INLINE AssetBytes BuildTestProjectBinary(const Name& startScene, AssetArena& arena){
+Vector<u8> BuildTestProjectBinary(in Name startScene){
     ProjectHeaderBinary header;
     header.startSceneHash = startScene.hash();
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header));
+    Vector<u8> binary;
     AppendPOD(binary, header);
     return binary;
 }
 
-template<typename SubsystemListT, typename AssetMapT, typename EntityListT>
-[[nodiscard]] FOUNDATION_INLINE AssetBytes BuildTestSceneBinary(
-    const SubsystemListT& subsystems,
-    const AssetMapT& assets,
-    const EntityListT& entities,
-    AssetArena& arena
-){
+Vector<u8> BuildTestSceneBinary(in Span<SubsystemRef> subsystems, in HashMap<Name, SceneAssetRef> assets, in Span<EntityRef> entities){
     SceneHeaderBinary header;
-    header.subsystemCount = static_cast<u64>(subsystems.size());
-    header.entityCount = static_cast<u64>(entities.size());
-    header.assetCount = static_cast<u64>(assets.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
+    header.subsystemCount = cast<u64>(subsystems.size());
+    header.entityCount = cast<u64>(entities.size());
+    header.assetCount = cast<u64>(assets.size());
+    Vector<u8> binary;
+    binary.reserve(size_of<SceneHeaderBinary>() + (subsystems.size() + entities.size()) * size_of<NameHash>() + assets.size() * size_of<SceneAssetEntryBinary>());
     AppendPOD(binary, header);
-    for(const auto& ref : subsystems)
-        AppendPOD(binary, ref.virtualPath.hash());
-    for(const auto& ref : entities)
-        AppendPOD(binary, ref.virtualPath.hash());
-    for(const auto& assetEntry : assets){
+    for(in SubsystemRef ref : subsystems)
+        AppendPOD(binary, ref.name().hash());
+    for(in EntityRef ref : entities)
+        AppendPOD(binary, ref.name().hash());
+    for(in auto asset : assets){
         SceneAssetEntryBinary entry;
-        entry.nicknameHash = assetEntry.first.hash();
-        entry.assetHash = assetEntry.second.virtualPath.hash();
+        entry.nicknameHash = asset.first.hash();
+        entry.assetHash = asset.second.name().hash();
         AppendPOD(binary, entry);
     }
     return binary;
 }
 
-template<typename ComponentListT>
-[[nodiscard]] FOUNDATION_INLINE AssetBytes BuildTestEntityBinary(const ComponentListT& components, AssetArena& arena){
+Vector<u8> BuildTestEntityBinary(in Span<ComponentRef> components){
     EntityHeaderBinary header;
-    header.componentCount = static_cast<u64>(components.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
+    header.componentCount = cast<u64>(components.size());
+    Vector<u8> binary;
     AppendPOD(binary, header);
-    for(const auto& ref : components)
-        AppendPOD(binary, ref.virtualPath.hash());
+    for(in ComponentRef ref : components)
+        AppendPOD(binary, ref.name().hash());
     return binary;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::SceneAssetCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GlobalArena = Core::Alloc::GlobalArena;
-using AssetArena = Core::Assets::AssetArena;
-using AssetBytes = Core::Assets::AssetBytes;
-using AssetRegistry = Core::Assets::AssetRegistry;
-using AssetManager = Core::Assets::AssetManager;
-using IAsset = Core::Assets::IAsset;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-namespace Key = Core::Key;
-
-using ActiveCameraComponent = Impl::Scene::ActiveCameraComponent;
-using CameraComponent = Impl::Scene::CameraComponent;
-using TransformComponent = Impl::Scene::TransformComponent;
-using SceneCameraView = Impl::Scene::SceneCameraView;
-using Impl::Scene::CreateSceneCameraEntity;
-using Impl::Scene::ResolveSceneCameraView;
-
-using FlyCameraMotion = ::Testbed::FlyCameraMotion;
-using FlyCameraInput = ::Testbed::FlyCameraInput;
-using FlyCameraPointerDelta = ::Testbed::FlyCameraPointerDelta;
-
-using IComponent = Impl::IComponent;
-using ISubsystem = Impl::ISubsystem;
-using EntityAsset = Impl::EntityAsset;
-using SceneAsset = Impl::SceneAsset;
-using ComponentAssetRef = Core::Assets::AssetRef<Impl::IComponent>;
-using SubsystemAssetRef = Core::Assets::AssetRef<Impl::ISubsystem>;
-using GenericAssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
-using EntityAssetRef = Core::Assets::AssetRef<Impl::EntityAsset>;
-using SceneAssetRef = Core::Assets::AssetRef<Impl::SceneAsset>;
-using ComponentAssetCodec = Impl::ComponentAssetCodec;
-using LightComponentAsset = Impl::LightComponentAsset;
-using LightComponentPayloadBinary = Impl::LightComponentPayloadBinary;
-using RendererComponentAsset = Impl::RendererComponentAsset;
-using RendererComponentPayloadBinary = Impl::RendererComponentPayloadBinary;
-using TransformComponentAsset = Impl::TransformComponentAsset;
-using TransformComponentPayloadBinary = Impl::TransformComponentPayloadBinary;
-namespace OpticalVolumeCoincidence = Impl::OpticalVolumeCoincidence;
-namespace OpticalBoundaryMode = Impl::OpticalBoundaryMode;
-using SubsystemAssetCodec = Impl::SubsystemAssetCodec;
-template<typename SubsystemT>
-using TypedSubsystemAssetCodec = Impl::TypedSubsystemAssetCodec<SubsystemT>;
-using EntityAssetCodec = Impl::EntityAssetCodec;
-using ProjectAssetCodec = Impl::ProjectAssetCodec;
-using SceneAssetCodec = Impl::SceneAssetCodec;
-using RendererSubsystem = Impl::RendererSubsystem;
-using SkinningSubsystem = Impl::SkinningSubsystem;
-using TransparentSubsystem = Impl::TransparentSubsystem;
-using UiSubsystem = Impl::UiSubsystem;
-using ActiveSceneSubsystems = Impl::ActiveSceneSubsystems;
-using ProjectHeaderBinary = Impl::ProjectHeaderBinary;
-using SceneHeaderBinary = Impl::SceneHeaderBinary;
-using SceneAssetEntryBinary = Impl::SceneAssetEntryBinary;
-using EntityHeaderBinary = Impl::EntityHeaderBinary;
-using Impl::s_DefaultProjectVirtualPath;
-
-using MapAssetBinarySource = Tests::SceneAssetTestHelpers::MapAssetBinarySource;
-using Tests::SceneAssetTestHelpers::RegisterTestCodec;
-using Tests::SceneAssetTestHelpers::HasActiveSubsystem;
-using Tests::SceneAssetTestHelpers::RequireActiveSubsystem;
-using Tests::SceneAssetTestHelpers::MakeComponentBinary;
-using Tests::SceneAssetTestHelpers::MakeSubsystemBinary;
-using Tests::SceneAssetTestHelpers::PopulateRequiredSubsystemFields;
-using Tests::SceneAssetTestHelpers::SceneTestArena;
-using Tests::SceneAssetTestHelpers::BuildTestProjectBinary;
-using Tests::SceneAssetTestHelpers::BuildTestSceneBinary;
-using Tests::SceneAssetTestHelpers::BuildTestEntityBinary;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -414,19 +235,19 @@ void VerifySceneCameraSelection_FallbackPreservesSparseViewOrderAfterRemoval(){
 void VerifySceneSubsystemAssets_RejectsInvalidLightFlagsAndTrailingComponentBytes(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
-    SceneTestArena arena(s_SceneCaseTestsSceneComponentBinaryEdges);
+    HeapStorage arena(s_SceneCaseTestsSceneComponentBinaryEdges);
     ComponentAssetCodec codec = ComponentAssetCodec();
 
     LightComponentPayloadBinary payload = LightComponentPayloadBinary();
     payload.enableCaustics = 2u;
-    const AssetBytes invalidFlags = MakeComponentBinary<LightComponentAsset>(payload, arena.arena);
-    EXPECT_FALSE(codec.deserialize(s_SceneCaseProjectEntitiesInvalidLight, invalidFlags, arena.arena).has_value());
+    const Vector<u8> invalidFlags = MakeComponentBinary(LightComponentAsset::AssetTypeName(), payload);
+    EXPECT_FALSE(codec.deserialize(s_SceneCaseProjectEntitiesInvalidLight, invalidFlags, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "invalid light flags"));
 
     payload.enableCaustics = 1u;
-    AssetBytes trailing = MakeComponentBinary<LightComponentAsset>(payload, arena.arena);
+    Vector<u8> trailing = MakeComponentBinary(LightComponentAsset::AssetTypeName(), payload);
     trailing.push_back(0u);
-    EXPECT_FALSE(codec.deserialize(s_SceneCaseProjectEntitiesTrailingLight, trailing, arena.arena).has_value());
+    EXPECT_FALSE(codec.deserialize(s_SceneCaseProjectEntitiesTrailingLight, trailing, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "trailing bytes detected"));
 }
 
@@ -434,21 +255,23 @@ void VerifySceneSubsystemAssets_RejectsMissingSharedOpticalGroupAndDuplicateEnti
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
-    SceneTestArena arena(s_SceneCaseTestsSceneEntityComponentAssets);
-    SceneTestArena globalArena(s_SceneCaseTestsSceneEntityComponentAssetsGlobal);
-    AssetRegistry registry(arena.arena);
-    MapAssetBinarySource source(arena.arena);
-    AssetManager assets(arena.arena, registry, source);
+    HeapStorage arena(s_SceneCaseTestsSceneEntityComponentAssets);
+    HeapStorage globalArena(s_SceneCaseTestsSceneEntityComponentAssetsGlobal);
+    AssetRegistry registry(arena);
+    TestValueSlot<MapAssetBinarySource> sourceSlot;
+    mut MapAssetBinarySource source = sourceSlot.constructIn(arena);
+    AssetManager assets(arena, registry, source);
 
-    RendererSubsystem rendererSubsystem(arena.arena, s_SceneAssetNameEngineSubsystemsRenderer);
+    TestValueSlot<RendererSubsystem> rendererSubsystemSlot;
+    mut RendererSubsystem rendererSubsystem = rendererSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsRenderer);
     PopulateRequiredSubsystemFields(rendererSubsystem);
-    source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem, arena.arena));
+    source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem));
 
     ASSERT_TRUE(RegisterTestCodec<SubsystemAssetCodec>(registry));
     ASSERT_TRUE(RegisterTestCodec<ComponentAssetCodec>(registry));
-    ASSERT_TRUE(RegisterTestCodec<EntityAssetCodec>(registry));
-    ASSERT_TRUE(RegisterTestCodec<ProjectAssetCodec>(registry));
-    ASSERT_TRUE(RegisterTestCodec<SceneAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<EntityAsset>>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<ProjectAsset>>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<SceneAsset>>(registry));
 
     RendererComponentPayloadBinary invalidRendererPayload = RendererComponentPayloadBinary();
     invalidRendererPayload.materialHash = s_SceneCaseProjectMaterialsMatSkinnedUv.hash();
@@ -456,31 +279,32 @@ void VerifySceneSubsystemAssets_RejectsMissingSharedOpticalGroupAndDuplicateEnti
     invalidRendererPayload.opticalVolumeCoincidence = cast<u8>(OpticalVolumeCoincidence::SharedGroup);
     invalidRendererPayload.opticalBoundaryMode = cast<u8>(OpticalBoundaryMode::ClosedPriority);
     ComponentAssetCodec componentCodec = ComponentAssetCodec();
-    EXPECT_FALSE(componentCodec.deserialize(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer, MakeComponentBinary<RendererComponentAsset>(invalidRendererPayload, arena.arena), arena.arena).has_value());
+    EXPECT_FALSE(componentCodec.deserialize(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer, MakeComponentBinary(RendererComponentAsset::AssetTypeName(), invalidRendererPayload), arena).has_value());
 
     TransformComponentPayloadBinary transformPayload = TransformComponentPayloadBinary();
     transformPayload.position = f32x4(1.0f, 2.0f, 3.0f, 0.0f);
     transformPayload.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
     transformPayload.scale = f32x4(2.0f, 2.0f, 2.0f, 0.0f);
-    source.setBinary(s_SceneCaseProjectEntitiesHeroTransform, MakeComponentBinary<TransformComponentAsset>(transformPayload, arena.arena));
-    source.setBinary(s_SceneCaseProjectEntitiesHeroTransformDuplicate, MakeComponentBinary<TransformComponentAsset>(transformPayload, arena.arena));
+    source.setBinary(s_SceneCaseProjectEntitiesHeroTransform, MakeComponentBinary(TransformComponentAsset::AssetTypeName(), transformPayload));
+    source.setBinary(s_SceneCaseProjectEntitiesHeroTransformDuplicate, MakeComponentBinary(TransformComponentAsset::AssetTypeName(), transformPayload));
 
-    Vector<ComponentAssetRef> duplicateComponents = Vector<ComponentAssetRef>();
-    duplicateComponents.push_back(ComponentAssetRef(Name("project/entities/hero/transform")));
-    duplicateComponents.push_back(ComponentAssetRef(Name("project/entities/hero/transform_duplicate")));
-    source.setBinary(s_SceneCaseProjectEntitiesDuplicateCompEntity, BuildTestEntityBinary(duplicateComponents, arena.arena));
+    Vector<ComponentRef> duplicateComponents = Vector<ComponentRef>();
+    duplicateComponents.push_back(ComponentRef(Name("project/entities/hero/transform")));
+    duplicateComponents.push_back(ComponentRef(Name("project/entities/hero/transform_duplicate")));
+    source.setBinary(s_SceneCaseProjectEntitiesDuplicateCompEntity, BuildTestEntityBinary(duplicateComponents));
 
-    Vector<SubsystemAssetRef> sceneSubsystems = Vector<SubsystemAssetRef>();
-    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
-    HashMap<Name, GenericAssetRef> sceneAssets = HashMap<Name, GenericAssetRef>();
-    Vector<EntityAssetRef> duplicateSceneEntities = Vector<EntityAssetRef>();
-    duplicateSceneEntities.push_back(EntityAssetRef(Name("project/entities/duplicate_comp_entity")));
-    source.setBinary(s_SceneCaseProjectScenesDuplicateCompScene, BuildTestSceneBinary(sceneSubsystems, sceneAssets, duplicateSceneEntities, arena.arena));
+    Vector<SubsystemRef> sceneSubsystems = Vector<SubsystemRef>();
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    HashMap<Name, SceneAssetRef> sceneAssets = HashMap<Name, SceneAssetRef>();
+    Vector<EntityRef> duplicateSceneEntities = Vector<EntityRef>();
+    duplicateSceneEntities.push_back(EntityRef(Name("project/entities/duplicate_comp_entity")));
+    source.setBinary(s_SceneCaseProjectScenesDuplicateCompScene, BuildTestSceneBinary(sceneSubsystems, sceneAssets, duplicateSceneEntities));
 
     EXPECT_TRUE(SawCapturedError(logger, "shared_group optical volume requires optical_volume_group"));
 
-    ActiveSceneSubsystems active(globalArena.arena);
-    EXPECT_FALSE(active.loadScene(SceneAssetRef(s_SceneCaseProjectScenesDuplicateCompScene), assets));
+    TestValueSlot<ActiveSceneSubsystems> activeSlot;
+    mut ActiveSceneSubsystems active = activeSlot.constructIn(globalArena);
+    EXPECT_FALSE(active.loadScene(SceneRef(s_SceneCaseProjectScenesDuplicateCompScene), assets));
     EXPECT_TRUE(SawCapturedError(logger, "duplicate component type"));
 }
 
@@ -561,25 +385,26 @@ void VerifySceneSubsystemAssets_RejectsMismatchedSubsystemTypeTrailingBytesAndCo
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
-    SceneTestArena arena(s_SceneCaseTestsSceneSubsystemRoundTrip);
-    SkinningSubsystem skinningSubsystem(arena.arena, s_SceneAssetNameEngineSubsystemsSkinning);
+    HeapStorage arena(s_SceneCaseTestsSceneSubsystemRoundTrip);
+    TestValueSlot<SkinningSubsystem> skinningSubsystemSlot;
+    mut SkinningSubsystem skinningSubsystem = skinningSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsSkinning);
     PopulateRequiredSubsystemFields(skinningSubsystem);
 
-    const AssetBytes skinningBinary = MakeSubsystemBinary(skinningSubsystem, arena.arena);
+    const Vector<u8> skinningBinary = MakeSubsystemBinary(skinningSubsystem);
     SubsystemAssetCodec codec = SubsystemAssetCodec();
 
     TypedSubsystemAssetCodec<RendererSubsystem> rendererCodec = TypedSubsystemAssetCodec<RendererSubsystem>();
-    EXPECT_FALSE(rendererCodec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, skinningBinary, arena.arena).has_value());
+    EXPECT_FALSE(rendererCodec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, skinningBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "subsystem binary type does not match"));
 
-    AssetBytes trailing = skinningBinary;
+    Vector<u8> trailing = skinningBinary;
     trailing.push_back(0u);
-    EXPECT_FALSE(codec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, trailing, arena.arena).has_value());
+    EXPECT_FALSE(codec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, trailing, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "trailing bytes detected"));
 
-    AssetBytes badMagic = skinningBinary;
+    Vector<u8> badMagic = skinningBinary;
     badMagic[0u] ^= 0xFFu;
-    EXPECT_FALSE(codec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, badMagic, arena.arena).has_value());
+    EXPECT_FALSE(codec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, badMagic, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "invalid subsystem asset format"));
 }
 
@@ -587,19 +412,19 @@ void VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsys
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
-    SceneTestArena arena(s_SceneCaseTestsSceneProjectSceneRoundTrip);
-    ProjectAssetCodec projectCodec = ProjectAssetCodec();
+    HeapStorage arena(s_SceneCaseTestsSceneProjectSceneRoundTrip);
+    DeclaredAssetCodec<ProjectAsset> projectCodec = DeclaredAssetCodec<ProjectAsset>();
 
-    const AssetBytes invalidProjectBinary = BuildTestProjectBinary(s_NameNone, arena.arena);
-    EXPECT_FALSE(projectCodec.deserialize(s_DefaultProjectVirtualPath, invalidProjectBinary, arena.arena).has_value());
+    const Vector<u8> invalidProjectBinary = BuildTestProjectBinary(s_NameNone);
+    EXPECT_FALSE(projectCodec.deserialize(s_DefaultProjectVirtualPath, invalidProjectBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "start_scene must not be empty"));
 
-    SceneAssetCodec sceneCodec = SceneAssetCodec();
-    Vector<SubsystemAssetRef> emptySubsystems = Vector<SubsystemAssetRef>();
-    HashMap<Name, GenericAssetRef> sceneAssets = HashMap<Name, GenericAssetRef>();
-    Vector<EntityAssetRef> emptyEntities = Vector<EntityAssetRef>();
-    const AssetBytes emptySceneBinary = BuildTestSceneBinary(emptySubsystems, sceneAssets, emptyEntities, arena.arena);
-    EXPECT_FALSE(sceneCodec.deserialize(s_SceneFixtureNameProjectScenesEmpty, emptySceneBinary, arena.arena).has_value());
+    DeclaredAssetCodec<SceneAsset> sceneCodec = DeclaredAssetCodec<SceneAsset>();
+    Vector<SubsystemRef> emptySubsystems = Vector<SubsystemRef>();
+    HashMap<Name, SceneAssetRef> sceneAssets = HashMap<Name, SceneAssetRef>();
+    Vector<EntityRef> emptyEntities = Vector<EntityRef>();
+    const Vector<u8> emptySceneBinary = BuildTestSceneBinary(emptySubsystems, sceneAssets, emptyEntities);
+    EXPECT_FALSE(sceneCodec.deserialize(s_SceneFixtureNameProjectScenesEmpty, emptySceneBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "scene must declare at least one subsystem"));
 }
 
@@ -607,72 +432,79 @@ void VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSce
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
-    SceneTestArena arena(s_SceneCaseTestsSceneActiveSceneSubsystems);
-    SceneTestArena globalArena(s_SceneCaseTestsSceneActiveSceneSubsystemsGlobal);
-    AssetRegistry registry(arena.arena);
-    MapAssetBinarySource source(arena.arena);
-    AssetManager assets(arena.arena, registry, source);
-    ActiveSceneSubsystems active(globalArena.arena);
+    HeapStorage arena(s_SceneCaseTestsSceneActiveSceneSubsystems);
+    HeapStorage globalArena(s_SceneCaseTestsSceneActiveSceneSubsystemsGlobal);
+    AssetRegistry registry(arena);
+    TestValueSlot<MapAssetBinarySource> sourceSlot;
+    mut MapAssetBinarySource source = sourceSlot.constructIn(arena);
+    AssetManager assets(arena, registry, source);
+    TestValueSlot<ActiveSceneSubsystems> activeSlot;
+    mut ActiveSceneSubsystems active = activeSlot.constructIn(globalArena);
 
-    RendererSubsystem rendererSubsystem(arena.arena, s_SceneAssetNameEngineSubsystemsRenderer);
+    TestValueSlot<RendererSubsystem> rendererSubsystemSlot;
+    mut RendererSubsystem rendererSubsystem = rendererSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsRenderer);
     PopulateRequiredSubsystemFields(rendererSubsystem);
 
-    SkinningSubsystem skinningSubsystem(arena.arena, s_SceneAssetNameEngineSubsystemsSkinning);
+    TestValueSlot<SkinningSubsystem> skinningSubsystemSlot;
+    mut SkinningSubsystem skinningSubsystem = skinningSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsSkinning);
     PopulateRequiredSubsystemFields(skinningSubsystem);
 
-    TransparentSubsystem transparentSubsystem(arena.arena, s_SceneAssetNameEngineSubsystemsTransparent);
-    transparentSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
-    transparentSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsSkinning));
+    TestValueSlot<TransparentSubsystem> transparentSubsystemSlot;
+    mut TransparentSubsystem transparentSubsystem = transparentSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsTransparent);
+    AppendSceneParent(transparentSubsystem, s_SceneAssetNameEngineSubsystemsRenderer);
+    AppendSceneParent(transparentSubsystem, s_SceneAssetNameEngineSubsystemsSkinning);
     PopulateRequiredSubsystemFields(transparentSubsystem);
 
-    UiSubsystem uiSubsystem(arena.arena, s_SceneAssetNameEngineSubsystemsUi);
-    uiSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
-    uiSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    TestValueSlot<UiSubsystem> uiSubsystemSlot;
+    mut UiSubsystem uiSubsystem = uiSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsUi);
+    AppendSceneParent(uiSubsystem, s_SceneAssetNameEngineSubsystemsRenderer);
+    AppendSceneParent(uiSubsystem, s_SceneAssetNameEngineSubsystemsRenderer);
     PopulateRequiredSubsystemFields(uiSubsystem);
 
-    source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem, arena.arena));
-    source.setBinary(s_SceneAssetNameEngineSubsystemsSkinning, MakeSubsystemBinary(skinningSubsystem, arena.arena));
-    source.setBinary(s_SceneAssetNameEngineSubsystemsTransparent, MakeSubsystemBinary(transparentSubsystem, arena.arena));
-    source.setBinary(s_SceneAssetNameEngineSubsystemsUi, MakeSubsystemBinary(uiSubsystem, arena.arena));
-    source.setBinary(s_DefaultProjectVirtualPath, BuildTestProjectBinary(s_SceneCaseProjectScenesMain, arena.arena));
+    source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem));
+    source.setBinary(s_SceneAssetNameEngineSubsystemsSkinning, MakeSubsystemBinary(skinningSubsystem));
+    source.setBinary(s_SceneAssetNameEngineSubsystemsTransparent, MakeSubsystemBinary(transparentSubsystem));
+    source.setBinary(s_SceneAssetNameEngineSubsystemsUi, MakeSubsystemBinary(uiSubsystem));
+    source.setBinary(s_DefaultProjectVirtualPath, BuildTestProjectBinary(s_SceneCaseProjectScenesMain));
 
     ASSERT_TRUE(RegisterTestCodec<SubsystemAssetCodec>(registry));
-    ASSERT_TRUE(RegisterTestCodec<ProjectAssetCodec>(registry));
-    ASSERT_TRUE(RegisterTestCodec<SceneAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<ProjectAsset>>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<SceneAsset>>(registry));
 
-    Vector<SubsystemAssetRef> sceneSubsystems = Vector<SubsystemAssetRef>();
-    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
-    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
-    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsUi));
-    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsTransparent));
-    HashMap<Name, GenericAssetRef> sceneAssets = HashMap<Name, GenericAssetRef>();
-    sceneAssets.try_emplace(s_SceneCaseCesiumManModel, GenericAssetRef(Name("project/characters/cesium_man/model")));
-    Vector<EntityAssetRef> emptyEntities = Vector<EntityAssetRef>();
-    source.setBinary(s_SceneCaseProjectScenesMain, BuildTestSceneBinary(sceneSubsystems, sceneAssets, emptyEntities, arena.arena));
+    Vector<SubsystemRef> sceneSubsystems = Vector<SubsystemRef>();
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsUi));
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsTransparent));
+    HashMap<Name, SceneAssetRef> sceneAssets = HashMap<Name, SceneAssetRef>();
+    sceneAssets.try_emplace(s_SceneCaseCesiumManModel, SceneAssetRef(Name("project/characters/cesium_man/model")));
+    Vector<EntityRef> emptyEntities = Vector<EntityRef>();
+    source.setBinary(s_SceneCaseProjectScenesMain, BuildTestSceneBinary(sceneSubsystems, sceneAssets, emptyEntities));
 
     ASSERT_TRUE(active.loadProjectStartScene(assets));
     EXPECT_EQ(active.subsystemCount(), 4u);
     EXPECT_FALSE(active.findSceneAsset(s_SceneFixtureNameNonexistentNickname).valid());
 
-    ASSERT_TRUE(HasActiveSubsystem<UiSubsystem>(active));
-    ASSERT_EQ(RequireActiveSubsystem<UiSubsystem>(active).subsystems.size(), 1u);
-    EXPECT_EQ(RequireActiveSubsystem<UiSubsystem>(active).subsystems[0u].name(), s_SceneAssetNameEngineSubsystemsRenderer);
+    ASSERT_TRUE(active.hasSubsystem<UiSubsystem>());
+    ASSERT_EQ(SceneParents(active.findSubsystem<UiSubsystem>().value()).size(), 1u);
+    EXPECT_EQ(SceneParents(active.findSubsystem<UiSubsystem>().value())[0u].name(), s_SceneAssetNameEngineSubsystemsRenderer);
 
-    RendererSubsystem duplicateRendererSubsystem(arena.arena, s_SceneCaseProjectSubsystemsRendererOverride);
+    TestValueSlot<RendererSubsystem> duplicateRendererSubsystemSlot;
+    mut RendererSubsystem duplicateRendererSubsystem = duplicateRendererSubsystemSlot.constructIn(arena, s_SceneCaseProjectSubsystemsRendererOverride);
     PopulateRequiredSubsystemFields(duplicateRendererSubsystem);
-    source.setBinary(s_SceneCaseProjectSubsystemsRendererOverride, MakeSubsystemBinary(duplicateRendererSubsystem, arena.arena));
-    Vector<SubsystemAssetRef> duplicateTypeSceneSubsystems = Vector<SubsystemAssetRef>();
-    duplicateTypeSceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
-    duplicateTypeSceneSubsystems.push_back(SubsystemAssetRef(Name("project/subsystems/renderer_override")));
-    source.setBinary(s_SceneCaseProjectScenesDuplicateType, BuildTestSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, emptyEntities, arena.arena));
-    EXPECT_FALSE(active.loadScene(SceneAssetRef(Name("project/scenes/duplicate_type")), assets));
+    source.setBinary(s_SceneCaseProjectSubsystemsRendererOverride, MakeSubsystemBinary(duplicateRendererSubsystem));
+    Vector<SubsystemRef> duplicateTypeSceneSubsystems = Vector<SubsystemRef>();
+    duplicateTypeSceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    duplicateTypeSceneSubsystems.push_back(SubsystemRef(Name("project/subsystems/renderer_override")));
+    source.setBinary(s_SceneCaseProjectScenesDuplicateType, BuildTestSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, emptyEntities));
+    EXPECT_FALSE(active.loadScene(SceneRef(Name("project/scenes/duplicate_type")), assets));
 
-    Vector<SubsystemAssetRef> brokenSceneSubsystems = Vector<SubsystemAssetRef>();
-    brokenSceneSubsystems.push_back(SubsystemAssetRef(Name("project/subsystems/missing_subsystem")));
-    source.setBinary(s_SceneCaseProjectScenesBroken, BuildTestSceneBinary(brokenSceneSubsystems, sceneAssets, emptyEntities, arena.arena));
+    Vector<SubsystemRef> brokenSceneSubsystems = Vector<SubsystemRef>();
+    brokenSceneSubsystems.push_back(SubsystemRef(Name("project/subsystems/missing_subsystem")));
+    source.setBinary(s_SceneCaseProjectScenesBroken, BuildTestSceneBinary(brokenSceneSubsystems, sceneAssets, emptyEntities));
 
     EXPECT_TRUE(SawCapturedError(logger, "duplicate subsystem type"));
-    EXPECT_FALSE(active.loadScene(SceneAssetRef(s_SceneCaseProjectScenesBroken), assets));
+    EXPECT_FALSE(active.loadScene(SceneRef(s_SceneCaseProjectScenesBroken), assets));
     EXPECT_EQ(active.scene().name(), s_SceneCaseProjectScenesMain);
     EXPECT_EQ(active.subsystemCount(), 4u);
     const auto foundSceneAsset = active.findSceneAsset(s_SceneFixtureNameCesiumManModel);

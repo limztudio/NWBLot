@@ -3,422 +3,257 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/value_storage.adhd>
+#include <tests/unit/ecs_graphics/surfel_shader_types.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/gi/lifecycle_types.adhd>
+#include <impl/ecs_render/gi/quality_settings.adhd>
+#include <impl/ecs_render/kernel/task_timing_feedback.adhd>
+#include <impl/ecs_render/material/instance_typed_ranges.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
+#include <impl/ecs_render/shadow/push_constants.adhd>
+#include <impl/ecs_render/shadow/quality_settings.adhd>
+#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd>
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd>
+#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd>
+#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
 #include <tests/unit/ecs_graphics/suite.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelGatherCoverage")]
+extern f32 nwbSurfelGatherCoverage(in f32 totalWeight);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelUpsampleNormalCompatible")]
+extern b8 nwbSurfelUpsampleNormalCompatible(in f32 normalDot);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelUpsampleGeometryWeight")]
+extern f32 nwbSurfelUpsampleGeometryWeight(in f32 bilinearWeight, in f32 distanceSquared, in f32 inverseWeight);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelUpsampleCoveredWeight")]
+extern f32 nwbSurfelUpsampleCoveredWeight(in f32 weight, in f32 coverage);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelUpsampleFinalize")]
+extern SurfelCoverageFloat4 nwbSurfelUpsampleFinalize(in SurfelCoverageFloat3 color, in f32 coveredWeight, in f32 compatibleWeight);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelCellCoord")]
+extern SurfelHashInt3 nwbSurfelCellCoord(in f32x3u position, in f32 cellSize);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelSameCell")]
+extern b8 nwbSurfelSameCell(in SurfelHashInt3 owner, in SurfelHashInt3 visited);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelHashCell")]
+extern u32 nwbSurfelHashCell(in SurfelHashInt3 cell, in u32 count);
+[cpp_header("<tests/unit/ecs_graphics/surfel_shader_host.h>"), cpp_name("::NWB::Tests::SurfelShaderHost::nwbSurfelSpawnCoversCandidate")]
+extern b8 nwbSurfelSpawnCoversCandidate(in b8 sameCell, in f32 alignment, in f32 distanceSquared, in f32 planeDistance, in f32 radius, in f32 normalBias);
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_GATHER_FULL_COVERAGE_WEIGHT")]
+extern const f32 s_TestSurfelGatherFullCoverageWeight;
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPSAMPLE_NORMAL_GATE")]
+extern const f32 s_TestSurfelUpsampleNormalGate;
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_CELL_SIZE")]
+extern const f32 s_TestSurfelCellSize;
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_HASH_CELL_COUNT")]
+extern const u32 s_TestSurfelHashCellCount;
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_DEFAULT_RADIUS")]
+extern const f32 s_ShaderSurfelDefaultRadius;
+type CommandQueueEnum = CommandQueue;
+type TransparentShadowSamplingEnum = TransparentShadowSampling;
+type ShadowReceiverResolutionEnum = ShadowReceiverResolution;
+type SurfelGiResolveResolutionEnum = SurfelGiResolveResolution;
+type ShadowSceneLightSpan = Span<SceneLightGpuData>;
+const usize s_ShadowInstanceGpuDataBytes = size_of<InstanceGpuData>();
 
+[ordered]
+class SoftShadowDispatchContext{
+    public HeapStorage arena = HeapStorage(s_EcsCaseTestsSoftShadowResolveDispatchBuilder);
+    public TestValueSlot<RendererRayTracingState> stateStorage;
+    public mut RendererRayTracingState state;
+    public SoftShadowDispatchContext(){ this.state = this.stateStorage.constructIn(this.arena); }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/gi/lifecycle_types.adhd.h>
-#include <impl/ecs_render/gi/quality_settings.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
-#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/shadow/push_constants.adhd.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
-#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
-#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd.h>
-#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/alloc/global.h>
-#include <core/perf/timing.h>
-#include <core/task/gpu/compiler_internal.h>
-
-#include <global/array.h>
-#include <global/limit.h>
-#include <global/simd/convert.h>
-#include <global/simd/type.h>
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsShadowSurfelDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-
-struct ShadowPacketPlan{
-    Tests::TestArena<> testArena;
-    Core::GpuTaskGraph graph;
-    Core::GpuCompiledGraph compiledGraph;
-    Impl::PreparedShadowVisibilityTasks tasks;
-
-
-public:
-    ShadowPacketPlan()
-        : graph(testArena.arena)
-        , compiledGraph(testArena.arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 build(
-        b8 combinedUpsample,
-        b8 temporalMerge,
-        u32 splitStage = Limit<u32>::s_Max,
-        b8 combinedWavelet = false,
-        b8 combinedTemporal = false,
-        b8 diagnostics = false
-    );
-
-    [[nodiscard]] b8 sharesPacket(const Impl::PreparedShadowVisibilityTasks& candidate)const{
-        const Core::GpuCompiledGraph::ReadView plan(compiledGraph);
-        return Impl::PreparedShadowVisibilityTasksSharePacket(plan, candidate);
+[ordered]
+class TaskTimingFeedbackContext{
+    public HeapStorage testArena;
+    public TimingRecorder timingSink;
+    public GpuTimingRecorder timingRecorder;
+    public TestValueSlot<RendererTaskTimingFeedbackState> stateStorage;
+    public mut RendererTaskTimingFeedbackState state;
+    public GpuTaskTimingHistoryStore history;
+    public GpuTaskTimingHistorySnapshot snapshot;
+    public TaskTimingFeedbackContext(){
+        this.testArena = HeapStorage();
+        this.timingSink = TimingRecorder(this.testArena);
+        this.timingRecorder = GpuTimingRecorder(this.testArena, this.timingSink);
+        this.state = this.stateStorage.constructIn(this.testArena);
+        this.history = this.testArena.makeValue<GpuTaskTimingHistoryStore>();
+        this.snapshot = this.testArena.makeValue<GpuTaskTimingHistorySnapshot>();
     }
-};
-
-struct SoftShadowDispatchContext{
-    Core::Alloc::GlobalArena arena{ NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsSoftShadowResolveDispatchBuilder };
-    Impl::RendererRayTracingState state{ arena };
-};
-
-struct TaskTimingFeedbackTestsTag{};
-
-struct TaskTimingFeedbackContext{
-    Tests::TestArena<TaskTimingFeedbackTestsTag> testArena;
-    Core::Perf::TimingRecorder timingSink;
-    Core::GpuTimingRecorder timingRecorder;
-    Impl::RendererTaskTimingFeedbackState state;
-    Core::GpuTaskTimingHistoryStore history;
-    Core::GpuTaskTimingHistorySnapshot snapshot;
-
-
-public:
-    TaskTimingFeedbackContext()
-        : timingSink(testArena.arena)
-        , timingRecorder(testArena.arena, timingSink)
-        , state(testArena.arena)
-        , history(testArena.arena)
-        , snapshot(testArena.arena)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<Core::GpuTimingSampleAttribution> allocateSampleAttribution(){
-        return timingRecorder.allocateSampleAttribution();
+    public Expected<GpuTimingSampleAttribution> allocateSampleAttribution(){ return this.timingRecorder.allocateSampleAttribution(); }
+    public ArenaMemoryStats memoryStats()const{ return this.testArena.memoryStats(); }
+    public Optional<GpuTaskTimingAssignmentState> findAssignment(in GpuTaskTimingKey key)const{
+        const Optional<in GpuTaskTimingAssignmentState> found = BorrowSnapshotTimingAssignment(this.snapshot, GpuTaskTimingAssignmentKeyFromHistoryKey(key));
+        if(found.has_value()){
+            in GpuTaskTimingAssignmentState value = found.value();
+            return value;
+        }
+        return Optional<GpuTaskTimingAssignmentState>();
     }
-
-    [[nodiscard]] ArenaMemoryStats memoryStats()const noexcept{
-        return testArena.arena.memoryStats();
+    public Optional<GpuTaskTimingHistory> findTiming(in GpuTaskTimingKey key, in GpuPhysicalQueueId queue)const{
+        const Optional<in GpuTaskTimingHistory> found = BorrowSnapshotTimingHistory(this.snapshot, key, queue);
+        if(found.has_value()){
+            in GpuTaskTimingHistory value = found.value();
+            return value;
+        }
+        return Optional<GpuTaskTimingHistory>();
     }
+}
 
-    [[nodiscard]] Optional<Core::GpuTaskTimingAssignmentState> findAssignment(const Core::GpuTaskTimingKey& key)const noexcept{
-        const Core::GpuTaskTimingAssignmentState* const assignment = snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key));
-        if(!assignment)
-            return Optional<Core::GpuTaskTimingAssignmentState>{};
-        return *assignment;
+GpuTaskId MakeGpuTaskId(in u32 generation, in u32 index){
+    GpuTaskId task;
+    task.generation = generation;
+    task.index = index;
+    return task;
+}
+RayTracingSceneContentStamp MakeRtSceneStamp(in u64 geometry, in u64 material, in b8 trusted){ return RayTracingSceneContentStamp(geometry, material, trusted); }
+QueueSubmissionToken MakeQueueToken(in u64 value, in u16 physicalQueueIndex, in u16 deviceGeneration, in CommandQueue queue){
+    QueueSubmissionToken token;
+    token.value = value;
+    token.physicalQueueIndex = physicalQueueIndex;
+    token.deviceGeneration = deviceGeneration;
+    token.queue = queue;
+    return token;
+}
+GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(in f64 minimumAbsoluteBenefitSeconds, in f64 minimumRelativeBenefit, in u32 minimumFramesBetweenSwitches,
+    in u32 minimumSampleCount, in u32 calibrationIntervalFrames, in b8 enabled){
+    GpuTaskTimingFeedbackPolicy policy;
+    policy.minimumAbsoluteBenefitSeconds = minimumAbsoluteBenefitSeconds;
+    policy.minimumRelativeBenefit = minimumRelativeBenefit;
+    policy.minimumFramesBetweenSwitches = minimumFramesBetweenSwitches;
+    policy.minimumSampleCount = minimumSampleCount;
+    policy.calibrationIntervalFrames = calibrationIntervalFrames;
+    policy.enabled = enabled;
+    return policy;
+}
+
+[ordered]
+class ShadowPacketPlan{
+    public HeapStorage testArena;
+    public GpuTaskGraph graph;
+    public GpuCompiledGraph compiledGraph;
+    public PreparedShadowVisibilityTasks tasks;
+    public ShadowPacketPlan(){
+        this.testArena = HeapStorage();
+        this.graph = GpuTaskGraph(this.testArena);
+        this.compiledGraph = GpuCompiledGraph(this.testArena);
     }
-
-    [[nodiscard]] Optional<Core::GpuTaskTimingHistory> findTiming(const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& queue)const noexcept{
-        const Core::GpuTaskTimingHistory* const timing = snapshot.find(key, queue);
-        if(!timing)
-            return Optional<Core::GpuTaskTimingHistory>{};
-        return *timing;
+    public b8 sharesPacket(in PreparedShadowVisibilityTasks candidate)const{
+        const GpuCompiledGraphReadView plan(this.compiledGraph);
+        return PreparedShadowVisibilityTasksSharePacket(plan, candidate);
     }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskId MakeGpuTaskId(const u32 generation, const u32 index)noexcept{
-    return Core::GpuTaskId{ .generation = generation, .index = index };
+    public b8 build(in b8 combinedUpsample, in b8 temporalMerge, in u32 splitStage, in b8 combinedWavelet, in b8 combinedTemporal, in b8 diagnostics){
+        const Array<Name, 8> identities(s_EcsCaseTestsShadowPacketOpaque,
+            s_EcsCaseTestsShadowPacketOpaqueWavelet,
+            s_EcsCaseTestsShadowPacketOpaqueUpsample,
+            s_EcsCaseTestsShadowPacketTransparentTrace,
+            s_EcsCaseTestsShadowPacketTransparentTemporal,
+            s_EcsCaseTestsShadowPacketTransparentWavelet,
+            s_EcsCaseTestsShadowPacketTerminal,
+            s_EcsCaseTestsShadowPacketDiagnostics);
+        const Array<StringView, 8> labels("Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace",
+        "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics");
+        Array<GpuTaskId, 8> stages;
+        GpuTaskId previous;
+        for(u32 index = 0u; index < stages.size(); ++index){
+            if((index == 1u && combinedTemporal) || (index == 2u && combinedUpsample) || (index == 4u && !temporalMerge) || (index == 7u && !diagnostics))
+                continue;
+            GpuTaskSchedulingHint scheduling;
+            scheduling.mergeWithPrevious = previous.valid();
+            scheduling.forceSubmissionBoundary = index == splitStage;
+            GpuTaskDesc desc;
+            desc.setIdentity(identities[index]).setMarkerLabel(labels[index]).setScheduling(scheduling);
+            if(previous.valid())
+                desc.setDependencies(SpanOf<GpuTaskId>(previous));
+            GpuTaskCommandRequirements commands;
+            commands.requiredCapabilities = GpuQueueCapability::Graphics;
+            const auto stage = this.graph.addTask(desc, commands);
+            EXPECT_TRUE(stage.has_value());
+            if(!stage.has_value())
+                return false;
+            stages[index] = stage.value();
+            previous = stages[index];
+        }
+        this.tasks.terminal = stages[6];
+        this.tasks.opaque = stages[0];
+        this.tasks.opaqueFirstWavelet = stages[1];
+        this.tasks.opaqueResolve = stages[2];
+        this.tasks.transparentTrace = stages[3];
+        this.tasks.transparentTemporalMerge = stages[4];
+        this.tasks.transparentFirstWavelet = stages[5];
+        this.tasks.diagnostics = stages[7];
+        this.tasks.combinedUpsample = combinedUpsample;
+        this.tasks.combinedWavelet = combinedWavelet;
+        this.tasks.combinedTemporal = combinedTemporal;
+        GpuPhysicalQueueInfo queue;
+        queue.familyIndex = 0u;
+        queue.queueIndex = 0u;
+        queue.id.index = 0u;
+        queue.id.deviceGeneration = 1u;
+        queue.queueClass = CommandQueue::Graphics;
+        queue.capabilities = cast<GpuQueueCapability>(cast<u8>(GpuQueueCapability::Graphics) | cast<u8>(GpuQueueCapability::Compute) | cast<u8>(GpuQueueCapability::Transfer));
+        GpuPhysicalQueueTopology topology;
+        topology.setQueues(SpanOf<GpuPhysicalQueueInfo>(queue));
+        GpuTaskGraphAnalysis analysis(this.testArena);
+        GpuTaskGraphQueueAssignments assignments(this.testArena);
+        ScratchStorage scratch(s_EcsCaseTestsShadowPacketScratch);
+        const GpuTaskGraphDeclarationReadView declarations(this.graph);
+        const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
+        GpuTaskGraphCompileOptions options;
+        options.allowMetadataOnlyTasks = true;
+        const b8 compiled = compiler.compile(declarations, topology, options, scratch, analysis, assignments, this.compiledGraph);
+        EXPECT_TRUE(compiled);
+        return compiled;
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE Impl::RayTracingSceneContentStamp MakeRtSceneStamp(const u64 geometry, const u64 material, const b8 trusted)noexcept{
-    return Impl::RayTracingSceneContentStamp{ geometry, material, trusted };
+[ordered]
+class SurfelFieldRecord{
+    public f32x3u position;
+    public f32 radiance;
+    public SurfelHashInt3 cell;
+    public SurfelFieldRecord(in f32x3u position, in f32 radiance){
+        this.position = position;
+        this.radiance = radiance;
+        this.cell = nwbSurfelCellCoord(position, s_TestSurfelCellSize);
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::QueueSubmissionToken MakeQueueToken(const u64 value, const u16 physicalQueueIndex, const u16 deviceGeneration, const Core::CommandQueue::Enum queue)noexcept{
-    return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = physicalQueueIndex, .deviceGeneration = deviceGeneration, .queue = queue };
+f32 GatherBoundaryValue(in f32x3u position, in b8 validateCell){
+    const f32x3u biasedPosition(position.x, position.y, position.z + 0.05f);
+    const SurfelHashInt3 baseCell = nwbSurfelCellCoord(biasedPosition, s_TestSurfelCellSize);
+    const Array<SurfelFieldRecord, 2> records(SurfelFieldRecord(f32x3u(0.61f, 0.61f, 0.0f), 1.0f), SurfelFieldRecord(f32x3u(1.21f, 0.61f, 0.0f), 0.0f));
+    f32 irradiance = 0.0f;
+    f32 totalWeight = 0.0f;
+    for(i32 z = -2; z <= 2; ++z)
+    for(i32 y = -2; y <= 2; ++y)
+    for(i32 x = -2; x <= 2; ++x){
+        const SurfelHashInt3 visitedCell(baseCell.x + x, baseCell.y + y, baseCell.z + z);
+        const u32 visitedBucket = nwbSurfelHashCell(visitedCell, s_TestSurfelHashCellCount);
+        for(in SurfelFieldRecord record : records){
+            if(nwbSurfelHashCell(record.cell, s_TestSurfelHashCellCount) != visitedBucket)
+                continue;
+            if(validateCell && !nwbSurfelSameCell(record.cell, visitedCell))
+                continue;
+            const f32 dx = biasedPosition.x - record.position.x;
+            const f32 dy = biasedPosition.y - record.position.y;
+            const f32 dz = biasedPosition.z - record.position.z;
+            const f32 distance = Sqrt(dx * dx + dy * dy + dz * dz);
+            const f32 weight = Max(1.0f - (distance / s_ShaderSurfelDefaultRadius), 0.0f);
+            irradiance += record.radiance * weight;
+            totalWeight += weight;
+        }
+    }
+    return irradiance / totalWeight;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
-    const f64 minimumAbsoluteBenefitSeconds,
-    const f64 minimumRelativeBenefit,
-    const u32 minimumFramesBetweenSwitches,
-    const u32 minimumSampleCount,
-    const u32 calibrationIntervalFrames,
-    const b8 enabled
-)noexcept{
-    return Core::GpuTaskTimingFeedbackPolicy{
-        .minimumAbsoluteBenefitSeconds = minimumAbsoluteBenefitSeconds,
-        .minimumRelativeBenefit = minimumRelativeBenefit,
-        .minimumFramesBetweenSwitches = minimumFramesBetweenSwitches,
-        .minimumSampleCount = minimumSampleCount,
-        .calibrationIntervalFrames = calibrationIntervalFrames,
-        .enabled = enabled,
-    };
-}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsSurfelCoverageDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShaderFloat3{
-    f32 x;
-    f32 y;
-    f32 z;
-
-
-public:
-    explicit ShaderFloat3(const f32 value)noexcept : x(value), y(value), z(value){}
-    ShaderFloat3(const f32 red, const f32 green, const f32 blue)noexcept : x(red), y(green), z(blue){}
-};
-
-struct ShaderFloat4{
-    f32 x;
-    f32 y;
-    f32 z;
-    f32 w;
-
-
-public:
-    ShaderFloat4(const ShaderFloat3 rgb, const f32 alpha)noexcept : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
-};
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator/(const ShaderFloat3 value, const f32 divisor)noexcept{
-    const SIMDVectorSingle quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorSet(divisor, divisor, divisor, 1.0f));
-    return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 exp(const f32 value)noexcept{ return ::Exp(value); }
-
-[[nodiscard]] f32 nwbSurfelGatherCoverage(f32 totalWeight);
-[[nodiscard]] b8 nwbSurfelUpsampleNormalCompatible(f32 normalDot);
-[[nodiscard]] f32 nwbSurfelUpsampleGeometryWeight(f32 bilinearWeight, f32 worldDistanceSquared, f32 invTwoSigmaWorldSq);
-[[nodiscard]] f32 nwbSurfelUpsampleCoveredWeight(f32 geometryWeight, f32 tapCoverage);
-[[nodiscard]] ShaderFloat4 nwbSurfelUpsampleFinalize(ShaderFloat3 weightedIrradianceSum, f32 coveredWeightSum, f32 compatibleWeightSum);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsSurfelHashDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShaderInt3{
-    i32 x;
-    i32 y;
-    i32 z;
-
-
-public:
-    ShaderInt3()noexcept : x(0), y(0), z(0){}
-    ShaderInt3(const i32 xValue, const i32 yValue, const i32 zValue)noexcept
-        : x(xValue)
-        , y(yValue)
-        , z(zValue)
-    {}
-    explicit ShaderInt3(const Float3U value)noexcept
-        : x(static_cast<i32>(value.x))
-        , y(static_cast<i32>(value.y))
-        , z(static_cast<i32>(value.z))
-    {}
-};
-
-[[nodiscard]] FOUNDATION_INLINE Float3U operator/(const Float3U value, const f32 divisor)noexcept{
-    return Float3U(value.x / divisor, value.y / divisor, value.z / divisor);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 operator==(const ShaderInt3 first, const ShaderInt3 second)noexcept{
-    return first.x == second.x && first.y == second.y && first.z == second.z;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Float3U FloorShaderVector(const Float3U value)noexcept{
-    Float3U floored;
-    StoreFloat(VectorFloor(LoadFloat(value)), floored);
-    return floored;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 AllShaderLanes(const b8 value)noexcept{ return value; }
-
-[[nodiscard]] ShaderInt3 nwbSurfelCellCoord(Float3U worldPosition, f32 cellSize);
-[[nodiscard]] b8 nwbSurfelSameCell(ShaderInt3 ownerCell, ShaderInt3 visitedCell);
-[[nodiscard]] u32 nwbSurfelHashCell(ShaderInt3 cell, u32 cellCount);
-[[nodiscard]] f32 GatherBoundaryValue(Float3U position, b8 validateCell)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsSurfelSpawnPolicyDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 nwbSurfelSpawnCoversCandidate(b8 sameCell, f32 normalAlignment, f32 distanceSquared, f32 planeDistance, f32 radius, f32 normalBias);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::EcsGraphicsCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using QueueSubmissionToken = Core::QueueSubmissionToken;
-namespace CommandQueue = Core::CommandQueue;
-using CommandQueueEnum = Core::CommandQueue::Enum;
-using GpuDescriptorHandle = Core::GpuDescriptorHandle;
-using GpuTaskId = Core::GpuTaskId;
-
-using RendererRayTracingState = Impl::RendererRayTracingState;
-using SoftShadowDispatchContext = EcsGraphicsShadowSurfelDetail::SoftShadowDispatchContext;
-using ShadowMaterialContextPolicy = Impl::ShadowMaterialContextPolicy;
-namespace PreparedShadowMaterialContextRoute = Impl::PreparedShadowMaterialContextRoute;
-inline constexpr usize s_ShadowInstanceGpuDataBytes = sizeof(Impl::InstanceGpuData);
-
-using Impl::ResolveMaterialTypedBufferByteCount;
-using Impl::ResolveWrappingRayTracingDispatchGroup;
-
-using ShadowQualitySettings = Impl::ShadowQualitySettings;
-using TransparentShadowSamplingHistory = Impl::TransparentShadowSamplingHistory;
-namespace TransparentShadowSampling = Impl::TransparentShadowSampling;
-using TransparentShadowSamplingEnum = Impl::TransparentShadowSampling::Enum;
-using ShadowReceiverResolutionEnum = Impl::ShadowReceiverResolution::Enum;
-using Impl::ValidateShadowQualitySettings;
-using Impl::ResolveTransparentShadowSampleCount;
-
-using ShadowPacketPlan = EcsGraphicsShadowSurfelDetail::ShadowPacketPlan;
-using PreparedShadowVisibilityTasks = Impl::PreparedShadowVisibilityTasks;
-using Impl::SelectOpaqueShadowCompletion;
-using EcsGraphicsShadowSurfelDetail::MakeGpuTaskId;
-
-using DeferredFrameTargets = Impl::DeferredFrameTargets;
-using OpaqueSoftShadowResolveOptions = Impl::OpaqueSoftShadowResolveOptions;
-using TransparentSoftShadowResolveOptions = Impl::TransparentSoftShadowResolveOptions;
-using SoftShadowResolveDispatch = Impl::SoftShadowResolveDispatch;
-using Impl::BuildOpaqueSoftShadowDispatch;
-using Impl::BuildTransparentSoftShadowDispatch;
-namespace SoftShadowOpaqueResolvePhase = Impl::SoftShadowOpaqueResolvePhase;
-namespace SoftShadowUpsampleFold = Impl::SoftShadowUpsampleFold;
-using Impl::CanCombineSoftShadowWavelets;
-
-using SoftwareTransparentSamplingHistory = Impl::SoftwareTransparentSamplingHistory;
-using RayTracingSceneContentStamp = Impl::RayTracingSceneContentStamp;
-using SceneLightSpan = Span<const Impl::SceneLightGpuData>;
-using EcsGraphicsShadowSurfelDetail::MakeRtSceneStamp;
-
-using SurfelCoverageFloat3 = EcsGraphicsSurfelCoverageDetail::ShaderFloat3;
-using SurfelCoverageFloat4 = EcsGraphicsSurfelCoverageDetail::ShaderFloat4;
-using EcsGraphicsSurfelCoverageDetail::nwbSurfelGatherCoverage;
-using EcsGraphicsSurfelCoverageDetail::nwbSurfelUpsampleNormalCompatible;
-using EcsGraphicsSurfelCoverageDetail::nwbSurfelUpsampleGeometryWeight;
-using EcsGraphicsSurfelCoverageDetail::nwbSurfelUpsampleCoveredWeight;
-using EcsGraphicsSurfelCoverageDetail::nwbSurfelUpsampleFinalize;
-inline constexpr f32 s_SurfelGatherFullCoverageWeight = NWB_SURFEL_GATHER_FULL_COVERAGE_WEIGHT;
-inline constexpr f32 s_SurfelUpsampleNormalGate = NWB_SURFEL_UPSAMPLE_NORMAL_GATE;
-
-using SurfelGiQualitySettings = Impl::SurfelGiQualitySettings;
-using SurfelGiResolveSize = Impl::SurfelGiResolveSize;
-using SurfelGiResolveResolutionEnum = Impl::SurfelGiResolveResolution::Enum;
-using Impl::SurfelReadbackSubmissionMatches;
-using Impl::ResolveSurfelSpawnDispatchGroup;
-using Impl::IsValidSurfelGiStorageCounts;
-using Impl::IsValidSurfelGiResolveSize;
-using Impl::MakeSurfelGiResolveSize;
-using Impl::ComputeSurfelBufferByteSize;
-using Impl::IsValidSurfelGiResolveFactor;
-using Impl::ValidateSurfelGiQualitySettings;
-using EcsGraphicsShadowSurfelDetail::MakeQueueToken;
-
-using SurfelHashInt3 = EcsGraphicsSurfelHashDetail::ShaderInt3;
-using EcsGraphicsSurfelHashDetail::nwbSurfelCellCoord;
-using EcsGraphicsSurfelHashDetail::nwbSurfelSameCell;
-using EcsGraphicsSurfelHashDetail::nwbSurfelHashCell;
-using EcsGraphicsSurfelHashDetail::GatherBoundaryValue;
-inline constexpr f32 s_SurfelCellSize = NWB_SURFEL_CELL_SIZE;
-inline constexpr u32 s_SurfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
-
-using EcsGraphicsSurfelSpawnPolicyDetail::nwbSurfelSpawnCoversCandidate;
-
-using GpuTaskTimingFeedbackPolicy = Core::GpuTaskTimingFeedbackPolicy;
-using GpuTaskTimingAssignmentState = Core::GpuTaskTimingAssignmentState;
-using GpuTaskTimingHistory = Core::GpuTaskTimingHistory;
-using RendererTaskTimingFeedbackDrainResult = Impl::RendererTaskTimingFeedbackDrainResult;
-using RendererTaskTimingFeedbackPolicyTransition = Impl::RendererTaskTimingFeedbackPolicyTransition;
-namespace RendererTaskTimingFeedbackCollectionAction = Impl::RendererTaskTimingFeedbackCollectionAction;
-using TaskTimingFeedbackContext = EcsGraphicsShadowSurfelDetail::TaskTimingFeedbackContext;
-using Impl::PrepareRendererTaskTimingFeedbackPolicyTransition;
-using Impl::ResolveRendererTaskTimingFeedbackPolicyTransition;
-using EcsGraphicsShadowSurfelDetail::MakeFeedbackPolicy;
-inline constexpr f64 s_QuietNaNF64 = Limit<f64>::s_QuietNaN;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -598,7 +433,7 @@ void VerifyShadowVisibilityMergeValidator_FusionOmitsOnlyOpaqueUpsampleAndKeepsO
     flags[1u] = true;
     for(in b8 temporalMerge : flags){
         ShadowPacketPlan fixture = ShadowPacketPlan();
-        ASSERT_TRUE(fixture.build(true, temporalMerge));
+        ASSERT_TRUE(fixture.build(true, temporalMerge, u32.max, false, false, false));
         EXPECT_FALSE(fixture.tasks.opaqueResolve.valid());
         EXPECT_EQ(fixture.tasks.transparentTemporalMerge.valid(), temporalMerge);
         EXPECT_TRUE(fixture.sharesPacket(fixture.tasks));
@@ -615,7 +450,7 @@ void VerifyShadowVisibilityMergeValidator_SeparateRouteRequiresItsOpaqueUpsample
     flags[1u] = true;
     for(in b8 temporalMerge : flags){
         ShadowPacketPlan fixture = ShadowPacketPlan();
-        ASSERT_TRUE(fixture.build(false, temporalMerge));
+        ASSERT_TRUE(fixture.build(false, temporalMerge, u32.max, false, false, false));
         EXPECT_TRUE(fixture.sharesPacket(fixture.tasks));
 
         PreparedShadowVisibilityTasks unexpectedTail = fixture.tasks;
@@ -664,8 +499,8 @@ void VerifyShadowVisibilityMergeValidator_MissingStagesAndForeignGraphIdentities
     for(in b8 combined : flags){
         ShadowPacketPlan fixture = ShadowPacketPlan();
         ShadowPacketPlan foreign = ShadowPacketPlan();
-        ASSERT_TRUE(fixture.build(combined, true));
-        ASSERT_TRUE(foreign.build(combined, true));
+        ASSERT_TRUE(fixture.build(combined, true, u32.max, false, false, false));
+        ASSERT_TRUE(foreign.build(combined, true, u32.max, false, false, false));
         for(u32 stageIndex = 0u; stageIndex < 4u; ++stageIndex){
             PreparedShadowVisibilityTasks missing = fixture.tasks;
             AssignRequiredShadowVisibilityStage(missing, stageIndex, GpuTaskId());
@@ -691,7 +526,7 @@ void VerifyShadowVisibilityMergeValidator_EverySeparateSubmissionBoundaryRejects
             const ScopedTestTrace traceCombined = ScopedTestTrace(combined);
             const ScopedTestTrace traceSplit = ScopedTestTrace(splitStage);
             ShadowPacketPlan fixture = ShadowPacketPlan();
-            ASSERT_TRUE(fixture.build(combined, true, splitStage));
+            ASSERT_TRUE(fixture.build(combined, true, splitStage, false, false, false));
             EXPECT_FALSE(fixture.sharesPacket(fixture.tasks));
         }
     }
@@ -723,7 +558,7 @@ void VerifyShadowVisibilityMergeValidator_TrailingDiagnosticsCannotExportScratch
 
 void VerifyShadowVisibilityMergeValidator_CombinedWaveletRequiresBothTemporalPhasesAndCombinedTerminal(){
     ShadowPacketPlan fixture = ShadowPacketPlan();
-    ASSERT_TRUE(fixture.build(true, true, u32.max, true));
+    ASSERT_TRUE(fixture.build(true, true, u32.max, true, false, false));
     EXPECT_TRUE(fixture.sharesPacket(fixture.tasks));
     PreparedShadowVisibilityTasks missingTemporal = fixture.tasks;
     missingTemporal.transparentTemporalMerge = GpuTaskId();
@@ -743,14 +578,14 @@ void VerifyShadowVisibilityMergeValidator_CombinedWaveletRejectsEveryProducerOrT
     for(in u32 stage : stages){
         const ScopedTestTrace traceStage = ScopedTestTrace(stage);
         ShadowPacketPlan fixture = ShadowPacketPlan();
-        ASSERT_TRUE(fixture.build(true, true, stage, true));
+        ASSERT_TRUE(fixture.build(true, true, stage, true, false, false));
         EXPECT_FALSE(fixture.sharesPacket(fixture.tasks));
     }
 }
 
 void VerifyShadowVisibilityMergeValidator_CombinedTemporalOmitsOnlyTheIndependentOpaqueMerge(){
     ShadowPacketPlan fixture = ShadowPacketPlan();
-    ASSERT_TRUE(fixture.build(true, true, u32.max, true, true));
+    ASSERT_TRUE(fixture.build(true, true, u32.max, true, true, false));
     EXPECT_FALSE(fixture.tasks.opaqueFirstWavelet.valid());
     EXPECT_TRUE(fixture.sharesPacket(fixture.tasks));
 
@@ -777,7 +612,7 @@ void VerifyShadowVisibilityMergeValidator_CombinedTemporalRejectsEveryRemainingP
     for(in u32 stage : stages){
         const ScopedTestTrace traceStage = ScopedTestTrace(stage);
         ShadowPacketPlan fixture = ShadowPacketPlan();
-        ASSERT_TRUE(fixture.build(true, true, stage, true, true));
+        ASSERT_TRUE(fixture.build(true, true, stage, true, true, false));
         EXPECT_FALSE(fixture.sharesPacket(fixture.tasks));
     }
 }
@@ -916,28 +751,28 @@ void VerifySoftwareTransparentSampling_EveryLightInputAndSlotOrderInvalidatesTru
     for(u32 fieldIndex = 0u; fieldIndex < 5u; ++fieldIndex){
         SoftwareTransparentSamplingHistory history = SoftwareTransparentSamplingHistory();
         history.prepareScene(scene);
-        history.prepareLighting(SceneLightSpan(original.data(), 2u));
+        history.prepareLighting(ShadowSceneLightSpan(original.data(), 2u));
         history.accept();
         Array<SceneLightGpuData, 2> changed = original;
         PerturbSceneLightField(changed[0u], fieldIndex);
-        history.prepareLighting(SceneLightSpan(changed.data(), 2u));
+        history.prepareLighting(ShadowSceneLightSpan(changed.data(), 2u));
         EXPECT_FALSE(history.usable());
     }
     SoftwareTransparentSamplingHistory history = SoftwareTransparentSamplingHistory();
     history.prepareScene(scene);
-    history.prepareLighting(SceneLightSpan(original.data(), 2u));
+    history.prepareLighting(ShadowSceneLightSpan(original.data(), 2u));
     history.accept();
     Array<SceneLightGpuData, 2> reversed = Array<SceneLightGpuData, 2>();
     reversed[0u] = original[1u];
     reversed[1u] = original[0u];
-    history.prepareLighting(SceneLightSpan(reversed.data(), 2u));
+    history.prepareLighting(ShadowSceneLightSpan(reversed.data(), 2u));
     EXPECT_FALSE(history.usable());
-    history.prepareLighting(SceneLightSpan(original.data(), 1u));
+    history.prepareLighting(ShadowSceneLightSpan(original.data(), 1u));
     EXPECT_FALSE(history.usable());
 }
 
 void VerifySurfelCoverage_EmptyAndSaturatedGatherCoverageStayWithinEndpoints(){
-    const f32 full = s_SurfelGatherFullCoverageWeight;
+    const f32 full = s_TestSurfelGatherFullCoverageWeight;
     ASSERT_GT(full, 0.0f);
     EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(0.0f), 0.0f);
     EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full), 1.0f);
@@ -945,7 +780,7 @@ void VerifySurfelCoverage_EmptyAndSaturatedGatherCoverageStayWithinEndpoints(){
 }
 
 void VerifySurfelCoverage_UpsampleRejectsIncompatibleNormalsAndDistantGeometry(){
-    const f32 gate = s_SurfelUpsampleNormalGate;
+    const f32 gate = s_TestSurfelUpsampleNormalGate;
     EXPECT_TRUE(nwbSurfelUpsampleNormalCompatible(gate));
     EXPECT_FALSE(nwbSurfelUpsampleNormalCompatible(gate - 0.01f));
     EXPECT_FALSE(nwbSurfelUpsampleNormalCompatible(0.0f));
@@ -1014,7 +849,7 @@ void VerifySurfelGiQualitySettings_StorageCountsAndResolveExtentsRejectEitherEmp
     EXPECT_FALSE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(0u, 1u, 2u)));
     EXPECT_FALSE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(1u, 0u, 2u)));
     EXPECT_TRUE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(1u, 1u, 2u)));
-    EXPECT_EQ(SurfelGiResolveSize::reflectedMethodCount(), 0u);
+    EXPECT_EQ(TestReflectedMethodCount<SurfelGiResolveSize>(), 0u);
 }
 
 void VerifySurfelGiQualitySettings_BufferByteSizeKeepsWideMultiplicationAndWrapping(){
@@ -1098,22 +933,22 @@ void VerifySurfelGiQualitySettings_EmptyAndLargestExtentsDoNotWrapTheReducedSize
 void VerifySurfelHash_SymmetricHashCollisionAdmitsEachResidentCellOnce(){
     const SurfelHashInt3 negative = SurfelHashInt3(-1, -1, 0);
     const SurfelHashInt3 positive = SurfelHashInt3(1, 1, 0);
-    ASSERT_EQ(nwbSurfelHashCell(negative, s_SurfelHashCellCount), nwbSurfelHashCell(positive, s_SurfelHashCellCount));
-    Array<Float3U, 2> residents = Array<Float3U, 2>();
-    residents[0u] = Float3U(-0.01f, -0.01f, 0.0f);
-    residents[1u] = Float3U(0.61f, 0.61f, 0.0f);
+    ASSERT_EQ(nwbSurfelHashCell(negative, s_TestSurfelHashCellCount), nwbSurfelHashCell(positive, s_TestSurfelHashCellCount));
+    Array<f32x3u, 2> residents = Array<f32x3u, 2>();
+    residents[0u] = f32x3u(-0.01f, -0.01f, 0.0f);
+    residents[1u] = f32x3u(0.61f, 0.61f, 0.0f);
     Array<SurfelHashInt3, 2> residentCells = Array<SurfelHashInt3, 2>();
-    residentCells[0u] = nwbSurfelCellCoord(residents[0u], s_SurfelCellSize);
-    residentCells[1u] = nwbSurfelCellCoord(residents[1u], s_SurfelCellSize);
+    residentCells[0u] = nwbSurfelCellCoord(residents[0u], s_TestSurfelCellSize);
+    residentCells[1u] = nwbSurfelCellCoord(residents[1u], s_TestSurfelCellSize);
     Array<u32, 2> bucketVisits = Array<u32, 2>();
     Array<u32, 2> admittedVisits = Array<u32, 2>();
     for(i32 z = -2; z <= 2; ++z){
         for(i32 y = -2; y <= 2; ++y){
             for(i32 x = -2; x <= 2; ++x){
                 const SurfelHashInt3 visitedCell = SurfelHashInt3(x, y, z);
-                const u32 visitedBucket = nwbSurfelHashCell(visitedCell, s_SurfelHashCellCount);
+                const u32 visitedBucket = nwbSurfelHashCell(visitedCell, s_TestSurfelHashCellCount);
                 for(usize index = 0u; index < 2u; ++index){
-                    if(nwbSurfelHashCell(residentCells[index], s_SurfelHashCellCount) != visitedBucket)
+                    if(nwbSurfelHashCell(residentCells[index], s_TestSurfelHashCellCount) != visitedBucket)
                         continue;
                     ++bucketVisits[index];
                     if(nwbSurfelSameCell(residentCells[index], visitedCell))
@@ -1129,18 +964,18 @@ void VerifySurfelHash_SymmetricHashCollisionAdmitsEachResidentCellOnce(){
 }
 
 void VerifySurfelHash_NeighborCellBoundaryPreservesTheNormalizedField(){
-    const Float3U before = Float3U(1.2f - 1e-6f, 0.61f, 0.0f);
-    const Float3U after = Float3U(1.2f + 1e-6f, 0.61f, 0.0f);
-    ASSERT_EQ(nwbSurfelCellCoord(before, s_SurfelCellSize).x, 1);
-    ASSERT_EQ(nwbSurfelCellCoord(after, s_SurfelCellSize).x, 2);
+    const f32x3u before = f32x3u(1.2f - 1e-6f, 0.61f, 0.0f);
+    const f32x3u after = f32x3u(1.2f + 1e-6f, 0.61f, 0.0f);
+    ASSERT_EQ(nwbSurfelCellCoord(before, s_TestSurfelCellSize).x, 1);
+    ASSERT_EQ(nwbSurfelCellCoord(after, s_TestSurfelCellSize).x, 2);
     EXPECT_GT(Abs(GatherBoundaryValue(before, false) - GatherBoundaryValue(after, false)), 0.1f);
     EXPECT_NEAR(GatherBoundaryValue(before, true), GatherBoundaryValue(after, true), 1e-5f);
 }
 
 void VerifySurfelHash_CollidingDistantCellsRetainUpperCoordinateBits(){
     const SurfelHashInt3 nearCell = SurfelHashInt3(1, -1, 0);
-    const SurfelHashInt3 distantCell = SurfelHashInt3(1 + cast<i32>(s_SurfelHashCellCount), -1, 0);
-    ASSERT_EQ(nwbSurfelHashCell(nearCell, s_SurfelHashCellCount), nwbSurfelHashCell(distantCell, s_SurfelHashCellCount));
+    const SurfelHashInt3 distantCell = SurfelHashInt3(1 + cast<i32>(s_TestSurfelHashCellCount), -1, 0);
+    ASSERT_EQ(nwbSurfelHashCell(nearCell, s_TestSurfelHashCellCount), nwbSurfelHashCell(distantCell, s_TestSurfelHashCellCount));
     EXPECT_FALSE(nwbSurfelSameCell(distantCell, nearCell));
     EXPECT_FALSE(nwbSurfelSameCell(nearCell, distantCell));
 }
@@ -1377,7 +1212,7 @@ void VerifyRendererTaskTimingFeedbackState_NonFiniteDurationIsTerminalButKeepsAc
     ASSERT_TRUE(attributionResult.has_value());
     const GpuTimingSampleAttribution attribution = attributionResult.value();
     ASSERT_TRUE(context.state.trackSample(attribution, scopeName, key, queue, 80u, false));
-    context.state.completeSample(PublishedSample(attribution, scopeName, queue, 80u, s_QuietNaNF64), true);
+    context.state.completeSample(PublishedSample(attribution, scopeName, queue, 80u, bit_cast<f64>(0x7ff8000000000000ull)), true);
     context.state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
 
     context.history.resetForDeviceGeneration(queue.deviceGeneration);
@@ -1447,218 +1282,6 @@ void VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsEntryBefor
     EXPECT_EQ(lateDrain.acceptedAssignmentCount, 0u);
     EXPECT_EQ(lateDrain.recordedSampleCount, 0u);
     EXPECT_EQ(lateDrain.retiredSampleCount, 0u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsShadowSurfelDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ShadowPacketPlan::build(
-    const b8 combinedUpsample,
-    const b8 temporalMerge,
-    const u32 splitStage,
-    const b8 combinedWavelet,
-    const b8 combinedTemporal,
-    const b8 diagnostics
-){
-    const Array<Name, 8> identities = {
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaque),
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaqueWavelet),
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaqueUpsample),
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentTrace),
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentTemporal),
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentWavelet),
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTerminal),
-        Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketDiagnostics)
-    };
-    constexpr Array<AStringView, 8> s_Labels = {
-        "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace",
-        "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics"
-    };
-    static_assert(s_Labels.size() == identities.size());
-    Array<Core::GpuTaskId, 8> stages{};
-    Core::GpuTaskId previous;
-    for(u32 index = 0u; index < LengthOf(identities); ++index){
-        if((index == 1u && combinedTemporal) || (index == 2u && combinedUpsample) || (index == 4u && !temporalMerge) || (index == 7u && !diagnostics))
-            continue;
-        Core::GpuTaskSchedulingHint scheduling;
-        scheduling.mergeWithPrevious = previous.valid();
-        scheduling.forceSubmissionBoundary = index == splitStage;
-        const auto stageResult = graph.addTask(
-            Core::GpuTaskDesc{}
-                .setIdentity(identities[index])
-                .setMarkerLabel(s_Labels[index])
-                .setScheduling(scheduling)
-                .setDependencies({ previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u }),
-            Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics }
-        );
-        if(!stageResult){
-            ADD_FAILURE() << "stage declaration=" << index;
-            return false;
-        }
-        stages[index] = *stageResult;
-        previous = stages[index];
-    }
-    tasks.terminal = stages[6];
-    tasks.opaque = stages[0];
-    tasks.opaqueFirstWavelet = stages[1];
-    tasks.opaqueResolve = stages[2];
-    tasks.transparentTrace = stages[3];
-    tasks.transparentTemporalMerge = stages[4];
-    tasks.transparentFirstWavelet = stages[5];
-    tasks.diagnostics = stages[7];
-    tasks.combinedUpsample = combinedUpsample;
-    tasks.combinedWavelet = combinedWavelet;
-    tasks.combinedTemporal = combinedTemporal;
-    const Core::GpuPhysicalQueueInfo queue{
-        .familyIndex = 0u,
-        .queueIndex = 0u,
-        .id = { .index = 0u, .deviceGeneration = 1u },
-        .queueClass = Core::CommandQueue::Graphics,
-        .capabilities = static_cast<Core::GpuQueueCapability::Mask>(Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer),
-    };
-    const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
-    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketScratch) };
-    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-    const Core::GpuTaskGraphCompiler compiler;
-    Core::GpuTaskGraphCompileOptions options;
-    options.allowMetadataOnlyTasks = true;
-    if(!compiler.compile(declarations, topology, options, scratchArena, analysis, assignments, compiledGraph)){
-        ADD_FAILURE() << "analysis status=" << static_cast<u32>(analysis.diagnostic().status) << ", queue status=" << static_cast<u32>(assignments.diagnostic().status);
-        return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsSurfelCoverageDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using float3 = ShaderFloat3;
-using float4 = ShaderFloat4;
-#include <impl/assets/graphics/gi/surfel/surfel_coverage.slangi>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsSurfelHashDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using float3 = Float3U;
-using uint = u32;
-using int3 = ShaderInt3;
-
-#define floor FloorShaderVector
-#define max Max
-#define all AllShaderLanes
-#include <impl/assets/graphics/gi/surfel/surfel_hash.slangi>
-#undef all
-#undef max
-#undef floor
-
-struct FieldRecord{
-    float3 position;
-    f32 radiance;
-    int3 cell;
-};
-
-f32 GatherBoundaryValue(const float3 position, const b8 validateCell)noexcept{
-    // Move only lane Z.
-    const float3 biasedPosition(position.x, position.y, position.z + 0.05f);
-    const int3 baseCell = nwbSurfelCellCoord(biasedPosition, NWB_SURFEL_CELL_SIZE);
-    const Array<FieldRecord, 2> records = {{
-        { float3(0.61f, 0.61f, 0.0f), 1.0f, nwbSurfelCellCoord(float3(0.61f, 0.61f, 0.0f), NWB_SURFEL_CELL_SIZE) },
-        { float3(1.21f, 0.61f, 0.0f), 0.0f, nwbSurfelCellCoord(float3(1.21f, 0.61f, 0.0f), NWB_SURFEL_CELL_SIZE) },
-    }};
-    f32 irradiance = 0.0f;
-    f32 totalWeight = 0.0f;
-    for(i32 z = -2; z <= 2; ++z)
-    for(i32 y = -2; y <= 2; ++y)
-    for(i32 x = -2; x <= 2; ++x){
-        const int3 visitedCell(baseCell.x + x, baseCell.y + y, baseCell.z + z);
-        const u32 visitedBucket = nwbSurfelHashCell(visitedCell, NWB_SURFEL_HASH_CELL_COUNT);
-        for(const FieldRecord& record : records){
-            if(nwbSurfelHashCell(record.cell, NWB_SURFEL_HASH_CELL_COUNT) != visitedBucket)
-                continue;
-            if(validateCell && !nwbSurfelSameCell(record.cell, visitedCell))
-                continue;
-            const f32 dx = biasedPosition.x - record.position.x;
-            const f32 dy = biasedPosition.y - record.position.y;
-            const f32 dz = biasedPosition.z - record.position.z;
-            const f32 distance = Sqrt(dx * dx + dy * dy + dz * dz);
-            const f32 weight = Max(1.0f - (distance / NWB_SURFEL_DEFAULT_RADIUS), 0.0f);
-            irradiance += record.radiance * weight;
-            totalWeight += weight;
-        }
-    }
-    return irradiance / totalWeight;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsSurfelSpawnPolicyDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/gi/surfel/surfel_spawn_policy.slangi>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

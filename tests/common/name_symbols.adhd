@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/name_symbols.h>"), cpp_name("::NWB::Tests::SymbolBuffer")]
+extern class SymbolBuffer<const usize Capacity>{
+    void format(in NameHash hash);
+    b8 resolve(in NameHash hash);
+    b8 resolveCallback(in NameHash hash);
+    StringView view()const;
+    void setByte(in usize index, in u8 value);
+};
+
+[cpp_header("<tests/common/name_symbols.h>"), cpp_name("::NWB::Tests::s_SymbolsEnabled")]
+extern const b8 s_SymbolsEnabled;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

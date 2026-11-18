@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "framebuffer_capture.adhd"
 #include "smoke_environment.adhd"
 #include <impl/ecs_scene/module.adhd>
@@ -11,101 +13,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<tests/smoke/test_environment.h>"), cpp_name("::NWB::Tests::Smoke::InitializeOnce")]
+extern T InitializeOnce<T>(in auto initializer);
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <core/common/log.h>
-#include <core/alloc/scratch.h>
-#include <core/ecs/entity.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/input/input_event.h>
-#include <core/input/module.h>
-
-#include <global/algorithm.h>
-#include <global/simd/frame.h>
-#include <global/simplemath.h>
-
-namespace NWB::Tests::Smoke{
-using Core::ECS::World;
-using Core::IInputEventHandler;
-using Core::KeyboardInputResult;
-namespace InputAction = Core::InputAction;
-namespace Key = Core::Key;
-
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
-    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
-    if(!world){
-        NWB_LOGGER_FATAL(FOUNDATION_TEXT("{}: ECS world allocation failed"), ConvertString(projectName));
-        throw RuntimeException("Smoke project initialization failed");
+[cpp_unwind]
+Expected<NotNullUniquePtr<World>> CreateSmokeWorld(in StringView projectName, mut ProjectRuntimeContext context){
+    auto world = MakeUnique<World>(context.objectArena, context.cpuTasks);
+    if(!world.valid()){
+        [essential] error("{}: ECS world allocation failed", projectName);
+        return MakeUnexpected(Failure());
     }
-    if(!context.shaderPathResolver){
-        NWB_LOGGER_FATAL(FOUNDATION_TEXT("{} initialization failed: shader path resolver callback is null"), ConvertString(projectName));
-        throw RuntimeException("Smoke project initialization failed");
+    if(!cast<b8>(context.shaderPathResolver)){
+        [essential] error("{} initialization failed: shader path resolver callback is null", projectName);
+        return MakeUnexpected(Failure());
     }
-
-    return MakeNotNullUnique(Move(world));
+    return TryTakeNotNullUnique<World>(world);
 }
 
-using ::s_PI;
-using ::s_2PI;
-using ::s_PIDIV2;
+b8 SmokeContextHasQuitCallback(in ProjectRuntimeContext context){ return cast<b8>(context.requestQuit); }
 
-using NWB::ProjectFrameClientSize;
-
-[[nodiscard]] FOUNDATION_INLINE ProjectFrameClientSize QuerySmokeFrameClientSize(){
-    return NWB::QueryProjectFrameClientSize();
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 SmokeContextHasQuitCallback(const ProjectRuntimeContext& context)noexcept{
-    return static_cast<b8>(context.requestQuit);
-}
-
-FOUNDATION_INLINE void RequestSmokeQuit(ProjectRuntimeContext& context){
-    if(context.requestQuit)
+void RequestSmokeQuit(mut ProjectRuntimeContext context){
+    if(SmokeContextHasQuitCallback(context))
         context.requestQuit();
 }
 
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
-    return Move(world);
+NotNullUniquePtr<World> TakeSmokeWorld(mut NotNullUniquePtr<World> world){
+    return TakeNotNullUnique<World>(world);
 }
 
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
-    return Move(world);
-}
+mut World SmokeWorldRef(mut NotNullUniquePtr<World> world){ return world.deref(); }
 
-[[nodiscard]] FOUNDATION_INLINE Core::ECS::World& SmokeWorldRef(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
-    return *world;
-}
-
-[[nodiscard]] FOUNDATION_INLINE const Core::ECS::World& SmokeWorldRef(const NotNullUniquePtr<Core::ECS::World>& world)noexcept{
-    return *world;
-}
-
-FOUNDATION_INLINE void SetSmokeWindowTitleSuffix(ProjectRuntimeContext& context, const AStringView suffix){
-    Core::Alloc::ScratchArena scratch(Name("SetSmokeWindowTitleSuffix"));
-    const TStringView prefix = QueryProjectWindowTitle();
-    const TString<Core::Alloc::ScratchArena> suffixText = ConvertString(scratch, suffix);
-    TString<Core::Alloc::ScratchArena> title(scratch);
-    title.reserve(prefix.size() + suffixText.size());
-    title.append(prefix);
-    title.append(suffixText);
-    context.graphics.setWindowTitle(TStringView(title));
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void SetSmokeWindowTitleSuffix(mut ProjectRuntimeContext context, in PlatformStringView projectTitle, in StringView suffix){
+    const PlatformOwnedString title = AppendPlatformText(projectTitle, suffix);
+    mut GraphicsRuntime graphics = context.graphics;
+    graphics.setWindowTitle(PlatformStringView(title));
 }
 
 
@@ -192,12 +134,7 @@ u32 ParseRendererBaselineCaptureFreezeFrame(){
 }
 
 u32 RendererBaselineCaptureFreezeFrame(){
-    u32 captureFrame = 0u;
-    native(mut captureFrame){
-        static const u32 s_CaptureFrame = ParseRendererBaselineCaptureFreezeFrame();
-        captureFrame = s_CaptureFrame;
-    }
-    return captureFrame;
+    return InitializeOnce<u32>(lambda[]() -> u32{ return ParseRendererBaselineCaptureFreezeFrame(); });
 }
 
 f32 ParseRendererBaselineFixedDelta(){
@@ -208,12 +145,7 @@ f32 ParseRendererBaselineFixedDelta(){
 }
 
 f32 RendererBaselineFixedDelta(){
-    f32 fixedDelta = 0.0f;
-    native(mut fixedDelta){
-        static const f32 s_FixedDelta = ParseRendererBaselineFixedDelta();
-        fixedDelta = s_FixedDelta;
-    }
-    return fixedDelta;
+    return InitializeOnce<f32>(lambda[]() -> f32{ return ParseRendererBaselineFixedDelta(); });
 }
 
 VectorSingle CalculateSmokeYawDisplay(in VectorSingle yaw, in VectorSingle turn){

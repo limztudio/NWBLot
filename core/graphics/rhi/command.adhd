@@ -40,6 +40,7 @@ extern enum RenderPassStoreAction : u8{
 [cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandListResourceStateHandoff"), cpp_flags(no_copy, no_assign)]
 extern class CommandListResourceStateHandoff{
     b8 buildResourceSubset(...);
+    b8 coversBufferWithOwnership(mut Buffer buffer, in GpuPhysicalQueueId owner, in GpuPhysicalQueueId release)const;
     b8 copyFrom(...);
     u16 deviceGeneration(...)const;
     b8 empty(...)const;
@@ -172,6 +173,7 @@ extern class GpuPhysicalQueueInfo{
 
 [cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueTopology"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuPhysicalQueueTopology{
+    void setQueues(in Span<GpuPhysicalQueueInfo> values);
     usize queueCount;
     Span<GpuPhysicalQueueInfo> queueSpan(...)const;
 };

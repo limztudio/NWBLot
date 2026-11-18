@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include <impl/ecs_skeleton/components.adhd>
 #include "skinned_caustic_transition.adhd"
 
@@ -28,11 +30,14 @@ StringView SkinnedCausticProjectName(){
     return "SkinnedCausticSmokeProject";
 }
 
-NotNullUniquePtr<World> CreateSkinnedCausticWorldOrDie(mut ProjectRuntimeContext context){
-    NotNullUniquePtr<World> world = CreateSmokeSkinnedRenderWorldOrDie(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
+Expected<NotNullUniquePtr<World>> CreateSkinnedCausticWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeSkinnedRenderWorld(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
     if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgTransitionEnvironment))
         SmokeRendererSystemRef(SmokeWorldRef(world)).setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgLaggedEnvironment));
-    return world;
+    return TakeSmokeWorld(world);
 }
 
 MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f32 jointIndex, in f32 timeSeconds){
@@ -51,9 +56,9 @@ MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f3
 
 [arena]
 class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
-    public SkinnedCausticSmokeProjectImpl(mut ProjectRuntimeContext context){
+    public SkinnedCausticSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSkinnedCausticWorldOrDie(context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_fpsProbe = FpsProbe(SkinnedCausticProjectName());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(SkinnedCausticProjectName());
         this.m_transition = SkinnedCausticTransition(context);
@@ -214,29 +219,21 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Skinned Caustic Smoke");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB Skinned Caustic Smoke");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::SkinnedCausticSmokeProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateSkinnedCausticWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<SkinnedCausticSmokeProjectImpl>(owner, context);
 }
 
 

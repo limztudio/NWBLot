@@ -130,3 +130,20 @@ void RecordHeapMemoryDeallocation(u64 bytes)noexcept;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ArenaMemoryOwnerCursor{
+public:
+    [[nodiscard]] b8 next(ArenaMemoryOwnerSnapshot& snapshot)noexcept{
+        if(!m_record)
+            return false;
+        m_record = ReadArenaMemoryOwnerRecord(*m_record, snapshot);
+        return true;
+    }
+
+private:
+    const ArenaMemoryOwnerRecord* m_record = FirstArenaMemoryOwnerRecord();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

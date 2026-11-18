@@ -1,0 +1,41 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ConstructionFailure{}
+
+class ConstructionState{
+    public Array<usize, 8u> destructionOrder;
+    public usize failAt = usize.max;
+    public usize constructors = 0u;
+    public usize completed = 0u;
+    public usize destructors = 0u;
+    public usize liveMembers = 0u;
+    public usize memberDestructors = 0u;
+    public b8 aligned = true;
+
+    [cpp_unwind]
+    public usize construct(in b8 aligned){
+        ++this.constructors;
+        this.aligned = this.aligned && aligned;
+        if(this.constructors == this.failAt)
+            ThrowTestException<ConstructionFailure>(ConstructionFailure());
+        ++this.completed;
+        return this.constructors;
+    }
+
+    public void destroy(in usize index){
+        this.destructionOrder[this.destructors] = index;
+        ++this.destructors;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

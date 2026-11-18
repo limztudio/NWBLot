@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/posix_child.adhd>
+#include <tests/unit/math/simd_abi.adhd>
 #include <tests/unit/math/suite.adhd>
 #include "case_types.adhd"
 
@@ -9,221 +11,94 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/compile.h>
-#include <global/process.h>
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::MathLaneReductionDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-FOUNDATION_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept;
-
-template<b8 Integer, u32 Dimension>
-FOUNDATION_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Integer){
-        if constexpr(Dimension == 3u)
-            return VectorDouble3EqualInt(left, right);
-        else
-            return VectorDouble4EqualInt(left, right);
-    }
-    else{
-        if constexpr(Dimension == 3u)
-            return VectorDouble3Equal(left, right);
-        else
-            return VectorDouble4Equal(left, right);
-    }
+b8 BaselineCompareDouble3(in VectorDouble left, in VectorDouble right){
+    const VectorDouble comparison = VectorDoubleEqual(left, right);
+    const u32 mask = BaselineLaneMask(comparison);
+    return (mask & 7u) == 7u;
 }
 
-template<b8 Integer>
-FOUNDATION_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Integer)
-        return Vector4EqualInt(left, right);
-    else
-        return Vector4Equal(left, right);
-}
-
-FOUNDATION_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept;
-
-namespace Reduction{
-enum Enum : u32{
-    Dot2 = 0u,
-    Dot3 = 1u,
-    Dot4 = 2u,
-    Sum = 3u
-};
-};
-
-template<Reduction::Enum Kind>
-FOUNDATION_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Kind == Reduction::Dot2){
-        lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY);
-        rhs = VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY);
+VectorDouble ReferenceReduction(in u32 kind, in VectorDouble input, in VectorDouble multiplier){
+    VectorDouble left = input;
+    VectorDouble right = multiplier;
+    if(kind < 2u){
+        VectorDouble mask = VectorDoubleSetInt(u64.max, u64.max, 0u, 0u);
+        if(kind == 1u)
+            mask = VectorDoubleSetInt(u64.max, u64.max, u64.max, 0u);
+        left = VectorDoubleAndInt(left, mask);
+        right = VectorDoubleAndInt(right, mask);
     }
-    else if constexpr(Kind == Reduction::Dot3){
-        lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMask3);
-        rhs = VectorDoubleAndInt(rhs, s_DoubleSIMDMask3);
-    }
-    const SIMDVectorDouble values = Kind == Reduction::Sum ? lhs : VectorDoubleMultiply(lhs, rhs);
-    SIMDVectorDouble result = VectorDoubleAdd(VectorDoubleSplatX(values), VectorDoubleSplatY(values));
-    if constexpr(Kind == Reduction::Dot2)
-        return result;
-    result = VectorDoubleAdd(result, VectorDoubleSplatZ(values));
-    if constexpr(Kind == Reduction::Dot3)
-        return result;
-    return VectorDoubleAdd(result, VectorDoubleSplatW(values));
+    VectorDouble values = left;
+    if(kind != 3u)
+        values = VectorDoubleMultiply(left, right);
+    VectorDouble sum = VectorDoubleAdd(VectorDoubleSplatX(values), VectorDoubleSplatY(values));
+    if(kind == 0u)
+        return sum;
+    sum = VectorDoubleAdd(sum, VectorDoubleSplatZ(values));
+    if(kind == 1u)
+        return sum;
+    return VectorDoubleAdd(sum, VectorDoubleSplatW(values));
 }
 
-template<Reduction::Enum Kind>
-FOUNDATION_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Kind == Reduction::Dot2)
-        return VectorDouble2Dot(lhs, rhs);
-    else if constexpr(Kind == Reduction::Dot3)
-        return VectorDouble3Dot(lhs, rhs);
-    else if constexpr(Kind == Reduction::Dot4)
-        return VectorDouble4Dot(lhs, rhs);
-    else
-        return VectorDoubleSum(lhs);
+VectorDouble CurrentReduction(in u32 kind, in VectorDouble input, in VectorDouble multiplier){
+    if(kind == 0u)
+        return VectorDouble2Dot(input, multiplier);
+    if(kind == 1u)
+        return VectorDouble3Dot(input, multiplier);
+    if(kind == 2u)
+        return VectorDouble4Dot(input, multiplier);
+    return VectorDoubleSum(input);
 }
 
-template<Reduction::Enum Kind>
-[[nodiscard]] b8 ObserveReductionKind(SIMDVectorDouble input, SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+b8 ObserveReductionByIndex(in u32 kind, in VectorDouble input, in VectorDouble multiplier, mut VectorDouble expected, mut i32 expectedFlags, mut VectorDouble actual, mut i32 actualFlags){
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
         return false;
-    outExpected = OriginalReduction<Kind>(input, multiplier);
-    outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+    expected = ReferenceReduction(kind, input, multiplier);
+    expectedFlags = TestFloatingPointExceptions(s_FeAllExcept);
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
         return false;
-    outActual = CurrentReduction<Kind>(input, multiplier);
-    outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    actual = CurrentReduction(kind, input, multiplier);
+    actualFlags = TestFloatingPointExceptions(s_FeAllExcept);
     return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 ObserveReductionByIndex(const u32 kindIndex, const SIMDVectorDouble input, const SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
-    switch(kindIndex){
-    case 0u: return ObserveReductionKind<Reduction::Dot2>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
-    case 1u: return ObserveReductionKind<Reduction::Dot3>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
-    case 2u: return ObserveReductionKind<Reduction::Dot4>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
-    default: return ObserveReductionKind<Reduction::Sum>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
-    }
+VectorDouble ReferenceReciprocalLength(in u32 dimension, in VectorDouble input){
+    if(dimension == 2u)
+        return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(input));
+    if(dimension == 3u)
+        return VectorDoubleReciprocalSqrt(VectorDouble3LengthSq(input));
+    return VectorDoubleReciprocalSqrt(VectorDouble4LengthSq(input));
 }
 
-template<u32 Dimension>
-FOUNDATION_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Dimension == 2u)
-        return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
-    else if constexpr(Dimension == 3u)
-        return VectorDoubleReciprocalSqrt(VectorDouble3LengthSq(value));
-    else
-        return VectorDoubleReciprocalSqrt(VectorDouble4LengthSq(value));
+VectorDouble CurrentReciprocalLength(in u32 dimension, in b8 estimate, in VectorDouble input){
+    if(dimension == 2u){
+        if(estimate)
+            return VectorDouble2ReciprocalLengthEst(input);
+        return VectorDouble2ReciprocalLength(input);
+    }
+    if(dimension == 3u){
+        if(estimate)
+            return VectorDouble3ReciprocalLengthEst(input);
+        return VectorDouble3ReciprocalLength(input);
+    }
+    if(estimate)
+        return VectorDouble4ReciprocalLengthEst(input);
+    return VectorDouble4ReciprocalLength(input);
 }
 
-template<u32 Dimension, b8 Estimate>
-FOUNDATION_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Dimension == 2u){
-        if constexpr(Estimate)
-            return VectorDouble2ReciprocalLengthEst(value);
-        else
-            return VectorDouble2ReciprocalLength(value);
-    }
-    else if constexpr(Dimension == 3u){
-        if constexpr(Estimate)
-            return VectorDouble3ReciprocalLengthEst(value);
-        else
-            return VectorDouble3ReciprocalLength(value);
-    }
-    else{
-        if constexpr(Estimate)
-            return VectorDouble4ReciprocalLengthEst(value);
-        else
-            return VectorDouble4ReciprocalLength(value);
-    }
-}
-
-template<u32 Dimension>
-[[nodiscard]] b8 ObserveReciprocalLengthDim(SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+b8 ObserveReciprocalLengthByDim(in u32 dimension, in VectorDouble input, mut VectorDouble expected, mut i32 expectedFlags, mut VectorDouble actual, mut i32 actualFlags, mut VectorDouble estimate, mut i32 estimateFlags){
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
         return false;
-    outExpected = OriginalReciprocalLength<Dimension>(input);
-    outExpectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+    expected = ReferenceReciprocalLength(dimension, input);
+    expectedFlags = TestFloatingPointExceptions(s_FeAllExcept);
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
         return false;
-    outActual = CurrentReciprocalLength<Dimension, false>(input);
-    outActualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
+    actual = CurrentReciprocalLength(dimension, false, input);
+    actualFlags = TestFloatingPointExceptions(s_FeAllExcept);
+    if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value())
         return false;
-    outEstimate = CurrentReciprocalLength<Dimension, true>(input);
-    outEstimateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    estimate = CurrentReciprocalLength(dimension, true, input);
+    estimateFlags = TestFloatingPointExceptions(s_FeAllExcept);
     return true;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ObserveReciprocalLengthByDim(const u32 dimension, const SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
-    switch(dimension){
-    case 2u: return ObserveReciprocalLengthDim<2u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
-    case 3u: return ObserveReciprocalLengthDim<3u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
-    default: return ObserveReciprocalLengthDim<4u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
-    }
-}
-
-struct PackedDot3ForkResult{
-    i32 childPid = -1;
-    i32 waitedPid = -1;
-    b8 exitedNormally = false;
-    i32 exitStatus = -1;
-};
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
-void TrapPriorityHandler(i32 signalNumber, siginfo_t* information, void* context)noexcept;
-#endif
-
-[[nodiscard]] PackedDot3ForkResult RunPackedDot3InvalidPriorityForkChild()noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-namespace NWB::Tests::MathCases{
-using MathLaneReductionDetail::BaselineCompareDouble3;
-using MathLaneReductionDetail::CompareDouble;
-using MathLaneReductionDetail::CompareSingle;
-using MathLaneReductionDetail::ExtractMask;
-using MathLaneReductionDetail::ObserveReductionByIndex;
-using MathLaneReductionDetail::ObserveReciprocalLengthByDim;
-using MathLaneReductionDetail::PackedDot3ForkResult;
-using MathLaneReductionDetail::RunPackedDot3InvalidPriorityForkChild;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -582,24 +457,24 @@ void VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptio
             const VectorDouble value = EvalLaneVectorDoubleSetIntByIndex(referenceDouble, cast<u64>(0x7FF0000000001234u), poisonLane);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            const b8 cmpSingleFloat = CompareSingle<false>(single, referenceSingle);
+            const b8 cmpSingleFloat = CompareSingle4Floats(single, referenceSingle);
             EXPECT_FALSE(cmpSingleFloat);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            const b8 cmpSingleInt = CompareSingle<true>(single, single);
+            const b8 cmpSingleInt = CompareSingle4Bits(single, single);
             EXPECT_TRUE(cmpSingleInt);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            const b8 baselinePartial = BaselineCompareDouble3(value, referenceDouble);
+            const b8 baselinePartial = RunDoubleComparison(BaselineCompareDouble3, value, referenceDouble);
             const i32 baselinePartialFlags = TestFloatingPointExceptions(s_FeAllExcept);
             EXPECT_EQ(baselinePartial, poisonLane == 3u);
             if(poisonLane != 3u)
                 EXPECT_EQ(baselinePartialFlags, s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            const b8 cmpDouble3Float = CompareDouble<false, 3u>(value, referenceDouble);
+            const b8 cmpDouble3Float = CompareDouble3Floats(value, referenceDouble);
             const i32 actualPartialFlags = TestFloatingPointExceptions(s_FeAllExcept);
             EXPECT_EQ(cmpDouble3Float, baselinePartial);
             EXPECT_EQ(actualPartialFlags, baselinePartialFlags);
@@ -607,17 +482,17 @@ void VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptio
                 EXPECT_EQ(actualPartialFlags, s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            const b8 cmpDouble4Float = CompareDouble<false, 4u>(value, referenceDouble);
+            const b8 cmpDouble4Float = CompareDouble4Floats(value, referenceDouble);
             EXPECT_FALSE(cmpDouble4Float);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            const b8 cmpDouble3Int = CompareDouble<true, 3u>(value, value);
+            const b8 cmpDouble3Int = CompareDouble3Bits(value, value);
             EXPECT_TRUE(cmpDouble3Int);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            const b8 cmpDouble4Int = CompareDouble<true, 4u>(value, value);
+            const b8 cmpDouble4Int = CompareDouble4Bits(value, value);
             EXPECT_TRUE(cmpDouble4Int);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
         }
@@ -708,113 +583,34 @@ void VerifyMathNativeReduction_ReciprocalLengthsPreserveZeroDivisionSubnormalSqu
 }
 
 void VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(){
-    const PackedDot3ForkResult res = RunPackedDot3InvalidPriorityForkChild();
-    ASSERT_GE(res.childPid, 0);
-    ASSERT_EQ(res.waitedPid, res.childPid);
-    ASSERT_TRUE(res.exitedNormally);
-    EXPECT_EQ(res.exitStatus, 0);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::MathLaneReductionDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-FOUNDATION_NOINLINE b8 BaselineCompareDouble3(const SIMDVectorDouble left, const SIMDVectorDouble right)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const SIMDVectorDouble comparison = VectorDoubleEqual(left, right);
-#if defined(FOUNDATION_HAS_NEON64)
-    const uint64x2_t low = vshrq_n_u64(SIMDVectorDoubleDetail::GetLowBits(comparison), 63u);
-    const uint64x2_t high = vshrq_n_u64(SIMDVectorDoubleDetail::GetHighBits(comparison), 63u);
-    const u32 mask = static_cast<u32>(vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u));
-#else
-    const u32 mask = VectorDoubleMoveMask(comparison);
-#endif
-    return (mask & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
-}
-
-FOUNDATION_NOINLINE u32 ExtractMask(const SIMDVectorDouble value)noexcept{
-#pragma STDC FENV_ACCESS ON
-    return VectorDoubleMoveMask(value);
-}
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
-void TrapPriorityHandler(const i32, siginfo_t* const information, void*)noexcept{
-    _exit(information != nullptr && information->si_code == FPE_FLTINV ? 0 : 1);
-}
-#endif
-
-PackedDot3ForkResult RunPackedDot3InvalidPriorityForkChild()noexcept{
-    PackedDot3ForkResult out{};
-#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
-    const pid_t child = fork();
-    out.childPid = static_cast<i32>(child);
-    if(child < 0)
-        return out;
+    const i32 child = ForkTestChild();
+    ASSERT_GE(child, 0);
     if(child == 0){
-        struct sigaction action{};
-        action.sa_sigaction = TrapPriorityHandler;
-        action.sa_flags = SA_SIGINFO;
-        if(sigemptyset(&action.sa_mask) != 0 || sigaction(SIGFPE, &action, nullptr) != 0)
-            _exit(3);
-        if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT) || feenableexcept(FE_INVALID | FE_OVERFLOW) == -1)
-            _exit(4);
-        volatile u64 maximumBits = 0x7fefffffffffffffull;
-        const SIMDVectorDouble lhs = VectorDoubleSetInt(maximumBits, 0x3ff0000000000000ull, 0u, 0u);
-        const SIMDVectorDouble rhs = VectorDoubleSet(2.0, 1.0, Limit<f64>::s_Infinity, 0.0);
-        volatile SIMDVectorDouble result = VectorDouble3Dot(lhs, rhs);
-        _exit(VectorDoubleMoveMask(result) != 0u ? 2 : 5);
+        if(!InstallFloatingTrap(lambda[](in b8 invalid) -> void{
+            if(invalid)
+                ExitTestChild(0);
+            ExitTestChild(1);
+        }))
+            ExitTestChild(3);
+        if(!ClearFloatingPointExceptions(s_FeAllExcept).has_value() || !EnableFloatingTraps())
+            ExitTestChild(4);
+        const VectorDouble left = MakeVolatileDoubleBits(0x7fefffffffffffffu, 0x3ff0000000000000u, 0u, 0u);
+        const VectorDouble right = VectorDouble(2.0, 1.0, bit_cast<f64>(s_F64InfinityBits), 0.0);
+        if(ExtractMask(VectorDouble3Dot(left, right)) != 0u)
+            ExitTestChild(2);
+        ExitTestChild(5);
     }
-    i32 status = 0;
-    out.waitedPid = static_cast<i32>(waitpid(child, &status, 0));
-    out.exitedNormally = WIFEXITED(status) != 0;
-    if(out.exitedNormally)
-        out.exitStatus = WEXITSTATUS(status);
-#endif
-    return out;
+    const ChildWaitResult result = WaitForTestChild(child);
+    ASSERT_TRUE(result.collected);
+    ASSERT_TRUE(result.exited);
+    EXPECT_EQ(result.exitCode, 0);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows){ NWB::Tests::MathCases::VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+registration GoogleTestLinuxAvx2Case(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows, VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

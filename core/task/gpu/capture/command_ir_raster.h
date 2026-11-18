@@ -235,6 +235,14 @@ template<typename T>
     return GpuCommandIrOwnerAnchor(box, s_AdoptRef);
 }
 
+template<typename T, typename Factory>
+[[nodiscard]] Expected<GpuCommandIrOwnerAnchor> MakeGpuCommandIrOwnerFrom(GraphicsArena& arena, Factory&& factory){
+    auto* const box = NewArenaObject<GpuCommandIrRetainedOwnerBox<T>>(arena, arena, Forward<Factory>(factory));
+    if(!box)
+        return MakeUnexpected(Failure{});
+    return GpuCommandIrOwnerAnchor(box, s_AdoptRef);
+}
+
 template<typename T>
 [[nodiscard]] Expected<GpuCommandIrOwnerAnchor> RetainGpuCommandIrOwner(GpuCommandIrCapture& capture, const T& owner){
     return MakeGpuCommandIrOwnerAnchor(capture.ownerArena(), owner);

@@ -18,20 +18,15 @@ void ExpectMemoryStatsEqual(in ArenaMemoryStats expected, in ArenaMemoryStats ac
 }
 
 b8 TryReadOwnerStats(in Name name, in ArenaMemorySource source, mut ArenaMemoryStats outStats){
-    b8 found = false;
-    native(in name, in source, mut outStats, mut found){
-        const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-        while(record){
-            ArenaMemoryOwnerSnapshot snapshot;
-            record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-            if(snapshot.ownerName == name && snapshot.source == source){
-                outStats = snapshot.stats;
-                found = true;
-                break;
-            }
+    ArenaMemoryOwnerCursor owners;
+    ArenaMemoryOwnerSnapshot snapshot;
+    while(owners.next(snapshot)){
+        if(snapshot.ownerName == name && snapshot.source == source){
+            outStats = snapshot.stats;
+            return true;
         }
     }
-    return found;
+    return false;
 }
 
 b8 TryReadOwnerStats(in Name name, mut ArenaMemoryStats outStats){

@@ -2,279 +2,67 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <utilities/cli/tool_cli.adhd>
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/toolkit/edit/model.adhd>
 #include <impl/ecs_ui/toolkit/paint_primitives.adhd>
 #include <impl/ecs_ui/toolkit/text/shaper.adhd>
+#include <impl/ecs_ui/edit_box_host.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/input/router.adhd>
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <tests/common/memory.adhd>
 #include <tests/performance/ui_input/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class BenchmarkTextInput : QueuedTextInputService{
+    [cpp_base(QueuedTextInputService, storage)]
+    public BenchmarkTextInput(mut HeapStorage storage){}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/edit_box_host.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-
-#include <core/common/application_entry.h>
-#include <core/os/clipboard_service.h>
-#include <core/os/text_input_service.h>
-
-#include <global/expected.h>
-#include <global/simd/vector_arithmetic.h>
-#include <global/timer.h>
-
-namespace NWB::Tests::UiInputBenchmarkCases{
-using NWB::Core::ClipboardCapabilities;
-using NWB::Core::ClipboardRequestToken;
-using NWB::Core::QueuedClipboardService;
-using NWB::Core::QueuedTextInputService;
-using NWB::Core::TextInputCapabilities;
-using NWB::Core::Alloc::GlobalArena;
-using NWB::Core::Assets::AssetRef;
-using NWB::Impl::RegionVector;
-using NWB::Impl::Texture;
-using NWB::Impl::UiEditBoxHost;
-using NWB::Impl::UiSkin;
-using namespace NWB::Impl::Ui;
-namespace ClipboardChannel = NWB::Core::ClipboardChannel;
-namespace ClipboardOperation = NWB::Core::ClipboardOperation;
-namespace ClipboardStatus = NWB::Core::ClipboardStatus;
-
-using HitTargetVector = InputVector<HitTarget>;
-
-[[nodiscard]] FOUNDATION_INLINE GlobalArena& BenchmarkFallbackArena()noexcept{
-    static GlobalArena s_Arena{ Name("tests/performance/ui_input") };
-    return s_Arena;
+    public TextInputCapabilities capabilities()const override{
+        TextInputCapabilities result();
+        result.commit = true;
+        result.preedit = true;
+        result.surrounding = true;
+        result.deleteSurrounding = true;
+        return result;
+    }
 }
 
-inline thread_local GlobalArena* s_ActiveBenchmarkArena = nullptr;
+class BenchmarkClipboard : QueuedClipboardService{
+    [cpp_base(QueuedClipboardService, storage)]
+    public BenchmarkClipboard(mut HeapStorage storage){}
 
-[[nodiscard]] FOUNDATION_INLINE GlobalArena& ActiveBenchmarkArena()noexcept{
-    return s_ActiveBenchmarkArena != nullptr ? *s_ActiveBenchmarkArena : BenchmarkFallbackArena();
-}
-
-struct BenchmarkScope final : NoCopy{
-    GlobalArena arena;
-    GlobalArena* previous = nullptr;
-
-    explicit BenchmarkScope(const Name& scopeName)noexcept
-        : arena(scopeName)
-        , previous(s_ActiveBenchmarkArena)
-    {
-        s_ActiveBenchmarkArena = &arena;
+    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{
+        return ClipboardCapabilities();
     }
 
-    ~BenchmarkScope()noexcept{
-        s_ActiveBenchmarkArena = previous;
+    public void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView text)override{
+        if(!this.completeNativeRequest(token, ClipboardStatus::Unsupported, ""))
+            TerminateInvariant();
     }
-};
-
-class BenchmarkTextInput final : public QueuedTextInputService{
-public:
-    BenchmarkTextInput() : QueuedTextInputService(ActiveBenchmarkArena()){}
-    explicit BenchmarkTextInput(GlobalArena& arena) : QueuedTextInputService(arena){}
-
-public:
-    [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
-};
-
-class BenchmarkClipboard final : public QueuedClipboardService{
-public:
-    BenchmarkClipboard() : QueuedClipboardService(ActiveBenchmarkArena()){}
-    explicit BenchmarkClipboard(GlobalArena& arena) : QueuedClipboardService(arena){}
-
-public:
-    [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum)const noexcept override{ return {}; }
-
-protected:
-    virtual void startNativeRequest(const ClipboardRequestToken token, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{
-        const b8 completed = completeNativeRequest(token, ClipboardStatus::Unsupported);
-        FOUNDATION_FATAL_ASSERT(completed);
-    }
-};
-
-class BenchmarkContext final : NoCopy{
-public:
-    BenchmarkContext() : m_value(ActiveBenchmarkArena()){}
-
-public:
-    operator Context&()noexcept{ return m_value; }
-    operator const Context&()const noexcept{ return m_value; }
-
-    template<typename... Args>
-    decltype(auto) beginFrame(Args&&... args){ return m_value.beginFrame(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) beginRoot(Args&&... args){ return m_value.beginRoot(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) addTarget(Args&&... args){ return m_value.addTarget(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) endRoot(Args&&... args){ return m_value.endRoot(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) finishFrame(Args&&... args){ return m_value.finishFrame(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) commitFrame(Args&&... args){ return m_value.commitFrame(Forward<Args>(args)...); }
-    [[nodiscard]] const InputRouter& input()const noexcept{ return m_value.input(); }
-
-private:
-    Context m_value;
-};
-
-class BenchmarkEditBoxHost final : NoCopy{
-public:
-    BenchmarkEditBoxHost(Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard)
-        : m_value(ActiveBenchmarkArena(), context, textInput, clipboard)
-    {}
-
-public:
-    template<typename... Args>
-    decltype(auto) beginFrame(Args&&... args){ return m_value.beginFrame(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) edit(Args&&... args){ return m_value.edit(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) publish(Args&&... args){ return m_value.publish(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) finishFrame(Args&&... args){ return m_value.finishFrame(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) commitFrame(Args&&... args){ return m_value.commitFrame(Forward<Args>(args)...); }
-    [[nodiscard]] b8 hasTextFocus()const noexcept{ return m_value.hasTextFocus(); }
-
-private:
-    UiEditBoxHost m_value;
-};
-
-class BenchmarkTextLayoutBuilder final : NoCopy{
-public:
-    explicit BenchmarkTextLayoutBuilder(ITextShaper& shaper)noexcept
-        : m_value(ActiveBenchmarkArena(), shaper)
-    {}
-
-public:
-    operator TextLayoutBuilder&()noexcept{ return m_value; }
-
-private:
-    TextLayoutBuilder m_value;
-};
-
-class BenchmarkTextService final : NoCopy{
-public:
-    BenchmarkTextService() : m_value(ActiveBenchmarkArena()){}
-
-public:
-    operator TextService&()noexcept{ return m_value; }
-
-private:
-    TextService m_value;
-};
-
-class BenchmarkPaintBuilder final : NoCopy{
-public:
-    BenchmarkPaintBuilder()noexcept : m_value(ActiveBenchmarkArena()){}
-
-public:
-    operator PaintBuilder&()noexcept{ return m_value; }
-    operator const PaintBuilder&()const noexcept{ return m_value; }
-
-    template<typename... Args>
-    decltype(auto) begin(Args&&... args){ return m_value.begin(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) reserve(Args&&... args){ return m_value.reserve(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) beginOverlay(Args&&... args){ return m_value.beginOverlay(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) pushClip(Args&&... args){ return m_value.pushClip(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) fillRect(Args&&... args){ return m_value.fillRect(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) popClip(Args&&... args){ return m_value.popClip(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) endOverlay(Args&&... args){ return m_value.endOverlay(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) freeze(Args&&... args){ return m_value.freeze(Forward<Args>(args)...); }
-
-private:
-    PaintBuilder m_value;
-};
-
-class BenchmarkInputRouter final : NoCopy{
-public:
-    BenchmarkInputRouter() : m_value(ActiveBenchmarkArena()){}
-
-public:
-    template<typename... Args>
-    decltype(auto) commitTargets(Args&&... args){ return m_value.commitTargets(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) queuePointer(Args&&... args){ return m_value.queuePointer(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) process(Args&&... args){ return m_value.process(Forward<Args>(args)...); }
-    template<typename... Args>
-    decltype(auto) consumePointerGesture(Args&&... args){ return m_value.consumePointerGesture(Forward<Args>(args)...); }
-    template<typename... Args>
-    [[nodiscard]] decltype(auto) pressed(Args&&... args)const{ return m_value.pressed(Forward<Args>(args)...); }
-    [[nodiscard]] decltype(auto) targets()const noexcept{ return m_value.targets(); }
-    [[nodiscard]] decltype(auto) hover()const noexcept{ return m_value.hover(); }
-    [[nodiscard]] decltype(auto) focus()const noexcept{ return m_value.focus(); }
-    [[nodiscard]] decltype(auto) capture()const noexcept{ return m_value.capture(); }
-    [[nodiscard]] decltype(auto) primaryDown()const noexcept{ return m_value.primaryDown(); }
-    [[nodiscard]] decltype(auto) actions()const noexcept{ return m_value.actions(); }
-    template<typename... Args>
-    [[nodiscard]] decltype(auto) ownsPointerSource(Args&&... args)const{ return m_value.ownsPointerSource(Forward<Args>(args)...); }
-
-private:
-    InputRouter m_value;
-};
-
-[[nodiscard]] FOUNDATION_INLINE EditBoxView CreateBenchmarkEditBoxView()noexcept{
-    return EditBoxView(ActiveBenchmarkArena());
 }
 
-[[nodiscard]] FOUNDATION_INLINE DrawSnapshot CreateBenchmarkDrawSnapshot()noexcept{
-    return DrawSnapshot(ActiveBenchmarkArena());
+b8 AdoptBuiltTextLayout(mut TextLayoutBuilder builder, in ShapeRequest request, mut EditBoxView view){
+    auto layout = builder.layout(request);
+    return layout.has_value() && view.adoptLayout(layout.value());
 }
 
-[[nodiscard]] FOUNDATION_INLINE HitTargetVector CreateBenchmarkHitTargetVector()noexcept{
-    return HitTargetVector(ActiveBenchmarkArena());
-}
-
-FOUNDATION_INLINE void WriteUiBenchmarkStdout(const AStringView text){
-    FOUNDATION_COUT << text;
-}
-
-FOUNDATION_INLINE b8 AdoptBuiltTextLayout(TextLayoutBuilder& layoutBuilder, const ShapeRequest& request, EditBoxView& view){
-    auto layout = layoutBuilder.layout(request);
-    return layout && view.adoptLayout(*layout);
-}
-
-FOUNDATION_INLINE b8 TryDeclareEditBoxWidget(Context& context, const AStringView id, WidgetState& outWidget){
+b8 TryDeclareEditBoxWidget(mut Context context, in StringView id, mut WidgetState outWidget){
     const auto widget = context.declare(id, WidgetKind::EditBox);
-    if(!widget)
+    if(!widget.has_value())
         return false;
-    outWidget = **widget;
+    outWidget = widget.value();
     return true;
 }
 
-FOUNDATION_INLINE b8 HasCommittedTargetWithWidth(const Context& context, const WidgetId id, const u64 declarationGeneration, const f32 expectedWidth){
-    const auto target = context.input().findTarget(id, declarationGeneration);
-    return target && (*target)->rectangle.width == expectedWidth;
+b8 HasCommittedTargetWithWidth(in Context context, in WidgetId id, in u64 generation, in f32 width){
+    const auto target = context.input().findTarget(id, generation);
+    return target.has_value() && target.value().rectangle.width == width;
 }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 const StringView s_SkinPath = "tests/performance/ui_input/skin";
@@ -436,7 +224,7 @@ b8 Measure<CaseT : IUiBenchmarkCase>(in StringView name, in u64 setupChecksum, m
         StringAppendFormat(output, "{:.17g}", samples[index]);
     }
     output.append("]}\n");
-    WriteUiBenchmarkStdout(output);
+    ConsoleWrite(output);
     return true;
 }
 
@@ -462,10 +250,10 @@ class BenchmarkShaper : ITextShaper{
 
 [arena]
 class PublicationCase : IUiBenchmarkCase{
-    private mut BenchmarkContext m_context;
-    private BenchmarkEditBoxHost m_host;
+    private mut Context m_context;
+    private UiEditBoxHost m_host;
     private EditModel m_model;
-    private BenchmarkTextLayoutBuilder m_layoutBuilder;
+    private TextLayoutBuilder m_layoutBuilder;
     private EditBoxView m_view;
     private EditBoxPlacement m_placement = EditBoxPlacement();
     private WidgetState m_widget = WidgetState();
@@ -473,17 +261,17 @@ class PublicationCase : IUiBenchmarkCase{
     private u64 m_generation = 0u;
 
     public PublicationCase(
-        mut BenchmarkContext context,
+        mut Context context,
         mut BenchmarkTextInput textInput,
         mut BenchmarkClipboard clipboard,
         mut BenchmarkShaper shaper,
         in usize stops
     ){
         this.m_context = context;
-        this.m_host = BenchmarkEditBoxHost(context, textInput, clipboard);
+        this.m_host = UiEditBoxHost(context, textInput, clipboard);
         this.m_model = EditModel(MakeBenchmarkEditLimits(stops));
-        this.m_layoutBuilder = BenchmarkTextLayoutBuilder(shaper);
-        this.m_view = CreateBenchmarkEditBoxView();
+        this.m_layoutBuilder = TextLayoutBuilder(shaper);
+        this.m_view = EditBoxView();
         this.m_stops = stops;
     }
 
@@ -556,20 +344,20 @@ class PublicationCase : IUiBenchmarkCase{
 class EmptySelectionCase : IUiBenchmarkCase{
     private UiSkin m_skin;
     private EditModel m_model;
-    private BenchmarkTextLayoutBuilder m_layoutBuilder;
+    private TextLayoutBuilder m_layoutBuilder;
     private EditBoxView m_view;
     private EditBoxPlacement m_placement = EditBoxPlacement();
-    private BenchmarkTextService m_text = BenchmarkTextService();
-    private BenchmarkPaintBuilder m_paint = BenchmarkPaintBuilder();
+    private TextService m_text = TextService();
+    private PaintBuilder m_paint = PaintBuilder();
     private DrawSnapshot m_snapshot;
     private usize m_lines;
 
     public EmptySelectionCase(mut BenchmarkShaper shaper, in usize lines){
         this.m_skin = UiSkin(Name(s_SkinPath));
         this.m_model = EditModel(MakeBenchmarkEditLimits(lines), EditTextMode::Multiline);
-        this.m_layoutBuilder = BenchmarkTextLayoutBuilder(shaper);
-        this.m_view = CreateBenchmarkEditBoxView();
-        this.m_snapshot = CreateBenchmarkDrawSnapshot();
+        this.m_layoutBuilder = TextLayoutBuilder(shaper);
+        this.m_view = EditBoxView();
+        this.m_snapshot = DrawSnapshot();
         this.m_lines = lines;
     }
 
@@ -617,14 +405,14 @@ class EmptySelectionCase : IUiBenchmarkCase{
 [arena]
 class PaintCase : IUiBenchmarkCase{
     private UiSkin m_skin;
-    private BenchmarkPaintBuilder m_builder = BenchmarkPaintBuilder();
+    private PaintBuilder m_builder = PaintBuilder();
     private DrawSnapshot m_snapshot;
     private u32 m_commands;
     private b8 m_descending;
 
     public PaintCase(in u32 commands, in b8 descending){
         this.m_skin = UiSkin(Name(s_SkinPath));
-        this.m_snapshot = CreateBenchmarkDrawSnapshot();
+        this.m_snapshot = DrawSnapshot();
         this.m_commands = commands;
         this.m_descending = descending;
         ConfigureBenchmarkSkinAtlas(this.m_skin);
@@ -683,8 +471,8 @@ class PaintCase : IUiBenchmarkCase{
 }
 
 class PointerWorkload : IUiBenchmarkCase{
-    private BenchmarkInputRouter m_router = BenchmarkInputRouter();
-    private HitTargetVector m_targets;
+    private InputRouter m_router = InputRouter();
+    private Vector<HitTarget> m_targets;
     private usize m_contactCount;
     private u64 m_setupChecksum;
     private u64 m_generation = 0u;
@@ -693,7 +481,7 @@ class PointerWorkload : IUiBenchmarkCase{
     private b8 m_hoverCapable;
 
     public PointerWorkload(in usize targetCount, in PointerWorkloadKind kind, in usize contactCount){
-        this.m_targets = CreateBenchmarkHitTargetVector();
+        this.m_targets = Vector<HitTarget>();
         this.m_contactCount = contactCount;
         this.m_kind = kind;
         this.m_hoverCapable = kind == PointerWorkloadKind::CursorHover || kind == PointerWorkloadKind::CursorGesture || kind == PointerWorkloadKind::PressedSweep;
@@ -862,7 +650,6 @@ b8 MeasurePointerWorkload(mut PointerWorkload workload){
 }
 
 b8 RunPointerCase(in usize targetCount, in PointerWorkloadKind kind, in usize contactCount){
-    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputPointer);
     PointerWorkload workload = PointerWorkload(targetCount, kind, contactCount);
     return MeasurePointerWorkload(workload);
 }
@@ -911,7 +698,6 @@ StringView ResolvePaintBenchmarkName(in usize index, in b8 descending){
 }
 
 b8 RunPaintCase(in u32 commandCount, in b8 descending, in StringView benchmarkName){
-    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputPaint);
     PaintCase benchmark = PaintCase(commandCount, descending);
     if(!benchmark.operation() || !benchmark.checksum().has_value())
         return false;
@@ -949,20 +735,24 @@ StringView ResolveSelectionBenchmarkName(in usize index){
     }
 }
 
+[arena]
+class PublicationContext{
+    public Context context = Context();
+}
+
 b8 RunPublicationCase(in usize stops, in StringView benchmarkName){
-    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputPublication);
-    BenchmarkContext context = BenchmarkContext();
-    BenchmarkTextInput textInput = BenchmarkTextInput();
-    BenchmarkClipboard clipboard = BenchmarkClipboard();
+    HeapStorage storage(s_UiBenchmarkNameTestsPerformanceUiInputPublication);
+    PublicationContext fixture();
+    BenchmarkTextInput textInput(storage);
+    BenchmarkClipboard clipboard(storage);
     BenchmarkShaper shaper = BenchmarkShaper();
-    PublicationCase publication = PublicationCase(context, textInput, clipboard, shaper, stops);
+    PublicationCase publication = PublicationCase(fixture.context, textInput, clipboard, shaper, stops);
     if(!publication.setup() || !publication.operation() || !publication.checksum().has_value())
         return false;
     return Measure(benchmarkName, cast<u64>(stops), publication);
 }
 
 b8 RunEmptySelectionCase(in usize lines, in StringView benchmarkName){
-    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputEmptySelection);
     BenchmarkShaper shaper = BenchmarkShaper();
     EmptySelectionCase selection = EmptySelectionCase(shaper, lines);
     if(!selection.setup() || !selection.operation() || !selection.checksum().has_value())
@@ -998,36 +788,19 @@ b8 RunAllUiInputBenchmarks(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiInputBenchmark{
-static int EntryPoint(const isize, tchar**, void*){
-    NWB::Core::Common::InitializerGuard initializer;
+[cpp_unwind]
+i32 RunUiInputBenchmark(){
+    InitializerGuard initializer();
     if(!initializer.initialize()){
-        FOUNDATION_CERR << "UI input benchmark common initialization failed\n";
+        ConsoleWriteError("UI input benchmark common initialization failed\n");
         return 1;
     }
-    if(!NWB::Tests::UiInputBenchmarkCases::RunAllUiInputBenchmarks()){
-        FOUNDATION_CERR << "UI input benchmark workload validation failed\n";
+    if(!RunAllUiInputBenchmarks()){
+        ConsoleWriteError("UI input benchmark workload validation failed\n");
         return 1;
     }
     return 0;
 }
-}
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(::UiInputBenchmark::EntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

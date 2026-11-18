@@ -2,6 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<tests/common/observed_value.h>"), cpp_name("::NWB::Tests::ObserveValue")]
+extern T ObserveValue<T>(in T value);
+
+[cpp_header("<tests/common/observed_value.h>"), cpp_name("::NWB::Tests::ScalarAddReference")]
+extern T ScalarAddReference<T>(in T first, in T second);
+
+[cpp_header("<tests/common/observed_value.h>"), cpp_name("::NWB::Tests::ScalarSubtractReference")]
+extern T ScalarSubtractReference<T>(in T first, in T second);
+
+[cpp_header("<tests/common/observed_value.h>"), cpp_name("::NWB::Tests::ScalarDivideReference")]
+extern T ScalarDivideReference<T>(in T first, in T second);
+
+[cpp_header("<tests/common/observed_value.h>"), cpp_name("::NWB::Tests::ScalarMultiplyAddReference")]
+extern T ScalarMultiplyAddReference<T>(in T first, in T second, in T addend);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const i32 s_SIMDMemoryAbortExitCode = 81;
 const i32 s_SIMDMemoryHandlerFailureExitCode = 82;
 const i32 s_SIMDMemoryReturnedExitCode = 83;

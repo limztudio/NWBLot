@@ -137,6 +137,7 @@ struct GpuTaskGraphQueueAssignmentOptions{
 
 
 public:
+    void setQueueLoads(Span<const GpuTaskQueueLoad> values)noexcept{ queueLoads = values.data(); queueLoadCount = values.size(); }
     void clearTimingHistory()noexcept{ timingHistory = nullptr; }
     void setTimingHistory(const GpuTaskTimingHistorySnapshot& snapshot)noexcept{ timingHistory = &snapshot; }
     void setTimingHistory(const GpuTaskTimingHistorySnapshot&&) = delete;
@@ -283,6 +284,11 @@ public:
     [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
+    [[nodiscard]] Optional<GpuTaskQueueAssignment> findAssignment(GpuTaskId task)const noexcept{
+        if(const auto* result = find(task))
+            return *result;
+        return {};
+    }
     [[nodiscard]] const GpuTaskQueueAssignment* find(const GpuTaskId& task)const noexcept;
 
 

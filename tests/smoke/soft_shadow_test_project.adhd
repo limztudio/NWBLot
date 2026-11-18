@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/skinning/system.adhd>
+#include <impl/ecs_render/material/material_instance.adhd>
+#include <impl/ecs_render/module.adhd>
+#include <impl/ecs_model_renderer/model_renderer.adhd>
+#include <impl/ecs_model/system.adhd>
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/assets_material/asset.adhd>
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include <impl/ecs_scene/module.adhd>
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
@@ -10,40 +19,6 @@
 #include "avboit_timing_render_pass.adhd"
 #include "smoke_scene_helpers.adhd"
 #include "smoke_skinned_scene_helpers.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_model_renderer/model_renderer.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/input/module.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/simd/frame.h>
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,9 +185,9 @@ f32 ConfiguredSourceRadius(){
 [arena]
 class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
-    public SoftShadowTestSmokeProject(mut ProjectRuntimeContext context){
+    public SoftShadowTestSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateSmokeSkinnedRenderWorldOrDie(s_SoftShadowProjectName, SmokeRenderQualitySettings(), context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_timingRenderPass = ShadowTimingRenderPass(context.graphics);
         this.m_fpsProbe = FpsProbe(s_SoftShadowProjectName);
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(s_SoftShadowProjectName);
@@ -221,7 +196,8 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
     public ~SoftShadowTestSmokeProject(){
         this.m_timingRenderPass.stop();
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         this.destroyWorld();
     }
 
@@ -258,7 +234,8 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     public void onShutdown()override{
         this.m_timingRenderPass.stop();
         this.m_context.graphics.setFrameSubmissionSuspended(false);
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         this.destroyWorld();
         [essential] info("SoftShadowTestSmokeProject: shutdown");
     }
@@ -306,7 +283,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         if(this.m_yaw.manualControl())
             manualSuffix = "  [manual: <- ->]";
         const String suffix = StringFormat("  |  yaw {:.2f} deg  |  sun {:.2f} deg  |  src r {:.3f}{}", yawDegrees, angleDegrees, this.m_sourceRadius, manualSuffix);
-        SetSmokeWindowTitleSuffix(this.m_context, suffix);
+        SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), suffix);
     }
 
     private mut ProjectRuntimeContext m_context;
@@ -329,29 +306,21 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Soft Shadow Test");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB Soft Shadow Test");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::SoftShadowTestSmokeProject>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateSmokeSkinnedRenderWorld(s_SoftShadowProjectName, SmokeRenderQualitySettings(), context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<SoftShadowTestSmokeProject>(owner, context);
 }
 
 

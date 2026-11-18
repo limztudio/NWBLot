@@ -177,5 +177,17 @@ extern const usize s_GpuCommandIrDrawRecordBytes;
 extern const usize s_GpuCommandIrGraphicsStateRecordBytes;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::MakeGpuCommandIrOwnerFrom")]
+extern Expected<GpuCommandIrOwnerAnchor> MakeGpuCommandIrOwnerFrom<T>(mut auto storage, in auto factory);
 
+[cpp_header("<core/task/gpu/capture/command_ir_internal.h>"), cpp_name("::NWB::Core::GpuCommandIrDetail::RasterReplayState"), cpp_flags(self_defaulted)]
+extern class GpuRasterReplayState;
+
+[cpp_header("<core/task/gpu/capture/command_ir_internal.h>"), cpp_name("::NWB::Core::GpuCommandIrDetail::ValidateRasterGraphOperation")]
+extern GpuCommandIrReplayError ValidateRasterGraphOperation(in GpuCommandIrRasterTaskRecord record, in GpuTaskGraphDeclarationReadView graph, in GpuTaskGraphTaskView task, mut GpuRasterReplayState state);
+
+[cpp_header("<core/task/gpu/capture/command_ir_internal.h>"), cpp_name("::NWB::Core::GpuCommandIrDetail::ValidateReplayCommandListQueue")]
+extern GpuCommandIrReplayError ValidateReplayCommandListQueue(in CommandListParameters description, in GpuPhysicalQueueId queue, in CommandQueue queueClass);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

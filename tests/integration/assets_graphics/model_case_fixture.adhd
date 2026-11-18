@@ -1,0 +1,239 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "case_types.adhd"
+#include <impl/assets_model/cook.adhd>
+#include <impl/assets_skeleton/cook.adhd>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/value_storage.adhd>
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_ModelMetaMeshObjectField = "mesh_0";
+const StringView s_SharedModelPath = "tests/model_cook_metadata/shared";
+const StringView s_UnknownModelPath = "tests/model_cook_metadata/unknown";
+const StringView s_StaticMeshesField = "static_meshes";
+const StringView s_PropObjectField = "prop";
+const StringView s_ModelMetaMeshField = "mesh";
+const StringView s_ModelMetaSkeletonField = "skeleton";
+const StringView s_ModelMetaSkinnedMeshesField = "skinned_meshes";
+const StringView s_ModelMetaMeshVirtualPath = "tests/model_cook_metadata/mesh";
+const StringView s_ModelMetaRigA = "rig_a";
+const StringView s_ModelMetaRigB = "rig_b";
+const StringView s_ModelPayloadProp = "prop";
+const StringView s_ModelPayloadReplacementRig = "replacement_rig";
+const StringView s_TestsModelPayloadMesh = "tests/model_payload/mesh";
+const StringView s_SkeletonJointLeft = "left";
+const StringView s_SkeletonJointRoot = "root";
+const StringView s_SkeletonJointRight = "right";
+
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::Bytes")]
+extern GraphicsOwnedBytes NewGraphicsBytes(mut HeapStorage storage);
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::AssetBytes")]
+extern class GraphicsOwnedBytes;
+
+
+[ordered]
+class ModelMetadata{
+    private HeapStorage metadataArena = HeapStorage(s_AssetCaseTestsModelCookMetadataMetadata);
+    private TestValueSlot<MetascriptValue> assetStorage;
+    private mut MetascriptValue asset;
+    public ModelCookEntry entry;
+    private HashMap<Name, Name> expectedSkeletons;
+
+    public ModelMetadata(){
+        this.asset = this.assetStorage.constructIn(this.metadataArena);
+        this.asset.makeMap();
+    }
+
+    public void addSkeleton(in StringView objectName, in StringView skeletonAsset){
+        this.asset.field("skeletons").field(objectName).field(s_ModelMetaSkeletonField).setString(skeletonAsset);
+    }
+
+    public void addSkinnedMesh(in StringView objectName, in StringView skeleton, in StringView expectedObject){
+        mut MetascriptValue object = this.asset.field(s_ModelMetaSkinnedMeshesField).field(objectName);
+        object.field("skin").setString("tests/model_cook_metadata/skin");
+        object.field(s_ModelMetaSkeletonField).setString(skeleton);
+        const auto key = NameFromText(objectName);
+        ASSERT_TRUE(key.has_value());
+        const auto expected = NameFromText(expectedObject);
+        ASSERT_TRUE(expected.has_value());
+        this.expectedSkeletons.insert_or_assign(key.value(), expected.value());
+    }
+
+    public void setNestedFieldString(in StringView group, in StringView objectName, in StringView field, in StringView value){
+        this.asset.field(group).field(objectName).field(field).setString(value);
+    }
+
+    public StringView nestedFieldString(in StringView group, in StringView objectName, in StringView field){
+        return this.asset.field(group).field(objectName).field(field).asString();
+    }
+
+    public usize eraseNestedField(in StringView group, in StringView objectName, in StringView field){
+        return this.asset.field(group).field(objectName).asMap().erase(field);
+    }
+
+    public void setExpectedSkeleton(in StringView objectName, in StringView expectedObject){
+        this.expectedSkeletons.at(NameFromText(objectName).value_or(s_NameNone)) = NameFromText(expectedObject).value_or(s_NameNone);
+    }
+
+    private void appendTransformRow(mut MetascriptValue transform, in usize diagonal){
+        TestValueSlot<MetascriptValue> rowSlot;
+        mut MetascriptValue row = rowSlot.constructIn(this.metadataArena);
+        row.makeList();
+        for(usize column = 0u; column < 4u; ++column){
+            TestValueSlot<MetascriptValue> numberSlot;
+            mut MetascriptValue number = numberSlot.constructIn(this.metadataArena);
+            number.setInteger(cast<i64>(column == diagonal));
+            row.asList().push_back(number);
+        }
+        transform.asList().push_back(row);
+    }
+
+    public void initThreeRowStaticTransform(in StringView objectName, in StringView mesh, in f64 translationX){
+        mut MetascriptValue object = this.asset.field(s_StaticMeshesField).field(objectName);
+        object.field(s_ModelMetaMeshField).setString(mesh);
+        mut MetascriptValue transform = object.field("transform");
+        transform.makeList();
+        for(usize row = 0u; row < 3u; ++row)
+            this.appendTransformRow(transform, row);
+        transform.asList()[0u].asList()[3u].setDouble(translationX);
+    }
+
+    public void appendHomogeneousStaticTransformRow(in StringView objectName){
+        mut MetascriptValue transform = this.asset.field(s_StaticMeshesField).field(objectName).field("transform");
+        this.appendTransformRow(transform, 3u);
+    }
+
+    public void popStaticTransformRow(in StringView objectName){
+        this.asset.field(s_StaticMeshesField).field(objectName).field("transform").asList().pop_back();
+    }
+
+    public f32 firstStaticTransform14()const{ return this.entry.staticMeshObjects[0u].transform._14; }
+
+    public b8 parse(){
+        const auto result = ParseModelCookMetadata(s_AssetCaseTestsModelCookMetadataModel, Path("tests/model_cook_metadata/model.nwb"), this.asset);
+        if(!result.has_value())
+            return false;
+        this.entry = result.value();
+        return true;
+    }
+
+    public void verifyObjectReferences()const{
+        ASSERT_EQ(this.entry.skinnedMeshObjects.size(), this.expectedSkeletons.size());
+        for(in ModelSkinnedMeshObject object : this.entry.skinnedMeshObjects){
+            ASSERT_TRUE(this.expectedSkeletons.contains(object.name));
+            EXPECT_EQ(object.skeletonObject, this.expectedSkeletons.at(object.name));
+            EXPECT_EQ(object.skin.name(), Name("tests/model_cook_metadata/skin"));
+        }
+    }
+}
+
+void AddIndexedModelObjects(in usize skeletonCount, in usize meshCount, mut ModelMetadata metadata){
+    for(usize index = 0u; index < skeletonCount; ++index){
+        const String object = StringFormat("rig_{}", index);
+        const String asset = StringFormat("tests/model_cook_metadata/skeleton_{}", index);
+        metadata.addSkeleton(object, asset);
+    }
+    for(usize index = 0u; index < meshCount; ++index){
+        const String mesh = StringFormat("mesh_{}", index);
+        const String object = StringFormat("rig_{}", (index * 73u) % skeletonCount);
+        metadata.addSkinnedMesh(mesh, object, object);
+    }
+}
+
+[ordered]
+class ModelInputs{
+    public HeapStorage storage = HeapStorage(s_AssetCaseTestsModelPayloadInputs);
+    private ScratchStorage scratchArena = ScratchStorage(s_AssetCaseTestsModelPayloadValidationScratch);
+    private TestValueSlot<Model> modelStorage;
+    public mut Model model;
+    public SkeletonObjectVector skeletonObjects;
+    public StaticMeshObjectVector staticMeshObjects;
+    public SkinnedMeshObjectVector skinnedMeshObjects;
+
+    public ModelInputs(){
+        this.model = this.modelStorage.constructIn(this.storage, s_AssetCaseTestsModelPayloadModel);
+        ModelSkeletonObject rig;
+        rig.name = Name(s_ModelRigSegment);
+        rig.skeleton = AssetRef<Skeleton>(Name("tests/model_payload/skeleton"));
+        this.skeletonObjects.push_back(rig);
+        ModelStaticMeshObject prop;
+        prop.name = Name(s_ModelPayloadProp);
+        prop.mesh = AssetRef<Mesh>(Name(s_TestsModelPayloadMesh));
+        prop.parentObject = Name(s_ModelRigSegment);
+        prop.parentJoint = s_AssetCaseHand;
+        this.staticMeshObjects.push_back(prop);
+        ModelSkinnedMeshObject body;
+        body.name = Name(s_ModelBodySegment);
+        body.skin = AssetRef<Skin>(Name("tests/model_payload/skin"));
+        body.skeletonObject = Name(s_ModelRigSegment);
+        this.skinnedMeshObjects.push_back(body);
+        this.publish();
+    }
+
+    public void publish(){ this.model.setObjects(this.skeletonObjects, this.staticMeshObjects, this.skinnedMeshObjects); }
+    public b8 validate(){ return this.model.validatePayload(); }
+    public b8 validateUnnamedModel(){
+        Model unnamed = Model();
+        return unnamed.validatePayload();
+    }
+    public ArenaMemoryStats scratchStats()const{ return this.scratchArena.memoryStats(); }
+}
+
+usize ExpectedSingleTripleModelBinaryBytes(){
+    return size_of<ModelHeaderBinary>() + size_of<ModelSkeletonObjectBinary>() + size_of<ModelStaticMeshObjectBinary>() + size_of<ModelSkinnedMeshObjectBinary>();
+}
+
+[ordered]
+class SkeletonInputs{
+    public HeapStorage storage = HeapStorage(s_AssetCaseTestsSkeletonPayloadInputs);
+    private ScratchStorage scratchArena = ScratchStorage(s_AssetCaseTestsSkeletonPayloadValidationScratch);
+    public SkeletonCookEntry entry;
+    private TestValueSlot<Skeleton> skeletonStorage;
+    public mut Skeleton skeleton;
+
+    private void addJoint(in Name name, in Name parent){
+        SkeletonCookJoint joint;
+        joint.name = name;
+        joint.parent = parent;
+        this.entry.joints.push_back(joint);
+    }
+
+    public SkeletonInputs(){
+        this.skeleton = this.skeletonStorage.constructIn(this.storage, s_AssetCaseTestsSkeletonPayloadSkeleton);
+        this.entry.virtualPath = this.skeleton.virtualPath();
+        this.entry.joints.reserve(4u);
+        this.addJoint(Name(s_SkeletonJointRoot), s_NameNone);
+        this.addJoint(Name(s_SkeletonJointLeft), Name(s_SkeletonJointRoot));
+        this.addJoint(Name(s_SkeletonJointRight), Name(s_SkeletonJointRoot));
+        this.addJoint(s_AssetCaseHand, Name(s_SkeletonJointLeft));
+        this.entry.joints[1u].localBindPose._14 = 2.0f;
+        this.entry.joints[3u].localBindPose._24 = 3.0f;
+    }
+
+    public b8 canBuild(){ return BuildSkeletonAsset(this.entry).has_value(); }
+    public b8 buildIntoSkeleton(){
+        const auto result = BuildSkeletonAsset(this.entry);
+        if(!result.has_value())
+            return false;
+        this.skeleton = result.value();
+        return true;
+    }
+    public b8 validate(){ return this.skeleton.validatePayload(); }
+    public ArenaMemoryStats scratchStats()const{ return this.scratchArena.memoryStats(); }
+    public void setJointIndexOverride(in Name jointName, in u32 value){
+        JointIndexMap indices = this.skeleton.jointIndices();
+        indices.at(jointName) = value;
+        const JointVector joints = this.skeleton.joints();
+        this.skeleton.setJoints(joints, indices);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

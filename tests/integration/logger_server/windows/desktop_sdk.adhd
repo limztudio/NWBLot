@@ -1,0 +1,172 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HDC"), cpp_flags(self_defaulted, small_value, brace_init)]
+extern class WinDcHandle;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HWND"), cpp_flags(self_defaulted, small_value, brace_init)]
+extern class WinWindowHandle;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HGLOBAL"), cpp_flags(self_defaulted, small_value, brace_init)]
+extern class WinGlobalHandle;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::DeviceContext"), cpp_flags(no_copy, no_assign)]
+extern class WinDeviceContext{
+    b8 valid()const;
+    WinDcHandle native()const;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::DibSection"), cpp_flags(no_copy, no_assign)]
+extern class WinDibSection{
+    b8 valid()const;
+    b8 hasPixels()const;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::SelectedBitmap"), cpp_flags(no_copy, no_assign)]
+extern class WinSelectedBitmap{
+    b8 valid()const;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::StaticWindow"), cpp_flags(no_copy, no_assign)]
+extern class WinStaticWindow{
+    b8 valid()const;
+    WinWindowHandle native()const;
+    void useDefaultGuiFont()const;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::GlobalTextLock"), cpp_flags(no_copy, no_assign)]
+extern class WinGlobalTextLock{
+    b8 valid()const;
+    PlatformStringView view(in usize count)const;
+    u32 character(in usize index)const;
+    b8 unlock();
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::OwnedGlobalMemory"), cpp_flags(no_copy, no_assign)]
+extern class WinOwnedGlobalMemory;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFOHEADER"), cpp_flags(self_defaulted, brace_init)]
+extern class WinBitmapHeader{
+    u32 biSize;
+    i32 biWidth;
+    i32 biHeight;
+    u16 biPlanes;
+    u16 biBitCount;
+    u32 biCompression;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFO"), cpp_flags(self_defaulted, brace_init)]
+extern class WinBitmapInfo{
+    WinBitmapHeader bmiHeader;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::RECT"), cpp_flags(self_defaulted, brace_init)]
+extern class WinRect{
+    i32 left;
+    i32 top;
+    i32 right;
+    i32 bottom;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::DRAWITEMSTRUCT"), cpp_flags(self_defaulted, brace_init)]
+extern class WinDrawItem{
+    WinDcHandle hDC;
+    WinRect rcItem;
+    u32 itemID;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::MEASUREITEMSTRUCT"), cpp_flags(self_defaulted, brace_init)]
+extern class WinMeasureItem{
+    u32 itemHeight;
+};
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("BI_RGB")]
+extern const u32 s_WinRgbBitmap;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("CLR_INVALID")]
+extern const u32 s_WinInvalidColor;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("OPAQUE")]
+extern const i32 s_WinOpaque;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("WS_POPUP")]
+extern const u32 s_WinPopup;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("WS_CHILD")]
+extern const u32 s_WinChild;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("GMEM_INVALID_HANDLE")]
+extern const u32 s_WinInvalidMemory;
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::SetTextColor")]
+extern u32 WinSetTextColor(in WinDcHandle dc, in u32 color);
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::GetTextColor")]
+extern u32 WinTextColor(in WinDcHandle dc);
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::GetBkMode")]
+extern i32 WinBackgroundMode(in WinDcHandle dc);
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::SetBkMode")]
+extern i32 WinSetBackgroundMode(in WinDcHandle dc, in i32 mode);
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::GetPixel")]
+extern u32 WinPixel(in WinDcHandle dc, in i32 x, in i32 y);
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("RGB")]
+extern u32 WinRgb(in u8 red, in u8 green, in u8 blue);
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::GlobalSize")]
+extern usize WinGlobalSize(in WinGlobalHandle handle);
+
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::GlobalFlags")]
+extern u32 WinGlobalFlags(in WinGlobalHandle handle);
+
+[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::LogString"), cpp_flags(no_assign)]
+extern class WinLogString;
+
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::NativeText")]
+extern WinLogString NativeLogText(mut HeapStorage storage, in PlatformStringView text);
+
+[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::MessageItem"), cpp_flags(no_assign)]
+extern class WinLogRow;
+
+[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::MessageDeque"), cpp_flags(no_assign)]
+extern class WinMessageDeque{
+    void emplace_back(in WinLogString text, in LogType kind);
+};
+
+[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardText"), cpp_flags(no_copy, no_assign)]
+extern class WinClipboardText{
+    WinGlobalHandle native()const;
+    void release();
+};
+
+[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardTextFailure"), cpp_flags(no_copy, no_assign)]
+extern class WinClipboardFailure;
+
+[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardByteCount")]
+extern Expected<usize, ErrorCode> WinClipboardBytes(in usize textCharacters);
+
+[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::BuildClipboardText")]
+extern Expected<WinClipboardText, WinClipboardFailure> WinBuildClipboardText(in WinMessageDeque messages);
+
+[cpp_header("<logger/server/log_row_painter.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::Draw")]
+extern void WinDrawLogRow(mut WinDrawItem item, in WinLogRow row);
+
+[cpp_header("<logger/server/log_row_painter.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::Measure")]
+extern void WinMeasureLogRow(in WinWindowHandle parent, in WinWindowHandle child, mut WinMeasureItem item, in WinLogRow row);
+
+[cpp_header("<logger/server/log_row_painter.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::s_FontHeight")]
+extern const u32 s_WinLogFontHeight;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

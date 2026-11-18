@@ -45,6 +45,8 @@ void SortDeclsTopologically(const Span<const DeclT* const> items, const DependsO
 
 
 b8 DeclarationDependencyAnalyzer::classDependsOnClassByValue(const ClassDecl& cls, const MStringView targetClassName, const u32 depth)const noexcept{
+    if(cls.concreteBase && cls.concreteBase->name == targetClassName)
+        return true;
     for(const FieldDecl* field : cls.fields){
         if(field && field->type && typeRefReferencesSymbolByValue(*field->type, targetClassName, depth))
             return true;

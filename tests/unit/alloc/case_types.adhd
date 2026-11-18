@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/alloc/allocation_access.adhd>
 #include <tests/common/arena_owner_fixture.adhd>
 #include <tests/common/gtest_macros.adhd>
 
@@ -79,13 +80,13 @@ AllocationRequest MakeAllocationRequest(in usize alignment, in usize bytes){
     return request;
 }
 
-void FillPattern(mut Span<u8> bytes){
-    for(usize index = 0u; index < bytes.size(); ++index)
+void FillPattern(in RawAllocation bytes, in usize count){
+    for(usize index = 0u; index < count; ++index)
         bytes[index] = cast<u8>(index * 17u + 3u);
 }
 
-void ExpectPattern(in Span<u8> bytes){
-    for(usize index = 0u; index < bytes.size(); ++index){
+void ExpectPattern(in RawAllocation bytes, in usize count){
+    for(usize index = 0u; index < count; ++index){
         const u8 expected = cast<u8>(index * 17u + 3u);
         EXPECT_EQ(bytes[index], expected);
     }

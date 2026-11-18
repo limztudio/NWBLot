@@ -2,72 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "global_owner_access.adhd"
+#include "name_case_types.adhd"
 #include <tests/common/arena_owner_fixture.adhd>
+#include <tests/common/backend_allocation.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
-#include <tests/unit/global/name_case_types.adhd>
+#include <tests/common/threads.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/module.h>
-#include <core/alloc/scratch.h>
-
-#include <global/arena_memory.h>
-#include <global/sync.h>
-#include <global/thread.h>
-#include <global/timer.h>
-
-#include <tbb/scalable_allocator.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_allocator_owner_concurrency_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void WaitForFlag(const Atomic<b8>& flag)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::GlobalCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ArenaMemorySource = ::ArenaMemorySource;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void WaitForFlag(in TestAtomic<b8> flag){
+    AtomicBackOff backoff;
+    while(!flag.load(MemoryOrder::acquire))
+        backoff.pause();
 }
 
 
@@ -83,29 +33,24 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
     ArenaMemoryStats simultaneouslyLive = ArenaMemoryStats();
     b8 failedValue = false;
     b8 snapshotsConsistent = true;
-    native(in owner, in before, mut simultaneouslyLive, mut failedValue, mut snapshotsConsistent){
-        using namespace NWB::Core::Alloc;
-        using __hidden_allocator_owner_concurrency_tests::WaitForFlag;
-        constexpr usize s_ThreadCount = 4u;
-        constexpr usize s_Iterations = 256u;
-        constexpr u64 s_Allocations = s_ThreadCount * s_Iterations * 5u;
-        const usize poolBytes = PersistentArena::StructureAlignedSize(4096u);
-        Atomic<b8> failed{ false };
-        Atomic<b8> releaseFirstAllocations{ false };
-        Atomic<usize> completed{ 0u };
-        Latch firstAllocationsReady(s_ThreadCount);
-        Array<Thread, s_ThreadCount> workers;
+    {
+        const usize poolBytes = PoolAllocationSize(4096u);
+        TestAtomic<b8> failed(false);
+        TestAtomic<b8> releaseFirstAllocations(false);
+        TestAtomic<usize> completed(0u);
+        TestLatch firstAllocationsReady(threadCount);
+        Array<Optional<TestThread>, 4u> workers;
 
-        for(Thread& worker : workers){
-            worker = Thread([&owner, &failed, &releaseFirstAllocations, &completed, &firstAllocationsReady, poolBytes](){
-                for(usize iteration = 0u; iteration < s_Iterations; ++iteration){
+        for(mut Optional<TestThread> worker : workers){
+            worker.emplace(lambda[in owner, mut failed, mut releaseFirstAllocations, mut completed, mut firstAllocationsReady, in poolBytes, in iterations]() -> void{
+                for(usize iteration = 0u; iteration < iterations; ++iteration){
                     {
-                        GlobalArena arena(owner);
-                        auto* allocation = static_cast<u8*>(arena.allocate(1u, 128u));
-                        if(allocation){
+                        HeapStorage arena(owner);
+                        RawAllocation allocation = AllocateBytes(arena, 1u, 128u);
+                        if(allocation.address() != 0u){
                             allocation[0u] = 73u;
-                            auto* const replacement = static_cast<u8*>(arena.reallocate(allocation, 1u, 256u));
-                            if(replacement)
+                            const RawAllocation replacement = ResizeBytes(arena, allocation, 1u, 256u);
+                            if(replacement.address() != 0u)
                                 allocation = replacement;
                             else
                                 failed.store(true, MemoryOrder::relaxed);
@@ -119,26 +64,26 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
                             firstAllocationsReady.count_down();
                             WaitForFlag(releaseFirstAllocations);
                         }
-                        arena.deallocate(allocation, 1u, 256u);
+                        FreeBytes(arena, allocation, 1u, 256u);
                     }
                     {
-                        ScratchArena arena(owner);
-                        void* const first = arena.allocate(8u, 64u);
-                        void* const second = arena.allocate(8u, 128u);
-                        if(!first || !second)
+                        ScratchStorage arena(owner);
+                        const RawAllocation first = AllocateBytes(arena, 8u, 64u);
+                        const RawAllocation second = AllocateBytes(arena, 8u, 128u);
+                        if(first.address() == 0u || second.address() == 0u)
                             failed.store(true, MemoryOrder::relaxed);
-                        if(first)
-                            arena.deallocate(first, 8u, 64u);
+                        if(first.address() != 0u)
+                            FreeBytes(arena, first, 8u, 64u);
                         // Out-of-order free defers release until arena destruction.
                     }
                     {
-                        PersistentArena arena(owner, poolBytes);
-                        void* const first = arena.allocate(8u, 64u);
-                        void* const second = arena.allocate(8u, 128u);
-                        if(!first || !second)
+                        PersistentStorage arena(owner, poolBytes);
+                        const RawAllocation first = AllocateBytes(arena, 8u, 64u);
+                        const RawAllocation second = AllocateBytes(arena, 8u, 128u);
+                        if(first.address() == 0u || second.address() == 0u)
                             failed.store(true, MemoryOrder::relaxed);
-                        if(first)
-                            arena.deallocate(first, 8u, 64u);
+                        if(first.address() != 0u)
+                            FreeBytes(arena, first, 8u, 64u);
                         // One explicit free and one bulk free must contribute exactly two retired deallocations.
                     }
                 }
@@ -147,24 +92,26 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
         }
 
         firstAllocationsReady.wait();
-        simultaneouslyLive = NWB::Tests::OwnerStats(owner);
+        simultaneouslyLive = OwnerStats(owner);
         releaseFirstAllocations.store(true, MemoryOrder::release);
         ArenaMemoryStats previous = simultaneouslyLive;
-        do{
-            const ArenaMemoryStats current = NWB::Tests::OwnerStats(owner);
-            snapshotsConsistent &= current.allocationCount >= previous.allocationCount;
-            snapshotsConsistent &= current.reallocationCount >= previous.reallocationCount;
-            snapshotsConsistent &= current.deallocationCount >= previous.deallocationCount;
-            snapshotsConsistent &= current.allocationCount - before.allocationCount <= s_Allocations;
-            snapshotsConsistent &= current.deallocationCount - before.deallocationCount <= s_Allocations;
-            snapshotsConsistent &= current.usedBytes <= s_ThreadCount * 256u;
-            snapshotsConsistent &= current.reservedBytes <= s_ThreadCount * poolBytes;
-            snapshotsConsistent &= current.peakUsedBytes <= Max<u64>(before.peakUsedBytes, 256u);
+        while(true){
+            const ArenaMemoryStats current = OwnerStats(owner);
+            snapshotsConsistent = snapshotsConsistent && current.allocationCount >= previous.allocationCount;
+            snapshotsConsistent = snapshotsConsistent && current.reallocationCount >= previous.reallocationCount;
+            snapshotsConsistent = snapshotsConsistent && current.deallocationCount >= previous.deallocationCount;
+            snapshotsConsistent = snapshotsConsistent && current.allocationCount - before.allocationCount <= expectedAllocations;
+            snapshotsConsistent = snapshotsConsistent && current.deallocationCount - before.deallocationCount <= expectedAllocations;
+            snapshotsConsistent = snapshotsConsistent && current.usedBytes <= threadCount * 256u;
+            snapshotsConsistent = snapshotsConsistent && current.reservedBytes <= threadCount * poolBytes;
+            snapshotsConsistent = snapshotsConsistent && current.peakUsedBytes <= Max<u64>(before.peakUsedBytes, 256u);
             previous = current;
             YieldThread();
-        }while(completed.load(MemoryOrder::acquire) != s_ThreadCount);
-        for(Thread& worker : workers)
-            worker.join();
+            if(completed.load(MemoryOrder::acquire) == threadCount)
+                break;
+        }
+        for(mut Optional<TestThread> worker : workers)
+            worker.value().join();
         failedValue = failed.load(MemoryOrder::relaxed);
     }
 
@@ -191,56 +138,53 @@ void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettl
     ArenaMemoryStats held = ArenaMemoryStats();
     ArenaMemoryStats settled = ArenaMemoryStats();
     ArenaMemoryStats retired = ArenaMemoryStats();
-    native(mut allocatedBytes, mut failedValue, mut before, mut held, mut settled, mut retired){
-        using namespace NWB::Core::Alloc;
-        using __hidden_allocator_owner_concurrency_tests::WaitForFlag;
-        constexpr usize s_AllocationCount = 64u;
-        u8* allocations[s_AllocationCount] = {};
-        Atomic<b8> failed{ false };
-        Atomic<b8> producerReady{ false };
-        Atomic<b8> consumerReady{ false };
-        Atomic<b8> startProducer{ false };
-        Atomic<b8> startConsumer{ false };
-        Atomic<b8> produced{ false };
-        Atomic<b8> consumed{ false };
-        Atomic<b8> releaseWorkers{ false };
+    {
+        Array<RawAllocation, 64u> allocations;
+        TestAtomic<b8> failed(false);
+        TestAtomic<b8> producerReady(false);
+        TestAtomic<b8> consumerReady(false);
+        TestAtomic<b8> startProducer(false);
+        TestAtomic<b8> startConsumer(false);
+        TestAtomic<b8> produced(false);
+        TestAtomic<b8> consumed(false);
+        TestAtomic<b8> releaseWorkers(false);
 
-        Thread producer([&]()noexcept{
-            void* const warmup = CoreAlloc(1u);
-            CoreFree(warmup);
+        TestThread producer(lambda[mut producerReady, mut startProducer, mut failed, mut allocations, mut allocatedBytes, mut produced, mut releaseWorkers, in allocationCount]() -> void{
+            const RawAllocation warmup = AllocateBacking(1u);
+            FreeBacking(warmup);
             producerReady.store(true, MemoryOrder::release);
             WaitForFlag(startProducer);
-            for(usize index = 0u; index < s_AllocationCount; ++index){
-                auto* const allocation = static_cast<u8*>(CoreAlloc(13u));
+            for(usize index = 0u; index < allocationCount; ++index){
+                const RawAllocation allocation = AllocateBacking(13u);
                 allocations[index] = allocation;
-                if(!allocation){
+                if(allocation.address() == 0u){
                     failed.store(true, MemoryOrder::relaxed);
                     continue;
                 }
-                allocatedBytes += CoreMsize(allocation);
-                allocation[0u] = static_cast<u8>(index);
-                allocation[12u] = static_cast<u8>(index + 1u);
+                allocatedBytes += BackendSize(allocation);
+                allocation[0u] = cast<u8>(index);
+                allocation[12u] = cast<u8>(index + 1u);
             }
             produced.store(true, MemoryOrder::release);
             WaitForFlag(releaseWorkers);
         });
-        Thread consumer([&]()noexcept{
-            void* const warmup = CoreAlloc(1u);
-            CoreFree(warmup);
+        TestThread consumer(lambda[mut consumerReady, mut startConsumer, mut failed, mut allocations, mut consumed, mut releaseWorkers, in allocationCount]() -> void{
+            const RawAllocation warmup = AllocateBacking(1u);
+            FreeBacking(warmup);
             consumerReady.store(true, MemoryOrder::release);
             WaitForFlag(startConsumer);
-            for(usize index = 0u; index < s_AllocationCount; ++index){
-                u8* allocation = allocations[index];
-                if(!allocation)
+            for(usize index = 0u; index < allocationCount; ++index){
+                RawAllocation allocation = allocations[index];
+                if(allocation.address() == 0u)
                     continue;
-                auto* const replacement = static_cast<u8*>(CoreRealloc(allocation, 71u));
-                if(replacement)
+                const RawAllocation replacement = ResizeBacking(allocation, 71u);
+                if(replacement.address() != 0u)
                     allocation = replacement;
                 else
                     failed.store(true, MemoryOrder::relaxed);
-                if(allocation[0u] != static_cast<u8>(index) || allocation[12u] != static_cast<u8>(index + 1u))
+                if(allocation[0u] != cast<u8>(index) || allocation[12u] != cast<u8>(index + 1u))
                     failed.store(true, MemoryOrder::relaxed);
-                CoreFree(allocation);
+                FreeBacking(allocation);
             }
             consumed.store(true, MemoryOrder::release);
             WaitForFlag(releaseWorkers);
@@ -284,16 +228,15 @@ void VerifyAllocationOwners_OwnerIdentitySurvivesRetirementAndLaterOwnerPublicat
     const Name owner = s_AllocationOwnerIdentityRetirement;
     const Name laterOwner = s_AllocationOwnerIdentityLater;
     b8 foundLater = false;
-    native(in owner, in laterOwner, mut foundLater){
-        using namespace NWB::Core::Alloc;
-        const ArenaMemoryOwnerRecord* retained = nullptr;
-        const ArenaMemoryOwnerRecord* successor = nullptr;
+    {
+        OwnerRecordRef retained;
+        OwnerRecordRef successor;
         {
-            GlobalArena arena(owner);
-            const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-            while(record){
+            HeapStorage arena(owner);
+            OwnerRecordRef record = FirstOwnerRecord();
+            while(record.present()){
                 ArenaMemoryOwnerIdentity identity;
-                const ArenaMemoryOwnerRecord* const next = ReadArenaMemoryOwnerIdentity(*record, identity);
+                const OwnerRecordRef next = record.readIdentity(identity);
                 if(identity.ownerName == owner){
                     retained = record;
                     successor = next;
@@ -301,19 +244,19 @@ void VerifyAllocationOwners_OwnerIdentitySurvivesRetirementAndLaterOwnerPublicat
                 }
                 record = next;
             }
-            ASSERT_NE(retained, nullptr);
-            void* const allocation = arena.allocate(1u, 37u);
-            ASSERT_NE(allocation, nullptr);
-            arena.deallocate(allocation, 1u, 37u);
+            ASSERT_TRUE(retained.present());
+            const RawAllocation allocation = AllocateBytes(arena, 1u, 37u);
+            ASSERT_NE(allocation.address(), 0u);
+            FreeBytes(arena, allocation, 1u, 37u);
         }
 
-        GlobalArena later(laterOwner);
+        HeapStorage later(laterOwner);
         ArenaMemoryOwnerIdentity identity;
-        EXPECT_EQ(ReadArenaMemoryOwnerIdentity(*retained, identity), successor);
+        EXPECT_EQ(retained.readIdentity(identity), successor);
         EXPECT_EQ(identity.ownerName, owner);
         EXPECT_EQ(identity.source, ArenaMemorySource::Arena);
         ArenaMemoryOwnerSnapshot retired;
-        EXPECT_EQ(ReadArenaMemoryOwnerRecord(*retained, retired), successor);
+        EXPECT_EQ(retained.readStats(retired), successor);
         EXPECT_EQ(retired.ownerName, identity.ownerName);
         EXPECT_EQ(retired.source, identity.source);
         EXPECT_EQ(retired.stats.usedBytes, 0u);
@@ -321,11 +264,11 @@ void VerifyAllocationOwners_OwnerIdentitySurvivesRetirementAndLaterOwnerPublicat
         EXPECT_GE(retired.stats.allocationCount, 1u);
         EXPECT_GE(retired.stats.deallocationCount, 1u);
 
-        const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-        while(record){
+        OwnerRecordRef record = FirstOwnerRecord();
+        while(record.present()){
             ArenaMemoryOwnerIdentity current;
-            record = ReadArenaMemoryOwnerIdentity(*record, current);
-            foundLater |= current.ownerName == laterOwner;
+            record = record.readIdentity(current);
+            foundLater = foundLater || current.ownerName == laterOwner;
         }
     }
     EXPECT_TRUE(foundLater);
@@ -336,22 +279,21 @@ void VerifyAllocationOwners_SharedNameAggregatesBytesAndRetainsIndividualHighwat
     const ArenaMemoryStats before = OwnerStats(owner);
     u64 combinedBytes = 0u;
     u64 largestArenaBytes = 0u;
-    native(in owner, in before, mut combinedBytes, mut largestArenaBytes){
-        using namespace NWB::Core::Alloc;
-        GlobalArena first(owner);
-        GlobalArena second("TESTS/ALLOCATION_OWNERS/SHARED_NAME");
-        void* firstAllocation = first.allocate(1u, 13u);
-        void* secondAllocation = second.allocate(1u, 21u);
-        ASSERT_NE(firstAllocation, nullptr);
-        ASSERT_NE(secondAllocation, nullptr);
-        combinedBytes = CoreMsize(firstAllocation) + CoreMsize(secondAllocation);
-        largestArenaBytes = Max(CoreMsize(firstAllocation), CoreMsize(secondAllocation));
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).usedBytes, before.usedBytes + combinedBytes);
+    {
+        HeapStorage first(owner);
+        HeapStorage second(Name("TESTS/ALLOCATION_OWNERS/SHARED_NAME"));
+        RawAllocation firstAllocation = AllocateBytes(first, 1u, 13u);
+        RawAllocation secondAllocation = AllocateBytes(second, 1u, 21u);
+        ASSERT_NE(firstAllocation.address(), 0u);
+        ASSERT_NE(secondAllocation.address(), 0u);
+        combinedBytes = BackendSize(firstAllocation) + BackendSize(secondAllocation);
+        largestArenaBytes = Max(BackendSize(firstAllocation), BackendSize(secondAllocation));
+        EXPECT_EQ(OwnerStats(owner).usedBytes, before.usedBytes + combinedBytes);
         EXPECT_EQ(first.memoryStats().allocationCount, 1u);
         EXPECT_EQ(second.memoryStats().allocationCount, 1u);
-        first.deallocate(firstAllocation, 1u, 13u);
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).usedBytes, before.usedBytes + CoreMsize(secondAllocation));
-        second.deallocate(secondAllocation, 1u, 21u);
+        FreeBytes(first, firstAllocation, 1u, 13u);
+        EXPECT_EQ(OwnerStats(owner).usedBytes, before.usedBytes + BackendSize(secondAllocation));
+        FreeBytes(second, secondAllocation, 1u, 21u);
     }
     const ArenaMemoryStats after = OwnerStats(owner);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
@@ -365,17 +307,16 @@ void VerifyAllocationOwners_TransientScratchBulkReleaseRetainsChurnWithoutAccumu
     const Name owner = s_AllocationOwnerTransientScratch;
     const ArenaMemoryStats before = OwnerStats(owner);
     for(usize pass = 0u; pass < 3u; ++pass){
-        native(in owner, in before){
-            using namespace NWB::Core::Alloc;
-            ScratchArena arena(owner);
-            void* first = arena.allocate(16u, 208u);
-            void* second = arena.allocate(16u, 64u);
-            ASSERT_NE(first, nullptr);
-            ASSERT_NE(second, nullptr);
-            arena.deallocate(first, 16u, 208u);
-            EXPECT_EQ(arena.memoryStats().usedBytes, 272u);
-            EXPECT_EQ(NWB::Tests::OwnerStats(owner).usedBytes, before.usedBytes + 272u);
-        }
+        {
+        ScratchStorage arena(owner);
+        RawAllocation first = AllocateBytes(arena, 16u, 208u);
+        RawAllocation second = AllocateBytes(arena, 16u, 64u);
+        ASSERT_NE(first.address(), 0u);
+        ASSERT_NE(second.address(), 0u);
+        FreeBytes(arena, first, 16u, 208u);
+        EXPECT_EQ(arena.memoryStats().usedBytes, 272u);
+        EXPECT_EQ(OwnerStats(owner).usedBytes, before.usedBytes + 272u);
+    }
     }
     const ArenaMemoryStats after = OwnerStats(owner);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
@@ -389,15 +330,14 @@ void VerifyAllocationOwners_TransientScratchBulkReleaseRetainsChurnWithoutAccumu
 void VerifyAllocationOwners_PersistentPoolBulkReleaseRetainsReallocationHistory(){
     const Name owner = s_AllocationOwnerTransientPersistent;
     const ArenaMemoryStats before = OwnerStats(owner);
-    native(in owner, in before){
-        using namespace NWB::Core::Alloc;
-        PersistentArena arena(owner, 65536u);
-        void* allocation = arena.allocate(1u, 13u);
-        ASSERT_NE(allocation, nullptr);
-        allocation = arena.reallocate(allocation, 1u, 67u);
-        ASSERT_NE(allocation, nullptr);
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u);
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).usedBytes, before.usedBytes + arena.memoryStats().usedBytes);
+    {
+        PersistentStorage arena(owner, 65536u);
+        RawAllocation allocation = AllocateBytes(arena, 1u, 13u);
+        ASSERT_NE(allocation.address(), 0u);
+        allocation = ResizeBytes(arena, allocation, 1u, 67u);
+        ASSERT_NE(allocation.address(), 0u);
+        EXPECT_EQ(OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u);
+        EXPECT_EQ(OwnerStats(owner).usedBytes, before.usedBytes + arena.memoryStats().usedBytes);
     }
     const ArenaMemoryStats after = OwnerStats(owner);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
@@ -410,22 +350,21 @@ void VerifyAllocationOwners_PersistentPoolBulkReleaseRetainsReallocationHistory(
 void VerifyAllocationOwners_SharedNamePreservesPoolReservationAlongsideDirectHeapUsage(){
     const Name owner = s_AllocationOwnerMixedReservation;
     const ArenaMemoryStats before = OwnerStats(owner);
-    native(in owner, in before){
-        using namespace NWB::Core::Alloc;
-        PersistentArena pool(owner, 65536u);
-        GlobalArena direct(owner);
-        void* allocation = direct.allocate(1u, 13u);
-        ASSERT_NE(allocation, nullptr);
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).usedBytes, before.usedBytes + CoreMsize(allocation));
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u + CoreMsize(allocation));
-        void* replacement = direct.reallocate(allocation, 1u, 21u);
-        ASSERT_NE(replacement, nullptr);
+    {
+        PersistentStorage pool(owner, 65536u);
+        HeapStorage direct(owner);
+        RawAllocation allocation = AllocateBytes(direct, 1u, 13u);
+        ASSERT_NE(allocation.address(), 0u);
+        EXPECT_EQ(OwnerStats(owner).usedBytes, before.usedBytes + BackendSize(allocation));
+        EXPECT_EQ(OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u + BackendSize(allocation));
+        RawAllocation replacement = ResizeBytes(direct, allocation, 1u, 21u);
+        ASSERT_NE(replacement.address(), 0u);
         allocation = replacement;
-        EXPECT_EQ(direct.memoryStats().reservedBytes, CoreMsize(allocation));
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u + CoreMsize(allocation));
-        direct.deallocate(allocation, 1u, 21u);
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).usedBytes, before.usedBytes);
-        EXPECT_EQ(NWB::Tests::OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u);
+        EXPECT_EQ(direct.memoryStats().reservedBytes, BackendSize(allocation));
+        EXPECT_EQ(OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u + BackendSize(allocation));
+        FreeBytes(direct, allocation, 1u, 21u);
+        EXPECT_EQ(OwnerStats(owner).usedBytes, before.usedBytes);
+        EXPECT_EQ(OwnerStats(owner).reservedBytes, before.reservedBytes + 65536u);
     }
     EXPECT_EQ(OwnerStats(owner).usedBytes, before.usedBytes);
     EXPECT_EQ(OwnerStats(owner).reservedBytes, before.reservedBytes);
@@ -434,20 +373,20 @@ void VerifyAllocationOwners_SharedNamePreservesPoolReservationAlongsideDirectHea
 void VerifyAllocationOwners_ResetPreservesRetiredCountersAndIndividualPeakExactlyOnce(){
     const Name owner = s_AllocationOwnerResetHistory;
     const ArenaMemoryStats before = OwnerStats(owner);
-    native(in owner, in before){
+    {
         ArenaMemoryTracker tracker(owner);
         tracker.reset(512u);
         tracker.recordAllocation(64u);
         tracker.recordAllocation(128u);
         tracker.reset(256u);
-        const ArenaMemoryStats resetOwner = NWB::Tests::OwnerStats(owner);
+        const ArenaMemoryStats resetOwner = OwnerStats(owner);
         EXPECT_EQ(tracker.snapshot().allocationCount, 0u);
         EXPECT_EQ(tracker.snapshot().peakUsedBytes, 0u);
         EXPECT_EQ(resetOwner.reservedBytes, before.reservedBytes + 256u);
         EXPECT_EQ(resetOwner.usedBytes, before.usedBytes);
         EXPECT_EQ(resetOwner.allocationCount - before.allocationCount, 2u);
         EXPECT_EQ(resetOwner.deallocationCount - before.deallocationCount, 2u);
-        EXPECT_EQ(resetOwner.peakUsedBytes, Max(before.peakUsedBytes, u64{ 192u }));
+        EXPECT_EQ(resetOwner.peakUsedBytes, Max(before.peakUsedBytes, cast<u64>(192u)));
         tracker.recordAllocation(16u);
         tracker.reset();
         tracker.reset();
@@ -466,17 +405,16 @@ void VerifyAllocationOwners_RetiredGlobalArenaPreservesUnreleasedOwnership(){
     const ArenaMemoryStats before = OwnerStats(owner);
     u64 bytes = 0u;
     ArenaMemoryStats retired = ArenaMemoryStats();
-    native(in owner, mut bytes, mut retired){
-        using namespace NWB::Core::Alloc;
-        void* allocation = nullptr;
+    {
+        RawAllocation allocation;
         {
-            GlobalArena arena(owner);
-            allocation = arena.allocate(1u, 13u);
-            ASSERT_NE(allocation, nullptr);
+            HeapStorage arena(owner);
+            allocation = AllocateBytes(arena, 1u, 13u);
+            ASSERT_NE(allocation.address(), 0u);
         }
-        bytes = CoreMsize(allocation);
-        retired = NWB::Tests::OwnerStats(owner);
-        CoreFree(allocation);
+        bytes = BackendSize(allocation);
+        retired = OwnerStats(owner);
+        FreeBacking(allocation);
     }
     EXPECT_EQ(retired.usedBytes, before.usedBytes + bytes);
     EXPECT_EQ(retired.reservedBytes, before.reservedBytes + bytes);
@@ -492,35 +430,35 @@ void VerifyAllocationOwners_BackingCountsRawAlignedAllocationsAndPreservesFailed
     ArenaMemoryStats failed = ArenaMemoryStats();
     ArenaMemoryStats beforeFree = ArenaMemoryStats();
     ArenaMemoryStats freed = ArenaMemoryStats();
-    native(mut bytes, mut allocated, mut failed, mut beforeFree, mut freed){
-        using namespace NWB::Core::Alloc;
-        auto* allocation = static_cast<u8*>(CoreAllocAligned(13u, 64u));
-        bytes = allocation ? CoreMsize(allocation) : 0u;
+    {
+        RawAllocation allocation = AllocateAlignedBacking(13u, 64u);
+        if(allocation.address() != 0u)
+            bytes = BackendSize(allocation);
         allocated = HeapBackingMemoryStats();
-        ASSERT_NE(allocation, nullptr);
+        ASSERT_NE(allocation.address(), 0u);
         allocation[0u] = 37u;
-        errno = ERANGE;
-        void* backendInvalidZero = scalable_aligned_realloc(allocation, 0u, 3u);
-        const i32 backendInvalidZeroError = errno;
-        errno = ERANGE;
-        void* backendInvalidAlignment = scalable_aligned_realloc(allocation, 21u, 0u);
-        const i32 backendInvalidAlignmentError = errno;
-        errno = ERANGE;
-        void* invalidZero = CoreReallocAligned(allocation, 0u, 3u);
-        const i32 invalidZeroError = errno;
-        errno = ERANGE;
-        void* invalidAlignment = CoreReallocAligned(allocation, 21u, 0u);
-        const i32 invalidAlignmentError = errno;
+        SetRangeError();
+        RawAllocation backendInvalidZero = BackendReallocate(allocation, 0u, 3u);
+        const i32 backendInvalidZeroError = AllocationError();
+        SetRangeError();
+        RawAllocation backendInvalidAlignment = BackendReallocate(allocation, 21u, 0u);
+        const i32 backendInvalidAlignmentError = AllocationError();
+        SetRangeError();
+        RawAllocation invalidZero = ResizeAlignedBacking(allocation, 0u, 3u);
+        const i32 invalidZeroError = AllocationError();
+        SetRangeError();
+        RawAllocation invalidAlignment = ResizeAlignedBacking(allocation, 21u, 0u);
+        const i32 invalidAlignmentError = AllocationError();
         failed = HeapBackingMemoryStats();
-        EXPECT_EQ(invalidZero, nullptr);
+        EXPECT_EQ(invalidZero.address(), 0u);
         EXPECT_EQ(invalidZero, backendInvalidZero);
         EXPECT_EQ(invalidZeroError, backendInvalidZeroError);
-        EXPECT_EQ(invalidAlignment, nullptr);
+        EXPECT_EQ(invalidAlignment.address(), 0u);
         EXPECT_EQ(invalidAlignment, backendInvalidAlignment);
         EXPECT_EQ(invalidAlignmentError, backendInvalidAlignmentError);
         EXPECT_EQ(allocation[0u], 37u);
         beforeFree = HeapBackingMemoryStats();
-        CoreFreeSizeAligned(allocation, 13u);
+        FreeAlignedBacking(allocation, 13u);
         freed = HeapBackingMemoryStats();
     }
     EXPECT_EQ(allocated.usedBytes - before.usedBytes, bytes);
@@ -543,23 +481,22 @@ void VerifyAllocationOwners_RawReallocationMaintainsBackingReservationAndCounts(
     ArenaMemoryStats grown = ArenaMemoryStats();
     ArenaMemoryStats beforeRelease = ArenaMemoryStats();
     ArenaMemoryStats afterRelease = ArenaMemoryStats();
-    native(mut originalBytes, mut grownBytes, mut allocated, mut grown, mut beforeRelease, mut afterRelease){
-        using namespace NWB::Core::Alloc;
-        auto* allocation = static_cast<u8*>(CoreRealloc(nullptr, 13u));
-        ASSERT_NE(allocation, nullptr);
+    {
+        RawAllocation allocation = ResizeBacking(RawAllocation(), 13u);
+        ASSERT_NE(allocation.address(), 0u);
         allocation[0u] = 29u;
-        originalBytes = CoreMsize(allocation);
+        originalBytes = BackendSize(allocation);
         allocated = HeapBackingMemoryStats();
-        auto* replacement = static_cast<u8*>(CoreRealloc(allocation, 71u));
-        ASSERT_NE(replacement, nullptr);
+        RawAllocation replacement = ResizeBacking(allocation, 71u);
+        ASSERT_NE(replacement.address(), 0u);
         allocation = replacement;
-        grownBytes = CoreMsize(allocation);
+        grownBytes = BackendSize(allocation);
         grown = HeapBackingMemoryStats();
         EXPECT_EQ(allocation[0u], 29u);
         beforeRelease = HeapBackingMemoryStats();
-        void* released = CoreRealloc(allocation, 0u);
+        RawAllocation released = ResizeBacking(allocation, 0u);
         afterRelease = HeapBackingMemoryStats();
-        EXPECT_EQ(released, nullptr);
+        EXPECT_EQ(released.address(), 0u);
     }
     EXPECT_EQ(allocated.usedBytes - before.usedBytes, originalBytes);
     EXPECT_EQ(allocated.allocationCount - before.allocationCount, 1u);
@@ -577,15 +514,14 @@ void VerifyAllocationOwners_BackingDomainCannotCollideWithAnArenaName(){
     u64 allocationBytes = 0u;
     ArenaMemoryStats arenaStats = ArenaMemoryStats();
     ArenaMemoryStats backingStats = ArenaMemoryStats();
-    native(in owner, mut allocationBytes, mut arenaStats, mut backingStats){
-        using namespace NWB::Core::Alloc;
-        GlobalArena arena(owner);
-        void* allocation = arena.allocate(1u, 13u);
-        ASSERT_NE(allocation, nullptr);
-        allocationBytes = CoreMsize(allocation);
-        arenaStats = NWB::Tests::OwnerStats(owner, ArenaMemorySource::Arena);
-        backingStats = NWB::Tests::OwnerStats(owner, ArenaMemorySource::HeapBacking);
-        arena.deallocate(allocation, 1u, 13u);
+    {
+        HeapStorage arena(owner);
+        RawAllocation allocation = AllocateBytes(arena, 1u, 13u);
+        ASSERT_NE(allocation.address(), 0u);
+        allocationBytes = BackendSize(allocation);
+        arenaStats = OwnerStats(owner, ArenaMemorySource::Arena);
+        backingStats = OwnerStats(owner, ArenaMemorySource::HeapBacking);
+        FreeBytes(arena, allocation, 1u, 13u);
     }
     EXPECT_EQ(arenaStats.usedBytes, allocationBytes);
     EXPECT_GE(backingStats.usedBytes, arenaStats.usedBytes);
@@ -599,31 +535,28 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
     const ArenaMemoryStats before = OwnerStats(owner);
     b8 failedValue = false;
     u64 elapsed = 0u;
-    native(in owner, mut failedValue, mut elapsed){
-        using namespace NWB::Core::Alloc;
-        constexpr u32 s_ThreadCount = 4u;
-        constexpr u32 s_AllocationCount = 8192u;
-        Latch startGate(s_ThreadCount + 1u);
-        Atomic<b8> failed{ false };
-        Array<Thread, s_ThreadCount> workers;
-        for(Thread& worker : workers){
-            worker = Thread([&owner, &startGate, &failed](){
-                GlobalArena arena(owner);
+    {
+        TestLatch startGate(threadCount + 1u);
+        TestAtomic<b8> failed(false);
+        Array<Optional<TestThread>, 4u> workers;
+        for(mut Optional<TestThread> worker : workers){
+            worker.emplace(lambda[in owner, mut startGate, mut failed, in allocationCount]() -> void{
+                HeapStorage arena(owner);
                 startGate.arrive_and_wait();
-                for(u32 index = 0u; index < s_AllocationCount; ++index){
-                    void* allocation = arena.allocate(1u, 128u);
-                    if(!allocation){
+                for(u32 index = 0u; index < allocationCount; ++index){
+                    RawAllocation allocation = AllocateBytes(arena, 1u, 128u);
+                    if(allocation.address() == 0u){
                         failed.store(true, MemoryOrder::relaxed);
                         return;
                     }
-                    arena.deallocate(allocation, 1u, 128u);
+                    FreeBytes(arena, allocation, 1u, 128u);
                 }
             });
         }
         const Timer begin = TimerNow();
         startGate.arrive_and_wait();
-        for(Thread& worker : workers)
-            worker.join();
+        for(mut Optional<TestThread> worker : workers)
+            worker.value().join();
         elapsed = DurationInNS<u64>(TimerNow(), begin);
         failedValue = failed.load(MemoryOrder::relaxed);
     }
@@ -636,41 +569,6 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
     const u64 expectedPeak = Max(before.peakUsedBytes, cast<u64>(128u));
     EXPECT_EQ(after.peakUsedBytes, expectedPeak);
     RecordUnsignedTestProperty("shared_owner_churn_ns", elapsed);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_allocator_owner_concurrency_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void WaitForFlag(const Atomic<b8>& flag)noexcept{
-    AtomicBackOff backoff;
-    while(!flag.load(MemoryOrder::acquire))
-        backoff.pause();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

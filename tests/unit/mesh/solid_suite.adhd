@@ -2,174 +2,88 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/binary_payload_io.adhd>
+#include <impl/assets_mesh/cook.adhd>
 #include <impl/assets_mesh/cook_solid_topology.adhd>
+#include <impl/assets_mesh/meshlet_triangle_visit.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/unit/mesh/solid_test_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::ThrowingPositionStreamGeometry")]
+extern class ThrowingPositionStreamGeometry;
+
+[cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::NoThrowCornerVisitor")]
+extern class NoThrowCornerVisitor;
+
+[cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::ThrowingCornerVisitor")]
+extern class ThrowingCornerVisitor;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/binary_payload_io.adhd.h>
-#include <impl/assets_mesh/cook.adhd.h>
-#include <impl/assets_mesh/cook_solid_topology.adhd.h>
-#include <impl/assets_mesh/meshlet_triangle_visit.adhd.h>
+type OneMeshlet = Array<MeshletDesc, 1u>;
+type OneLocalVertex = Array<MeshletLocalVertexRef, 1u>;
+type OnePrimitive = Array<u8, 1u>;
 
-#include <core/assets/binary_payload_io.h>
+static_assert(is_nothrow_call<in Mesh, mut usize>(AddMeshBaseReserveBytes));
+static_assert(!is_nothrow_call<in ThrowingPositionStreamGeometry, mut usize>(AddMeshBaseReserveBytes));
+static_assert(is_nothrow_call<in OneMeshlet, in OneLocalVertex, in OnePrimitive, mut NoThrowCornerVisitor>(ForEachMeshletTriangleCorner));
+static_assert(!is_nothrow_call<in OneMeshlet, in OneLocalVertex, in OnePrimitive, mut ThrowingCornerVisitor>(ForEachMeshletTriangleCorner));
 
-#include <global/bit.h>
-#include <global/simd/vector.h>
+const usize s_MeshletCountHeaderOffset = offset_of<MeshBinaryHeader>(meshletCount);
+const usize s_MeshletBoundCountHeaderOffset = offset_of<MeshBinaryHeader>(meshletBoundCount);
+const usize s_MeshletPrimitiveIndexCountHeaderOffset = offset_of<MeshBinaryHeader>(meshletPrimitiveIndexCount);
+const u64 s_UnaddressableMeshBoundsCount = cast<u64>(u32.max / s_MeshletBoundsStride) + 1u;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshSolidCodecTestsDetail{
+static_assert((s_UnaddressableMeshBoundsCount - 1u) * s_MeshletBoundsStride <= u32.max);
+static_assert(s_UnaddressableMeshBoundsCount * s_MeshletBoundsStride > u32.max);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Declarations for testing non-noexcept callback traits without calling them.
-struct ThrowingPositionStreamGeometry{
-    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const;
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<Impl::MeshletDesc>& meshlets()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<Impl::MeshletBounds>& meshletBounds()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<Impl::MeshletLocalVertexRef>& meshletLocalVertexRefs()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetVector<u32>& solidTriangleWords()const noexcept;
-};
+const StringView s_MeshSource = "mesh asset;\nasset.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]];\nasset.normals = [[0, 0, 1]];\nasset.tangents = [[1, 0, 0, 1]];\nasset.uv0 = [[0, 0]];\nasset.colors = [[1, 1, 1, 1]];\nasset.vertex_refs = [[0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [2, 0, 0, 0, 0], [3, 0, 0, 0, 0]];\nasset.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];\n";
 
-struct NoThrowCornerVisitor{
-    [[nodiscard]] b8 operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const noexcept;
-};
+Expected<Vector<u8>> CookMeshBinary(){
+    MetascriptDocumentWorkspace workspace(s_SolidCaseMeshSolidCodecCook);
+    if(!workspace.document.parse(s_MeshSource))
+        return MakeUnexpected(Failure());
+    const auto asset = workspace.document.borrowVariable("asset");
+    if(!asset.has_value())
+        return MakeUnexpected(Failure());
 
-struct ThrowingCornerVisitor{
-    [[nodiscard]] b8 operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const;
-};
-
-using OneMeshlet = Array<Impl::MeshletDesc, 1u>;
-using OneLocalVertex = Array<Impl::MeshletLocalVertexRef, 1u>;
-using OnePrimitive = Array<u8, 1u>;
-
-static_assert(noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<const Impl::Mesh&>(), DeclVal<usize&>())));
-static_assert(!noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<const ThrowingPositionStreamGeometry&>(), DeclVal<usize&>())));
-static_assert(noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<NoThrowCornerVisitor&>())));
-static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<ThrowingCornerVisitor&>())));
-
-inline constexpr usize s_MeshletCountHeaderOffset = offsetof(Impl::MeshBinaryHeader, meshletCount);
-inline constexpr usize s_MeshletBoundCountHeaderOffset = offsetof(Impl::MeshBinaryHeader, meshletBoundCount);
-inline constexpr usize s_MeshletPrimitiveIndexCountHeaderOffset = offsetof(Impl::MeshBinaryHeader, meshletPrimitiveIndexCount);
-inline constexpr u64 s_UnaddressableMeshBoundsCount = static_cast<u64>(Limit<u32>::s_Max / Impl::s_MeshletBoundsStride) + 1u;
-static_assert((s_UnaddressableMeshBoundsCount - 1u) * Impl::s_MeshletBoundsStride <= Limit<u32>::s_Max);
-static_assert(s_UnaddressableMeshBoundsCount * Impl::s_MeshletBoundsStride > Limit<u32>::s_Max);
-
-FOUNDATION_INLINE void OverwritePodU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
-    FOUNDATION_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
+    CpuTaskScheduler scheduler(1u);
+    auto entry = ParseMeshCookMetadata(s_OneOffNameTestsMeshSolidCodec, Path("tests/mesh/solid_codec.nwb"), asset.value(), scheduler);
+    if(!entry.has_value())
+        return MakeUnexpected(Failure());
+    const auto mesh = BuildMeshAsset(entry.value());
+    if(!mesh.has_value())
+        return MakeUnexpected(Failure());
+    DeclaredAssetCodec<Mesh> codec = DeclaredAssetCodec<Mesh>();
+    HeapStorage storage(s_SolidCaseMeshSolidCodecCook);
+    TestValueSlot<AssetByteBuffer> binarySlot;
+    mut AssetByteBuffer binary = binarySlot.constructIn(storage);
+    if(!codec.serialize(mesh.value(), binary))
+        return MakeUnexpected(Failure());
+    Vector<u8> result;
+    for(usize index = 0u; index < binary.size(); ++index)
+        result.push_back(binary[index]);
+    return result;
 }
 
-FOUNDATION_INLINE void OverwritePodU64(Core::Assets::AssetBytes& bytes, const usize offset, const u64 value)noexcept{
-    FOUNDATION_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 AppendCompactBoundsPayload(
-    const Core::Assets::AssetVector<Impl::MeshletBounds>& bounds,
-    Core::Assets::AssetBytes& outBinary
-){
-    return Core::Assets::AppendVectorPayload(bounds, FOUNDATION_TEXT("compact bounds"), FOUNDATION_TEXT("bounds"), outBinary);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 ReadCompactBoundsPayload(
-    const Span<const u8> binary,
-    const usize count,
-    usize& inOutCursor,
-    Core::Assets::AssetVector<Impl::MeshletBounds>& outBounds
-){
-    return Core::Assets::ReadVectorPayload(binary, count, FOUNDATION_TEXT("compact bounds"), FOUNDATION_TEXT("bounds"), inOutCursor, outBounds);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<u32> ReadPayloadWordAt(const Span<const u8> binary, usize& inOutCursor)noexcept{
-    return ReadPOD<u32>(binary, inOutCursor);
-}
-
-[[nodiscard]] Expected<Core::Assets::AssetBytes> CookMeshBinary(Core::Assets::AssetArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using AssetArena = Core::Assets::AssetArena;
-struct SolidTestAssetArena{
-    AssetArena arena;
-    explicit SolidTestAssetArena(const Name& scopeName) : arena(scopeName){}
-};
-using AssetBytes = Core::Assets::AssetBytes;
-using ScratchArena = Core::Alloc::ScratchArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-using Mesh = Impl::Mesh;
-using MeshletBounds = Impl::MeshletBounds;
-using AssetMeshletBoundsVector = Core::Assets::AssetVector<Impl::MeshletBounds>;
-using MeshSolidCodecTestsDetail::CookMeshBinary;
-using MeshSolidCodecTestsDetail::s_MeshletCountHeaderOffset;
-using MeshSolidCodecTestsDetail::s_MeshletBoundCountHeaderOffset;
-using MeshSolidCodecTestsDetail::s_MeshletPrimitiveIndexCountHeaderOffset;
-using MeshSolidCodecTestsDetail::s_UnaddressableMeshBoundsCount;
-using MeshSolidCodecTestsDetail::OverwritePodU32;
-using MeshSolidCodecTestsDetail::OverwritePodU64;
-using MeshSolidCodecTestsDetail::AppendCompactBoundsPayload;
-using MeshSolidCodecTestsDetail::ReadCompactBoundsPayload;
-using MeshSolidCodecTestsDetail::ReadPayloadWordAt;
-using Impl::BuildSolidTriangleWords;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void OverwritePayloadValue<T>(mut Vector<u8> binary, in usize offset, in T value){
+    Vector<u8> bytes;
+    AppendPOD(bytes, value);
+    for(usize index = 0u; index < bytes.size(); ++index)
+        binary[offset + index] = bytes[index];
 }
 
 
@@ -179,22 +93,21 @@ NWB_END
 void VerifyMeshSolidCodec_MissingTruncatedOrExtraMembershipWordsAreRejected(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecTruncated);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
+    const Expected<Vector<u8>> cooked = CookMeshBinary();
     ASSERT_TRUE(cooked.has_value());
-    Mesh control(arena.arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh control(s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(control.loadBinary(cooked.value()));
     ASSERT_EQ(control.solidTriangleWords().size(), 1u);
     ASSERT_EQ(control.solidTriangleWords()[0u], 0xfu);
 
-    Mesh rejected(arena.arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh rejected(s_OneOffNameTestsMeshSolidCodec);
     for(usize removedBytes = 1u; removedBytes <= 4u; ++removedBytes){
-        AssetBytes malformed = cooked.value();
+        Vector<u8> malformed = cooked.value();
         malformed.resize(malformed.size() - removedBytes);
         EXPECT_FALSE(rejected.loadBinary(malformed));
     }
-    AssetBytes extraWord = cooked.value();
+    Vector<u8> extraWord = cooked.value();
     AppendPOD(extraWord, 0u);
     EXPECT_FALSE(rejected.loadBinary(extraWord));
 
@@ -204,20 +117,19 @@ void VerifyMeshSolidCodec_MissingTruncatedOrExtraMembershipWordsAreRejected(){
 void VerifyMeshSolidCodec_UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreservesLoadedMesh(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecUnaddressableBounds);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
+    const Expected<Vector<u8>> cooked = CookMeshBinary();
     ASSERT_TRUE(cooked.has_value());
-    Mesh loaded(arena.arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh loaded(s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(loaded.loadBinary(cooked.value()));
     const usize retainedMeshletCount = loaded.meshlets().size();
     const usize retainedPositionCount = loaded.positionStream().size();
     ASSERT_EQ(loaded.solidTriangleWords().size(), 1u);
     const u32 retainedSolidWord = loaded.solidTriangleWords()[0u];
 
-    AssetBytes malformed = cooked.value();
-    OverwritePodU64(malformed, s_MeshletCountHeaderOffset, s_UnaddressableMeshBoundsCount);
-    OverwritePodU64(malformed, s_MeshletBoundCountHeaderOffset, s_UnaddressableMeshBoundsCount);
+    Vector<u8> malformed = cooked.value();
+    OverwritePayloadValue<u64>(malformed, s_MeshletCountHeaderOffset, s_UnaddressableMeshBoundsCount);
+    OverwritePayloadValue<u64>(malformed, s_MeshletBoundCountHeaderOffset, s_UnaddressableMeshBoundsCount);
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_EQ(loaded.meshlets().size(), retainedMeshletCount);
     EXPECT_EQ(loaded.positionStream().size(), retainedPositionCount);
@@ -230,26 +142,25 @@ void VerifyMeshSolidCodec_UnaddressableBoundsCountIsRejectedBeforeStreamReadAndP
 void VerifyMeshSolidCodec_TailPaddingAndInconsistentPrimitiveCountsAreRejected(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecPadding);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
+    const Expected<Vector<u8>> cooked = CookMeshBinary();
     ASSERT_TRUE(cooked.has_value());
-    Mesh control(arena.arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh control(s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(control.loadBinary(cooked.value()));
     ASSERT_EQ(control.solidTriangleWords().size(), 1u);
 
-    Mesh rejected(arena.arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh rejected(s_OneOffNameTestsMeshSolidCodec);
     Array<u32, 2> invalidWords = Array<u32, 2>();
     invalidWords[0u] = 0x1fu;
     invalidWords[1u] = 0x8000000fu;
     for(in u32 invalidWord : invalidWords){
-        AssetBytes malformed = cooked.value();
-        OverwritePodU32(malformed, malformed.size() - 4u, invalidWord);
+        Vector<u8> malformed = cooked.value();
+        OverwritePayloadValue<u32>(malformed, malformed.size() - 4u, invalidWord);
         EXPECT_FALSE(rejected.loadBinary(malformed));
     }
-    AssetBytes wrongCount = cooked.value();
+    Vector<u8> wrongCount = cooked.value();
     const u64 inconsistentIndexCount = 99u;
-    OverwritePodU64(wrongCount, s_MeshletPrimitiveIndexCountHeaderOffset, inconsistentIndexCount);
+    OverwritePayloadValue<u64>(wrongCount, s_MeshletPrimitiveIndexCountHeaderOffset, inconsistentIndexCount);
     EXPECT_FALSE(rejected.loadBinary(wrongCount));
 
     EXPECT_TRUE(SawCapturedError(logger, "invalid solid triangle padding"));
@@ -258,7 +169,6 @@ void VerifyMeshSolidCodec_TailPaddingAndInconsistentPrimitiveCountsAreRejected()
 void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecCompactBounds);
 
     Array<u32, 10> words = Array<u32, 10>();
     words[0u] = 0x80000000u;
@@ -272,44 +182,46 @@ void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLast
     words[8u] = 0x00800000u;
     words[9u] = 0x80000001u;
 
-    AssetMeshletBoundsVector bounds(arena.arena);
+    Vector<MeshletBounds> bounds;
     bounds.resize(2u);
     for(usize index = 0u; index < bounds.size(); ++index){
         bounds[index].sphere = f32x4u(
-            BitCast<f32>(words[index * 5u + 0u]),
-            BitCast<f32>(words[index * 5u + 1u]),
-            BitCast<f32>(words[index * 5u + 2u]),
-            BitCast<f32>(words[index * 5u + 3u])
+            bit_cast<f32>(words[index * 5u + 0u]),
+            bit_cast<f32>(words[index * 5u + 1u]),
+            bit_cast<f32>(words[index * 5u + 2u]),
+            bit_cast<f32>(words[index * 5u + 3u])
         );
         bounds[index].conePacked = words[index * 5u + 4u];
     }
 
-    AssetBytes binary(arena.arena);
-    ASSERT_TRUE(AppendCompactBoundsPayload(bounds, binary));
+    HeapStorage storage(s_SolidCaseMeshSolidCodecCompactBounds);
+    TestValueSlot<AssetByteBuffer> binarySlot;
+    mut AssetByteBuffer binary = binarySlot.constructIn(storage);
+    ASSERT_TRUE(AppendVectorPayload(bounds, "compact bounds", "bounds", binary));
     ASSERT_EQ(binary.size(), 4u * words.size());
     usize wordCursor = 0u;
     for(in u32 word : words){
-        const Expected<u32> stored = ReadPayloadWordAt(binary, wordCursor);
+        const Expected<u32> stored = ReadPOD<u32>(Span<u8>(binary), wordCursor);
         ASSERT_TRUE(stored.has_value());
         EXPECT_EQ(stored.value(), word);
     }
 
-    AssetMeshletBoundsVector decoded(arena.arena);
+    Vector<MeshletBounds> decoded;
     usize cursor = 0u;
-    ASSERT_TRUE(ReadCompactBoundsPayload(binary, bounds.size(), cursor, decoded));
+    ASSERT_TRUE(ReadVectorPayload(Span<u8>(binary), bounds.size(), "compact bounds", "bounds", cursor, decoded));
     ASSERT_EQ(decoded.size(), bounds.size());
     for(usize index = 0u; index < decoded.size(); ++index){
-        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.x), words[index * 5u + 0u]);
-        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.y), words[index * 5u + 1u]);
-        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.z), words[index * 5u + 2u]);
-        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.w), words[index * 5u + 3u]);
+        EXPECT_EQ(bit_cast<u32>(decoded[index].sphere.x), words[index * 5u + 0u]);
+        EXPECT_EQ(bit_cast<u32>(decoded[index].sphere.y), words[index * 5u + 1u]);
+        EXPECT_EQ(bit_cast<u32>(decoded[index].sphere.z), words[index * 5u + 2u]);
+        EXPECT_EQ(bit_cast<u32>(decoded[index].sphere.w), words[index * 5u + 3u]);
         EXPECT_EQ(decoded[index].conePacked, words[index * 5u + 4u]);
     }
     for(usize removedBytes = 1u; removedBytes <= 4u; ++removedBytes){
-        AssetBytes truncated = binary;
+        AssetByteBuffer truncated(binary);
         truncated.resize(truncated.size() - removedBytes);
         cursor = 0u;
-        EXPECT_FALSE(ReadCompactBoundsPayload(truncated, bounds.size(), cursor, decoded));
+        EXPECT_FALSE(ReadVectorPayload(Span<u8>(truncated), bounds.size(), "compact bounds", "bounds", cursor, decoded));
         EXPECT_EQ(cursor, 0u);
         EXPECT_TRUE(decoded.empty());
     }
@@ -320,17 +232,16 @@ void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLast
 void VerifyMeshSolidCodec_PreviousMeshMagicCannotAdmitOtherwiseValidCurrentPayload(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecPreviousEncoding);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
+    const Expected<Vector<u8>> cooked = CookMeshBinary();
     ASSERT_TRUE(cooked.has_value());
-    Mesh control(arena.arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh control(s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(control.loadBinary(cooked.value()));
 
-    AssetBytes previousEncoding = cooked.value();
+    Vector<u8> previousEncoding = cooked.value();
     const u32 previousMeshMagic = 0x4d534836u;
-    OverwritePodU32(previousEncoding, 0u, previousMeshMagic);
-    Mesh rejected(arena.arena, s_OneOffNameTestsMeshSolidCodec);
+    OverwritePayloadValue<u32>(previousEncoding, 0u, previousMeshMagic);
+    Mesh rejected(s_OneOffNameTestsMeshSolidCodec);
     EXPECT_FALSE(rejected.loadBinary(previousEncoding));
 
     EXPECT_GT(logger.errorCount(), 0u);
@@ -508,80 +419,6 @@ void VerifyMeshSolidTopology_RelativeComponentVolumePreservesTinyAndTranslatedSo
         ASSERT_EQ(words.value().size(), 1u);
         EXPECT_EQ(words.value()[0u], 0xfu);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshSolidCodecTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_MeshSource = R"(mesh asset;
-asset.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]];
-asset.normals = [[0, 0, 1]];
-asset.tangents = [[1, 0, 0, 1]];
-asset.uv0 = [[0, 0]];
-asset.colors = [[1, 1, 1, 1]];
-asset.vertex_refs = [[0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [2, 0, 0, 0, 0], [3, 0, 0, 0, 0]];
-asset.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
-)";
-
-Expected<Core::Assets::AssetBytes> CookMeshBinary(Core::Assets::AssetArena& arena){
-    Core::Metascript::Document document(arena);
-    if(!document.parse(s_MeshSource))
-        return MakeUnexpected(Failure{});
-    const Core::Metascript::Value* const asset = document.findVariable("asset");
-    if(!asset)
-        return MakeUnexpected(Failure{});
-    Core::CpuTaskScheduler scheduler(1u);
-    Core::Alloc::ScratchArena scratch{Name(Tests::s_SolidCaseMeshSolidCodecCook)};
-    const NWB::Path sourcePath(arena, "tests/mesh/solid_codec.nwb");
-    auto entry = Impl::ParseMeshCookMetadata(arena, Tests::s_OneOffNameTestsMeshSolidCodec, sourcePath, *asset, scheduler);
-    if(!entry)
-        return MakeUnexpected(Failure{});
-    auto mesh = Impl::BuildMeshAsset(arena, *entry);
-    if(!mesh)
-        return MakeUnexpected(Failure{});
-    Core::Assets::AssetBytes binary(arena);
-    const Impl::MeshAssetCodec codec;
-    if(!codec.serialize(*mesh, binary))
-        return MakeUnexpected(Failure{});
-    return binary;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

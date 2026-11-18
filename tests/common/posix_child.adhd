@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::WaitResult"), cpp_flags(self_defaulted)]
+extern class ChildWaitResult{
+    b8 collected;
+    b8 signaled;
+    i32 signal;
+    b8 exited;
+    i32 exitCode;
+};
+
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::Fork")]
+extern i32 ForkTestChild();
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::Wait")]
+extern ChildWaitResult WaitForTestChild(in i32 process);
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::SilenceConsole")]
+extern void SilenceTestChildConsole();
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::CloseDescriptor")]
+extern b8 CloseTestDescriptor(in i32 descriptor);
+[cpp_header("<cstdlib>"), cpp_name("::std::_Exit")]
+extern void ExitTestChild(in i32 code);
+[cpp_header("<csignal>"), cpp_name("SIGABRT")]
+extern const i32 s_TestAbortSignal;
+
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("NWB_TEST_OBSERVABLE_ASSERT")]
+extern void ObservableTestAssertion(in b8 condition);
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::s_AssertCategory")]
+extern const StringView s_TestAssertCategory;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

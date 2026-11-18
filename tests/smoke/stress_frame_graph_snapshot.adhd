@@ -2,49 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/frame_graph_snapshot_validation.adhd>
+#include <tests/common/memory.adhd>
+#include <loader/project_entry.adhd>
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/frame_graph_snapshot_validation.adhd.h>
-
-#include <loader/project_entry.adhd.h>
-
-#include <core/global.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/telemetry/codec.h>
-#include <core/telemetry/frame_graph.h>
-#include <core/telemetry/frame_graph_registry.h>
-#include <core/telemetry/session.h>
-
-namespace NWB::Tests::Smoke{
-namespace FrameGraphQueueClass = Core::Telemetry::FrameGraphQueueClass;
-using Core::Telemetry::FrameGraphEdgePayload;
-using Core::Telemetry::FrameGraphNodePayload;
-using Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord;
-using Core::Telemetry::FrameGraphPayload;
-using Core::Telemetry::FrameGraphPhysicalQueueId;
-using Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics;
-using Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord;
-using Core::Telemetry::FrameGraphRuntimeStatistics;
-using FrameGraphQueueClassEnum = Core::Telemetry::FrameGraphQueueClass::Enum;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -231,7 +193,7 @@ class StressFrameGraphSnapshotWriter{
         out.push_back('"');
     }
 
-    private StringView queueClassLabel(in FrameGraphQueueClassEnum queueClass)const{
+    private StringView queueClassLabel(in FrameGraphQueueClass queueClass)const{
         if(queueClass == FrameGraphQueueClass::Graphics)
             return "Graphics";
         if(queueClass == FrameGraphQueueClass::Compute)
@@ -332,7 +294,8 @@ b8 ValidateStressFrameGraphSnapshot(in FrameGraphPayload payload, in u64 sourceF
 
 // Captures the pixel-freeze frame snapshot through public telemetry.
 b8 CaptureStressFrameGraphSnapshot(in StringView outputPath, in u64 completedFrames, mut ProjectRuntimeContext context){
-    const u64 graphicsFrame = context.graphics.getFrameIndex();
+    mut GraphicsRuntime graphics = context.graphics;
+    const u64 graphicsFrame = graphics.getFrameIndex();
     if(outputPath.empty() || completedFrames == 0u || graphicsFrame == 0u){
         error("StressFrameGraphSnapshot: no completed frame or output path");
         return false;
@@ -346,53 +309,41 @@ b8 CaptureStressFrameGraphSnapshot(in StringView outputPath, in u64 completedFra
     usize packetCount = 0u;
     u32 failureReason = 0u;
     usize failedPayloadBytes = 0u;
-    native(
-        in sourceFrame,
-        in graphicsFrame,
-        in completedFrames,
-        mut context,
-        mut encodedBytes,
-        mut snapshotJson,
-        mut nodeCount,
-        mut edgeCount,
-        mut packetCount,
-        mut failureReason,
-        mut failedPayloadBytes
-    ){
-        Core::Telemetry::TelemetryArena arena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFrameGraphSnapshot)};
-        Core::Telemetry::CaptureSession session(arena);
-        session.setCaptureOptions(Core::Telemetry::CaptureOptions::FrameGraphOnly());
-        session.setFrameIndex(sourceFrame);
-        if(!context.frameGraphRegistry.record(session) || session.eventCount() != 1u){
-            failureReason = 1u;
+    HeapStorage storage(s_SmokeNameTestsSmokeFrameGraphSnapshot);
+    CaptureSession session(storage);
+    session.setCaptureOptions(TelemetryCaptureOptionsFrameGraphOnly());
+    session.setFrameIndex(sourceFrame);
+    mut FrameGraphRegistry registry = context.frameGraphRegistry;
+    if(!registry.record(session) || session.eventCount() != 1u){
+        failureReason = 1u;
+    }
+    else{
+        const EventView events = session.view();
+        const Optional<in EventRecord> event = events.borrowEventAt(cast<usize>(0u));
+        if(!event.has_value() || event.value().header.kind != EventKind::FrameGraphFrame || event.value().header.frameIndex != sourceFrame){
+            failureReason = 2u;
         }
         else{
-            const auto* const event = session.view().eventAt(0u);
-            if(!event || event->header.kind != Core::Telemetry::EventKind::FrameGraphFrame || event->header.frameIndex != sourceFrame){
+            ScratchStorage scratch(s_SmokeNameTestsSmokeFrameGraphSnapshotScratch);
+            const auto payload = ParseFrameGraphPayload(storage, scratch, event.value().payload);
+            if(!payload.has_value()){
+                failureReason = 3u;
+                failedPayloadBytes = event.value().payload.size();
+            }
+            else if(!ValidateStressFrameGraphSnapshot(payload.value(), sourceFrame)){
                 failureReason = 2u;
             }
             else{
-                Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::Smoke::s_SmokeNameTestsSmokeFrameGraphSnapshotScratch)};
-                const auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, scratchArena, event->payload.data(), event->payload.size());
-                if(!payload){
-                    failureReason = 3u;
-                    failedPayloadBytes = event->payload.size();
-                }
-                else if(!ValidateStressFrameGraphSnapshot(*payload, sourceFrame)){
-                    failureReason = 2u;
+                TelemetryBytes encoded = session.recorder().createByteBuffer();
+                if(!EncodeEventStream(events, encoded)){
+                    failureReason = 4u;
                 }
                 else{
-                    Core::Telemetry::TelemetryBytes encoded(arena);
-                    if(!Core::Telemetry::EncodeEventStream(session.view(), encoded)){
-                        failureReason = 4u;
-                    }
-                    else{
-                        encodedBytes.assign(encoded.begin(), encoded.end());
-                        snapshotJson.assign(AStringView(StressFrameGraphSnapshotWriter().format(scratchArena, *payload, graphicsFrame, completedFrames)));
-                        nodeCount = payload->nodes.size();
-                        edgeCount = payload->edges.size();
-                        packetCount = payload->packetSubmissionStatistics.size();
-                    }
+                    encodedBytes.assign(encoded.begin(), encoded.end());
+                    snapshotJson = StressFrameGraphSnapshotWriter().format(payload.value(), graphicsFrame, completedFrames);
+                    nodeCount = payload.value().nodes.size();
+                    edgeCount = payload.value().edges.size();
+                    packetCount = payload.value().packetSubmissionStatistics.size();
                 }
             }
         }

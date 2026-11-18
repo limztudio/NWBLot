@@ -9,387 +9,127 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <tests/unit/ui/fixture_text_shaping.adhd>
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd>
 
+const f32 s_CaretGlyphAdvance = 10.0f;
+const StringView s_MultilineViewSkinPath = "tests/ui/widgets/multiline_view/skin";
+Rect MultilineViewViewport(){ return Rect(0.0f, 0.0f, 500.0f, 500.0f); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class CaretShaper : ITextShaper{
+    public f32 scalarAdvance = s_CaretGlyphAdvance;
+    public UiFixtureShaperFault fault = UiFixtureShaperFault::None;
+    public b8 variedHeight = false;
+    public b8 zeroAdvance = false;
 
-
-#include <tests/common/font_fixture.adhd.h>
-#include <tests/unit/ui/fixture_text_shaping.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/grapheme.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.adhd.h>
-
-#include <global/filesystem.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiEditCaretTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-
-inline constexpr f32 s_CaretGlyphAdvance = 10.0f;
-
-namespace ShaperFault = ::__hidden_ui_glyph_sdf_tests::UiFixtureShaperFault;
-
-class CaretShaper final : public ITextShaper{
-public:
-    explicit CaretShaper(Core::Alloc::GlobalArena&)noexcept{}
-    virtual ~CaretShaper()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(::ArenaBase& resultArena, const ShapeRequest& request)override;
-
-
-public:
-    f32 scalarAdvance = s_CaretGlyphAdvance;
-    ShaperFault::Enum fault = ShaperFault::None;
-    b8 variedHeight = false;
-    b8 zeroAdvance = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class EditCaretFixture : public testing::Test{
-public:
-    EditCaretFixture()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsEditCaret))
-        , m_shaper(m_arena)
-        , m_builder(m_arena, m_shaper)
-        , m_geometry(m_arena)
-        , m_mapping(m_arena)
-        , m_boundaries(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
-        return m_builder.layout({ .text = text, .fontSize = 16.0f, .direction = direction });
+    [cpp_unwind]
+    public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
+        ShapedRun run;
+        PopulateCaretShapedRun(this, request, run);
+        return run;
     }
-    [[nodiscard]] b8 identityMapping(const StringView text){
-        auto boundaries = BuildEditGraphemeBoundaries(m_arena, text);
-        if(!boundaries)
+}
+
+[ordered, extensible]
+class EditCaretFixture{
+    public CaretShaper m_shaper;
+    public TextLayoutBuilder m_builder;
+    public EditCaretGeometry m_geometry;
+    public PaintVector<EditCaretMapping> m_mapping;
+    public EditBoundaryVector m_boundaries;
+
+    public EditCaretFixture(){ this.m_builder = TextLayoutBuilder(this.m_shaper); }
+    public Expected<TextLayout, TextLayoutStatus> layout(in StringView text){ return this.layout(text, TextDirection::LeftToRight); }
+    public Expected<TextLayout, TextLayoutStatus> layout(in StringView text, in TextDirection direction){
+        ShapeRequest request;
+        request.text = text;
+        request.fontSize = 16.0f;
+        request.direction = direction;
+        return this.m_builder.layout(request);
+    }
+    public b8 identityMapping(in StringView text){
+        auto boundaries = BuildEditGraphemeBoundaries(text);
+        if(!boundaries.has_value())
             return false;
-        m_boundaries = Move(*boundaries);
-        m_mapping.clear();
-        m_mapping.reserve(m_boundaries.size());
-        for(const usize boundary : m_boundaries)
-            m_mapping.push_back({ boundary, boundary });
+        this.m_boundaries = boundaries.value();
+        this.m_mapping.clear();
+        this.m_mapping.reserve(this.m_boundaries.size());
+        for(in usize boundary : this.m_boundaries)
+            this.m_mapping.push_back(EditCaretMapping(boundary, boundary));
         return true;
     }
-    [[nodiscard]] b8 adopt(const StringView text, const usize committedBytes, const EditTextMode::Enum mode = EditTextMode::Multiline){
-        auto candidate = layout(text);
-        return candidate && m_geometry.adoptLayout(*candidate, text, m_mapping, committedBytes, mode);
+    public b8 adopt(in StringView text, in usize committedBytes){ return this.adopt(text, committedBytes, EditTextMode::Multiline); }
+    public b8 adopt(in StringView text, in usize committedBytes, in EditTextMode mode){
+        auto candidate = this.layout(text);
+        return candidate.has_value() && this.m_geometry.adoptLayout(candidate.value(), text, this.m_mapping, committedBytes, mode);
     }
-    [[nodiscard]] b8 adoptText(const StringView text, const EditTextMode::Enum mode = EditTextMode::Multiline){
-        return identityMapping(text) && adopt(text, text.size(), mode);
+    public b8 adoptText(in StringView text){ return this.adoptText(text, EditTextMode::Multiline); }
+    public b8 adoptText(in StringView text, in EditTextMode mode){ return this.identityMapping(text) && this.adopt(text, text.size(), mode); }
+    public void expectCaret(in usize byte, in f32 x, in f32 y)const{ this.expectCaret(byte, x, y, 12.0f); }
+    public void expectCaret(in usize byte, in f32 x, in f32 y, in f32 height)const{ ExpectEditCaretFixtureCaret(this, byte, x, y, height); }
+    public void expectRange(in EditBoxRange range, in u32 line, in Rect expected)const{ this.expectRange(range, line, expected, 1.0f); }
+    public void expectRange(in EditBoxRange range, in u32 line, in Rect expected, in f32 cap)const{ ExpectEditCaretFixtureRange(this, range, line, expected, cap); }
+}
+
+[extensible]
+class EditFixture{
+    public EditModel m_model;
+}
+
+[extensible]
+class HorizontalNavigationFixture : RouterTestFixture{
+    public Array<HitTarget, 3u> m_targets;
+    public u64 m_generation = 0u;
+
+    public HorizontalNavigationFixture(){ InitHorizontalNavigationTargets(this.m_targets); }
+    public InputRoutingResult keyDown(in Key key){ return this.keyDown(key, false); }
+    public InputRoutingResult keyDown(in Key key, in b8 repeat){ return SendHorizontalNavigationKeyDown(this, key, repeat); }
+    public InputRoutingResult keyUp(in Key key){ return SendHorizontalNavigationKeyUp(this, key); }
+    public void press(in Key key){ PressHorizontalNavigationKey(this, key); }
+    public void focusTarget(){ this.focusTarget(0u); }
+    public void focusTarget(in usize index){ FocusHorizontalNavigationTarget(this, index); }
+    public b8 publish(){ return this.publish(2u); }
+    public b8 publish(in usize count){ return this.publish(count, Span<PopupScope>()); }
+    public b8 publish(in usize count, in Span<PopupScope> popups){ return PublishHorizontalNavigationTargets(this, count, popups); }
+    public Expected<ControlAction> take(){ return this.take(0u); }
+    public Expected<ControlAction> take(in usize index){ return TakeHorizontalNavigationAction(this, index); }
+    public void bindEditor(){ this.bindEditor(0u); }
+    public void bindEditor(in usize hostIndex){ BindHorizontalNavigationEditor(this, hostIndex); }
+}
+
+[ordered, extensible]
+class MultilineViewFixture{
+    public EditModel m_model = EditModel(EditLimits(), EditTextMode::Multiline);
+    public FixtureShaper m_shaper;
+    public TextLayoutBuilder m_layoutBuilder;
+    public EditBoxView m_view;
+    public EditBoxPlacement m_placement;
+    public Font m_font = Font(Name("tests/ui/widgets/multiline_view/font"));
+    public TextService m_text;
+    public UiSkin m_skin = UiSkin(Name(s_MultilineViewSkinPath));
+    public PaintBuilder m_paint;
+
+    public MultilineViewFixture(){
+        this.m_layoutBuilder = TextLayoutBuilder(this.m_shaper);
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/widgets/multiline_view/texture"), 4u, 4u, 1.0f, RegionVector());
     }
-    void expectCaret(usize byte, f32 x, f32 y, f32 height = 12.0f)const;
-    void expectRange(EditBoxRange range, u32 line, Rect expected, f32 cap = 1.0f)const;
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    CaretShaper m_shaper;
-    TextLayoutBuilder m_builder;
-    EditCaretGeometry m_geometry;
-    PaintVector<EditCaretMapping> m_mapping;
-    EditBoundaryVector m_boundaries;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiEditTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class EditFixture : public testing::Test{
-public:
-    EditFixture()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiEditFixture))
-        , m_model(m_arena)
-    {}
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    Impl::Ui::EditModel m_model;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiHorizontalNavigationTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-
-HitTarget Part(const HitTarget& host)noexcept;
-PopupScope Popup(const HitTarget& owner, u64 openGeneration = 7u)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class HorizontalNavigationFixture : public UiTestSupport::RouterTestFixture{
-public:
-    HorizontalNavigationFixture();
-
-
-public:
-    [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, b8 repeat = false);
-    [[nodiscard]] InputRoutingResult keyUp(Core::Key::Enum key);
-    void press(Core::Key::Enum key);
-    void focusTarget(usize index = 0u);
-    [[nodiscard]] b8 publish(usize count = 2u, Span<const PopupScope> popups = {});
-    [[nodiscard]] Expected<ControlAction> take(usize index = 0u)noexcept;
-    void bindEditor(usize hostIndex = 0u)noexcept;
-
-
-public:
-    Array<HitTarget, 3u> m_targets;
-    u64 m_generation = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiMultilineViewTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-using namespace UiWidgetTests;
-
-inline constexpr AStringView s_MultilineViewFontPath = "tests/ui/widgets/multiline_view/font";
-inline constexpr AStringView s_MultilineViewSkinPath = "tests/ui/widgets/multiline_view/skin";
-inline constexpr Rect s_MultilineViewViewport{ 0.0f, 0.0f, 500.0f, 500.0f };
-
-using NWB::Tests::UiFixtureText::FixtureShaper;
-
-void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected);
-void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MultilineViewFixture : public testing::Test{
-public:
-    MultilineViewFixture()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsMultilineView))
-        , m_model(m_arena, {}, EditTextMode::Multiline)
-        , m_shaper(m_arena)
-        , m_layoutBuilder(m_arena, m_shaper)
-        , m_view(m_arena)
-        , m_font(m_arena, Name(s_MultilineViewFontPath))
-        , m_text(m_arena)
-        , m_skin(m_arena, Name(s_MultilineViewSkinPath))
-        , m_paint(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/widgets/multiline_view/texture"), 4u, 4u, 1.0f, Move(regions));
-    }
-
-
-public:
-    [[nodiscard]] b8 shapeView(){
-        if(!m_view.snapshot(m_model))
+    public b8 shapeView(){
+        if(!this.m_view.snapshot(this.m_model))
             return false;
-        auto layout = m_layoutBuilder.layout({ m_view.displayText() });
-        return layout && m_view.adoptLayout(*layout);
+        ShapeRequest request;
+        request.text = this.m_view.displayText();
+        auto layout = this.m_layoutBuilder.layout(request);
+        return layout.has_value() && this.m_view.adoptLayout(layout.value());
     }
-    [[nodiscard]] b8 place(f32 width = 100.0f, f32 height = 100.0f, Point previousScroll = {})noexcept;
-    [[nodiscard]] b8 loadFont(){
-        return InstallLatinFixtureFont(m_arena, m_font, m_text);
+    public b8 place(){ return this.place(100.0f, 100.0f, Point()); }
+    public b8 place(in f32 width){ return this.place(width, 100.0f, Point()); }
+    public b8 place(in f32 width, in f32 height){ return this.place(width, height, Point()); }
+    public b8 place(in f32 width, in f32 height, in Point scroll){ return PlaceMultilineViewFixture(this, width, height, scroll); }
+    public b8 loadFont(){ return InstallLatinFixtureFont(this.m_font, this.m_text); }
+    public Expected<DrawSnapshot> paintView(in EditBoxStyle style, in EditBoxPaintFlags flags){
+        return PaintMultilineViewFixture(this, style, flags);
     }
-    [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags);
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    EditModel m_model;
-    FixtureShaper m_shaper;
-    TextLayoutBuilder m_layoutBuilder;
-    EditBoxView m_view;
-    EditBoxPlacement m_placement;
-    Font m_font;
-    TextService m_text;
-    UiSkin m_skin;
-    PaintBuilder m_paint;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-namespace __hidden_ui_glyph_sdf_tests{
-using CaretShaper = ::NWB::UiEditCaretTests::CaretShaper;
-using EditCaretFixture = ::NWB::UiEditCaretTests::EditCaretFixture;
-using EditBoxRange = ::NWB::Impl::Ui::EditBoxRange;
-using HorizontalNavigationFixture = ::NWB::UiHorizontalNavigationTests::HorizontalNavigationFixture;
-using MultilineViewFixture = ::NWB::UiMultilineViewTests::MultilineViewFixture;
-template<typename T>
-using PaintVector = ::NWB::Impl::Ui::PaintVector<T>;
-using ::NWB::Tests::UiFixtureText::ReverseGlyphs;
-using ::NWB::UiEditCaretTests::s_CaretGlyphAdvance;
-using ::NWB::UiMultilineViewTests::s_MultilineViewSkinPath;
-using ::NWB::UiMultilineViewTests::s_MultilineViewViewport;
-
-HitTarget MakeHorizontalNavigationPart(const HitTarget& host)noexcept;
-PopupScope MakeHorizontalNavigationPopup(const HitTarget& owner, u64 openGeneration)noexcept;
-void ExpectUiEditBoxPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected)noexcept;
-void ExpectUiEditCaretRect(const Rect& rectangle, f32 x, f32 y, f32 height)noexcept;
-void PopulateCaretShapedRun(const CaretShaper& shaper, const ShapeRequest& request, ShapedRun& run)noexcept;
-void ExpectEditCaretFixtureCaret(const EditCaretFixture& self, usize byte, f32 x, f32 y, f32 height)noexcept;
-void ExpectEditCaretFixtureRange(const EditCaretFixture& self, const EditBoxRange& range, u32 line, const Rect& expected, f32 cap)noexcept;
-void InitHorizontalNavigationTargets(Array<HitTarget, 3u>& targets)noexcept;
-InputRoutingResult SendHorizontalNavigationKeyDown(HorizontalNavigationFixture& self, const KeyEnum& key, b8 repeat)noexcept;
-InputRoutingResult SendHorizontalNavigationKeyUp(HorizontalNavigationFixture& self, const KeyEnum& key)noexcept;
-void PressHorizontalNavigationKey(HorizontalNavigationFixture& self, const KeyEnum& key)noexcept;
-void FocusHorizontalNavigationTarget(HorizontalNavigationFixture& self, usize index)noexcept;
-b8 PublishHorizontalNavigationTargets(HorizontalNavigationFixture& self, usize count, Span<const PopupScope> popups)noexcept;
-Expected<ControlAction> TakeHorizontalNavigationAction(HorizontalNavigationFixture& self, usize index)noexcept;
-void BindHorizontalNavigationEditor(HorizontalNavigationFixture& self, usize hostIndex)noexcept;
-template<typename TArena>
-void CollectUiSolidRects(const DrawSnapshot& snapshot, const Color& color, Vector<Rect, TArena>& output)noexcept;
-b8 PlaceMultilineViewFixture(MultilineViewFixture& self, f32 width, f32 height, const Point& previousScroll)noexcept;
-Expected<DrawSnapshot> PaintMultilineViewFixture(MultilineViewFixture& self, const EditBoxStyle& style, const EditBoxPaintFlags& flags)noexcept;
-};
-
-NWB_BEGIN
-namespace UiEditCaretTests{
-FOUNDATION_INLINE Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(::ArenaBase& resultArena, const ShapeRequest& request){
-    ShapedRun run(resultArena);
-    ::__hidden_ui_glyph_sdf_tests::PopulateCaretShapedRun(*this, request, run);
-    return run;
 }
-FOUNDATION_INLINE void EditCaretFixture::expectCaret(const usize byte, const f32 x, const f32 y, const f32 height)const{
-    ::__hidden_ui_glyph_sdf_tests::ExpectEditCaretFixtureCaret(*this, byte, x, y, height);
-}
-FOUNDATION_INLINE void EditCaretFixture::expectRange(const EditBoxRange range, const u32 line, const Rect expected, const f32 cap)const{
-    ::__hidden_ui_glyph_sdf_tests::ExpectEditCaretFixtureRange(*this, range, line, expected, cap);
-}
-};
-namespace UiHorizontalNavigationTests{
-FOUNDATION_INLINE HitTarget Part(const HitTarget& host)noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPart(host); }
-FOUNDATION_INLINE PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPopup(owner, openGeneration); }
-FOUNDATION_INLINE HorizontalNavigationFixture::HorizontalNavigationFixture()
-    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiHorizontalNavigation))
-{
-    ::__hidden_ui_glyph_sdf_tests::InitHorizontalNavigationTargets(m_targets);
-}
-FOUNDATION_INLINE InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const b8 repeat){
-    return ::__hidden_ui_glyph_sdf_tests::SendHorizontalNavigationKeyDown(*this, key, repeat);
-}
-FOUNDATION_INLINE InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key){
-    return ::__hidden_ui_glyph_sdf_tests::SendHorizontalNavigationKeyUp(*this, key);
-}
-FOUNDATION_INLINE void HorizontalNavigationFixture::press(const Core::Key::Enum key){
-    ::__hidden_ui_glyph_sdf_tests::PressHorizontalNavigationKey(*this, key);
-}
-FOUNDATION_INLINE void HorizontalNavigationFixture::focusTarget(const usize index){
-    ::__hidden_ui_glyph_sdf_tests::FocusHorizontalNavigationTarget(*this, index);
-}
-FOUNDATION_INLINE b8 HorizontalNavigationFixture::publish(const usize count, const Span<const PopupScope> popups){
-    return ::__hidden_ui_glyph_sdf_tests::PublishHorizontalNavigationTargets(*this, count, popups);
-}
-FOUNDATION_INLINE Expected<ControlAction> HorizontalNavigationFixture::take(const usize index)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::TakeHorizontalNavigationAction(*this, index);
-}
-FOUNDATION_INLINE void HorizontalNavigationFixture::bindEditor(const usize hostIndex)noexcept{
-    ::__hidden_ui_glyph_sdf_tests::BindHorizontalNavigationEditor(*this, hostIndex);
-}
-};
-namespace UiMultilineViewTests{
-FOUNDATION_INLINE void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiEditBoxPlacement(actual, expected);
-}
-FOUNDATION_INLINE void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output){
-    ::__hidden_ui_glyph_sdf_tests::CollectUiSolidRects(snapshot, color, output);
-}
-FOUNDATION_INLINE b8 MultilineViewFixture::place(const f32 width, const f32 height, const Point previousScroll)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::PlaceMultilineViewFixture(*this, width, height, previousScroll);
-}
-FOUNDATION_INLINE Expected<DrawSnapshot> MultilineViewFixture::paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
-    return ::__hidden_ui_glyph_sdf_tests::PaintMultilineViewFixture(*this, style, flags);
-}
-};
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 HitTarget MakeHorizontalNavigationPart(in HitTarget host){
@@ -578,7 +318,7 @@ void FocusHorizontalNavigationTarget(mut HorizontalNavigationFixture self, in us
 
 b8 PublishHorizontalNavigationTargets(mut HorizontalNavigationFixture self, in usize count, in Span<PopupScope> popups){
     const u64 generation = self.m_generation + 1u;
-    if(!self.m_router.commitTargets(Span<HitTarget>(self.m_targets.data(), count), generation, popups))
+    if(!self.m_router.commitTargets(Span<HitTarget>(self.m_targets).subspan(0u, count), generation, popups))
         return false;
     self.m_generation = generation;
     return true;
@@ -614,7 +354,7 @@ void CollectUiSolidRects(in DrawSnapshot snapshot, in Color color, mut PaintVect
 }
 
 b8 PlaceMultilineViewFixture(mut MultilineViewFixture self, in f32 width, in f32 height, in Point previousScroll){
-    const Expected<EditBoxPlacement> placement = self.m_view.arrange(Rect(10.0f, 20.0f, width, height), Insets(), s_MultilineViewViewport, previousScroll);
+    const Expected<EditBoxPlacement> placement = self.m_view.arrange(Rect(10.0f, 20.0f, width, height), Insets(), MultilineViewViewport(), previousScroll);
     if(!placement.has_value())
         return false;
     self.m_placement = placement.value();
@@ -622,7 +362,7 @@ b8 PlaceMultilineViewFixture(mut MultilineViewFixture self, in f32 width, in f32
 }
 
 Expected<DrawSnapshot> PaintMultilineViewFixture(mut MultilineViewFixture self, in EditBoxStyle style, in EditBoxPaintFlags flags){
-    self.m_paint.begin(DisplayMetrics(s_MultilineViewViewport.width, s_MultilineViewViewport.height, 1.0f, 1.0f), 1u, 1u, MakeUiSkinAssetRef(s_MultilineViewSkinPath), self.m_skin);
+    self.m_paint.begin(DisplayMetrics(MultilineViewViewport().width, MultilineViewViewport().height, 1.0f, 1.0f), 1u, 1u, MakeUiSkinAssetRef(s_MultilineViewSkinPath), self.m_skin);
     if(!self.m_view.paint(self.m_text, self.m_paint, self.m_skin, self.m_placement, style, flags))
         return MakeUnexpected(Failure());
     EXPECT_FALSE(self.m_paint.popClip());

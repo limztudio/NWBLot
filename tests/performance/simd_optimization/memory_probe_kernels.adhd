@@ -1,0 +1,85 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "memory_probe_access.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CandidateCopy<const usize FixedCount>(in ReadAddress source, in usize bytes, in usize capacity, in ByteAddress destination){
+    usize count = bytes;
+    if(FixedCount != 0u)
+        count = FixedCount;
+    if(!s_ProbeHasAvx){
+        CopyTestBytes(destination, capacity, source, count);
+        return;
+    }
+    if(count == 0u)
+        return;
+    if(count > capacity || !HasByteAddress(destination) || !HasByteAddress(source))
+        AbortMemoryProbe();
+    const usize dstAddress = ProbeAddress(destination);
+    const usize srcAddress = ProbeAddress(source);
+    if(((dstAddress | srcAddress) & (s_SIMDMemoryCopyAlignment - 1u)) != 0u)
+        AbortMemoryProbe();
+    usize separation = srcAddress - dstAddress;
+    if(dstAddress >= srcAddress)
+        separation = dstAddress - srcAddress;
+    if(separation < count)
+        AbortMemoryProbe();
+    ByteAddress dst = AssumeProbeAlignment(destination);
+    ByteAddress src = AssumeProbeAlignment(source);
+    if(count > 8192u){
+        CopyProbeBytes(dst, src, count);
+        return;
+    }
+    usize remaining = count;
+    while(remaining >= 128u){
+        CopyProbePacket<128u>(dst, src);
+        dst = GuardAddress(dst, 128u);
+        src = GuardAddress(src, 128u);
+        remaining -= 128u;
+    }
+    while(remaining >= 32u){
+        CopyProbePacket<32u>(dst, src);
+        dst = GuardAddress(dst, 32u);
+        src = GuardAddress(src, 32u);
+        remaining -= 32u;
+    }
+    if(remaining >= 16u){
+        CopyProbePacket<16u>(dst, src);
+        dst = GuardAddress(dst, 16u);
+        src = GuardAddress(src, 16u);
+        remaining -= 16u;
+    }
+    if(remaining >= 8u){
+        CopyProbePacket<8u>(dst, src);
+        dst = GuardAddress(dst, 8u);
+        src = GuardAddress(src, 8u);
+        remaining -= 8u;
+    }
+    if(remaining >= 4u){
+        CopyProbePacket<4u>(dst, src);
+        dst = GuardAddress(dst, 4u);
+        src = GuardAddress(src, 4u);
+        remaining -= 4u;
+    }
+    if(remaining >= 2u){
+        CopyProbePacket<2u>(dst, src);
+        dst = GuardAddress(dst, 2u);
+        src = GuardAddress(src, 2u);
+        remaining -= 2u;
+    }
+    if(remaining != 0u)
+        CopyProbePacket<1u>(dst, src);
+}
+
+b8 CandidateEqualFirstWord<const usize Words>(in ByteAddress lhs, in ByteAddress rhs){
+    return ProbeWord(lhs, 0u) == ProbeWord(rhs, 0u) && CandidateEqual<Words>(lhs, rhs);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

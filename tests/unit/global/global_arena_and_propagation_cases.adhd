@@ -2,83 +2,53 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "global_platform.adhd"
+#include "global_container_access.adhd"
+#include "name_case_types.adhd"
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
-#include <tests/unit/global/name_case_types.adhd>
+#include <tests/common/value_storage.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/module.h>
-#include <core/alloc/scratch.h>
-
-#include <global/auto_registration.h>
-#include <global/basic_string.h>
-#include <global/compile.h>
-#include <global/containers.h>
-#include <global/filesystem/path.h>
-#include <global/filesystem/utility.h>
-#include <global/fixed_buffer.h>
-#include <global/limit.h>
-#include <global/not_null.h>
-#include <global/numeric_text.h>
-#include <global/overflow.h>
-#include <global/simplemath.h>
-#include <global/termination.h>
-#include <global/text_utils.h>
-#include <global/utf8_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_allocator_propagation_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using NWB::Core::Alloc::GlobalArena;
-
-[[nodiscard]] GlobalArena& DefaultOwner();
-
-template<typename T>
-using DefaultAllocator = ContainerDetail::DefaultArenaAllocator<T, GlobalArena, DefaultOwner>;
-
-template<typename AllocatorT>
-[[nodiscard]] b8 CheckAllocatorSelfAssignment(const Name& owner){
-    GlobalArena arena{ owner };
-    AllocatorT allocator(arena);
-    AllocatorT& sameAllocator = allocator;
-    allocator = sameAllocator;
-    return allocator.arenaPtr() == &arena;
+usize SelectedLength(in b8 useShort, in usize shortLength, in usize longLength){
+    if(useShort)
+        return shortLength;
+    return longLength;
 }
 
-template<typename VectorT>
-void VerifyVectorMove(const b8 foreignArena, const usize targetSize = 1u){
-    GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorSource)};
-    GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorTarget)};
+ConcurrentVector ConstructVector(in b8 withAllocator, mut ConcurrentVector source, mut HeapStorage owner){
+    if(withAllocator)
+        return MoveContainerTo<ConcurrentVector>(source, owner);
+    return MoveContainer<ConcurrentVector>(source);
+}
+
+b8 CheckAllocatorSelfAssignment<AllocatorT>(in Name owner){
+    HeapStorage arena(owner);
+    AllocatorT allocator(arena);
+    mut AllocatorT sameAllocator = allocator;
+    allocator = sameAllocator;
+    return AllocatorUsesStorage(allocator, arena);
+}
+
+void VerifyVectorMove<VectorT>(in b8 foreignArena, in usize targetSize){
+    HeapStorage sourceArena(s_GlobalArenaCaseAllocatorPropagationVectorSource);
+    HeapStorage targetArena(s_GlobalArenaCaseAllocatorPropagationVectorTarget);
     {
-        VectorT target{ typename VectorT::allocator_type(foreignArena ? targetArena : sourceArena) };
+        ContainerInstance<VectorT, u32> target = MakeContainer<VectorT>(SelectStorage(foreignArena, sourceArena, targetArena));
         for(usize index = 0u; index < targetSize; ++index)
             target.push_back(99u);
         {
-            VectorT source{ typename VectorT::allocator_type(sourceArena) };
+            ContainerInstance<VectorT, u32> source = MakeContainer<VectorT>(sourceArena);
             for(u32 index = 0u; index < 128u; ++index)
                 source.push_back(index);
-            const NotNull<const u32*> firstElement = MakeNotNull(&source[0u]);
-            target = Move(source);
-            EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
+            const usize firstElement = TestValueAddress<u32>(source[0u]);
+            TestMoveAssign(target, source);
+            EXPECT_TRUE(TestUsesStorage(target, sourceArena));
             ASSERT_EQ(target.size(), 128u);
-            EXPECT_EQ(&target[0u], firstElement.get());
+            EXPECT_EQ(TestValueAddress<u32>(target[0u]), firstElement);
             EXPECT_TRUE(source.empty());
             source.push_back(7u);
             EXPECT_EQ(source[0u], 7u);
@@ -96,26 +66,25 @@ void VerifyVectorMove(const b8 foreignArena, const usize targetSize = 1u){
     EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
 }
 
-template<typename StringT>
-void VerifyStringMove(const b8 foreignArena, const b8 shortSource){
-    GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringSource)};
-    GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringTarget)};
+void VerifyStringMove<StringT>(in b8 foreignArena, in b8 shortSource){
+    HeapStorage sourceArena(s_GlobalArenaCaseAllocatorPropagationStringSource);
+    HeapStorage targetArena(s_GlobalArenaCaseAllocatorPropagationStringTarget);
     {
-        StringT target{ typename StringT::allocator_type(foreignArena ? targetArena : sourceArena) };
+        ContainerInstance<StringT, NarrowChar> target = MakeContainer<StringT>(SelectStorage(foreignArena, sourceArena, targetArena));
         target.assign(96u, 'z');
         {
-            StringT source{ typename StringT::allocator_type(sourceArena) };
-            source.assign(shortSource ? 3u : 192u, 'a');
-            const char* const sourceStorage = source.data();
-            target = Move(source);
-            EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
-            EXPECT_EQ(target.size(), shortSource ? 3u : 192u);
+            ContainerInstance<StringT, NarrowChar> source = MakeContainer<StringT>(sourceArena);
+            source.assign(SelectedLength(shortSource, 3u, 192u), 'a');
+            const usize sourceStorage = TestDataAddress(source);
+            TestMoveAssign(target, source);
+            EXPECT_TRUE(TestUsesStorage(target, sourceArena));
+            EXPECT_EQ(target.size(), SelectedLength(shortSource, 3u, 192u));
             if(!shortSource)
-                EXPECT_EQ(target.data(), sourceStorage);
+                EXPECT_EQ(TestDataAddress(target), sourceStorage);
             EXPECT_TRUE(source.empty());
             source.assign(48u, 'b');
         }
-        for(const char character : target)
+        for(in NarrowChar character : target)
             EXPECT_EQ(character, 'a');
         target.append(257u, 'c');
         EXPECT_EQ(target.back(), 'c');
@@ -126,36 +95,35 @@ void VerifyStringMove(const b8 foreignArena, const b8 shortSource){
     EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
 }
 
-template<typename VectorT>
-void VerifyVectorSwap(const b8 foreignArena){
-    GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorSwapFirst)};
-    GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationVectorSwapSecond)};
-    GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
+void VerifyVectorSwap<VectorT>(in b8 foreignArena){
+    HeapStorage firstArena(s_GlobalArenaCaseAllocatorPropagationVectorSwapFirst);
+    HeapStorage secondArena(s_GlobalArenaCaseAllocatorPropagationVectorSwapSecond);
+    mut HeapStorage secondOwner = SelectStorage(foreignArena, firstArena, secondArena);
     {
-        VectorT first{ typename VectorT::allocator_type(firstArena) };
-        VectorT second{ typename VectorT::allocator_type(secondOwner) };
+        ContainerInstance<VectorT, u32> first = MakeContainer<VectorT>(firstArena);
+        ContainerInstance<VectorT, u32> second = MakeContainer<VectorT>(secondOwner);
         for(u32 index = 0u; index < 64u; ++index)
             first.push_back(index);
         for(u32 index = 0u; index < 96u; ++index)
             second.push_back(index + 100u);
-        const NotNull<const u32*> firstStorage = MakeNotNull(&first[0u]);
-        const NotNull<const u32*> secondStorage = MakeNotNull(&second[0u]);
+        const usize firstStorage = TestValueAddress<u32>(first[0u]);
+        const usize secondStorage = TestValueAddress<u32>(second[0u]);
         first.swap(second);
-        EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
-        EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+        EXPECT_TRUE(TestUsesStorage(first, secondOwner));
+        EXPECT_TRUE(TestUsesStorage(second, firstArena));
         ASSERT_EQ(first.size(), 96u);
         ASSERT_EQ(second.size(), 64u);
-        EXPECT_EQ(&first[0u], secondStorage.get());
-        EXPECT_EQ(&second[0u], firstStorage.get());
+        EXPECT_EQ(TestValueAddress<u32>(first[0u]), secondStorage);
+        EXPECT_EQ(TestValueAddress<u32>(second[0u]), firstStorage);
         for(u32 index = 0u; index < 96u; ++index)
             EXPECT_EQ(first[index], index + 100u);
         for(u32 index = 0u; index < 64u; ++index)
             EXPECT_EQ(second[index], index);
         first.push_back(777u);
         second.push_back(888u);
-        Swap(first, second);
-        EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
-        EXPECT_EQ(second.get_allocator().arenaPtr(), &secondOwner);
+        SwapContainers(first, second);
+        EXPECT_TRUE(TestUsesStorage(first, firstArena));
+        EXPECT_TRUE(TestUsesStorage(second, secondOwner));
         EXPECT_EQ(first.back(), 888u);
         EXPECT_EQ(second.back(), 777u);
     }
@@ -167,29 +135,28 @@ void VerifyVectorSwap(const b8 foreignArena){
     EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
 }
 
-template<typename StringT>
-void VerifyStringSwap(const b8 foreignArena, const b8 shortFirst){
-    GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringSwapFirst)};
-    GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationStringSwapSecond)};
-    GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
+void VerifyStringSwap<StringT>(in b8 foreignArena, in b8 shortFirst){
+    HeapStorage firstArena(s_GlobalArenaCaseAllocatorPropagationStringSwapFirst);
+    HeapStorage secondArena(s_GlobalArenaCaseAllocatorPropagationStringSwapSecond);
+    mut HeapStorage secondOwner = SelectStorage(foreignArena, firstArena, secondArena);
     {
-        StringT first{ typename StringT::allocator_type(firstArena) };
-        StringT second{ typename StringT::allocator_type(secondOwner) };
-        first.assign(shortFirst ? 3u : 96u, 'a');
+        ContainerInstance<StringT, NarrowChar> first = MakeContainer<StringT>(firstArena);
+        ContainerInstance<StringT, NarrowChar> second = MakeContainer<StringT>(secondOwner);
+        first.assign(SelectedLength(shortFirst, 3u, 96u), 'a');
         second.assign(64u, 'b');
-        const char* const firstStorage = first.data();
-        const char* const secondStorage = second.data();
+        const usize firstStorage = TestDataAddress(first);
+        const usize secondStorage = TestDataAddress(second);
         first.swap(second);
-        EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
-        EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
-        EXPECT_EQ(first.data(), secondStorage);
+        EXPECT_TRUE(TestUsesStorage(first, secondOwner));
+        EXPECT_TRUE(TestUsesStorage(second, firstArena));
+        EXPECT_EQ(TestDataAddress(first), secondStorage);
         if(!shortFirst)
-            EXPECT_EQ(second.data(), firstStorage);
+            EXPECT_EQ(TestDataAddress(second), firstStorage);
         ASSERT_EQ(first.size(), 64u);
-        ASSERT_EQ(second.size(), shortFirst ? 3u : 96u);
-        for(const char character : first)
+        ASSERT_EQ(second.size(), SelectedLength(shortFirst, 3u, 96u));
+        for(in NarrowChar character : first)
             EXPECT_EQ(character, 'b');
-        for(const char character : second)
+        for(in NarrowChar character : second)
             EXPECT_EQ(character, 'a');
         first.append(128u, 'c');
         second.append(128u, 'd');
@@ -206,46 +173,15 @@ void VerifyStringSwap(const b8 foreignArena, const b8 shortFirst){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::GlobalCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Utf8CharArray4 = Array<char, 4>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyAllocatorPropagation_SelfAssignmentPreservesArenaBinding(){
     const Name owner = s_GlobalArenaCaseAllocatorPropagationSelfAssignment;
     b8 regularPreserved = false;
     b8 cacheAlignedPreserved = false;
     b8 defaultPreserved = false;
-    native(in owner, mut regularPreserved, mut cacheAlignedPreserved, mut defaultPreserved){
-        using namespace __hidden_allocator_propagation_tests;
-        regularPreserved = CheckAllocatorSelfAssignment<ContainerDetail::ArenaAllocator<u32, GlobalArena>>(owner);
-        cacheAlignedPreserved = CheckAllocatorSelfAssignment<ContainerDetail::ArenaCacheAlignedAllocator<u32, GlobalArena>>(owner);
-        defaultPreserved = CheckAllocatorSelfAssignment<DefaultAllocator<u32>>(owner);
+    {
+        regularPreserved = CheckAllocatorSelfAssignment<RegularAllocator>(owner);
+        cacheAlignedPreserved = CheckAllocatorSelfAssignment<AlignedAllocator>(owner);
+        defaultPreserved = CheckAllocatorSelfAssignment<DefaultAllocator>(owner);
     }
     EXPECT_TRUE(regularPreserved);
     EXPECT_TRUE(cacheAlignedPreserved);
@@ -258,10 +194,9 @@ void VerifyAllocatorPropagation_VectorMoveTransfersStorageAndItsDeallocationOwne
     flags[1u] = true;
     u32 executedCases = 0u;
     for(in b8 foreignArena : flags){
-        native(in foreignArena, mut executedCases){
-            using namespace __hidden_allocator_propagation_tests;
-            VerifyVectorMove<::Vector<u32, GlobalArena>>(foreignArena);
-            VerifyVectorMove<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
+        {
+            VerifyVectorMove<RegularVector>(foreignArena, 1u);
+            VerifyVectorMove<DefaultVector>(foreignArena, 1u);
             executedCases += 2u;
         }
     }
@@ -279,9 +214,8 @@ void VerifyAllocatorPropagation_CacheAlignedVectorMoveTransfersStorageAndItsDeal
     u32 executedCases = 0u;
     for(in b8 foreignArena : flags){
         for(in usize targetSize : targetSizes){
-            native(in foreignArena, in targetSize, mut executedCases){
-                using namespace __hidden_allocator_propagation_tests;
-                VerifyVectorMove<::ParallelVector<u32, GlobalArena>>(foreignArena, targetSize);
+            {
+                VerifyVectorMove<ConcurrentVector>(foreignArena, targetSize);
                 ++executedCases;
             }
         }
@@ -299,21 +233,20 @@ void VerifyAllocatorPropagation_CacheAlignedVectorMoveConstructionPreservesExpli
             const Name targetOwner = s_GlobalArenaCaseAllocatorPropagationParallelConstructTarget;
             ArenaMemoryStats sourceStats = ArenaMemoryStats();
             ArenaMemoryStats targetStats = ArenaMemoryStats();
-            native(in explicitAllocator, in foreignArena, in sourceOwner, in targetOwner, mut sourceStats, mut targetStats){
-                using NWB::Core::Alloc::GlobalArena;
-                GlobalArena sourceArena{ sourceOwner };
-                GlobalArena targetArena{ targetOwner };
-                using Values = ::ParallelVector<u32, GlobalArena>;
+            {
+                HeapStorage sourceArena(sourceOwner);
+                HeapStorage targetArena(targetOwner);
+
                 {
-                    Values source{ sourceArena };
+                    ConcurrentVector source = MakeContainer<ConcurrentVector>(sourceArena);
                     for(u32 index = 0u; index < 128u; ++index)
                         source.push_back(index);
-                    const NotNull<const u32*> firstElement = MakeNotNull(&source[0u]);
-                    GlobalArena& destinationArena = explicitAllocator && foreignArena ? targetArena : sourceArena;
-                    Values target = explicitAllocator ? Values(Move(source), destinationArena) : Values(Move(source));
-                    EXPECT_EQ(target.get_allocator().arenaPtr(), &destinationArena);
+                    const usize firstElement = TestValueAddress<u32>(source[0u]);
+                    mut HeapStorage destinationArena = SelectStorage(explicitAllocator && foreignArena, sourceArena, targetArena);
+                    ConcurrentVector target = ConstructVector(explicitAllocator, source, destinationArena);
+                    EXPECT_TRUE(TestUsesStorage(target, destinationArena));
                     ASSERT_EQ(target.size(), 128u);
-                    EXPECT_EQ(&target[0u] == firstElement.get(), &destinationArena == &sourceArena);
+                    EXPECT_EQ(TestValueAddress<u32>(target[0u]) == firstElement, !explicitAllocator || !foreignArena);
                     for(u32 index = 0u; index < 128u; ++index)
                         EXPECT_EQ(target[index], index);
                     source.clear();
@@ -342,10 +275,9 @@ void VerifyAllocatorPropagation_StringMovePropagatesArenaForHeapAndSmallStringSt
     u32 executedCases = 0u;
     for(in b8 foreignArena : flags){
         for(in b8 shortSource : flags){
-            native(in foreignArena, in shortSource, mut executedCases){
-                using namespace __hidden_allocator_propagation_tests;
-                VerifyStringMove<AString<GlobalArena>>(foreignArena, shortSource);
-                VerifyStringMove<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortSource);
+            {
+                VerifyStringMove<RegularText>(foreignArena, shortSource);
+                VerifyStringMove<DefaultText>(foreignArena, shortSource);
                 executedCases += 2u;
             }
         }
@@ -362,28 +294,27 @@ void VerifyAllocatorPropagation_OrderedMapMoveTransfersNodesAndTheirDeallocation
         const Name targetOwner = s_GlobalArenaCaseAllocatorPropagationMapTarget;
         ArenaMemoryStats sourceStats = ArenaMemoryStats();
         ArenaMemoryStats targetStats = ArenaMemoryStats();
-        native(in foreignArena, in sourceOwner, in targetOwner, mut sourceStats, mut targetStats){
-            using NWB::Core::Alloc::GlobalArena;
-            GlobalArena sourceArena{ sourceOwner };
-            GlobalArena targetArena{ targetOwner };
+        {
+            HeapStorage sourceArena(sourceOwner);
+            HeapStorage targetArena(targetOwner);
             {
-                ::Map<u32, u32, GlobalArena> target{ foreignArena ? targetArena : sourceArena };
-                ASSERT_TRUE(target.emplace(900u, 900u).second);
+                OwnerMap target = MakeContainer<OwnerMap>(SelectStorage(foreignArena, sourceArena, targetArena));
+                ASSERT_TRUE(InsertEntry(target, 900u, 900u));
                 {
-                    ::Map<u32, u32, GlobalArena> source{ sourceArena };
+                    OwnerMap source = MakeContainer<OwnerMap>(sourceArena);
                     for(u32 key = 0u; key < 64u; ++key)
-                        ASSERT_TRUE(source.emplace(key, key * 3u).second);
-                    const NotNull<const u32*> sourceValue = MakeNotNull(&source.find(0u)->second);
-                    target = Move(source);
-                    EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
+                        ASSERT_TRUE(InsertEntry(source, key, key * 3u));
+                    const usize sourceValue = TestValueAddress<u32>(MappedValue(source, 0u));
+                    TestMoveAssign(target, source);
+                    EXPECT_TRUE(TestUsesStorage(target, sourceArena));
                     ASSERT_EQ(target.size(), 64u);
-                    EXPECT_EQ(&target.find(0u)->second, sourceValue.get());
+                    EXPECT_EQ(TestValueAddress<u32>(MappedValue(target, 0u)), sourceValue);
                     EXPECT_TRUE(source.empty());
-                    ASSERT_TRUE(source.emplace(7u, 8u).second);
+                    ASSERT_TRUE(InsertEntry(source, 7u, 8u));
                 }
                 for(u32 key = 0u; key < 64u; ++key)
-                    EXPECT_EQ(target.find(key)->second, key * 3u);
-                ASSERT_TRUE(target.emplace(65u, 195u).second);
+                    EXPECT_EQ(MappedValue(target, key), key * 3u);
+                ASSERT_TRUE(InsertEntry(target, 65u, 195u));
             }
             sourceStats = sourceArena.memoryStats();
             targetStats = targetArena.memoryStats();
@@ -401,11 +332,10 @@ void VerifyAllocatorPropagation_VectorSwapsTransferStorageAndItsArenaForEveryAll
     flags[1u] = true;
     u32 executedCases = 0u;
     for(in b8 foreignArena : flags){
-        native(in foreignArena, mut executedCases){
-            using namespace __hidden_allocator_propagation_tests;
-            VerifyVectorSwap<::Vector<u32, GlobalArena>>(foreignArena);
-            VerifyVectorSwap<::ParallelVector<u32, GlobalArena>>(foreignArena);
-            VerifyVectorSwap<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
+        {
+            VerifyVectorSwap<RegularVector>(foreignArena);
+            VerifyVectorSwap<ConcurrentVector>(foreignArena);
+            VerifyVectorSwap<DefaultVector>(foreignArena);
             executedCases += 3u;
         }
     }
@@ -419,10 +349,9 @@ void VerifyAllocatorPropagation_StringSwapsTransferArenaForHeapAndSmallStringSto
     u32 executedCases = 0u;
     for(in b8 foreignArena : flags){
         for(in b8 shortFirst : flags){
-            native(in foreignArena, in shortFirst, mut executedCases){
-                using namespace __hidden_allocator_propagation_tests;
-                VerifyStringSwap<AString<GlobalArena>>(foreignArena, shortFirst);
-                VerifyStringSwap<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortFirst);
+            {
+                VerifyStringSwap<RegularText>(foreignArena, shortFirst);
+                VerifyStringSwap<DefaultText>(foreignArena, shortFirst);
                 executedCases += 2u;
             }
         }
@@ -439,33 +368,32 @@ void VerifyAllocatorPropagation_OrderedMapSwapsTransferNodesAndTheirArena(){
         const Name secondOwner = s_GlobalArenaCaseAllocatorPropagationOrderedSwapSecond;
         ArenaMemoryStats firstStats = ArenaMemoryStats();
         ArenaMemoryStats secondStats = ArenaMemoryStats();
-        native(in foreignArena, in firstOwner, in secondOwner, mut firstStats, mut secondStats){
-            using NWB::Core::Alloc::GlobalArena;
-            GlobalArena firstArena{ firstOwner };
-            GlobalArena secondArena{ secondOwner };
-            GlobalArena& secondOwnerRef = foreignArena ? secondArena : firstArena;
+        {
+            HeapStorage firstArena(firstOwner);
+            HeapStorage secondArena(secondOwner);
+            mut HeapStorage secondOwnerRef = SelectStorage(foreignArena, firstArena, secondArena);
             {
-                ::Map<u32, u32, GlobalArena> first{ firstArena };
-                ::Map<u32, u32, GlobalArena> second{ secondOwnerRef };
+                OwnerMap first = MakeContainer<OwnerMap>(firstArena);
+                OwnerMap second = MakeContainer<OwnerMap>(secondOwnerRef);
                 for(u32 key = 0u; key < 16u; ++key)
-                    ASSERT_TRUE(first.emplace(key, key * 3u).second);
+                    ASSERT_TRUE(InsertEntry(first, key, key * 3u));
                 for(u32 key = 100u; key < 132u; ++key)
-                    ASSERT_TRUE(second.emplace(key, key * 5u).second);
-                const NotNull<const u32*> firstNode = MakeNotNull(&first.find(0u)->second);
-                const NotNull<const u32*> secondNode = MakeNotNull(&second.find(100u)->second);
+                    ASSERT_TRUE(InsertEntry(second, key, key * 5u));
+                const usize firstNode = TestValueAddress<u32>(MappedValue(first, 0u));
+                const usize secondNode = TestValueAddress<u32>(MappedValue(second, 100u));
                 first.swap(second);
-                EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwnerRef);
-                EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+                EXPECT_TRUE(TestUsesStorage(first, secondOwnerRef));
+                EXPECT_TRUE(TestUsesStorage(second, firstArena));
                 ASSERT_EQ(first.size(), 32u);
                 ASSERT_EQ(second.size(), 16u);
-                EXPECT_EQ(&first.find(100u)->second, secondNode.get());
-                EXPECT_EQ(&second.find(0u)->second, firstNode.get());
+                EXPECT_EQ(TestValueAddress<u32>(MappedValue(first, 100u)), secondNode);
+                EXPECT_EQ(TestValueAddress<u32>(MappedValue(second, 0u)), firstNode);
                 for(u32 key = 100u; key < 132u; ++key)
                     EXPECT_EQ(first.at(key), key * 5u);
                 for(u32 key = 0u; key < 16u; ++key)
                     EXPECT_EQ(second.at(key), key * 3u);
-                ASSERT_TRUE(first.emplace(999u, 7u).second);
-                ASSERT_TRUE(second.emplace(888u, 9u).second);
+                ASSERT_TRUE(InsertEntry(first, 999u, 7u));
+                ASSERT_TRUE(InsertEntry(second, 888u, 9u));
             }
             firstStats = firstArena.memoryStats();
             secondStats = secondArena.memoryStats();
@@ -486,38 +414,37 @@ void VerifyAllocatorPropagation_HashMapSwapsAndMovesPreserveArenaAndSourceReuse(
         const Name secondOwner = s_GlobalArenaCaseAllocatorPropagationHashMapSecond;
         ArenaMemoryStats firstStats = ArenaMemoryStats();
         ArenaMemoryStats secondStats = ArenaMemoryStats();
-        native(in foreignArena, in firstOwner, in secondOwner, mut firstStats, mut secondStats){
-            using NWB::Core::Alloc::GlobalArena;
-            GlobalArena firstArena{ firstOwner };
-            GlobalArena secondArena{ secondOwner };
-            GlobalArena& secondOwnerRef = foreignArena ? secondArena : firstArena;
+        {
+            HeapStorage firstArena(firstOwner);
+            HeapStorage secondArena(secondOwner);
+            mut HeapStorage secondOwnerRef = SelectStorage(foreignArena, firstArena, secondArena);
             {
-                ::HashMap<u32, u32, GlobalArena> first{ firstArena };
-                ::HashMap<u32, u32, GlobalArena> second{ secondOwnerRef };
+                OwnerHashMap first = MakeContainer<OwnerHashMap>(firstArena);
+                OwnerHashMap second = MakeContainer<OwnerHashMap>(secondOwnerRef);
                 for(u32 key = 0u; key < 64u; ++key)
-                    ASSERT_TRUE(first.emplace(key, key * 3u).second);
+                    ASSERT_TRUE(InsertEntry(first, key, key * 3u));
                 for(u32 key = 100u; key < 132u; ++key)
-                    ASSERT_TRUE(second.emplace(key, key * 5u).second);
-                const NotNull<const u32*> firstStorage = MakeNotNull(&first.at(0u));
-                const NotNull<const u32*> secondStorage = MakeNotNull(&second.at(100u));
+                    ASSERT_TRUE(InsertEntry(second, key, key * 5u));
+                const usize firstStorage = TestValueAddress<u32>(first.at(0u));
+                const usize secondStorage = TestValueAddress<u32>(second.at(100u));
                 first.swap(second);
-                EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwnerRef);
-                EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+                EXPECT_TRUE(TestUsesStorage(first, secondOwnerRef));
+                EXPECT_TRUE(TestUsesStorage(second, firstArena));
                 ASSERT_EQ(first.size(), 32u);
                 ASSERT_EQ(second.size(), 64u);
-                EXPECT_EQ(&first.at(100u), secondStorage.get());
-                EXPECT_EQ(&second.at(0u), firstStorage.get());
-                first = Move(second);
-                EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
+                EXPECT_EQ(TestValueAddress<u32>(first.at(100u)), secondStorage);
+                EXPECT_EQ(TestValueAddress<u32>(second.at(0u)), firstStorage);
+                TestMoveAssign(first, second);
+                EXPECT_TRUE(TestUsesStorage(first, firstArena));
                 ASSERT_EQ(first.size(), 64u);
-                EXPECT_EQ(&first.at(0u), firstStorage.get());
+                EXPECT_EQ(TestValueAddress<u32>(first.at(0u)), firstStorage);
                 EXPECT_TRUE(second.empty());
                 for(u32 key = 0u; key < 64u; ++key)
                     EXPECT_EQ(first.at(key), key * 3u);
                 first.reserve(256u);
-                ASSERT_TRUE(first.emplace(999u, 7u).second);
+                ASSERT_TRUE(InsertEntry(first, 999u, 7u));
                 second.reserve(64u);
-                ASSERT_TRUE(second.emplace(888u, 9u).second);
+                ASSERT_TRUE(InsertEntry(second, 888u, 9u));
                 EXPECT_EQ(second.at(888u), 9u);
                 EXPECT_EQ(first.at(999u), 7u);
             }
@@ -540,38 +467,37 @@ void VerifyAllocatorPropagation_HashSetSwapsAndMovesPreserveArenaAndSourceReuse(
         const Name secondOwner = s_GlobalArenaCaseAllocatorPropagationHashSetSecond;
         ArenaMemoryStats firstStats = ArenaMemoryStats();
         ArenaMemoryStats secondStats = ArenaMemoryStats();
-        native(in foreignArena, in firstOwner, in secondOwner, mut firstStats, mut secondStats){
-            using NWB::Core::Alloc::GlobalArena;
-            GlobalArena firstArena{ firstOwner };
-            GlobalArena secondArena{ secondOwner };
-            GlobalArena& secondOwnerRef = foreignArena ? secondArena : firstArena;
+        {
+            HeapStorage firstArena(firstOwner);
+            HeapStorage secondArena(secondOwner);
+            mut HeapStorage secondOwnerRef = SelectStorage(foreignArena, firstArena, secondArena);
             {
-                ::HashSet<u32, GlobalArena> first{ firstArena };
-                ::HashSet<u32, GlobalArena> second{ secondOwnerRef };
+                OwnerHashSet first = MakeContainer<OwnerHashSet>(firstArena);
+                OwnerHashSet second = MakeContainer<OwnerHashSet>(secondOwnerRef);
                 for(u32 key = 0u; key < 64u; ++key)
-                    ASSERT_TRUE(first.insert(key).second);
+                    ASSERT_TRUE(InsertKey(first, key));
                 for(u32 key = 100u; key < 132u; ++key)
-                    ASSERT_TRUE(second.insert(key).second);
-                const NotNull<const u32*> firstStorage = MakeNotNull(&*first.find(0u));
-                const NotNull<const u32*> secondStorage = MakeNotNull(&*second.find(100u));
+                    ASSERT_TRUE(InsertKey(second, key));
+                const usize firstStorage = TestValueAddress<u32>(FoundKey(first, 0u));
+                const usize secondStorage = TestValueAddress<u32>(FoundKey(second, 100u));
                 first.swap(second);
-                EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwnerRef);
-                EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+                EXPECT_TRUE(TestUsesStorage(first, secondOwnerRef));
+                EXPECT_TRUE(TestUsesStorage(second, firstArena));
                 ASSERT_EQ(first.size(), 32u);
                 ASSERT_EQ(second.size(), 64u);
-                EXPECT_EQ(&*first.find(100u), secondStorage.get());
-                EXPECT_EQ(&*second.find(0u), firstStorage.get());
-                first = Move(second);
-                EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
+                EXPECT_EQ(TestValueAddress<u32>(FoundKey(first, 100u)), secondStorage);
+                EXPECT_EQ(TestValueAddress<u32>(FoundKey(second, 0u)), firstStorage);
+                TestMoveAssign(first, second);
+                EXPECT_TRUE(TestUsesStorage(first, firstArena));
                 ASSERT_EQ(first.size(), 64u);
-                EXPECT_EQ(&*first.find(0u), firstStorage.get());
+                EXPECT_EQ(TestValueAddress<u32>(FoundKey(first, 0u)), firstStorage);
                 EXPECT_TRUE(second.empty());
                 for(u32 key = 0u; key < 64u; ++key)
                     EXPECT_EQ(first.count(key), 1u);
                 first.reserve(256u);
-                ASSERT_TRUE(first.insert(999u).second);
+                ASSERT_TRUE(InsertKey(first, 999u));
                 second.reserve(64u);
-                ASSERT_TRUE(second.insert(888u).second);
+                ASSERT_TRUE(InsertKey(second, 888u));
                 EXPECT_EQ(second.count(888u), 1u);
                 EXPECT_EQ(first.count(999u), 1u);
             }
@@ -594,24 +520,23 @@ void VerifyAllocatorPropagation_DefaultProviderAllocatorMovesAwayFromItsInitialO
     u64 sourceUsedAfter = 1u;
     u64 defaultBeforeUsed = 0u;
     u64 defaultAfterUsed = 1u;
-    native(in sourceOwner, mut initialBoundToDefault, mut movedBoundToSource, mut movedSize, mut movedBack, mut sourceUsedAfter, mut defaultBeforeUsed, mut defaultAfterUsed){
-        using namespace __hidden_allocator_propagation_tests;
-        GlobalArena sourceArena{ sourceOwner };
-        const ArenaMemoryStats defaultBefore = DefaultOwner().memoryStats();
+    {
+        HeapStorage sourceArena(sourceOwner);
+        const ArenaMemoryStats defaultBefore = PropagationDefault().memoryStats();
         defaultBeforeUsed = defaultBefore.usedBytes;
         {
-            DefaultVector<u32, GlobalArena, DefaultOwner> target;
-            initialBoundToDefault = target.get_allocator().arenaPtr() == &DefaultOwner();
+            DefaultVector target;
+            initialBoundToDefault = TestUsesStorage(target, PropagationDefault());
             target.assign(32u, 9u);
-            DefaultVector<u32, GlobalArena, DefaultOwner> source{ sourceArena };
+            DefaultVector source = MakeContainer<DefaultVector>(sourceArena);
             source.assign(64u, 8u);
-            target = Move(source);
-            movedBoundToSource = target.get_allocator().arenaPtr() == &sourceArena;
+            TestMoveAssign(target, source);
+            movedBoundToSource = TestUsesStorage(target, sourceArena);
             movedSize = target.size();
             movedBack = target.back();
         }
         sourceUsedAfter = sourceArena.memoryStats().usedBytes;
-        defaultAfterUsed = DefaultOwner().memoryStats().usedBytes;
+        defaultAfterUsed = PropagationDefault().memoryStats().usedBytes;
     }
     EXPECT_TRUE(initialBoundToDefault);
     EXPECT_TRUE(movedBoundToSource);
@@ -624,9 +549,9 @@ void VerifyAllocatorPropagation_DefaultProviderAllocatorMovesAwayFromItsInitialO
 void VerifyGlobal_AutoRegistrationQueueDeduplicatesAndSnapshots(){
     Vector<u32> values = Vector<u32>();
     values.reserve(6u);
-    native(mut values){
-        ::AutoRegistrationQueue<u32, NWB::Core::Alloc::GlobalArena> queue(NWB::Tests::s_TestArena);
-        const auto equal = [](const u32 lhs, const u32 rhs)noexcept{ return lhs == rhs; };
+    {
+        RegistrationQueue queue(s_TestArena);
+        const auto equal = lambda[](in u32 lhs, in u32 rhs) -> b8{ return lhs == rhs; };
 
         queue.appendUnique(7u, equal);
         queue.appendUnique(7u, equal);
@@ -648,10 +573,8 @@ void VerifyGlobal_AutoRegistrationQueueDeduplicatesAndSnapshots(){
 
 void VerifyGlobal_GenericPathKeepsNativeFilenameCharacters(){
     b8 windowsPlatform = false;
-    native(mut windowsPlatform){
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        windowsPlatform = true;
-#endif
+    {
+        windowsPlatform = s_WindowsPath;
     }
     const Path path = Path("one\\two");
     const String rendered = PathToGenericString(path);
@@ -663,25 +586,18 @@ void VerifyGlobal_GenericPathKeepsNativeFilenameCharacters(){
 }
 
 void VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText(){
-    b8 supported = false;
     i32 strcpyStatus = 0;
     String truncatedCopy = "";
     i32 strcatStatus = 0;
     u8 finalByte = 1u;
-    native(mut supported, mut strcpyStatus, mut truncatedCopy, mut strcatStatus, mut finalByte){
-#if !defined(_MSC_VER)
-        supported = true;
-        Array<char, 4u> truncatedText = {};
-        strcpyStatus = FOUNDATION_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef");
-        truncatedCopy.assign(AStringView(truncatedText.data()));
-
-        Array<char, 4u> nullTerminatedText = { 'a', 'b', 'c', 'd' };
-        strcatStatus = FOUNDATION_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e");
-        finalByte = static_cast<u8>(nullTerminatedText[sizeof(nullTerminatedText) - 1u]);
-#endif
+    {
+        Array<NarrowChar, 4u> truncatedText;
+        strcpyStatus = CopyBounded(truncatedText, "abcdef");
+        truncatedCopy.assign(ReadFixedText(truncatedText));
+        Array<NarrowChar, 4u> unterminated = Array<NarrowChar, 4u>('a', 'b', 'c', 'd');
+        strcatStatus = AppendBounded(unterminated, "e");
+        finalByte = cast<u8>(unterminated[3u]);
     }
-    if(!supported)
-        return;
 
     EXPECT_NE(strcpyStatus, 0);
     const StringView truncatedView = truncatedCopy;
@@ -712,10 +628,10 @@ void VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdent
     EXPECT_TRUE(HasUtf8Bom(bomPrefixed));
     EXPECT_FALSE(HasUtf8Bom(bomPrefixed.substr(0u, 2u)));
 
-    Utf8CharArray4 encoded = Utf8CharArray4();
-    EXPECT_FALSE(EncodeUtf8CodePoint(0xD800u, encoded).has_value());
-    EXPECT_FALSE(EncodeUtf8CodePoint(s_UnicodeMaxCodePoint + 1u, encoded).has_value());
-    const Expected<usize> encodedBytes = EncodeUtf8CodePoint(s_UnicodeMaxCodePoint, encoded);
+    Array<NarrowChar, 4u> encoded;
+    EXPECT_FALSE(EncodeFixedUtf8(0xD800u, encoded).has_value());
+    EXPECT_FALSE(EncodeFixedUtf8(s_UnicodeMaxCodePoint + 1u, encoded).has_value());
+    const Expected<usize> encodedBytes = EncodeFixedUtf8(s_UnicodeMaxCodePoint, encoded);
     ASSERT_TRUE(encodedBytes.has_value());
     ASSERT_EQ(encodedBytes.value(), 4u);
 
@@ -801,60 +717,6 @@ void VerifyGlobal_OwnershipInvariantTerminationIsAlwaysActive(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_allocator_propagation_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GlobalArena& DefaultOwner(){
-    static GlobalArena s_Arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationDefault)};
-    return s_Arena;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if !defined(_MSC_VER)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
-    VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(AllocatorPropagation, SelfAssignmentPreservesArenaBinding, VerifyAllocatorPropagation_SelfAssignmentPreservesArenaBinding)
 NWB_ADHD_GTEST(AllocatorPropagation, VectorMoveTransfersStorageAndItsDeallocationOwner, VerifyAllocatorPropagation_VectorMoveTransfersStorageAndItsDeallocationOwner)
 NWB_ADHD_GTEST(AllocatorPropagation, CacheAlignedVectorMoveTransfersStorageAndItsDeallocationOwner, VerifyAllocatorPropagation_CacheAlignedVectorMoveTransfersStorageAndItsDeallocationOwner)
@@ -871,6 +733,7 @@ NWB_ADHD_GTEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots, VerifyGlob
 NWB_ADHD_GTEST(Global, GenericPathKeepsNativeFilenameCharacters, VerifyGlobal_GenericPathKeepsNativeFilenameCharacters)
 NWB_ADHD_GTEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers, VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers)
 NWB_ADHD_GTEST(Global, OwnershipInvariantTerminationIsAlwaysActive, VerifyGlobal_OwnershipInvariantTerminationIsAlwaysActive)
+registration PortableCrtCase(Global, BoundedRuntimeWrappersTerminateTruncatedText, VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

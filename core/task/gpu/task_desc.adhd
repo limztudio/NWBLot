@@ -27,6 +27,7 @@ extern enum GpuTaskTimingPolicy : u8{
 extern class GpuClearBufferTaskDesc{
     GpuGraphResourceId destination;
     u32 clearValue;
+    void publishAcceptedToken(mut QueueSubmissionToken token);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuClearTextureRectUIntTaskDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
@@ -36,6 +37,7 @@ extern class GpuClearTextureRectUIntTaskDesc{
     Rect rect;
     UIntColor uintValue;
     GpuClearTextureTaskRecordHooks recordHooks;
+    void publishAcceptedToken(mut QueueSubmissionToken token);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuClearTextureTaskDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
@@ -65,6 +67,8 @@ extern GpuClearTextureTaskRecordHooks MakeGpuClearTextureTaskRecordHooks(mut aut
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuCopyBufferTaskDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCopyBufferTaskDesc{
     usize regionCount;
+    void publishAcceptedToken(mut QueueSubmissionToken token);
+    void setRegions(in Span<GpuCopyBufferTaskRegion> regions);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuCopyBufferTaskRegion"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
@@ -79,6 +83,7 @@ extern class GpuCopyBufferTaskRegion{
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuCopyTextureTaskDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCopyTextureTaskDesc{
     usize regionCount;
+    void publishAcceptedToken(mut QueueSubmissionToken token);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuCopyTextureTaskRegion"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
@@ -101,6 +106,7 @@ extern class GpuExternalCompletionDesc{
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuGraphInitialOwnerHandoffSourceDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuGraphInitialOwnerHandoffSourceDesc{
+    void setStateSource(in borrow CommandListResourceStateHandoff source);
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
@@ -168,6 +174,7 @@ extern class GpuGraphResourceVersionDesc{
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuResolveTextureTaskDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuResolveTextureTaskDesc{
     usize regionCount;
+    void publishAcceptedToken(mut QueueSubmissionToken token);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuResolveTextureTaskRegion"), cpp_flags(self_defaulted, binary_serializable, brace_init)]

@@ -11,6 +11,7 @@ extern class CaptureSession{
     b8 recordFrameGraph(...);
     PerfSessionRecordResult recordPerfReport(...);
     mut Recorder recorder(...)const;
+    void setCaptureOptions(in TelemetryCaptureOptions options);
     void setFrameIndex(...);
     void setStreamId(...);
     u32 streamId(...)const;

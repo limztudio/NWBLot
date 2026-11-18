@@ -31,16 +31,16 @@ template<typename PayloadT>
 struct MemberTask{
     using Payload = PayloadT;
 
-    [[nodiscard]] static GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept(noexcept(payload.commandRequirements())) requires requires{ payload.commandRequirements(); }{
+    [[nodiscard]] static GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept(noexcept(payload.commandRequirements())) requires requires{ static_cast<GpuTaskCommandRequirements (Payload::*)()const>(&Payload::commandRequirements); }{
         return payload.commandRequirements();
     }
-    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept(noexcept(payload.record(commandList, context))) requires requires{ payload.record(commandList, context); }{
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept(noexcept(payload.record(commandList, context))) requires requires{ static_cast<b8 (Payload::*)(CommandList&, const GpuTaskRecordContext&)const>(&Payload::record); }{
         return payload.record(commandList, context);
     }
-    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept(noexcept(payload.accepted(token))) requires requires{ payload.accepted(token); }{
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept(noexcept(payload.accepted(token))) requires (requires{ static_cast<void (Payload::*)(const QueueSubmissionToken&)>(&Payload::accepted); } || requires{ static_cast<void (Payload::*)(QueueSubmissionToken)>(&Payload::accepted); }){
         payload.accepted(token);
     }
-    static void Discarded(Payload& payload)noexcept(noexcept(payload.discarded())) requires requires{ payload.discarded(); }{
+    static void Discarded(Payload& payload)noexcept(noexcept(payload.discarded())) requires requires{ static_cast<void (Payload::*)()>(&Payload::discarded); }{
         payload.discarded();
     }
 };

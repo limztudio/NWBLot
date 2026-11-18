@@ -116,6 +116,10 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
     TelemetryBytes& outPayload
 );
 [[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc::ScratchArena& scratchArena, const void* payload, usize payloadBytes);
+[[nodiscard]] inline Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc::ScratchArena& scratch, const Span<const u8> payload){
+    return ParseFrameGraphPayload(arena, scratch, payload.data(), payload.size());
+}
+
 [[nodiscard]] inline b8 RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, const u64 frameIndex, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, const u32 streamId = 0u){
     return recorder.recordBuiltPayload(EventKind::FrameGraphFrame, frameIndex, streamId, [frameIndex, &scratchArena, nodes, edges](TelemetryArena&, TelemetryBytes& payload){
         return BuildFrameGraphPayload(frameIndex, nodes, edges, scratchArena, payload);

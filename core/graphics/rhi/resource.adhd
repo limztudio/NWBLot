@@ -190,6 +190,7 @@ extern class StagingTextureHandle{
 [cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::StagingTextureMapping"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class StagingTextureMapping{
     usize rowPitch;
+    Span<u8> readBytes()const;
 };
 
 [cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]

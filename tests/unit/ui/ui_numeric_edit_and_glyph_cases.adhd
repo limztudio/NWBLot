@@ -4,495 +4,211 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ui/multiline_fixture.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_numeric_and_popup_tools.adhd>
+#include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<tests/unit/ui/numeric_format_buffer.h>"), cpp_name("::NWB::Tests::UiCases::FormatF64Bytes")]
+extern Expected<usize, ErrorCode> FormatF64Bytes(in f64 value, mut Span<u8> buffer);
+
+[cpp_header("<tests/unit/ui/numeric_format_buffer.h>"), cpp_name("::NWB::Tests::UiCases::FormatI64Bytes")]
+extern Expected<usize, ErrorCode> FormatI64Bytes(in i64 value, mut Span<u8> buffer);
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+enum<u8> UiNumericSelectionEpochMutation{ SelectionRoundTrip, SameSelection, CompositionRoundTrip }
 
+type NumericLifetimeIntegerModel = IntegerEditModel;
+type NumericLifetimeFloatModel = FloatEditModel;
+type NumericLifetimeIntegerFixture = NumericModelFixture<IntegerEditModel>;
+type NumericLifetimeFloatFixture = NumericModelFixture<FloatEditModel>;
+type IntegerLifetimeTests = NumericLifetimeIntegerFixture;
+type FloatLifetimeTests = NumericLifetimeFloatFixture;
+type UiNumericSelectionEpochTests = NumericFixture;
 
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+class UiNumericFormatBuffer{
+    public Array<u8, s_NumericEditMaxBytes> storage;
+    public Expected<usize, ErrorCode> result = MakeUnexpected(ErrorCode());
+    public b8 hasValue()const{ return this.result.has_value(); }
+    public StringView text()const{
+        if(this.result.has_value())
+            return ReadBinaryTextSlice(this.storage, 0u, cast<isize>(this.result.value())).value();
+        return "";
+    }
+    public ErrorCode error()const{
+        if(!this.result.has_value())
+            return this.result.error();
+        return ErrorCode();
+    }
+}
 
-#include <global/bit.h>
-#include <global/limit.h>
-#include <global/numeric_text.h>
+UiNumericFormatBuffer FormatUiNumericI64(in i64 value){
+    UiNumericFormatBuffer out;
+    out.result = FormatI64Bytes(value, out.storage);
+    return out;
+}
 
-#include <gtest/gtest.h>
+UiNumericFormatBuffer FormatUiNumericF64(in f64 value){
+    UiNumericFormatBuffer out;
+    out.result = FormatF64Bytes(value, out.storage);
+    return out;
+}
 
+[ordered]
+class UiNumericFormatGuardedOneByteBuffer{
+    public u8 first = 'a';
+    public Array<u8, 1u> buffer = Array<u8, 1u>('x');
+    public u8 last = 'z';
+    public Expected<usize, ErrorCode> formatInteger(in i64 value){ return FormatI64Bytes(value, this.buffer); }
+    public Expected<usize, ErrorCode> formatFloat(in f64 value){ return FormatF64Bytes(value, this.buffer); }
+    public b8 firstIntact()const{ return this.first == 'a'; }
+    public b8 lastIntact()const{ return this.last == 'z'; }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiNumericEditBuilderPlainHost : IEditBoxHost{
+    public usize edits = 0u;
 
-
-namespace __hidden_ui_numeric_edit_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiNumericEditTests;
-
-
-class PlainHost final : public IEditBoxHost{
-public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel&)noexcept override{
-        ++edits;
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2) override{
+        ++this.edits;
         EditBoxResult result;
         result.valid = true;
         return result;
     }
-
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{ return true; }
+    public EditBoxResult editInPopup(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3) override{ return EditBoxResult(); }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{ return EditBoxResult(); }
+    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6) override{ return EditBoxResult(); }
+    public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3) override{ return true; }
+}
 
 
-public:
-    usize edits = 0u;
-};
+class UiNumericEditBuilderTests : NumericFixture{
 
-class UiNumericEditBuilderTests : public NumericFixture{
-public:
-    void usePlainHost(PlainHost& host)noexcept{
-        m_builder.setEditHost(host);
+
+    public void usePlainHost(mut UiNumericEditBuilderPlainHost host){
+        this.m_builder.setEditHost(host);
     }
-
-    void armLoanInteger()noexcept{
-        m_host.onLoanInteger = &m_integer;
+    public void armLoanInteger(){
+        this.m_host.onLoanInteger = Optional<mut IntegerEditModel>(this.m_integer);
     }
-
-    void armResetBuilder()noexcept{
-        m_host.resetBuilder = &m_builder;
+    public void armResetBuilder(){
+        this.m_host.resetBuilder = Optional<mut Builder>(this.m_builder);
     }
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 
 
-};
+class UiNumericEditLoanMutationSource : ComboSource{
+    public TestObserved<Optional<mut IntegerEditModel>> onText;
+    public TestObserved<Optional<mut IntegerEditModel>> onRevision;
+    public TestObserved<Optional<mut UiNumericEditLoanMutationSource>> armSource;
+    public Optional<mut IntegerEditModel> armModel;
+    public TestObserved<b8> mutationApplied;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_numeric_edit_loan_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiNumericEditTests;
-
-
-class NumericMutationSource final : public ComboSource{
-public:
-    NumericMutationSource()noexcept{ count = 5u; }
-
-
-public:
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        if(onRevision){
-            IntegerEditModel& model = *MakeNotNull(Exchange(onRevision, nullptr));
-            mutationApplied = model.setValue(99);
+    public UiNumericEditLoanMutationSource(){ this.count = 5u; }
+    public u64 revision()const override{
+        if(this.onRevision.value().has_value()){
+            mut IntegerEditModel model = this.onRevision.value().value();
+            this.onRevision.value().reset();
+            this.mutationApplied.value() = model.setValue(99);
         }
-        return contentRevision;
+        return this.contentRevision;
     }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        const StringView result = ComboSource::text(index);
-        if(onText){
-            IntegerEditModel& model = *MakeNotNull(Exchange(onText, nullptr));
-            mutationApplied = model.setValue(99);
+    public StringView text(in u64 index)const override{
+        const StringView result = this.baseText(index);
+        if(this.onText.value().has_value()){
+            mut IntegerEditModel model = this.onText.value().value();
+            this.onText.value().reset();
+            this.mutationApplied.value() = model.setValue(99);
         }
-        if(armSource){
-            armSource->onRevision = armModel;
-            armSource = nullptr;
+        if(this.armSource.value().has_value()){
+            this.armSource.value().value().onRevision.value() = this.armModel;
+            this.armSource.value().reset();
         }
         return result;
     }
-
-    void armTextModel(IntegerEditModel& model)noexcept{
-        onText = &model;
+    public void armTextModel(mut IntegerEditModel model){
+        this.onText.value() = Optional<mut IntegerEditModel>(model);
     }
-
-    void armRevisionOnSource(NumericMutationSource& source, IntegerEditModel& model)noexcept{
-        armSource = &source;
-        armModel = &model;
+    public void armRevisionOnSource(mut UiNumericEditLoanMutationSource source, mut IntegerEditModel model){
+        this.armSource.value() = Optional<mut UiNumericEditLoanMutationSource>(source);
+        this.armModel = Optional<mut IntegerEditModel>(model);
     }
-
-
-public:
-    mutable IntegerEditModel* onText = nullptr;
-    mutable IntegerEditModel* onRevision = nullptr;
-    mutable NumericMutationSource* armSource = nullptr;
-    IntegerEditModel* armModel = nullptr;
-    mutable b8 mutationApplied = false;
-};
-
-class UiNumericEditLoanTests : public NumericFixture{
-public:
-    void armPublishInteger()noexcept{
-        m_host.onPublishInteger = &m_integer;
-    }
-
-    void armPublishFloat()noexcept{
-        m_host.onPublishFloat = &m_float;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_numeric_format_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-struct FormattedNumericBuffer{
-    Array<char, s_NumericEditMaxBytes> storage{};
-    Expected<AStringView, ErrorCode> result = MakeUnexpected(ErrorCode{});
-
-    [[nodiscard]] b8 hasValue()const noexcept{
-        return result.has_value();
-    }
-
-    [[nodiscard]] AStringView text()const noexcept{
-        return result ? *result : AStringView{};
-    }
-
-    [[nodiscard]] ErrorCode error()const noexcept{
-        return result ? ErrorCode{} : result.error();
-    }
-};
-
-[[nodiscard]] FOUNDATION_INLINE FormattedNumericBuffer FormatIntegerBuffer(const i64 value)noexcept{
-    FormattedNumericBuffer out;
-    out.result = FormatI64(value, out.storage);
-    return out;
 }
 
-[[nodiscard]] FOUNDATION_INLINE FormattedNumericBuffer FormatFloatBuffer(const f64 value)noexcept{
-    FormattedNumericBuffer out;
-    out.result = FormatF64(value, out.storage);
-    return out;
+
+class UiNumericEditLoanTests : NumericFixture{
+
+
+    public void armPublishInteger(){
+        this.m_host.onPublishInteger = Optional<mut IntegerEditModel>(this.m_integer);
+    }
+    public void armPublishFloat(){
+        this.m_host.onPublishFloat = Optional<mut FloatEditModel>(this.m_float);
+    }
 }
 
-struct GuardedOneByteBuffer{
-    char first = 'a';
-    Array<char, 1u> buffer{ 'x' };
-    char last = 'z';
 
-    [[nodiscard]] Expected<AStringView, ErrorCode> formatInteger(const i64 value)noexcept{
-        return FormatI64(value, buffer);
-    }
+class UiNumericSelectionEpochSource : ComboSource{
+    public TestObserved<Optional<mut EditModel>> onText;
+    public TestObserved<Optional<mut EditModel>> onRevision;
+    public TestObserved<Optional<mut UiNumericSelectionEpochSource>> armSource;
+    public Optional<mut EditModel> armDraft;
+    public UiNumericSelectionEpochMutation mutation = UiNumericSelectionEpochMutation::SelectionRoundTrip;
+    public TestObserved<b8> mutationApplied;
 
-    [[nodiscard]] Expected<AStringView, ErrorCode> formatFloat(const f64 value)noexcept{
-        return FormatF64(value, buffer);
-    }
-
-    [[nodiscard]] b8 firstIntact()const noexcept{
-        return first == 'a';
-    }
-
-    [[nodiscard]] b8 lastIntact()const noexcept{
-        return last == 'z';
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_numeric_model_lifetime_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::UiNumericTests;
-
-template<typename Model>
-class NumericLifetimeTests : public NumericModelFixture<Model>{};
-
-using ModelTypes = testing::Types<IntegerEditModel, FloatEditModel>;
-TYPED_TEST_SUITE(NumericLifetimeTests, ModelTypes);
-
-class IntegerLifetimeTests : public NumericModelFixture<IntegerEditModel>{};
-class FloatLifetimeTests : public NumericModelFixture<FloatEditModel>{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_numeric_parse_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-
-inline constexpr AStringView s_EmbeddedNulDigits("1\0", 2u);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_numeric_selection_epoch_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiNumericEditTests;
-
-namespace EpochMutation{
-    enum Enum : u8{ SelectionRoundTrip, SameSelection, CompositionRoundTrip };
-};
-
-class SelectionEpochSource final : public ComboSource{
-public:
-    SelectionEpochSource()noexcept{ count = 5u; }
-
-
-public:
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        if(onRevision){
-            EditModel& draft = *MakeNotNull(Exchange(onRevision, nullptr));
-            mutationApplied = mutate(draft);
+    public UiNumericSelectionEpochSource(){ this.count = 5u; }
+    public u64 revision()const override{
+        if(this.onRevision.value().has_value()){
+            mut EditModel draft = this.onRevision.value().value();
+            this.onRevision.value().reset();
+            this.mutationApplied.value() = MutateUiNumericSelectionEpochDraft(this.mutation, draft);
         }
-        return contentRevision;
+        return this.contentRevision;
     }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        const StringView result = ComboSource::text(index);
-        if(onText){
-            EditModel& draft = *MakeNotNull(Exchange(onText, nullptr));
-            mutationApplied = mutate(draft);
+    public StringView text(in u64 index)const override{
+        const StringView result = this.baseText(index);
+        if(this.onText.value().has_value()){
+            mut EditModel draft = this.onText.value().value();
+            this.onText.value().reset();
+            this.mutationApplied.value() = MutateUiNumericSelectionEpochDraft(this.mutation, draft);
         }
-        if(armSource){
-            armSource->onRevision = armDraft;
-            armSource = nullptr;
+        if(this.armSource.value().has_value()){
+            this.armSource.value().value().onRevision.value() = this.armDraft;
+            this.armSource.value().reset();
         }
         return result;
     }
-
-    void armTextDraft(EditModel& draft)noexcept{
-        onText = &draft;
+    public void armTextDraft(mut EditModel draft){
+        this.onText.value() = Optional<mut EditModel>(draft);
     }
-
-    void armRevisionOnSource(SelectionEpochSource& source, EditModel& draft)noexcept{
-        armSource = &source;
-        armDraft = &draft;
+    public void armRevisionOnSource(mut UiNumericSelectionEpochSource source, mut EditModel draft){
+        this.armSource.value() = Optional<mut UiNumericSelectionEpochSource>(source);
+        this.armDraft = Optional<mut EditModel>(draft);
     }
+}
 
 
-private:
-    [[nodiscard]] b8 mutate(EditModel& draft)const;
+class UiPaintGlyphTests : PaintTextFixture{
 
 
-public:
-    mutable EditModel* onText = nullptr;
-    mutable EditModel* onRevision = nullptr;
-    mutable SelectionEpochSource* armSource = nullptr;
-    EditModel* armDraft = nullptr;
-    EpochMutation::Enum mutation = EpochMutation::SelectionRoundTrip;
-    mutable b8 mutationApplied = false;
-};
+    public b8 prepareSingleGlyphPage(in SharedGlyphPage page){ return this.m_builder.prepareGlyphPages(Array<SharedGlyphPage, 1u>(page)); }
+}
 
-class UiNumericSelectionEpochTests : public NumericFixture{};
 
+usize UiPaintGlyphPageAddress(in SharedGlyphPage page){
+    if(page.valid())
+        return TestValueAddress<GlyphPage>(page.deref());
+    return 0u;
+}
+u64 UiPaintGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
+u8 UiPaintGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_paint_glyph_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-
-class UiPaintGlyphTests : public NWB::UiPaintTextTests::PaintTextFixture{
-public:
-    [[nodiscard]] b8 prepareSingleGlyphPage(const SharedGlyphPage& page){
-        return m_builder.prepareGlyphPages(Span(&page, 1u));
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiNumericEditBuilderPlainHost = __hidden_ui_numeric_edit_builder_tests::PlainHost;
-using UiNumericEditBuilderTests = __hidden_ui_numeric_edit_builder_tests::UiNumericEditBuilderTests;
-using UiNumericEditLoanMutationSource = __hidden_ui_numeric_edit_loan_tests::NumericMutationSource;
-using UiNumericEditLoanTests = __hidden_ui_numeric_edit_loan_tests::UiNumericEditLoanTests;
-using UiNumericFormatBuffer = __hidden_ui_numeric_format_tests::FormattedNumericBuffer;
-using UiNumericFormatGuardedOneByteBuffer = __hidden_ui_numeric_format_tests::GuardedOneByteBuffer;
-using NumericLifetimeIntegerFixture = __hidden_ui_numeric_model_lifetime_tests::NumericLifetimeTests<::NWB::Impl::Ui::IntegerEditModel>;
-using NumericLifetimeFloatFixture = __hidden_ui_numeric_model_lifetime_tests::NumericLifetimeTests<::NWB::Impl::Ui::FloatEditModel>;
-using IntegerLifetimeTests = __hidden_ui_numeric_model_lifetime_tests::IntegerLifetimeTests;
-using FloatLifetimeTests = __hidden_ui_numeric_model_lifetime_tests::FloatLifetimeTests;
-namespace UiNumericSelectionEpochMutation = __hidden_ui_numeric_selection_epoch_tests::EpochMutation;
-using UiNumericSelectionEpochMutationEnum = __hidden_ui_numeric_selection_epoch_tests::EpochMutation::Enum;
-using UiNumericSelectionEpochSource = __hidden_ui_numeric_selection_epoch_tests::SelectionEpochSource;
-using UiNumericSelectionEpochTests = __hidden_ui_numeric_selection_epoch_tests::UiNumericSelectionEpochTests;
-using UiPaintGlyphTests = __hidden_ui_paint_glyph_tests::UiPaintGlyphTests;
-
-using Color = ::NWB::Impl::Ui::Color;
-using EditBoxState = ::NWB::Impl::Ui::EditBoxState;
-using FloatBounds = ::NWB::Impl::Ui::FloatBounds;
-using FloatEditModel = ::NWB::Impl::Ui::FloatEditModel;
-using FloatEditOptions = ::NWB::Impl::Ui::FloatEditOptions;
-using IntegerBounds = ::NWB::Impl::Ui::IntegerBounds;
-using IntegerEditModel = ::NWB::Impl::Ui::IntegerEditModel;
-using IntegerEditOptions = ::NWB::Impl::Ui::IntegerEditOptions;
-using ListState = ::NWB::Impl::Ui::ListState;
-using PopupState = ::NWB::Impl::Ui::PopupState;
-using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
-
-namespace CoreKey = ::NWB::Core::Key;
-namespace EditAction = ::NWB::Impl::Ui::EditAction;
-namespace NumericBoundsPolicy = ::NWB::Impl::Ui::NumericBoundsPolicy;
-using NumericBoundsPolicyEnum = ::NWB::Impl::Ui::NumericBoundsPolicy::Enum;
-namespace NumericParseStatus = ::NWB::Impl::Ui::NumericParseStatus;
-using NumericParseStatusEnum = ::NWB::Impl::Ui::NumericParseStatus::Enum;
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-
-using ::NWB::Impl::Ui::ParseFloatDraft;
-using ::NWB::Impl::Ui::ParseIntegerDraft;
-using ::NWB::Impl::Ui::ValidateFloatBounds;
-using ::NWB::Impl::Ui::ValidateIntegerBounds;
-using ::NWB::Impl::Ui::s_NumericEditMaxBytes;
-using ::NWB::Impl::Ui::s_PaintMaxImages;
-using ::NWB::Tests::UiCases::s_UiInputNameSprite;
-
-inline constexpr AStringView s_UiNumericParseEmbeddedNulDigits = __hidden_ui_numeric_parse_tests::s_EmbeddedNulDigits;
-
-[[nodiscard]] FOUNDATION_INLINE UiNumericFormatBuffer FormatUiNumericI64(const i64 value)noexcept{
-    return __hidden_ui_numeric_format_tests::FormatIntegerBuffer(value);
-}
-[[nodiscard]] FOUNDATION_INLINE UiNumericFormatBuffer FormatUiNumericF64(const f64 value)noexcept{
-    return __hidden_ui_numeric_format_tests::FormatFloatBuffer(value);
-}
-[[nodiscard]] FOUNDATION_INLINE ::ErrorCode MakeUiNumericValueTooLargeError()noexcept{
-    return ::MakeErrorCode(::ErrorCondition::value_too_large);
-}
-[[nodiscard]] FOUNDATION_INLINE ::ErrorCode MakeUiNumericInvalidArgumentError()noexcept{
-    return ::MakeErrorCode(::ErrorCondition::invalid_argument);
-}
-[[nodiscard]] FOUNDATION_INLINE f64 UiNumericInfinityF64()noexcept{
-    return ::Limit<f64>::s_Infinity;
-}
-[[nodiscard]] FOUNDATION_INLINE f64 UiNumericQuietNaNF64()noexcept{
-    return ::Limit<f64>::s_QuietNaN;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintGlyphHasPage(const SharedGlyphPage& page)noexcept{
-    return static_cast<b8>(page != nullptr);
-}
-[[nodiscard]] FOUNDATION_INLINE usize UiPaintGlyphPageAddress(const SharedGlyphPage& page)noexcept{
-    return reinterpret_cast<usize>(page.get());
-}
-[[nodiscard]] FOUNDATION_INLINE u64 UiPaintGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
-    return page->binding().generation;
-}
-[[nodiscard]] FOUNDATION_INLINE u8 UiPaintGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
-    return page->pixels()[index];
-}
-FOUNDATION_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
-    dst = ::Move(*src);
-}
-FOUNDATION_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
-    dst = ::Move(*src);
-}
-
-b8 MutateUiNumericSelectionEpochDraft(const UiNumericSelectionEpochMutationEnum& mutation, EditModel& draft)noexcept;
-};
-
-namespace __hidden_ui_numeric_selection_epoch_tests{
-FOUNDATION_INLINE b8 SelectionEpochSource::mutate(EditModel& draft)const{
-    return ::__hidden_ui_glyph_sdf_tests::MutateUiNumericSelectionEpochDraft(mutation, draft);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutationEnum mutation, mut EditModel draft){
+b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutation mutation, mut EditModel draft){
     const usize anchor = draft.anchor();
     const usize caret = draft.caret();
     if(mutation == UiNumericSelectionEpochMutation::SelectionRoundTrip)
@@ -518,7 +234,7 @@ const u64 s_UiPaintGlyphDefaultAtlasIdentity = 11u;
 
 class UiNumericParseExpectationCase{
     public StringView text;
-    public NumericParseStatusEnum status;
+    public NumericParseStatus status;
 
     public UiNumericParseExpectationCase(){
         this.text = "";
@@ -530,7 +246,7 @@ class UiNumericParseExpectationCase{
         this.status = NumericParseStatus::Invalid;
     }
 
-    public UiNumericParseExpectationCase(in StringView inText, in NumericParseStatusEnum inStatus){
+    public UiNumericParseExpectationCase(in StringView inText, in NumericParseStatus inStatus){
         this.text = inText;
         this.status = inStatus;
     }
@@ -624,7 +340,7 @@ void VerifyUiNumericEditBuilderTests_AHostWithoutOrderedActionsRejectsTypedEdito
 void VerifyUiNumericEditBuilderTests_SubmitCommitsAtItsPositionBeforeLaterText(mut UiNumericEditBuilderTests self){
     self.useHost();
     self.m_host.replace("42");
-    self.m_host.key(CoreKey::Enter);
+    self.m_host.key(Key::Enter);
     self.m_host.text("7");
     ASSERT_TRUE(self.beginNumeric(1u));
     const auto result = self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState);
@@ -644,9 +360,9 @@ void VerifyUiNumericEditBuilderTests_SubmitCommitsAtItsPositionBeforeLaterText(m
 void VerifyUiNumericEditBuilderTests_SubmitThenCancelAggregatesActionsAndDropsRetiredText(mut UiNumericEditBuilderTests self){
     self.useHost();
     self.m_host.replace("42");
-    self.m_host.key(CoreKey::Enter);
+    self.m_host.key(Key::Enter);
     self.m_host.text("7");
-    self.m_host.key(CoreKey::Escape);
+    self.m_host.key(Key::Escape);
     self.m_host.text("9");
     ASSERT_TRUE(self.beginNumeric(1u));
     const auto result = self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState);
@@ -664,7 +380,7 @@ void VerifyUiNumericEditBuilderTests_IncompleteSubmitRetainsDraftAndReportsRejec
     self.useHost();
     ASSERT_TRUE(self.m_integer.setValue(12));
     self.m_host.replace("-");
-    self.m_host.key(CoreKey::Enter);
+    self.m_host.key(Key::Enter);
     ASSERT_TRUE(self.beginNumeric(1u));
     const auto result = self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
@@ -695,7 +411,7 @@ void VerifyUiNumericEditBuilderTests_InvalidBlurRestoresCurrentCommittedValueBef
 void VerifyUiNumericEditBuilderTests_FloatClampUsesTheBoundsOfTheOrderedAction(mut UiNumericEditBuilderTests self){
     self.useHost();
     self.m_host.replace("12.5");
-    self.m_host.key(CoreKey::Enter);
+    self.m_host.key(Key::Enter);
     FloatEditOptions options = FloatEditOptions();
     options.bounds = MakeUiFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Clamp);
     ASSERT_TRUE(self.beginNumeric(1u));
@@ -723,7 +439,7 @@ void VerifyUiNumericEditBuilderTests_BoundsPolicyChangePreservesDraftUntilTheNex
     EXPECT_EQ(self.m_integer.value(), 0);
     EXPECT_EQ(self.m_integer.draft().text(), "42");
     ASSERT_TRUE(self.acceptNumeric());
-    self.m_host.key(CoreKey::Enter);
+    self.m_host.key(Key::Enter);
     ASSERT_TRUE(self.beginNumeric(3u));
     const auto committed = self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState, options);
     ASSERT_TRUE(committed.edit.valid && committed.numeric.valid);
@@ -738,7 +454,7 @@ void VerifyUiNumericEditBuilderTests_ReadOnlySubmitDoesNotCommitOrAdvanceNumeric
     ASSERT_TRUE(self.m_integer.setValue(12));
     ASSERT_TRUE(self.m_integer.setDraft("42"));
     const u64 revision = self.m_integer.revision();
-    self.m_host.key(CoreKey::Enter);
+    self.m_host.key(Key::Enter);
     IntegerEditOptions options = IntegerEditOptions();
     options.edit.readOnly = true;
     ASSERT_TRUE(self.beginNumeric(1u));
@@ -794,8 +510,8 @@ void VerifyUiNumericEditBuilderTests_PreeditOwnsEnterAndTheFirstEscape(mut UiNum
     ASSERT_TRUE(self.m_integer.setValue(12));
     ASSERT_TRUE(self.m_integer.setDraft("42"));
     self.m_host.preedit("7");
-    self.m_host.key(CoreKey::Enter);
-    self.m_host.key(CoreKey::Escape);
+    self.m_host.key(Key::Enter);
+    self.m_host.key(Key::Escape);
     ASSERT_TRUE(self.beginNumeric(1u));
     const auto first = self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState);
     ASSERT_TRUE(first.edit.valid && first.numeric.valid);
@@ -805,7 +521,7 @@ void VerifyUiNumericEditBuilderTests_PreeditOwnsEnterAndTheFirstEscape(mut UiNum
     EXPECT_EQ(self.m_integer.value(), 12);
     EXPECT_EQ(self.m_integer.draft().text(), "42");
     ASSERT_TRUE(self.acceptNumeric());
-    self.m_host.key(CoreKey::Escape);
+    self.m_host.key(Key::Escape);
     ASSERT_TRUE(self.beginNumeric(2u));
     const auto second = self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState);
     ASSERT_TRUE(second.edit.valid && second.numeric.valid);
@@ -966,8 +682,8 @@ void VerifyUiNumericEditLoanTests_LaterVirtualListCallbackRejectsAnAlreadyPainte
     ASSERT_TRUE(self.m_builder.virtualList("list", source, list, MakeLargeLoanListOptions()).valid);
     source.armTextModel(self.m_integer);
     EXPECT_FALSE(self.m_builder.endPanel());
-    EXPECT_TRUE(source.mutationApplied);
-    EXPECT_GT(source.textCalls, 0u);
+    EXPECT_TRUE(source.mutationApplied.value());
+    EXPECT_GT(source.textCalls.value(), 0u);
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_EQ(self.m_integer.value(), 99);
 }
@@ -1000,7 +716,7 @@ void VerifyUiNumericEditLoanTests_ChildSourceCallbackRejectsAnAlreadyPaintedPare
     ASSERT_TRUE(self.m_builder.endPopup());
     source.armTextModel(self.m_integer);
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_EQ(self.m_integer.value(), 99);
 }
@@ -1018,7 +734,7 @@ void VerifyUiNumericEditLoanTests_ParentSourceCallbackRejectsTheEndedChildNumeri
     ASSERT_TRUE(self.m_builder.endPopup());
     source.armTextModel(self.m_integer);
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 0u);
     EXPECT_EQ(self.m_integer.value(), 99);
 }
@@ -1039,9 +755,9 @@ void VerifyUiNumericEditLoanTests_FinalSourceValidationCannotMutateAParentNumeri
     ASSERT_TRUE(self.m_builder.endPopup());
     childSource.armRevisionOnSource(parentSource, self.m_integer);
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(parentSource.mutationApplied);
+    EXPECT_TRUE(parentSource.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
-    EXPECT_GT(childSource.textCalls, 0u);
+    EXPECT_GT(childSource.textCalls.value(), 0u);
     EXPECT_EQ(self.m_integer.value(), 99);
 }
 
@@ -1062,7 +778,7 @@ void VerifyUiNumericEditLoanTests_LaterSiblingSourceRejectsAnAlreadyPaintedEnded
     ASSERT_TRUE(self.m_builder.endPopup());
     source.armTextModel(self.m_integer);
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_EQ(self.m_integer.value(), 99);
 }
@@ -1087,8 +803,8 @@ void VerifyUiNumericEditLoanTests_ClosedAncestorSuppressesNumericPublicationAndH
     ASSERT_TRUE(self.finishRoot());
     EXPECT_EQ(self.m_host.loans, loans);
     EXPECT_EQ(self.m_host.publishes, 0u);
-    EXPECT_EQ(source.textCalls, 0u);
-    EXPECT_FALSE(source.mutationApplied);
+    EXPECT_EQ(source.textCalls.value(), 0u);
+    EXPECT_FALSE(source.mutationApplied.value());
     EXPECT_EQ(self.m_integer.value(), 42);
 }
 
@@ -1159,27 +875,27 @@ void VerifyUiNumericFormatTests_InsufficientCallerStorageReportsSizeErrorWithout
     UiNumericFormatGuardedOneByteBuffer integer = UiNumericFormatGuardedOneByteBuffer();
     const auto integerText = integer.formatInteger(i64.min);
     ASSERT_FALSE(integerText.has_value());
-    EXPECT_EQ(integerText.error(), MakeUiNumericValueTooLargeError());
+    EXPECT_EQ(integerText.error(), MakeErrorCode(ErrorCondition::value_too_large));
     EXPECT_TRUE(integer.firstIntact());
     EXPECT_TRUE(integer.lastIntact());
 
     UiNumericFormatGuardedOneByteBuffer floating = UiNumericFormatGuardedOneByteBuffer();
     const auto floatingText = floating.formatFloat(123.25);
     ASSERT_FALSE(floatingText.has_value());
-    EXPECT_EQ(floatingText.error(), MakeUiNumericValueTooLargeError());
+    EXPECT_EQ(floatingText.error(), MakeErrorCode(ErrorCondition::value_too_large));
     EXPECT_TRUE(floating.firstIntact());
     EXPECT_TRUE(floating.lastIntact());
 }
 
 void VerifyUiNumericFormatTests_NonfiniteFloatFormattingIsRejected(){
     Array<f64, 3u> values = Array<f64, 3u>();
-    values[0u] = UiNumericInfinityF64();
-    values[1u] = -UiNumericInfinityF64();
-    values[2u] = UiNumericQuietNaNF64();
+    values[0u] = bit_cast<f64>(cast<u64>(0x7ff0000000000000u));
+    values[1u] = -bit_cast<f64>(cast<u64>(0x7ff0000000000000u));
+    values[2u] = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
     for(in f64 value : values){
         const UiNumericFormatBuffer formatted = FormatUiNumericF64(value);
         ASSERT_FALSE(formatted.hasValue());
-        EXPECT_EQ(formatted.error(), MakeUiNumericInvalidArgumentError());
+        EXPECT_EQ(formatted.error(), MakeErrorCode(ErrorCondition::invalid_argument));
     }
 }
 
@@ -1445,15 +1161,15 @@ void VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraft
 
 void VerifyIntegerLifetimeTests_ReversedAndUnknownIntegerBoundsAreAtomic(mut IntegerLifetimeTests self){
     ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(10, 1, NumericBoundsPolicy::Reject), self.m_model);
-    const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(3u);
+    const NumericBoundsPolicy unknown = cast<NumericBoundsPolicy>(3u);
     ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(-10, 10, unknown), self.m_model);
 }
 
 void VerifyFloatLifetimeTests_ReversedNonfiniteAndUnknownFloatBoundsAreAtomic(mut FloatLifetimeTests self){
     ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(10.0, 1.0, NumericBoundsPolicy::Reject), self.m_model);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(UiNumericQuietNaNF64(), 10.0, NumericBoundsPolicy::Reject), self.m_model);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject), self.m_model);
-    const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(3u);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(bit_cast<f64>(cast<u64>(0x7ff8000000000000u)), 10.0, NumericBoundsPolicy::Reject), self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, bit_cast<f64>(cast<u64>(0x7ff0000000000000u)), NumericBoundsPolicy::Reject), self.m_model);
+    const NumericBoundsPolicy unknown = cast<NumericBoundsPolicy>(3u);
     ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, 10.0, unknown), self.m_model);
 }
 
@@ -1482,7 +1198,7 @@ void VerifyUiNumericParseTests_IntegerPrefixesAndMalformedSyntaxRetainErrorClass
     cases[16u] = UiNumericParseExpectationCase("\342\210\2221");
     cases[17u] = UiNumericParseExpectationCase("\xD9\xA1");
     cases[18u] = UiNumericParseExpectationCase("\302\2401");
-    cases[19u] = UiNumericParseExpectationCase(s_UiNumericParseEmbeddedNulDigits);
+    cases[19u] = UiNumericParseExpectationCase(StringView("1\0", 2u));
     cases[20u] = UiNumericParseExpectationCase("999999999999999999999999x");
     cases[21u] = UiNumericParseExpectationCase("9223372036854775808", NumericParseStatus::OutOfRange);
     cases[22u] = UiNumericParseExpectationCase("-9223372036854775809", NumericParseStatus::OutOfRange);
@@ -1534,7 +1250,7 @@ void VerifyUiNumericParseTests_FloatPrefixesAndMalformedSyntaxAreClassifiedBefor
     cases[22u] = UiNumericParseExpectationCase("inf");
     cases[23u] = UiNumericParseExpectationCase("-infinity");
     cases[24u] = UiNumericParseExpectationCase("\302\2401");
-    cases[25u] = UiNumericParseExpectationCase(s_UiNumericParseEmbeddedNulDigits);
+    cases[25u] = UiNumericParseExpectationCase(StringView("1\0", 2u));
     cases[26u] = UiNumericParseExpectationCase("1e99999x");
     cases[27u] = UiNumericParseExpectationCase("1e309", NumericParseStatus::OutOfRange);
     cases[28u] = UiNumericParseExpectationCase("1e-9999", NumericParseStatus::OutOfRange);
@@ -1599,9 +1315,9 @@ void VerifyUiNumericParseTests_BoundsValidationRejectsReversalNonfiniteEndpoints
     EXPECT_TRUE(ValidateFloatBounds(MakeUiFloatBounds(-0.0, 0.0, NumericBoundsPolicy::Reject)));
     EXPECT_FALSE(ValidateIntegerBounds(MakeUiIntegerBounds(8, 3, NumericBoundsPolicy::Reject)));
     EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(8.0, 3.0, NumericBoundsPolicy::Reject)));
-    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(UiNumericQuietNaNF64(), 1.0, NumericBoundsPolicy::Reject)));
-    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(-1.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject)));
-    const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(2u);
+    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(bit_cast<f64>(cast<u64>(0x7ff8000000000000u)), 1.0, NumericBoundsPolicy::Reject)));
+    EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(-1.0, bit_cast<f64>(cast<u64>(0x7ff0000000000000u)), NumericBoundsPolicy::Reject)));
+    const NumericBoundsPolicy unknown = cast<NumericBoundsPolicy>(2u);
     EXPECT_FALSE(ValidateIntegerBounds(MakeUiIntegerBounds(-1, 1, unknown)));
     EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(-1.0, 1.0, unknown)));
 }
@@ -1624,8 +1340,8 @@ void VerifyUiNumericSelectionEpochTests_LaterSourceRejectsIntegerSelectionRoundT
     const u64 selectionGeneration = self.m_integer.draft().selectionGeneration();
     source.armTextDraft(self.m_integer.lendDraft());
     EXPECT_FALSE(self.m_builder.endPanel());
-    EXPECT_TRUE(source.mutationApplied);
-    EXPECT_GT(source.textCalls, 0u);
+    EXPECT_TRUE(source.mutationApplied.value());
+    EXPECT_GT(source.textCalls.value(), 0u);
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_integer.value(), 42);
@@ -1651,7 +1367,7 @@ void VerifyUiNumericSelectionEpochTests_LaterSourceRejectsFloatSelectionRoundTri
     const u64 selectionGeneration = self.m_float.draft().selectionGeneration();
     source.armTextDraft(self.m_float.lendDraft());
     EXPECT_FALSE(self.m_builder.endPanel());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_DOUBLE_EQ(self.m_float.value(), 1.25);
     EXPECT_EQ(self.m_float.revision(), numericRevision);
@@ -1674,7 +1390,7 @@ void VerifyUiNumericSelectionEpochTests_LaterSourceRejectsAcceptedIdenticalSelec
     const u64 selectionGeneration = self.m_integer.draft().selectionGeneration();
     source.armTextDraft(self.m_integer.lendDraft());
     EXPECT_FALSE(self.m_builder.endPanel());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_EQ(self.m_integer.value(), 42);
     EXPECT_EQ(self.m_integer.draft().anchor(), 2u);
@@ -1694,7 +1410,7 @@ void VerifyUiNumericSelectionEpochTests_LaterSourceRejectsCompositionRoundTripWi
     const u64 compositionGeneration = self.m_integer.draft().compositionGeneration();
     source.armTextDraft(self.m_integer.lendDraft());
     EXPECT_FALSE(self.m_builder.endPanel());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_EQ(self.m_integer.value(), 42);
     EXPECT_EQ(self.m_integer.draft().text(), "42");
@@ -1716,7 +1432,7 @@ void VerifyUiNumericSelectionEpochTests_ChildSourceRejectsAnAlreadyPaintedParent
     ASSERT_TRUE(self.m_builder.endPopup());
     source.armTextDraft(self.m_integer.lendDraft());
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_EQ(self.m_integer.value(), 42);
     EXPECT_EQ(self.m_integer.draft().anchor(), 2u);
@@ -1738,7 +1454,7 @@ void VerifyUiNumericSelectionEpochTests_ParentSourceRejectsTheEndedChildSelectio
     ASSERT_TRUE(self.m_builder.endPopup());
     source.armTextDraft(self.m_integer.lendDraft());
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 0u);
     EXPECT_EQ(self.m_integer.value(), 42);
     EXPECT_EQ(self.m_integer.draft().anchor(), 2u);
@@ -1763,7 +1479,7 @@ void VerifyUiNumericSelectionEpochTests_LaterSiblingSourceRejectsAnAlreadyPainte
     ASSERT_TRUE(self.m_builder.endPopup());
     source.armTextDraft(self.m_float.lendDraft());
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(source.mutationApplied);
+    EXPECT_TRUE(source.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
     EXPECT_DOUBLE_EQ(self.m_float.value(), 1.25);
     EXPECT_EQ(self.m_float.draft().anchor(), 4u);
@@ -1787,9 +1503,9 @@ void VerifyUiNumericSelectionEpochTests_FinalSourceValidationRejectsTheParentSel
     ASSERT_TRUE(self.m_builder.endPopup());
     childSource.armRevisionOnSource(parentSource, self.m_integer.lendDraft());
     EXPECT_FALSE(self.m_builder.endPopup());
-    EXPECT_TRUE(parentSource.mutationApplied);
+    EXPECT_TRUE(parentSource.mutationApplied.value());
     EXPECT_EQ(self.m_host.publishes, 1u);
-    EXPECT_GT(childSource.textCalls, 0u);
+    EXPECT_GT(childSource.textCalls.value(), 0u);
     EXPECT_EQ(self.m_integer.value(), 42);
     EXPECT_EQ(self.m_integer.draft().anchor(), 2u);
     EXPECT_EQ(self.m_integer.draft().caret(), 2u);
@@ -1803,8 +1519,8 @@ void VerifyUiPaintGlyphTests_ClipTrimsGlyphGeometryAndUv(mut UiPaintGlyphTests s
     auto pageCreationResult = self.makeGlyphPage();
     ASSERT_TRUE(pageCreationResult.has_value());
     SharedGlyphPage page = SharedGlyphPage();
-    TakeUiPaintGlyphPage(page, pageCreationResult);
-    ASSERT_TRUE(UiPaintGlyphHasPage(page));
+    TestMoveAssign<SharedGlyphPage>(page, pageCreationResult.value());
+    ASSERT_TRUE(page.valid());
     self.m_builder.pushClip(Rect(10.0f, 5.0f, 20.0f, 10.0f));
     ASSERT_TRUE(self.m_builder.drawGlyph(
         page,
@@ -1820,13 +1536,13 @@ void VerifyUiPaintGlyphTests_BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAn
     auto firstCreationResult = self.makeGlyphPage();
     ASSERT_TRUE(firstCreationResult.has_value());
     SharedGlyphPage first = SharedGlyphPage();
-    TakeUiPaintGlyphPage(first, firstCreationResult);
+    TestMoveAssign<SharedGlyphPage>(first, firstCreationResult.value());
     auto secondCreationResult = self.makeGlyphPage(s_UiPaintGlyphDefaultAtlasIdentity, 1u, 1u);
     ASSERT_TRUE(secondCreationResult.has_value());
     SharedGlyphPage second = SharedGlyphPage();
-    TakeUiPaintGlyphPage(second, secondCreationResult);
-    ASSERT_TRUE(UiPaintGlyphHasPage(first));
-    ASSERT_TRUE(UiPaintGlyphHasPage(second));
+    TestMoveAssign<SharedGlyphPage>(second, secondCreationResult.value());
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
     const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
     const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
     ASSERT_TRUE(self.m_builder.drawGlyph(first, rectangle, uv));
@@ -1866,13 +1582,13 @@ void VerifyUiPaintGlyphTests_NewerAppendOnlyPageUpgradesBindingWithoutMovingEarl
     auto originalCreationResult = self.makeGlyphPage();
     ASSERT_TRUE(originalCreationResult.has_value());
     SharedGlyphPage original = SharedGlyphPage();
-    TakeUiPaintGlyphPage(original, originalCreationResult);
+    TestMoveAssign<SharedGlyphPage>(original, originalCreationResult.value());
     auto appendedCreationResult = self.makeGlyphPage(s_UiPaintGlyphDefaultAtlasIdentity, 2u);
     ASSERT_TRUE(appendedCreationResult.has_value());
     SharedGlyphPage appended = SharedGlyphPage();
-    TakeUiPaintGlyphPage(appended, appendedCreationResult);
-    ASSERT_TRUE(UiPaintGlyphHasPage(original));
-    ASSERT_TRUE(UiPaintGlyphHasPage(appended));
+    TestMoveAssign<SharedGlyphPage>(appended, appendedCreationResult.value());
+    ASSERT_TRUE(original.valid());
+    ASSERT_TRUE(appended.valid());
     const Rect earlierUv = Rect(0.0f, 0.0f, 0.25f, 0.25f);
     ASSERT_TRUE(self.m_builder.drawGlyph(original, Rect(1.0f, 1.0f, 4.0f, 4.0f), earlierUv));
     ASSERT_TRUE(self.prepareSingleGlyphPage(appended));
@@ -1903,8 +1619,8 @@ void VerifyUiPaintGlyphTests_FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAn
     auto originalCreationResult = self.makeGlyphPage();
     ASSERT_TRUE(originalCreationResult.has_value());
     SharedGlyphPage original = SharedGlyphPage();
-    TakeUiPaintGlyphPage(original, originalCreationResult);
-    ASSERT_TRUE(UiPaintGlyphHasPage(original));
+    TestMoveAssign<SharedGlyphPage>(original, originalCreationResult.value());
+    ASSERT_TRUE(original.valid());
     ASSERT_TRUE(self.m_builder.drawGlyph(original, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
     const DrawSnapshot first = self.m_builder.freeze();
     original.reset();
@@ -1912,8 +1628,8 @@ void VerifyUiPaintGlyphTests_FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAn
     auto appendedCreationResult = self.makeGlyphPage(s_UiPaintGlyphDefaultAtlasIdentity, 2u);
     ASSERT_TRUE(appendedCreationResult.has_value());
     SharedGlyphPage appended = SharedGlyphPage();
-    TakeUiPaintGlyphPage(appended, appendedCreationResult);
-    ASSERT_TRUE(UiPaintGlyphHasPage(appended));
+    TestMoveAssign<SharedGlyphPage>(appended, appendedCreationResult.value());
+    ASSERT_TRUE(appended.valid());
     ASSERT_TRUE(self.m_builder.drawGlyph(appended, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f)));
     const DrawSnapshot second = self.m_builder.freeze();
     appended.reset();
@@ -1938,8 +1654,8 @@ void VerifyUiPaintGlyphTests_RejectedPageAdmissionAtCapacityPreservesBindingsAnd
         auto pageCreationResult = self.makeGlyphPage(100u + index);
         ASSERT_TRUE(pageCreationResult.has_value());
         SharedGlyphPage page = SharedGlyphPage();
-        TakeUiPaintGlyphPage(page, pageCreationResult);
-        ASSERT_TRUE(UiPaintGlyphHasPage(page));
+        TestMoveAssign<SharedGlyphPage>(page, pageCreationResult.value());
+        ASSERT_TRUE(page.valid());
         pages.push_back(page);
     }
     ASSERT_TRUE(self.m_builder.drawGlyph(pages[0u], Rect(2.0f, 3.0f, 4.0f, 5.0f), Rect(0.125f, 0.25f, 0.5f, 0.5f)));
@@ -1947,13 +1663,13 @@ void VerifyUiPaintGlyphTests_RejectedPageAdmissionAtCapacityPreservesBindingsAnd
     auto upgradeCreationResult = self.makeGlyphPage(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult.has_value());
     SharedGlyphPage upgrade = SharedGlyphPage();
-    TakeUiPaintGlyphPage(upgrade, upgradeCreationResult);
+    TestMoveAssign<SharedGlyphPage>(upgrade, upgradeCreationResult.value());
     auto overflowCreationResult = self.makeGlyphPage(1000u);
     ASSERT_TRUE(overflowCreationResult.has_value());
     SharedGlyphPage overflow = SharedGlyphPage();
-    TakeUiPaintGlyphPage(overflow, overflowCreationResult);
-    ASSERT_TRUE(UiPaintGlyphHasPage(upgrade));
-    ASSERT_TRUE(UiPaintGlyphHasPage(overflow));
+    TestMoveAssign<SharedGlyphPage>(overflow, overflowCreationResult.value());
+    ASSERT_TRUE(upgrade.valid());
+    ASSERT_TRUE(overflow.valid());
     Array<SharedGlyphPage, 2u> candidates = Array<SharedGlyphPage, 2u>();
     candidates[0u] = upgrade;
     candidates[1u] = overflow;
@@ -2025,27 +1741,14 @@ NWB_ADHD_GTEST(UiNumericFormatTests, NonfiniteFloatFormattingIsRejected, VerifyU
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+registration GoogleTestTypedPair(NumericLifetimeTests, NumericModelFixture, NumericLifetimeIntegerModel, NumericLifetimeFloatModel);
+registration GoogleTestTypedCase(NumericLifetimeTests, SameValueExternalReplacementFencesHistorySelectionAndComposition, VerifyNumericLifetimeTests_SameValueExternalReplacementFencesHistorySelectionAndComposition);
+registration GoogleTestTypedCase(NumericLifetimeTests, SameTextDraftReplacementFencesWithoutChangingTheCommittedValue, VerifyNumericLifetimeTests_SameTextDraftReplacementFencesWithoutChangingTheCommittedValue);
+registration GoogleTestTypedCase(NumericLifetimeTests, RejectedIncompleteSubmitStillRetiresLoanEpoch, VerifyNumericLifetimeTests_RejectedIncompleteSubmitStillRetiresLoanEpoch);
+registration GoogleTestTypedCase(NumericLifetimeTests, RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue, VerifyNumericLifetimeTests_RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue);
+registration GoogleTestTypedCase(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestoration, VerifyNumericLifetimeTests_ExternalReplacementControlsLaterAbandonRestoration);
+registration GoogleTestTypedCase(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField, VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraftField);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_numeric_model_lifetime_tests{
-TYPED_TEST(NumericLifetimeTests, SameValueExternalReplacementFencesHistorySelectionAndComposition){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_SameValueExternalReplacementFencesHistorySelectionAndComposition(*this); }
-TYPED_TEST(NumericLifetimeTests, SameTextDraftReplacementFencesWithoutChangingTheCommittedValue){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_SameTextDraftReplacementFencesWithoutChangingTheCommittedValue(*this); }
-TYPED_TEST(NumericLifetimeTests, RejectedIncompleteSubmitStillRetiresLoanEpoch){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_RejectedIncompleteSubmitStillRetiresLoanEpoch(*this); }
-TYPED_TEST(NumericLifetimeTests, RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue(*this); }
-TYPED_TEST(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestoration){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_ExternalReplacementControlsLaterAbandonRestoration(*this); }
-TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraftField(*this); }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

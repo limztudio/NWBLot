@@ -6,8 +6,8 @@
 extern class FrameGraphRegistry{
     void clear(...);
     b8 record(...);
-    void registerContributor(...);
-    void unregisterContributor(...);
+    void registerContributor(mut IFrameGraphContributor contributor);
+    void unregisterContributor(mut IFrameGraphContributor contributor);
 };
 
 

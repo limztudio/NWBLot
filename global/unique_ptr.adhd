@@ -3,7 +3,16 @@
 
 
 [cpp_header("<global/unique_ptr.h>"), cpp_name("::MakeUnique")]
-extern UniquePtr<T> MakeUnique<T>();
+extern UniquePtr<T> MakeUnique<T>(...);
+
+[cpp_header("<global/unique_ptr.h>"), cpp_name("::TakeUnique")]
+extern UniquePtr<T> TakeUnique<T>(mut UniquePtr<T> owner);
+
+[cpp_header("<global/unique_ptr.h>"), cpp_name("::TakeNotNullUnique")]
+extern NotNullUniquePtr<T> TakeNotNullUnique<T>(mut NotNullUniquePtr<T> owner);
+
+[cpp_header("<global/unique_ptr.h>"), cpp_name("::TryTakeNotNullUnique")]
+extern Expected<NotNullUniquePtr<T>> TryTakeNotNullUnique<T>(mut UniquePtr<T> owner);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,5 +6,121 @@
 extern class GpuTaskGraphCompiler;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability"), cpp_flags(no_copy, no_assign)]
+extern class GpuTaskSchedulingReachability;
 
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoringData"), cpp_flags(no_copy, no_assign)]
+extern class GpuTaskQueueScoringData;
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::BorrowOptionalResult<&::NWB::Core::GpuTaskGraphCompilerDetail::FindTimingFeedbackQueue>")]
+extern Optional<in GpuPhysicalQueueInfo> BorrowTimingFeedbackQueue(
+    in GpuTaskGraphDeclarationReadView graph, in GpuTaskGraphAnalysis analysis, in Span<GpuTaskQueueAssignment> assignments,
+    in Span<u32> assignmentIndices, in GpuPhysicalQueueTopology topology, in GpuTaskSchedulingReachability reachability,
+    in GpuTaskQueueScoringData scoring, in GpuTaskGraphTaskView task, in GpuPhysicalQueueInfo incumbent,
+    in GpuTaskTimingAssignmentKey key, in GpuTaskTimingHistorySnapshot snapshot, in GpuTaskTimingFeedbackPolicy policy, in u64 frameIndex
+);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::TrackedCompiledResourceState"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TrackedCompiledResourceState{
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuTaskId task;
+    ResourceStates state;
+    GpuTaskResourceAccess access;
+    GpuPhysicalQueueId queue;
+    usize readStateSourceIndex;
+};
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::TrackedResourceStateHistory"), cpp_flags(no_copy, no_assign)]
+extern class TrackedResourceStateHistory{
+    b8 append(in TrackedCompiledResourceState state);
+    usize first(...)const;
+    usize last(...)const;
+    usize next(...)const;
+    b8 validFor(...)const;
+};
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::TrackedResourceStateFragment"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class TrackedResourceStateFragment{
+    GpuTaskResourceRange range;
+    usize stateIndex;
+    Optional<in TrackedCompiledResourceState> borrowState()const;
+    void setState(in borrow TrackedCompiledResourceState value);
+};
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::Vector<::NWB::Core::GpuTaskGraphCompilerDetail::TrackedResourceStateFragment, ::NWB::Core::Alloc::ScratchArena>"), cpp_flags(no_copy, no_assign)]
+extern class TrackedStateFragments{
+    usize size()const;
+    in TrackedResourceStateFragment operator[](in usize index)const;
+};
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::Vector<::NWB::Core::GpuTaskGraphCompilerDetail::TrackedCompiledResourceState, ::NWB::Core::Alloc::ScratchArena>"), cpp_flags(no_copy, no_assign)]
+extern class TrackedStates{
+    usize size()const;
+    mut TrackedCompiledResourceState operator[](in usize index);
+    in TrackedCompiledResourceState operator[](in usize index)const;
+};
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::CollectLatestResourceStateFragments")]
+extern b8 CollectLatestResourceStateFragments(in Span<TrackedCompiledResourceState> states, in TrackedResourceStateHistory history, in GpuTaskGraphResourceView resource, in Span<GpuTaskResourceRange> ranges, mut auto scratch, mut TrackedStateFragments fragments);
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::CollectTerminalResourceStateFragments")]
+extern b8 CollectTerminalResourceStateFragments(in Span<TrackedCompiledResourceState> states, in TrackedResourceStateHistory history, in GpuTaskGraphResourceView resource, mut auto scratch, mut TrackedStateFragments fragments);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::GpuTaskQueuePlacementGroup"), cpp_flags(self_defaulted, brace_init)]
+extern class GpuTaskQueuePlacementGroup{
+    usize assignmentOffset;
+    usize assignmentCount;
+};
+
+
+[cpp_header("<core/task/gpu/compiler_task_use_index.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::TaskResourceUseIndex"), cpp_flags(no_copy, no_assign)]
+extern class GpuSubmissionUseIndex{
+    b8 build(in GpuTaskGraphTaskView task);
+    b8 validFor(in GpuTaskGraphTaskView task)const;
+    usize first(in GpuGraphResourceId resource)const;
+    usize next(in usize index)const;
+};
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::CollectResourceFirstUseRangesWithinTask")]
+extern b8 CollectResourceFirstUseRangesWithinTask(in GpuTaskGraphDeclarationReadView graph, in GpuTaskGraphTaskView task, in GpuSubmissionUseIndex history, in usize index, in GpuTaskGraphResourceView resource, in GpuTaskResourceRange range, mut auto scratch, mut auto ranges);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges")]
+extern Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(in GpuTaskGraphDeclarationReadView graph, mut auto scratch, mut auto edges);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability")]
+extern b8 BuildGpuTaskSchedulingReachability(in GpuTaskGraphDeclarationReadView graph, in GpuTaskGraphAnalysis analysis, mut GpuTaskSchedulingReachability out);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::BuildQueuePlacementGroups")]
+extern Expected<void, GpuTaskQueueAssignmentDiagnostic> BuildQueuePlacementGroups(...);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::BuildQueueAssignmentScore")]
+extern GpuQueueAssignmentScore BuildQueueAssignmentScore(...);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::BuildQueuePlacementGroupScore")]
+extern GpuQueueAssignmentScore BuildQueuePlacementGroupScore(...);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::QueueCostWeight")]
+extern u64 QueueCostWeight(in GpuTaskCostHint cost);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::IsValidQueueTopology")]
+extern b8 IsValidQueueTopology(in GpuPhysicalQueueTopology topology);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::ResourceUsesConcurrentQueueSharing")]
+extern b8 ResourceUsesConcurrentQueueSharing(in GpuTaskGraphResourceView resource, in GpuPhysicalQueueTopology topology);
+
+
+[cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoreExclusions"), cpp_flags(self_defaulted, brace_init)]
+extern class GpuTaskQueueScoreExclusions;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

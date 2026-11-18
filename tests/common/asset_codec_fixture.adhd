@@ -1,0 +1,15 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/global.h>"), cpp_name("::NWB::Core::Assets::AssetArena"), cpp_flags(no_copy, no_assign)]
+extern class AssetCodecFixtureStorage;
+
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::IAssetCodec"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class AssetCodecFixtureBase{
+    Name assetType()const;
+    [cpp_flags(unwind)] Expected<UniquePtr<IAsset>> deserialize(in cpp_ref Name path, in Span<u8> binary, mut AssetCodecFixtureStorage storage)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

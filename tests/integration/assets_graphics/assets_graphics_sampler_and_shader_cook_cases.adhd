@@ -3,6 +3,10 @@
 
 
 #include "suite.adhd"
+#include <impl/assets_sampler/cook.adhd>
+#include <impl/assets_shader/asset.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/value_storage.adhd>
 #include <tests/common/gtest_macros.adhd>
 
 
@@ -56,152 +60,161 @@ b8 WriteExactEntryPointShaderProbe(in GraphicsTestPath assetRoot){
 
 void VerifyAssetsGraphics_SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
-    TestArena testArena = TestArena();
-    native(in logger, mut testArena){
-        NWB::Impl::Sampler sampler(testArena.arena, Name(s_AssetCaseProjectSamplersBinaryAdmission));
-        NWB::Core::SamplerDesc description;
-        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-        description.addressW = NWB::Core::SamplerAddressMode::Border;
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena;
+    Sampler sampler(Name(s_AssetCaseProjectSamplersBinaryAdmission));
+    SamplerDesc description;
+    description.borderColor = Color(0.0f, 0.0f, 0.0f, 0.0f);
+    description.addressW = SamplerAddressMode::Border;
+    sampler.setDescription(description);
+
+    DeclaredAssetCodec<Sampler> codec = DeclaredAssetCodec<Sampler>();
+    TestValueSlot<AssetByteBuffer> binarySlot;
+    mut AssetByteBuffer binary = binarySlot.constructIn(testArena);
+    ASSERT_TRUE(codec.serialize(sampler, GraphicsCodecBytes(binary)));
+    ASSERT_EQ(binary.size(), size_of<SamplerBinaryHeader>());
+    const AssetByteBuffer validBinary(binary);
+
+    const Array<SamplerReductionType, 2u> reductions(SamplerReductionType::Minimum, SamplerReductionType::Maximum);
+    for(in SamplerReductionType reduction : reductions){
+        binary = validBinary;
+        const u32 reductionValue = cast<u32>(reduction);
+        ASSERT_TRUE(OverwriteU32InAssetBytes(offset_of<SamplerBinaryHeader>(reductionType), reductionValue, binary));
+        EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), Span<u8>(binary), testArena).has_value());
+
+        description.reductionType = reduction;
         sampler.setDescription(description);
-
-        NWB::Impl::SamplerAssetCodec codec;
-        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-        ASSERT_TRUE(codec.serialize(sampler, binary));
-        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
-        const NWB::Core::Assets::AssetBytes validBinary(binary);
-
-        for(const NWB::Core::SamplerReductionType::Enum reduction : { NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum }){
-            binary = validBinary;
-            const u32 reductionValue = static_cast<u32>(reduction);
-            FOUNDATION_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
-            EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
-
-            description.reductionType = reduction;
-            sampler.setDescription(description);
-            EXPECT_FALSE(codec.serialize(sampler, binary));
-        }
-
-        for(const usize borderOffset : {
-            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorR),
-            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorG),
-            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorB),
-            offsetof(NWB::Impl::SamplerBinaryHeader, borderColorA)
-        }){
-            binary = validBinary;
-            const f32 nonblack = 1.0f;
-            FOUNDATION_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
-            EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
-        }
-
-        description.reductionType = NWB::Core::SamplerReductionType::Standard;
-        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 1.0f);
-        sampler.setDescription(description);
-        EXPECT_FALSE(codec.serialize(sampler, binary));
-
-        description.reductionType = NWB::Core::SamplerReductionType::Standard;
-        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-        sampler.setDescription(description);
-        ASSERT_TRUE(codec.serialize(sampler, binary));
-        UniquePtr<NWB::Core::Assets::IAsset> recoveredAsset;
-        auto recoveredResult = codec.deserialize(sampler.virtualPath(), binary, testArena.arena);
-        ASSERT_TRUE(recoveredResult);
-        recoveredAsset = Move(*recoveredResult);
-        ASSERT_NE(recoveredAsset.get(), nullptr);
-        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("sampler description is invalid")));
+        EXPECT_FALSE(codec.serialize(sampler, GraphicsCodecBytes(binary)));
     }
+
+    const Array<usize, 4u> offsets(
+        offset_of<SamplerBinaryHeader>(borderColorR),
+        offset_of<SamplerBinaryHeader>(borderColorG),
+        offset_of<SamplerBinaryHeader>(borderColorB),
+        offset_of<SamplerBinaryHeader>(borderColorA)
+    );
+    for(in usize borderOffset : offsets){
+        binary = validBinary;
+        const f32 nonblack = 1.0f;
+        ASSERT_TRUE(OverwriteU32InAssetBytes(borderOffset, BitCast<u32>(nonblack), binary));
+        EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), Span<u8>(binary), testArena).has_value());
+    }
+
+    description.reductionType = SamplerReductionType::Standard;
+    description.borderColor = Color(0.0f, 0.0f, 0.0f, 1.0f);
+    sampler.setDescription(description);
+    EXPECT_FALSE(codec.serialize(sampler, GraphicsCodecBytes(binary)));
+
+    description.reductionType = SamplerReductionType::Standard;
+    description.borderColor = Color(0.0f, 0.0f, 0.0f, 0.0f);
+    sampler.setDescription(description);
+    ASSERT_TRUE(codec.serialize(sampler, GraphicsCodecBytes(binary)));
+    const auto recoveredResult = codec.deserialize(sampler.virtualPath(), Span<u8>(binary), testArena);
+    ASSERT_TRUE(recoveredResult.has_value());
+    EXPECT_TRUE(recoveredResult.value());
+    EXPECT_TRUE(SawCapturedError(logger, "sampler description is invalid"));
 }
 
 void VerifyAssetsGraphics_SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    TestArena testArena = TestArena();
-    native(in logger, mut testArena){
-        NWB::Impl::Sampler sampler(testArena.arena, Name(s_AssetCaseProjectSamplersReloadAdmission));
-        NWB::Core::SamplerDesc description;
-        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-        description.maxAnisotropy = 4.0f;
-        description.mipBias = -0.25f;
-        description.minFilter = false;
-        description.addressW = NWB::Core::SamplerAddressMode::Border;
-        sampler.setDescription(description);
-        NWB::Impl::SamplerAssetCodec codec;
-        NWB::Core::Assets::AssetBytes binary(testArena.arena);
-        ASSERT_TRUE(codec.serialize(sampler, binary));
-        ASSERT_TRUE(sampler.loadBinary(binary));
-        for(usize prefix = 0u; prefix < binary.size(); ++prefix){
-            NWB::Core::Assets::AssetBytes malformed(binary);
-            malformed.resize(prefix);
-            EXPECT_FALSE(sampler.loadBinary(malformed)) << prefix;
-            NWB::Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(sampler, retained));
-            EXPECT_EQ(retained, binary) << prefix;
-        }
-        for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
-            NWB::Impl::SamplerBinaryHeader header;
-            FOUNDATION_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
-            switch(invalidCase){
-            case 0u: header.magic = 0u; break;
-            case 1u: ++header.version; break;
-            case 2u: header.reserved = 1u; break;
-            case 3u: header.minFilter = 2u; break;
-            case 4u: header.addressU = Limit<u32>::s_Max; break;
-            case 5u: header.mipBias = BitCast<f32>(0x7fc00000u); break;
-            }
-            NWB::Core::Assets::AssetBytes malformed(testArena.arena);
-            AppendPOD(malformed, header);
-            if(invalidCase == 6u)
-                malformed.push_back(0u);
-            EXPECT_FALSE(sampler.loadBinary(malformed)) << invalidCase;
-            NWB::Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(sampler, retained));
-            EXPECT_EQ(retained, binary) << invalidCase;
-        }
-        EXPECT_EQ(logger.errorCount(), binary.size() + 7u);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena;
+    Sampler sampler(Name(s_AssetCaseProjectSamplersReloadAdmission));
+    SamplerDesc description;
+    description.borderColor = Color(0.0f, 0.0f, 0.0f, 0.0f);
+    description.maxAnisotropy = 4.0f;
+    description.mipBias = -0.25f;
+    description.minFilter = false;
+    description.addressW = SamplerAddressMode::Border;
+    sampler.setDescription(description);
+    DeclaredAssetCodec<Sampler> codec = DeclaredAssetCodec<Sampler>();
+    TestValueSlot<AssetByteBuffer> binarySlot;
+    mut AssetByteBuffer binary = binarySlot.constructIn(testArena);
+    ASSERT_TRUE(codec.serialize(sampler, GraphicsCodecBytes(binary)));
+    ASSERT_TRUE(sampler.loadBinary(binary));
+    for(usize prefix = 0u; prefix < binary.size(); ++prefix){
+        const ScopedTestTrace trace(prefix);
+        AssetByteBuffer malformed(binary);
+        malformed.resize(prefix);
+        EXPECT_FALSE(sampler.loadBinary(malformed));
+        TestValueSlot<AssetByteBuffer> retainedSlot;
+        mut AssetByteBuffer retained = retainedSlot.constructIn(testArena);
+        ASSERT_TRUE(codec.serialize(sampler, GraphicsCodecBytes(retained)));
+        EXPECT_EQ(retained, binary);
     }
+    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        usize cursor = 0u;
+        const auto headerResult = ReadPOD<SamplerBinaryHeader>(Span<u8>(binary), cursor);
+        ASSERT_TRUE(headerResult.has_value());
+        SamplerBinaryHeader header = headerResult.value();
+        switch(invalidCase){
+        case 0u: header.magic = 0u; break;
+        case 1u: ++header.version; break;
+        case 2u: header.reserved = 1u; break;
+        case 3u: header.minFilter = 2u; break;
+        case 4u: header.addressU = u32.max; break;
+        case 5u: header.mipBias = BitCast<f32>(0x7fc00000u); break;
+        }
+        TestValueSlot<AssetByteBuffer> malformedSlot;
+        mut AssetByteBuffer malformed = malformedSlot.constructIn(testArena);
+        AppendPOD(malformed, header);
+        if(invalidCase == 6u)
+            malformed.push_back(cast<u8>(0u));
+        EXPECT_FALSE(sampler.loadBinary(malformed));
+        TestValueSlot<AssetByteBuffer> retainedSlot;
+        mut AssetByteBuffer retained = retainedSlot.constructIn(testArena);
+        ASSERT_TRUE(codec.serialize(sampler, GraphicsCodecBytes(retained)));
+        EXPECT_EQ(retained, binary);
+    }
+    EXPECT_EQ(logger.errorCount(), binary.size() + 7u);
 }
 
 void VerifyAssetsGraphics_SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreservesReload(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    TestArena testArena = TestArena();
-    native(in logger, mut testArena){
-        NWB::Impl::Sampler sampler(testArena.arena, Name(s_AssetCaseProjectSamplersWideEnumAdmission));
-        NWB::Core::SamplerDesc description;
-        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-        description.addressU = NWB::Core::SamplerAddressMode::MirrorOnce;
-        description.addressV = NWB::Core::SamplerAddressMode::MirrorOnce;
-        description.addressW = NWB::Core::SamplerAddressMode::MirrorOnce;
-        description.reductionType = NWB::Core::SamplerReductionType::Comparison;
-        sampler.setDescription(description);
-        NWB::Impl::SamplerAssetCodec codec;
-        NWB::Core::Assets::AssetBytes binary(testArena.arena);
-        ASSERT_TRUE(codec.serialize(sampler, binary));
-        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena;
+    Sampler sampler(Name(s_AssetCaseProjectSamplersWideEnumAdmission));
+    SamplerDesc description;
+    description.borderColor = Color(0.0f, 0.0f, 0.0f, 0.0f);
+    description.addressU = SamplerAddressMode::MirrorOnce;
+    description.addressV = SamplerAddressMode::MirrorOnce;
+    description.addressW = SamplerAddressMode::MirrorOnce;
+    description.reductionType = SamplerReductionType::Comparison;
+    sampler.setDescription(description);
+    DeclaredAssetCodec<Sampler> codec = DeclaredAssetCodec<Sampler>();
+    TestValueSlot<AssetByteBuffer> binarySlot;
+    mut AssetByteBuffer binary = binarySlot.constructIn(testArena);
+    ASSERT_TRUE(codec.serialize(sampler, GraphicsCodecBytes(binary)));
+    ASSERT_EQ(binary.size(), size_of<SamplerBinaryHeader>());
 
-        for(const usize offset : {
-            offsetof(NWB::Impl::SamplerBinaryHeader, addressU),
-            offsetof(NWB::Impl::SamplerBinaryHeader, addressV),
-            offsetof(NWB::Impl::SamplerBinaryHeader, addressW),
-            offsetof(NWB::Impl::SamplerBinaryHeader, reductionType)
-        }){
-            for(const u32 rawValue : { 0x100u, 0x101u }){
-                NWB::Core::Assets::AssetBytes malformed(binary);
-                FOUNDATION_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
-                EXPECT_FALSE(sampler.loadBinary(malformed)) << offset << ":" << rawValue;
-                NWB::Core::Assets::AssetBytes retained(testArena.arena);
-                ASSERT_TRUE(codec.serialize(sampler, retained));
-                EXPECT_EQ(retained, binary) << offset << ":" << rawValue;
-                EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), malformed, testArena.arena)) << offset << ":" << rawValue;
-            }
+    const Array<usize, 4u> offsets(
+        offset_of<SamplerBinaryHeader>(addressU),
+        offset_of<SamplerBinaryHeader>(addressV),
+        offset_of<SamplerBinaryHeader>(addressW),
+        offset_of<SamplerBinaryHeader>(reductionType)
+    );
+    for(in usize offset : offsets){
+        const Array<u32, 2u> rawValues(0x100u, 0x101u);
+        for(in u32 rawValue : rawValues){
+            const ScopedTestTrace valueTrace(rawValue);
+            const ScopedTestTrace offsetTrace(offset);
+            AssetByteBuffer malformed(binary);
+            ASSERT_TRUE(OverwriteU32InAssetBytes(offset, rawValue, malformed));
+            EXPECT_FALSE(sampler.loadBinary(malformed));
+            TestValueSlot<AssetByteBuffer> retainedSlot;
+            mut AssetByteBuffer retained = retainedSlot.constructIn(testArena);
+            ASSERT_TRUE(codec.serialize(sampler, GraphicsCodecBytes(retained)));
+            EXPECT_EQ(retained, binary);
+            EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), Span<u8>(malformed), testArena).has_value());
         }
-        EXPECT_EQ(logger.errorCount(), 16u);
     }
+    EXPECT_EQ(logger.errorCount(), 16u);
 }
 
 void VerifyAssetsGraphics_SamplerCookerRequiresTheAssetField(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse("sampler configuration; configuration.mip_bias = 2.0;"));
@@ -226,7 +239,7 @@ void VerifyAssetsGraphics_SamplerCookerRejectsFixedBorderColorAndUnsupportedRedu
     for(in StringView assignment : unsupportedAssignments){
         const ScopedTestTrace trace(assignment);
         CapturingLogger logger = CapturingLogger();
-        LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+        LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
         TestArena testArena = TestArena();
         String metadata(s_SamplerTestMetadata);
         if(assignment.starts_with(s_ReductionAssignmentPrefix)){
@@ -257,7 +270,7 @@ void VerifyAssetsGraphics_SamplerCookerRejectsDeprecatedVersionMetadata(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const StringView baseMetadata = s_SamplerTestMetadata;
     const usize firstFieldPosition = baseMetadata.find("asset.min_filter");
@@ -295,35 +308,37 @@ void VerifyAssetsGraphics_ShaderArchiveVariantLookupIsExact(){
 void VerifyAssetsGraphics_ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmittingUnalignedRecords(){
     TestArena testArena = TestArena();
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
-    native(in logger, mut testArena){
-        ScratchArena scratchArena(s_AssetCaseTestsAssetsGraphicsArchiveAdmission);
-        Core::GraphicsVector<Core::ShaderArchive::Record> records(testArena.arena);
-        Core::ShaderArchive::Record record(testArena.arena);
-        record.shaderName = Name(s_ProjectShadersTestShader);
-        record.variantName.assign(Core::ShaderArchive::s_DefaultVariant);
-        record.stage = Name(s_ShaderStagePs);
-        record.virtualPathHash = Name(s_AssetCaseShaderUnalignedDefaultPs).hash();
-        record.sourceChecksum = 0x12345678u;
-        records.push_back(Move(record));
-        const auto encoded = Core::ShaderArchive::SerializeIndex(records, testArena.arena, scratchArena);
-        ASSERT_TRUE(encoded);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
+    ScratchStorage scratch(s_AssetCaseTestsAssetsGraphicsArchiveAdmission);
+    ShaderArchiveRecordVector records(testArena.arena);
+    ShaderArchiveRecord record(testArena.arena);
+    record.shaderName = Name(s_ProjectShadersTestShader);
+    record.variantName.assign(s_DefaultVariant);
+    record.stage = Name(s_ShaderStagePs);
+    record.virtualPathHash = Name(s_AssetCaseShaderUnalignedDefaultPs).hash();
+    record.sourceChecksum = 0x12345678u;
+    records.push_back(record);
+    const auto encoded = SerializeIndex(records, testArena.arena, scratch);
+    ASSERT_TRUE(encoded.has_value());
 
-        alignas(u32) Array<u8, 2048u> unalignedStorage = {};
-        ASSERT_LT(encoded->size(), unalignedStorage.size());
-        u8* const unalignedBytes = unalignedStorage.data() + 1u;
-        FOUNDATION_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
-        const auto admitted = Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() });
-        ASSERT_TRUE(admitted);
-        ASSERT_EQ(admitted->size(), 1u);
-        EXPECT_EQ(admitted->front().shaderName, records.front().shaderName);
-        EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
-        EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { nullptr, encoded->size() }));
-        EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() - 1u }));
-        EXPECT_EQ(logger.errorCount(), 2u);
-        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("nonempty byte view has no data")));
-        EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
-    }
+    Array<u8, 2048u> storage = Array<u8, 2048u>();
+    usize offset = 0u;
+    if(TestDataAddress(storage) % align_of<u32>() == 0u)
+        offset = 1u;
+    ASSERT_LT(encoded.value().size(), storage.size());
+    for(usize index = 0u; index < encoded.value().size(); ++index)
+        storage[index + offset] = encoded.value()[index];
+    const Span<u8> unaligned = Span<u8>(storage).subspan(offset, encoded.value().size());
+    const auto admitted = DeserializeIndex(testArena.arena, TestByteView(unaligned, unaligned.size(), true));
+    ASSERT_TRUE(admitted.has_value());
+    ASSERT_EQ(admitted.value().size(), 1u);
+    EXPECT_EQ(admitted.value().front().shaderName, records.front().shaderName);
+    EXPECT_EQ(admitted.value().front().sourceChecksum, records.front().sourceChecksum);
+    EXPECT_FALSE(DeserializeIndex(testArena.arena, TestByteView(unaligned, unaligned.size(), false)).has_value());
+    EXPECT_FALSE(DeserializeIndex(testArena.arena, TestByteView(unaligned, unaligned.size() - 1u, true)).has_value());
+    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_TRUE(SawCapturedError(logger, "nonempty byte view has no data"));
+    EXPECT_EQ(admitted.value().front().sourceChecksum, records.front().sourceChecksum);
 }
 
 void VerifyAssetsGraphics_WrongStageAndMalformedEntryInstructionsAreRejected(){
@@ -338,12 +353,12 @@ void VerifyAssetsGraphics_WrongStageAndMalformedEntryInstructionsAreRejected(){
     words[8u] = mainWord;
 
     EXPECT_TRUE(IsValidSpirvModuleWords(words));
-    const Expected<StringView, SpirvLookupError> entryPointResult1 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_PixelStage);
+    const Expected<StringView, SpirvLookupError> entryPointResult1 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, ShaderTypeMask::Pixel);
     ASSERT_TRUE(entryPointResult1.has_value());
 
-    const Expected<StringView, SpirvLookupError> entryPointResult2 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_ComputeStage);
+    const Expected<StringView, SpirvLookupError> entryPointResult2 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, ShaderTypeMask::Compute);
     ASSERT_FALSE(entryPointResult2.has_value());
-    EXPECT_EQ(entryPointResult2.error(), s_SpirvNotFound);
+    EXPECT_EQ(entryPointResult2.error(), SpirvEntryPointLookupResult::NotFound);
 
     Array<u32, 9u> invalidWords = Array<u32, 9u>();
     invalidWords[0u] = 0x07230203u;
@@ -354,9 +369,9 @@ void VerifyAssetsGraphics_WrongStageAndMalformedEntryInstructionsAreRejected(){
     invalidWords[7u] = 1u;
     invalidWords[8u] = mainWord;
 
-    const Expected<StringView, SpirvLookupError> entryPointResult3 = ResolveSpirvEntryPointName(invalidWords, s_ShaderEntryMain, s_PixelStage);
+    const Expected<StringView, SpirvLookupError> entryPointResult3 = ResolveSpirvEntryPointName(invalidWords, s_ShaderEntryMain, ShaderTypeMask::Pixel);
     ASSERT_FALSE(entryPointResult3.has_value());
-    EXPECT_EQ(entryPointResult3.error(), s_SpirvInvalid);
+    EXPECT_EQ(entryPointResult3.error(), SpirvEntryPointLookupResult::InvalidSpirv);
     EXPECT_FALSE(IsValidSpirvModuleWords(invalidWords));
 
     Array<u32, 9u> malformedOtherStageEntryWords = Array<u32, 9u>();
@@ -368,28 +383,28 @@ void VerifyAssetsGraphics_WrongStageAndMalformedEntryInstructionsAreRejected(){
     malformedOtherStageEntryWords[8u] = mainWord;
 
     EXPECT_FALSE(IsValidSpirvModuleWords(malformedOtherStageEntryWords));
-    const Expected<StringView, SpirvLookupError> entryPointResult4 = ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_ShaderEntryMain, s_PixelStage);
+    const Expected<StringView, SpirvLookupError> entryPointResult4 = ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_ShaderEntryMain, ShaderTypeMask::Pixel);
     ASSERT_FALSE(entryPointResult4.has_value());
-    EXPECT_EQ(entryPointResult4.error(), s_SpirvInvalid);
+    EXPECT_EQ(entryPointResult4.error(), SpirvEntryPointLookupResult::InvalidSpirv);
 }
 
 void VerifyAssetsGraphics_SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnknown(){
     Vector<SpirvModelStageCase> models = Vector<SpirvModelStageCase>();
     models.reserve(4u);
     SpirvModelStageCase model0 = SpirvModelStageCase();
-    model0.stage = s_AmplificationStage;
+    model0.stage = ShaderTypeMask::Amplification;
     model0.model = 5267u;
     models.push_back(model0);
     SpirvModelStageCase model1 = SpirvModelStageCase();
-    model1.stage = s_MeshStage;
+    model1.stage = ShaderTypeMask::Mesh;
     model1.model = 5268u;
     models.push_back(model1);
     SpirvModelStageCase model2 = SpirvModelStageCase();
-    model2.stage = s_AmplificationStage;
+    model2.stage = ShaderTypeMask::Amplification;
     model2.model = 5364u;
     models.push_back(model2);
     SpirvModelStageCase model3 = SpirvModelStageCase();
-    model3.stage = s_MeshStage;
+    model3.stage = ShaderTypeMask::Mesh;
     model3.model = 5365u;
     models.push_back(model3);
 
@@ -408,65 +423,58 @@ void VerifyAssetsGraphics_SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnk
         EXPECT_EQ(entry.value(), s_ShaderEntryMain);
     }
     words[6u] = u32.max;
-    const Expected<StringView, SpirvLookupError> unknown = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_PixelStage);
+    const Expected<StringView, SpirvLookupError> unknown = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, ShaderTypeMask::Pixel);
     ASSERT_FALSE(unknown.has_value());
-    EXPECT_EQ(unknown.error(), s_SpirvNotFound);
+    EXPECT_EQ(unknown.error(), SpirvEntryPointLookupResult::NotFound);
 }
 
 void VerifyAssetsGraphics_SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches(){
-    TestArena testArena = TestArena();
-    native(mut testArena){
-        constexpr Array<u32, 10u> s_Words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
-        constexpr Array<char, 5u> s_RequestedName = { 'm', 'a', 'i', 'n', 'X' };
-        const AStringView requestedName(s_RequestedName.data(), 4u);
-        NWB::Core::GraphicsVector<u32> copiedWords(testArena.arena);
-        AStringView copiedEntryPoint;
-        {
-            NWB::Core::GraphicsVector<u32> sourceWords(s_Words.begin(), s_Words.end(), testArena.arena);
-            AStringView sourceEntryPoint;
-            const auto entryPointResult5 = NWB::Core::ResolveSpirvEntryPointName(sourceWords, requestedName, NWB::Core::ShaderType::Pixel);
-            ASSERT_TRUE(entryPointResult5);
-            sourceEntryPoint = *entryPointResult5;
-            EXPECT_EQ(sourceEntryPoint.data(), reinterpret_cast<const char*>(sourceWords.data() + 8u));
-            copiedWords = sourceWords;
-            const auto entryPointResult6 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
-            ASSERT_TRUE(entryPointResult6);
-            copiedEntryPoint = *entryPointResult6;
-            EXPECT_EQ(copiedEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(copiedWords.data() + 8u)));
-            EXPECT_NE(copiedEntryPoint.data(), sourceEntryPoint.data());
-        }
-        // Specializations retain their own bytecode, so their entry-name view must survive the original module.
-        EXPECT_EQ(copiedEntryPoint, s_ShaderEntryMain);
-        EXPECT_EQ(copiedEntryPoint.data()[copiedEntryPoint.size()], '\0');
-
-        Core::Assets::AssetBytes unalignedBytes(testArena.arena);
-        unalignedBytes.resize(1u + copiedWords.size() * sizeof(u32));
-        FOUNDATION_MEMCPY(unalignedBytes.data() + 1u, unalignedBytes.size() - 1u, copiedWords.data(), copiedWords.size() * sizeof(u32));
-        const BinaryByteView unalignedModule{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u };
-        AStringView byteEntryPoint;
-        const auto entryPointResult7 = Core::ResolveSpirvEntryPointName(unalignedModule, requestedName, Core::ShaderType::Pixel);
-        ASSERT_TRUE(entryPointResult7);
-        byteEntryPoint = *entryPointResult7;
-        EXPECT_EQ(byteEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(unalignedBytes.data() + 1u + 8u * sizeof(u32))));
-        EXPECT_EQ(byteEntryPoint, s_ShaderEntryMain);
-        const auto entryPointResult8 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedModule.data(), unalignedModule.size() - 1u }, requestedName, Core::ShaderType::Pixel);
-        ASSERT_FALSE(entryPointResult8);
-        EXPECT_EQ(entryPointResult8.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);
-        AppendPOD(unalignedBytes, 0u);
-        const auto entryPointResult9 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u }, requestedName, Core::ShaderType::Pixel);
-        ASSERT_FALSE(entryPointResult9);
-        EXPECT_EQ(entryPointResult9.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);
-
-        copiedWords.push_back(0u);
-        const auto entryPointResult10 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
-        ASSERT_FALSE(entryPointResult10);
-        EXPECT_EQ(entryPointResult10.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
+    const Array<u32, 10u> words(0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvAsciiWord(109u, 97u, 105u, 110u), 0u);
+    const StringView requestedName = StringView("mainX").substr(0u, 4u);
+    Vector<u32> copiedWords;
+    StringView copiedEntryPoint = "";
+    {
+        Vector<u32> sourceWords;
+        for(in u32 word : words)
+            sourceWords.push_back(word);
+        const auto original = ResolveSpirvEntryPointName(Span<u32>(sourceWords), requestedName, ShaderTypeMask::Pixel);
+        ASSERT_TRUE(original.has_value());
+        EXPECT_EQ(TestDataAddress(original.value()), TestValueAddress<u32>(sourceWords[8u]));
+        ASSERT_TRUE(TryCopyVector<u32>(copiedWords, Span<u32>(sourceWords)));
+        const auto copied = ResolveSpirvEntryPointName(Span<u32>(copiedWords), requestedName, ShaderTypeMask::Pixel);
+        ASSERT_TRUE(copied.has_value());
+        copiedEntryPoint = copied.value();
+        EXPECT_EQ(TestDataAddress(copiedEntryPoint), TestValueAddress<u32>(copiedWords[8u]));
+        EXPECT_NE(TestDataAddress(copiedEntryPoint), TestDataAddress(original.value()));
     }
+    EXPECT_EQ(copiedEntryPoint, s_ShaderEntryMain);
+    const Span<u8> wordBytes = PodArrayBytes<u32>(Span<u32>(copiedWords));
+    EXPECT_EQ(wordBytes[8u * size_of<u32>() + copiedEntryPoint.size()], 0u);
+    Vector<u8> unalignedBytes;
+    unalignedBytes.push_back(0u);
+    for(in u8 byte : wordBytes)
+        unalignedBytes.push_back(byte);
+    const Span<u8> unaligned = Span<u8>(unalignedBytes).subspan(1u);
+    const auto byteEntry = ResolveSpirvEntryPointName(TestByteView(unaligned, unaligned.size(), true), requestedName, ShaderTypeMask::Pixel);
+    ASSERT_TRUE(byteEntry.has_value());
+    EXPECT_EQ(TestDataAddress(byteEntry.value()), TestValueAddress<u8>(unalignedBytes[1u + 8u * size_of<u32>()]));
+    EXPECT_EQ(byteEntry.value(), s_ShaderEntryMain);
+    const auto truncated = ResolveSpirvEntryPointName(TestByteView(unaligned, unaligned.size() - 1u, true), requestedName, ShaderTypeMask::Pixel);
+    ASSERT_FALSE(truncated.has_value());
+    EXPECT_EQ(truncated.error(), SpirvEntryPointLookupResult::InvalidSpirv);
+    AppendPOD(unalignedBytes, 0u);
+    const auto trailingBytes = ResolveSpirvEntryPointName(Span<u8>(unalignedBytes).subspan(1u), requestedName, ShaderTypeMask::Pixel);
+    ASSERT_FALSE(trailingBytes.has_value());
+    EXPECT_EQ(trailingBytes.error(), SpirvEntryPointLookupResult::InvalidSpirv);
+    copiedWords.push_back(0u);
+    const auto trailingWord = ResolveSpirvEntryPointName(Span<u32>(copiedWords), requestedName, ShaderTypeMask::Pixel);
+    ASSERT_FALSE(trailingWord.has_value());
+    EXPECT_EQ(trailingWord.error(), SpirvEntryPointLookupResult::InvalidSpirv);
 }
 
 void VerifyAssetsGraphics_CompilerPathTextCapacityChecksWideOverflow(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     const usize limit = usize.max;
     const usize wideUnits = limit / s_MaxEncodedPathBytesPerWideUnit;
     const Expected<usize> wideCapacity = TryComputeCompilerPathTextCapacity(wideUnits, false);
@@ -481,7 +489,7 @@ void VerifyAssetsGraphics_CompilerPathTextCapacityChecksWideOverflow(){
 
 void VerifyAssetsGraphics_CompilerArgumentCapacitiesRejectOverflow(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
     const usize limit = usize.max;
     const usize prefixBytes = s_SlangWorkspaceRootKeyPrefix.size();
     const usize rootBytes = (limit - prefixBytes) / 2u;
@@ -531,7 +539,7 @@ void VerifyAssetsGraphics_ShaderCombinationCountsPreserveStateOnOverflow(){
 
 void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "concrete_shader_stage_admission");
     ASSERT_TRUE(cookCaseResult.has_value());
@@ -560,28 +568,31 @@ void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLo
 
     AssetBytes pixelBinary(testArena.arena);
     AssetBytes computeBinary(testArena.arena);
-    ASSERT_EQ(EncodeTestShaderPayload(ViewArenaString(cookedPixel.entryPoint()), cookedPixel.bytecode(), pixelBinary), s_ShaderPayloadEncodeNone);
-    ASSERT_EQ(EncodeTestShaderPayload(ViewArenaString(cookedCompute.entryPoint()), cookedCompute.bytecode(), computeBinary), s_ShaderPayloadEncodeNone);
+    ASSERT_EQ(EncodeTestShaderPayload(StringView(cookedPixel.entryPoint()), cookedPixel.bytecode(), pixelBinary), AssetPayloadEncodeFailure::None);
+    ASSERT_EQ(EncodeTestShaderPayload(StringView(cookedCompute.entryPoint()), cookedCompute.bytecode(), computeBinary), AssetPayloadEncodeFailure::None);
 
     const PixelShaderAssetCodec pixelCodec = PixelShaderAssetCodec();
     const ComputeShaderAssetCodec computeCodec = ComputeShaderAssetCodec();
     CheckCodecRejectsBinary(pixelCodec, pixelPath, computeBinary, testArena);
     CheckCodecRejectsBinary(computeCodec, computePath, pixelBinary, testArena);
 
-    PixelShaderAsset pixel(testArena.arena, pixelPath);
-    ComputeShaderAsset compute(testArena.arena, computePath);
+    TestValueSlot<PixelShaderAsset> pixelStorage;
+    mut PixelShaderAsset pixel = pixelStorage.constructIn(testArena, pixelPath);
+    TestValueSlot<ComputeShaderAsset> computeStorage;
+    mut ComputeShaderAsset compute = computeStorage.constructIn(testArena, computePath);
     ASSERT_TRUE(pixel.loadBinary(pixelBinary));
     // A five-byte entry point puts SPIR-V at an unaligned payload offset.
     ASSERT_TRUE(compute.loadBinary(computeBinary));
-    const usize pixelBytesAddr = ByteBufferAddress(pixel.bytecode());
-    const usize computeBytesAddr = ByteBufferAddress(compute.bytecode());
-    const usize pixelEntryAddr = StringDataAddress(pixel.entryPoint());
-    const usize computeEntryAddr = StringDataAddress(compute.entryPoint());
+    const usize pixelBytesAddr = TestDataAddress(pixel.bytecode());
+    const usize computeBytesAddr = TestDataAddress(compute.bytecode());
+    const usize pixelEntryAddr = TestDataAddress(pixel.entryPoint());
+    const usize computeEntryAddr = TestDataAddress(compute.entryPoint());
     ASSERT_GE(pixelEntryAddr, pixelBytesAddr);
     ASSERT_LT(pixelEntryAddr - pixelBytesAddr, pixel.bytecode().size());
     ASSERT_GE(computeEntryAddr, computeBytesAddr);
     ASSERT_LT(computeEntryAddr - computeBytesAddr, compute.bytecode().size());
-    PixelShaderAsset emptyPixel(testArena.arena, pixelPath);
+    TestValueSlot<PixelShaderAsset> emptyPixelStorage;
+    mut PixelShaderAsset emptyPixel = emptyPixelStorage.constructIn(testArena, pixelPath);
     EXPECT_TRUE(emptyPixel.entryPoint().empty());
     EXPECT_FALSE(pixel.loadBinary(computeBinary));
     EXPECT_FALSE(compute.loadBinary(pixelBinary));
@@ -589,65 +600,70 @@ void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLo
     AppendZeroU32ToAssetBytes(malformedPixelBinary);
     EXPECT_FALSE(pixel.loadBinary(malformedPixelBinary));
     AssetBytes missingEntryBinary(testArena.arena);
-    ASSERT_EQ(EncodeTestShaderPayload("absent", cookedCompute.bytecode(), missingEntryBinary), s_ShaderPayloadEncodeNone);
+    ASSERT_EQ(EncodeTestShaderPayload("absent", cookedCompute.bytecode(), missingEntryBinary), AssetPayloadEncodeFailure::None);
     EXPECT_FALSE(compute.loadBinary(missingEntryBinary));
-    EXPECT_EQ(ByteBufferAddress(pixel.bytecode()), pixelBytesAddr);
-    EXPECT_EQ(ByteBufferAddress(compute.bytecode()), computeBytesAddr);
-    EXPECT_EQ(StringDataAddress(pixel.entryPoint()), pixelEntryAddr);
-    EXPECT_EQ(StringDataAddress(compute.entryPoint()), computeEntryAddr);
+    EXPECT_EQ(TestDataAddress(pixel.bytecode()), pixelBytesAddr);
+    EXPECT_EQ(TestDataAddress(compute.bytecode()), computeBytesAddr);
+    EXPECT_EQ(TestDataAddress(pixel.entryPoint()), pixelEntryAddr);
+    EXPECT_EQ(TestDataAddress(compute.entryPoint()), computeEntryAddr);
     EXPECT_EQ(pixel.bytecode(), cookedPixel.bytecode());
     EXPECT_EQ(compute.bytecode(), cookedCompute.bytecode());
-    EXPECT_EQ(ViewArenaString(pixel.entryPoint()), ViewArenaString(cookedPixel.entryPoint()));
-    EXPECT_EQ(ViewArenaString(compute.entryPoint()), ViewArenaString(cookedCompute.entryPoint()));
+    EXPECT_EQ(StringView(pixel.entryPoint()), StringView(cookedPixel.entryPoint()));
+    EXPECT_EQ(StringView(compute.entryPoint()), StringView(cookedCompute.entryPoint()));
     ASSERT_TRUE(pixel.loadBinary(pixelBinary));
     ASSERT_TRUE(compute.loadBinary(computeBinary));
-    EXPECT_EQ(ViewArenaString(pixel.entryPoint()), ViewArenaString(cookedPixel.entryPoint()));
-    EXPECT_EQ(ViewArenaString(compute.entryPoint()), ViewArenaString(cookedCompute.entryPoint()));
-    native(in pixelBinary, in cookedPixel, in pixelPath, mut testArena){
-        AssetBytes carrier(testArena.arena);
-        carrier.assign(cookedPixel.bytecode().begin(), cookedPixel.bytecode().end());
-        const usize payloadOffset = carrier.size() + sizeof(u32);
+    EXPECT_EQ(StringView(pixel.entryPoint()), StringView(cookedPixel.entryPoint()));
+    EXPECT_EQ(StringView(compute.entryPoint()), StringView(cookedCompute.entryPoint()));
+    {
+        Vector<u8> carrier;
+        for(in u8 byte : cookedPixel.bytecode())
+            carrier.push_back(byte);
+        const usize payloadOffset = carrier.size() + size_of<u32>();
         const usize payloadWords = (pixelBinary.size() + 3u) / 4u;
         ASSERT_LE(payloadWords + 1u, 0xffffu);
-        const u32 instruction = (static_cast<u32>(payloadWords + 1u) << 16u) | 7u;
+        const u32 instruction = (cast<u32>(payloadWords + 1u) << 16u) | 7u;
         for(u32 shift = 0u; shift < 32u; shift += 8u)
-            carrier.push_back(static_cast<u8>(instruction >> shift));
-        carrier.insert(carrier.end(), pixelBinary.begin(), pixelBinary.end());
-        carrier.resize(payloadOffset + payloadWords * sizeof(u32), 0u);
+            carrier.push_back(cast<u8>(instruction >> shift));
+        for(in u8 byte : pixelBinary)
+            carrier.push_back(byte);
+        carrier.resize(payloadOffset + payloadWords * size_of<u32>(), 0u);
         AssetBytes outerPayload(testArena.arena);
-        ASSERT_EQ(EncodeTestShaderPayload(cookedPixel.entryPoint(), Span<const u8>(carrier.data(), carrier.size()), outerPayload), s_ShaderPayloadEncodeNone);
-        PixelShaderAsset aliased(testArena.arena, pixelPath);
-        ASSERT_TRUE(aliased.loadBinary(Span<const u8>(outerPayload.data(), outerPayload.size())));
-        const Span<const u8> embedded(aliased.bytecode().data() + payloadOffset, pixelBinary.size());
+        ASSERT_EQ(EncodeTestShaderPayload(cookedPixel.entryPoint(), Span<u8>(carrier), outerPayload), AssetPayloadEncodeFailure::None);
+        PixelShader aliased(pixelPath);
+        ASSERT_TRUE(aliased.loadBinary(outerPayload));
+        const Span<u8> embedded = Span<u8>(aliased.bytecode()).subspan(payloadOffset, pixelBinary.size());
         ASSERT_TRUE(aliased.loadBinary(embedded));
         EXPECT_EQ(aliased.entryPoint(), cookedPixel.entryPoint());
         EXPECT_EQ(aliased.bytecode(), cookedPixel.bytecode());
     }
     pixelBinary.clear();
     computeBinary.clear();
-    EXPECT_EQ(ViewArenaString(pixel.entryPoint()), ViewArenaString(cookedPixel.entryPoint()));
-    EXPECT_EQ(ViewArenaString(compute.entryPoint()), ViewArenaString(cookedCompute.entryPoint()));
-    native(in pixel){
-        TestArena otherArena;
-        PixelShaderAsset rebound(otherArena.arena, pixel);
+    EXPECT_EQ(StringView(pixel.entryPoint()), StringView(cookedPixel.entryPoint()));
+    EXPECT_EQ(StringView(compute.entryPoint()), StringView(cookedCompute.entryPoint()));
+    {
+        HeapStorage otherArena;
+        TestValueSlot<PixelShader> reboundSlot;
+        in PixelShader rebound = reboundSlot.constructIn(otherArena, pixel);
         EXPECT_EQ(rebound.entryPoint(), pixel.entryPoint());
-        EXPECT_NE(rebound.bytecode().data(), pixel.bytecode().data());
-        PixelShaderAsset copied(pixel);
-        PixelShaderAsset moved(otherArena.arena, Move(copied));
+        EXPECT_NE(TestDataAddress(rebound.bytecode()), TestDataAddress(pixel.bytecode()));
+        TestValueSlot<PixelShader> copySlot;
+        mut PixelShader copied = copySlot.copy(pixel);
+        TestValueSlot<PixelShader> movedSlot;
+        in PixelShader moved = movedSlot.takeIn(otherArena, copied);
         EXPECT_EQ(moved.entryPoint(), pixel.entryPoint());
         if(copied.bytecode().empty())
             EXPECT_TRUE(copied.entryPoint().empty());
-        const usize bytes = reinterpret_cast<usize>(moved.bytecode().data());
-        const usize entry = reinterpret_cast<usize>(moved.entryPoint().data());
+        const usize bytes = TestDataAddress(moved.bytecode());
+        const usize entry = TestDataAddress(moved.entryPoint());
         ASSERT_GE(entry, bytes);
         EXPECT_LT(entry - bytes, moved.bytecode().size());
     }
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "gather_independent_shaders");
     ASSERT_TRUE(rootResult.has_value());
@@ -667,8 +683,8 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(firstAssetRoot, s_ShadersDirectory, "standalone_ps.slang"), "float4 main() : SV_Target0{ return float4(0.0, 1.0, 0.0, 1.0); }\n"));
     ASSERT_TRUE(BuildSingleAssetRoot(testArena, root, conflictingBuilt, firstAssetRoot));
 
-    ASSERT_TRUE(RemoveAllIfExists(firstAssetRoot).has_value());
-    ASSERT_TRUE(RemoveAllIfExists(secondAssetRoot).has_value());
+    ASSERT_TRUE(GraphicsRemoveAllIfExists(firstAssetRoot).has_value());
+    ASSERT_TRUE(GraphicsRemoveAllIfExists(secondAssetRoot).has_value());
 
     AssetGatherOptions options(testArena.arena);
     AppendGatherInputPath(testArena, firstBuilt, options);
@@ -676,7 +692,7 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     SetGatherOutputPath(testArena, outputDirectory, options);
     options.configuration = "tests";
     EnableGraphicsGatherMerge(options);
-    ASSERT_TRUE(GatherGraphicsAssets(options));
+    ASSERT_TRUE(GatherAssets(options));
 
     const Expected<ShaderArchiveRecordVector> recordsResult = LoadShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsResult.has_value());
@@ -698,7 +714,7 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     ASSERT_TRUE(originalChecksumResult.has_value());
     const u64 originalChecksum = originalChecksumResult.value();
     AppendGatherInputPath(testArena, conflictingBuilt, options);
-    EXPECT_FALSE(GatherGraphicsAssets(options));
+    EXPECT_FALSE(GatherAssets(options));
     EXPECT_GT(logger.errorCount(), 0u);
     const Expected<ShaderArchiveRecordVector> recordsResult2 = LoadShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsResult2.has_value());
@@ -707,12 +723,12 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     const Expected<u64> preservedChecksumResult = FindTestShaderSourceChecksum(records2, shaderNames[0u], Name(s_ShaderStagePs));
     ASSERT_TRUE(preservedChecksumResult.has_value());
     EXPECT_EQ(preservedChecksumResult.value(), originalChecksum);
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCleansFailedInvocation(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "shader_cook_bom_compiler_inputs");
     ASSERT_TRUE(cookCaseResult.has_value());
@@ -724,11 +740,11 @@ void VerifyAssetsGraphics_ShaderCookCompilesBomPrefixedSourceAndExternalIncludeA
     ASSERT_TRUE(WriteBomCompilerProbe(assetRoot));
     const GraphicsTestPath externalIncludeRoot = JoinGraphicsPath2(root, "external", "includes");
     ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(externalIncludeRoot, s_CompilerProbeIncludeFilename), s_BomCompilerProbeIncludeSource));
-    const Expected<b8, ErrorCode> removedInclude = RemoveFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, s_CompilerProbeIncludeFilename));
+    const Expected<b8, ErrorCode> removedInclude = GraphicsRemoveFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, s_CompilerProbeIncludeFilename));
     ASSERT_TRUE(removedInclude.has_value());
     ASSERT_TRUE(removedInclude.value());
     const AssetString shaderMetadata = FormatShaderIncludeRootsMetadata(testArena, s_ShaderAssetHead, s_AssetEntryMain, externalIncludeRoot);
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.nwb"), ViewArenaString(shaderMetadata)));
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.nwb"), StringView(shaderMetadata)));
     ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
     EXPECT_EQ(logger.errorCount(), 0u);
     ExpectNoShaderCompilerWorkDirectories(JoinGraphicsPath(root, s_CacheDirectory));
@@ -737,7 +753,7 @@ void VerifyAssetsGraphics_ShaderCookCompilesBomPrefixedSourceAndExternalIncludeA
     ASSERT_TRUE(LoadCookedPixelShader(testArena, outputDirectory, shaderPathResult.value(), 2u).has_value());
 
     const AssetString absoluteSource = FormatBomAbsoluteIncludeSource(testArena, JoinGraphicsPath(externalIncludeRoot, s_CompilerProbeIncludeFilename));
-    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.slang"), ViewArenaString(absoluteSource)));
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "bom_compiler_probe_ps.slang"), StringView(absoluteSource)));
     ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
     EXPECT_EQ(logger.errorCount(), 0u);
     ExpectNoShaderCompilerWorkDirectories(JoinGraphicsPath(root, s_CacheDirectory));
@@ -752,12 +768,12 @@ void VerifyAssetsGraphics_ShaderCookCompilesBomPrefixedSourceAndExternalIncludeA
     EXPECT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
     EXPECT_EQ(logger.errorCount(), failureErrors);
     ExpectNoShaderCompilerWorkDirectories(JoinGraphicsPath(root, s_CacheDirectory));
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_ShaderCookPreservesExactEntryPoint(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "shader_cook_exact_entry_point");
     ASSERT_TRUE(cookCaseResult.has_value());
@@ -776,23 +792,23 @@ void VerifyAssetsGraphics_ShaderCookPreservesExactEntryPoint(){
         const Expected<PixelShaderAsset> loadedShader = LoadCookedPixelShader(testArena, outputDirectory, shaderVirtualPathResult.value(), 2u);
         ASSERT_TRUE(loadedShader.has_value());
         const PixelShaderAsset shader = loadedShader.value();
-        EXPECT_EQ(ViewArenaString(shader.entryPoint()), s_ShaderMainCase);
+        EXPECT_EQ(StringView(shader.entryPoint()), s_ShaderMainCase);
 
         const GraphicsWordVector words = CopyBytecodeToWords(testArena, shader.bytecode());
-        const Expected<StringView, SpirvLookupError> entryPointResult1 = ResolveSpirvWordsEntryPoint(words, ViewArenaString(shader.entryPoint()), s_PixelStage);
+        const Expected<StringView, SpirvLookupError> entryPointResult1 = ResolveSpirvWordsEntryPoint(words, StringView(shader.entryPoint()), ShaderTypeMask::Pixel);
         ASSERT_TRUE(entryPointResult1.has_value());
         EXPECT_EQ(entryPointResult1.value(), s_ShaderMainCase);
-        const Expected<StringView, SpirvLookupError> entryPointResult2 = ResolveSpirvWordsEntryPoint(words, s_ShaderEntryMain, s_PixelStage);
+        const Expected<StringView, SpirvLookupError> entryPointResult2 = ResolveSpirvWordsEntryPoint(words, s_ShaderEntryMain, ShaderTypeMask::Pixel);
         ASSERT_FALSE(entryPointResult2.has_value());
-        EXPECT_EQ(entryPointResult2.error(), s_SpirvNotFound);
+        EXPECT_EQ(entryPointResult2.error(), SpirvEntryPointLookupResult::NotFound);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCaches(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "shader_cook_invalid_bytecode_cache");
     ASSERT_TRUE(cookCaseResult.has_value());
@@ -847,15 +863,15 @@ void VerifyAssetsGraphics_ShaderCookRebuildsTruncatedMalformedAndWrongStageBytec
         ASSERT_TRUE(WriteTestBinaryFile(bytecodeCachePath, corrupted));
         ASSERT_TRUE(CookSingleAssetRoot(testArena, root, outputDirectory, assetRoot));
         ASSERT_TRUE(ReadTestBinaryFile(bytecodeCachePath, repaired));
-        const Expected<StringView, SpirvLookupError> resolvedEntryPoint = ResolveSpirvBytesEntryPoint(repaired, s_ShaderEntryMain, s_PixelStage);
+        const Expected<StringView, SpirvLookupError> resolvedEntryPoint = ResolveSpirvBytesEntryPoint(repaired, s_ShaderEntryMain, ShaderTypeMask::Pixel);
         ASSERT_TRUE(resolvedEntryPoint.has_value());
         EXPECT_EQ(resolvedEntryPoint.value(), s_ShaderEntryMain);
         const Expected<PixelShaderAsset> pixelAssetResult = LoadCookedPixelShader(testArena, outputDirectory, pixelPath, 2u);
         ASSERT_TRUE(pixelAssetResult.has_value());
-        EXPECT_EQ(ViewArenaString(pixelAssetResult.value().entryPoint()), s_ShaderEntryMain);
+        EXPECT_EQ(StringView(pixelAssetResult.value().entryPoint()), s_ShaderEntryMain);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 

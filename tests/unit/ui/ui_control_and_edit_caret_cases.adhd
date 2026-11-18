@@ -3,68 +3,17 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_edit_and_navigation.adhd>
+#include <tests/unit/ui/snapshot_fault_fixture.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/font_fixture.adhd.h>
-#include <tests/unit/ui/fixture_text_shaping.adhd.h>
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
-
-#include <global/filesystem.h>
-#include <global/limit.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_control_input_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget MakeHost(const u64 id = 1u, const f32 x = 0.0f)noexcept{
+HitTarget MakeControlInputPart(in HitTarget host, in u64 id, in Rect rectangle, in u64 value){
     HitTarget target;
-    target.id = { id };
-    target.declarationGeneration = 7u;
-    target.rectangle = { x, 0.0f, 100.0f, 100.0f };
-    target.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
-    target.focusable = true;
-    target.control = { 11u, 21u, 31u };
-    target.navigable = true;
-    target.scrollable = true;
-    target.scrollStep = 72.0;
-    target.pageRows = 4u;
-    target.gestureMaximum = 2399900.0;
-    return target;
-}
-
-[[nodiscard]] FOUNDATION_INLINE HitTarget MakePart(const HitTarget& host, const u64 id, const Rect& rectangle, const u64 value = 0u)noexcept{
-    HitTarget target;
-    target.id = { id };
+    target.id = WidgetId(id);
     target.rectangle = rectangle;
     target.clip = host.clip;
     target.declarationGeneration = host.declarationGeneration;
@@ -77,348 +26,152 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-using UiTestSupport::Key;
-using UiTestSupport::Pointer;
+class UiControlInputTests : RouterTestFixture{
+    public Array<HitTarget, 3u> m_targets;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiControlInputTests : public UiTestSupport::RouterTestFixture{
-public:
-    UiControlInputTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiControlInput))
-    {
-        m_targets[0u] = MakeHost();
-        m_targets[1u] = MakePart(m_targets[0u], 2u, { 0.0f, 0.0f, 80.0f, 20.0f }, 100000u);
-        m_targets[2u] = MakePart(m_targets[0u], 3u, { 90.0f, 20.0f, 10.0f, 20.0f });
-        m_targets[2u].activatable = false;
-        m_targets[2u].pointerGesture = true;
-        m_targets[2u].gestureReference = { 90.0f, 0.0f, 10.0f, 100.0f };
-        m_targets[2u].gestureMaximum = m_targets[0u].gestureMaximum;
+    public UiControlInputTests(){
+        this.m_targets[0u] = MakeUiControlInputHost(1u, 0.0f);
+        this.m_targets[1u] = MakeControlInputPart(this.m_targets[0u], 2u, Rect(0.0f, 0.0f, 80.0f, 20.0f), 100000u);
+        this.m_targets[2u] = MakeControlInputPart(this.m_targets[0u], 3u, Rect(90.0f, 20.0f, 10.0f, 20.0f), 0u);
+        this.m_targets[2u].activatable = false;
+        this.m_targets[2u].pointerGesture = true;
+        this.m_targets[2u].gestureReference = Rect(90.0f, 0.0f, 10.0f, 100.0f);
+        this.m_targets[2u].gestureMaximum = this.m_targets[0u].gestureMaximum;
     }
-
-
-public:
-    [[nodiscard]] InputRoutingResult wheel(const f64 delta = -1.0, const Point& position = { 10.0f, 10.0f }){
+    public InputRoutingResult wheel(){ return this.wheel(-1.0); }
+    public InputRoutingResult wheel(in f64 delta){ return this.wheel(delta, Point(10.0f, 10.0f)); }
+    public InputRoutingResult wheel(in f64 delta, in Point position){
         InputEvent event = Pointer(InputEventType::PointerWheel, position);
         event.scrollY = delta;
-        return send(event);
+        return this.send(event);
     }
-
-    void focus(){
-        EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Tab)).commandConsumed);
-        EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Tab)).commandConsumed);
+    public void focus(){
+        EXPECT_TRUE(this.send(Key(InputEventType::KeyDown, Key::Tab)).commandConsumed);
+        EXPECT_TRUE(this.send(Key(InputEventType::KeyUp, Key::Tab)).commandConsumed);
     }
-
-    void revise()noexcept{
-        for(auto& target : m_targets)
+    public void revise(){
+        for(mut HitTarget target : this.m_targets)
             ++target.control.contentRevision;
     }
-
-    [[nodiscard]] b8 queueNative(const InputEvent& event){
-        return m_router.queue(UiTestSupport::NativeInput(event)).has_value();
+    public b8 queueNative(in InputEvent event){
+        return this.m_router.queue(NativeInput(event)).has_value();
     }
-
-    [[nodiscard]] Expected<ControlAction> take()noexcept{
-        return m_router.consumeControlAction(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
+    public Expected<ControlAction> take(){
+        return this.m_router.consumeControlAction(this.m_targets[0u].id, this.m_targets[0u].declarationGeneration, this.m_targets[0u].control);
     }
+}
 
 
-public:
-    Array<HitTarget, 3u> m_targets;
-};
+[ordered]
+class EditBoxLayoutTests{
+    public EditModel m_model;
+    public FixtureShaper m_shaper;
+    public TextLayoutBuilder m_builder;
+    public EditBoxView m_view;
+    public EditBoxPlacement m_placement;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_box_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-constexpr AStringView s_EditBoxSkinPath = "tests/ui/edit_box/skin";
-constexpr AStringView s_EditBoxTexturePath = "tests/ui/edit_box/texture";
-constexpr AStringView s_EditBoxFontPath = "tests/ui/edit_box/font";
-constexpr AStringView s_LatinFontFileName = "latin.font";
-
-using NWB::Tests::UiFixtureText::FixtureShaper;
-
-class EditBoxLayoutTests : public testing::Test{
-public:
-    EditBoxLayoutTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseNameEditBoxLayout))
-        , m_model(m_arena)
-        , m_shaper(m_arena)
-        , m_builder(m_arena, m_shaper)
-        , m_view(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 shapeView(){
-        if(!m_view.snapshot(m_model))
+    public EditBoxLayoutTests(){ this.m_builder = TextLayoutBuilder(this.m_shaper); }
+    public b8 shapeView(){
+        if(!this.m_view.snapshot(this.m_model))
             return false;
-        auto layout = m_builder.layout({ m_view.displayText() });
-        return layout && m_view.adoptLayout(*layout);
+        ShapeRequest request;
+        request.text = this.m_view.displayText();
+        auto layout = this.m_builder.layout(request);
+        return layout.has_value() && this.m_view.adoptLayout(layout.value());
     }
-
-    [[nodiscard]] b8 tryAdoptBuiltLayout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
-        ShapeRequest request{ text };
+    public b8 tryAdoptBuiltLayout(in StringView text){ return this.tryAdoptBuiltLayout(text, TextDirection::LeftToRight); }
+    public b8 tryAdoptBuiltLayout(in StringView text, in TextDirection direction){
+        ShapeRequest request;
+        request.text = text;
         request.direction = direction;
-        auto layout = m_builder.layout(request);
-        EXPECT_TRUE(layout);
-        if(!layout)
-            return false;
-        return m_view.adoptLayout(*layout);
+        auto layout = this.m_builder.layout(request);
+        EXPECT_TRUE(layout.has_value());
+        return layout.has_value() && this.m_view.adoptLayout(layout.value());
     }
-
-    void moveViewTo(EditBoxView& destination)noexcept{
-        destination = EditBoxView(Move(m_view));
-    }
-
-    void configureSkin(UiSkin& skin, const b8 includeButtonRegion = false){
-        UiSkin::RegionVector regions(m_arena);
+    public void moveViewTo(mut EditBoxView destination){ TestMoveAssign<EditBoxView>(destination, this.m_view); }
+    public void configureSkin(mut UiSkin skin){ this.configureSkin(skin, false); }
+    public void configureSkin(mut UiSkin skin, in b8 includeButtonRegion){
+        Vector<UiSkinRegion> regions;
         if(includeButtonRegion)
-            regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal), { 0u, 0u, 4u, 4u }, {}, {} });
-        skin.setAtlas(Core::Assets::AssetRef<Texture>(s_EditBoxTexturePath), 4u, 4u, 1.0f, Move(regions));
+            regions.push_back(UiSkinRegion(Name(s_UiCaseNameButtonNormal), UiSkinRect(0u, 0u, 4u, 4u), UiSkinSliceInsets(), UiSkinInsets()));
+        skin.setAtlas(AssetRef<Texture>("tests/ui/edit_box/texture"), 4u, 4u, 1.0f, regions);
     }
-
-    void beginSkinPaint(PaintBuilder& paint, const UiSkin& skin, const u64 generation, const f32 width = 200.0f, const f32 height = 100.0f, const f32 scale = 1.0f){
-        paint.begin({ width, height, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
+    public void beginSkinPaint(mut PaintBuilder paint, in UiSkin skin, in u64 generation){ this.beginSkinPaint(paint, skin, generation, 200.0f); }
+    public void beginSkinPaint(mut PaintBuilder paint, in UiSkin skin, in u64 generation, in f32 width){ this.beginSkinPaint(paint, skin, generation, width, 100.0f); }
+    public void beginSkinPaint(mut PaintBuilder paint, in UiSkin skin, in u64 generation, in f32 width, in f32 height){ this.beginSkinPaint(paint, skin, generation, width, height, 1.0f); }
+    public void beginSkinPaint(mut PaintBuilder paint, in UiSkin skin, in u64 generation, in f32 width, in f32 height, in f32 scale){
+        paint.begin(DisplayMetrics(width, height, scale, scale), generation, 1u, AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
     }
-
-    [[nodiscard]] b8 installBundledLatinFont(Font& font, TextService& service){
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / s_LatinFontFileName;
-        auto bytes = Tests::ReadBundledFontBytes(path, m_arena);
-        if(!bytes)
+    public b8 installBundledLatinFont(mut Font font, mut TextService service){
+        if(!LoadBundledFixtureFont("latin.font", font))
             return false;
-        font.setFontBytes(Move(*bytes));
-        if(!font.validatePayload())
-            return false;
-        const FontSource source{ Core::Assets::AssetRef<Font>(s_EditBoxFontPath), font, 1u };
-        return service.setFonts(Span(&source, 1u));
+        const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>("tests/ui/edit_box/font"), font, 1u));
+        return service.setFonts(sources);
     }
-
-    [[nodiscard]] b8 place(f32 width = 100.0f, f32 scroll = 0.0f)noexcept{
-        const auto placement = m_view.arrange({ 10.0f, 20.0f, width, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, { scroll, 0.0f });
-        if(!placement)
+    public b8 place(){ return this.place(100.0f); }
+    public b8 place(in f32 width){ return this.place(width, 0.0f); }
+    public b8 place(in f32 width, in f32 scroll){
+        const auto placement = this.m_view.arrange(Rect(10.0f, 20.0f, width, 20.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 500.0f), Point(scroll, 0.0f));
+        if(!placement.has_value())
             return false;
-        m_placement = *placement;
+        this.m_placement = placement.value();
         return true;
     }
-
-    [[nodiscard]] Expected<Rect> rangeRect(const EditBoxRange range)const noexcept{
-        auto rect = m_view.caretGeometry().rangeOnLine(range, 0u, m_placement.caret.width);
-        if(!rect)
-            return MakeUnexpected(Failure{});
-        const SIMDVectorSingle origin = VectorAdd(VectorSet(rect->x, rect->y, 0.0f, 0.0f), VectorSet(m_placement.textOrigin.x, m_placement.textOrigin.y, 0.0f, 0.0f));
-        rect->x = VectorGetX(origin);
-        rect->y = VectorGetY(origin);
+    public Expected<Rect> rangeRect(in EditBoxRange range)const{
+        auto rect = this.m_view.caretGeometry().rangeOnLine(range, 0u, this.m_placement.caret.width);
+        if(!rect.has_value())
+            return MakeUnexpected(Failure());
+        rect.value().x += this.m_placement.textOrigin.x;
+        rect.value().y += this.m_placement.textOrigin.y;
         return rect;
     }
+}
 
 
-public:
-    Core::Alloc::GlobalArena m_arena;
-    EditModel m_model;
-    FixtureShaper m_shaper;
-    TextLayoutBuilder m_builder;
-    EditBoxView m_view;
-    EditBoxPlacement m_placement;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_caret_geometry_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiEditCaretTests;
-
-[[nodiscard]] FOUNDATION_INLINE b8 AdoptMismatchedSourcePreservingCandidate(EditCaretFixture& self){
-    auto layoutResult = self.layout("new");
-    if(!layoutResult)
+b8 UiEditCaretAdoptMismatchedSource(mut EditCaretFixture self){
+    auto layout = self.layout("new");
+    if(!layout.has_value() || !self.identityMapping("new"))
         return false;
-    TextLayout& candidate = *layoutResult;
-    if(!self.identityMapping("new"))
-        return false;
+    mut TextLayout candidate = layout.value();
     const b8 adopted = self.m_geometry.adoptLayout(candidate, "wrong", self.m_mapping, 3u, EditTextMode::SingleLine);
     EXPECT_FALSE(adopted);
     EXPECT_EQ(candidate.utf8(), "new");
     return !adopted && candidate.utf8() == "new";
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 AdoptBuiltCaretLayout(EditCaretFixture& self, const StringView layoutText, const StringView sourceText, const usize committedBytes, const EditTextMode::Enum mode, const TextDirection::Enum direction = TextDirection::LeftToRight){
-    auto built = self.layout(layoutText, direction);
-    EXPECT_TRUE(built);
-    if(!built)
-        return false;
-    return self.m_geometry.adoptLayout(*built, sourceText, self.m_mapping, committedBytes, mode);
+b8 UiEditCaretAdoptBuiltLayout(mut EditCaretFixture self, in StringView layoutText, in StringView sourceText, in usize committedBytes, in EditTextMode mode){
+    return UiEditCaretAdoptBuiltLayout(self, layoutText, sourceText, committedBytes, mode, TextDirection::LeftToRight);
+}
+b8 UiEditCaretAdoptBuiltLayout(mut EditCaretFixture self, in StringView layoutText, in StringView sourceText, in usize committedBytes, in EditTextMode mode, in TextDirection direction){
+    auto candidate = self.layout(layoutText, direction);
+    EXPECT_TRUE(candidate.has_value());
+    return candidate.has_value() && self.m_geometry.adoptLayout(candidate.value(), sourceText, self.m_mapping, committedBytes, mode);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 AdoptNonfiniteDerivedGlyphPlacement(EditCaretFixture& self){
-    auto malformedResult = self.layout("ab");
-    EXPECT_TRUE(malformedResult);
-    if(!malformedResult)
+b8 UiEditCaretAdoptNonfinitePlacement(mut EditCaretFixture self){
+    auto layout = self.layout("ab");
+    EXPECT_TRUE(layout.has_value());
+    if(!layout.has_value())
         return false;
-    TextLayout& malformed = *malformedResult;
+    mut TextLayout malformed = layout.value();
     EXPECT_EQ(malformed.glyphs().size(), 2u);
     if(malformed.glyphs().size() != 2u)
         return false;
-    const_cast<PlacedGlyph&>(malformed.glyphs()[1u]).position.x = Limit<f32>::s_Infinity;
-    if(!self.identityMapping("ab"))
-        return false;
-    return self.m_geometry.adoptLayout(malformed, "ab", self.m_mapping, 2u, EditTextMode::SingleLine);
+    TextLayoutFaultFixture faults;
+    faults.invalidateGlyphPosition(malformed);
+    return self.identityMapping("ab") && self.m_geometry.adoptLayout(malformed, "ab", self.m_mapping, 2u, EditTextMode::SingleLine);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 AdoptMutatedLineRecord(EditCaretFixture& self, const u32 mutation){
-    auto malformedResult = self.layout("a\nb");
-    EXPECT_TRUE(malformedResult);
-    if(!malformedResult)
+b8 UiEditCaretAdoptMutatedLineRecord(mut EditCaretFixture self, in u32 mutation){
+    auto layout = self.layout("a\nb");
+    EXPECT_TRUE(layout.has_value());
+    if(!layout.has_value())
         return false;
-    TextLayout& malformed = *malformedResult;
-    TextLine& line = const_cast<TextLine&>(malformed.lines()[1u]);
-    switch(mutation){
-    case 0u: line.byteBegin = 0u; break;
-    case 1u: line.byteEnd = 4u; break;
-    case 2u: line.breakEnd = 4u; break;
-    case 3u: line.firstCluster = 0u; break;
-    case 4u: line.clusterCount = 2u; break;
-    case 5u: line.firstGlyph = 0u; break;
-    case 6u: line.glyphCount = 2u; break;
-    case 7u: line.top = 11.0f; break;
-    case 8u: line.height = 0.0f; break;
-    case 9u: line.advance = -1.0f; break;
-    case 10u: line.baseline = Limit<f32>::s_Infinity; break;
-    case 11u: line.height = Limit<f32>::s_QuietNaN; break;
-    case 12u: line.advance = 11.0f; break;
-    case 13u: const_cast<TextLine&>(malformed.lines()[0u]).breakEnd = 1u; break;
-    case 14u: const_cast<TextCluster&>(malformed.clusters().back()).glyphCount = Limit<u32>::s_Max; break;
-    }
+    mut TextLayout malformed = layout.value();
+    TextLayoutFaultFixture faults;
+    faults.invalidateLineRecord(malformed, mutation);
     return self.m_geometry.adoptLayout(malformed, "a\nb", self.m_mapping, 3u, EditTextMode::Multiline);
 }
-
-FOUNDATION_INLINE void MoveCaretGeometry(EditCaretGeometry& source, EditCaretGeometry& destination)noexcept{
-    destination = Move(source);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiControlInputTests = __hidden_ui_control_input_tests::UiControlInputTests;
-using EditBoxLayoutTests = __hidden_ui_edit_box_layout_tests::EditBoxLayoutTests;
-using EditCaretFixture = ::NWB::UiEditCaretTests::EditCaretFixture;
-namespace UiEditCaretShaperFault = ::NWB::UiEditCaretTests::ShaperFault;
-using UiEditCaretShaperFaultEnum = ::NWB::UiEditCaretTests::ShaperFault::Enum;
-
-using Color = ::NWB::Impl::Ui::Color;
-using ControlAction = ::NWB::Impl::Ui::ControlAction;
-using ControlToken = ::NWB::Impl::Ui::ControlToken;
-using EditBoxPaintFlags = ::NWB::Impl::Ui::EditBoxPaintFlags;
-using EditBoxPlacement = ::NWB::Impl::Ui::EditBoxPlacement;
-using EditBoxRange = ::NWB::Impl::Ui::EditBoxRange;
-using EditBoxStyle = ::NWB::Impl::Ui::EditBoxStyle;
-using EditBoxView = ::NWB::Impl::Ui::EditBoxView;
-using EditCaretGeometry = ::NWB::Impl::Ui::EditCaretGeometry;
-using EditCaretLine = ::NWB::Impl::Ui::EditCaretLine;
-using EditCaretMapping = ::NWB::Impl::Ui::EditCaretMapping;
-using Font = ::NWB::Impl::Font;
-using Insets = ::NWB::Impl::Ui::Insets;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
-using PaintBuilder = ::NWB::Impl::Ui::PaintBuilder;
-using PointerGesture = ::NWB::Impl::Ui::PointerGesture;
-using PopupScope = ::NWB::Impl::Ui::PopupScope;
-using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
-using TextService = ::NWB::Impl::Ui::TextService;
-using UiSkin = ::NWB::Impl::UiSkin;
-using ScratchArena = ::NWB::Core::Alloc::ScratchArena;
-
-namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
-namespace EditMove = ::NWB::Impl::Ui::EditMove;
-namespace EditTextMode = ::NWB::Impl::Ui::EditTextMode;
-using EditTextModeEnum = ::NWB::Impl::Ui::EditTextMode::Enum;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace PointerGestureState = ::NWB::Impl::Ui::PointerGestureState;
-namespace TextDirection = ::NWB::Impl::Ui::TextDirection;
-namespace TextLayoutStatus = ::NWB::Impl::Ui::TextLayoutStatus;
-namespace CoreKey = ::NWB::Core::Key;
-using CoreKeyEnum = ::NWB::Core::Key::Enum;
-
-using ::NWB::Impl::Ui::s_InputMaxControlActions;
-
-[[nodiscard]] FOUNDATION_INLINE f32 UiControlCaretInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f32 UiControlCaretQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] FOUNDATION_INLINE f64 UiControlCaretInfinityF64()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] FOUNDATION_INLINE f64 UiControlCaretQuietNaNF64()noexcept{ return ::Limit<f64>::s_QuietNaN; }
-[[nodiscard]] FOUNDATION_INLINE b8 UiEditBoxSignBit(const f32 value)noexcept{ return ::SignBit(value); }
-[[nodiscard]] FOUNDATION_INLINE EditTextModeEnum MakeUiInvalidEditTextMode()noexcept{ return static_cast<EditTextModeEnum>(99u); }
-[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiControlInputPointer(const InputEventTypeEnum type, const Point position = { 15.0f, 15.0f })noexcept{
-    return ::UiTestSupport::Pointer(type, position);
-}
-[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiControlInputKey(const InputEventTypeEnum type, const CoreKeyEnum key, const b8 repeat = false)noexcept{
-    return ::UiTestSupport::Key(type, key, repeat);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiEditCaretAdoptMismatchedSource(EditCaretFixture& self){
-    return __hidden_ui_edit_caret_geometry_tests::AdoptMismatchedSourcePreservingCandidate(self);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiEditCaretAdoptBuiltLayout(EditCaretFixture& self, const StringView layoutText, const StringView sourceText, const usize committedBytes, const EditTextModeEnum mode, const ::NWB::Impl::Ui::TextDirection::Enum direction = ::NWB::Impl::Ui::TextDirection::LeftToRight){
-    return __hidden_ui_edit_caret_geometry_tests::AdoptBuiltCaretLayout(self, layoutText, sourceText, committedBytes, mode, direction);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiEditCaretAdoptNonfinitePlacement(EditCaretFixture& self){
-    return __hidden_ui_edit_caret_geometry_tests::AdoptNonfiniteDerivedGlyphPlacement(self);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiEditCaretAdoptMutatedLineRecord(EditCaretFixture& self, const u32 mutation){
-    return __hidden_ui_edit_caret_geometry_tests::AdoptMutatedLineRecord(self, mutation);
-}
-FOUNDATION_INLINE void UiEditCaretMoveGeometry(EditCaretGeometry& source, EditCaretGeometry& destination)noexcept{
-    __hidden_ui_edit_caret_geometry_tests::MoveCaretGeometry(source, destination);
-}
-FOUNDATION_INLINE void UiEditCaretMoveGeometry(EditCaretGeometry&& source, EditCaretGeometry& destination)noexcept{
-    destination = Move(source);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -497,7 +250,7 @@ void VerifyUiControlInputTests_OverlappingUnrelatedControlBlocksUnderlyingWheelR
 
 void VerifyUiControlInputTests_HorizontalOnlyWheelIsConsumedWithoutVerticalMutation(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    InputEvent event = MakeUiControlInputPointer(InputEventType::PointerWheel);
+    InputEvent event = Pointer(InputEventType::PointerWheel);
     event.scrollX = 2.0;
     EXPECT_TRUE(self.send(event).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -507,10 +260,10 @@ void VerifyUiControlInputTests_HorizontalOnlyWheelIsConsumedWithoutVerticalMutat
 
 void VerifyUiControlInputTests_SceneHeldPrimarySequenceCannotStartScrollingWhenPointerCrossesList(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_FALSE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown, Point(200.0f, 180.0f))).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::PrimaryDown, Point(200.0f, 180.0f))).pointerConsumed);
     EXPECT_FALSE(self.wheel().pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_FALSE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_FALSE(self.send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(self.wheel().pointerConsumed);
 }
 
@@ -518,12 +271,12 @@ void VerifyUiControlInputTests_NavigationCopiesAcceptedPageSizeAndSubmissionDoes
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
     self.m_targets[0u].pageRows = 30u;
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::PageDown)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::PageDown, true)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::PageDown)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Enter, true)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::PageDown)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::PageDown, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::PageDown)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().kind, ControlActionKind::PageDown);
@@ -544,14 +297,14 @@ void VerifyUiControlInputTests_HeldNavigationCannotRetargetAnotherFocusedList(mu
     targets[1u] = second;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
     self.focus();
     EXPECT_EQ(self.m_router.focus(), second.id);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Down)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     const Expected<ControlAction> actionResult2 = self.m_router.consumeControlAction(second.id, second.declarationGeneration, second.control);
     ASSERT_TRUE(actionResult2.has_value());
     EXPECT_EQ(actionResult2.value().kind, ControlActionKind::Down);
@@ -561,7 +314,7 @@ void VerifyUiControlInputTests_ReplacedContentFencesCaptureActionsAndFocusUntilA
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.click();
     EXPECT_TRUE(self.wheel().pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
     const usize pending = self.m_router.controlActions().size();
     ASSERT_GT(pending, 0u);
     ASSERT_EQ(self.m_router.capture(), self.m_targets[1u].id);
@@ -574,7 +327,7 @@ void VerifyUiControlInputTests_ReplacedContentFencesCaptureActionsAndFocusUntilA
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
     self.click();
@@ -585,11 +338,11 @@ void VerifyUiControlInputTests_ReplacedContentFencesCaptureActionsAndFocusUntilA
 
 void VerifyUiControlInputTests_CommitOfNewEpochRejectsOldPressWithoutLeakingItsRelease(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
     self.revise();
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
     EXPECT_FALSE(self.m_router.capture().valid());
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
 }
 
@@ -626,19 +379,19 @@ void VerifyUiControlInputTests_RemovedRowRejectsItsQueuedStableValueWhileHostWhe
 void VerifyUiControlInputTests_HostRetirementRemovesPartsAndGesturesButPreservesHeldOwnership(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.click();
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     self.m_router.invalidateTarget(self.m_targets[0u].id);
     EXPECT_TRUE(self.m_router.targets().empty());
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_FALSE(self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u).has_value());
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryUp, Point(95.0f, 25.0f))).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp, Point(95.0f, 25.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down)).commandConsumed);
 }
 
 void VerifyUiControlInputTests_ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResize(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     const Expected<PointerGesture> gestureResult1 = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(gestureResult1.has_value());
     PointerGesture gesture = gestureResult1.value();
@@ -648,7 +401,7 @@ void VerifyUiControlInputTests_ThumbGestureRetainsAcceptedTrackAndMaximumAcrossR
     self.m_targets[2u].gestureMaximum = 1000.0;
     self.m_targets[2u].gestureReference.height = 150.0f;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PointerMove, Point(95.0f, 50.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PointerMove, Point(95.0f, 50.0f))).pointerConsumed);
     const Expected<PointerGesture> gestureResult2 = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(gestureResult2.has_value());
     gesture = gestureResult2.value();
@@ -659,8 +412,8 @@ void VerifyUiControlInputTests_ThumbGestureRetainsAcceptedTrackAndMaximumAcrossR
 
 void VerifyUiControlInputTests_ChangedThumbEpochRejectsAQueuedCompletedGesture(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryUp, Point(95.0f, 30.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp, Point(95.0f, 30.0f))).pointerConsumed);
     self.revise();
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
     EXPECT_FALSE(self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u).has_value());
@@ -703,15 +456,15 @@ void VerifyUiControlInputTests_FocusHintCannotStealAnotherFocusOrSurviveDelayedF
 void VerifyUiControlInputTests_RepeatedNavigationDoesNotJumpToAcceptedReplacementEpoch(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     self.revise();
     self.m_targets[0u].focusOnCommit = true;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Down)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
 }
 
@@ -732,7 +485,7 @@ void VerifyUiControlInputTests_MalformedControlMetadataRejectsPublicationBeforeC
     self.m_targets[0u].control.contentRevision = 0u;
     EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
     self.m_targets[0u] = host;
-    self.m_targets[0u].scrollStep = UiControlCaretQuietNaNF64();
+    self.m_targets[0u].scrollStep = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
     EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
     self.m_targets[0u] = host;
     self.m_targets[0u].pageRows = 0u;
@@ -759,14 +512,14 @@ void VerifyUiControlInputTests_MissingDisabledOrFocusablePartOwnerIsRejected(mut
 
 void VerifyUiControlInputTests_InvalidWheelCoordinatesAndDeltasNeverReachAcceptedActions(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    InputEvent event = MakeUiControlInputPointer(InputEventType::PointerWheel);
-    event.scrollY = UiControlCaretQuietNaNF64();
+    InputEvent event = Pointer(InputEventType::PointerWheel);
+    event.scrollY = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
     EXPECT_FALSE(self.queueNative(event));
     event.scrollY = -1.0;
-    event.scrollX = UiControlCaretInfinityF64();
+    event.scrollX = bit_cast<f64>(cast<u64>(0x7ff0000000000000u));
     EXPECT_FALSE(self.queueNative(event));
     event.scrollX = 0.0;
-    event.position.x = UiControlCaretQuietNaNF32();
+    event.position.x = bit_cast<f32>(0x7fc00000u);
     EXPECT_FALSE(self.queueNative(event));
     EXPECT_TRUE(self.m_router.controlActions().empty());
 }
@@ -870,7 +623,7 @@ void VerifyUiControlInputTests_ClosingPopupBlocksFocusHintAndHeldNavigationCanno
     targets[1u] = barrier;
     targets[2u] = upper;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(popup)));
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     self.m_router.closePopup(popup.token);
     ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, MakeUiSinglePopupScopeArray(popup)));
     EXPECT_FALSE(self.m_router.focus().valid());
@@ -879,9 +632,9 @@ void VerifyUiControlInputTests_ClosingPopupBlocksFocusHintAndHeldNavigationCanno
     targets[2u].popup = popup.token;
     ASSERT_TRUE(self.m_router.commitTargets(targets, 3u, MakeUiSinglePopupScopeArray(popup)));
     EXPECT_EQ(self.m_router.focus(), upper.id);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down)).commandConsumed);
 }
 
 void VerifyUiControlInputTests_ActivationAlsoFencesItsCopiedControlEpoch(mut UiControlInputTests self){
@@ -919,7 +672,7 @@ void VerifyUiControlInputTests_ControlActivationAndGestureActionsShareOneMonoton
     ASSERT_TRUE(actionResult.has_value());
     EXPECT_GT(actionResult.value().id.sequence, activationSequence);
     const u64 wheelSequence = actionResult.value().id.sequence;
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     const Expected<PointerGesture> gestureResult = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(gestureResult.has_value());
     EXPECT_GT(gestureResult.value().id.sequence, wheelSequence);
@@ -938,7 +691,7 @@ void VerifyUiControlInputTests_NativeUnfocusedAcceptanceCannotApplyAControlFocus
 void VerifyUiControlInputTests_RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTokenReturns(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
     self.focus();
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     const ControlToken original = self.m_targets[0u].control;
     self.revise();
     self.m_targets[0u].focusOnCommit = true;
@@ -947,16 +700,16 @@ void VerifyUiControlInputTests_RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTok
         target.control = original;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Down)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
 }
 
 void VerifyUiControlInputTests_GestureUpdateSequenceOrdersLatestMotionAfterAnInterveningWheel(mut UiControlInputTests self){
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     const Expected<PointerGesture> initialResult = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(initialResult.has_value());
     const PointerGesture initial = initialResult.value();
@@ -966,13 +719,13 @@ void VerifyUiControlInputTests_GestureUpdateSequenceOrdersLatestMotionAfterAnInt
     ASSERT_TRUE(actionResult.has_value());
     const ControlAction action = actionResult.value();
     EXPECT_GT(action.id.sequence, initial.updateSequence);
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PointerMove, Point(95.0f, 70.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PointerMove, Point(95.0f, 70.0f))).pointerConsumed);
     const Expected<PointerGesture> movedResult = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(movedResult.has_value());
     const PointerGesture moved = movedResult.value();
     EXPECT_EQ(moved.id.sequence, initial.id.sequence);
     EXPECT_GT(moved.updateSequence, action.id.sequence);
-    EXPECT_TRUE(self.send(MakeUiControlInputPointer(InputEventType::PrimaryUp, Point(95.0f, 70.0f))).pointerConsumed);
+    EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp, Point(95.0f, 70.0f))).pointerConsumed);
     const Expected<PointerGesture> completedResult = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(completedResult.has_value());
     const PointerGesture completed = completedResult.value();
@@ -984,25 +737,25 @@ void VerifyUiControlInputTests_GestureUpdateSequenceOrdersLatestMotionAfterAnInt
 void VerifyUiControlInputTests_EscapeAndControlRebindingCancelHeldSubmitWithoutReleaseLeakage(mut UiControlInputTests self){
     self.m_targets[0u].focusOnCommit = true;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Escape)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Escape)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Escape)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Escape)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     const ControlToken original = self.m_targets[0u].control;
     self.revise();
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
     for(mut HitTarget target : self.m_targets)
         target.control = original;
     ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 4u));
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyDown, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    EXPECT_TRUE(self.send(MakeUiControlInputKey(InputEventType::KeyUp, CoreKey::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     const Expected<ControlAction> action = self.take();
     ASSERT_TRUE(action.has_value());
     EXPECT_EQ(action.value().kind, ControlActionKind::Submit);
@@ -1155,8 +908,8 @@ void VerifyEditBoxLayoutTests_PlacementIntersectsFrameAndContentClipsAndRejectsI
     EXPECT_FLOAT_EQ(self.m_placement.clip.height, 22.0f);
     EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, -1.0f, 20.0f), Insets(), Rect(), Point()).has_value());
     EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, 20.0f, 20.0f), Insets(-1.0f, 0.0f, 0.0f, 0.0f), Rect(), Point()).has_value());
-    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, 20.0f, 20.0f), Insets(), Rect(), Point(UiControlCaretQuietNaNF32(), 0.0f)).has_value());
-    EXPECT_FALSE(self.m_view.hitTest(Point(UiControlCaretQuietNaNF32(), 0.0f), self.m_placement).has_value());
+    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, 20.0f, 20.0f), Insets(), Rect(), Point(bit_cast<f32>(0x7fc00000u), 0.0f)).has_value());
+    EXPECT_FALSE(self.m_view.hitTest(Point(bit_cast<f32>(0x7fc00000u), 0.0f), self.m_placement).has_value());
 }
 
 void VerifyEditBoxLayoutTests_MismatchedAndRtlLayoutsPreserveTheAdmittedGeometry(mut EditBoxLayoutTests self){
@@ -1172,7 +925,7 @@ void VerifyEditBoxLayoutTests_MismatchedAndRtlLayoutsPreserveTheAdmittedGeometry
     ShapeRequest request = ShapeRequest();
     request.text = "abc";
     request.direction = TextDirection::RightToLeft;
-    TextService service = TextService(self.m_arena);
+    TextService service = TextService();
     EXPECT_EQ(self.m_view.shape(service, request), TextLayoutStatus::InvalidParameters);
     EXPECT_EQ(self.m_view.layout().utf8(), "abc");
 }
@@ -1185,7 +938,7 @@ void VerifyEditBoxLayoutTests_SnapshotOwnsModelBytesAndReshapingRejectsUnsupport
     EXPECT_EQ(self.m_view.displayText(), "owned");
     EXPECT_EQ(self.m_view.layout().utf8(), "owned");
     EXPECT_EQ(self.m_view.revision(), revision);
-    EditBoxView moved = EditBoxView(self.m_arena);
+    EditBoxView moved = EditBoxView();
     self.moveViewTo(moved);
     EXPECT_EQ(moved.displayText(), "owned");
     EXPECT_EQ(moved.layout().utf8(), "owned");
@@ -1193,7 +946,7 @@ void VerifyEditBoxLayoutTests_SnapshotOwnsModelBytesAndReshapingRejectsUnsupport
     ASSERT_TRUE(self.m_model.setText("A\tB"));
     ASSERT_TRUE(moved.snapshot(self.m_model));
     EXPECT_FALSE(moved.ready());
-    TextService service = TextService(self.m_arena);
+    TextService service = TextService();
     EXPECT_EQ(moved.shape(service), TextLayoutStatus::UnsupportedControl);
     EXPECT_FALSE(moved.arrange(Rect(), Insets(), Rect(), Point()).has_value());
 }
@@ -1204,10 +957,10 @@ void VerifyEditBoxLayoutTests_EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEdi
     ASSERT_EQ(self.m_view.caretStops().size(), 1u);
     EXPECT_FLOAT_EQ(self.m_placement.caret.x, 10.0f);
     EXPECT_FLOAT_EQ(self.m_placement.caret.height, 12.0f);
-    UiSkin skin = UiSkin(self.m_arena, s_UiEditBoxSkinAssetName);
+    UiSkin skin = UiSkin(s_UiEditBoxSkinAssetName);
     self.configureSkin(skin);
-    PaintBuilder paint = PaintBuilder(self.m_arena);
-    TextService service = TextService(self.m_arena);
+    PaintBuilder paint = PaintBuilder();
+    TextService service = TextService();
     EditBoxPaintFlags flags = EditBoxPaintFlags();
     flags.focused = true;
     flags.caretVisible = false;
@@ -1228,10 +981,10 @@ void VerifyEditBoxLayoutTests_EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEdi
 void VerifyEditBoxLayoutTests_EmptySelectionRejectsInvalidCaretWidthsAndRestoresClippingWithoutADrawnCaret(mut EditBoxLayoutTests self){
     ASSERT_TRUE(self.shapeView());
     ASSERT_TRUE(self.place());
-    UiSkin skin = UiSkin(self.m_arena, s_UiEditBoxSkinAssetName);
+    UiSkin skin = UiSkin(s_UiEditBoxSkinAssetName);
     self.configureSkin(skin);
-    PaintBuilder paint = PaintBuilder(self.m_arena);
-    TextService service = TextService(self.m_arena);
+    PaintBuilder paint = PaintBuilder();
+    TextService service = TextService();
     EditBoxPaintFlags flags = EditBoxPaintFlags();
     flags.focused = true;
     flags.caretVisible = false;
@@ -1239,8 +992,8 @@ void VerifyEditBoxLayoutTests_EmptySelectionRejectsInvalidCaretWidthsAndRestores
     u64 generation = 0u;
     Array<f32, 3u> widths = Array<f32, 3u>();
     widths[0u] = -1.0f;
-    widths[1u] = UiControlCaretQuietNaNF32();
-    widths[2u] = UiControlCaretInfinityF32();
+    widths[1u] = bit_cast<f32>(0x7fc00000u);
+    widths[2u] = bit_cast<f32>(0x7f800000u);
     for(in f32 width : widths){
         EditBoxPlacement placement = self.m_placement;
         placement.caret.width = width;
@@ -1253,8 +1006,8 @@ void VerifyEditBoxLayoutTests_EmptySelectionRejectsInvalidCaretWidthsAndRestores
 }
 
 void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRestoresClipping(mut EditBoxLayoutTests self){
-    Font font = Font(self.m_arena, s_UiEditBoxFontAssetName);
-    TextService service = TextService(self.m_arena);
+    Font font = Font(s_UiEditBoxFontAssetName);
+    TextService service = TextService();
     ASSERT_TRUE(self.installBundledLatinFont(font, service));
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("IME", 3u, 3u));
@@ -1268,9 +1021,9 @@ void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRes
         Point()
     );
     ASSERT_TRUE(placement.has_value());
-    UiSkin skin = UiSkin(self.m_arena, s_UiEditBoxSkinAssetName);
+    UiSkin skin = UiSkin(s_UiEditBoxSkinAssetName);
     self.configureSkin(skin);
-    PaintBuilder paint = PaintBuilder(self.m_arena);
+    PaintBuilder paint = PaintBuilder();
     EditBoxStyle style = EditBoxStyle();
     style.preedit.r = 0.0f;
     style.preedit.g = 1.0f;
@@ -1293,17 +1046,17 @@ void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRes
 }
 
 void VerifyEditBoxLayoutTests_PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales(mut EditBoxLayoutTests self){
-    Font font = Font(self.m_arena, s_UiEditBoxFontAssetName);
-    TextService service = TextService(self.m_arena);
+    Font font = Font(s_UiEditBoxFontAssetName);
+    TextService service = TextService();
     ASSERT_TRUE(self.installBundledLatinFont(font, service));
     ASSERT_TRUE(self.m_model.setText("ffi"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
     ASSERT_EQ(self.m_view.shape(service), TextLayoutStatus::Success);
     ASSERT_TRUE(self.place());
-    UiSkin skin = UiSkin(self.m_arena, s_UiEditBoxSkinAssetName);
+    UiSkin skin = UiSkin(s_UiEditBoxSkinAssetName);
     self.configureSkin(skin, true);
-    PaintBuilder paint = PaintBuilder(self.m_arena);
+    PaintBuilder paint = PaintBuilder();
     EditBoxPaintFlags flags = EditBoxPaintFlags();
     flags.focused = true;
     const EditBoxStyle style = EditBoxStyle();
@@ -1344,7 +1097,7 @@ void VerifyEditBoxLayoutTests_NegativeZeroScrollClampsToPositiveZero(mut EditBox
         );
         ASSERT_TRUE(placement.has_value());
         EXPECT_FLOAT_EQ(placement.value().scroll, 0.0f);
-        EXPECT_FALSE(UiEditBoxSignBit(placement.value().scroll));
+        EXPECT_FALSE(SignBit(placement.value().scroll));
     }
 }
 
@@ -1653,7 +1406,7 @@ void VerifyEditCaretFixture_MultilineRequiresCanonicalLfAndSingleLineRejectsHard
     ASSERT_TRUE(self.adoptText("base", EditTextMode::SingleLine));
     EXPECT_FALSE(self.adoptText("ab\r\nc", EditTextMode::Multiline));
     EXPECT_FALSE(self.adoptText("ab\nc", EditTextMode::SingleLine));
-    EXPECT_FALSE(self.adoptText("abc", MakeUiInvalidEditTextMode()));
+    EXPECT_FALSE(self.adoptText("abc", cast<EditTextMode>(99u)));
     EXPECT_EQ(self.m_geometry.layout().utf8(), "base");
     EXPECT_EQ(self.m_geometry.textMode(), EditTextMode::SingleLine);
 }
@@ -1663,12 +1416,12 @@ void VerifyEditCaretFixture_RtlAndMalformedClusterCoverageCannotReplaceReadyLtrG
     ASSERT_TRUE(self.adoptText("base", EditTextMode::SingleLine));
     ASSERT_TRUE(self.identityMapping(text));
     EXPECT_FALSE(UiEditCaretAdoptBuiltLayout(self, text, text, 3u, EditTextMode::SingleLine, TextDirection::RightToLeft));
-    Array<UiEditCaretShaperFaultEnum, 4u> faults = Array<UiEditCaretShaperFaultEnum, 4u>();
-    faults[0u] = UiEditCaretShaperFault::LeadingGap;
-    faults[1u] = UiEditCaretShaperFault::TrailingGap;
-    faults[2u] = UiEditCaretShaperFault::Overlap;
-    faults[3u] = UiEditCaretShaperFault::InconsistentGlyphEnd;
-    for(in UiEditCaretShaperFaultEnum fault : faults){
+    Array<UiFixtureShaperFault, 4u> faults = Array<UiFixtureShaperFault, 4u>();
+    faults[0u] = UiFixtureShaperFault::LeadingGap;
+    faults[1u] = UiFixtureShaperFault::TrailingGap;
+    faults[2u] = UiFixtureShaperFault::Overlap;
+    faults[3u] = UiFixtureShaperFault::InconsistentGlyphEnd;
+    for(in UiFixtureShaperFault fault : faults){
         const ScopedTestTrace trace = ScopedTestTrace(cast<u32>(fault));
         self.m_shaper.fault = fault;
         EXPECT_FALSE(UiEditCaretAdoptBuiltLayout(self, text, text, 3u, EditTextMode::SingleLine));
@@ -1679,11 +1432,11 @@ void VerifyEditCaretFixture_RtlAndMalformedClusterCoverageCannotReplaceReadyLtrG
 
 void VerifyEditCaretFixture_NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometry(mut EditCaretFixture self){
     ASSERT_TRUE(self.adoptText("base", EditTextMode::SingleLine));
-    self.m_shaper.fault = UiEditCaretShaperFault::NonfinitePlacement;
+    self.m_shaper.fault = UiFixtureShaperFault::NonfinitePlacement;
     EXPECT_FALSE(self.layout("ab").has_value());
     EXPECT_EQ(self.m_geometry.layout().utf8(), "base");
     self.expectCaret(1u, 10.0f, 0.0f);
-    self.m_shaper.fault = UiEditCaretShaperFault::None;
+    self.m_shaper.fault = UiFixtureShaperFault::None;
     EXPECT_FALSE(UiEditCaretAdoptNonfinitePlacement(self));
     EXPECT_EQ(self.m_geometry.layout().utf8(), "base");
 }
@@ -1705,16 +1458,16 @@ void VerifyEditCaretFixture_OwnedGeometrySurvivesSourceAndMappingChangesAndMoves
     ASSERT_TRUE(self.adoptText(source));
     source.assign("replacement");
     self.m_mapping.clear();
-    EditCaretGeometry moved = EditCaretGeometry(self.m_arena);
-    UiEditCaretMoveGeometry(self.m_geometry, moved);
+    EditCaretGeometry moved = EditCaretGeometry();
+    TestMoveAssign<EditCaretGeometry>(moved, self.m_geometry);
     EXPECT_EQ(moved.layout().utf8(), "ab\nc");
     ASSERT_EQ(moved.lines().size(), 2u);
     const Expected<Rect> rectangle = moved.caretRect(4u);
     ASSERT_TRUE(rectangle.has_value());
     EXPECT_FLOAT_EQ(rectangle.value().x, 10.0f);
     EXPECT_FLOAT_EQ(rectangle.value().y, 12.0f);
-    EditCaretGeometry assigned = EditCaretGeometry(self.m_arena);
-    UiEditCaretMoveGeometry(moved, assigned);
+    EditCaretGeometry assigned = EditCaretGeometry();
+    TestMoveAssign<EditCaretGeometry>(assigned, moved);
     const Expected<usize> byte = assigned.hitTest(Point(10.0f, 14.0f));
     ASSERT_TRUE(byte.has_value());
     EXPECT_EQ(byte.value(), 4u);
@@ -1758,12 +1511,12 @@ void VerifyEditCaretFixture_VariableLineHeightsDetermineCaretAndHitBoundaries(mu
 void VerifyEditCaretFixture_InvalidCoordinatesAndCaretOffsetsRejectQueries(mut EditCaretFixture self){
     ASSERT_TRUE(self.adoptText("e\xcc\x81\nx"));
     Array<Point, 2u> invalid = Array<Point, 2u>();
-    invalid[0u] = Point(UiControlCaretQuietNaNF32(), 0.0f);
-    invalid[1u] = Point(0.0f, UiControlCaretInfinityF32());
+    invalid[0u] = Point(bit_cast<f32>(0x7fc00000u), 0.0f);
+    invalid[1u] = Point(0.0f, bit_cast<f32>(0x7f800000u));
     for(in Point point : invalid)
         EXPECT_FALSE(self.m_geometry.hitTest(point).has_value());
     EXPECT_FALSE(self.m_geometry.verticalTarget(2u, true, 10.0f).has_value());
-    EXPECT_FALSE(self.m_geometry.verticalTarget(0u, true, UiControlCaretQuietNaNF32()).has_value());
+    EXPECT_FALSE(self.m_geometry.verticalTarget(0u, true, bit_cast<f32>(0x7fc00000u)).has_value());
     EXPECT_FALSE(self.m_geometry.verticalTarget(6u, true, 10.0f).has_value());
     EXPECT_FALSE(self.m_geometry.caretRect(6u).has_value());
 }
@@ -1848,9 +1601,9 @@ void VerifyEditCaretRangeFixture_InvalidBreakCapsRejectEvenCollapsedRanges(mut E
     ASSERT_TRUE(self.adoptText("ab\nc"));
     Array<f32, 4u> invalid = Array<f32, 4u>();
     invalid[0u] = -1.0f;
-    invalid[1u] = UiControlCaretQuietNaNF32();
-    invalid[2u] = UiControlCaretInfinityF32();
-    invalid[3u] = -UiControlCaretInfinityF32();
+    invalid[1u] = bit_cast<f32>(0x7fc00000u);
+    invalid[2u] = bit_cast<f32>(0x7f800000u);
+    invalid[3u] = -bit_cast<f32>(0x7f800000u);
     for(in f32 cap : invalid){
         EXPECT_FALSE(self.m_geometry.rangeOnLine(MakeUiEditCaretRange(0u, 3u), 0u, cap).has_value());
         EXPECT_FALSE(self.m_geometry.rangeOnLine(MakeUiEditCaretRange(1u, 1u), 0u, cap).has_value());

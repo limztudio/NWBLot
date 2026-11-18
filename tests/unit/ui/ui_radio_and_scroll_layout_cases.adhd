@@ -3,175 +3,55 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_radio.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+
+class UiRadioGroupLoanTests : RadioGroupFixture{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}
 
 
-#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/scroll.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd.h>
+class UiRadioGroupPopupTests : RadioGroupFixture{
+    public PopupState m_parent;
+    public PopupState m_child;
+    public RadioSource m_childSource;
+    public RadioSource m_laterSource;
+    public RadioGroupState m_childState;
+    public RadioGroupState m_laterState;
+    public RadioGroupResult m_childResult;
 
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(!IsConstructible_V<NWB::Impl::Ui::ScrollState, const NWB::Impl::Ui::ScrollState&>);
-static_assert(!IsConstructible_V<NWB::Impl::Ui::ScrollState, NWB::Impl::Ui::ScrollState&&>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_radio_group_loan_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiRadioGroupTests;
-
-class UiRadioGroupLoanTests : public RadioGroupFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_radio_group_popup_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiRadioGroupTests;
-
-
-class UiRadioGroupPopupTests : public RadioGroupFixture{
-public:
-    virtual void SetUp()override{
-        RadioGroupFixture::SetUp();
-        m_childSource.m_generation = 2001u;
-        m_laterSource.m_generation = 2101u;
-        m_childState.select(20u);
-        m_parent.open();
-        m_child.open();
+    public void setup(){
+        SetUpRadioGroupFixture(this);
+        this.m_childSource.m_generation.value() = 2001u;
+        this.m_laterSource.m_generation.value() = 2101u;
+        this.m_childState.select(20u);
+        this.m_parent.open();
+        this.m_child.open();
     }
-
-    [[nodiscard]] WidgetId parentHost()const;
-    [[nodiscard]] b8 beginParent(u64 generation);
-    [[nodiscard]] b8 declareFamily(u64 generation);
-    [[nodiscard]] b8 finishParent();
-    [[nodiscard]] b8 acceptParent(u64 generation);
-    [[nodiscard]] b8 acceptFamily(u64 generation);
-
-
-public:
-    PopupState m_parent;
-    PopupState m_child;
-    RadioSource m_childSource;
-    RadioSource m_laterSource;
-    RadioGroupState m_childState;
-    RadioGroupState m_laterState;
-    RadioGroupResult m_childResult;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiRadioGroupLoanTests = ::__hidden_ui_radio_group_loan_tests::UiRadioGroupLoanTests;
-using UiRadioGroupPopupTests = ::__hidden_ui_radio_group_popup_tests::UiRadioGroupPopupTests;
-using RadioGroupChoice = ::NWB::Impl::Ui::RadioGroupChoice;
-using RadioGroupChoices = ::NWB::Impl::Ui::RadioGroupChoices;
-using RadioGroupOptions = ::NWB::Impl::Ui::RadioGroupOptions;
-using RadioGroupStyle = ::NWB::Impl::Ui::RadioGroupStyle;
-using RadioGroupMetrics = ::NWB::Impl::Ui::RadioGroupMetrics;
-using RadioGroupPlacement = ::NWB::Impl::Ui::RadioGroupPlacement;
-using RadioGroupSnapshot = ::NWB::Impl::Ui::RadioGroupSnapshot;
-using RadioGroupState = ::NWB::Impl::Ui::RadioGroupState;
-using UiRadioTestSource = ::NWB::UiRadioGroupTests::RadioSource;
-namespace UiRadioCallbackSite = ::NWB::UiRadioGroupTests::RadioCallbackSite;
-using UiRadioCallbackSiteEnum = ::NWB::UiRadioGroupTests::RadioCallbackSite::Enum;
-using UiRadioAcceptedInput128 = ::NWB::UiWidgetTests::AcceptedInputState<128u>;
-using Insets = ::NWB::Impl::Ui::Insets;
-using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
-using ScrollState = ::NWB::Impl::Ui::ScrollState;
-using ScrollPlacement = ::NWB::Impl::Ui::ScrollPlacement;
-using ScrollbarPlacement = ::NWB::Impl::Ui::ScrollbarPlacement;
-using ScrollViewportPlacement = ::NWB::Impl::Ui::ScrollViewportPlacement;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-namespace UiRadioKey = ::NWB::Core::Key;
-using ::NWB::Impl::Ui::s_RadioGroupMaxChoices;
-using ::NWB::Impl::Ui::MeasureRadioGroup;
-using ::NWB::Impl::Ui::PlaceRadioGroup;
-using ::NWB::Impl::Ui::CalculateScrollPlacement;
-using ::NWB::Impl::Ui::CalculateScrollRowBounds;
-using ::NWB::Impl::Ui::CalculateScrollViewportPlacement;
-using ::NWB::Impl::Ui::TryUpdateScrollViewportOffsets;
-
-WidgetId GetUiRadioGroupPopupParentHost(const UiRadioGroupPopupTests& self)noexcept;
-b8 BeginUiRadioGroupPopupParent(UiRadioGroupPopupTests& self, u64 generation)noexcept;
-b8 DeclareUiRadioGroupPopupFamily(UiRadioGroupPopupTests& self, u64 generation)noexcept;
-b8 FinishUiRadioGroupPopupParent(UiRadioGroupPopupTests& self)noexcept;
-b8 AcceptUiRadioGroupPopupParent(UiRadioGroupPopupTests& self, u64 generation)noexcept;
-b8 AcceptUiRadioGroupPopupFamily(UiRadioGroupPopupTests& self, u64 generation)noexcept;
-};
-
-namespace __hidden_ui_radio_group_popup_tests{
-FOUNDATION_INLINE WidgetId UiRadioGroupPopupTests::parentHost()const{
-    return ::__hidden_ui_glyph_sdf_tests::GetUiRadioGroupPopupParentHost(*this);
-}
-FOUNDATION_INLINE b8 UiRadioGroupPopupTests::beginParent(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::BeginUiRadioGroupPopupParent(*this, generation);
-}
-FOUNDATION_INLINE b8 UiRadioGroupPopupTests::declareFamily(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::DeclareUiRadioGroupPopupFamily(*this, generation);
-}
-FOUNDATION_INLINE b8 UiRadioGroupPopupTests::finishParent(){
-    return ::__hidden_ui_glyph_sdf_tests::FinishUiRadioGroupPopupParent(*this);
-}
-FOUNDATION_INLINE b8 UiRadioGroupPopupTests::acceptParent(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::AcceptUiRadioGroupPopupParent(*this, generation);
-}
-FOUNDATION_INLINE b8 UiRadioGroupPopupTests::acceptFamily(const u64 generation){
-    return ::__hidden_ui_glyph_sdf_tests::AcceptUiRadioGroupPopupFamily(*this, generation);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public WidgetId parentHost()const{
+        return GetUiRadioGroupPopupParentHost(this);
+    }
+    public b8 beginParent(in u64 generation){
+        return BeginUiRadioGroupPopupParent(this, generation);
+    }
+    public b8 declareFamily(in u64 generation){
+        return DeclareUiRadioGroupPopupFamily(this, generation);
+    }
+    public b8 finishParent(){
+        return FinishUiRadioGroupPopupParent(this);
+    }
+    public b8 acceptParent(in u64 generation){
+        return AcceptUiRadioGroupPopupParent(this, generation);
+    }
+    public b8 acceptFamily(in u64 generation){
+        return AcceptUiRadioGroupPopupFamily(this, generation);
+    }
 }
 
 
@@ -229,12 +109,12 @@ RadioGroupChoices MakeUiRadioGroupLayoutChoices(in u32 count){
     return choices;
 }
 
-void ExpectUiRadioGroupPopupSourceClosure(mut UiRadioGroupPopupTests self, in UiRadioCallbackSiteEnum site){
+void ExpectUiRadioGroupPopupSourceClosure(mut UiRadioGroupPopupTests self, in RadioCallbackSite site){
     ASSERT_TRUE(self.acceptParent(1u));
     ASSERT_EQ(self.m_context.input().focus(), self.parentHost());
     InputEvent held = InputEvent();
     held.type = InputEventType::KeyDown;
-    held.key = UiRadioKey::Right;
+    held.key = Key::Right;
     ASSERT_TRUE(self.send(held).commandConsumed);
     const RadioGroupSnapshot before = self.m_state.snapshot();
     self.m_source.resetCounters();
@@ -246,9 +126,9 @@ void ExpectUiRadioGroupPopupSourceClosure(mut UiRadioGroupPopupTests self, in Ui
     EXPECT_FALSE(self.m_result.activated);
     EXPECT_TRUE(self.m_state.matches(before));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
-    EXPECT_EQ(self.m_source.m_mutations, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
-    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    EXPECT_EQ(self.m_source.m_mutations.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
+    EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
     ASSERT_TRUE(self.finishParent());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().popupCount(), 0u);
@@ -476,73 +356,73 @@ void VerifyUiRadioGroupLayoutTests_MismatchedCountKeysOrMetricsRejectPlacement()
 
 void VerifyUiRadioGroupLoanTests_IdenticalSelectionInAKeyCallbackRejectsBeforeTheNextBorrowedCall(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     const u64 token = self.m_state.inputGeneration();
     self.m_source.resetCounters();
-    self.m_source.armSelection(self.m_state, UiRadioCallbackSite::Key, 10u);
+    self.m_source.armSelection(self.m_state, RadioCallbackSite::Key, 10u);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_NE(self.m_state.inputGeneration(), token);
-    EXPECT_EQ(self.m_source.m_mutations, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
-    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    EXPECT_EQ(self.m_source.m_mutations.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
+    EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_SelectionAwayAndBackInEnabledCallbackCannotPassTheSnapshotFence(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     const RadioGroupSnapshot saved = self.m_state.snapshot();
     self.m_source.resetCounters();
-    self.m_source.armSelection(self.m_state, UiRadioCallbackSite::Enabled, 10u, true);
+    self.m_source.armSelection(self.m_state, RadioCallbackSite::Enabled, 10u, true);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_EQ(self.m_state.cursorKey(), 10u);
     EXPECT_FALSE(self.m_state.matches(saved));
-    EXPECT_EQ(self.m_source.m_mutations, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_EQ(self.m_source.m_mutations.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_SourceRevisionChangedMidReconcileIsPreservedWithoutPublishingPartialChoices(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     const RadioGroupSnapshot saved = self.m_state.snapshot();
-    const u64 revision = self.m_source.m_contentRevision;
-    self.m_source.armSource(UiRadioCallbackSite::Key);
+    const u64 revision = self.m_source.m_contentRevision.value();
+    self.m_source.armSource(RadioCallbackSite::Key);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(self.m_source.m_contentRevision, revision + 1u);
+    EXPECT_EQ(self.m_source.m_contentRevision.value(), revision + 1u);
     EXPECT_TRUE(self.m_state.matches(saved));
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_SourceReplacementInsideALabelCallbackRetainsTheApplicationMutation(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
-    const u64 generation = self.m_source.m_generation;
-    self.m_source.armSource(UiRadioCallbackSite::Text, true);
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
+    const u64 generation = self.m_source.m_generation.value();
+    self.m_source.armSource(RadioCallbackSite::Text, true);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(self.m_source.m_generation, generation + 1u);
+    EXPECT_EQ(self.m_source.m_generation.value(), generation + 1u);
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_FinalCountCallbackRevisionMutationRejectsEvenAfterEarlierMetadataMatched(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.declare(2u));
     const RadioGroupSnapshot prepared = self.m_state.snapshot();
-    const u64 revision = self.m_source.m_contentRevision;
-    self.m_source.armSource(UiRadioCallbackSite::Count);
+    const u64 revision = self.m_source.m_contentRevision.value();
+    self.m_source.armSource(RadioCallbackSite::RowCount);
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_FALSE(self.m_context.ready());
-    EXPECT_EQ(self.m_source.m_contentRevision, revision + 1u);
+    EXPECT_EQ(self.m_source.m_contentRevision.value(), revision + 1u);
     EXPECT_TRUE(self.m_state.matches(prepared));
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     self.expectAccepted(displayed);
@@ -550,95 +430,95 @@ void VerifyUiRadioGroupLoanTests_FinalCountCallbackRevisionMutationRejectsEvenAf
 
 void VerifyUiRadioGroupLoanTests_ExplicitSameValueIntentAfterDeclarationRejectsBeforeAnyFurtherSourceCall(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.declare(2u));
     self.m_source.resetCounters();
     self.m_state.select(10u);
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(self.m_source.m_calls, 0u);
+    EXPECT_EQ(self.m_source.m_calls.value(), 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_SharingOneStateAcrossDeclarationsRejectsBeforeTheSecondSourceIsLent(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.declare(2u));
-    UiRadioTestSource other = UiRadioTestSource();
-    other.m_generation = 1901u;
+    RadioSource other = RadioSource();
+    other.m_generation.value() = 1901u;
     EXPECT_FALSE(self.m_builder.radioGroup("other", other, self.m_state).valid);
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(other.m_calls, 0u);
+    EXPECT_EQ(other.m_calls.value(), 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_ResetDuringInitialRevisionMetadataRejectsWithoutAnotherSourceCallback(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     self.m_source.resetCounters();
-    self.m_source.armReentry(self.m_builder, UiRadioCallbackSite::Revision);
+    self.m_source.armReentry(self.m_builder, RadioCallbackSite::Revision);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(self.m_source.m_mutations, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_EQ(self.m_source.m_mutations.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_ResetInsideAKeyCallbackCannotClearTheScopeUnderTheBorrow(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     self.m_source.resetCounters();
-    self.m_source.armReentry(self.m_builder, UiRadioCallbackSite::Key);
+    self.m_source.armReentry(self.m_builder, RadioCallbackSite::Key);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(self.m_source.m_mutations, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
-    EXPECT_EQ(self.m_source.m_textCalls, 0u);
+    EXPECT_EQ(self.m_source.m_mutations.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
+    EXPECT_EQ(self.m_source.m_textCalls.value(), 0u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_BalancedPanelReentryInsideEnabledCallbackRejectsBothOperations(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     self.m_source.resetCounters();
-    self.m_source.armReentry(self.m_builder, UiRadioCallbackSite::Enabled, true);
+    self.m_source.armReentry(self.m_builder, RadioCallbackSite::Enabled, true);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_FALSE(self.m_source.m_beginAccepted);
-    EXPECT_FALSE(self.m_source.m_endAccepted);
-    EXPECT_EQ(self.m_source.m_mutations, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_FALSE(self.m_source.m_beginAccepted.value());
+    EXPECT_FALSE(self.m_source.m_endAccepted.value());
+    EXPECT_EQ(self.m_source.m_mutations.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_LabelCallbackResetStopsBeforeTheNextLabelOrMetadataBorrow(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     self.m_source.resetCounters();
-    self.m_source.armReentry(self.m_builder, UiRadioCallbackSite::Text);
+    self.m_source.armReentry(self.m_builder, RadioCallbackSite::Text);
     EXPECT_FALSE(self.declare(2u));
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(self.m_source.m_textCalls, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_EQ(self.m_source.m_textCalls.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     self.expectAccepted(displayed);
 }
 
 void VerifyUiRadioGroupLoanTests_FinalizationCountCallbackCannotBeginAndEndAReplacementPanel(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.accept(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.declare(2u));
     self.m_source.resetCounters();
-    self.m_source.armReentry(self.m_builder, UiRadioCallbackSite::Count, true);
+    self.m_source.armReentry(self.m_builder, RadioCallbackSite::RowCount, true);
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_FALSE(self.m_source.m_beginAccepted);
-    EXPECT_FALSE(self.m_source.m_endAccepted);
-    EXPECT_EQ(self.m_source.m_mutations, 1u);
-    EXPECT_EQ(self.m_source.m_callbacksAfterMutation, 0u);
+    EXPECT_FALSE(self.m_source.m_beginAccepted.value());
+    EXPECT_FALSE(self.m_source.m_endAccepted.value());
+    EXPECT_EQ(self.m_source.m_mutations.value(), 1u);
+    EXPECT_EQ(self.m_source.m_callbacksAfterMutation.value(), 0u);
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     self.expectAccepted(displayed);
 }
@@ -646,10 +526,10 @@ void VerifyUiRadioGroupLoanTests_FinalizationCountCallbackCannotBeginAndEndARepl
 void VerifyUiRadioGroupLoanTests_CompletedScopeReleasesTheSourceBeforeAcceptedPublication(mut UiRadioGroupLoanTests self){
     ASSERT_TRUE(self.prepare(1u));
     self.m_source.resetCounters();
-    self.m_source.armReentry(self.m_builder, UiRadioCallbackSite::Revision);
+    self.m_source.armReentry(self.m_builder, RadioCallbackSite::Revision);
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    EXPECT_EQ(self.m_source.m_calls, 0u);
-    EXPECT_EQ(self.m_source.m_mutations, 0u);
+    EXPECT_EQ(self.m_source.m_calls.value(), 0u);
+    EXPECT_EQ(self.m_source.m_mutations.value(), 0u);
     EXPECT_FALSE(self.m_context.failed());
 }
 
@@ -659,7 +539,7 @@ void VerifyUiRadioGroupLoanTests_CompletedScopeReleasesTheSourceBeforeAcceptedPu
 
 void VerifyUiRadioGroupPopupTests_ChildEndKeepsTheRadioStateLoanThroughTheOutermostPopupEnd(mut UiRadioGroupPopupTests self){
     ASSERT_TRUE(self.acceptFamily(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.declareFamily(2u));
     const u64 token = self.m_childState.inputGeneration();
     self.m_childState.select(20u);
@@ -674,41 +554,41 @@ void VerifyUiRadioGroupPopupTests_ChildEndKeepsTheRadioStateLoanThroughTheOuterm
 
 void VerifyUiRadioGroupPopupTests_ParentLabelCallbackRejectsAnIdenticalIntentOnTheAlreadyEndedChild(mut UiRadioGroupPopupTests self){
     ASSERT_TRUE(self.acceptFamily(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.declareFamily(2u));
     const u64 token = self.m_childState.inputGeneration();
-    self.m_laterSource.armSelection(self.m_childState, UiRadioCallbackSite::Text, 20u);
+    self.m_laterSource.armSelection(self.m_childState, RadioCallbackSite::Text, 20u);
     ASSERT_TRUE(self.m_builder.radioGroup("later", self.m_laterSource, self.m_laterState).valid);
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_NE(self.m_childState.inputGeneration(), token);
     EXPECT_EQ(self.m_childState.selectedKey(), 20u);
-    EXPECT_EQ(self.m_laterSource.m_mutations, 1u);
+    EXPECT_EQ(self.m_laterSource.m_mutations.value(), 1u);
     self.expectAccepted(displayed, false, false);
 }
 
 void VerifyUiRadioGroupPopupTests_ChildMetadataMutationCannotPublishTheAlreadyPaintedParentGroup(mut UiRadioGroupPopupTests self){
     ASSERT_TRUE(self.acceptFamily(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.declareFamily(2u));
-    self.m_childSource.armSelection(self.m_state, UiRadioCallbackSite::Revision, 50u);
+    self.m_childSource.armSelection(self.m_state, RadioCallbackSite::Revision, 50u);
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_state.selectedKey(), 50u);
-    EXPECT_EQ(self.m_childSource.m_mutations, 1u);
+    EXPECT_EQ(self.m_childSource.m_mutations.value(), 1u);
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     self.expectAccepted(displayed, false, false);
 }
 
 void VerifyUiRadioGroupPopupTests_AParentStateCannotBeAliasedByItsLiveChildRadioGroup(mut UiRadioGroupPopupTests self){
     ASSERT_TRUE(self.acceptFamily(1u));
-    const UiRadioAcceptedInput128 displayed = self.accepted();
+    const UiFixtureAcceptedInputState<128u> displayed = self.accepted();
     ASSERT_TRUE(self.beginParent(2u));
     ASSERT_TRUE(self.m_builder.beginPopup("child", self.m_child, MakeNestedChildPopupOptions()));
     self.m_childSource.resetCounters();
     EXPECT_FALSE(self.m_builder.radioGroup("radio", self.m_childSource, self.m_state).valid);
     EXPECT_TRUE(self.m_context.failed());
-    EXPECT_EQ(self.m_childSource.m_calls, 0u);
+    EXPECT_EQ(self.m_childSource.m_calls.value(), 0u);
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     self.expectAccepted(displayed, false, false);
 }
@@ -730,8 +610,8 @@ void VerifyUiRadioGroupPopupTests_AncestorClosureSuppressesMetadataAndRetiresCap
     self.m_parent.close();
     ASSERT_TRUE(self.finishParent());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_EQ(self.m_source.m_calls, 0u);
-    EXPECT_EQ(self.m_childSource.m_calls, 0u);
+    EXPECT_EQ(self.m_source.m_calls.value(), 0u);
+    EXPECT_EQ(self.m_childSource.m_calls.value(), 0u);
     EXPECT_EQ(self.m_context.input().popupCount(), 0u);
     EXPECT_FALSE(self.m_context.input().capture().valid());
     EXPECT_EQ(self.m_childState.selectedKey(), 20u);
@@ -753,7 +633,7 @@ void VerifyUiRadioGroupPopupTests_AncestorClosureSuppressesMetadataAndRetiresCap
 }
 
 void VerifyUiRadioGroupPopupTests_InstanceCallbackClosingThePopupRetiresQueuedRightBeforeReconcile(mut UiRadioGroupPopupTests self){
-    ExpectUiRadioGroupPopupSourceClosure(self, UiRadioCallbackSite::Instance);
+    ExpectUiRadioGroupPopupSourceClosure(self, RadioCallbackSite::Instance);
 }
 
 

@@ -368,7 +368,7 @@ b8 CreateGiCsgSubtraction(in SmokeBoxBounds box, in SmokeBoxBounds cutter, in u3
         const VectorSingle maximum = VectorSingle(cut.maximum, 0.0f);
         const f32x4 halfExtents = f32x4((maximum - minimum) * 0.5f);
         const VectorSingle center = (minimum + maximum) * 0.5f;
-        CreateSmokeCsgBoxCutter(groupName, s_GiCsgBoxShapeName, active, halfExtents, center, identityRot, world);
+        CreateSmokeCsgBoxCutter(groupName, s_GiCsgBoxShapeName, active, VectorSingle(halfExtents), center, identityRot, world);
     }
     return true;
 }
@@ -416,7 +416,7 @@ b8 CreateGiCsgMixedSubtraction(in StringView arm, mut World world){
         groupName,
         s_GiCsgBoxShapeName,
         active,
-        f32x4(0.25f, 0.6f, 1.1f, 0.0f),
+        VectorSingle(0.25f, 0.6f, 1.1f, 0.0f),
         VectorSingle(0.0f, -0.4f, -0.1f, 0.0f),
         VectorSingle(0.0f, 0.0f, 0.0f, 1.0f),
         world
@@ -424,7 +424,7 @@ b8 CreateGiCsgMixedSubtraction(in StringView arm, mut World world){
     return true;
 }
 
-class CsgGiScene{
+class CsgGiScene : ISmokeCapturePredicate{
     public CsgGiScene(mut ProjectRuntimeContext context){
         this.m_context = context;
     }
@@ -433,7 +433,7 @@ class CsgGiScene{
         return this.m_liveWarmupComplete && this.m_context.graphics.getSuccessfulPresentationCount() >= this.m_requiredPresentations;
     }
 
-    public b8 shouldCaptureFrame(in u64 frame)const{
+    public b8 shouldCaptureFrame(in u64 frame)const override{
         return this.shouldCapture();
     }
 

@@ -18,26 +18,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::Smoke{
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-inline constexpr b8 s_StressHardwareShadowBoundaryBenchmark = true;
+const b8 s_StressHardwareShadowBoundaryBenchmark = true;
 #else
-inline constexpr b8 s_StressHardwareShadowBoundaryBenchmark = false;
+const b8 s_StressHardwareShadowBoundaryBenchmark = false;
 #endif
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +99,7 @@ class StressCsgScene{
                 receiverGroup,
                 s_CsgBoxShapeName,
                 true,
-                f32x4(s_StressCutterHalfX, s_StressCutterHalfY, s_StressCutterHalfZ, 0.0f),
+                VectorSingle(s_StressCutterHalfX, s_StressCutterHalfY, s_StressCutterHalfZ, 0.0f),
                 VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
                 QuaternionIdentity(),
                 world

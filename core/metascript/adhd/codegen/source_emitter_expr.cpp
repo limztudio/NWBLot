@@ -87,7 +87,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
 
     if(expr.wrapInNotNull){
-        out.append("::MakeNotNull(&(");
+        out.append("::MakeNotNull(::AddressOf(");
         Expr unwrapped = expr;
         unwrapped.wrapInNotNull = false;
         emitExpr(out, unwrapped);
@@ -377,7 +377,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 out.push_back('(');
             if(expr.lhs)
                 emitExpr(out, *expr.lhs);
-            out.append(" = ::MakeNotNull(&(");
+            out.append(" = ::MakeNotNull(::AddressOf(");
             if(expr.rhs)
                 emitExpr(out, *expr.rhs);
             out.append(omitOuterBinaryParens ? "))" : ")))");
@@ -467,6 +467,61 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         break;
     }
     case ExprKind::LayoutQuery:{
+        if(expr.layoutQuery == LayoutQueryKind::CppConstructible){
+            out.append("::IsConstructible_V<");
+            for(usize i = 0u; i < expr.callTemplateArgs.size(); ++i){
+                if(i != 0u)
+                    out.append(", ");
+                m_typeEmitter.emitReturnTypeCpp(out, *expr.callTemplateArgs[i].type);
+            }
+            out.push_back('>');
+            break;
+        }
+        if(expr.layoutQuery == LayoutQueryKind::NothrowCall){
+            out.append("noexcept(");
+            if(!expr.resolvedCppExportName.empty())
+                out.append(expr.resolvedCppExportName);
+            else
+                m_typeEmitter.appendQualifiedName(out, expr.resolvedCppNamespace, expr.text);
+            out.push_back('(');
+            for(usize i = 0u; i < expr.callTemplateArgs.size(); ++i){
+                if(i != 0u)
+                    out.append(", ");
+                out.append("::DeclVal<");
+                const TypeRef& argument = *expr.callTemplateArgs[i].type;
+                const TypeRef* underlying = m_symbols.unwrapTypeAlias(&argument);
+                const TypeRef& view = underlying ? *underlying : argument;
+                if(m_symbols.resolveRefMode(&argument) == ParamPassingMode::Mut && !m_symbols.hasTypeSymbol(view.name)
+                    && IsBorrowViewType(view.name) && view.templateArgs.size() == 1u && view.templateArgs[0].type){
+                    m_typeEmitter.emitParamTypeCpp(out, ParamPassingMode::Mut, view, false);
+                    out.push_back('&');
+                }
+                else
+                    m_typeEmitter.emitReturnTypeCpp(out, argument);
+                out.append(">()");
+            }
+            out.append("))");
+            break;
+        }
+        // Dependent requirements yield false for missing, inaccessible, and incompatible members.
+        if(expr.layoutQuery == LayoutQueryKind::CppTypeAlias || expr.layoutQuery == LayoutQueryKind::NothrowRvalueMember){
+            if(expr.layoutQuery == LayoutQueryKind::CppTypeAlias){
+                out.append("[]<class Owner, class Expected>()constexpr{ return requires{ requires ::IsSame_V<typename Owner::")
+                    .append(expr.text).append(", Expected>; }; }.template operator()<");
+            }
+            else{
+                out.append("[]<class Owner, class Result, class Arg>()constexpr{ return requires(Owner& self, Arg&& arg){ { self.")
+                    .append(expr.text).append("(static_cast<Arg&&>(arg)) } noexcept; static_cast<Result(Owner::*)(Arg&&)noexcept>(&Owner::")
+                    .append(expr.text).append("); }; }.template operator()<");
+            }
+            m_typeEmitter.emitTypeCpp(out, *expr.targetType);
+            for(const TypeArg& argument : expr.callTemplateArgs){
+                out.append(", ");
+                m_typeEmitter.emitTypeCpp(out, *argument.type);
+            }
+            out.append(">()");
+            break;
+        }
         const LayoutQuery& query = s_LayoutQueries[expr.layoutQuery];
         out.append(query.cppPrefix.data(), query.cppPrefix.size());
         m_typeEmitter.emitTypeCpp(out, *expr.targetType);

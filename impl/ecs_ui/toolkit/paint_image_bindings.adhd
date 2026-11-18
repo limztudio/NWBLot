@@ -124,7 +124,7 @@ Expected<u32> ResolvePaintBinding<T, TPolicy : IPaintBindingPolicy<T>>(in Shared
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
+[move_only, friend(DrawSnapshotFaultFixture)]
 class PaintImageBindings{
     private Vector<SharedGlyphPage> m_glyphPages;
     private Vector<SharedSdfAtlasPage> m_sdfPages;

@@ -56,7 +56,11 @@ public: \
         \
         \
         NWB_ASSET_CODEC_SERIALIZE_DECL() \
-    }
+    }; \
+    [[nodiscard]] inline codecType AssetCodecFor(const assetType&)noexcept(noexcept(codecType{})){ return codecType{}; }
+
+template<typename T>
+using DeclaredAssetCodec = decltype(AssetCodecFor(DeclVal<const T&>()));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

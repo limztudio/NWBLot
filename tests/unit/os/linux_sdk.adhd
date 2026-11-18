@@ -1,0 +1,122 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "service_sdk.adhd"
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::Display"), cpp_flags(no_copy, no_assign)]
+extern class X11Display;
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::XEvent"), cpp_flags(self_defaulted)]
+extern class OsXEvent{
+    i32 type;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::DisplayConnection"), cpp_flags(self_defaulted, no_copy, no_assign)]
+extern class DisplayConnection{
+    b8 open();
+    i32 close();
+    b8 valid()const;
+    mut X11Display display()const;
+    i32 pending()const;
+    i32 next(mut OsXEvent event);
+    b8 checkTyped(in i32 type, mut OsXEvent event);
+    u64 atom(...)const;
+    u64 rootWindow()const;
+    u64 createWindow(in u64 parent, in u32 width, in u32 height);
+    void destroyWindow(in u64 window);
+    void sync()const;
+    void setOwner(in u64 atom, in u64 window, in u64 time);
+    u64 owner(in u64 atom)const;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::X11Property"), cpp_flags(no_copy)]
+extern class OsX11Property{
+    u64 type;
+    usize count;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::X11PropertyFailure")]
+extern class OsX11PropertyFailure{
+    u8 errorCode;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::X11CheckedOperation"), cpp_flags(no_copy)]
+extern class X11CheckedOperation{
+    b8 succeeded();
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ClipboardPipe")]
+extern class OsPipe{
+    i32 readFd;
+    i32 writeFd;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ClipboardPipeReadFailure")]
+extern class ClipboardPipeReadFailure{
+    ClipboardStatus status;
+    b8 finished;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ClipboardPipeWriter"), cpp_flags(no_copy)]
+extern class ClipboardPipeWriter{
+    b8 begin(in i32 fd, in StringView text);
+    ClipboardStatus advance();
+    b8 finished()const;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::pollfd"), cpp_flags(self_defaulted, brace_init)]
+extern class OsPollFd{
+    i32 fd;
+    i16 events;
+    i16 revents;
+};
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::sigset_t"), cpp_flags(self_defaulted)]
+extern class OsSignalMask;
+
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::SelectionClearAtom")]
+extern u64 OsSelectionClearAtom(in OsXEvent event);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::DispatchX11ClipboardEvent")]
+extern b8 DispatchOsX11ClipboardEvent(mut IClipboardService service, in OsXEvent event);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::CreateX11ClipboardService")]
+extern Expected<OsClipboardServiceOwner> OpenOsX11ClipboardService(mut HeapStorage storage, mut X11Display display);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ReadX11Property")]
+extern Expected<OsX11Property, OsX11PropertyFailure> ReadOsX11Property(mut X11Display display, in u64 window, in u64 property, in b8 remove, in usize byteLimit);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::OpenClipboardPipe")]
+extern Expected<OsPipe> OpenClipboardPipe();
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::CloseClipboardPipe")]
+extern void CloseClipboardPipe(mut i32 fd);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ReadClipboardPipe")]
+extern Expected<b8, ClipboardPipeReadFailure> ReadClipboardPipe(in i32 fd, mut ClipboardTextAccumulator text);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::WriteFd")]
+extern isize WriteOsFd(in i32 fd, in StringView bytes);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::PollFd")]
+extern i32 PollOsFd(mut OsPollFd descriptor, in i32 timeout);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::CurrentSignalMask")]
+extern i32 CurrentOsSignalMask(mut OsSignalMask mask);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::SignalMember")]
+extern i32 OsSignalMember(in OsSignalMask mask, in i32 signal);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::fcntl")]
+extern i32 OsFdFlags(in i32 fd, in i32 flag);
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("F_GETFL")]
+extern const i32 s_OsGetFileFlags;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("O_NONBLOCK")]
+extern const i32 s_OsNonBlocking;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("SIGPIPE")]
+extern const i32 s_OsSigpipe;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("POLLOUT")]
+extern const i16 s_OsPollOut;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("SelectionRequest")]
+extern const i32 s_OsSelectionRequest;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("SelectionClear")]
+extern const i32 s_OsSelectionClear;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("CurrentTime")]
+extern const u64 s_OsCurrentTime;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("XA_STRING")]
+extern const u64 s_OsStringAtom;
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("BadWindow")]
+extern const u8 s_OsBadWindow;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

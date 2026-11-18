@@ -30,6 +30,12 @@ extern class IAssetCodec{
     Name assetType(...)const;
 };
 
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::DeclaredAssetCodec")]
+extern class DeclaredAssetCodec<T>{
+    b8 serialize(in IAsset asset, mut AssetByteBuffer binary)const;
+    Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> bytes, mut auto storage)const;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -10,108 +10,56 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_ui_skin/asset.adhd>
+#include <impl/ecs_ui/components.adhd>
+#include <impl/ecs_ui/edit_clipboard_controller.adhd>
+#include <impl/ecs_ui/paint_context.adhd>
+#include <impl/ecs_ui/skin_selection.adhd>
+#include <impl/ecs_ui/text_edit_session.adhd>
+#include <impl/ecs_ui/toolkit/context.adhd>
+#include <impl/ecs_ui/toolkit/gpu/renderer.adhd>
+#include <tests/common/ecs_test_world.adhd>
+#include <tests/common/value_storage.adhd>
 
+static_assert(is_cpp_type_alias<GpuRenderer, ShaderArchivePathResolver>(ShaderPathResolveCallback));
+static_assert(has_nothrow_rvalue_member<GpuRenderer, b8, DrawSnapshot>(submit));
+static_assert(!has_nothrow_rvalue_member<GpuRenderer, void, DrawSnapshot>(submit));
+static_assert(!is_cpp_type_alias<GpuRenderer, DrawSnapshot>(ShaderPathResolveCallback));
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_ui_skin/asset.adhd.h>
-#include <impl/ecs_ui/components.adhd.h>
-#include <impl/ecs_ui/edit_clipboard_controller.adhd.h>
-#include <impl/ecs_ui/paint_context.adhd.h>
-#include <impl/ecs_ui/skin_selection.adhd.h>
-#include <impl/ecs_ui/text_edit_session.adhd.h>
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/gpu/renderer.adhd.h>
-
-#include <core/ecs/entity.h>
-#include <core/task/cpu/scheduler.h>
-
-#include <global/optional.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::EcsUi{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Core;
-using namespace NWB::Impl;
-
-
-static_assert(IsSame_V<Ui::GpuRenderer::ShaderPathResolveCallback, ShaderArchive::PathResolver>);
-static_assert(requires(Ui::GpuRenderer& renderer, ::ArenaBase& arena){ renderer.submit(Ui::DrawSnapshot(arena)); });
-static_assert(requires{ static_cast<b8(Ui::GpuRenderer::*)(Ui::DrawSnapshot&&)noexcept>(&Ui::GpuRenderer::submit); });
-
+[ordered]
 class PaintSlotFixture{
-public:
-    Tests::TestArena<> arena;
-    CpuTaskScheduler scheduler{0u};
-    ECS::World world{arena.arena, scheduler};
-    FakeClipboard clipboard{arena.arena};
-    FakeTextInput textInput{arena.arena};
-    Ui::Context uiContext{arena.arena};
-    Ui::PaintBuilder paint{arena.arena};
-    Ui::TextService text{arena.arena};
-    Ui::DisplayMetrics display{};
-    Ui::Builder builder{arena.arena, uiContext, paint, text};
-    UiPaintContext context{world, clipboard, textInput, paint, text, display, builder};
-};
+    public EcsTestWorld ecs;
+    public FakeClipboard clipboard;
+    public FakeTextInput textInput;
+    public Context uiContext;
+    public PaintBuilder paint;
+    public TextService text;
+    public DisplayMetrics display;
+    public Builder builder;
+    public UiPaintContext context;
 
-using EntityID = NWB::Core::ECS::EntityID;
-using TestArena = NWB::Tests::TestArena<>;
-using ScopedTestTrace = NWB::Tests::ScopedTestTrace;
-using TextInputEvent = NWB::Core::TextInputEvent;
-namespace TextInputPollResult = NWB::Core::TextInputPollResult;
-namespace TextInputEventKind = NWB::Core::TextInputEventKind;
-using UiEditLimits = NWB::Impl::Ui::EditLimits;
-using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
-using UiEditClipboardResult = NWB::Impl::UiEditClipboardResult;
-namespace UiEditClipboardStatus = NWB::Impl::UiEditClipboardStatus;
-using UiPaintComponent = NWB::Impl::UiPaintComponent;
-using UiPaintContext = NWB::Impl::UiPaintContext;
-using UiPaintSlot = NWB::Impl::UiPaintSlot;
-using UiSkinAssetRef = NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin>;
-using UiSkinSelectionState = NWB::Impl::UiSkinSelectionState;
-namespace UiSkinSelectionResult = NWB::Impl::UiSkinSelectionResult;
-using UiTextEditOwner = NWB::Impl::UiTextEditOwner;
-using UiTextEditResult = NWB::Impl::UiTextEditResult;
-using UiTextEditSession = NWB::Impl::UiTextEditSession;
-namespace UiTextEditStatus = NWB::Impl::UiTextEditStatus;
-using NWB::Impl::ApplyUiTextEditEvent;
-using NWB::Impl::EnsureUiSkinSelection;
-using NWB::Impl::MakeUiSkinSelectionState;
+    public PaintSlotFixture(){
+        this.clipboard = FakeClipboard(this.ecs.arena);
+        this.textInput = FakeTextInput(this.ecs.arena);
+        this.builder = Builder(this.uiContext, this.paint, this.text);
+        this.context = UiPaintContext(this.ecs.world, this.clipboard, this.textInput, this.paint, this.text, this.display, this.builder);
+    }
+}
 
-inline constexpr AStringView s_DefaultSkinPath = "engine/ui/skins/default/atlas";
-inline constexpr AStringView s_MissingSkinPath = "project/ui/skins/missing/atlas";
-inline constexpr AStringView s_CustomSkinPath = "project/ui/skins/custom/atlas";
-inline constexpr UiSkinAssetRef s_DefaultUiSkinRef{ s_DefaultSkinPath };
-inline constexpr UiSkinAssetRef s_MissingUiSkinRef{ s_MissingSkinPath };
-inline constexpr UiSkinAssetRef s_CustomUiSkinRef{ s_CustomSkinPath };
+const AssetRef<UiSkin> s_DefaultUiSkinRef = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
+const AssetRef<UiSkin> s_MissingUiSkinRef = AssetRef<UiSkin>("project/ui/skins/missing/atlas");
+const AssetRef<UiSkin> s_CustomUiSkinRef = AssetRef<UiSkin>("project/ui/skins/custom/atlas");
 
-inline constexpr TextInputRect s_SelectionDeletionCaret{ 30, 40, 1, 18 };
-inline constexpr UiTextEditOwner s_OwnedTestOwner{ { 61u }, 1u, 2u };
-inline constexpr TextInputRect s_OwnedTestCaret{ 10, 20, 1, 18 };
-inline constexpr UiTextEditOwner s_SessionTestOwner{ { 17u }, 1u, 1u };
-inline constexpr TextInputRect s_SessionTestCaret{ 100, 32, 1, 18 };
+const TextInputRect s_SelectionDeletionCaret = TextInputRect(30, 40, 1, 18);
+const TextInputRect s_OwnedTestCaret = TextInputRect(10, 20, 1, 18);
+const TextInputRect s_SessionTestCaret = TextInputRect(100, 32, 1, 18);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+UiTextEditOwner MakeSessionTestOwner(in u64 widget, in u64 declaration, in u64 model){
+    UiTextEditOwner owner();
+    owner.widget.value = widget;
+    owner.declarationGeneration = declaration;
+    owner.modelGeneration = model;
+    return owner;
 }
 
 
@@ -131,77 +79,82 @@ UiTextEditOwner MakeSelectionDeletionOwner(in u64 modelGeneration){
 
 UiTextEditOwner MakeReplacedSessionOwner(in u64 modelGeneration){
     UiTextEditOwner owner = UiTextEditOwner();
-    owner.widget = s_SessionTestOwner.widget;
-    owner.declarationGeneration = s_SessionTestOwner.declarationGeneration;
+    owner.widget = MakeSessionTestOwner(17u, 1u, 1u).widget;
+    owner.declarationGeneration = MakeSessionTestOwner(17u, 1u, 1u).declarationGeneration;
     owner.modelGeneration = modelGeneration;
     return owner;
 }
 
 
+[cpp_unwind]
 void VerifyPaintSlot_ClearAndRemoveReaddDoNotRestoreTheRunningCallback(){
     PaintSlotFixture fixture = PaintSlotFixture();
-    auto entity = fixture.world.createEntity();
+    auto entity = fixture.ecs.world.createEntity();
     const auto id = entity.id();
-    entity.addComponent<UiPaintComponent>().paint = lambda[in id](mut UiPaintContext ctx) -> void{
+    UiPaintCallback clearComponent = lambda[in id](mut UiPaintContext ctx) -> void{
         ctx.world.entity(id).getComponent<UiPaintComponent>().paint.reset();
     };
+    entity.addComponent<UiPaintComponent>().paint.setCallback(clearComponent);
     entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context);
-    EXPECT_FALSE(cast<b8>(entity.getComponent<UiPaintComponent>().paint));
+    EXPECT_FALSE(entity.getComponent<UiPaintComponent>().paint.callable());
 
-    entity.getComponent<UiPaintComponent>().paint = lambda[in id](mut UiPaintContext ctx) -> void{
+    UiPaintCallback replaceComponent = lambda[in id](mut UiPaintContext ctx) -> void{
         auto current = ctx.world.entity(id);
         current.removeComponent<UiPaintComponent>();
         current.addComponent<UiPaintComponent>();
     };
+    entity.getComponent<UiPaintComponent>().paint.setCallback(replaceComponent);
     entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context);
-    EXPECT_FALSE(cast<b8>(entity.getComponent<UiPaintComponent>().paint));
+    EXPECT_FALSE(entity.getComponent<UiPaintComponent>().paint.callable());
 
-    native(mut entity, mut fixture, in id){
-        entity.getComponent<UiPaintComponent>().paint = [id](UiPaintContext& ctx){
-            auto current = ctx.world->entity(id);
-            current.removeComponent<UiPaintComponent>();
-            current.addComponent<UiPaintComponent>();
-            throw 42;
-        };
-        EXPECT_THROW(entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context), i32);
-    }
-    EXPECT_FALSE(cast<b8>(entity.getComponent<UiPaintComponent>().paint));
+    UiPaintCallback replaceAndThrow = lambda[in id](mut UiPaintContext ctx) -> void{
+        auto current = ctx.world.entity(id);
+        current.removeComponent<UiPaintComponent>();
+        current.addComponent<UiPaintComponent>();
+        ThrowTestException<i32>(42);
+    };
+    entity.getComponent<UiPaintComponent>().paint.setCallback(replaceAndThrow);
+    EXPECT_TRUE(ThrowsException<i32>(lambda[mut entity, mut fixture]() -> void{ entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context); }));
+    EXPECT_FALSE(entity.getComponent<UiPaintComponent>().paint.callable());
 }
 
 void VerifyPaintSlot_ReplacementAndRelocationKeepTheCurrentOwner(){
     PaintSlotFixture fixture = PaintSlotFixture();
-    auto first = fixture.world.createEntity();
+    auto first = fixture.ecs.world.createEntity();
     first.addComponent<UiPaintComponent>();
-    auto second = fixture.world.createEntity();
+    auto second = fixture.ecs.world.createEntity();
     const EntityID firstId = first.id();
     const EntityID secondId = second.id();
     i32 observed = 0;
-    second.addComponent<UiPaintComponent>().paint = lambda[in firstId, mut observed](mut UiPaintContext ctx) -> void{
+    UiPaintCallback removeFirst = lambda[in firstId, mut observed](mut UiPaintContext ctx) -> void{
         ++observed;
         if(observed == 1){
             ctx.world.entity(firstId).removeComponent<UiPaintComponent>();
         }
     };
+    second.addComponent<UiPaintComponent>().paint.setCallback(removeFirst);
     second.getComponent<UiPaintComponent>().paint.invoke(fixture.context);
-    fixture.world.entity(secondId).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
+    fixture.ecs.world.entity(secondId).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
     EXPECT_EQ(observed, 2);
 
-    fixture.world.entity(secondId).getComponent<UiPaintComponent>().paint = lambda[in secondId, mut observed](mut UiPaintContext ctx) -> void{
-        ctx.world.entity(secondId).getComponent<UiPaintComponent>().paint = lambda[mut observed](mut UiPaintContext unused) -> void{
+    UiPaintCallback replaceCallback = lambda[in secondId, mut observed](mut UiPaintContext ctx) -> void{
+        UiPaintCallback observeReplacement = lambda[mut observed](mut UiPaintContext unused) -> void{
             observed = 17;
         };
+        ctx.world.entity(secondId).getComponent<UiPaintComponent>().paint.setCallback(observeReplacement);
     };
-    fixture.world.entity(secondId).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
-    fixture.world.entity(secondId).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
+    fixture.ecs.world.entity(secondId).getComponent<UiPaintComponent>().paint.setCallback(replaceCallback);
+    fixture.ecs.world.entity(secondId).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
+    fixture.ecs.world.entity(secondId).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
     EXPECT_EQ(observed, 17);
 }
 
 void VerifyPaintSlot_VectorGrowthAndExplicitMovePreserveMutableCaptures(){
     PaintSlotFixture fixture = PaintSlotFixture();
-    auto entity = fixture.world.createEntity();
+    auto entity = fixture.ecs.world.createEntity();
     const EntityID id = entity.id();
     i32 observed = 0;
-    entity.addComponent<UiPaintComponent>().paint = lambda[mut observed](mut UiPaintContext ctx) -> void{
+    UiPaintCallback growStorage = lambda[mut observed](mut UiPaintContext ctx) -> void{
         ++observed;
         if(observed == 1){
             for(u32 i = 0u; i < 128u; ++i){
@@ -209,61 +162,61 @@ void VerifyPaintSlot_VectorGrowthAndExplicitMovePreserveMutableCaptures(){
             }
         }
     };
+    entity.addComponent<UiPaintComponent>().paint.setCallback(growStorage);
     entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context);
-    fixture.world.entity(id).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
+    fixture.ecs.world.entity(id).getComponent<UiPaintComponent>().paint.invoke(fixture.context);
     EXPECT_EQ(observed, 2);
 
     observed = 0;
     UiPaintSlot first = UiPaintSlot();
     UiPaintSlot second = UiPaintSlot();
-    native(mut first, mut second, mut observed){
-        first = [&first, &second, &observed](UiPaintContext&){
-            ++observed;
-            if(observed == 1)
-                second = Move(first);
-        };
-    }
+    UiPaintCallback moveSlot = lambda[mut first, mut second, mut observed](mut UiPaintContext unused) -> void{
+        ++observed;
+        if(observed == 1)
+            TestMoveAssign<UiPaintSlot>(second, first);
+    };
+    first.setCallback(moveSlot);
     first.invoke(fixture.context);
-    EXPECT_FALSE(cast<b8>(first));
-    ASSERT_TRUE(cast<b8>(second));
+    EXPECT_FALSE(first.callable());
+    ASSERT_TRUE(second.callable());
     second.invoke(fixture.context);
     EXPECT_EQ(observed, 2);
 }
 
+[cpp_unwind]
 void VerifyPaintSlot_ExceptionRestoresCallbackWhenItStillHasAnOwner(){
     PaintSlotFixture fixture = PaintSlotFixture();
     UiPaintSlot slot = UiPaintSlot();
     i32 calls = 0;
-    native(mut fixture, mut slot, mut calls){
-        slot = [&calls](UiPaintContext&){ ++calls; throw 42; };
-        EXPECT_THROW(slot.invoke(fixture.context), i32);
-        ASSERT_TRUE(static_cast<b8>(slot));
-        EXPECT_THROW(slot.invoke(fixture.context), i32);
-    }
+    UiPaintCallback throwOnCall = lambda[mut calls](mut UiPaintContext unused) -> void{ ++calls; ThrowTestException<i32>(42); };
+    slot.setCallback(throwOnCall);
+    EXPECT_TRUE(ThrowsException<i32>(lambda[mut slot, mut fixture]() -> void{ slot.invoke(fixture.context); }));
+    ASSERT_TRUE(slot.callable());
+    EXPECT_TRUE(ThrowsException<i32>(lambda[mut slot, mut fixture]() -> void{ slot.invoke(fixture.context); }));
     EXPECT_EQ(calls, 2);
 }
 
+[cpp_unwind]
 void VerifyPaintSlot_NestedReplacementAndExceptionDoNotRestoreTheDisplacedCallback(){
     PaintSlotFixture fixture = PaintSlotFixture();
     UiPaintSlot slot = UiPaintSlot();
     i32 calls = 0;
-    native(mut fixture, mut slot, mut calls){
-        slot = [&slot, &calls](UiPaintContext& ctx){
-            slot = [&calls](UiPaintContext&){ ++calls; };
-            slot.invoke(ctx);
-            throw 42;
-        };
-        EXPECT_THROW(slot.invoke(fixture.context), i32);
-    }
-    ASSERT_TRUE(cast<b8>(slot));
+    UiPaintCallback replaceAndThrow = lambda[mut slot, mut calls](mut UiPaintContext ctx) -> void{
+        UiPaintCallback incrementCalls = lambda[mut calls](mut UiPaintContext unused) -> void{ ++calls; };
+        slot.setCallback(incrementCalls);
+        slot.invoke(ctx);
+        ThrowTestException<i32>(42);
+    };
+    slot.setCallback(replaceAndThrow);
+    EXPECT_TRUE(ThrowsException<i32>(lambda[mut slot, mut fixture]() -> void{ slot.invoke(fixture.context); }));
+    ASSERT_TRUE(slot.callable());
     slot.invoke(fixture.context);
     EXPECT_EQ(calls, 2);
 
-    native(mut fixture, mut slot){
-        slot = [&slot](UiPaintContext&){ slot.reset(); throw 42; };
-        EXPECT_THROW(slot.invoke(fixture.context), i32);
-    }
-    EXPECT_FALSE(cast<b8>(slot));
+    UiPaintCallback clearAndThrow = lambda[mut slot](mut UiPaintContext unused) -> void{ slot.reset(); ThrowTestException<i32>(42); };
+    slot.setCallback(clearAndThrow);
+    EXPECT_TRUE(ThrowsException<i32>(lambda[mut slot, mut fixture]() -> void{ slot.invoke(fixture.context); }));
+    EXPECT_FALSE(slot.callable());
 }
 
 void VerifyPaintSlot_RunningCallbackRemainsVisibleUntilCleared(){
@@ -272,39 +225,40 @@ void VerifyPaintSlot_RunningCallbackRemainsVisibleUntilCleared(){
     b8 visibleDuringCall = false;
     b8 visibleAfterClear = true;
     b8 callableDuringCall = true;
-    slot = lambda[mut slot, mut visibleDuringCall, mut visibleAfterClear, mut callableDuringCall](mut UiPaintContext ctx) -> void{
+    UiPaintCallback checkVisibility = lambda[mut slot, mut visibleDuringCall, mut visibleAfterClear, mut callableDuringCall](mut UiPaintContext ctx) -> void{
         visibleDuringCall = slot.present();
-        callableDuringCall = cast<b8>(slot);
-        if(cast<b8>(slot)){
+        callableDuringCall = slot.callable();
+        if(slot.callable()){
             slot.invoke(ctx);
         }
         slot.reset();
         visibleAfterClear = slot.present();
     };
+    slot.setCallback(checkVisibility);
     slot.invoke(fixture.context);
     EXPECT_TRUE(visibleDuringCall);
     EXPECT_FALSE(callableDuringCall);
     EXPECT_FALSE(visibleAfterClear);
-    EXPECT_FALSE(cast<b8>(slot));
+    EXPECT_FALSE(slot.callable());
 }
 
 void VerifyPaintSlot_MoveConstructionTransfersTheActiveLease(){
     PaintSlotFixture fixture = PaintSlotFixture();
     UiPaintSlot first = UiPaintSlot();
-    Optional<UiPaintSlot> second = Optional<UiPaintSlot>();
+    TestValueSlot<UiPaintSlot> second();
+    Optional<mut UiPaintSlot> moved();
     i32 calls = 0;
-    native(mut first, mut second, mut calls){
-        first = [&first, &second, &calls](UiPaintContext&){
-            ++calls;
-            if(calls == 1)
-                second.emplace(Move(first));
-        };
-    }
+    UiPaintCallback moveConstructSlot = lambda[mut first, mut second, mut moved, mut calls](mut UiPaintContext unused) -> void{
+        ++calls;
+        if(calls == 1)
+            moved = Optional<mut UiPaintSlot>(second.take(first));
+    };
+    first.setCallback(moveConstructSlot);
     first.invoke(fixture.context);
-    EXPECT_FALSE(cast<b8>(first));
-    ASSERT_TRUE(second.has_value());
-    ASSERT_TRUE(cast<b8>(second.value()));
-    second.value().invoke(fixture.context);
+    EXPECT_FALSE(first.callable());
+    ASSERT_TRUE(moved.has_value());
+    ASSERT_TRUE(moved.value().callable());
+    moved.value().invoke(fixture.context);
     EXPECT_EQ(calls, 2);
 }
 
@@ -312,7 +266,7 @@ void VerifyUiSkinSelectionTests_FailedCustomFallsBackToDefaultAndRevalidatesOnly
     u32 customCalls = 0u;
     u32 defaultCalls = 0u;
     UiSkinSelectionState selection = MakeUiSkinSelectionState(s_MissingUiSkinRef);
-    auto bind = lambda[mut customCalls, mut defaultCalls](in UiSkinAssetRef ref) -> b8{
+    auto bind = lambda[mut customCalls, mut defaultCalls](in AssetRef<UiSkin> ref) -> b8{
         if(ref == s_MissingUiSkinRef){
             ++customCalls;
             return false;
@@ -331,14 +285,14 @@ void VerifyUiSkinSelectionTests_FailedCustomFallsBackToDefaultAndRevalidatesOnly
 void VerifyUiSkinSelectionTests_FailedDefaultLeavesSelectionUncommittedForRetry(){
     u32 calls = 0u;
     UiSkinSelectionState selection = MakeUiSkinSelectionState(s_MissingUiSkinRef);
-    auto reject = lambda[mut calls](in UiSkinAssetRef unused) -> b8{
+    auto reject = lambda[mut calls](in AssetRef<UiSkin> unused) -> b8{
         ++calls;
         return false;
     };
     EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, reject), UiSkinSelectionResult::Failed);
     EXPECT_FALSE(selection.selected.valid());
     EXPECT_EQ(calls, 2u);
-    auto acceptCustom = lambda[](in UiSkinAssetRef ref) -> b8{
+    auto acceptCustom = lambda[](in AssetRef<UiSkin> ref) -> b8{
         return ref == s_MissingUiSkinRef;
     };
     EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, acceptCustom), UiSkinSelectionResult::Selected);
@@ -349,11 +303,11 @@ void VerifyUiSkinSelectionTests_FailedDefaultLeavesSelectionUncommittedForRetry(
 void VerifyUiSkinSelectionTests_FailedRevalidationPreservesPreviouslySelectedCustom(){
     u32 calls = 0u;
     UiSkinSelectionState selection = MakeUiSkinSelectionState(s_CustomUiSkinRef);
-    auto acceptCustom = lambda[](in UiSkinAssetRef ref) -> b8{
+    auto acceptCustom = lambda[](in AssetRef<UiSkin> ref) -> b8{
         return ref == s_CustomUiSkinRef;
     };
     EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, acceptCustom), UiSkinSelectionResult::Selected);
-    auto rejectRevalidation = lambda[mut calls](in UiSkinAssetRef ref) -> b8{
+    auto rejectRevalidation = lambda[mut calls](in AssetRef<UiSkin> ref) -> b8{
         ++calls;
         EXPECT_EQ(ref, s_CustomUiSkinRef);
         return false;
@@ -364,14 +318,14 @@ void VerifyUiSkinSelectionTests_FailedRevalidationPreservesPreviouslySelectedCus
 }
 
 void VerifyUiTextEditOwned_PollCopiesEventsWithoutApplyingAndOwnedCommitSurvivesNativeCancellation(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(61u, 1u, 2u), s_OwnedTestCaret, model), TextInputAdmission::Accepted);
     const TextInputSessionToken oldToken = session.token();
     String source = String(" copied");
     ASSERT_EQ(service.commit(StringView(source)), TextInputAdmission::Accepted);
@@ -380,7 +334,7 @@ void VerifyUiTextEditOwned_PollCopiesEventsWithoutApplyingAndOwnedCommitSurvives
     EXPECT_EQ(event.token, oldToken);
     EXPECT_EQ(StringView(event.text), " copied");
     EXPECT_EQ(model.text(), "base");
-    EXPECT_TRUE(session.matchesPublished(s_OwnedTestOwner, model));
+    EXPECT_TRUE(session.matchesPublished(MakeSessionTestOwner(61u, 1u, 2u), model));
     ASSERT_TRUE(session.cancel());
     EXPECT_FALSE(session.token().valid());
     EXPECT_FALSE(service.activeSession().valid());
@@ -390,46 +344,46 @@ void VerifyUiTextEditOwned_PollCopiesEventsWithoutApplyingAndOwnedCommitSurvives
 }
 
 void VerifyUiTextEditOwned_TrustedLocalAdoptionRecoversAfterStrictRefreshRejectsChangedModel(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(61u, 1u, 2u), s_OwnedTestCaret, model), TextInputAdmission::Accepted);
     const u64 oldSurrounding = session.surroundingRevision();
     ASSERT_TRUE(model.replaceSelection(" local"));
-    EXPECT_FALSE(session.matchesPublished(s_OwnedTestOwner, model));
-    EXPECT_EQ(session.refresh(s_OwnedTestOwner, model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
-    ASSERT_EQ(session.adoptLocal(s_OwnedTestOwner, model, s_OwnedTestCaret), TextInputAdmission::Accepted);
+    EXPECT_FALSE(session.matchesPublished(MakeSessionTestOwner(61u, 1u, 2u), model));
+    EXPECT_EQ(session.refresh(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
+    ASSERT_EQ(session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret), TextInputAdmission::Accepted);
     EXPECT_GT(session.surroundingRevision(), oldSurrounding);
-    EXPECT_TRUE(session.matchesPublished(s_OwnedTestOwner, model));
+    EXPECT_TRUE(session.matchesPublished(MakeSessionTestOwner(61u, 1u, 2u), model));
     ASSERT_EQ(service.commit(" native"), TextInputAdmission::Accepted);
-    ASSERT_EQ(session.drain(s_OwnedTestOwner, model).status, UiTextEditStatus::Applied);
+    ASSERT_EQ(session.drain(MakeSessionTestOwner(61u, 1u, 2u), model).status, UiTextEditStatus::Applied);
     EXPECT_EQ(model.text(), "base local native");
 }
 
 void VerifyUiTextEditOwned_CancelWithoutModelLeavesTransientCompositionForTheNextSynchronousLend(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(61u, 1u, 2u), s_OwnedTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit("draft", 0u, 5u, false), TextInputAdmission::Accepted);
-    ASSERT_EQ(session.drain(s_OwnedTestOwner, model).status, UiTextEditStatus::Applied);
+    ASSERT_EQ(session.drain(MakeSessionTestOwner(61u, 1u, 2u), model).status, UiTextEditStatus::Applied);
     ASSERT_TRUE(session.cancel());
     EXPECT_TRUE(model.composition().active);
     EXPECT_EQ(model.text(), "base");
-    EXPECT_EQ(session.adoptLocal(s_OwnedTestOwner, model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
     model.cancelComposition();
-    ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(61u, 1u, 2u), s_OwnedTestCaret, model), TextInputAdmission::Accepted);
 }
 
 void VerifyUiTextEditOwned_CopiedSurroundingDeletionRequiresPublishedRevisionAndGraphemeAlignedRange(){
-    TestArena arena = TestArena();
-    UiEditModel model = UiEditModel(arena.arena);
+    HeapStorage arena = HeapStorage();
+    EditModel model = EditModel();
     TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(model.setText("a\xCC\x81z"));
     event.kind = TextInputEventKind::DeleteSurrounding;
@@ -449,10 +403,10 @@ void VerifyUiTextEditOwned_CopiedSurroundingDeletionRequiresPublishedRevisionAnd
 }
 
 void VerifyUiTextEditOwned_MalformedCopiedEventsAndRejectedPreeditPreserveCommittedState(){
-    TestArena arena = TestArena();
-    UiEditLimits limits = UiEditLimits();
+    HeapStorage arena = HeapStorage();
+    EditLimits limits = EditLimits();
     limits.maxBytes = 4u;
-    UiEditModel model = UiEditModel(arena.arena, limits);
+    EditModel model = EditModel(limits);
     TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(model.setText("base"));
     event.kind = TextInputEventKind::Preedit;
@@ -475,37 +429,37 @@ void VerifyUiTextEditOwned_MalformedCopiedEventsAndRejectedPreeditPreserveCommit
 }
 
 void VerifyUiTextEditOwned_IdenticalExternalResetFencesOldEventsAndPublishedDeletionContext(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(61u, 1u, 2u), s_OwnedTestCaret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("old"), TextInputAdmission::Accepted);
     const u64 revision = model.revision();
     ASSERT_TRUE(model.setText("base"));
     EXPECT_EQ(model.revision(), revision);
-    EXPECT_FALSE(session.matchesPublished(s_OwnedTestOwner, model));
-    EXPECT_EQ(session.refresh(s_OwnedTestOwner, model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
-    EXPECT_EQ(session.drain(s_OwnedTestOwner, model).status, UiTextEditStatus::StaleModel);
+    EXPECT_FALSE(session.matchesPublished(MakeSessionTestOwner(61u, 1u, 2u), model));
+    EXPECT_EQ(session.refresh(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(session.drain(MakeSessionTestOwner(61u, 1u, 2u), model).status, UiTextEditStatus::StaleModel);
     EXPECT_EQ(model.text(), "base");
 }
 
 void VerifyUiTextEditOwned_OwnedCollectionAdoptionAndCancellationRejectAnotherThread(){
-    TestArena arena = TestArena();
-    FakeTextInput service = FakeTextInput(arena.arena);
-    UiEditModel model = UiEditModel(arena.arena);
-    UiTextEditSession session = UiTextEditSession(arena.arena, service);
+    HeapStorage arena = HeapStorage();
+    FakeTextInput service = FakeTextInput(arena);
+    EditModel model = EditModel();
+    UiTextEditSession session = UiTextEditSession(service);
     TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(service.setFocused(true));
-    ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(MakeSessionTestOwner(61u, 1u, 2u), s_OwnedTestCaret, model), TextInputAdmission::Accepted);
     b8 cancelled = true;
     TextInputPollResultEnum poll = TextInputPollResult::Pending;
     TextInputAdmissionEnum adopt = TextInputAdmission::Accepted;
     Thread other = Thread(lambda[mut session, mut event, mut model, mut poll, mut adopt, mut cancelled]() -> void{
         poll = session.pollOwned(event);
-        adopt = session.adoptLocal(s_OwnedTestOwner, model, s_OwnedTestCaret);
+        adopt = session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret);
         cancelled = session.cancel();
     });
     other.join();

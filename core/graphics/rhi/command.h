@@ -133,6 +133,10 @@ struct GpuPhysicalQueueTopology{
 
 
 public:
+    void setQueues(Span<const GpuPhysicalQueueInfo> values)noexcept{
+        queues = values.data();
+        queueCount = values.size();
+    }
     [[nodiscard]] Span<const GpuPhysicalQueueInfo> queueSpan()const noexcept{
         return queues ? Span<const GpuPhysicalQueueInfo>(queues, queueCount) : Span<const GpuPhysicalQueueInfo>();
     }
@@ -340,6 +344,9 @@ public:
     [[nodiscard]] b8 coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept;
     // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
     [[nodiscard]] b8 coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept;
+    [[nodiscard]] b8 coversBufferWithOwnership(Buffer& buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept{
+        return coversBufferWithOwnership(&buffer, expectedOwnerQueue, expectedReleaseDestinationQueue, range);
+    }
     // Copies a valid state snapshot without exposing backend tracker storage.
     // Packet recording retains graph-owned producer seeds while individual command-list consumers request their own final handoff.
     [[nodiscard]] b8 copyFrom(const CommandListResourceStateHandoff& source);

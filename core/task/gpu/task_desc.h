@@ -144,6 +144,8 @@ struct GpuGraphInitialOwnerHandoffSourceDesc{
     // This prevents an externally supplied completion from aliasing the source queue while racing the terminal export.
     QueueSubmissionToken minimumCompletionToken;
     const CommandListResourceStateHandoff* stateSource = nullptr;
+    void setStateSource(const CommandListResourceStateHandoff& source)noexcept{ stateSource = &source; }
+    void setStateSource(const CommandListResourceStateHandoff&&) = delete;
 };
 
 // A resource may be metadata-only in the shadow-graph phase, or hold an imported engine handle. The latter is required before recording.
@@ -352,6 +354,9 @@ struct GpuCopyBufferTaskDesc{
     usize regionCount = 0u;
     // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
+
+    void publishAcceptedToken(QueueSubmissionToken& token)noexcept{ acceptedToken = &token; }
+    void setRegions(const Span<const GpuCopyBufferTaskRegion> values)noexcept{ regions = values.data(); regionCount = values.size(); }
 };
 
 struct GpuCopyTextureTaskRegion{
@@ -365,6 +370,8 @@ struct GpuCopyTextureTaskDesc{
     const GpuCopyTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
     QueueSubmissionToken* acceptedToken = nullptr;
+
+    void publishAcceptedToken(QueueSubmissionToken& token)noexcept{ acceptedToken = &token; }
 };
 
 // Resolve ops keep both textures until late recording, then record via CommandList after queue assignment.
@@ -379,6 +386,8 @@ struct GpuResolveTextureTaskDesc{
     const GpuResolveTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
     QueueSubmissionToken* acceptedToken = nullptr;
+
+    void publishAcceptedToken(QueueSubmissionToken& token)noexcept{ acceptedToken = &token; }
 };
 
 
@@ -414,6 +423,8 @@ struct GpuClearBufferTaskDesc{
     GpuGraphResourceId destination;
     u32 clearValue = 0u;
     QueueSubmissionToken* acceptedToken = nullptr;
+
+    void publishAcceptedToken(QueueSubmissionToken& token)noexcept{ acceptedToken = &token; }
 };
 
 namespace GpuClearTextureTaskValueType{
@@ -489,6 +500,8 @@ struct GpuClearTextureRectUIntTaskDesc{
     UIntColor uintValue;
     GpuClearTextureTaskRecordHooks recordHooks;
     QueueSubmissionToken* acceptedToken = nullptr;
+
+    void publishAcceptedToken(QueueSubmissionToken& token)noexcept{ acceptedToken = &token; }
 };
 
 

@@ -16,65 +16,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/runtime/render_pass.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/expected.h>
-#include <global/filesystem.h>
-#include <global/filesystem/path.h>
-#include <global/simd/convert_half.h>
-#include <global/simd/frame.h>
-#include <global/simdmath.h>
-
-namespace NWB::Tests::Smoke{
-inline constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScopes = {
-    Impl::s_TimingScopeFrame,
-    Impl::s_TimingScopeCausticPhotons,
-    Impl::s_TimingScopeCausticResolve,
-    Impl::s_TimingScopeOpaqueRegular,
-    Impl::s_TimingScopeDeferredComposite,
-    Impl::s_TimingScopeDeferredPresent,
-};
+const usize s_CsgCausticGpuScopeCount = 6u;
+const Array<GpuTimingScopeDefinition, s_CsgCausticGpuScopeCount> s_CausticGpuTimingScopes = Array<GpuTimingScopeDefinition, 6u>(
+    s_TimingScopeFrame,
+    s_TimingScopeCausticPhotons,
+    s_TimingScopeCausticResolve,
+    s_TimingScopeOpaqueRegular,
+    s_TimingScopeDeferredComposite,
+    s_TimingScopeDeferredPresent
+);
 
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
-inline constexpr b8 s_CsgCausticSmokeEnabled = true;
-inline constexpr SmokeMaterialRef s_CsgShadowGlassMaterial{"project/smoke/csg_caustic/materials/glass"};
-inline constexpr SmokeMaterialRef s_CsgShadowOpaqueMaterial{"project/smoke/csg_caustic/materials/receiver"};
+const b8 s_CsgCausticSmokeEnabled = true;
+const SmokeMaterialRef s_CsgShadowGlassMaterial = "project/smoke/csg_caustic/materials/glass";
+const SmokeMaterialRef s_CsgShadowOpaqueMaterial = "project/smoke/csg_caustic/materials/receiver";
 #else
-inline constexpr b8 s_CsgCausticSmokeEnabled = false;
-inline constexpr SmokeMaterialRef s_CsgShadowGlassMaterial{"project/smoke/csg_shadow/materials/glass"};
-inline constexpr SmokeMaterialRef s_CsgShadowOpaqueMaterial{"project/smoke/csg_shadow/materials/opaque"};
+const b8 s_CsgCausticSmokeEnabled = false;
+const SmokeMaterialRef s_CsgShadowGlassMaterial = "project/smoke/csg_shadow/materials/glass";
+const SmokeMaterialRef s_CsgShadowOpaqueMaterial = "project/smoke/csg_shadow/materials/opaque";
 #endif
 
-[[nodiscard]] FOUNDATION_INLINE AStringView CsgCausticProbeOwnerLabel()noexcept{
+StringView CsgCausticProbeOwnerLabel(){
     return "csg_caustic";
 }
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const usize s_CsgCausticGpuScopeCount = 6u;
 const usize s_CsgCausticCpuScopeCount = 5u;
 const usize s_CsgCausticScopeCount = s_CsgCausticGpuScopeCount + s_CsgCausticCpuScopeCount;
 const usize s_CsgCausticMaxIntervals = 2048u;
@@ -187,21 +156,14 @@ class CsgCausticTimingProbe{
         if(!this.m_cpu.initialize(diagnostic, true, cpuOutputPath))
             return false;
 
-        b8 queriesPrepared = true;
-        native(in diagnostic, mut ctx = this.m_context, mut queriesPrepared){
-            static_assert(s_CausticGpuTimingScopes.size() == s_CsgCausticGpuScopeCount);
-            auto capture = Core::Perf::CaptureOptions::GpuTimingOnly();
-            capture.cpuTiming = diagnostic;
-            ctx.setPerfCapture(capture);
-            for(const Core::GpuTimingScopeDefinition& scope : s_CausticGpuTimingScopes){
-                if(!ctx.graphics.gpuTiming().prepareScopeQueries(scope.identity, ctx.graphics.getDevice(), s_CsgCausticQueryInFlightRanges)){
-                    queriesPrepared = false;
-                    break;
-                }
-            }
+        PerfCaptureOptions capture = PerfCaptureOptionsGpuTimingOnly();
+        capture.cpuTiming = diagnostic;
+        this.m_context.setPerfCapture(capture);
+        mut GraphicsRuntime graphics = this.m_context.graphics;
+        for(usize i = 0u; i < s_CausticGpuTimingScopes.size(); ++i){
+            if(!graphics.gpuTiming().prepareScopeQueries(s_CausticGpuTimingScopes[i].identity, graphics.getDevice(), s_CsgCausticQueryInFlightRanges))
+                return false;
         }
-        if(!queriesPrepared)
-            return false;
 
         StringView modeText = "performance";
         if(diagnostic)
@@ -697,7 +659,7 @@ class CsgShadowAtlas{
         const b8 active = mode.arm != CsgShadowArm::Uncut;
         const VectorSingle identityRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
         const EntityID cutterId = CreateSmokeCsgBoxCutter(
-            groupName, s_CsgBoxShapeName, active, halfExtents, initialCenter, identityRot, world
+            groupName, s_CsgBoxShapeName, active, VectorSingle(halfExtents), initialCenter, identityRot, world
         );
         if(moving){
             assert(this.m_movingCount < this.m_movingCutters.size(), "Moving cutter capacity exceeded");
@@ -773,20 +735,20 @@ class CsgShadowAtlas{
         const Name sphereShape = Name(s_ShadowSmokeEngineCsgSphere);
         const Name capsuleShape = Name(s_ShadowSmokeCapsuleShapePath);
 
-        SetSmokeCsgCutterMatrix(CreateSmokeCsgPlaneCutter(CsgShadowAnalyticGroupName(0u), planeShape, active, f32x4(0.5f, 0.0f, 1.0f, 0.0f), world), MatrixTranslation(-2.0f, 1.0f, -6.0f), world);
+        SetSmokeCsgCutterMatrix(CreateSmokeCsgPlaneCutter(CsgShadowAnalyticGroupName(0u), planeShape, active, VectorSingle(0.5f, 0.0f, 1.0f, 0.0f), world), MatrixTranslation(-2.0f, 1.0f, -6.0f), world);
 
         const MatrixSingle ellipsoid = MatrixAffineTransformation(VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f));
-        SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(1u), sphereShape, active, f32x4(1.0f, 0.0f, 0.0f, 0.0f), world), ellipsoid, world);
+        SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(1u), sphereShape, active, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), world), ellipsoid, world);
 
-        SetSmokeCsgCutterMatrix(CreateSmokeCsgCapsuleCutter(CsgShadowAnalyticGroupName(2u), capsuleShape, active, f32x4(0.35f, 0.25f, 0.0f, 0.0f), world), MatrixTranslation(2.0f, 1.0f, -6.0f), world);
+        SetSmokeCsgCutterMatrix(CreateSmokeCsgCapsuleCutter(CsgShadowAnalyticGroupName(2u), capsuleShape, active, VectorSingle(0.35f, 0.25f, 0.0f, 0.0f), world), MatrixTranslation(2.0f, 1.0f, -6.0f), world);
         // An exact axis permutation exercises the capsule's zero radial-speed branch.
         const MatrixSingle alongLight = MatrixSet(1.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-        SetSmokeCsgCutterMatrix(CreateSmokeCsgCapsuleCutter(CsgShadowAnalyticGroupName(3u), capsuleShape, active, f32x4(0.3f, 0.4f, 0.0f, 0.0f), world), alongLight, world);
+        SetSmokeCsgCutterMatrix(CreateSmokeCsgCapsuleCutter(CsgShadowAnalyticGroupName(3u), capsuleShape, active, VectorSingle(0.3f, 0.4f, 0.0f, 0.0f), world), alongLight, world);
 
-        SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(4u), sphereShape, active, f32x4(0.55f, 0.0f, 0.0f, 0.0f), world), MatrixTranslation(0.0f, -1.0f, -6.25f), world);
-        SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(4u), sphereShape, active, f32x4(0.55f, 0.0f, 0.0f, 0.0f), world), MatrixTranslation(0.0f, -1.0f, -5.75f), world);
+        SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(4u), sphereShape, active, VectorSingle(0.55f, 0.0f, 0.0f, 0.0f), world), MatrixTranslation(0.0f, -1.0f, -6.25f), world);
+        SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(4u), sphereShape, active, VectorSingle(0.55f, 0.0f, 0.0f, 0.0f), world), MatrixTranslation(0.0f, -1.0f, -5.75f), world);
         // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
-        SetSmokeCsgCutterMatrix(CreateSmokeCsgPlaneCutter(CsgShadowAnalyticGroupName(5u), planeShape, active, f32x4(0.0f, 0.0f, 1.0f, 8.0f), world), MatrixIdentity(), world);
+        SetSmokeCsgCutterMatrix(CreateSmokeCsgPlaneCutter(CsgShadowAnalyticGroupName(5u), planeShape, active, VectorSingle(0.0f, 0.0f, 1.0f, 8.0f), world), MatrixIdentity(), world);
         [essential] info("CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule");
     }
 
@@ -833,7 +795,7 @@ class CsgShadowAtlas{
                 f32 planeW = 8.0f;
                 if(clipped)
                     planeW = 6.75f;
-                if(!CreateSmokeCsgPlaneCutter(groupName, Name(s_ShadowSmokePlaneShapePath), true, f32x4(0.0f, 0.0f, 1.0f, planeW), world).valid())
+                if(!CreateSmokeCsgPlaneCutter(groupName, Name(s_ShadowSmokePlaneShapePath), true, VectorSingle(0.0f, 0.0f, 1.0f, planeW), world).valid())
                     return false;
             }
         }

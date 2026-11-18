@@ -51,6 +51,9 @@ extern class GpuCompiledExternalResourceExportSource{
 
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExportView"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuCompiledExternalResourceExportView{
+    Optional<GpuCompiledExternalResourceExport> exportPlan()const;
+    Span<GpuCompiledExternalResourceExportSource> sourcesSpan()const;
+    b8 hasSources()const;
     b8 valid(...)const;
 };
 
@@ -114,6 +117,12 @@ extern class GpuCompiledOwnershipTransfer{
 
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPacketView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCompiledPacketView{
+    Span<GpuExternalCompletionId> externalDependenciesSpan()const;
+    b8 hasExternalDependencies()const;
+    Span<GpuPacketDependency> dependenciesSpan()const;
+    b8 hasDependencies()const;
+    Span<GpuTaskId> tasksSpan()const;
+    b8 hasTasks()const;
     GpuSubmissionPacketId id;
     Span<GpuTaskId> taskSpan()const;
     Optional<GpuSubmissionPacket> packetPlan(...)const;
@@ -147,6 +156,13 @@ extern class GpuCompiledTask{
 
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTaskView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCompiledTaskView{
+    Optional<GpuCompiledTask> taskPlan()const;
+    Span<GpuCompiledBarrier> epilogueBarriersSpan()const;
+    b8 hasEpilogueBarriers()const;
+    Span<GpuCompiledBarrier> prologueBarriersSpan()const;
+    b8 hasPrologueBarriers()const;
+    Span<GpuPacketStateSeed> prologueStateSeedsSpan()const;
+    b8 hasPrologueStateSeeds()const;
     b8 recordsNonCommittingTimingSample()const;
     b8 valid(...)const;
 };

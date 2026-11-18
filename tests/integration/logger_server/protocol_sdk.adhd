@@ -1,0 +1,79 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<logger/client/module.h>"), cpp_name("::NWB::Log::Client"), cpp_flags(no_copy, no_assign)]
+extern class ProtocolClient{
+    b8 init(in StringView url);
+    usize rejectedPayloadCount()const;
+};
+
+[cpp_header("<core/common/log.h>"), cpp_name("::NWB::Core::Common::LoggerDetail::EnqueueMessage")]
+extern void EnqueueLogMessage(mut ProtocolClient client, in LogType kind, in StringView message);
+
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::s_Windows")]
+extern const b8 s_IsWindowsLoggerPlatform;
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::s_DesktopLinux")]
+extern const b8 s_IsDesktopLinuxLoggerPlatform;
+[cpp_header("<global/filesystem/exclusive_publication.h>"), cpp_name("::PublishNewFileDurable")]
+extern FilePublicationResult PublishBytesView(in auto destination, in BinaryByteView bytes);
+
+[cpp_header("<logger/processed_message_file.h>"), cpp_name("::NWB::Log::ProcessedMessageFile"), cpp_flags(no_copy, no_assign)]
+extern class ProcessedMessageFile{
+    b8 open(in PlatformStringView name);
+    b8 writeLine(in PlatformStringView line);
+    Path path()const;
+    void close();
+};
+
+[cpp_header("<core/alloc/general.h>"), cpp_name("::Path<::NWB::Core::Alloc::GlobalArena>")]
+extern class LoggerPublicationPath;
+
+[cpp_header("<logger/common.h>"), cpp_name("::NWB::Log::s_MaxLogMessageUploadBytes")]
+extern const usize s_MaxClientMessageBytes;
+[cpp_header("<logger/common.h>"), cpp_name("::NWB::Log::s_MaxTelemetryUploadBytes")]
+extern const usize s_MaxClientTelemetryBytes;
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::s_NativeCharacterBytes")]
+extern const usize s_NativeCharacterBytes;
+
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::EnqueueTelemetry")]
+extern b8 EnqueueTestTelemetryView(mut ProtocolClient client, in BinaryByteView bytes);
+
+[cpp_header("<logger/message_payload_codec.h>"), cpp_name("::NWB::Log::MessagePayloadError::Enum")]
+extern enum MessagePayloadError : u8{
+    InvalidType,
+    SizeOverflow
+};
+
+[cpp_header("<logger/common.h>"), cpp_name("::NWB::Log::MessageType"), cpp_flags(no_assign)]
+extern class ProtocolMessage;
+
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::Literal"), cpp_flags(platform_literal_arg0)]
+extern PlatformStringView ProtocolText(in StringView text);
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::Message")]
+extern ProtocolMessage MakeProtocolMessage(mut HeapStorage storage, in Timer time, in LogType logType, in PlatformStringView text);
+[cpp_header("<logger/message_payload_codec.h>"), cpp_name("::NWB::Log::MessagePayloadCodec::Build")]
+extern Expected<void, MessagePayloadError> BuildMessagePayload(in ProtocolMessage message, mut Vector<u8> bytes);
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::Parse")]
+extern Expected<ProtocolMessage, PlatformStringView> ParseMessagePayload(mut HeapStorage storage, in Span<u8> bytes);
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::MessageText")]
+extern PlatformStringView ProtocolMessageText(in ProtocolMessage message);
+
+
+b8 EnqueueClientTelemetry(mut ProtocolClient client, in Span<u8> bytes){
+    return EnqueueTestTelemetryView(client, BinaryByteView(bytes.data(), bytes.size()));
+}
+
+FilePublicationResult PublishDurableBytes<T>(in T destination, in Span<u8> bytes){
+    return PublishBytesView(destination, BinaryByteView(bytes.data(), bytes.size()));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -3,398 +3,158 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type UiPaintOverlayTests = PaintTextFixture;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/floating_point_environment_guard.adhd.h>
-
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-
-#include <global/bit.h>
-#include <global/floating_point_environment.h>
-#include <global/limit.h>
-#include <global/sha256.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_paint_overlay_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-
-class UiPaintOverlayTests : public NWB::UiPaintTextTests::PaintTextFixture{
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_paint_sdf_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-struct AssetFactorySdfSample{
-    SharedSdfAtlasPage page;
-    Sha256Digest sourceHash;
-    b8 valid = false;
-};
-
-
-class UiPaintSdfTests : public NWB::UiPaintTextTests::PaintTextFixture{
-public:
-    [[nodiscard]] b8 prepareSingleSdfPage(const SharedSdfAtlasPage& page){
-        return m_builder.prepareSdfPages(Span(&page, 1u));
+class UiPaintScopedHeldFenv : NoCopy{
+    private Expected<FloatingPointEnvironment> m_held = HoldFloatingPointExceptions();
+    public b8 valid()const{ return this.m_held.has_value(); }
+    public ~UiPaintScopedHeldFenv(){
+        if(this.m_held.has_value())
+            SetFloatingPointEnvironment(this.m_held.value());
     }
+}
 
-    [[nodiscard]] b8 prepareGlyphSpanAndSingleSdf(const Span<const SharedGlyphPage> glyphs, const SharedSdfAtlasPage& sdf){
-        return m_builder.prepareImages(glyphs, Span(&sdf, 1u));
+class UiPaintSdfAssetFactorySample{
+    public SharedSdfAtlasPage page;
+    public Sha256Digest sourceHash;
+    public b8 valid = false;
+
+
+}
+
+
+class UiPaintSdfTests : PaintTextFixture{
+
+
+    public b8 prepareSingleSdfPage(in SharedSdfAtlasPage page){
+        return this.m_builder.prepareSdfPages(Array<SharedSdfAtlasPage, 1u>(page));
     }
-
-    [[nodiscard]] b8 prepareSingleGlyphAndSingleSdf(const SharedGlyphPage& glyph, const SharedSdfAtlasPage& sdf){
-        return m_builder.prepareImages(Span(&glyph, 1u), Span(&sdf, 1u));
+    public b8 prepareGlyphSpanAndSingleSdf(in Span<SharedGlyphPage> glyphs, in SharedSdfAtlasPage sdf){
+        return this.m_builder.prepareImages(glyphs, Array<SharedSdfAtlasPage, 1u>(sdf));
     }
-
-    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPixels& pixels){
-        return CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(m_arena), binding, pixels);
+    public b8 prepareSingleGlyphAndSingleSdf(in SharedGlyphPage glyph, in SharedSdfAtlasPage sdf){
+        return this.m_builder.prepareImages(Array<SharedGlyphPage, 1u>(glyph), Array<SharedSdfAtlasPage, 1u>(sdf));
     }
-
-    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPixels&& pixels){
-        return CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(m_arena), binding, pixels);
-    }
-
-    [[nodiscard]] AssetFactorySdfSample createPageFromTemporaryAtlas(){
-        AssetFactorySdfSample sample;
-        FontAtlas atlas(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontAtlas));
-        FontAtlasPayload payload(m_arena);
-        payload.font = Core::Assets::AssetRef<Font>("tests/ui/font");
+    public UiPaintSdfAssetFactorySample createPageFromTemporaryAtlas(){
+        UiPaintSdfAssetFactorySample sample;
+        FontAtlas atlas = FontAtlas(Name(s_UiCaseTestsUiFontAtlas));
+        FontAtlasPayload payload;
+        payload.font = AssetRef<Font>("tests/ui/font");
         payload.fontSha256.bytes[0u] = 99u;
         payload.unitsPerEm = 1000u;
         payload.sourceGlyphCount = 1u;
         payload.ascenderUnits = 800.0f;
         payload.descenderUnits = -200.0f;
-        payload.glyphs.push_back({});
-        FontAtlasGroup group(m_arena);
+        payload.glyphs.push_back(FontAtlasGlyph());
+        FontAtlasGroup group;
         group.width = 8u;
         group.height = 8u;
         group.pixels.resize(256u, 0u);
         group.pixels[3u] = 192u;
-        group.sha256 = ComputeSha256(BinaryByteView(group.pixels.data(), group.pixels.size()));
+        group.sha256 = ComputeSha256(group.pixels);
         sample.sourceHash = group.sha256;
-        payload.groups.push_back(Move(group));
-        atlas.setPayload(Move(payload));
+        payload.groups.push_back(group);
+        atlas.setPayload(payload);
         if(!atlas.validatePayload())
             return sample;
-        auto pageResult = CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(m_arena), atlas, 7u, 123u, 0u);
-        if(!pageResult)
+        auto pageResult = CreateSdfAtlasPage(this.pool, atlas, 7u, 123u, 0u);
+        if(!pageResult.has_value())
             return sample;
-        sample.page = Move(*pageResult);
-        sample.valid = static_cast<b8>(sample.page != nullptr);
+        TestMoveAssign<SharedSdfAtlasPage>(sample.page, pageResult.value());
+        sample.valid = sample.page.valid();
         return sample;
     }
-};
+    public Expected<SharedSdfAtlasPage> createMovedSdfPage(in SdfAtlasPageBinding binding, mut SdfAtlasPixels pixels){ return CreateSdfAtlasPage(this.pool, binding, pixels); }
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiPaintDrawRegionFenvSample{
+    public i32 exceptions = 0;
+    public b8 cleared = false;
+    public b8 drawn = false;
 
 
-};
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class UiPaintTests{
+    public UiSkin m_skin = UiSkin(Name(s_TestSkinPath));
+    public PaintBuilder m_builder;
 
-
-namespace __hidden_ui_paint_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-using UiWidgetTests::s_TestSkinPath;
-inline constexpr AStringView s_TexturePath = "tests/ui/texture";
-inline constexpr AStringView s_SpriteRegion = "sprite";
-inline constexpr AStringView s_PanelRegion = "panel";
-
-struct DrawRegionFenvSample{
-    i32 exceptions = 0;
-    b8 cleared = false;
-    b8 drawn = false;
-};
-
-class ScopedHeldFenv final : NoCopy{
-public:
-    ScopedHeldFenv()noexcept
-        : m_held(HoldFloatingPointExceptions())
-    {}
-
-    ~ScopedHeldFenv()noexcept{
-        if(m_held){
-            const auto restored = SetFloatingPointEnvironment(*m_held);
-            if(!restored){}
-        }
+    public UiPaintTests(){
+        Vector<UiSkinRegion> regions;
+        regions.push_back(UiSkinRegion(Name("sprite"), UiSkinRect(16u, 32u, 32u, 24u), UiSkinSliceInsets(), UiSkinInsets(), 0.0f, 0.0f, UiSkinDrawMode::Sprite));
+        regions.push_back(UiSkinRegion(Name("panel"), UiSkinRect(0u, 0u, 32u, 24u), UiSkinSliceInsets(4u, 6u, 8u, 2u), UiSkinInsets(), 0.0f, 0.0f, UiSkinDrawMode::NineSlice));
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 128u, 64u, 2.0f, regions);
+        this.m_builder.begin(DisplayMetrics(200.0f, 100.0f, 1.5f, 2.0f), 7u, 3u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
+        this.m_builder.reserve(32u);
     }
-
-    [[nodiscard]] b8 valid()const noexcept{
-        return m_held.has_value();
+    public void configurePanelBorderCase(in UiSkinSliceInsets borders){
+        Vector<UiSkinRegion> regions;
+        regions.push_back(UiSkinRegion(Name("panel"), UiSkinRect(0u, 0u, 32u, 24u), borders, UiSkinInsets(), 0.0f, 0.0f, UiSkinDrawMode::NineSlice));
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/texture"), 128u, 64u, 2.0f, regions);
+        this.m_builder.begin(DisplayMetrics(200.0f, 100.0f), 7u, 3u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
     }
-
-
-private:
-    Expected<FloatingPointEnvironment> m_held;
-};
-
-
-class UiPaintTests : public testing::Test{
-public:
-    UiPaintTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaint))
-        , m_skin(m_arena, Name(s_TestSkinPath))
-        , m_builder(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name(s_SpriteRegion), { 16u, 32u, 32u, 24u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        UiSkinRegion panel{ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, { 4u, 6u, 8u, 2u }, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice };
-        regions.push_back(panel);
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f, 1.5f, 2.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        m_builder.reserve(32u);
-    }
-
-
-public:
-    void configurePanelBorderCase(const UiSkinSliceInsets& borders){
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, borders, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-    }
-
-    [[nodiscard]] DrawRegionFenvSample drawPanelWithFenvCheck(const Name& region, const Rect& bounds){
-#pragma STDC FENV_ACCESS ON
-        DrawRegionFenvSample sample;
+    public UiPaintDrawRegionFenvSample drawPanelWithFenvCheck(in Name region, in Rect bounds){
+        UiPaintDrawRegionFenvSample sample;
         sample.cleared = ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value();
         if(!sample.cleared)
             return sample;
-        sample.drawn = m_builder.drawRegion(region, bounds);
+        sample.drawn = this.m_builder.drawRegion(region, bounds);
         sample.exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
         return sample;
     }
-
-    void configureReplacementSpriteSkin(){
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name(s_SpriteRegion), { 0u, 0u, 4u, 4u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/replacement"), 16u, 16u, 1.0f, Move(regions));
-        m_builder.begin({ 20.0f, 20.0f }, 8u, 4u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
+    public void configureReplacementSpriteSkin(){
+        Vector<UiSkinRegion> regions;
+        regions.push_back(UiSkinRegion(Name("sprite"), UiSkinRect(0u, 0u, 4u, 4u), UiSkinSliceInsets(), UiSkinInsets(), 0.0f, 0.0f, UiSkinDrawMode::Sprite));
+        this.m_skin.setAtlas(AssetRef<Texture>("tests/ui/replacement"), 16u, 16u, 1.0f, regions);
+        this.m_builder.begin(DisplayMetrics(20.0f, 20.0f), 8u, 4u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
     }
-
-
-public:
-    Core::Alloc::GlobalArena m_arena;
-    UiSkin m_skin;
-    PaintBuilder m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using PaintImageFixture = ::NWB::UiPaintImageTests::PaintImageFixture;
-using UiPaintOverlayTests = __hidden_ui_paint_overlay_tests::UiPaintOverlayTests;
-using UiPaintSdfAssetFactorySample = __hidden_ui_paint_sdf_tests::AssetFactorySdfSample;
-using UiPaintSdfPixels = ::NWB::Impl::Ui::SdfAtlasPixels;
-using UiPaintSdfTests = __hidden_ui_paint_sdf_tests::UiPaintSdfTests;
-using UiPaintDrawRegionFenvSample = __hidden_ui_paint_tests::DrawRegionFenvSample;
-using UiPaintScopedHeldFenv = __hidden_ui_paint_tests::ScopedHeldFenv;
-using UiPaintTests = __hidden_ui_paint_tests::UiPaintTests;
-
-using Color = ::NWB::Impl::Ui::Color;
-using ImageIdentity = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Texture>;
-using PaintBuilder = ::NWB::Impl::Ui::PaintBuilder;
-using SdfAtlasPageBinding = ::NWB::Impl::Ui::SdfAtlasPageBinding;
-using Sha256Digest = ::Sha256Digest;
-using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
-using SharedImageSource = ::NWB::Impl::Ui::SharedImageSource;
-using SharedSdfAtlasPage = ::NWB::Impl::Ui::SharedSdfAtlasPage;
-using UiSkinSliceInsets = ::NWB::Impl::UiSkinSliceInsets;
-
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-
-using ::NWB::Impl::s_FontAtlasDistanceEncoding;
-using ::NWB::Impl::s_FontAtlasMaxSpreadPixels;
-using ::NWB::Impl::Ui::s_PaintMaxImages;
-using ::NWB::Impl::Ui::s_PaintMaxOverlayDepth;
-using ::NWB::Tests::UiCases::s_UiInputNameMissing;
-using ::NWB::Tests::UiCases::s_UiInputNameSprite;
-
-FOUNDATION_INLINE void ExpectUiPaintOverlaySameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
-    ::NWB::UiPaintImageTests::ExpectSameImagePaint(actual, expected);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(
-    PaintBuilder& builder,
-    const ::Span<const SharedGlyphPage> glyphs,
-    const SharedSdfAtlasPage& sdf,
-    const SharedImageSource& image
-){
-    return builder.prepareImages(glyphs, ::Span(&sdf, 1u), ::Span(&image, 1u));
+b8 UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(mut PaintBuilder builder, in Span<SharedGlyphPage> glyphs, in SharedSdfAtlasPage sdf, in SharedImageSource image){ return builder.prepareImages(glyphs, Array<SharedSdfAtlasPage, 1u>(sdf), Array<SharedImageSource, 1u>(image)); }
+b8 UiPaintOverlayPrepareOneEach(mut PaintBuilder builder, in SharedGlyphPage glyph, in SharedSdfAtlasPage sdf, in SharedImageSource image){ return builder.prepareImages(Array<SharedGlyphPage, 1u>(glyph), Array<SharedSdfAtlasPage, 1u>(sdf), Array<SharedImageSource, 1u>(image)); }
+b8 UiPaintOverlayPrepareOneGlyphAndOneImage(mut PaintBuilder builder, in SharedGlyphPage glyph, in SharedImageSource image){ return builder.prepareImages(Array<SharedGlyphPage, 1u>(glyph), Span<SharedSdfAtlasPage>(), Array<SharedImageSource, 1u>(image)); }
+b8 UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(mut PaintBuilder builder, in SharedGlyphPage glyph, in SharedSdfAtlasPage sdf, in Span<SharedImageSource> images){ return builder.prepareImages(Array<SharedGlyphPage, 1u>(glyph), Array<SharedSdfAtlasPage, 1u>(sdf), images); }
+b8 UiPaintOverlayPrepareSingleTextureImage(mut PaintBuilder builder, in SharedImageSource image){ return builder.prepareTextureImages(Array<SharedImageSource, 1u>(image)); }
+b8 UiPaintOverlayHasGlyphPage(in SharedGlyphPage page){ return page.valid(); }
+usize UiPaintOverlayGlyphPageAddress(in SharedGlyphPage page){
+    if(page.valid())
+        return TestValueAddress<GlyphPage>(page.deref());
+    return 0u;
 }
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayPrepareOneEach(
-    PaintBuilder& builder,
-    const SharedGlyphPage& glyph,
-    const SharedSdfAtlasPage& sdf,
-    const SharedImageSource& image
-){
-    return builder.prepareImages(::Span(&glyph, 1u), ::Span(&sdf, 1u), ::Span(&image, 1u));
+u64 UiPaintOverlayGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
+u8 UiPaintOverlayGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
+b8 UiPaintOverlayHasSdfPage(in SharedSdfAtlasPage page){ return page.valid(); }
+usize UiPaintOverlaySdfPageAddress(in SharedSdfAtlasPage page){
+    if(page.valid())
+        return TestValueAddress<SdfAtlasPage>(page.deref());
+    return 0u;
 }
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayPrepareOneGlyphAndOneImage(
-    PaintBuilder& builder,
-    const SharedGlyphPage& glyph,
-    const SharedImageSource& image
-){
-    return builder.prepareImages(::Span(&glyph, 1u), {}, ::Span(&image, 1u));
+u8 UiPaintOverlaySdfPagePixel(in SharedSdfAtlasPage page, in usize index){ return page.deref().pixels()[index]; }
+Sha256Digest UiPaintOverlaySdfPagePixelsHash(in SharedSdfAtlasPage page){ return page.deref().binding().pixelsSha256; }
+u8 UiPaintOverlaySdfPageFontHashByte(in SharedSdfAtlasPage page, in usize index){ return page.deref().binding().fontSha256.bytes[index]; }
+SdfAtlasPageBinding UiPaintOverlaySdfPageBinding(in SharedSdfAtlasPage page){ return page.deref().binding(); }
+b8 UiPaintOverlayHasImage(in SharedImageSource image){ return image.valid(); }
+usize UiPaintOverlayImageAddress(in SharedImageSource image){
+    if(image.valid())
+        return TestValueAddress<ImageSource>(image.deref());
+    return 0u;
 }
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(
-    PaintBuilder& builder,
-    const SharedGlyphPage& glyph,
-    const SharedSdfAtlasPage& sdf,
-    const ::Span<const SharedImageSource> images
-){
-    return builder.prepareImages(::Span(&glyph, 1u), ::Span(&sdf, 1u), images);
-}
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayPrepareSingleTextureImage(PaintBuilder& builder, const SharedImageSource& image){
-    return builder.prepareTextureImages(::Span(&image, 1u));
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayHasGlyphPage(const SharedGlyphPage& page)noexcept{
-    return static_cast<b8>(page != nullptr);
-}
-[[nodiscard]] FOUNDATION_INLINE usize UiPaintOverlayGlyphPageAddress(const SharedGlyphPage& page)noexcept{
-    return reinterpret_cast<usize>(page.get());
-}
-[[nodiscard]] FOUNDATION_INLINE u64 UiPaintOverlayGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
-    return page->binding().generation;
-}
-[[nodiscard]] FOUNDATION_INLINE u8 UiPaintOverlayGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
-    return page->pixels()[index];
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayHasSdfPage(const SharedSdfAtlasPage& page)noexcept{
-    return static_cast<b8>(page != nullptr);
-}
-[[nodiscard]] FOUNDATION_INLINE usize UiPaintOverlaySdfPageAddress(const SharedSdfAtlasPage& page)noexcept{
-    return reinterpret_cast<usize>(page.get());
-}
-[[nodiscard]] FOUNDATION_INLINE u8 UiPaintOverlaySdfPagePixel(const SharedSdfAtlasPage& page, const usize index)noexcept{
-    return page->pixels()[index];
-}
-[[nodiscard]] FOUNDATION_INLINE Sha256Digest UiPaintOverlaySdfPagePixelsHash(const SharedSdfAtlasPage& page)noexcept{
-    return page->binding().pixelsSha256;
-}
-[[nodiscard]] FOUNDATION_INLINE u8 UiPaintOverlaySdfPageFontHashByte(const SharedSdfAtlasPage& page, const usize index)noexcept{
-    return page->binding().fontSha256.bytes[index];
-}
-[[nodiscard]] FOUNDATION_INLINE SdfAtlasPageBinding UiPaintOverlaySdfPageBinding(const SharedSdfAtlasPage& page)noexcept{
-    return page->binding();
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiPaintOverlayHasImage(const SharedImageSource& image)noexcept{
-    return static_cast<b8>(image != nullptr);
-}
-[[nodiscard]] FOUNDATION_INLINE usize UiPaintOverlayImageAddress(const SharedImageSource& image)noexcept{
-    return reinterpret_cast<usize>(image.get());
-}
-[[nodiscard]] FOUNDATION_INLINE u64 UiPaintOverlayImageGeneration(const SharedImageSource& image)noexcept{
-    return image->generation();
-}
-[[nodiscard]] FOUNDATION_INLINE ImageIdentity UiPaintOverlayImageIdentity(const SharedImageSource& image)noexcept{
-    return image->identity();
-}
-[[nodiscard]] FOUNDATION_INLINE u8 UiPaintOverlayImagePayloadByte(const SharedImageSource& image, const usize index)noexcept{
-    return image->texture().payloadBytes()[index];
-}
-[[nodiscard]] FOUNDATION_INLINE u32 UiPaintOverlayImageWidth(const SharedImageSource& image)noexcept{
-    return image->texture().width();
-}
-[[nodiscard]] FOUNDATION_INLINE u32 UiPaintOverlayImageHeight(const SharedImageSource& image)noexcept{
-    return image->texture().height();
-}
-[[nodiscard]] FOUNDATION_INLINE usize UiPaintOverlayImageMipCount(const SharedImageSource& image)noexcept{
-    return image->texture().mipLevels().size();
-}
-
-FOUNDATION_INLINE void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
-    dst = ::Move(*src);
-}
-FOUNDATION_INLINE void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
-    dst = ::Move(*src);
-}
-FOUNDATION_INLINE void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>& src)noexcept{
-    dst = ::Move(*src);
-}
-FOUNDATION_INLINE void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>&& src)noexcept{
-    dst = ::Move(*src);
-}
-FOUNDATION_INLINE void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>& src)noexcept{
-    dst = ::Move(*src);
-}
-FOUNDATION_INLINE void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>&& src)noexcept{
-    dst = ::Move(*src);
-}
-
-[[nodiscard]] FOUNDATION_INLINE usize UiPaintOverlayVerticesAddress(const DrawSnapshot& snapshot)noexcept{
-    return reinterpret_cast<usize>(snapshot.vertices().data());
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
+u64 UiPaintOverlayImageGeneration(in SharedImageSource image){ return image.deref().generation(); }
+AssetRef<Texture> UiPaintOverlayImageIdentity(in SharedImageSource image){ return image.deref().identity(); }
+u8 UiPaintOverlayImagePayloadByte(in SharedImageSource image, in usize index){ return image.deref().texture().payloadBytes()[index]; }
+u32 UiPaintOverlayImageWidth(in SharedImageSource image){ return image.deref().texture().width(); }
+u32 UiPaintOverlayImageHeight(in SharedImageSource image){ return image.deref().texture().height(); }
+usize UiPaintOverlayImageMipCount(in SharedImageSource image){ return image.deref().texture().mipLevels().size(); }
+usize UiPaintOverlayVerticesAddress(in DrawSnapshot snapshot){ return TestDataAddress(snapshot.vertices()); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -479,24 +239,24 @@ void VerifyPaintImageFixture_ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicate
         auto pageCreationResult = self.makeGlyph(100u + index);
         ASSERT_TRUE(pageCreationResult.has_value());
         SharedGlyphPage page = SharedGlyphPage();
-        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        TestMoveAssign<SharedGlyphPage>(page, pageCreationResult.value());
         ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
         glyphs.push_back(page);
     }
     auto sdfCreationResult = self.makeSdf();
     ASSERT_TRUE(sdfCreationResult.has_value());
     SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(sdf, sdfCreationResult.value());
     auto imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     SharedImageSource image = SharedImageSource();
-    TakeUiPaintOverlayImageSource(image, imageResult);
+    TestMoveAssign<SharedImageSource>(image, imageResult.value());
     auto overflowResult = self.makeImage(s_UiPaintOverlayDefaultImagePath, 81u);
     ASSERT_TRUE(overflowResult.has_value());
     SharedImageSource overflow = SharedImageSource();
-    TakeUiPaintOverlayImageSource(overflow, overflowResult);
+    TestMoveAssign<SharedImageSource>(overflow, overflowResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf) && UiPaintOverlayHasImage(image) && UiPaintOverlayHasImage(overflow));
-    PaintBuilder reference = PaintBuilder(self.m_arena);
+    PaintBuilder reference = PaintBuilder();
     self.beginPaint(reference);
     RecordUiPaintImageAdmissionBaseline(self.m_builder, glyphs, sdf, image);
     RecordUiPaintImageAdmissionBaseline(reference, glyphs, sdf, image);
@@ -521,7 +281,7 @@ void VerifyPaintImageFixture_ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicate
     ASSERT_EQ(actual.sdfPages().size(), 1u);
     ASSERT_EQ(actual.textureImages().size(), 1u);
     EXPECT_EQ(actual.glyphPages().size() + actual.sdfPages().size() + actual.textureImages().size(), 64u);
-    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+    ExpectUiSameImagePaintSnapshots(actual, expected);
 }
 
 void VerifyPaintImageFixture_MixedOverflowPreservesCoverageGenerationSdfImageVersionsAndAllPriorGeometry(mut PaintImageFixture self){
@@ -531,39 +291,39 @@ void VerifyPaintImageFixture_MixedOverflowPreservesCoverageGenerationSdfImageVer
         auto pageCreationResult = self.makeGlyph(100u + index);
         ASSERT_TRUE(pageCreationResult.has_value());
         SharedGlyphPage page = SharedGlyphPage();
-        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        TestMoveAssign<SharedGlyphPage>(page, pageCreationResult.value());
         ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
         glyphs.push_back(page);
     }
     auto sdfCreationResult = self.makeSdf();
     ASSERT_TRUE(sdfCreationResult.has_value());
     SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(sdf, sdfCreationResult.value());
     auto imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     SharedImageSource image = SharedImageSource();
-    TakeUiPaintOverlayImageSource(image, imageResult);
+    TestMoveAssign<SharedImageSource>(image, imageResult.value());
     auto upgradeCreationResult = self.makeGlyph(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult.has_value());
     SharedGlyphPage upgrade = SharedGlyphPage();
-    TakeUiPaintOverlayGlyphPage(upgrade, upgradeCreationResult);
+    TestMoveAssign<SharedGlyphPage>(upgrade, upgradeCreationResult.value());
     auto newSdfCreationResult = self.makeSdf(99u);
     ASSERT_TRUE(newSdfCreationResult.has_value());
     SharedSdfAtlasPage newSdf = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(newSdf, newSdfCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(newSdf, newSdfCreationResult.value());
     auto newImageResult = self.makeImage(s_UiPaintOverlayDefaultImagePath, 81u);
     ASSERT_TRUE(newImageResult.has_value());
     SharedImageSource newImage = SharedImageSource();
-    TakeUiPaintOverlayImageSource(newImage, newImageResult);
+    TestMoveAssign<SharedImageSource>(newImage, newImageResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf) && UiPaintOverlayHasImage(image) && UiPaintOverlayHasGlyphPage(upgrade) && UiPaintOverlayHasSdfPage(newSdf) && UiPaintOverlayHasImage(newImage));
-    PaintBuilder reference = PaintBuilder(self.m_arena);
+    PaintBuilder reference = PaintBuilder();
     self.beginPaint(reference);
     RecordUiPaintImageMixedOverflowBaseline(self.m_builder, glyphs, sdf, image);
     RecordUiPaintImageMixedOverflowBaseline(reference, glyphs, sdf, image);
     const DrawSnapshot expected = reference.freeze();
     EXPECT_FALSE(UiPaintOverlayPrepareOneEach(self.m_builder, upgrade, newSdf, newImage));
     const DrawSnapshot actual = self.m_builder.freeze();
-    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+    ExpectUiSameImagePaintSnapshots(actual, expected);
     ASSERT_EQ(actual.glyphPages().size(), 62u);
     EXPECT_EQ(UiPaintOverlayGlyphPageAddress(actual.glyphPages()[0u]), UiPaintOverlayGlyphPageAddress(glyphs[0u]));
     EXPECT_EQ(UiPaintOverlayGlyphPageGeneration(actual.glyphPages()[0u]), 1u);
@@ -580,28 +340,28 @@ void VerifyPaintImageFixture_NullThirdKindRejectsEarlierCandidatesAtomicallyAndA
     auto glyphCreationResult = self.makeGlyph();
     ASSERT_TRUE(glyphCreationResult.has_value());
     SharedGlyphPage glyph = SharedGlyphPage();
-    TakeUiPaintOverlayGlyphPage(glyph, glyphCreationResult);
+    TestMoveAssign<SharedGlyphPage>(glyph, glyphCreationResult.value());
     auto upgradeCreationResult = self.makeGlyph(11u, 2u);
     ASSERT_TRUE(upgradeCreationResult.has_value());
     SharedGlyphPage upgrade = SharedGlyphPage();
-    TakeUiPaintOverlayGlyphPage(upgrade, upgradeCreationResult);
+    TestMoveAssign<SharedGlyphPage>(upgrade, upgradeCreationResult.value());
     auto sdfCreationResult = self.makeSdf();
     ASSERT_TRUE(sdfCreationResult.has_value());
     SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(sdf, sdfCreationResult.value());
     auto imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     SharedImageSource image = SharedImageSource();
-    TakeUiPaintOverlayImageSource(image, imageResult);
+    TestMoveAssign<SharedImageSource>(image, imageResult.value());
     auto additionResult = self.makeImage("tests/ui/added_image", 81u);
     ASSERT_TRUE(additionResult.has_value());
     SharedImageSource addition = SharedImageSource();
-    TakeUiPaintOverlayImageSource(addition, additionResult);
+    TestMoveAssign<SharedImageSource>(addition, additionResult.value());
     ASSERT_TRUE(UiPaintOverlayHasGlyphPage(glyph) && UiPaintOverlayHasGlyphPage(upgrade) && UiPaintOverlayHasSdfPage(sdf) && UiPaintOverlayHasImage(image) && UiPaintOverlayHasImage(addition));
     Array<SharedImageSource, 2u> invalidImages = Array<SharedImageSource, 2u>();
     invalidImages[0u] = addition;
     invalidImages[1u] = SharedImageSource();
-    PaintBuilder reference = PaintBuilder(self.m_arena);
+    PaintBuilder reference = PaintBuilder();
     for(u64 pass = 0u; pass < 2u; ++pass){
         self.beginPaint(self.m_builder, pass + 1u);
         self.beginPaint(reference, pass + 1u);
@@ -615,7 +375,7 @@ void VerifyPaintImageFixture_NullThirdKindRejectsEarlierCandidatesAtomicallyAndA
         }
         const DrawSnapshot expected = reference.freeze();
         const DrawSnapshot actual = self.m_builder.freeze();
-        ExpectUiPaintOverlaySameImagePaint(actual, expected);
+        ExpectUiSameImagePaintSnapshots(actual, expected);
         ASSERT_EQ(actual.glyphPages().size(), 1u);
         usize expectedGlyphAddress = UiPaintOverlayGlyphPageAddress(glyph);
         u64 expectedGeneration = 1u;
@@ -638,11 +398,11 @@ void VerifyPaintImageFixture_SamePathFreshVersionsCoexistWhileCopiedHandlesUseOn
     auto firstResult = self.makeImage(s_UiPaintOverlayVersionedImagePath, 37u);
     ASSERT_TRUE(firstResult.has_value());
     SharedImageSource first = SharedImageSource();
-    TakeUiPaintOverlayImageSource(first, firstResult);
+    TestMoveAssign<SharedImageSource>(first, firstResult.value());
     auto secondResult = self.makeImage(s_UiPaintOverlayVersionedImagePath, 81u);
     ASSERT_TRUE(secondResult.has_value());
     SharedImageSource second = SharedImageSource();
-    TakeUiPaintOverlayImageSource(second, secondResult);
+    TestMoveAssign<SharedImageSource>(second, secondResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(first) && UiPaintOverlayHasImage(second));
     ASSERT_EQ(UiPaintOverlayImageIdentity(first), UiPaintOverlayImageIdentity(second));
     ASSERT_NE(UiPaintOverlayImageGeneration(first), UiPaintOverlayImageGeneration(second));
@@ -679,7 +439,7 @@ void VerifyPaintImageFixture_CropAndNestedClipTrimFullImageGeometryAndUv(mut Pai
     auto imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     SharedImageSource image = SharedImageSource();
-    TakeUiPaintOverlayImageSource(image, imageResult);
+    TestMoveAssign<SharedImageSource>(image, imageResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(image));
     self.m_builder.pushClip(Rect(10.0f, 8.0f, 60.0f, 35.0f));
     self.m_builder.pushClip(Rect(20.0f, 10.0f, 25.0f, 20.0f));
@@ -707,11 +467,11 @@ void VerifyPaintImageFixture_AdjacentBatchingIncludesImmutableImageIndexAndPrese
     auto firstResult = self.makeImage(s_UiPaintOverlaySameImagePath, 37u);
     ASSERT_TRUE(firstResult.has_value());
     SharedImageSource first = SharedImageSource();
-    TakeUiPaintOverlayImageSource(first, firstResult);
+    TestMoveAssign<SharedImageSource>(first, firstResult.value());
     auto secondResult = self.makeImage(s_UiPaintOverlaySameImagePath, 73u);
     ASSERT_TRUE(secondResult.has_value());
     SharedImageSource second = SharedImageSource();
-    TakeUiPaintOverlayImageSource(second, secondResult);
+    TestMoveAssign<SharedImageSource>(second, secondResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(first) && UiPaintOverlayHasImage(second));
     ASSERT_NE(UiPaintOverlayImageGeneration(first), UiPaintOverlayImageGeneration(second));
     const Rect rectangle = Rect(1.0f, 1.0f, 8.0f, 4.0f);
@@ -738,15 +498,15 @@ void VerifyPaintImageFixture_ImageCommandsKeepDistinctClipsMaterialsAndOverlayLa
     auto imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     SharedImageSource image = SharedImageSource();
-    TakeUiPaintOverlayImageSource(image, imageResult);
+    TestMoveAssign<SharedImageSource>(image, imageResult.value());
     auto glyphCreationResult = self.makeGlyph();
     ASSERT_TRUE(glyphCreationResult.has_value());
     SharedGlyphPage glyph = SharedGlyphPage();
-    TakeUiPaintOverlayGlyphPage(glyph, glyphCreationResult);
+    TestMoveAssign<SharedGlyphPage>(glyph, glyphCreationResult.value());
     auto sdfCreationResult = self.makeSdf();
     ASSERT_TRUE(sdfCreationResult.has_value());
     SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(sdf, sdfCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(image) && UiPaintOverlayHasGlyphPage(glyph) && UiPaintOverlayHasSdfPage(sdf));
     const Rect rectangle = Rect(0.0f, 0.0f, 20.0f, 20.0f);
     const Rect unitUv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
@@ -783,23 +543,24 @@ void VerifyPaintImageFixture_FrozenAndMovedSnapshotsRetainExactSourceVersionsAcr
     auto originalResult = self.makeImage(s_UiPaintOverlayReplacementImagePath, 37u, 9u, 5u);
     ASSERT_TRUE(originalResult.has_value());
     SharedImageSource original = SharedImageSource();
-    TakeUiPaintOverlayImageSource(original, originalResult);
+    TestMoveAssign<SharedImageSource>(original, originalResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(original));
     const u64 originalGeneration = UiPaintOverlayImageGeneration(original);
     const u8 originalByte = UiPaintOverlayImagePayloadByte(original, 0u);
     ASSERT_TRUE(self.m_builder.drawImage(original, Rect(1.0f, 2.0f, 18.0f, 10.0f)));
-    DrawSnapshot retained = DrawSnapshot(self.m_arena);
-    native(mut builder = self.m_builder, mut retained){
-        DrawSnapshot frozen = builder.freeze();
-        DrawSnapshot moved = ::Move(frozen);
-        retained = ::Move(moved);
+    DrawSnapshot retained = DrawSnapshot();
+    {
+        DrawSnapshot frozen = self.m_builder.freeze();
+        TestValueSlot<DrawSnapshot> slot;
+        mut DrawSnapshot moved = slot.take(frozen);
+        TestMoveAssign<DrawSnapshot>(retained, moved);
     }
     original.reset();
     self.beginPaint(self.m_builder, 2u);
     auto replacementResult = self.makeImage(s_UiPaintOverlayReplacementImagePath, 73u, 4u, 4u);
     ASSERT_TRUE(replacementResult.has_value());
     SharedImageSource replacement = SharedImageSource();
-    TakeUiPaintOverlayImageSource(replacement, replacementResult);
+    TestMoveAssign<SharedImageSource>(replacement, replacementResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(replacement));
     ASSERT_NE(UiPaintOverlayImageGeneration(replacement), originalGeneration);
     ASSERT_TRUE(self.m_builder.drawImage(replacement, Rect(4.0f, 5.0f, 8.0f, 8.0f)));
@@ -823,9 +584,9 @@ void VerifyPaintImageFixture_InvalidRectangleUvTintAndNullSourcePreserveEarlierB
     auto imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     SharedImageSource image = SharedImageSource();
-    TakeUiPaintOverlayImageSource(image, imageResult);
+    TestMoveAssign<SharedImageSource>(image, imageResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(image));
-    PaintBuilder reference = PaintBuilder(self.m_arena);
+    PaintBuilder reference = PaintBuilder();
     self.beginPaint(reference);
     const Rect rectangle = Rect(1.0f, 2.0f, 10.0f, 8.0f);
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
@@ -867,14 +628,14 @@ void VerifyPaintImageFixture_InvalidRectangleUvTintAndNullSourcePreserveEarlierB
     EXPECT_FALSE(self.m_builder.drawImage(SharedImageSource(), rectangle));
     const DrawSnapshot actual = self.m_builder.freeze();
     const DrawSnapshot expected = reference.freeze();
-    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+    ExpectUiSameImagePaintSnapshots(actual, expected);
 }
 
 void VerifyPaintImageFixture_InvisibleAndTransparentDrawsRemainValidAtCapacityWithoutAdmittingTheSource(mut PaintImageFixture self){
     auto imageResult = self.makeImage();
     ASSERT_TRUE(imageResult.has_value());
     SharedImageSource image = SharedImageSource();
-    TakeUiPaintOverlayImageSource(image, imageResult);
+    TestMoveAssign<SharedImageSource>(image, imageResult.value());
     ASSERT_TRUE(UiPaintOverlayHasImage(image));
     ASSERT_EQ(s_PaintMaxImages, 64u);
     FixedVector<SharedGlyphPage, 64u> pages = FixedVector<SharedGlyphPage, 64u>();
@@ -882,11 +643,11 @@ void VerifyPaintImageFixture_InvisibleAndTransparentDrawsRemainValidAtCapacityWi
         auto pageCreationResult = self.makeGlyph(100u + index);
         ASSERT_TRUE(pageCreationResult.has_value());
         SharedGlyphPage page = SharedGlyphPage();
-        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        TestMoveAssign<SharedGlyphPage>(page, pageCreationResult.value());
         ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
         pages.push_back(page);
     }
-    PaintBuilder reference = PaintBuilder(self.m_arena);
+    PaintBuilder reference = PaintBuilder();
     self.beginPaint(reference);
     ASSERT_TRUE(self.m_builder.prepareGlyphPages(pages));
     ASSERT_TRUE(reference.prepareGlyphPages(pages));
@@ -905,7 +666,7 @@ void VerifyPaintImageFixture_InvisibleAndTransparentDrawsRemainValidAtCapacityWi
     EXPECT_FALSE(self.m_builder.drawImage(image, Rect(1.0f, 1.0f, 4.0f, 4.0f)));
     const DrawSnapshot actual = self.m_builder.freeze();
     const DrawSnapshot expected = reference.freeze();
-    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+    ExpectUiSameImagePaintSnapshots(actual, expected);
     EXPECT_TRUE(actual.textureImages().empty());
     EXPECT_EQ(actual.glyphPages().size(), s_PaintMaxImages);
 }
@@ -1091,7 +852,7 @@ void VerifyUiPaintOverlayTests_BoundedOverlayDepthRejectsWithoutChangingTheLastA
 }
 
 void VerifyUiPaintOverlayTests_UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState(mut UiPaintOverlayTests self){
-    PaintBuilder idle = PaintBuilder(self.m_arena);
+    PaintBuilder idle = PaintBuilder();
     EXPECT_FALSE(idle.beginOverlay(1u));
     EXPECT_FALSE(idle.endOverlay());
     ASSERT_TRUE(self.m_builder.beginOverlay(5u));
@@ -1145,11 +906,11 @@ void VerifyUiPaintOverlayTests_SortingCommandsRetainsSkinCoverageDistanceBinding
     auto coverageCreationResult = self.makeCoverage();
     ASSERT_TRUE(coverageCreationResult.has_value());
     SharedGlyphPage coverage = SharedGlyphPage();
-    TakeUiPaintOverlayGlyphPage(coverage, coverageCreationResult);
+    TestMoveAssign<SharedGlyphPage>(coverage, coverageCreationResult.value());
     auto distanceCreationResult = self.makeDistance();
     ASSERT_TRUE(distanceCreationResult.has_value());
     SharedSdfAtlasPage distance = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(distance, distanceCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(distance, distanceCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasGlyphPage(coverage) && UiPaintOverlayHasSdfPage(distance));
     const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
     const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
@@ -1205,7 +966,7 @@ void VerifyUiPaintSdfTests_ClipTrimsSdfGeometryAndUv(mut UiPaintSdfTests self){
     auto pageCreationResult = self.makeSdfPage();
     ASSERT_TRUE(pageCreationResult.has_value());
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(page, pageCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
     self.m_builder.pushClip(Rect(10.0f, 5.0f, 20.0f, 10.0f));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(
@@ -1223,15 +984,15 @@ void VerifyUiPaintSdfTests_BatchesOnlyAdjacentMatchingGroupChannelMaterialAndCli
     auto firstCreationResult = self.makeSdfPage();
     ASSERT_TRUE(firstCreationResult.has_value());
     SharedSdfAtlasPage first = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(first, firstCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(first, firstCreationResult.value());
     auto secondCreationResult = self.makeSdfPage(s_UiPaintOverlayDefaultAtlasIdentity, 1u, 1u);
     ASSERT_TRUE(secondCreationResult.has_value());
     SharedSdfAtlasPage second = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(second, secondCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(second, secondCreationResult.value());
     auto coverageCreationResult = self.makeCoverage(22u);
     ASSERT_TRUE(coverageCreationResult.has_value());
     SharedGlyphPage coverage = SharedGlyphPage();
-    TakeUiPaintOverlayGlyphPage(coverage, coverageCreationResult);
+    TestMoveAssign<SharedGlyphPage>(coverage, coverageCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(first) && UiPaintOverlayHasSdfPage(second) && UiPaintOverlayHasGlyphPage(coverage));
     const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
     const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
@@ -1266,7 +1027,7 @@ void VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepack
     auto originalCreationResult = self.makeSdfPage();
     ASSERT_TRUE(originalCreationResult.has_value());
     SharedSdfAtlasPage original = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(original, originalCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(original, originalCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(original));
     const Sha256Digest oldPixelsHash = UiPaintOverlaySdfPagePixelsHash(original);
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(original, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
@@ -1276,7 +1037,7 @@ void VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepack
     auto replacementCreationResult = self.makeSdfPage(12u, 1u, 0u, 64u);
     ASSERT_TRUE(replacementCreationResult.has_value());
     SharedSdfAtlasPage replacement = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(replacement, replacementCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(replacement, replacementCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(replacement));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(replacement, 2u, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f)));
     const DrawSnapshot second = self.m_builder.freeze();
@@ -1299,25 +1060,25 @@ void VerifyUiPaintSdfTests_RejectedMixedAdmissionAtCapacityPreservesEarlierCover
         auto pageCreationResult = self.makeCoverage(100u + index);
         ASSERT_TRUE(pageCreationResult.has_value());
         SharedGlyphPage page = SharedGlyphPage();
-        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        TestMoveAssign<SharedGlyphPage>(page, pageCreationResult.value());
         ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
         coverage.push_back(page);
     }
     auto sdfCreationResult = self.makeSdfPage();
     ASSERT_TRUE(sdfCreationResult.has_value());
     SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(sdf, sdfCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf));
     ASSERT_TRUE(self.prepareGlyphSpanAndSingleSdf(coverage, sdf));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     auto upgradeCreationResult = self.makeCoverage(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult.has_value());
     SharedGlyphPage upgrade = SharedGlyphPage();
-    TakeUiPaintOverlayGlyphPage(upgrade, upgradeCreationResult);
+    TestMoveAssign<SharedGlyphPage>(upgrade, upgradeCreationResult.value());
     auto overflowCreationResult = self.makeSdfPage(99u);
     ASSERT_TRUE(overflowCreationResult.has_value());
     SharedSdfAtlasPage overflow = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(overflow, overflowCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(overflow, overflowCreationResult.value());
     EXPECT_FALSE(self.prepareSingleGlyphAndSingleSdf(upgrade, overflow));
     EXPECT_FALSE(self.m_builder.drawSdfGlyph(overflow, 0u, Rect(10.0f, 10.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     const DrawSnapshot snapshot = self.m_builder.freeze();
@@ -1335,11 +1096,11 @@ void VerifyUiPaintSdfTests_EqualIdentityCannotAliasDifferentDistanceBytes(mut Ui
     auto originalCreationResult = self.makeSdfPage();
     ASSERT_TRUE(originalCreationResult.has_value());
     SharedSdfAtlasPage original = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(original, originalCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(original, originalCreationResult.value());
     auto conflictingCreationResult = self.makeSdfPage(s_UiPaintOverlayDefaultAtlasIdentity, 1u, 0u, 64u);
     ASSERT_TRUE(conflictingCreationResult.has_value());
     SharedSdfAtlasPage conflicting = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(conflicting, conflictingCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(conflicting, conflictingCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(original) && UiPaintOverlayHasSdfPage(conflicting));
     ASSERT_TRUE(self.prepareSingleSdfPage(original));
     EXPECT_FALSE(self.prepareSingleSdfPage(conflicting));
@@ -1353,7 +1114,7 @@ void VerifyUiPaintSdfTests_InvalidChannelAndUvFailBeforeImageOrGeometryAdmission
     auto pageCreationResult = self.makeSdfPage();
     ASSERT_TRUE(pageCreationResult.has_value());
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(page, pageCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
     EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 4u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 0u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.75f, 0.0f, 0.5f, 0.5f)));
@@ -1367,11 +1128,11 @@ void VerifyUiPaintSdfTests_DuplicateCandidatesConsumeOneImageSlot(mut UiPaintSdf
     auto pageCreationResult = self.makeSdfPage();
     ASSERT_TRUE(pageCreationResult.has_value());
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(page, pageCreationResult.value());
     auto reconstructedCreationResult = self.makeSdfPage();
     ASSERT_TRUE(reconstructedCreationResult.has_value());
     SharedSdfAtlasPage reconstructed = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(reconstructed, reconstructedCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(reconstructed, reconstructedCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page) && UiPaintOverlayHasSdfPage(reconstructed));
     Array<SharedSdfAtlasPage, 3u> candidates = Array<SharedSdfAtlasPage, 3u>();
     candidates[0u] = page;
@@ -1387,9 +1148,9 @@ void VerifyUiPaintSdfTests_PageFactoryRejectsUnsupportedEncodingSpreadAndIncompl
     auto bindingPageResult = self.makeSdfPage();
     ASSERT_TRUE(bindingPageResult.has_value());
     SharedSdfAtlasPage bindingPage = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(bindingPage, bindingPageResult);
+    TestMoveAssign<SharedSdfAtlasPage>(bindingPage, bindingPageResult.value());
     SdfAtlasPageBinding binding = UiPaintOverlaySdfPageBinding(bindingPage);
-    UiPaintSdfPixels pixels = UiPaintSdfPixels(self.m_arena);
+    SdfAtlasPixels pixels = SdfAtlasPixels();
     pixels.resize(256u, 0u);
     binding.distanceEncoding = 2u;
     EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
@@ -1407,17 +1168,17 @@ void VerifyUiPaintSdfTests_CompactPageRejectsMissingChannelsWithoutPublishingGeo
     auto bindingPageResult = self.makeSdfPage();
     ASSERT_TRUE(bindingPageResult.has_value());
     SharedSdfAtlasPage bindingPage = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(bindingPage, bindingPageResult);
+    TestMoveAssign<SharedSdfAtlasPage>(bindingPage, bindingPageResult.value());
     SdfAtlasPageBinding binding = UiPaintOverlaySdfPageBinding(bindingPage);
     binding.width = 7u;
     binding.height = 5u;
     binding.channelCount = 2u;
-    UiPaintSdfPixels pixels = UiPaintSdfPixels(self.m_arena);
+    SdfAtlasPixels pixels = SdfAtlasPixels();
     pixels.resize(7u * 5u * 2u, 128u);
     auto pageCreationResult = self.createMovedSdfPage(binding, pixels);
     ASSERT_TRUE(pageCreationResult.has_value());
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    TestMoveAssign<SharedSdfAtlasPage>(page, pageCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
     EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
     EXPECT_TRUE(self.m_builder.freeze().commands().empty());
@@ -1432,9 +1193,9 @@ void VerifyUiPaintSdfTests_CompactFactoryRejectsInvalidChannelCountAndRgbaSizedI
     auto bindingPageResult = self.makeSdfPage();
     ASSERT_TRUE(bindingPageResult.has_value());
     SharedSdfAtlasPage bindingPage = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(bindingPage, bindingPageResult);
+    TestMoveAssign<SharedSdfAtlasPage>(bindingPage, bindingPageResult.value());
     SdfAtlasPageBinding binding = UiPaintOverlaySdfPageBinding(bindingPage);
-    UiPaintSdfPixels pixels = UiPaintSdfPixels(self.m_arena);
+    SdfAtlasPixels pixels = SdfAtlasPixels();
     pixels.resize(256u, 128u);
     binding.channelCount = 0u;
     EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
@@ -1447,7 +1208,7 @@ void VerifyUiPaintSdfTests_CompactFactoryRejectsInvalidChannelCountAndRgbaSizedI
     auto pageResult = self.createMovedSdfPage(binding, pixels);
     ASSERT_TRUE(pageResult.has_value());
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
-    TakeUiPaintOverlaySdfPage(page, pageResult);
+    TestMoveAssign<SharedSdfAtlasPage>(page, pageResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
 }
 

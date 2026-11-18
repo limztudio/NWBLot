@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashConfig"), cpp_flags(no_copy, no_assign)]
+extern class PersistentCrashConfig{
+    StringView applicationName;
+    StringView buildId;
+    StringView version;
+    Path spoolDirectory;
+    StringView logServerUrl;
+    StringView handlerExecutablePath;
+};
+
+[cpp_header("<core/alloc/persistent.h>"), cpp_name("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize")]
+extern usize CrashStorageAlignedSize(in usize bytes);
+
+[cpp_header("<core/crash/package_archive.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::CrashBytesT<::NWB::Core::Alloc::GlobalArena>")]
+extern class ObservationArchiveBytes{
+    usize size()const;
+    u8 operator[](in usize index)const;
+};
+
+[cpp_header("<tests/integration/crash/archive_sdk.h>"), cpp_name("::NWB::Tests::CrashArchiveSdk::Build")]
+extern Expected<ObservationArchiveBytes, ErrorCode> BuildObservationArchive(mut HeapStorage storage, mut ScratchStorage scratch, in Path directory);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

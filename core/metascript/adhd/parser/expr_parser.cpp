@@ -355,18 +355,68 @@ Expr* ExprParser::parsePrimary(){
             if(tok.text != s_LayoutQueries[index].keyword)
                 continue;
             m_cursor.advance();
-            if(!m_cursor.expect(TokenType::Less, "expected '<type>' after layout query"))
-                return nullptr;
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
             node->kind = ExprKind::LayoutQuery;
             node->span = span;
             node->layoutQuery = static_cast<LayoutQueryKind::Enum>(index);
+            if(node->layoutQuery == LayoutQueryKind::CppConstructible){
+                if(!m_typeParser.parseTypeArgList(node->callTemplateArgs))
+                    return nullptr;
+                if(node->callTemplateArgs.empty() || !node->callTemplateArgs.front().type){
+                    m_cursor.error("is_cpp_constructible requires an owner type");
+                    return nullptr;
+                }
+                for(const TypeArg& arg : node->callTemplateArgs){
+                    if(!arg.type){
+                        m_cursor.error("is_cpp_constructible requires type arguments");
+                        return nullptr;
+                    }
+                }
+                if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after constructibility query types")
+                    || !m_cursor.expect(TokenType::RightParen, "expected ')' after constructibility query"))
+                    return nullptr;
+                return node;
+            }
+            if(node->layoutQuery == LayoutQueryKind::NothrowCall){
+                if(m_cursor.check(TokenType::Less) && !m_typeParser.parseTypeArgList(node->callTemplateArgs))
+                    return nullptr;
+                for(const TypeArg& arg : node->callTemplateArgs){
+                    if(!arg.type){
+                        m_cursor.error("is_nothrow_call requires argument types");
+                        return nullptr;
+                    }
+                }
+                if(!m_cursor.expect(TokenType::LeftParen, "expected '(' before function in is_nothrow_call"))
+                    return nullptr;
+                if(!m_cursor.check(TokenType::Identifier)){
+                    m_cursor.error("is_nothrow_call requires a free function name");
+                    return nullptr;
+                }
+                node->text = m_cursor.current().text;
+                m_cursor.advance();
+                if(!m_cursor.expect(TokenType::RightParen, "expected ')' after function name"))
+                    return nullptr;
+                return node;
+            }
+            if(!m_cursor.expect(TokenType::Less, "expected '<type>' after layout query"))
+                return nullptr;
             node->targetType = m_typeParser.parseType(false, false);
+            const b8 aliasQuery = node->layoutQuery == LayoutQueryKind::CppTypeAlias;
+            const b8 rvalueMemberQuery = node->layoutQuery == LayoutQueryKind::NothrowRvalueMember;
+            const usize extraTypeCount = rvalueMemberQuery ? 2u : (aliasQuery ? 1u : 0u);
+            for(usize arg = 0u; arg < extraTypeCount; ++arg){
+                if(!m_cursor.expect(TokenType::Comma, "expected another type in C++ member query"))
+                    return nullptr;
+                TypeRef* type = m_typeParser.parseType();
+                if(!type)
+                    return nullptr;
+                node->callTemplateArgs.push_back(TypeArg{ type, {} });
+            }
             if(!node->targetType || !m_typeParser.expectClosingAngle() || !m_cursor.expect(TokenType::LeftParen, "expected '(' after layout query type"))
                 return nullptr;
-            if(node->layoutQuery == LayoutQueryKind::Offset){
+            if(node->layoutQuery == LayoutQueryKind::Offset || aliasQuery || rvalueMemberQuery){
                 if(!m_cursor.check(TokenType::Identifier)){
-                    m_cursor.error("offset_of requires a field name");
+                    m_cursor.error(node->layoutQuery == LayoutQueryKind::Offset ? "offset_of requires a field name" : "C++ member query requires a member name");
                     return nullptr;
                 }
                 node->text = m_cursor.current().text;

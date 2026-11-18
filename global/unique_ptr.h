@@ -7,6 +7,7 @@
 
 #include "assert.h"
 #include "compressed_pair.h"
+#include "expected.h"
 #include "smart_ptr.h"
 
 
@@ -414,6 +415,23 @@ typename EnableIf<IsBoundedArray<T>::value>::type MakeUnique(Args&&...) = delete
 template<typename T, typename Deleter>
 [[nodiscard]] inline NotNullUniquePtr<T, Deleter> MakeNotNullUnique(UniquePtr<T, Deleter>&& owner)noexcept{
     return NotNullUniquePtr<T, Deleter>(Move(owner));
+}
+
+template<typename T, typename Deleter>
+[[nodiscard]] inline UniquePtr<T, Deleter> TakeUnique(UniquePtr<T, Deleter>& owner)noexcept{
+    return Move(owner);
+}
+
+template<typename T, typename Deleter>
+[[nodiscard]] inline NotNullUniquePtr<T, Deleter> TakeNotNullUnique(NotNullUniquePtr<T, Deleter>& owner)noexcept{
+    return Move(owner);
+}
+
+template<typename T, typename Deleter>
+[[nodiscard]] inline Expected<NotNullUniquePtr<T, Deleter>> TryTakeNotNullUnique(UniquePtr<T, Deleter>& owner)noexcept{
+    if(!owner)
+        return MakeUnexpected(Failure{});
+    return MakeNotNullUnique(Move(owner));
 }
 
 

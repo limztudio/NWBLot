@@ -45,6 +45,12 @@ public:
 
         [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return valid() ? &m_states : nullptr; }
 
+        [[nodiscard]] Optional<NotNull<const CommandListResourceStateHandoff*>> borrowSource()const noexcept{
+            if(valid())
+                return MakeNotNull(&m_states);
+            return {};
+        }
+
 
     private:
         void reset()noexcept;

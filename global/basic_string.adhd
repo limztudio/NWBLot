@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/basic_string.h>"), cpp_name("::TString<::ArenaBase>")]
+extern class PlatformOwnedString;
+
+[cpp_header("<global/basic_string.h>"), cpp_name("::AppendPlatformText"), cpp_flags(scratch_arena)]
+extern PlatformOwnedString AppendPlatformText(in PlatformStringView prefix, in StringView suffix);
+
 [cpp_header("<global/basic_string.h>"), cpp_name("::TStringView"), cpp_flags(platform_literal_arg0)]
 extern PlatformStringView PlatformTextLiteral(in StringView text);
 

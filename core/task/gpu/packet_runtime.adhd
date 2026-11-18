@@ -121,11 +121,13 @@ extern class GpuTaskGraphSubmissionStatistics{
 [cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskAcceptedCallback"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphTaskAcceptedCallback{
     GpuTaskId task;
+    b8 notify(in QueueSubmissionToken token)const;
 };
 
 [cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskRecordedCallback"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphTaskRecordedCallback{
     GpuTaskId task;
+    b8 notify(in Optional<in CommandListResourceStateHandoff> finalState)const;
 };
 
 [cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::MakeGpuTaskRecordedCallback")]
@@ -145,6 +147,21 @@ extern class GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
     void bind(in GpuTaskId id, mut GpuTimingSubmissionTicket ticket);
 };
+
+
+[cpp_header("<core/task/gpu/packet_runtime_internal.h>"), cpp_name("::NWB::Core::GpuPacketRuntimeDetail::PacketWaitStatistics"), cpp_flags(self_defaulted)]
+extern class PacketWaitStatistics{
+    usize plannedWaitTokenCount;
+    usize sameQueueWaitElisionCount;
+    usize timelineWaitCount;
+    usize mergedTimelineWaitCount;
+};
+[cpp_header("<core/task/gpu/packet_runtime_internal.h>"), cpp_name("::NWB::Core::GpuPacketRuntimeDetail::CountPacketWaitStatistics")]
+extern PacketWaitStatistics CountPacketWaitStatistics(in GpuPhysicalQueueId queue, in Span<QueueSubmissionToken> waits, mut auto scratch);
+
+
+[cpp_header("<core/task/gpu/packet_runtime_internal.h>"), cpp_name("::NWB::Core::GpuPacketRuntimeDetail::ValidateExternalDependencyTokens")]
+extern b8 ValidateExternalDependencyTokens(in GpuTaskGraphDeclarationReadView graph, in GpuCompiledGraphReadView plan, in GpuSubmissionPacketRange range);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -154,6 +154,14 @@ public:
     [[nodiscard]] constexpr b8 valid()const noexcept{ return invoke != nullptr; }
 };
 
+template<typename Receiver>
+[[nodiscard]] GpuTimingSampleListener MakeGpuTimingSampleListener(Receiver& receiver)noexcept{
+    return { &receiver, [](void* context, const GpuTimingSample& sample)noexcept{
+        if(context)
+            static_cast<Receiver*>(context)->onSample(sample);
+    } };
+}
+
 // Subscription identities are process-unique and never reused, so delayed snapshots cannot resolve a removed subscription to a replacement context.
 class GpuTimingSampleSubscription final{
     friend class GpuTimingRecorder;

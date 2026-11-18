@@ -12,8 +12,8 @@ if(TARGET nwb_tex_conv)
     nwb_target_adhd_sources(nwb_texture_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/texture_smoke_project.adhd"
         )
-    target_compile_definitions(nwb_texture_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
-    nwb_configure_runtime_smoke_target(nwb_texture_smoke "${_nwb_texture_smoke_runtime_root}")
+    nwb_target_adhd_definitions(nwb_texture_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+    nwb_configure_runtime_smoke_target(nwb_texture_smoke "${_nwb_texture_smoke_runtime_root}" texture_smoke_project)
 
     file(GLOB_RECURSE _nwb_texture_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
 

@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../crash_package_and_spool_cases.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock, VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock)
+NWB_ADHD_GTEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock, VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock)
+NWB_ADHD_GTEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage, VerifyCrash_DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

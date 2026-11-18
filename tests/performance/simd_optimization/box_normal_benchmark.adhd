@@ -8,208 +8,194 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <utilities/cli/tool_cli.adhd>
 
+[cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDetail::Vector3SignedUnitMask")]
+extern VectorSingle BenchmarkSingleSignedUnitMask(in VectorSingle position, in VectorSingle componentMask);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDoubleDetail::VectorDouble3SignedUnitMask")]
+extern VectorDouble BenchmarkDoubleSignedUnitMask(in VectorDouble position, in VectorDouble componentMask);
 
+[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::ConsumeChecksum")]
+extern void ConsumeBenchmarkChecksum(in u64 value);
 
-namespace SimdOptimizationBenchmark{
-namespace BoxNormalKernels{
+VectorSingle OriginalSingle(in VectorSingle position, in VectorSingle halfExtents, in VectorSingle fallback, in f32 minLengthSquared){
+    const VectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
+    const VectorSingle outside = VectorMax(q, VectorZero());
+    const VectorSingle signedOutside = VectorSelect(VectorNegate(outside), outside, VectorGreaterOrEqual(position, VectorZero()));
+    const VectorSingle outsideNormal = Vector3NormalizeOr(signedOutside, fallback, minLengthSquared);
+    const VectorSingle useOutside = VectorGreater(Vector3LengthSq(outside), VectorReplicate(minLengthSquared));
 
-volatile u64 s_ChecksumSink = 0u;
-
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
-    const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
-    const SIMDVectorSingle outside = VectorMax(q, VectorZero());
-    const SIMDVectorSingle signedOutside = VectorSelect(VectorNegate(outside), outside, VectorGreaterOrEqual(position, VectorZero()));
-    const SIMDVectorSingle outsideNormal = Vector3NormalizeOr(signedOutside, fallback, minLengthSquared);
-    const SIMDVectorSingle useOutside = VectorGreater(Vector3LengthSq(outside), VectorReplicate(minLengthSquared));
-
-    const SIMDVectorSingle qX = VectorSplatX(q);
-    const SIMDVectorSingle qY = VectorSplatY(q);
-    const SIMDVectorSingle qZ = VectorSplatZ(q);
-    const SIMDVectorSingle xIsMax = VectorAndInt(VectorGreaterOrEqual(qX, qY), VectorGreaterOrEqual(qX, qZ));
-    const SIMDVectorSingle yIsMax = VectorGreaterOrEqual(qY, qZ);
-    const SIMDVectorSingle xNormal = CollisionDetail::Vector3SignedUnitMask(position, s_SIMDMaskX);
-    const SIMDVectorSingle yNormal = CollisionDetail::Vector3SignedUnitMask(position, s_SIMDMaskY);
-    const SIMDVectorSingle zNormal = CollisionDetail::Vector3SignedUnitMask(position, s_SIMDMaskZ);
-    SIMDVectorSingle faceNormal = VectorSelect(zNormal, yNormal, yIsMax);
+    const VectorSingle qX = VectorSplatX(q);
+    const VectorSingle qY = VectorSplatY(q);
+    const VectorSingle qZ = VectorSplatZ(q);
+    const VectorSingle xIsMax = VectorAndInt(VectorGreaterOrEqual(qX, qY), VectorGreaterOrEqual(qX, qZ));
+    const VectorSingle yIsMax = VectorGreaterOrEqual(qY, qZ);
+    const VectorSingle xNormal = BenchmarkSingleSignedUnitMask(position, VectorSingle(u32x4(u32.max, 0u, 0u, 0u)));
+    const VectorSingle yNormal = BenchmarkSingleSignedUnitMask(position, VectorSingle(u32x4(0u, u32.max, 0u, 0u)));
+    const VectorSingle zNormal = BenchmarkSingleSignedUnitMask(position, VectorSingle(u32x4(0u, 0u, u32.max, 0u)));
+    VectorSingle faceNormal = VectorSelect(zNormal, yNormal, yIsMax);
     faceNormal = VectorSelect(faceNormal, xNormal, xIsMax);
     return VectorSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL OriginalDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
-    const SIMDVectorDouble q = VectorDoubleSubtract(VectorDoubleAbs(position), halfExtents);
-    const SIMDVectorDouble outside = VectorDoubleMax(q, VectorDoubleZero());
-    const SIMDVectorDouble signedOutside = VectorDoubleSelect(VectorDoubleNegate(outside), outside, VectorDoubleGreaterOrEqual(position, VectorDoubleZero()));
-    const SIMDVectorDouble outsideNormal = VectorDouble3NormalizeOr(signedOutside, fallback, minLengthSquared);
-    const SIMDVectorDouble useOutside = VectorDoubleGreater(VectorDouble3LengthSq(outside), VectorDoubleReplicate(minLengthSquared));
+VectorDouble OriginalDouble(in VectorDouble position, in VectorDouble halfExtents, in VectorDouble fallback, in f64 minLengthSquared){
+    const VectorDouble q = VectorDoubleSubtract(VectorDoubleAbs(position), halfExtents);
+    const VectorDouble outside = VectorDoubleMax(q, VectorDoubleZero());
+    const VectorDouble signedOutside = VectorDoubleSelect(VectorDoubleNegate(outside), outside, VectorDoubleGreaterOrEqual(position, VectorDoubleZero()));
+    const VectorDouble outsideNormal = VectorDouble3NormalizeOr(signedOutside, fallback, minLengthSquared);
+    const VectorDouble useOutside = VectorDoubleGreater(VectorDouble3LengthSq(outside), VectorDoubleReplicate(minLengthSquared));
 
-    const SIMDVectorDouble qX = VectorDoubleSplatX(q);
-    const SIMDVectorDouble qY = VectorDoubleSplatY(q);
-    const SIMDVectorDouble qZ = VectorDoubleSplatZ(q);
-    const SIMDVectorDouble xIsMax = VectorDoubleAndInt(VectorDoubleGreaterOrEqual(qX, qY), VectorDoubleGreaterOrEqual(qX, qZ));
-    const SIMDVectorDouble yIsMax = VectorDoubleGreaterOrEqual(qY, qZ);
-    const SIMDVectorDouble xNormal = CollisionDoubleDetail::VectorDouble3SignedUnitMask(position, s_DoubleSIMDMaskX);
-    const SIMDVectorDouble yNormal = CollisionDoubleDetail::VectorDouble3SignedUnitMask(position, s_DoubleSIMDMaskY);
-    const SIMDVectorDouble zNormal = CollisionDoubleDetail::VectorDouble3SignedUnitMask(position, s_DoubleSIMDMaskZ);
-    SIMDVectorDouble faceNormal = VectorDoubleSelect(zNormal, yNormal, yIsMax);
+    const VectorDouble qX = VectorDoubleSplatX(q);
+    const VectorDouble qY = VectorDoubleSplatY(q);
+    const VectorDouble qZ = VectorDoubleSplatZ(q);
+    const VectorDouble xIsMax = VectorDoubleAndInt(VectorDoubleGreaterOrEqual(qX, qY), VectorDoubleGreaterOrEqual(qX, qZ));
+    const VectorDouble yIsMax = VectorDoubleGreaterOrEqual(qY, qZ);
+    const VectorDouble xNormal = BenchmarkDoubleSignedUnitMask(position, VectorDouble(u64x4(u64.max, 0u, 0u, 0u)));
+    const VectorDouble yNormal = BenchmarkDoubleSignedUnitMask(position, VectorDouble(u64x4(0u, u64.max, 0u, 0u)));
+    const VectorDouble zNormal = BenchmarkDoubleSignedUnitMask(position, VectorDouble(u64x4(0u, 0u, u64.max, 0u)));
+    VectorDouble faceNormal = VectorDoubleSelect(zNormal, yNormal, yIsMax);
     faceNormal = VectorDoubleSelect(faceNormal, xNormal, xIsMax);
     return VectorDoubleSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL CandidateSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
-    return SdfTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
+VectorSingle CandidateSingle(in VectorSingle position, in VectorSingle halfExtents, in VectorSingle fallback, in f32 minLengthSquared){
+    return SdfBoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL CandidateDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
-    return SdfDoubleTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
+VectorDouble CandidateDouble(in VectorDouble position, in VectorDouble halfExtents, in VectorDouble fallback, in f64 minLengthSquared){
+    return SdfDoubleBoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
-template<b8 Candidate, typename CaseT>
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle RunSingle(const CaseT& input)noexcept{
-    const SIMDVectorSingle position = LoadFloat(input.position);
-    const SIMDVectorSingle extents = LoadFloat(input.extents);
-    const SIMDVectorSingle fallback = LoadFloat(input.fallback);
-    if constexpr(Candidate)
+VectorSingle RunSingle<const b8 Candidate>(in BoxNormalSingleCase input){
+    const VectorSingle position = VectorSingle(input.position);
+    const VectorSingle extents = VectorSingle(input.extents);
+    const VectorSingle fallback = VectorSingle(input.fallback);
+    if(Candidate)
         return CandidateSingle(position, extents, fallback, input.threshold);
     else
         return OriginalSingle(position, extents, fallback, input.threshold);
 }
 
-template<b8 Candidate, typename CaseT>
-[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble RunDouble(const CaseT& input)noexcept{
-    const SIMDVectorDouble position = LoadDouble(input.position);
-    const SIMDVectorDouble extents = LoadDouble(input.extents);
-    const SIMDVectorDouble fallback = LoadDouble(input.fallback);
-    if constexpr(Candidate)
+VectorDouble RunDouble<const b8 Candidate>(in BoxNormalDoubleCase input){
+    const VectorDouble position = VectorDouble(input.position);
+    const VectorDouble extents = VectorDouble(input.extents);
+    const VectorDouble fallback = VectorDouble(input.fallback);
+    if(Candidate)
         return CandidateDouble(position, extents, fallback, input.threshold);
     else
         return OriginalDouble(position, extents, fallback, input.threshold);
 }
 
-template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
-[[nodiscard]] FOUNDATION_NOINLINE u64 WorkloadSingle(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
-    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, 8> accumulators = {};
-    for(auto& accumulator : accumulators)
-        accumulator = LoadFloat(data[0].position);
+u64 WorkloadSingle<const b8 Candidate, const b8 Latency>(in Array<BoxNormalSingleCase, s_BoxNormalDataCount> data, in usize iterations){
+    Array<f32x4, 8> accumulators;
+    for(usize lane = 0u; lane < 8u; ++lane)
+        accumulators[lane] = f32x4(data[0u].position);
     for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if constexpr(Latency){
-            CaseT input = data[iteration % DataCount];
-            StoreFloat(accumulators[0], input.position);
-            accumulators[0] = RunSingle<Candidate>(input);
+        if(Latency){
+            BoxNormalSingleCase input = data[iteration % s_BoxNormalDataCount];
+            input.position = accumulators[0u];
+            accumulators[0] = f32x4(RunSingle<Candidate>(input));
         }
         else{
             for(usize lane = 0u; lane < 8u; ++lane)
-                accumulators[lane] = VectorAdd(accumulators[lane], RunSingle<Candidate>(data[(iteration + lane) % DataCount]));
+                accumulators[lane] = f32x4(VectorAdd(VectorSingle(accumulators[lane]), RunSingle<Candidate>(data[(iteration + lane) % s_BoxNormalDataCount])));
         }
     }
     u64 checksum = 0u;
-    for(const auto& accumulator : accumulators){
+    for(in f32x4 accumulator : accumulators){
         for(usize lane = 0u; lane < 4u; ++lane)
-            checksum ^= BitCast<u32>(static_cast<f32>(accumulator[lane]));
+            checksum ^= SimdGetSingleLaneBits(VectorSingle(accumulator), lane);
     }
-    s_ChecksumSink = checksum;
+    ConsumeBenchmarkChecksum(checksum);
     return checksum;
 }
 
-template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
-[[nodiscard]] FOUNDATION_NOINLINE u64 WorkloadDouble(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
-    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
-    for(auto& accumulator : accumulators)
-        accumulator = LoadDouble(data[0].position);
+u64 WorkloadDouble<const b8 Candidate, const b8 Latency>(in Array<BoxNormalDoubleCase, s_BoxNormalDataCount> data, in usize iterations){
+    Array<f64x4, 8> accumulators;
+    for(usize lane = 0u; lane < 8u; ++lane)
+        accumulators[lane] = f64x4(data[0u].position);
     for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if constexpr(Latency){
-            CaseT input = data[iteration % DataCount];
-            StoreDouble(accumulators[0], input.position);
-            accumulators[0] = RunDouble<Candidate>(input);
+        if(Latency){
+            BoxNormalDoubleCase input = data[iteration % s_BoxNormalDataCount];
+            input.position = accumulators[0u];
+            accumulators[0] = f64x4(RunDouble<Candidate>(input));
         }
         else{
             for(usize lane = 0u; lane < 8u; ++lane)
-                accumulators[lane] = VectorDoubleAdd(accumulators[lane], RunDouble<Candidate>(data[(iteration + lane) % DataCount]));
+                accumulators[lane] = f64x4(VectorDoubleAdd(VectorDouble(accumulators[lane]), RunDouble<Candidate>(data[(iteration + lane) % s_BoxNormalDataCount])));
         }
     }
     u64 checksum = 0u;
-    for(const auto& accumulator : accumulators){
+    for(in f64x4 accumulator : accumulators){
         for(usize lane = 0u; lane < 4u; ++lane)
-            checksum ^= BitCast<u64>(static_cast<f64>(accumulator[lane]));
+            checksum ^= SimdGetDoubleLaneBits(VectorDouble(accumulator), lane);
     }
-    s_ChecksumSink = checksum;
+    ConsumeBenchmarkChecksum(checksum);
     return checksum;
 }
 
-}
-
-template<typename CaseT>
-[[nodiscard]] FOUNDATION_INLINE b8 CompareBoxNormalSingleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
-#pragma STDC FENV_ACCESS ON
+b8 CompareBoxNormalSingleKernel(in BoxNormalSingleCase input, mut b8 outEqual, mut i32 outOriginalFlags, mut i32 outCandidateFlags, mut i32 outOriginalErrno, mut i32 outCandidateErrno){
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = 71;
-    const SIMDVectorSingle original = BoxNormalKernels::RunSingle<false>(input);
+    SetMathErrno(71);
+    const VectorSingle original = RunSingle<false>(input);
     outOriginalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outOriginalErrno = errno;
+    outOriginalErrno = CurrentMathErrno();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = 71;
-    const SIMDVectorSingle candidate = BoxNormalKernels::RunSingle<true>(input);
+    SetMathErrno(71);
+    const VectorSingle candidate = RunSingle<true>(input);
     outCandidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outCandidateErrno = errno;
+    outCandidateErrno = CurrentMathErrno();
     b8 equal = outOriginalFlags == outCandidateFlags && outOriginalErrno == outCandidateErrno;
     for(usize lane = 0u; lane < 4u; ++lane)
-        equal &= BitCast<u32>(static_cast<f32>(original[lane])) == BitCast<u32>(static_cast<f32>(candidate[lane]));
+        equal &= SimdGetSingleLaneBits(original, lane) == SimdGetSingleLaneBits(candidate, lane);
     outEqual = equal;
     return true;
 }
 
-template<typename CaseT>
-[[nodiscard]] FOUNDATION_INLINE b8 CompareBoxNormalDoubleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
-#pragma STDC FENV_ACCESS ON
+b8 CompareBoxNormalDoubleKernel(in BoxNormalDoubleCase input, mut b8 outEqual, mut i32 outOriginalFlags, mut i32 outCandidateFlags, mut i32 outOriginalErrno, mut i32 outCandidateErrno){
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = 71;
-    const SIMDVectorDouble original = BoxNormalKernels::RunDouble<false>(input);
+    SetMathErrno(71);
+    const VectorDouble original = RunDouble<false>(input);
     outOriginalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outOriginalErrno = errno;
+    outOriginalErrno = CurrentMathErrno();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    errno = 71;
-    const SIMDVectorDouble candidate = BoxNormalKernels::RunDouble<true>(input);
+    SetMathErrno(71);
+    const VectorDouble candidate = RunDouble<true>(input);
     outCandidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outCandidateErrno = errno;
+    outCandidateErrno = CurrentMathErrno();
     b8 equal = outOriginalFlags == outCandidateFlags && outOriginalErrno == outCandidateErrno;
     for(usize lane = 0u; lane < 4u; ++lane)
-        equal &= BitCast<u64>(static_cast<f64>(original[lane])) == BitCast<u64>(static_cast<f64>(candidate[lane]));
+        equal &= SimdGetDoubleLaneBits(original, lane) == SimdGetDoubleLaneBits(candidate, lane);
     outEqual = equal;
     return true;
 }
 
-template<typename CaseT, usize DataCount>
-[[nodiscard]] FOUNDATION_INLINE u64 DispatchBoxNormalSingleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
-    if(latency)
-        return candidate ? BoxNormalKernels::WorkloadSingle<true, true>(data, iterations) : BoxNormalKernels::WorkloadSingle<false, true>(data, iterations);
-    return candidate ? BoxNormalKernels::WorkloadSingle<true, false>(data, iterations) : BoxNormalKernels::WorkloadSingle<false, false>(data, iterations);
+u64 DispatchBoxNormalSingleWorkload(in Array<BoxNormalSingleCase, s_BoxNormalDataCount> data, in b8 candidate, in b8 latency, in usize iterations){
+    if(latency){
+        if(candidate)
+            return WorkloadSingle<true, true>(data, iterations);
+        return WorkloadSingle<false, true>(data, iterations);
+    }
+    if(candidate)
+        return WorkloadSingle<true, false>(data, iterations);
+    return WorkloadSingle<false, false>(data, iterations);
 }
 
-template<typename CaseT, usize DataCount>
-[[nodiscard]] FOUNDATION_INLINE u64 DispatchBoxNormalDoubleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
-    if(latency)
-        return candidate ? BoxNormalKernels::WorkloadDouble<true, true>(data, iterations) : BoxNormalKernels::WorkloadDouble<false, true>(data, iterations);
-    return candidate ? BoxNormalKernels::WorkloadDouble<true, false>(data, iterations) : BoxNormalKernels::WorkloadDouble<false, false>(data, iterations);
+u64 DispatchBoxNormalDoubleWorkload(in Array<BoxNormalDoubleCase, s_BoxNormalDataCount> data, in b8 candidate, in b8 latency, in usize iterations){
+    if(latency){
+        if(candidate)
+            return WorkloadDouble<true, true>(data, iterations);
+        return WorkloadDouble<false, true>(data, iterations);
+    }
+    if(candidate)
+        return WorkloadDouble<true, false>(data, iterations);
+    return WorkloadDouble<false, false>(data, iterations);
 }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const usize s_BoxNormalCaseCount = 32768u;
 const usize s_BoxNormalDataCount = 128u;
@@ -502,29 +488,15 @@ i32 RunBoxNormalBenchmarkCli(in Span<StringView> args){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-int main(const int argc, const char* const* argv){
-    if(argc <= 0)
+i32 RunBoxNormalBenchmarkCliEntry(in ConsoleArguments arguments){
+    if(arguments.count <= 0)
         return 2;
-    Array<StringView, 8> args{};
-    const usize count = Min(static_cast<usize>(argc), args.size());
+    Array<StringView, 8> args;
+    const usize count = Min(cast<usize>(arguments.count), args.size());
     for(usize index = 0u; index < count; ++index)
-        args[index] = StringView(argv[index]);
-    return SimdOptimizationBenchmark::RunBoxNormalBenchmarkCli(Span<const StringView>(args.data(), count));
+        args[index] = arguments.text(cast<i32>(index));
+    return RunBoxNormalBenchmarkCli(Span<StringView>(args).first(count));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

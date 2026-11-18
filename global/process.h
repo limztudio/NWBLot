@@ -37,6 +37,7 @@ namespace ProcessSignal{
 
 
 enum Enum : i32{
+    Abort = SIGABRT,
     Interrupt = SIGINT,
     Terminate = SIGTERM,
 };

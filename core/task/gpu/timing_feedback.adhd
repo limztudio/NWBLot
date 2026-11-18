@@ -100,5 +100,17 @@ extern GpuTaskTimingAssignmentKey GpuTaskTimingAssignmentKeyFromHistoryKey(in au
 extern const u32 s_DefaultGpuTaskTimingHistorySampleCount;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::BorrowOptionalResult<&::NWB::Core::GpuTaskTimingHistorySnapshot::find>")]
+extern Optional<in GpuTaskTimingHistory> BorrowSnapshotTimingHistory(in borrow GpuTaskTimingHistorySnapshot source, in GpuTaskTimingKey key, in GpuPhysicalQueueId queue);
 
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::BorrowOptionalResult<&::NWB::Core::GpuTaskTimingHistorySnapshot::findAssignment>")]
+extern Optional<in GpuTaskTimingAssignmentState> BorrowSnapshotTimingAssignment(in borrow GpuTaskTimingHistorySnapshot source, in GpuTaskTimingAssignmentKey key);
+
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::BorrowOptionalResult<&::NWB::Core::GpuTaskTimingHistoryStore::find>")]
+extern Optional<in GpuTaskTimingHistory> BorrowStoreTimingHistory(in borrow GpuTaskTimingHistoryStore source, in GpuTaskTimingKey key, in GpuPhysicalQueueId queue);
+
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::BorrowOptionalResult<&::NWB::Core::GpuTaskTimingHistoryStore::findAssignment>")]
+extern Optional<in GpuTaskTimingAssignmentState> BorrowStoreTimingAssignment(in borrow GpuTaskTimingHistoryStore source, in GpuTaskTimingAssignmentKey key);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

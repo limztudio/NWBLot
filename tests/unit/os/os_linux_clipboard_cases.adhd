@@ -1,0 +1,471 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "suite.adhd"
+#include "linux_sdk.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class OwnedPipe{
+    public i32 readFd = -1;
+    public i32 writeFd = -1;
+    public ~OwnedPipe(){ this.reset(); }
+    public void reset(){ CloseClipboardPipe(this.readFd); CloseClipboardPipe(this.writeFd); }
+    public b8 open(){
+        this.reset();
+        const auto result = OpenClipboardPipe();
+        if(!result.has_value())
+            return false;
+        this.readFd = result.value().readFd;
+        this.writeFd = result.value().writeFd;
+        return true;
+    }
+    public i32 releaseWrite(){
+        const i32 fd = this.writeFd;
+        this.writeFd = -1;
+        return fd;
+    }
+}
+
+[ordered]
+class ClipboardPipeContext{
+    private HeapStorage storage = HeapStorage();
+    private OwnedPipe pipe;
+    private TestValueSlot<ClipboardTextAccumulator> receiveSlot;
+    private mut ClipboardTextAccumulator received;
+    private TestValueSlot<ClipboardPipeWriter> writerSlot;
+    private mut ClipboardPipeWriter writer;
+    public String input;
+    public String expected;
+
+    public ClipboardPipeContext(){
+        this.received = this.receiveSlot.constructIn(this.storage);
+        this.writer = this.writerSlot.constructIn(this.storage);
+    }
+
+    public b8 openPipe(){ return this.pipe.open(); }
+    public void closeWriteEnd(){ CloseClipboardPipe(this.pipe.writeFd); }
+    public void closeReadEnd(){ CloseClipboardPipe(this.pipe.readFd); }
+    public i32 releaseWriteFd(){ return this.pipe.releaseWrite(); }
+    public isize writeRaw(in StringView bytes){ return WriteOsFd(this.pipe.writeFd, bytes); }
+    public Expected<b8, ClipboardPipeReadFailure> readPipe(){ return ReadClipboardPipe(this.pipe.readFd, this.received); }
+    public StringView receivedText()const{ return this.received.textView(); }
+    public void clearReceived(){ this.received.clear(); }
+    public b8 beginWriter(in i32 fd, in StringView text){ return this.writer.begin(fd, text); }
+    public ClipboardStatus advanceWriter(){ return this.writer.advance(); }
+    public b8 writerFinished()const{ return this.writer.finished(); }
+    public i32 queryFdFlags(in i32 fd)const{ return OsFdFlags(fd, s_OsGetFileFlags); }
+    public b8 hasNonblockFlag(in i32 flags)const{ return (flags & s_OsNonBlocking) != 0; }
+    public i32 pollPipeWritable(in i32 fd)const{
+        OsPollFd descriptor = OsPollFd(fd, s_OsPollOut, 0);
+        return PollOsFd(descriptor, 0);
+    }
+}
+
+const u32 s_SelectionChangeTimeoutMS = 3000u;
+const u32 s_ClipboardCompletionTimeoutMS = 6000u;
+const u32 s_PollIntervalMS = 1u;
+
+[ordered]
+class X11ClipboardFixture{
+    public HeapStorage storage = HeapStorage();
+    public Array<DisplayConnection, 2u> displays;
+    public Array<OsClipboardServiceOwner, 2u> services;
+    public b8 m_sawSelectionRequest = false;
+    public void setup(){
+        const auto isolated = EnvironmentVariableEquals("NWB_X11_CLIPBOARD_TEST_ISOLATED", "1");
+        ASSERT_TRUE(isolated.has_value());
+        if(!isolated.value())
+            SkipTest("Native clipboard tests require the isolated Xvfb CTest entry");
+        for(usize index = 0u; index < this.displays.size(); ++index){
+            ASSERT_TRUE(this.displays[index].open());
+            auto service = OpenOsX11ClipboardService(this.storage, this.displays[index].display());
+            ASSERT_TRUE(service.has_value());
+            TestMoveAssign<OsClipboardServiceOwner>(this.services[index], service.value());
+            ASSERT_TRUE(this.services[index].valid());
+        }
+    }
+    public void teardown(){
+        for(mut OsClipboardServiceOwner service : this.services)
+            service.reset();
+        for(mut DisplayConnection display : this.displays){
+            if(display.valid())
+                EXPECT_EQ(display.close(), 0);
+        }
+    }
+    public b8 pumpAll(){
+        for(usize index = 0u; index < this.displays.size(); ++index){
+            if(!this.services[index].deref().pump())
+                return false;
+            usize dispatched = 0u;
+            while(this.displays[index].pending() > 0 && dispatched < 256u){
+                OsXEvent event;
+                if(this.displays[index].next(event) != 0)
+                    return false;
+                if(event.type == s_OsSelectionRequest)
+                    this.m_sawSelectionRequest = true;
+                DispatchOsX11ClipboardEvent(this.services[index].deref(), event);
+                ++dispatched;
+            }
+        }
+        return true;
+    }
+    public b8 awaitServiceCompletion(in usize index, in ClipboardRequestToken token, mut ClipboardCompletion completion){
+        const Timer deadline = TimerAddMS(TimerNow(), s_ClipboardCompletionTimeoutMS);
+        while(TimerNow() < deadline){
+            if(!this.pumpAll())
+                return false;
+            const ClipboardPollResult result = this.services[index].deref().poll(token, completion);
+            if(result == ClipboardPollResult::Completed)
+                return true;
+            if(result != ClipboardPollResult::Pending)
+                return false;
+            SleepMS(s_PollIntervalMS);
+        }
+        return false;
+    }
+    public b8 writeText(in usize index, in ClipboardChannel channel, in StringView text){
+        ClipboardCompletion completion = ClipboardCompletion();
+        const auto request = this.services[index].deref().requestWriteText(channel, text);
+        return request.has_value() && request.value().valid() && this.awaitServiceCompletion(index, request.value(), completion) && completion.status == ClipboardStatus::Success;
+    }
+    public b8 canReadPrimarySelection()const{ return this.services[0u].deref().capabilities(ClipboardChannel::PrimarySelection).readText; }
+    public Expected<ClipboardRequestToken, ClipboardAdmission> requestRead(in usize index, in ClipboardChannel channel){ return this.services[index].deref().requestReadText(channel); }
+    public Expected<ClipboardRequestToken, ClipboardAdmission> requestWrite(in usize index, in ClipboardChannel channel, in StringView text){ return this.services[index].deref().requestWriteText(channel, text); }
+    public b8 pumpService(in usize index){ return this.services[index].deref().pump(); }
+    public b8 cancelService(in usize index, in ClipboardRequestToken token){ return this.services[index].deref().cancel(token); }
+    public ClipboardPollResult pollService(in usize index, in ClipboardRequestToken token, mut ClipboardCompletion completion){ return this.services[index].deref().poll(token, completion); }
+    public b8 waitForSelectionRequest(){
+        const Timer deadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
+        while(!this.m_sawSelectionRequest && TimerNow() < deadline){
+            if(!this.pumpAll())
+                return false;
+            SleepMS(s_PollIntervalMS);
+        }
+        return this.m_sawSelectionRequest;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyClipboardPipe_PartialUnicodeStaysPendingUntilValidEof(){
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_EQ(ctx.writeRaw("\xED"), 1);
+    const Expected<b8, ClipboardPipeReadFailure> step1 = ctx.readPipe();
+    ASSERT_TRUE(step1.has_value());
+    EXPECT_FALSE(step1.value());
+
+    ASSERT_EQ(ctx.writeRaw("\x95\x9C\xF0\x9F"), 4);
+    const Expected<b8, ClipboardPipeReadFailure> step2 = ctx.readPipe();
+    ASSERT_TRUE(step2.has_value());
+    EXPECT_FALSE(step2.value());
+
+    ASSERT_EQ(ctx.writeRaw("\x98\x80"), 2);
+    ctx.closeWriteEnd();
+    const Expected<b8, ClipboardPipeReadFailure> step3 = ctx.readPipe();
+    ASSERT_TRUE(step3.has_value());
+    EXPECT_TRUE(step3.value());
+    EXPECT_EQ(ctx.receivedText(), "\xED\x95\x9C\xF0\x9F\x98\x80");
+}
+
+void VerifyClipboardPipe_TruncatedUnicodeIsRejectedAtEof(){
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_EQ(ctx.writeRaw("\xF0\x9F"), 2);
+    ctx.closeWriteEnd();
+    const Expected<b8, ClipboardPipeReadFailure> finished = ctx.readPipe();
+    ASSERT_FALSE(finished.has_value());
+    EXPECT_EQ(finished.error().status, ClipboardStatus::InvalidText);
+    EXPECT_TRUE(finished.error().finished);
+}
+
+void VerifyClipboardPipe_WriterOwnsLargeInputAndResumesAfterFullPipe(){
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    FillGlobalString(ctx.input, 2u * 1024u * 1024u, 0x78u);
+    AssignGlobalString(ctx.expected, StringView(ctx.input));
+    const i32 writeFd = ctx.releaseWriteFd();
+    ASSERT_TRUE(ctx.beginWriter(writeFd, StringView(ctx.input)));
+    AssignGlobalString(ctx.input, "caller changed bytes");
+
+    const i32 writerFlags = ctx.queryFdFlags(writeFd);
+    ASSERT_GE(writerFlags, 0);
+    ASSERT_TRUE(ctx.hasNonblockFlag(writerFlags));
+    for(usize attempt = 0u; attempt < 64u; ++attempt)
+        ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_FALSE(ctx.writerFinished());
+    ASSERT_EQ(ctx.pollPipeWritable(writeFd), 0);
+
+    b8 finished = false;
+    for(usize attempt = 0u; attempt < 4096u && !finished; ++attempt){
+        const Expected<b8, ClipboardPipeReadFailure> read = ctx.readPipe();
+        ASSERT_TRUE(read.has_value());
+        finished = read.value();
+        ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    }
+    EXPECT_TRUE(finished);
+    EXPECT_TRUE(ctx.writerFinished());
+    EXPECT_EQ(ctx.receivedText(), StringView(ctx.expected));
+}
+
+void VerifyClipboardPipe_ClosedReaderFailsWithoutSigpipeOrChangingThreadMask(){
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ctx.closeReadEnd();
+    i32 beforeStatus = -1;
+    i32 beforeSigpipe = -1;
+    OsSignalMask beforeMask;
+    beforeStatus = CurrentOsSignalMask(beforeMask);
+    if(beforeStatus == 0)
+        beforeSigpipe = OsSignalMember(beforeMask, s_OsSigpipe);
+    ASSERT_EQ(beforeStatus, 0);
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "reader is gone"));
+    EXPECT_EQ(ctx.advanceWriter(), ClipboardStatus::NativeFailure);
+    EXPECT_TRUE(ctx.writerFinished());
+
+    i32 afterStatus = -1;
+    i32 afterSigpipe = -2;
+    OsSignalMask afterMask;
+    afterStatus = CurrentOsSignalMask(afterMask);
+    if(afterStatus == 0)
+        afterSigpipe = OsSignalMember(afterMask, s_OsSigpipe);
+    ASSERT_EQ(afterStatus, 0);
+    EXPECT_EQ(beforeSigpipe, afterSigpipe);
+}
+
+void VerifyClipboardPipe_WriterCanBeReusedForEmptyAndShorterTransfers(){
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "old long contents"));
+    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_TRUE(ctx.writerFinished());
+    const Expected<b8, ClipboardPipeReadFailure> firstFinished = ctx.readPipe();
+    ASSERT_TRUE(firstFinished.has_value());
+    ASSERT_TRUE(firstFinished.value());
+    EXPECT_EQ(ctx.receivedText(), "old long contents");
+
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), StringView()));
+    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_TRUE(ctx.writerFinished());
+    ctx.clearReceived();
+    const Expected<b8, ClipboardPipeReadFailure> emptyFinished = ctx.readPipe();
+    ASSERT_TRUE(emptyFinished.has_value());
+    EXPECT_TRUE(emptyFinished.value());
+    EXPECT_TRUE(ctx.receivedText().empty());
+
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "new"));
+    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_TRUE(ctx.writerFinished());
+    ctx.clearReceived();
+    const Expected<b8, ClipboardPipeReadFailure> lastFinished = ctx.readPipe();
+    ASSERT_TRUE(lastFinished.has_value());
+    EXPECT_TRUE(lastFinished.value());
+    EXPECT_EQ(ctx.receivedText(), "new");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyX11ClipboardFixture_PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults(mut X11ClipboardFixture self){
+    b8 createdOk = false;
+    b8 retiredNonZero = false;
+    b8 absentOk = false;
+    u64 absentType = 1u;
+    usize absentCount = 1u;
+    b8 destroyedOk = false;
+    b8 failedHasValue = true;
+    u8 failedErrorCode = 0u;
+    u8 expectedBadWindow = 1u;
+    expectedBadWindow = s_OsBadWindow;
+    u64 retired = 0u;
+    {
+        X11CheckedOperation created = X11CheckedOperation(self.displays[0u].display());
+        retired = self.displays[0u].createWindow(self.displays[0u].rootWindow(), 1u, 1u);
+        createdOk = created.succeeded();
+        retiredNonZero = retired != 0u;
+    }
+    if(createdOk && retiredNonZero){
+        const auto absent = ReadOsX11Property(self.displays[0u].display(), retired, s_OsStringAtom, false, 16u);
+        absentOk = absent.has_value();
+        if(absentOk){
+            absentType = absent.value().type;
+            absentCount = absent.value().count;
+        }
+        {
+            X11CheckedOperation destroyed = X11CheckedOperation(self.displays[0u].display());
+            self.displays[0u].destroyWindow(retired);
+            destroyedOk = destroyed.succeeded();
+        }
+        const auto failed = ReadOsX11Property(self.displays[0u].display(), retired, s_OsStringAtom, false, 16u);
+        failedHasValue = failed.has_value();
+        if(!failedHasValue)
+            failedErrorCode = failed.error().errorCode;
+    }
+    ASSERT_TRUE(createdOk);
+    ASSERT_TRUE(retiredNonZero);
+    ASSERT_TRUE(absentOk);
+    EXPECT_EQ(absentType, 0u);
+    EXPECT_EQ(absentCount, 0u);
+    ASSERT_TRUE(destroyedOk);
+    ASSERT_FALSE(failedHasValue);
+    EXPECT_EQ(failedErrorCode, expectedBadWindow);
+}
+
+void VerifyX11ClipboardFixture_WritingPrimarySelectionDoesNotOverwriteClipboardUtf8(mut X11ClipboardFixture self){
+    const StringView clipboard = "clipboard \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x99\x82";
+    const StringView primary = "primary caf\xc3\xa9";
+    ASSERT_TRUE(self.canReadPrimarySelection());
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, clipboard));
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::PrimarySelection, primary));
+
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> clipAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(clipAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, clipAdmission.value(), out.completion));
+    ASSERT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, clipboard);
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> primaryAdmission = self.requestRead(1u, ClipboardChannel::PrimarySelection);
+    ASSERT_TRUE(primaryAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, primaryAdmission.value(), out.completion));
+    ASSERT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, primary);
+}
+
+void VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSelection(mut X11ClipboardFixture self){
+    ClipboardPipeContext scratchCtx = ClipboardPipeContext();
+    FillGlobalString(scratchCtx.input, 200000u, 0x78u);
+    scratchCtx.input.replace(65534u, 1u, "\xf0\x9f\x99\x82");
+    const StringView originalView = StringView(scratchCtx.input);
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, originalView));
+    self.m_sawSelectionRequest = false;
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> tokenAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const ClipboardRequestToken token = tokenAdmission.value();
+    ASSERT_TRUE(self.waitForSelectionRequest());
+    ASSERT_TRUE(self.m_sawSelectionRequest);
+
+    u64 replacementWindow = 0u;
+    b8 ownerReplaced = false;
+    replacementWindow = self.displays[1u].createWindow(self.displays[1u].rootWindow(), 1u, 1u);
+    if(replacementWindow != 0u){
+        const u64 clipboard = self.displays[1u].atom("CLIPBOARD");
+        self.displays[1u].setOwner(clipboard, replacementWindow, s_OsCurrentTime);
+        self.displays[1u].sync();
+        ownerReplaced = self.displays[1u].owner(clipboard) == replacementWindow;
+    }
+    ASSERT_NE(replacementWindow, 0u);
+    ASSERT_TRUE(ownerReplaced);
+
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, token, out.completion));
+    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, originalView);
+
+    self.displays[1u].destroyWindow(replacementWindow);
+    self.displays[1u].sync();
+}
+
+void VerifyX11ClipboardFixture_CancelledRequestWindowCannotCompleteFreshRequest(mut X11ClipboardFixture self){
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "first"));
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> cancelledAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(cancelledAdmission.has_value());
+    const ClipboardRequestToken cancelled = cancelledAdmission.value();
+    ASSERT_TRUE(self.pumpService(1u));
+    ASSERT_TRUE(self.cancelService(1u, cancelled));
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "after cancellation"));
+
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> freshAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(freshAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, freshAdmission.value(), out.completion));
+    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, "after cancellation");
+    EXPECT_EQ(self.pollService(1u, cancelled, out.completion), ClipboardPollResult::InvalidRequest);
+}
+
+void VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText(mut X11ClipboardFixture self){
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "before ownership loss"));
+
+    u64 temporaryWindow = 0u;
+    b8 temporaryOwned = false;
+    b8 queuedLoss = false;
+    b8 selectionMatched = false;
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> writeAdmission = self.requestWrite(0u, ClipboardChannel::Clipboard, "after reacquisition");
+    ASSERT_TRUE(writeAdmission.has_value());
+    const ClipboardRequestToken writeToken = writeAdmission.value();
+    ASSERT_TRUE(writeToken.valid());
+
+    b8 reacquiredOk = false;
+    b8 ownerMovedAway = false;
+    b8 lossDispatched = false;
+    const u64 clipboard = self.displays[1u].atom("CLIPBOARD");
+    temporaryWindow = self.displays[1u].createWindow(self.displays[1u].rootWindow(), 1u, 1u);
+    if(temporaryWindow != 0u){
+        self.displays[1u].setOwner(clipboard, temporaryWindow, s_OsCurrentTime);
+        self.displays[1u].sync();
+        temporaryOwned = self.displays[1u].owner(clipboard) == temporaryWindow;
+    }
+    OsXEvent ownershipLoss;
+    if(temporaryOwned){
+        const Timer deadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
+        while(!queuedLoss && TimerNow() < deadline){
+            queuedLoss = self.displays[0u].checkTyped(s_OsSelectionClear, ownershipLoss);
+            if(!queuedLoss)
+                SleepMS(s_PollIntervalMS);
+        }
+        selectionMatched = OsSelectionClearAtom(ownershipLoss) == clipboard;
+    }
+    if(queuedLoss && selectionMatched){
+        reacquiredOk = self.awaitServiceCompletion(0u, writeToken, out.completion) && out.completion.status == ClipboardStatus::Success;
+        ownerMovedAway = self.displays[1u].owner(clipboard) != temporaryWindow;
+        lossDispatched = DispatchOsX11ClipboardEvent(self.services[0u].deref(), ownershipLoss);
+    }
+    ASSERT_NE(temporaryWindow, 0u);
+    ASSERT_TRUE(temporaryOwned);
+    ASSERT_TRUE(queuedLoss);
+    ASSERT_TRUE(selectionMatched);
+    ASSERT_TRUE(reacquiredOk);
+    ASSERT_TRUE(ownerMovedAway);
+    ASSERT_TRUE(lossDispatched);
+    ASSERT_TRUE(self.pumpAll());
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> readAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(readAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, readAdmission.value(), out.completion));
+    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, "after reacquisition");
+
+    self.displays[1u].destroyWindow(temporaryWindow);
+    self.displays[1u].sync();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(ClipboardPipe, PartialUnicodeStaysPendingUntilValidEof, VerifyClipboardPipe_PartialUnicodeStaysPendingUntilValidEof)
+NWB_ADHD_GTEST(ClipboardPipe, TruncatedUnicodeIsRejectedAtEof, VerifyClipboardPipe_TruncatedUnicodeIsRejectedAtEof)
+NWB_ADHD_GTEST(ClipboardPipe, WriterOwnsLargeInputAndResumesAfterFullPipe, VerifyClipboardPipe_WriterOwnsLargeInputAndResumesAfterFullPipe)
+NWB_ADHD_GTEST(ClipboardPipe, ClosedReaderFailsWithoutSigpipeOrChangingThreadMask, VerifyClipboardPipe_ClosedReaderFailsWithoutSigpipeOrChangingThreadMask)
+NWB_ADHD_GTEST(ClipboardPipe, WriterCanBeReusedForEmptyAndShorterTransfers, VerifyClipboardPipe_WriterCanBeReusedForEmptyAndShorterTransfers)
+NWB_ADHD_GTEST_F(X11ClipboardFixture, PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults, VerifyX11ClipboardFixture_PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults)
+NWB_ADHD_GTEST_F(X11ClipboardFixture, WritingPrimarySelectionDoesNotOverwriteClipboardUtf8, VerifyX11ClipboardFixture_WritingPrimarySelectionDoesNotOverwriteClipboardUtf8)
+NWB_ADHD_GTEST_F(X11ClipboardFixture, IncrementalReadRetainsSnapshotAfterOwnerLosesSelection, VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSelection)
+NWB_ADHD_GTEST_F(X11ClipboardFixture, CancelledRequestWindowCannotCompleteFreshRequest, VerifyX11ClipboardFixture_CancelledRequestWindowCannotCompleteFreshRequest)
+NWB_ADHD_GTEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText, VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

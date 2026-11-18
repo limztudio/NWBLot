@@ -4,6 +4,7 @@
 
 [cpp_name("::ProcessSignal::Enum")]
 extern enum ProcessSignal : u32{
+    Abort,
     Interrupt,
     Terminate
 };
@@ -11,6 +12,9 @@ extern enum ProcessSignal : u32{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_header("<global/process.h>"), cpp_name("::SetSignalHandler")]
+extern b8 SetSignalHandler(in ProcessSignal signalValue, in auto handler);
 
 [cpp_name("::CurrentProcessId")]
 extern u32 CurrentProcessId();

@@ -64,7 +64,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             out.append(" = ([&]()").append(lambdaExceptionSpec());
             out.append(stmt.varType->refMode == ParamPassingMode::In ? "{ const auto& __adhd_ref = (" : "{ auto& __adhd_ref = (");
             emitExpr(out, *stmt.expr);
-            out.append("); return ::MakeNotNull(&__adhd_ref); }());\r\n");
+            out.append("); return ::MakeNotNull(::AddressOf(__adhd_ref)); }());\r\n");
             break;
         }
         const TypeRef* rawVarType = (stmt.varType && !stmt.varType->isAuto) ? stmt.varType : stmt.inferredAutoType;
@@ -89,7 +89,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         out.append(stmt.name.data(), stmt.name.size());
 
         if(stmt.varType && m_symbols.resolveRefMode(stmt.varType) != ParamPassingMode::None && stmt.expr){
-            out.append(" = ::MakeNotNull(&(");
+            out.append(" = ::MakeNotNull(::AddressOf(");
             emitExpr(out, *stmt.expr);
             out.append("));\r\n");
         }
@@ -192,7 +192,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         out.append("return");
         if(stmt.expr){
             if(stmt.wrapReturnNotNull){
-                out.append(" ::MakeNotNull(&(");
+                out.append(" ::MakeNotNull(::AddressOf(");
                 emitExpr(out, *stmt.expr);
                 out.append("))");
             }

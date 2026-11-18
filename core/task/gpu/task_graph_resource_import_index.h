@@ -40,6 +40,9 @@ public:
 
     explicit GpuGraphResourceImportIndex(GraphicsArena& arena)noexcept : m_arena(arena){}
     [[nodiscard]] u32 findResourceIdentity(Span<const ResourceNode> resources, const Name& identity)const noexcept;
+    [[nodiscard]] ResourceImportMatch findPointerMatch(const Span<const ResourceNode> resources, const ResourcePointerKey& pointer)const noexcept{
+        return findResourceImportMatch(resources, nullptr, pointer);
+    }
     [[nodiscard]] ResourceImportMatch findResourceImportMatch(Span<const ResourceNode> resources, const NameHash* identity, const ResourcePointerKey& pointer)const noexcept;
     [[nodiscard]] u32 findResourceSetIdentity(Span<const ResourceSetNode> sets, const Name& identity)const noexcept;
     void prepareResourceIndexes(Span<const ResourceNode> resources, const ResourcePointerKey& pendingPointer);

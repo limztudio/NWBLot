@@ -10,11 +10,14 @@ extern class GpuPresentEndpoint{
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphDeclarationReadView"), cpp_flags(no_copy, no_assign)]
 extern class GpuTaskGraphDeclarationReadView{
+    Optional<GpuPresentEndpoint> findPresentEndpoint()const;
+    Optional<QueueSubmissionToken> findCompletionToken(in GpuExternalCompletionId completion)const;
     Optional<mut RhiTexture> borrowTexture(in GpuGraphResourceId id)const;
     Optional<mut GraphicsPipeline> borrowGraphicsPipeline(in GpuGraphPipelineId id)const;
     Optional<mut ComputePipeline> borrowComputePipeline(in GpuGraphPipelineId id)const;
     Optional<mut Buffer> borrowBuffer(in GpuGraphResourceId id)const;
     b8 appendAcceptedFrameGraphTelemetry(in GpuTaskGraphAnalysis analysis, mut FrameGraphBuilder builder, in GpuTaskGraphQueueAssignments assignments, in GpuCompiledGraphReadView compiledPlan, in GpuTaskGraphQueueAssignmentTelemetryTracker telemetry)const;
+    b8 hasComputePipeline(in GpuGraphPipelineId pipeline)const;
     b8 appendFrameGraphTelemetry(...)const;
     u64 declarationRevision(...)const;
     GpuTaskGraphExternalCompletionView externalCompletionAt(...)const;
@@ -78,6 +81,8 @@ extern class GpuTaskGraphPipelineView{
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphResourceSetView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphResourceSetView{
+    Span<GpuGraphResourceId> membersSpan()const;
+    b8 hasMembers()const;
     GpuGraphResourceSetId id;
     Name identity;
     StringView markerLabel;
@@ -95,6 +100,8 @@ extern class GpuTaskGraphResourceVersionView{
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphResourceView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphResourceView{
+    Span<GpuTaskGraphInitialOwnerHandoffSourceView> initialOwnerHandoffSourcesSpan()const;
+    b8 hasInitialOwnerHandoffSources()const;
     GpuGraphResourceId id;
     Name identity;
     StringView markerLabel;
@@ -114,6 +121,17 @@ extern class GpuTaskGraphResourceView{
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphTaskView{
+    Span<GpuTaskResourceVersionUse> resourceVersionUsesSpan()const;
+    b8 hasResourceVersionUses()const;
+    Span<GpuTaskResourceUse> resourceUsesSpan()const;
+    b8 hasResourceUses()const;
+    Span<GpuTaskExternalStateSource> externalStateSourcesSpan()const;
+    b8 hasExternalStateSources()const;
+    Span<GpuExternalCompletionId> externalDependenciesSpan()const;
+    b8 hasExternalDependencies()const;
+    Span<GpuTaskId> dependenciesSpan()const;
+    b8 hasDependencies()const;
+    void setResourceUses(in Span<GpuTaskResourceUse> uses);
     GpuTaskId id;
     Name identity;
     StringView markerLabel;
@@ -135,7 +153,11 @@ extern class GpuTaskGraphTaskView{
 };
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphTelemetryOptions"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
-extern class GpuTaskGraphTelemetryOptions;
+extern class GpuTaskGraphTelemetryOptions{
+    void setQueueAssignmentTelemetry(in borrow GpuTaskGraphQueueAssignmentTelemetryTracker value);
+    void setCompiledPlan(in borrow GpuCompiledGraphReadView value);
+    void setQueueAssignments(in borrow GpuTaskGraphQueueAssignments value);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

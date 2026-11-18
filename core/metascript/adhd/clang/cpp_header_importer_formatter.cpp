@@ -260,7 +260,8 @@ MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaAre
             out.append(";\r\n");
         }
         for(const MethodDecl* m : c->methods){
-            if(m)
+            // ADHD operator declarations have no template parameter list.
+            if(m && !(m->isOperator && !m->templateParams.empty()))
                 CppHeaderImportDetail::AppendMethodExternSignature(out, *m, "    ", false);
         }
         out.append("};\r\n\r\n");

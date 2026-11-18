@@ -2,38 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "reflection_suite_scenes.adhd"
+#include <impl/ecs_render/kernel/timing_names.adhd>
 #include "avboit_timing_render_pass.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/reflection/depth_constants.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-
-namespace NWB::Tests::Smoke{
-using Impl::s_TimingScopeReflectionDepthPyramid;
-using Impl::s_TimingScopeReflectionClassify;
-using Impl::s_TimingScopeReflectionBuildArgs;
-using Impl::s_TimingScopeReflectionHardware;
-using Impl::s_TimingScopeReflectionTemporal;
-using Impl::s_TimingScopeReflectionSpatial;
-inline constexpr u32 s_ReflectionMaxDepthMipsCap = NWB_REFLECTION_MAX_DEPTH_MIPS;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+[cpp_header("<impl/assets/graphics/reflection/depth_constants.h>"), cpp_name("NWB_REFLECTION_MAX_DEPTH_MIPS")]
+extern const u32 s_ReflectionMaxDepthMipsCap;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,8 +119,11 @@ class ReflectionTimingRenderPass{
     private b8 m_registered = false;
 }
 
-NotNullUniquePtr<World> CreateReflectionSmokeWorldOrDie(mut ProjectRuntimeContext context){
-    NotNullUniquePtr<World> world = CreateSmokeWorldOrDie(ReflectionSmokeProjectName(), context);
+Expected<NotNullUniquePtr<World>> CreateReflectionSmokeWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(ReflectionSmokeProjectName(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
     const Expected<String> caseText = ReadSmokeEnvironmentString(s_ReflectionSmokeCaseEnv);
     StringView caseName = "";
     if(caseText.has_value())
@@ -149,7 +132,7 @@ NotNullUniquePtr<World> CreateReflectionSmokeWorldOrDie(mut ProjectRuntimeContex
         AddSmokeSkinnedRenderSystems(SmokeWorldRef(world), context);
     else
         SetupSmokeRenderSystems(SmokeWorldRef(world), context);
-    return world;
+    return TakeSmokeWorld(world);
 }
 
 ProjectFrameClientSize QueryReflectionSmokeFrameClientSize(){
@@ -818,10 +801,10 @@ class ReflectionStatisticsReporter{
 
 
 [arena]
-class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
-    public ReflectionSmokeProjectImpl(mut ProjectRuntimeContext context){
+class ReflectionSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
+    public ReflectionSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateReflectionSmokeWorldOrDie(context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_timingRenderPass = ReflectionTimingRenderPass(context.graphics);
         this.m_fpsProbe = FpsProbe(ReflectionSmokeProjectName());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(ReflectionSmokeProjectName());
@@ -919,7 +902,7 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
             return false;
         }
 
-        const ProjectFrameClientSize extent = QuerySmokeFrameClientSize();
+        const ProjectFrameClientSize extent = GetProjectFrameClientSize();
         const u32 extentWidth = extent.width;
         const u32 extentHeight = extent.height;
         const EntityID cameraId = CreateSmokeCamera(1.4f, 6.0f, 0.0f, SmokeWorldRef(this.m_world));
@@ -1076,7 +1059,7 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         return latest.frameIndex >= Max(this.m_configuration.targetSamples(), 3u);
     }
 
-    public b8 shouldCaptureFrame(in u64 graphicsFrame)const{
+    public b8 shouldCaptureFrame(in u64 graphicsFrame)const override{
         return this.shouldCapture(graphicsFrame);
     }
 
@@ -1252,29 +1235,21 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return NWB::Tests::Smoke::QueryReflectionSmokeFrameClientSize();
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return QueryReflectionSmokeFrameClientSize();
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB Reflection Smoke");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB Reflection Smoke");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::ReflectionSmokeProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateReflectionSmokeWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<ReflectionSmokeProjectImpl>(owner, context);
 }
 
 

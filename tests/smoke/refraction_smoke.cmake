@@ -4,8 +4,8 @@ nwb_target_adhd_sources(nwb_refraction_smoke NAMESPACE "NWB::Tests::Smoke" SOURC
             "${CMAKE_CURRENT_LIST_DIR}/refraction_scenes_and_runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/refraction_project.adhd"
         )
-target_compile_definitions(nwb_refraction_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
-nwb_configure_runtime_smoke_target(nwb_refraction_smoke "${_nwb_transparent_multi_runtime_root}")
+nwb_target_adhd_definitions(nwb_refraction_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+nwb_configure_runtime_smoke_target(nwb_refraction_smoke "${_nwb_transparent_multi_runtime_root}" refraction_scenes_and_runtime)
 add_dependencies(nwb_refraction_smoke nwb_transparent_multi_smoke_assets)
 
 if(TARGET nwb_logserver)

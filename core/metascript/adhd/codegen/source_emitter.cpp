@@ -248,6 +248,7 @@ template<typename IsReadyField>
     return !unit.globalConstants.empty()
         && unit.staticAssertions.empty()
         && unit.assetRegistrations.empty()
+        && unit.registrationCalls.empty()
         && unit.topLevelNativeBlocks.empty()
         && unit.sourceNativeBlocks.empty()
         && unit.includedAdhdFiles.empty()
@@ -367,6 +368,11 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     out.push_back('"');
     out.append(headerIncludePath.data(), headerIncludePath.size());
     out.append("\"\r\n");
+    for(const MStringView header : unit.registrationHeaders){
+        out.append("#include ");
+        out.append(header.data(), header.size());
+        out.append("\r\n");
+    }
     if(!IsNameLiteralOnlyUnit(unit) && !IsScalarLiteralOnlyUnit(unit)){
         out.append("\r\n");
         ContractSemantics::ForEachPreambleHeader(PreambleHeaderGroup::SourceDefault, [&](const MStringView hdr){
@@ -439,6 +445,18 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
         emitOutOfClassCallable(out, nullptr, *fn, true, false, false);
     }
     AssetCookRoleEmitter::Emit(out, unit, m_symbols);
+
+    for(const RegistrationCall& registration : unit.registrationCalls){
+        out.append(registration.cppName.data(), registration.cppName.size());
+        out.push_back('(');
+        for(usize i = 0u; i < registration.arguments.size(); ++i){
+            if(i)
+                out.append(", ");
+            const auto argument = registration.arguments[i];
+            out.append(argument.data(), argument.size());
+        }
+        out.append(")\r\n\r\n");
+    }
 
     if(!namespacePath.empty()){
         out.append("};\r\n\r\n\r\n");
@@ -630,6 +648,30 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
         for(const TypeRef* iface : m_activeOwnerClass->implementedInterfaces){
             if(!iface)
                 continue;
+            if(m_activeOwnerClass->concreteBase && m_symbols.resolveBaseTypeName(iface->name) == m_activeOwnerClass->concreteBase->name){
+                if(m_activeOwnerClass->concreteBase->canBorrowMotherArena() && m_activeOwnerClass->concreteBase->needsClassArena){
+                    out.append(firstInit ? " : " : ", ");
+                    firstInit = false;
+                    m_typeEmitter.emitTypeCpp(out, *iface);
+                    out.push_back('(');
+                    out.append(CodegenSymbols::s_MotherArenaVar).push_back(')');
+                }
+                continue;
+            }
+            if(!ctor.initializedCppBase.empty() && iface->name == ctor.initializedCppBase){
+                out.append(firstInit ? " : " : ", ");
+                firstInit = false;
+                m_typeEmitter.emitTypeCpp(out, *iface);
+                out.push_back('(');
+                for(usize i = 0u; i < ctor.cppBaseArguments.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    const MStringView argument = ctor.cppBaseArguments[i];
+                    out.append(argument.data(), argument.size());
+                }
+                out.push_back(')');
+                continue;
+            }
             const InterfaceCtorForwardInfo* fwd = ContractSemantics::FindInterfaceCtorForward(m_symbols.resolveBaseTypeName(iface->name));
             if(!fwd)
                 continue;
@@ -644,7 +686,6 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
                     break;
                 }
             }
-            break;
         }
     }
     if(
@@ -663,6 +704,11 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
     }
     MVector<MStringView> readyFields(m_arena);
     const auto isReadyField = [&](const MStringView name)noexcept{
+        if(m_activeOwnerClass && m_activeOwnerClass->concreteBase){
+            const FieldDecl* inherited = SymbolTable::FindClassField(*m_activeOwnerClass, name);
+            if(inherited && inherited->declaringClass != m_activeOwnerClass)
+                return true;
+        }
         for(const MStringView ready : readyFields){
             if(ready == name)
                 return true;
@@ -689,7 +735,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
             out.append(firstInit ? " : " : ", ");
             firstInit = false;
             out.append(field->name.data(), field->name.size());
-            out.append("(::MakeNotNull(&(");
+            out.append("(::MakeNotNull(::AddressOf(");
             emitExpr(out, *rhs);
             out.append(")))");
         }

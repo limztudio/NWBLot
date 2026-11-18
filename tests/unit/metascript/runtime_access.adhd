@@ -1,0 +1,67 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/value_storage.adhd>
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::CaptureReturnedValue")]
+extern mut T CaptureReturnedValue<T>(mut TestValueSlot<T> slot, in T value);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::DeserializeReflected")]
+extern b8 DeserializeReflected<T>(mut T value, in MetascriptValue input);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::VisitReflectedDependencies")]
+extern b8 VisitReflectedDependencies<T>(in MetascriptValue input, in Func<void(in Name)> visitor);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::ReaderWithSpan"), cpp_flags(no_copy, no_assign, polymorphic_base, abstract)]
+extern class ReaderWithSpan{ [cpp_flags(unwind)] Expected<usize> readBytes(mut Span<u8> buffer); };
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::LerpMoveOnlyOperand")]
+extern class LerpMoveOnlyOperand{ i32 value; };
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::AppendMovedValue")]
+extern void AppendMovedValue(mut MetascriptValue target, mut MetascriptValue source);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::BorrowStructMetadata")]
+extern Optional<in MetascriptValue> BorrowStructMetadata(in MetascriptDocument document, in StringView name);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_InvalidCharacterDecoded")]
+extern const b8 s_InvalidCharacterDecoded;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_InvalidCharacterValue")]
+extern const i64 s_InvalidCharacterValue;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_CountsCopyConstructible")]
+extern const b8 s_CountsCopyConstructible;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_CountsCopyAssignable")]
+extern const b8 s_CountsCopyAssignable;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_CountsMoveConstructible")]
+extern const b8 s_CountsMoveConstructible;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_CountsMoveAssignable")]
+extern const b8 s_CountsMoveAssignable;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_ReadyNothrow")]
+extern const b8 s_ReadyNothrow;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_ConcreteRecordNothrow")]
+extern const b8 s_ConcreteRecordNothrow;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::s_VirtualRecordNothrow")]
+extern const b8 s_VirtualRecordNothrow;
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::FormatOwnedDiagnosticPath")]
+extern DiagnosticEventText FormatOwnedDiagnosticPath(in Path path, mut HeapStorage storage);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::FormatDeferredDiagnosticPath")]
+extern DiagnosticEventText FormatDeferredDiagnosticPath(in Path path);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::FormatWideDiagnosticPath")]
+extern DiagnosticEventText FormatWideDiagnosticPath(in Path path);
+
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::DiagnosticTerminator")]
+extern u8 DiagnosticTerminator(in DiagnosticEventText text);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

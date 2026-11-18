@@ -1,0 +1,205 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <pipeline/volume_workspace.adhd>
+#include "path_sdk.adhd"
+#include <tests/common/memory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::BindMerge")]
+extern GatherMergeCallback BindGatherMerge<Policy>();
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Path")]
+extern class GraphicsOwnedPath{
+    GraphicsOwnedPath(in auto first, ...);
+    GraphicsOwnedPath operator/(in auto child)const;
+    GraphicsOwnedPath parentPath()const;
+    GraphicsOwnedPath lexicallyNormal()const;
+    PlatformStringView native()const;
+    PlatformStringView filenameView()const;
+    b8 empty()const;
+    b8 isAbsolute()const;
+};
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::OwnPath")]
+extern GraphicsOwnedPath OwnGraphicsPath(mut auto storage, in auto path);
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::AppendCatalogFile")]
+extern void AppendTestCatalogFile(mut CookFileCatalog catalog, in Path root, in Path file, in StringView normalized, in StringView virtualRoot);
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::CurrentTestName")]
+extern StringView GraphicsCurrentTestName();
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::MergeOutput")]
+extern mut HeapStorageVector<u8> TestGatherOutput(mut BinaryUpdateContext context);
+[cpp_header("<core/assets/volume/pack_manifest.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest")]
+extern b8 AppendTestCookPayload(in Name name, in Span<u8> bytes, mut CookPackManifest manifest, in u64 key);
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::TakeAssetValue")]
+extern Expected<Asset> TakeTestAssetValue<Asset>(mut IAsset source);
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Core::Assets::AssetString")]
+extern class GraphicsOwnedString{
+    void append(...);
+    void assign(...);
+    void reserve(in usize capacity);
+    void resize(...);
+    void clear();
+    usize size()const;
+    b8 empty()const;
+    void push_back(in u8 byte);
+    u8 operator[](in usize index)const;
+};
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::DeriveOwnedPath")]
+extern Expected<GraphicsOwnedString> DeriveOwnedPathText(in auto root, in StringView virtualRoot, in auto source, mut HeapStorage owner, mut auto scratch);
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::InvokeWithStorage")]
+extern T CallGraphicsWithStorage<T>(...);
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::OwnPathLike")]
+extern GraphicsOwnedPath OwnGraphicsPathLike(in auto donor, in auto source);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::ParseMetadataDocumentText")]
+extern b8 ReadGraphicsMetadata(in auto file, in StringView prefix, in Func<b8(in StringView)> parse, mut String text, mut MetascriptDocument document);
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::RegistryEntries")]
+extern mut HeapStorageVector<Entry> GraphicsRegistryEntries<Entry>(mut CookEntryRegistry registry, in Name type);
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::HasBucket")]
+extern b8 HasCookEntryRegistryBucket(in CookEntryRegistry registry, in Name type);
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParseAssetMetadata")]
+extern b8 ParseGraphicsAssetMetadata(in auto files, in auto root, in auto cache, mut auto outputStorage, mut auto scheduler, mut auto scratch, mut ParsedAssetMetadata metadata);
+[cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::NWB::Core::Assets::CookMetadataDetail::CopyPairedSidecarRules")]
+extern void CopyGraphicsSidecarRules(mut ScratchStorageVector<AssetPairedSidecarRule> rules);
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolveVirtualAssetPath")]
+extern Expected<GraphicsOwnedPath> ResolveGraphicsVirtualPath(in auto roots, in StringView path, mut auto owner, mut auto scratch);
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::WriteTextFile")]
+extern b8 WriteGraphicsText(in auto path, in StringView text);
+[cpp_header("<global/basic_string.h>"), cpp_name("::WriteConvertedText<char>")]
+extern void CountGraphicsNativeBytes(mut CountingByteOutput counter, in PlatformStringView text);
+[cpp_header("<core/assets/input_list.h>"), cpp_name("::NWB::Core::Assets::EncodeAssetInputList")]
+extern Expected<PathScratchString> EncodeGraphicsInputs(in auto inputs, mut auto scratch);
+
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::Move")]
+extern CookDependencyRegistry MoveGraphicsRegistry(mut CookDependencyRegistry source);
+
+[cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::std::pair<::NWB::Core::Assets::CookMetadataDetail::DiscoveredPathSet::iterator, bool>")]
+extern class InsertedPath{ b8 second; };
+[cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::NWB::Core::Assets::CookMetadataDetail::DiscoveredPathSet"), cpp_flags(no_copy)]
+extern class DiscoveredPathSet{
+    void reserve(in usize count);
+    InsertedPath insert(in PathScratchString path);
+    usize bucket_count()const;
+    usize size()const;
+};
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::DiscoveredPaths")]
+extern DiscoveredPathSet NewDiscoveredPaths(mut auto storage);
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::Hasher<AStringView>{}")]
+extern usize HashDiscoveredPath(in StringView path);
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::CStringByte")]
+extern u8 GraphicsStringByte(in auto text, in usize index);
+
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::TestAString")]
+extern class TestAString{
+    void append(...);
+    void assign(...);
+    void reserve(in usize count);
+    usize size()const;
+    b8 empty()const;
+    void push_back(in u8 byte);
+};
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::NwbFileAssetCacheRecord")]
+extern class NwbFileAssetCacheRecord{
+    GraphicsOwnedPath cacheFilePath;
+    GraphicsOwnedString relativePathText;
+    Sha256Digest paramSha256;
+    b8 standalone;
+    b8 loadedFromCache;
+    b8 canWriteCache;
+};
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::NwbAssetCacheFileHeader"), cpp_flags(self_defaulted, binary_serializable)]
+extern class NwbAssetCacheFileHeader{
+    u32 magic;
+    u16 version;
+    u16 headerSize;
+    u32 flags;
+    u32 entryCount;
+    Sha256Digest paramSha256;
+    u64 payloadSectionSize;
+    u64 payloadSectionHashFnv64;
+};
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::AssetRootResolutionFailure::Enum")]
+extern enum AssetRootResolutionFailure : u8{ ResolvePath };
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::AssetRootResolutionError")]
+extern class AssetRootResolutionError{
+    GraphicsOwnedPath inputPath;
+    usize sourceIndex;
+    AssetRootResolutionFailure reason;
+    ErrorCode error;
+};
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::ResolveAssetRoots")]
+extern Expected<HeapStorageVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveGraphicsRoots(in auto root, in auto sources, in b8 infer, in AssetRootDuplicatePolicy policy, mut auto scratch);
+[cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord")]
+extern void PrepareGraphicsCacheRecord(...);
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::AssetPathsDetail::BuildRelativeAssetPathText")]
+extern b8 WriteGraphicsRelativePath(in auto path, mut auto text);
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText")]
+extern Expected<PathScratchString> DeriveGraphicsScratchPath(in auto root, in StringView virtualRoot, in auto source, mut auto output, mut auto scratch);
+[cpp_header("<core/assets/volume/pack_manifest.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest")]
+extern b8 ReserveGraphicsManifest(in usize count, mut CookPackManifest manifest);
+[cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets")]
+extern b8 WriteGraphicsBuiltAssets(in auto path, in CookPackManifest manifest, mut auto scratch);
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::s_Debug")]
+extern const b8 s_GraphicsDebugBuild;
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::s_Final")]
+extern const b8 s_GraphicsFinalBuild;
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::s_Windows")]
+extern const b8 s_GraphicsWindowsHost;
+[cpp_header("<global/filesystem/operations_remove.h>"), cpp_name("::RemoveAllIfExists")]
+extern Expected<void, ErrorCode> GraphicsRemoveAllIfExists(in auto path);
+[cpp_header("<global/filesystem/operations_remove.h>"), cpp_name("::EnsureEmptyDirectory")]
+extern Expected<void, ErrorCode> GraphicsEnsureEmptyDirectory(in auto path);
+[cpp_header("<global/filesystem/operations.h>"), cpp_name("::EnsureDirectories")]
+extern Expected<void, ErrorCode> GraphicsEnsureDirectories(in auto path);
+[cpp_header("<global/filesystem/operations.h>"), cpp_name("::FileExists")]
+extern Expected<b8, ErrorCode> GraphicsFileExists(in auto path);
+[cpp_header("<global/filesystem/operations.h>"), cpp_name("::IsRegularFile")]
+extern Expected<b8, ErrorCode> GraphicsIsRegularFile(in auto path);
+[cpp_header("<global/filesystem/operations.h>"), cpp_name("::IsDirectory")]
+extern Expected<b8, ErrorCode> GraphicsIsDirectory(in auto path);
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::FileSize")]
+extern Expected<u64, ErrorCode> GraphicsFileSize(in auto path);
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::ReadTextFile")]
+extern Expected<void, ErrorCode> GraphicsReadTextFile(in auto path, mut auto text);
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::ReadBinaryFile")]
+extern Expected<void, ErrorCode> GraphicsReadBinaryFile(in auto path, mut auto bytes);
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::WriteBinaryFile")]
+extern b8 GraphicsWriteBinaryFile(in auto path, in auto bytes);
+[cpp_header("<global/basic_string.h>"), cpp_name("::StringAppendFormat")]
+extern void GraphicsStringAppendFormat(mut auto text, in StringView format, ...);
+[cpp_header("<core/assets/module.h>"), cpp_name("static_cast<::NWB::Core::Assets::AssetBytes&>")]
+extern mut AssetByteBuffer GraphicsCodecBytes(mut auto buffer);
+
+[cpp_header("<global/sha1.h>"), cpp_name("::AppendSha1Hex")]
+extern void AppendGraphicsSha1Hex(in Sha1Digest digest, mut auto output);
+[cpp_header("<global/filesystem/operations_remove.h>"), cpp_name("::RemoveFile")]
+extern Expected<b8, ErrorCode> GraphicsRemoveFile(in auto path);
+
+[cpp_header("<core/assets/input_list.h>"), cpp_name("::NWB::Core::Assets::ReadAssetInputList")]
+extern b8 ReadGraphicsInputList(in auto path, mut auto scratch, mut auto outputs, in b8 resolve);
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::s_NwbAssetCacheMagic")]
+extern const u32 s_NwbAssetCacheMagic;
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::s_NwbAssetCacheVersion")]
+extern const u16 s_NwbAssetCacheVersion;
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::s_NwbAssetCacheFlagStandalone")]
+extern const u32 s_NwbAssetCacheFlagStandalone;
+[cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename")]
+extern const StringView s_ManifestFilename;
+[cpp_header("<core/assets/volume/cook_types.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeName")]
+extern const StringView s_AssetVolumeName;
+[cpp_name("__FILE__")]
+extern const StringView s_GraphicsFixtureSource;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

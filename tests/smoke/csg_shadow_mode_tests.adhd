@@ -10,20 +10,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/smoke/test_environment.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+[cpp_header("<tests/smoke/test_environment.h>"), cpp_name("::NWB::Tests::Smoke::SetSmokeTestEnvironment")]
+extern i32 SetSmokeTestEnvironment(in String name, in String value, in b8 hasValue);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,10 +20,7 @@ native{
 void SetCsgShadowModeEnvironment(in StringView name, in StringView value, in b8 hasValue){
     String nameCopy = String(name);
     String valueCopy = String(value);
-    i32 status = -1;
-    native(in nameCopy, in valueCopy, in hasValue, mut status){
-        status = NWB::Tests::Smoke::SetSmokeTestEnvironment(nameCopy.c_str(), hasValue ? valueCopy.c_str() : nullptr);
-    }
+    const i32 status = SetSmokeTestEnvironment(nameCopy, valueCopy, hasValue);
     ASSERT_EQ(status, 0);
 }
 

@@ -45,7 +45,7 @@ b8 IsValidPaintSdfGlyphRequest(in u32 channel, in u32 channelCount, in Rect uv){
 
 
 // The caller's arena must outlive the snapshot and every consumer of it.
-[move_only, friend(PaintBuilder)]
+[move_only, friend(PaintBuilder, DrawSnapshotFaultFixture)]
 class DrawSnapshot{
     private u64 m_generation = 0u;
     private DisplayMetrics m_displayMetrics;

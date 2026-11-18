@@ -17,6 +17,7 @@ extern class GpuPacketEnvelopeMetricScope{
 [cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuTimingMetricCorrelator"), cpp_flags(no_copy, no_assign)]
 extern class GpuTimingMetricCorrelator{
     void discardPendingRanges(...);
+    void recordTimestampRange(in Name scope, in u64 frameIndex, in GpuComparableTimestampRange range, mut auto scratch, mut auto samples);
     b8 hasOutputRole(...)const;
     b8 prepareOverlapMetric(...);
     b8 preparePacketEnvelopeMetrics(...);

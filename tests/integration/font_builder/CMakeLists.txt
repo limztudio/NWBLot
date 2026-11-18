@@ -8,8 +8,9 @@ target_link_libraries(nwb_font_builder_bake_tests PRIVATE nwb_font_builder_bake)
 if(Python3_Interpreter_FOUND AND TARGET nwb_assets_font_atlas_cook AND TARGET nwb_assets_bunch_cook)
     nwb_declare_executable(nwb_font_builder_package_probe)
     nwb_target_adhd_sources(nwb_font_builder_package_probe NAMESPACE "NWB::Tests::FontPackageCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/package_*.adhd")
-    target_link_libraries(nwb_font_builder_package_probe PRIVATE nwb_assets_font_atlas_cook nwb_assets_bunch_cook nwb_common nwb_alloc nwb_logclient)
+    target_link_libraries(nwb_font_builder_package_probe PRIVATE nwb_assets_font_atlas_cook nwb_assets_bunch_cook nwb_test_common_names nwb_common nwb_alloc nwb_logclient)
     target_compile_definitions(nwb_font_builder_package_probe PRIVATE NWB_COOK=1)
+    nwb_target_console_entry(nwb_font_builder_package_probe "tests/integration/font_builder/package_probe.adhd.h" "NWB::Tests::FontPackageCases::RunConsole" "font_builder_package_probe" "NWB::Tests::FontPackageCases::s_EntryFailure")
 
     add_test(NAME nwb_font_builder_cli_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/font_builder_cli_tests.py" --executable "$<TARGET_FILE:nwb_font_builder>" --package-probe "$<TARGET_FILE:nwb_font_builder_package_probe>"
             --fonts "${PROJECT_SOURCE_DIR}/impl/assets/ui/fonts/default")

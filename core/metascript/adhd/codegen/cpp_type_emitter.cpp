@@ -467,7 +467,7 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
             out.append("void");
         out.push_back(' ');
     }
-    else if(isDeclarationInClass && isOverrideDestructor){
+    else if(isDeclarationInClass && (isOverrideDestructor || (method.isDestructor && ownerClass && ownerClass->isExtensible))){
         out.append("virtual ");
     }
     else if(isDeclarationInClass && prependMotherArena && method.params.empty()){

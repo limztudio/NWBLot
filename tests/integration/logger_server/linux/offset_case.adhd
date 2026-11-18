@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../logger_crash_fixture.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset(mut LoggerServerCrash self){
+    HeapStorage testArena = HeapStorage();
+    const StringView group = "logger_server_linux_offset_overflow_test";
+    const StringView stem = "linux_offset_overflow_001";
+    RemoveTestArtifacts(group);
+
+    String archive = "";
+    BeginArchiveWithManifest("linux-offset-overflow-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Include, ManifestTriggerFields(), archive);
+    AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4097\n", archive);
+    AppendArchiveFile(s_ProcMapsFileName, "1000-2000 r-xp ffffffffffffffff 00:00 0 /tmp/overflow\n", archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
+    ASSERT_TRUE(result.accepted);
+
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), "instruction_pointer_module=/tmp/overflow"));
+    EXPECT_TRUE(Contains(StringView(report), "symbolication_relative_ip=unavailable"));
+    RemoveTestArtifacts(group);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(LoggerServerCrash, LinuxCrashPackageDoesNotWrapSymbolOffset, VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

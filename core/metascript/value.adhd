@@ -20,6 +20,8 @@ extern enum MetascriptValueType : u8{
 [cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value")]
 extern class MetascriptValue{
     f64 asDouble(...)const;
+    mut MetascriptList asList();
+    mut MetascriptMap asMap();
     i64 asInteger(...)const;
     StringView asReference(...)const;
     StringView asString(...)const;
@@ -46,6 +48,26 @@ extern class MetascriptValue{
     f64 toDouble(...)const;
     MetascriptValueType type(...)const;
     b8 visitField(in StringView a0, in Func<void(in MetascriptValue)> a1)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value::ListType")]
+extern class MetascriptList{
+    void clear();
+    usize size()const;
+    void pop_back();
+    void reserve(in usize count);
+    void push_back(in MetascriptValue value);
+    in MetascriptValue front()const;
+    mut MetascriptValue operator[](in usize index);
+};
+
+[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value::MapType")]
+extern class MetascriptMap{
+    usize erase(in StringView key);
 };
 
 

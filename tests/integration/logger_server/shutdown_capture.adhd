@@ -1,0 +1,110 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "loopback_http.adhd"
+#include <tests/common/threads.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_FirstRequestDelayMilliseconds = 250u;
+
+class ShutdownCaptureServer : NoCopy{
+    private Array<Array<u8, 8192u>, 2u> m_payloads;
+    private Array<usize, 2u> m_payloadSizes;
+    private Array<b8, 2u> m_telemetryRequests;
+    private b8 m_payloadOverflow = false;
+    private u32 m_firstStatus;
+    private b8 m_repeatStatus;
+    private b8 m_holdFirstRequest;
+    private TestAtomic<u32> m_requestCount = TestAtomic<u32>(0u);
+    private TestAtomic<b8> m_delayedFirstRequest = TestAtomic<b8>(false);
+    private TestAtomic<b8> m_releaseFirstRequest = TestAtomic<b8>(false);
+    private TestHttpServer m_server;
+
+    public ShutdownCaptureServer(in u32 firstStatus, in b8 repeatStatus, in b8 holdFirstRequest){
+        this.m_firstStatus = firstStatus;
+        this.m_repeatStatus = repeatStatus;
+        this.m_holdFirstRequest = holdFirstRequest;
+    }
+
+    public ~ShutdownCaptureServer(){
+        this.releaseFirstRequest();
+        this.m_server.stop();
+    }
+
+    public b8 start(mut u16 port){
+        Func<64u, b8(mut TestHttpRequest)> handle = lambda[mut this](mut TestHttpRequest request) -> b8{ return this.handle(request); };
+        return this.m_server.start(handle, port);
+    }
+
+    public u32 requestCount()const{ return this.m_requestCount.load(MemoryOrder::acquire); }
+    public b8 processingFirstRequest()const{ return this.m_delayedFirstRequest.load(MemoryOrder::acquire); }
+    public void releaseFirstRequest(){ this.m_releaseFirstRequest.store(true, MemoryOrder::release); }
+    public b8 requestWasTelemetry(in u32 index)const{ return this.m_telemetryRequests[index]; }
+    public usize firstPayloadSize()const{
+        if(this.m_payloadOverflow)
+            return 0u;
+        return this.m_payloadSizes[0u];
+    }
+    public b8 firstPayloadRetried()const{
+        return !this.m_payloadOverflow && this.m_payloadSizes[0u] != 0u && this.m_payloadSizes[0u] == this.m_payloadSizes[1u]
+            && BytesMatch(Span<u8>(this.m_payloads[0u]).first(this.m_payloadSizes[0u]), Span<u8>(this.m_payloads[1u]).first(this.m_payloadSizes[1u]));
+    }
+
+    private b8 handle(mut TestHttpRequest request){
+        if(request.method() != "POST")
+            return false;
+        if(request.begin())
+            return true;
+        const Span<u8> body = request.body();
+        if(!body.empty()){
+            const u32 index = this.m_requestCount.load(MemoryOrder::relaxed);
+            if(index < this.m_payloads.size()){
+                const usize used = this.m_payloadSizes[index];
+                if(body.size() > this.m_payloads[index].size() - used)
+                    this.m_payloadOverflow = true;
+                else{
+                    for(usize offset = 0u; offset < body.size(); ++offset)
+                        this.m_payloads[index][used + offset] = body[offset];
+                    this.m_payloadSizes[index] += body.size();
+                }
+            }
+            request.consume();
+            return true;
+        }
+        if(!this.m_delayedFirstRequest.exchange(true, MemoryOrder::acq_rel)){
+            if(this.m_holdFirstRequest){
+                while(!this.m_releaseFirstRequest.load(MemoryOrder::acquire))
+                    SleepMS(1u);
+            }
+            else
+                SleepMS(s_FirstRequestDelayMilliseconds);
+        }
+        const u32 index = this.m_requestCount.load(MemoryOrder::relaxed);
+        if(index < this.m_telemetryRequests.size())
+            this.m_telemetryRequests[index] = request.path() == "/telemetry";
+        this.m_requestCount.fetch_add(1u, MemoryOrder::release);
+        if(index == 0u || this.m_repeatStatus)
+            return request.respond(this.m_firstStatus);
+        return request.respond(s_HttpOk);
+    }
+}
+
+class ServerFirstRequestReleaseGuard : NoCopy{
+    private mut ShutdownCaptureServer m_server;
+    private b8 m_armed = true;
+
+    public ServerFirstRequestReleaseGuard(mut ShutdownCaptureServer server){ this.m_server = server; }
+    public ~ServerFirstRequestReleaseGuard(){
+        if(this.m_armed)
+            this.m_server.releaseFirstRequest();
+    }
+    public void release(){ this.m_armed = false; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

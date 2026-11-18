@@ -5,6 +5,7 @@
 [cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService::BufferSetupDesc"), cpp_flags(self_defaulted)]
 extern class StandaloneBufferSetupDesc{
     BufferDesc bufferDesc;
+    CommandQueue queue;
     void setData<T>(in Span<T> payload);
 };
 

@@ -32,6 +32,7 @@ public:
     void clear()noexcept;
     [[nodiscard]] ClipboardStatus::Enum appendBytes(AStringView bytes);
     [[nodiscard]] const AString<Alloc::GlobalArena>& text()const noexcept{ return m_text; }
+    [[nodiscard]] AStringView textView()const noexcept{ return m_text; }
 
 
 private:

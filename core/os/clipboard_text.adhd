@@ -7,6 +7,7 @@ extern class ClipboardTextAccumulator{
     ClipboardStatus appendBytes(...);
     void clear(...);
     String text(...)const;
+    StringView textView()const;
 };
 
 

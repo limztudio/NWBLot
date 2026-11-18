@@ -2,362 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/avboit_pass_and_geometry_reuse.adhd>
+#include <impl/ecs_render/refraction/rt_refraction.adhd>
+#include <impl/assets_graphics/refractive_subsystem.adhd>
+#include <impl/assets_graphics/transparent_subsystem.adhd>
+#include <impl/assets_scene/asset.adhd>
+#include "gpu_probe_resources.adhd"
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/smoke/assets/shaders/refraction_tile_probe_layout.h>
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets/graphics/refraction/push_constants.h>
-#include <impl/assets_graphics/components.adhd.h>
-#include <impl/assets_graphics/refractive_subsystem.adhd.h>
-#include <impl/assets_graphics/transparent_subsystem.adhd.h>
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_shader/loader.adhd.h>
-#include <impl/ecs_render/avboit/avboit.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/simd/convert_half.h>
-#include <global/simd/vector.h>
-
-namespace NWB::Tests::Smoke{
-inline constexpr u32 s_AvboitIntWidth = 7u;
-inline constexpr u32 s_AvboitIntHeight = 3u;
-inline constexpr u32 s_AvboitIntPixelCount = s_AvboitIntWidth * s_AvboitIntHeight;
-inline constexpr u32 s_AvboitIntSliceCount = 17u;
-inline constexpr u32 s_AvboitIntWordCount = DivideUp(s_AvboitIntSliceCount, NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * s_AvboitIntPixelCount;
-
-struct AvboitIntegrationProbeTask{
-    struct Payload{
-        Core::BufferHandle extinction;
-        Core::BufferHandle overflow;
-        Core::BufferHandle control;
-        Core::BufferHandle slots;
-        Core::TextureHandle volume;
-        Core::StagingTextureHandle readback;
-        Core::ComputePipelineHandle pipeline;
-        Core::GpuDescriptorHeap& heap;
-        TStringView& stage;
-        Core::ResourceStates::Mask volumeInitialState = Core::ResourceStates::Unknown;
-        Array<u32, s_AvboitIntWordCount> words{};
-        Array<u32, s_AvboitIntPixelCount> overflowSlices{};
-        Array<u32, NWB_AVBOIT_CONTROL_WORD_COUNT> controlWords{};
-        Impl::RendererAvboitPushConstants push{};
-    };
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
-        payload.stage = FOUNDATION_TEXT("recording entry");
-        if(context.commandIrCapture)
-            return false;
-        payload.stage = FOUNDATION_TEXT("buffer uploads");
-        if(
-            !commands.tryWriteBuffer(*payload.extinction, payload.words.data(), sizeof(payload.words))
-            || !commands.tryWriteBuffer(*payload.overflow, payload.overflowSlices.data(), sizeof(payload.overflowSlices))
-            || !commands.tryWriteBuffer(*payload.control, payload.controlWords.data(), sizeof(payload.controlWords))
-        )
-            return false;
-        // Reused storage must return to neutral even when the next dispatch skips every XY cell.
-        payload.stage = FOUNDATION_TEXT("volume clear and integration dispatch");
-        commands.clearTextureFloat(*payload.volume, Core::TextureSubresourceSet{}, Core::Color(1.f, 1.f, 1.f, 1.f));
-        commands.setBufferState(payload.extinction.get(), Core::ResourceStates::ShaderResource);
-        commands.setBufferState(payload.overflow.get(), Core::ResourceStates::ShaderResource);
-        commands.setBufferState(payload.control.get(), Core::ResourceStates::ShaderResource);
-        commands.setTextureState(payload.volume.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::UnorderedAccess);
-        commands.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(payload.pipeline.get());
-        commands.setComputeState(state);
-        payload.heap.bindCompute(commands, *payload.pipeline);
-        commands.setPushConstants(&payload.push, sizeof(payload.push));
-        commands.dispatch(DivideUp(s_AvboitIntPixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)), 1u, 1u);
-        payload.stage = FOUNDATION_TEXT("volume copy and state restoration");
-        commands.setTextureState(payload.volume.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::CopySource);
-        commands.commitBarriers();
-        commands.copyTexture(*payload.readback, Core::TextureSlice{}, *payload.volume, Core::TextureSlice{});
-        commands.setBufferState(payload.extinction.get(), Core::ResourceStates::CopyDest);
-        commands.setBufferState(payload.overflow.get(), Core::ResourceStates::CopyDest);
-        commands.setBufferState(payload.control.get(), Core::ResourceStates::CopyDest);
-        commands.setTextureState(payload.volume.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::CopyDest);
-        commands.commitBarriers();
-        if(commands.commandRecordingFailed())
-            return false;
-        payload.stage = FOUNDATION_TEXT("native close and submission");
-        return true;
-    }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> DeclareAvboitIntegrationProbe(void* userData, Core::GpuTaskGraph& graph){
-    const auto& payload = *MakeNotNull(static_cast<const AvboitIntegrationProbeTask::Payload*>(userData));
-    const Name probeName = Name(s_SmokeNameAvboitIntegrationProbe);
-    payload.stage = FOUNDATION_TEXT("buffer imports");
-    const auto importBuf = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
-        return graph.importBuffer(buffer, Core::GpuGraphResourceDesc{}.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state));
-    };
-    const Array<Expected<Core::GpuGraphResourceId>, 4u> buffers{
-        importBuf(payload.extinction, "Integration probe extinction", Core::ResourceStates::CopyDest),
-        importBuf(payload.overflow, "Integration probe overflow", Core::ResourceStates::CopyDest),
-        importBuf(payload.control, "Integration probe control", Core::ResourceStates::CopyDest),
-        importBuf(payload.slots, "Integration probe heap slots", Core::ResourceStates::ConstantBuffer),
-    };
-    for(const auto& buffer : buffers){
-        if(!buffer)
-            return MakeUnexpected(Failure{});
-    }
-    payload.stage = FOUNDATION_TEXT("volume and staging imports");
-    const auto volume = graph.importTexture(
-        payload.volume,
-        Core::GpuGraphResourceDesc{}
-            .setIdentity(probeName)
-            .setMarkerLabel("Integration probe transmittance volume")
-            .setType(Core::GpuGraphResourceType::Texture)
-            .setInitialState(payload.volumeInitialState)
-            .setExternalFinalState(Core::ResourceStates::CopyDest)
-    );
-    const auto readback = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name(s_SmokeNameAvboitIntegrationReadback)).setMarkerLabel("Integration probe staging writes").setType(Core::GpuGraphResourceType::HazardDomain));
-    if(!volume || !readback)
-        return MakeUnexpected(Failure{});
-    const Array<Core::GpuTaskResourceUse, 6> uses = {{
-        { .resource = *buffers[0], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
-        { .resource = *buffers[1], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
-        { .resource = *buffers[2], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
-        { .resource = *buffers[3], .range = {}, .requiredState = Core::ResourceStates::ConstantBuffer, .access = Core::GpuTaskResourceAccess::Read },
-        { .resource = *volume, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-        { .resource = *readback, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write },
-    }};
-    payload.stage = FOUNDATION_TEXT("task declaration");
-    const auto task = graph.addTask<AvboitIntegrationProbeTask>(Core::GpuTaskDesc{}.setIdentity(probeName).setMarkerLabel("AVBOIT sparse integration boundary probe").setResourceUses(uses), AvboitIntegrationProbeTask::Payload(payload));
-    if(task)
-        payload.stage = FOUNDATION_TEXT("scheduling or initial-state recording admission");
-    return task;
-}
-
-inline constexpr u32 s_RefTileTilesX = DivideUp(s_RefractionTileProbeWidth, static_cast<u32>(NWB_REFRACTION_GROUP_SIZE));
-inline constexpr u32 s_RefTileTilesY = DivideUp(s_RefractionTileProbeHeight, static_cast<u32>(NWB_REFRACTION_GROUP_SIZE));
-inline constexpr u32 s_RefTileCount = s_RefTileTilesX * s_RefTileTilesY;
-inline constexpr u32 s_RefTilePixelCount = s_RefractionTileProbeWidth * s_RefractionTileProbeHeight;
-inline constexpr u32 s_RefTileArgumentWords = NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32) + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
-inline constexpr u32 s_RefTileQueueWords = s_RefTileCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
-inline constexpr u32 s_RefTileVisitWords = NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + s_RefTileCount + s_RefTilePixelCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
-inline constexpr u32 s_RefTileReadbackWords = s_RefTileArgumentWords + s_RefTileQueueWords + s_RefTileVisitWords;
-inline constexpr u32 s_RefTileSentinel = 0xa573d91bu;
-inline constexpr u32 s_RefTileMissingTile = (s_RefTileTilesY / 2u) * s_RefTileTilesX + s_RefTileTilesX / 2u;
-inline constexpr Array<u32, 6u> s_RefTileSparseTiles{ 0u, s_RefTileTilesX - 1u, (s_RefTileTilesY - 1u) * s_RefTileTilesX, s_RefTileCount - 1u, 65534u, 65535u };
-
-using RefractionTileProbePushConstants = Impl::RefractionPushConstants;
-
-static_assert(sizeof(RefractionTileProbePushConstants) == 11u * sizeof(u32));
-static_assert(s_RefTileCount == 66049u && s_RefTileCount > NWB_REFRACTION_MAX_GROUP_COUNT_X);
-static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 32u && NWB_REFRACTION_TILE_COUNTER_OFFSET == 12u && NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == 16u);
-
-struct RefractionTileProbeTask{
-    struct Payload{
-        Core::TextureHandle depth;
-        Core::BufferHandle queue;
-        Core::BufferHandle reversedQueue;
-        Core::BufferHandle arguments;
-        Core::BufferHandle visits;
-        Core::BufferHandle slots;
-        Core::BufferHandle readback;
-        Core::ComputePipelineHandle classify;
-        Core::ComputePipelineHandle finalize;
-        Core::ComputePipelineHandle verifyCompact;
-        Core::ComputePipelineHandle verifyDense;
-        Core::GpuDescriptorHeap& heap;
-        TStringView& stage;
-        RefractionTileProbePushConstants push;
-        u32 denseTileListSlot = 0u;
-        u32 phase = 0u;
-    };
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
-        payload.stage = FOUNDATION_TEXT("resource initialization");
-        if(context.commandIrCapture)
-            return false;
-        commands.clearTextureFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Color(payload.phase == 0u || payload.phase == 5u ? 0.5f : 1.f));
-        commands.setTextureState(payload.depth.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::CopyDest, true);
-        commands.commitBarriers();
-        if(payload.phase == 2u){
-            for(const u32 tile : s_RefTileSparseTiles){
-                const i32 x = static_cast<i32>((tile % s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
-                const i32 y = static_cast<i32>((tile / s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
-                commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(x, x + 1, y, y + 1), Core::Color(0.5f));
-            }
-        }
-        else if(payload.phase == 3u || payload.phase == 4u){
-            const u32 count = ExpectedRefractionProbeTileCount(payload.phase);
-            const u32 fullRows = count / s_RefTileTilesX;
-            commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(0, static_cast<i32>(s_RefractionTileProbeWidth), 0, static_cast<i32>(fullRows * NWB_REFRACTION_GROUP_SIZE)), Core::Color(0.5f));
-            const u32 remainder = count % s_RefTileTilesX;
-            if(remainder != 0u){
-                const i32 y = static_cast<i32>(fullRows * NWB_REFRACTION_GROUP_SIZE);
-                commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(0, static_cast<i32>(remainder * NWB_REFRACTION_GROUP_SIZE), y, y + NWB_REFRACTION_GROUP_SIZE), Core::Color(0.5f));
-            }
-        }
-        else if(payload.phase == 5u){
-            const i32 x = static_cast<i32>((s_RefTileMissingTile % s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
-            const i32 y = static_cast<i32>((s_RefTileMissingTile / s_RefTileTilesX) * NWB_REFRACTION_GROUP_SIZE);
-            commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(x, x + NWB_REFRACTION_GROUP_SIZE, y, y + NWB_REFRACTION_GROUP_SIZE), Core::Color(1.f));
-        }
-        Array<u32, s_RefTileArgumentWords> arguments;
-        arguments.fill(s_RefTileSentinel);
-        for(u32 word = 0u; word < NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32); ++word)
-            arguments[word] = 0u;
-        Array<u32, NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS> guards;
-        guards.fill(s_RefTileSentinel);
-        commands.clearBufferUInt(*payload.queue, s_RefTileSentinel);
-        commands.clearBufferUInt(*payload.visits, 0u);
-        commands.setBufferState(payload.visits.get(), Core::ResourceStates::CopyDest, true);
-        commands.commitBarriers();
-        if(!commands.tryWriteBuffer(*payload.arguments, arguments.data(), sizeof(arguments)) || !commands.tryWriteBuffer(*payload.visits, guards.data(), sizeof(guards), static_cast<u64>(s_RefTileVisitWords - NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS) * sizeof(u32)))
-            return false;
-
-        payload.stage = FOUNDATION_TEXT("production tile classification");
-        commands.setTextureState(payload.depth.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::ShaderResource);
-        commands.setBufferState(payload.queue.get(), Core::ResourceStates::UnorderedAccess);
-        commands.setBufferState(payload.arguments.get(), Core::ResourceStates::UnorderedAccess);
-        commands.setBufferState(payload.visits.get(), Core::ResourceStates::UnorderedAccess);
-        commands.commitBarriers();
-        Core::ComputeState classify;
-        classify.setPipeline(payload.classify.get());
-        commands.setComputeState(classify);
-        payload.heap.bindCompute(commands, *payload.classify);
-        commands.setPushConstants(&payload.push, sizeof(payload.push));
-        commands.dispatch(s_RefTileTilesX, s_RefTileTilesY, 1u);
-
-        payload.stage = FOUNDATION_TEXT("production indirect route finalization");
-        commands.setBufferState(payload.arguments.get(), Core::ResourceStates::UnorderedAccess, true);
-        commands.commitBarriers();
-        Core::ComputeState finalize;
-        finalize.setPipeline(payload.finalize.get());
-        commands.setComputeState(finalize);
-        payload.heap.bindCompute(commands, *payload.finalize);
-        commands.setPushConstants(&payload.push, sizeof(payload.push));
-        commands.dispatch(1u, 1u, 1u);
-
-        payload.stage = FOUNDATION_TEXT("compact indirect mapping verification");
-        commands.setBufferState(payload.queue.get(), Core::ResourceStates::ShaderResource);
-        commands.setBufferState(payload.arguments.get(), Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument);
-        commands.commitBarriers();
-        Core::ComputeState verifyCompact;
-        verifyCompact.setPipeline(payload.verifyCompact.get()).setIndirectParams(payload.arguments.get());
-        commands.setComputeState(verifyCompact);
-        payload.heap.bindCompute(commands, *payload.verifyCompact);
-        commands.setPushConstants(&payload.push, sizeof(payload.push));
-        commands.dispatchIndirect(0u);
-
-        payload.stage = FOUNDATION_TEXT("dense indirect mapping verification");
-        commands.setBufferState(payload.visits.get(), Core::ResourceStates::UnorderedAccess, true);
-        commands.commitBarriers();
-        Core::ComputeState verifyDense;
-        verifyDense.setPipeline(payload.verifyDense.get()).setIndirectParams(payload.arguments.get());
-        commands.setComputeState(verifyDense);
-        payload.heap.bindCompute(commands, *payload.verifyDense);
-        // A valid reversed list distinguishes direct dense mapping from queue traversal without changing classifier output.
-        RefractionTileProbePushConstants verifyPush = payload.push;
-        verifyPush.tileListSlot = payload.denseTileListSlot;
-        commands.setPushConstants(&verifyPush, sizeof(verifyPush));
-        commands.dispatchIndirect(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET);
-
-        payload.stage = FOUNDATION_TEXT("counter and queue readback");
-        const Array<Core::BufferHandle, 3u> buffers{ payload.arguments, payload.queue, payload.visits };
-        for(const auto& buffer : buffers)
-            commands.setBufferState(buffer.get(), Core::ResourceStates::CopySource);
-        commands.commitBarriers();
-        u64 offset = 0u;
-        for(const auto& buffer : buffers){
-            const u64 bytes = buffer->getCreationDescription().byteSize;
-            commands.copyBuffer(*payload.readback, offset, *buffer, 0u, bytes);
-            offset += bytes;
-            commands.setBufferState(buffer.get(), Core::ResourceStates::CopyDest);
-        }
-        commands.setTextureState(payload.depth.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::CopyDest);
-        commands.commitBarriers();
-        if(commands.commandRecordingFailed())
-            return false;
-        payload.stage = FOUNDATION_TEXT("native close and submission");
-        return true;
-    }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> DeclareRefractionTileProbe(void* userData, Core::GpuTaskGraph& graph){
-    const auto& payload = *MakeNotNull(static_cast<const RefractionTileProbeTask::Payload*>(userData));
-    const Name probeName = Name(s_SmokeNameRefractionTileProbe);
-    payload.stage = FOUNDATION_TEXT("graph imports");
-    const auto importBuffer = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
-        return graph.importBuffer(buffer, Core::GpuGraphResourceDesc{}.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state));
-    };
-    const Array<Expected<Core::GpuGraphResourceId>, 6u> buffers{
-        importBuffer(payload.queue, "Refraction probe tile queue", Core::ResourceStates::CopyDest),
-        importBuffer(payload.arguments, "Refraction probe indirect arguments", Core::ResourceStates::CopyDest),
-        importBuffer(payload.visits, "Refraction probe visit counters", Core::ResourceStates::CopyDest),
-        importBuffer(payload.slots, "Refraction probe heap selectors", Core::ResourceStates::ConstantBuffer),
-        importBuffer(payload.readback, "Refraction probe readback", Core::ResourceStates::CopyDest),
-        importBuffer(payload.reversedQueue, "Refraction probe reversed dense tile list", Core::ResourceStates::ShaderResource),
-    };
-    for(const auto& buffer : buffers){
-        if(!buffer)
-            return MakeUnexpected(Failure{});
-    }
-    const auto initial = payload.phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
-    const auto depthDesc = Core::GpuGraphResourceDesc{}.setIdentity(probeName).setMarkerLabel("Refraction probe capture depth").setType(Core::GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(Core::ResourceStates::CopyDest);
-    const auto depth = graph.importTexture(payload.depth, depthDesc);
-    if(!depth)
-        return MakeUnexpected(Failure{});
-    const Array<Core::GpuTaskResourceUse, 7> uses = {{
-        { .resource = *buffers[0], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-        { .resource = *buffers[1], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-        { .resource = *buffers[2], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-        { .resource = *buffers[3], .range = {}, .requiredState = Core::ResourceStates::ConstantBuffer, .access = Core::GpuTaskResourceAccess::Read },
-        { .resource = *buffers[4], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-        { .resource = *buffers[5], .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read },
-        { .resource = *depth, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-    }};
-    payload.stage = FOUNDATION_TEXT("task declaration");
-    const auto task = graph.addTask<RefractionTileProbeTask>(Core::GpuTaskDesc{}.setIdentity(probeName).setMarkerLabel("Refraction tile queue boundary probe").setResourceUses(uses), RefractionTileProbeTask::Payload(payload));
-    if(task)
-        payload.stage = FOUNDATION_TEXT("scheduling or initial-state recording admission");
-    return task;
-}
-
-using Impl::ActiveSceneSubsystems;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -493,151 +145,482 @@ b8 VerifyAvboitIntegrationSliceValues(
     return true;
 }
 
-b8 RunAvboitIntegrationProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectRuntimeContext context){
-    AvboitIntegrationPhaseState phaseState = AvboitIntegrationPhaseState();
-    b8 ok = false;
-    native(in sceneSubsystems, mut context, mut phaseState, mut ok){
-        const Name probeName = Name(s_SmokeNameAvboitIntegrationProbe);
-        auto& graphics = context.graphics;
-        auto& device = graphics.getDevice();
-        auto& heap = device.getDescriptorHeap();
-        Core::ShaderHandle shader;
-        const auto transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
-        const auto integrateShaderRef = transparentSubsystem ? (*transparentSubsystem)->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES")]
+extern const u32 s_IntegrationProbeActiveSlicesIndex;
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE")]
+extern const u32 s_IntegrationProbeExtinctionScaleIndex;
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT")]
+extern const Format s_IntegrationProbeTransmittanceFormat;
+[cpp_header("<impl/assets/graphics/refraction/push_constants.h>"), cpp_name("NWB_REFRACTION_TILE_COUNTER_OFFSET")]
+extern const u32 s_RefractionProbeShaderCounterOffset;
+[cpp_header("<tests/smoke/assets/shaders/refraction_tile_probe_layout.h>"), cpp_name("NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS")]
+extern const u32 s_RefractionProbeShaderGuardWords;
+[cpp_header("<tests/smoke/assets/shaders/refraction_tile_probe_layout.h>"), cpp_name("NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS")]
+extern const u32 s_RefractionProbeShaderHeaderWords;
+static_assert(size_of<RefractionPushConstants>() == 11u * size_of<u32>());
+static_assert(s_RefractionTileProbeTileCount == 66049u && s_RefractionTileProbeTileCount > s_RefractionTileProbeMaxGroupCountX);
+static_assert(s_RefractionShaderTileArgumentBytes == 32u && s_RefractionProbeShaderCounterOffset == 12u && s_RefractionShaderDenseArgumentOffset == 16u);
+static_assert(s_RefractionProbeShaderGuardWords == s_RefractionTileProbeGuardWords && s_RefractionProbeShaderHeaderWords == s_RefractionTileProbeHeaderWords);
+
+class GpuProbeProgress{
+    public StringView stage = "probe initialization";
+}
+
+type IntegrationProbeExtinctionWords = Array<u32, s_AvboitIntegrationProbeWordCount>;
+
+type IntegrationProbePixelWords = Array<u32, s_AvboitIntegrationProbePixelCount>;
+
+type IntegrationProbeControlWords = Array<u32, s_AvboitProbeControlWordCount>;
+
+class AvboitIntegrationProbeTask{
+    public BufferHandle extinction = BufferHandle();
+    public BufferHandle overflow = BufferHandle();
+    public BufferHandle control = BufferHandle();
+    public BufferHandle slots = BufferHandle();
+    public TextureHandle volume = TextureHandle();
+    public StagingTextureHandle readback = StagingTextureHandle();
+    public ComputePipelineHandle pipeline = ComputePipelineHandle();
+    public ResourceStates volumeInitialState = ResourceStates::Unknown;
+    public Array<u32, s_AvboitIntegrationProbeWordCount> words = IntegrationProbeExtinctionWords();
+    public Array<u32, s_AvboitIntegrationProbePixelCount> overflowSlices = IntegrationProbePixelWords();
+    public Array<u32, s_AvboitProbeControlWordCount> controlWords = IntegrationProbeControlWords();
+    public RendererAvboitPushConstants push = RendererAvboitPushConstants();
+    public mut GpuDescriptorHeap heap;
+    public mut GpuProbeProgress progress;
+
+    public AvboitIntegrationProbeTask(mut GpuDescriptorHeap heap, mut GpuProbeProgress progress){
+        this.heap = heap;
+        this.progress = progress;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        this.progress.stage = "recording entry";
+        if(context.hasCommandIrCapture())
+            return false;
+        this.progress.stage = "buffer uploads";
         if(
-            !integrateShaderRef.valid()
-            || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, probeName, "AvboitIntegrationProbe", graphics, context.assetManager, context.shaderPathResolver, {}, shader)
+            !commands.tryWriteBuffer(this.extinction.deref(), this.words)
+            || !commands.tryWriteBuffer(this.overflow.deref(), this.overflowSlices)
+            || !commands.tryWriteBuffer(this.control.deref(), this.controlWords)
         )
             return false;
-        Core::BindingLayoutDesc layoutDesc(context.objectArena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
-        const auto layout = device.createBindingLayout(layoutDesc);
-        if(!layout)
+        // Reused storage must return to neutral even when the next dispatch skips every XY cell.
+        this.progress.stage = "volume clear and integration dispatch";
+        commands.clearTextureFloat(this.volume.deref(), TextureSubresourceSet(), Color(1.0f, 1.0f, 1.0f, 1.0f));
+        commands.setBufferState(this.extinction.deref(), ResourceStates::ShaderResource);
+        commands.setBufferState(this.overflow.deref(), ResourceStates::ShaderResource);
+        commands.setBufferState(this.control.deref(), ResourceStates::ShaderResource);
+        commands.setTextureState(this.volume.deref(), TextureSubresourceSet(), ResourceStates::UnorderedAccess);
+        commands.commitBarriers();
+        ComputeState state;
+        state.setPipeline(this.pipeline.deref());
+        commands.setComputeState(state);
+        this.heap.bindCompute(commands, this.pipeline.deref());
+        commands.setPushConstants(this.push);
+        commands.dispatch(DivideUp(s_AvboitIntegrationProbePixelCount, cast<u32>(s_AvboitIntegrateGroupSizeX)), 1u, 1u);
+        this.progress.stage = "volume copy and state restoration";
+        commands.setTextureState(this.volume.deref(), TextureSubresourceSet(), ResourceStates::CopySource);
+        commands.commitBarriers();
+        commands.copyTexture(this.readback.deref(), TextureSlice(), this.volume.deref(), TextureSlice());
+        commands.setBufferState(this.extinction.deref(), ResourceStates::CopyDest);
+        commands.setBufferState(this.overflow.deref(), ResourceStates::CopyDest);
+        commands.setBufferState(this.control.deref(), ResourceStates::CopyDest);
+        commands.setTextureState(this.volume.deref(), TextureSubresourceSet(), ResourceStates::CopyDest);
+        commands.commitBarriers();
+        if(commands.commandRecordingFailed())
             return false;
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc.setComputeShader(shader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        const auto pipeline = device.createComputePipeline(pipelineDesc);
-        if(!pipeline)
-            return false;
-        const auto createBuffer = [&graphics](const Name name, const u32 byteSize, const b8 constant){
-            Core::BufferDesc desc;
-            desc.setDebugName(name).setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(!constant).setIsConstantBuffer(constant).enableAutomaticStateTracking(constant ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::CopyDest);
-            return graphics.createBuffer(desc);
-        };
-        const auto extinction = createBuffer(Name(s_SmokeNameAvboitIntegrationExtinction), s_AvboitIntWordCount * sizeof(u32), false);
-        const auto overflow = createBuffer(Name(s_SmokeNameAvboitIntegrationOverflow), s_AvboitIntPixelCount * sizeof(u32), false);
-        const auto control = createBuffer(Name(s_SmokeNameAvboitIntegrationControl), NWB_AVBOIT_CONTROL_WORD_COUNT * sizeof(u32), false);
-        Core::TextureDesc textureDesc;
-        textureDesc.setWidth(s_AvboitIntWidth)
-            .setHeight(s_AvboitIntHeight)
-            .setDepth(s_AvboitIntSliceCount)
-            .setDimension(Core::TextureDimension::Texture3D)
-            .setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT)
-            .setIsUAV(true)
-            .setName(probeName)
-            .setInitialState(Core::ResourceStates::CopyDest)
-            .setKeepInitialState(true)
-        ;
-        const auto volume = graphics.createTexture(textureDesc);
-        const auto readback = device.createStagingTexture(textureDesc, Core::CpuAccessMode::Read);
-        if(!extinction || !overflow || !control || !volume || !readback)
-            return false;
-        Core::BufferHandle slotBuffer;
-        Array<Core::GpuDescriptorHandle, 5u> descriptors{};
-        Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
-        const Array<Core::BufferHandle, 3u> buffers{ *extinction, *overflow, *control };
-        for(u32 index = 0u; index < buffers.size(); ++index){
-            const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-            if(!descriptor)
-                return false;
-            descriptors[index] = *descriptor;
-            if(!heap.write(*descriptor, Core::DescriptorWriteItem::StructuredBufferUav(0u, buffers[index].get())))
-                return false;
-        }
-        const auto storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);
-        if(!storage)
-            return false;
-        descriptors[3] = *storage;
-        if(!heap.write(*storage, Core::DescriptorWriteItem::TextureUav(0u, volume->get(), textureDesc.format, Core::TextureSubresourceSet{}, Core::TextureDimension::Texture3D)))
-            return false;
-        Impl::DeferredBindlessResourceSlots slots;
-        slots.avboitExtinction = descriptors[0].slot();
-        slots.avboitExtinctionOverflow = descriptors[1].slot();
-        slots.avboitControl = descriptors[2].slot();
-        slots.avboitTransmittanceStorage = descriptors[3].slot();
-        Core::GraphicsStandaloneService::BufferSetupDesc setup;
-        setup.bufferDesc.setDebugName(Name(s_SmokeNameAvboitIntegrationSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
-        setup.data = &slots;
-        setup.dataSize = sizeof(slots);
-        setup.queue = Core::CommandQueue::Graphics;
-        const auto slotBufferResult = graphics.standaloneGraph().setupBuffer(setup);
-        if(!slotBufferResult)
-            return false;
-        slotBuffer = *slotBufferResult;
-        const auto uniform = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-        if(!uniform)
-            return false;
-        descriptors[4] = *uniform;
-        if(!heap.write(*uniform, Core::DescriptorWriteItem::ConstantBuffer(0u, slotBuffer.get())))
-            return false;
-        TStringView stage = FOUNDATION_TEXT("phase preparation");
-        AvboitIntegrationProbeTask::Payload payload{ *extinction, *overflow, *control, slotBuffer, *volume, *readback, *pipeline, heap, stage };
-        payload.push.frame[0] = s_AvboitIntWidth * 4u;
-        payload.push.frame[1] = s_AvboitIntHeight * 4u;
-        payload.push.frame[2] = s_AvboitIntWidth;
-        payload.push.frame[3] = s_AvboitIntHeight;
-        payload.push.volume[1] = s_AvboitIntSliceCount;
-        payload.push.volume[2] = s_AvboitIntWordCount;
-        payload.push.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = static_cast<f32>(s_AvboitIntegrationProbeFixedScale);
-        payload.push.heapSlots[0] = uniform->slot();
-        for(u32 phase = 0u; phase < s_AvboitIntegrationProbePhaseCount; ++phase){
-            phaseState.prepare(phase);
-            payload.volumeInitialState = phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
-            payload.words = phaseState.words;
-            payload.overflowSlices = phaseState.overflowSlices;
-            payload.controlWords.fill(0u);
-            payload.controlWords[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES] = phaseState.activeSlices;
-            const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareAvboitIntegrationProbe);
-            if(!token){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitIntegrationProbe: phase {} standalone graph rejected at {}"), phase, stage);
-                return false;
-            }
-            if(!device.waitForSubmissionToken(*token)){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitIntegrationProbe: phase {} submission completion wait failed"), phase);
-                return false;
-            }
-            Array<u32, s_AvboitIntPixelCount> extinctionFixed{};
-            for(u32 slice = 0u; slice < s_AvboitIntSliceCount; ++slice){
-                const auto mapping = device.mapStagingTexture(*payload.readback, Core::TextureSlice{}.setOrigin(0u, 0u, slice).setSize(s_AvboitIntWidth, s_AvboitIntHeight, 1u), Core::CpuAccessMode::Read);
-                if(!mapping){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
-                    return false;
-                }
-                ScopeExit unmap([&]()noexcept{ device.unmapStagingTexture(*payload.readback); });
-                if(!mapping->data || mapping->rowPitch < s_AvboitIntWidth * sizeof(Half)){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
-                    return false;
-                }
-                Array<f32, s_AvboitIntPixelCount> observedPixels{};
-                Array<f32, s_AvboitIntPixelCount> expectedPixels{};
-                for(u32 pixel = 0u; pixel < s_AvboitIntPixelCount; ++pixel){
-                    Half observed;
-                    FOUNDATION_MEMCPY(&observed, sizeof(observed), static_cast<const u8*>(mapping->data) + (pixel / s_AvboitIntWidth) * mapping->rowPitch + (pixel % s_AvboitIntWidth) * sizeof(Half), sizeof(observed));
-                    const f32 exponent = -static_cast<f32>(extinctionFixed[pixel]) / static_cast<f32>(s_AvboitIntegrationProbeFixedScale);
-                    expectedPixels[pixel] = ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent)));
-                    observedPixels[pixel] = ConvertHalfToFloat(observed);
-                }
-                if(!VerifyAvboitIntegrationSliceValues(phaseState, phase, slice, Span<const f32>(observedPixels.data(), observedPixels.size()), Span<const f32>(expectedPixels.data(), expectedPixels.size()), extinctionFixed)){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
-                    return false;
-                }
-            }
-        }
-        ok = true;
+        this.progress.stage = "native close and submission";
+        return true;
     }
-    if(ok)
-        [essential] info("AvboitIntegrationProbe: passed 5 phases with empty, late, partial, saturation, wrapped overflow and active-to-empty clear checks");
-    return ok;
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareAvboitIntegrationProbe(in AvboitIntegrationProbeTask payload, mut GpuTaskGraph graph){
+    const Name probeName = s_SmokeNameAvboitIntegrationProbe;
+    payload.progress.stage = "buffer imports";
+    const Array<BufferHandle, 4u> buffers(payload.extinction, payload.overflow, payload.control, payload.slots);
+    const Array<StringView, 4u> labels("Integration probe extinction", "Integration probe overflow", "Integration probe control", "Integration probe heap slots");
+    const Array<ResourceStates, 4u> states(ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::ConstantBuffer);
+    const Array<GpuTaskResourceAccess, 4u> access(GpuTaskResourceAccess::ReadWrite, GpuTaskResourceAccess::ReadWrite, GpuTaskResourceAccess::ReadWrite, GpuTaskResourceAccess::Read);
+    Array<GpuTaskResourceUse, 6u> uses;
+    for(usize i = 0u; i < buffers.size(); ++i){
+        GpuGraphResourceDesc desc;
+        desc.setIdentity(buffers[i].deref().getCreationDescription().debugName).setMarkerLabel(labels[i]).setType(GpuGraphResourceType::Buffer)
+            .setInitialState(states[i]).setExternalFinalState(states[i]);
+        const auto imported = graph.importBuffer(buffers[i], desc);
+        if(!imported.has_value())
+            return MakeUnexpected(Failure());
+        uses[i].resource = imported.value();
+        uses[i].requiredState = states[i];
+        uses[i].access = access[i];
+    }
+    payload.progress.stage = "volume and staging imports";
+    const ResourceStates initial = payload.volumeInitialState;
+    GpuGraphResourceDesc textureDesc;
+    textureDesc.setIdentity(probeName).setMarkerLabel("Integration probe transmittance volume").setType(GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(ResourceStates::CopyDest);
+    const auto volume = graph.importTexture(payload.volume, textureDesc);
+    GpuGraphResourceDesc stagingDesc;
+    stagingDesc.setIdentity(s_SmokeNameAvboitIntegrationReadback).setMarkerLabel("Integration probe staging writes").setType(GpuGraphResourceType::HazardDomain);
+    const auto readback = graph.importHazardDomain(stagingDesc);
+    if(!volume.has_value())
+        return MakeUnexpected(Failure());
+    uses[4u].resource = volume.value();
+    uses[4u].requiredState = ResourceStates::CopyDest;
+    uses[4u].access = GpuTaskResourceAccess::Write;
+    if(!readback.has_value())
+        return MakeUnexpected(Failure());
+    uses[5u].resource = readback.value();
+    uses[5u].requiredState = ResourceStates::Unknown;
+    uses[5u].access = GpuTaskResourceAccess::Write;
+    payload.progress.stage = "task declaration";
+    GpuTaskDesc desc;
+    desc.setIdentity(probeName).setMarkerLabel("AVBOIT sparse integration boundary probe").setResourceUses(uses);
+    AvboitIntegrationProbeTask recorded = payload;
+    const auto task = graph.addPayloadTask(desc, recorded);
+    if(task.has_value())
+        payload.progress.stage = "scheduling or initial-state recording admission";
+    return task;
+}
+
+class RefractionTileProbeTask{
+    public TextureHandle depth = TextureHandle();
+    public BufferHandle queue = BufferHandle();
+    public BufferHandle reversedQueue = BufferHandle();
+    public BufferHandle arguments = BufferHandle();
+    public BufferHandle visits = BufferHandle();
+    public BufferHandle slots = BufferHandle();
+    public BufferHandle readback = BufferHandle();
+    public ComputePipelineHandle classify = ComputePipelineHandle();
+    public ComputePipelineHandle finalize = ComputePipelineHandle();
+    public ComputePipelineHandle verifyCompact = ComputePipelineHandle();
+    public ComputePipelineHandle verifyDense = ComputePipelineHandle();
+    public RefractionPushConstants push = RefractionPushConstants();
+    public u32 denseTileListSlot = 0u;
+    public u32 phase = 0u;
+    public mut GpuDescriptorHeap heap;
+    public mut GpuProbeProgress progress;
+
+    public RefractionTileProbeTask(mut GpuDescriptorHeap heap, mut GpuProbeProgress progress){
+        this.heap = heap;
+        this.progress = progress;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        this.progress.stage = "resource initialization";
+        if(context.hasCommandIrCapture())
+            return false;
+        f32 depth = 1.0f;
+        if(this.phase == 0u || this.phase == 5u)
+            depth = 0.5f;
+        commands.clearTextureFloat(this.depth.deref(), TextureSubresourceSet(), Color(depth));
+        commands.setTextureState(this.depth.deref(), TextureSubresourceSet(), ResourceStates::CopyDest, true);
+        commands.commitBarriers();
+        if(this.phase == 2u){
+            const Array<u32, 6u> sparseTiles(0u, s_RefractionTileProbeTilesX - 1u, (s_RefractionTileProbeTilesY - 1u) * s_RefractionTileProbeTilesX, s_RefractionTileProbeTileCount - 1u, 65534u, 65535u);
+            for(in u32 tile : sparseTiles){
+                const i32 x = cast<i32>((tile % s_RefractionTileProbeTilesX) * s_RefractionTileProbeGroupSize);
+                const i32 y = cast<i32>((tile / s_RefractionTileProbeTilesX) * s_RefractionTileProbeGroupSize);
+                commands.clearTextureRectFloat(this.depth.deref(), TextureSubresourceSet(), Rect(x, x + 1, y, y + 1), Color(0.5f));
+            }
+        }
+        else if(this.phase == 3u || this.phase == 4u){
+            const u32 count = ExpectedRefractionProbeTileCount(this.phase);
+            const u32 fullRows = count / s_RefractionTileProbeTilesX;
+            commands.clearTextureRectFloat(this.depth.deref(), TextureSubresourceSet(), Rect(0, cast<i32>(s_RefractionTileProbeWidth), 0, cast<i32>(fullRows * s_RefractionTileProbeGroupSize)), Color(0.5f));
+            const u32 remainder = count % s_RefractionTileProbeTilesX;
+            if(remainder != 0u){
+                const i32 y = cast<i32>(fullRows * s_RefractionTileProbeGroupSize);
+                commands.clearTextureRectFloat(this.depth.deref(), TextureSubresourceSet(), Rect(0, cast<i32>(remainder * s_RefractionTileProbeGroupSize), y, y + s_RefractionTileProbeGroupSize), Color(0.5f));
+            }
+        }
+        else if(this.phase == 5u){
+            const i32 x = cast<i32>((s_RefractionTileProbeMissingTile % s_RefractionTileProbeTilesX) * s_RefractionTileProbeGroupSize);
+            const i32 y = cast<i32>((s_RefractionTileProbeMissingTile / s_RefractionTileProbeTilesX) * s_RefractionTileProbeGroupSize);
+            commands.clearTextureRectFloat(this.depth.deref(), TextureSubresourceSet(), Rect(x, x + s_RefractionTileProbeGroupSize, y, y + s_RefractionTileProbeGroupSize), Color(1.0f));
+        }
+        Array<u32, s_RefractionTileProbeArgumentWords> arguments;
+        arguments.fill(s_RefractionTileProbeSentinel);
+        for(u32 word = 0u; word < s_RefractionTileProbeArgumentBytes / size_of<u32>(); ++word)
+            arguments[word] = 0u;
+        Array<u32, s_RefractionTileProbeGuardWords> guards;
+        guards.fill(s_RefractionTileProbeSentinel);
+        commands.clearBufferUInt(this.queue.deref(), s_RefractionTileProbeSentinel);
+        commands.clearBufferUInt(this.visits.deref(), 0u);
+        commands.setBufferState(this.visits.deref(), ResourceStates::CopyDest, true);
+        commands.commitBarriers();
+        if(!commands.tryWriteBuffer(this.arguments.deref(), arguments) || !commands.tryWriteBuffer(this.visits.deref(), guards, cast<u64>(s_RefractionTileProbeVisitWords - s_RefractionTileProbeGuardWords) * size_of<u32>()))
+            return false;
+
+        this.progress.stage = "production tile classification";
+        commands.setTextureState(this.depth.deref(), TextureSubresourceSet(), ResourceStates::ShaderResource);
+        commands.setBufferState(this.queue.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.arguments.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.visits.deref(), ResourceStates::UnorderedAccess);
+        commands.commitBarriers();
+        ComputeState classify;
+        classify.setPipeline(this.classify.deref());
+        commands.setComputeState(classify);
+        this.heap.bindCompute(commands, this.classify.deref());
+        commands.setPushConstants(this.push);
+        commands.dispatch(s_RefractionTileProbeTilesX, s_RefractionTileProbeTilesY, 1u);
+
+        this.progress.stage = "production indirect route finalization";
+        commands.setBufferState(this.arguments.deref(), ResourceStates::UnorderedAccess, true);
+        commands.commitBarriers();
+        ComputeState finalize;
+        finalize.setPipeline(this.finalize.deref());
+        commands.setComputeState(finalize);
+        this.heap.bindCompute(commands, this.finalize.deref());
+        commands.setPushConstants(this.push);
+        commands.dispatch(1u, 1u, 1u);
+
+        this.progress.stage = "compact indirect mapping verification";
+        commands.setBufferState(this.queue.deref(), ResourceStates::ShaderResource);
+        commands.setBufferState(this.arguments.deref(), ResourceStates::ShaderResource | ResourceStates::IndirectArgument);
+        commands.commitBarriers();
+        ComputeState verifyCompact;
+        verifyCompact.setPipeline(this.verifyCompact.deref()).setIndirectParams(this.arguments.deref());
+        commands.setComputeState(verifyCompact);
+        this.heap.bindCompute(commands, this.verifyCompact.deref());
+        commands.setPushConstants(this.push);
+        commands.dispatchIndirect(0u);
+
+        this.progress.stage = "dense indirect mapping verification";
+        commands.setBufferState(this.visits.deref(), ResourceStates::UnorderedAccess, true);
+        commands.commitBarriers();
+        ComputeState verifyDense;
+        verifyDense.setPipeline(this.verifyDense.deref()).setIndirectParams(this.arguments.deref());
+        commands.setComputeState(verifyDense);
+        this.heap.bindCompute(commands, this.verifyDense.deref());
+        // A valid reversed list distinguishes direct dense mapping from queue traversal without changing classifier output.
+        RefractionPushConstants verifyPush = this.push;
+        verifyPush.tileListSlot = this.denseTileListSlot;
+        commands.setPushConstants(verifyPush);
+        commands.dispatchIndirect(s_RefractionDenseArgumentOffset);
+
+        this.progress.stage = "counter and queue readback";
+        const Array<BufferHandle, 3u> buffers(this.arguments, this.queue, this.visits);
+        for(in BufferHandle buffer : buffers)
+            commands.setBufferState(buffer.deref(), ResourceStates::CopySource);
+        commands.commitBarriers();
+        u64 offset = 0u;
+        for(in BufferHandle buffer : buffers){
+            const u64 bytes = buffer.deref().getCreationDescription().byteSize;
+            commands.copyBuffer(this.readback.deref(), offset, buffer.deref(), 0u, bytes);
+            offset += bytes;
+            commands.setBufferState(buffer.deref(), ResourceStates::CopyDest);
+        }
+        commands.setTextureState(this.depth.deref(), TextureSubresourceSet(), ResourceStates::CopyDest);
+        commands.commitBarriers();
+        if(commands.commandRecordingFailed())
+            return false;
+        this.progress.stage = "native close and submission";
+        return true;
+    }
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareRefractionTileProbe(in RefractionTileProbeTask payload, mut GpuTaskGraph graph){
+    const Name probeName = s_SmokeNameRefractionTileProbe;
+    payload.progress.stage = "graph imports";
+    const Array<BufferHandle, 6u> buffers(payload.queue, payload.arguments, payload.visits, payload.slots, payload.readback, payload.reversedQueue);
+    const Array<StringView, 6u> labels("Refraction probe tile queue", "Refraction probe indirect arguments", "Refraction probe visit counters", "Refraction probe heap selectors", "Refraction probe readback", "Refraction probe reversed dense tile list");
+    const Array<ResourceStates, 6u> states(ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::CopyDest, ResourceStates::ConstantBuffer, ResourceStates::CopyDest, ResourceStates::ShaderResource);
+    const Array<GpuTaskResourceAccess, 6u> access(GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Read, GpuTaskResourceAccess::Write, GpuTaskResourceAccess::Read);
+    Array<GpuTaskResourceUse, 7u> uses;
+    for(usize i = 0u; i < buffers.size(); ++i){
+        GpuGraphResourceDesc desc;
+        desc.setIdentity(buffers[i].deref().getCreationDescription().debugName).setMarkerLabel(labels[i]).setType(GpuGraphResourceType::Buffer)
+            .setInitialState(states[i]).setExternalFinalState(states[i]);
+        const auto imported = graph.importBuffer(buffers[i], desc);
+        if(!imported.has_value())
+            return MakeUnexpected(Failure());
+        uses[i].resource = imported.value();
+        uses[i].requiredState = states[i];
+        uses[i].access = access[i];
+    }
+    ResourceStates initial = ResourceStates::Unknown;
+    if(payload.phase != 0u)
+        initial = ResourceStates::CopyDest;
+    GpuGraphResourceDesc textureDesc;
+    textureDesc.setIdentity(probeName).setMarkerLabel("Refraction probe capture depth").setType(GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(ResourceStates::CopyDest);
+    const auto depth = graph.importTexture(payload.depth, textureDesc);
+    if(!depth.has_value())
+        return MakeUnexpected(Failure());
+    uses[6u].resource = depth.value();
+    uses[6u].requiredState = ResourceStates::CopyDest;
+    uses[6u].access = GpuTaskResourceAccess::Write;
+    payload.progress.stage = "task declaration";
+    GpuTaskDesc desc;
+    desc.setIdentity(probeName).setMarkerLabel("Refraction tile queue boundary probe").setResourceUses(uses);
+    RefractionTileProbeTask recorded = payload;
+    const auto task = graph.addPayloadTask(desc, recorded);
+    if(task.has_value())
+        payload.progress.stage = "scheduling or initial-state recording admission";
+    return task;
+}
+
+Expected<BufferHandle> CreateTileProbeBuffer(mut GraphicsRuntime graphics, in Name name, in u64 bytes, in b8 raw, in b8 indirect, in b8 readback){
+    BufferDesc desc;
+    desc.setDebugName(name).setByteSize(bytes).setStructStride(size_of<u32>()).setCanHaveUAVs(!readback)
+        .setCanHaveRawViews(raw && !readback).setIsDrawIndirectArgs(indirect).enableAutomaticStateTracking(ResourceStates::CopyDest);
+    if(readback)
+        desc.setCpuAccess(CpuAccessMode::Read);
+    return graphics.createBuffer(desc);
+}
+
+Expected<BufferHandle> CreateProbeSlots(mut GraphicsRuntime graphics, in Name name, in DeferredBindlessResourceSlots slots, mut GpuDescriptorHandle descriptor){
+    const Array<DeferredBindlessResourceSlots, 1u> data(slots);
+    StandaloneBufferSetupDesc setup;
+    setup.bufferDesc.setDebugName(name).setByteSize(size_of<DeferredBindlessResourceSlots>()).setIsConstantBuffer(true).enableAutomaticStateTracking(ResourceStates::ConstantBuffer);
+    setup.queue = CommandQueue::Graphics;
+    setup.setData<DeferredBindlessResourceSlots>(Span<DeferredBindlessResourceSlots>(data));
+    const auto buffer = graphics.standaloneGraph().setupBuffer(setup);
+    if(!buffer.has_value())
+        return MakeUnexpected(Failure());
+    mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+    const auto uniform = heap.allocate(GpuDescriptorClass::UniformBuffer);
+    if(!uniform.has_value())
+        return MakeUnexpected(Failure());
+    descriptor = uniform.value();
+    if(!heap.write(descriptor, DescriptorWriteItemConstantBuffer(0u, buffer.value().deref())))
+        return MakeUnexpected(Failure());
+    return buffer;
+}
+
+b8 CompareIntegrationSlice(in StagingTextureMapping mapping, in AvboitIntegrationPhaseState phaseState, in u32 phase, in u32 slice, mut Array<u32, s_AvboitIntegrationProbePixelCount> extinctionFixed){
+    const Span<u8> bytes = mapping.readBytes();
+    const usize rowBytes = s_AvboitIntegrationProbeWidth * size_of<u16>();
+    if(mapping.rowPitch < rowBytes || bytes.size() < rowBytes || s_AvboitIntegrationProbeHeight - 1u > (bytes.size() - rowBytes) / mapping.rowPitch)
+        return false;
+    Array<f32, s_AvboitIntegrationProbePixelCount> observedPixels;
+    Array<f32, s_AvboitIntegrationProbePixelCount> expectedPixels;
+    for(u32 pixel = 0u; pixel < s_AvboitIntegrationProbePixelCount; ++pixel){
+        const usize offset = (pixel / s_AvboitIntegrationProbeWidth) * mapping.rowPitch + (pixel % s_AvboitIntegrationProbeWidth) * size_of<u16>();
+        const u16 halfBits = cast<u16>(cast<u32>(bytes[offset]) | (cast<u32>(bytes[offset + 1u]) << 8u));
+        const f32 exponent = -cast<f32>(extinctionFixed[pixel]) / cast<f32>(s_AvboitIntegrationProbeFixedScale);
+        expectedPixels[pixel] = ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent)));
+        observedPixels[pixel] = ConvertHalfToFloat(halfBits);
+    }
+    return VerifyAvboitIntegrationSliceValues(phaseState, phase, slice, Span<f32>(observedPixels), Span<f32>(expectedPixels), extinctionFixed);
+}
+
+[cpp_unwind]
+b8 RunAvboitIntegrationProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectRuntimeContext context){
+    AvboitIntegrationPhaseState phaseState = AvboitIntegrationPhaseState();
+    mut GraphicsRuntime graphics = context.graphics;
+    mut Device device = graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    const Name probeName = s_SmokeNameAvboitIntegrationProbe;
+    const auto transparent = sceneSubsystems.findSubsystem<TransparentSubsystem>();
+    ComputePipelineHandle pipeline;
+    if(!transparent.has_value() || !transparent.value().avboitIntegrateCs.valid()
+        || !LoadGpuProbePipeline(context, transparent.value().avboitIntegrateCs.name(), s_DefaultVariant, probeName, "AvboitIntegrationProbe", size_of<RendererAvboitPushConstants>(), pipeline))
+        return false;
+    const auto extinction = CreateTileProbeBuffer(graphics, s_SmokeNameAvboitIntegrationExtinction, s_AvboitIntegrationProbeWordCount * size_of<u32>(), false, false, false);
+    const auto overflow = CreateTileProbeBuffer(graphics, s_SmokeNameAvboitIntegrationOverflow, s_AvboitIntegrationProbePixelCount * size_of<u32>(), false, false, false);
+    const auto control = CreateTileProbeBuffer(graphics, s_SmokeNameAvboitIntegrationControl, s_AvboitProbeControlWordCount * size_of<u32>(), false, false, false);
+    TextureDesc textureDesc;
+    textureDesc.setWidth(s_AvboitIntegrationProbeWidth)
+        .setHeight(s_AvboitIntegrationProbeHeight)
+        .setDepth(s_AvboitIntegrationProbeSliceCount)
+        .setDimension(TextureDimension::Texture3D)
+        .setFormat(s_IntegrationProbeTransmittanceFormat)
+        .setIsUAV(true)
+        .setName(probeName)
+        .setInitialState(ResourceStates::CopyDest)
+        .setKeepInitialState(true)
+    ;
+    const auto volume = graphics.createTexture(textureDesc);
+    const auto readback = device.createStagingTexture(textureDesc, CpuAccessMode::Read);
+    if(!extinction.has_value() || !overflow.has_value() || !control.has_value() || !volume.has_value() || !readback.has_value())
+        return false;
+    Array<GpuDescriptorHandle, 5u> descriptors;
+    GpuDescriptorRetirementGuard retire(heap, Span<GpuDescriptorHandle>(descriptors));
+    const Array<BufferHandle, 3u> buffers(extinction.value(), overflow.value(), control.value());
+    for(u32 index = 0u; index < buffers.size(); ++index){
+        const auto descriptor = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        if(!descriptor.has_value())
+            return false;
+        descriptors[index] = descriptor.value();
+        if(!heap.write(descriptor.value(), DescriptorWriteItemStructuredBufferUav(0u, buffers[index].deref())))
+            return false;
+    }
+    const auto storage = heap.allocate(GpuDescriptorClass::StorageImage);
+    if(!storage.has_value())
+        return false;
+    descriptors[3] = storage.value();
+    if(!heap.write(storage.value(), DescriptorWriteItemTextureUav(0u, volume.value().deref(), textureDesc.format, TextureSubresourceSet(), TextureDimension::Texture3D)))
+        return false;
+    DeferredBindlessResourceSlots slots;
+    slots.avboitExtinction = descriptors[0].slot();
+    slots.avboitExtinctionOverflow = descriptors[1].slot();
+    slots.avboitControl = descriptors[2].slot();
+    slots.avboitTransmittanceStorage = descriptors[3].slot();
+    const auto slotBuffer = CreateProbeSlots(graphics, s_SmokeNameAvboitIntegrationSlots, slots, descriptors[4u]);
+    if(!slotBuffer.has_value())
+        return false;
+    GpuProbeProgress progress;
+    AvboitIntegrationProbeTask payload(heap, progress);
+    payload.extinction = extinction.value();
+    payload.overflow = overflow.value();
+    payload.control = control.value();
+    payload.slots = slotBuffer.value();
+    payload.volume = volume.value();
+    payload.readback = readback.value();
+    payload.pipeline = pipeline;
+    payload.push.frame[0] = s_AvboitIntegrationProbeWidth * 4u;
+    payload.push.frame[1] = s_AvboitIntegrationProbeHeight * 4u;
+    payload.push.frame[2] = s_AvboitIntegrationProbeWidth;
+    payload.push.frame[3] = s_AvboitIntegrationProbeHeight;
+    payload.push.volume[1] = s_AvboitIntegrationProbeSliceCount;
+    payload.push.volume[2] = s_AvboitIntegrationProbeWordCount;
+    payload.push.params = f32x4(VectorSetByIndex(VectorZero(), cast<f32>(s_AvboitIntegrationProbeFixedScale), s_IntegrationProbeExtinctionScaleIndex));
+    payload.push.heapSlots[0] = descriptors[4u].slot();
+    for(u32 phase = 0u; phase < s_AvboitIntegrationProbePhaseCount; ++phase){
+        phaseState.prepare(phase);
+        payload.volumeInitialState = ResourceStates::Unknown;
+        if(phase != 0u)
+            payload.volumeInitialState = ResourceStates::CopyDest;
+        payload.words = phaseState.words;
+        payload.overflowSlices = phaseState.overflowSlices;
+        payload.controlWords.fill(0u);
+        payload.controlWords[s_IntegrationProbeActiveSlicesIndex] = phaseState.activeSlices;
+        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(
+            lambda[in payload](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{ return DeclareAvboitIntegrationProbe(payload, graph); }, GpuPhysicalQueueId());
+        if(!token.has_value()){
+            error("AvboitIntegrationProbe: phase {} standalone graph rejected at {}", phase, progress.stage);
+            return false;
+        }
+        if(!device.waitForSubmissionToken(token.value())){
+            error("AvboitIntegrationProbe: phase {} submission completion wait failed", phase);
+            return false;
+        }
+        Array<u32, s_AvboitIntegrationProbePixelCount> extinctionFixed;
+        for(u32 slice = 0u; slice < s_AvboitIntegrationProbeSliceCount; ++slice){
+            TextureSlice region;
+            region.setOrigin(0u, 0u, slice).setSize(s_AvboitIntegrationProbeWidth, s_AvboitIntegrationProbeHeight, 1u);
+            const auto mapping = device.mapStagingTexture(payload.readback.deref(), region, CpuAccessMode::Read);
+            if(!mapping.has_value()){
+                error("AvboitIntegrationProbe: phase {} volume readback comparison failed", phase);
+                return false;
+            }
+            const b8 matched = CompareIntegrationSlice(mapping.value(), phaseState, phase, slice, extinctionFixed);
+            device.unmapStagingTexture(payload.readback.deref());
+            if(!matched){
+                error("AvboitIntegrationProbe: phase {} volume readback comparison failed", phase);
+                return false;
+            }
+        }
+    }
+    [essential] info("AvboitIntegrationProbe: passed 5 phases with empty, late, partial, saturation, wrapped overflow and active-to-empty clear checks");
+    return true;
 }
 
 void BuildRefractionProbeReversedTiles(mut Vector<u32> outTiles){
@@ -833,153 +816,113 @@ b8 VerifyRefractionTileProbeReadback(
     return true;
 }
 
+[cpp_unwind]
 b8 RunRefractionTileProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectRuntimeContext context){
     Vector<u32> reversedTiles;
     BuildRefractionProbeReversedTiles(reversedTiles);
 
-    b8 ok = false;
-    native(in sceneSubsystems, in reversedTiles, mut context, mut ok){
-        const Name probeName = Name(s_SmokeNameRefractionTileProbe);
-        const Name verifyShaderName = Name(s_SmokeNameRefractionTileProbeCs);
-        auto& graphics = context.graphics;
-        auto& device = graphics.getDevice();
-        auto& heap = device.getDescriptorHeap();
-        Core::ShaderHandle classifyShader;
-        Core::ShaderHandle finalizeShader;
-        Core::ShaderHandle verifyCompactShader;
-        Core::ShaderHandle verifyDenseShader;
-        const auto refractiveSubsystem = sceneSubsystems.findSubsystem<Impl::RefractiveSubsystem>();
-        const auto classifyShaderRef = refractiveSubsystem ? (*refractiveSubsystem)->refractionClassifyTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
-        const auto finalizeShaderRef = refractiveSubsystem ? (*refractiveSubsystem)->refractionFinalizeTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
-        const auto verifyShaderRef = sceneSubsystems.findSceneAsset<Impl::ComputeShader>(verifyShaderName);
-        if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
+    mut GraphicsRuntime graphics = context.graphics;
+    mut Device device = graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    const Name probeName = s_SmokeNameRefractionTileProbe;
+    const auto subsystem = sceneSubsystems.findSubsystem<RefractiveSubsystem>();
+    const auto verify = sceneSubsystems.findSceneAsset<ComputeShader>(s_SmokeNameRefractionTileProbeCs);
+    if(!subsystem.has_value() || !subsystem.value().refractionClassifyTilesCs.valid() || !subsystem.value().refractionFinalizeTilesCs.valid() || !verify.valid())
+        return false;
+    const u32 pushBytes = size_of<RefractionPushConstants>();
+    ComputePipelineHandle classify;
+    ComputePipelineHandle finalize;
+    ComputePipelineHandle verifyCompact;
+    ComputePipelineHandle verifyDense;
+    if(!LoadGpuProbePipeline(context, subsystem.value().refractionClassifyTilesCs.name(), s_DefaultVariant, probeName, "RefractionTileProbe", pushBytes, classify)
+        || !LoadGpuProbePipeline(context, subsystem.value().refractionFinalizeTilesCs.name(), s_DefaultVariant, probeName, "RefractionTileProbe", pushBytes, finalize)
+        || !LoadGpuProbePipeline(context, verify.name(), "NWB_REFRACTION_DENSE_GRID=0", probeName, "RefractionTileProbe", pushBytes, verifyCompact)
+        || !LoadGpuProbePipeline(context, verify.name(), "NWB_REFRACTION_DENSE_GRID=1", probeName, "RefractionTileProbe", pushBytes, verifyDense))
+        return false;
+    StandaloneBufferSetupDesc reversedSetup;
+    reversedSetup.bufferDesc.setDebugName(Name(s_SmokeNameRefractionTileProbeReversedQueue)).setByteSize(cast<u64>(s_RefractionTileProbeQueueWords) * size_of<u32>()).setStructStride(size_of<u32>());
+    reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(ResourceStates::ShaderResource);
+    reversedSetup.setData<u32>(Span<u32>(reversedTiles));
+    reversedSetup.queue = CommandQueue::Graphics;
+    const auto reversedQueue = graphics.standaloneGraph().setupBuffer(reversedSetup);
+    const auto queue = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeQueue, s_RefractionTileProbeQueueWords * size_of<u32>(), true, false, false);
+    const auto arguments = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeArguments, s_RefractionTileProbeArgumentWords * size_of<u32>(), true, true, false);
+    const auto visits = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeVisits, s_RefractionTileProbeVisitWords * size_of<u32>(), true, false, false);
+    const auto readback = CreateTileProbeBuffer(graphics, s_SmokeNameRefractionTileProbeReadback, s_RefractionTileProbeReadbackWords * size_of<u32>(), true, false, true);
+    TextureDesc depthDesc;
+    depthDesc.setWidth(s_RefractionTileProbeWidth).setHeight(s_RefractionTileProbeHeight).setFormat(Format::R32_FLOAT).setName(probeName).setInitialState(ResourceStates::CopyDest).setKeepInitialState(true);
+    const auto depth = graphics.createTexture(depthDesc);
+    if(!queue.has_value() || !reversedQueue.has_value() || !arguments.has_value() || !visits.has_value() || !readback.has_value() || !depth.has_value())
+        return false;
+    Array<GpuDescriptorHandle, 6u> descriptors;
+    GpuDescriptorRetirementGuard retire(heap, Span<GpuDescriptorHandle>(descriptors));
+    const Array<BufferHandle, 4u> storageBuffers(queue.value(), arguments.value(), visits.value(), reversedQueue.value());
+    for(u32 index = 0u; index < storageBuffers.size(); ++index){
+        const auto descriptor = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        if(!descriptor.has_value())
             return false;
-        const auto loadProbeShader = [&](const Name& shaderName, const AStringView variantName, Core::ShaderHandle& outShader){
-            return Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shaderName, variantName, probeName, "RefractionTileProbe", graphics, context.assetManager, context.shaderPathResolver, {}, outShader);
-        };
-        if(
-            !loadProbeShader(classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, classifyShader)
-            || !loadProbeShader(finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, finalizeShader)
-            || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), verifyCompactShader)
-            || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), verifyDenseShader)
-        )
+        descriptors[index] = descriptor.value();
+        if(!heap.write(descriptor.value(), DescriptorWriteItemRawBufferUav(0u, storageBuffers[index].deref())))
             return false;
-        Core::BindingLayoutDesc layoutDesc(context.objectArena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(RefractionTileProbePushConstants)));
-        const auto layout = device.createBindingLayout(layoutDesc);
-        if(!layout)
-            return false;
-        Core::ComputePipelineDesc classifyDesc;
-        classifyDesc.setComputeShader(classifyShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        Core::ComputePipelineDesc finalizeDesc;
-        finalizeDesc.setComputeShader(finalizeShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        Core::ComputePipelineDesc verifyCompactDesc;
-        verifyCompactDesc.setComputeShader(verifyCompactShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        Core::ComputePipelineDesc verifyDenseDesc;
-        verifyDenseDesc.setComputeShader(verifyDenseShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        const auto classify = device.createComputePipeline(classifyDesc);
-        const auto finalize = device.createComputePipeline(finalizeDesc);
-        const auto verifyCompact = device.createComputePipeline(verifyCompactDesc);
-        const auto verifyDense = device.createComputePipeline(verifyDenseDesc);
-        const auto createBuffer = [&graphics](const Name name, const u32 words, const b8 indirect, const b8 readback){
-            Core::BufferDesc desc;
-            desc.setDebugName(name).setByteSize(static_cast<u64>(words) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCanHaveRawViews(!readback).setIsDrawIndirectArgs(indirect);
-            desc.setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
-            return graphics.createBuffer(desc);
-        };
-        Core::GraphicsStandaloneService::BufferSetupDesc reversedSetup;
-        reversedSetup.bufferDesc.setDebugName(Name(s_SmokeNameRefractionTileProbeReversedQueue)).setByteSize(static_cast<u64>(s_RefTileQueueWords) * sizeof(u32)).setStructStride(sizeof(u32));
-        reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
-        reversedSetup.data = reversedTiles.data();
-        reversedSetup.dataSize = static_cast<u64>(s_RefTileQueueWords) * sizeof(u32);
-        reversedSetup.queue = Core::CommandQueue::Graphics;
-        const auto reversedQueue = graphics.standaloneGraph().setupBuffer(reversedSetup);
-        const auto queue = createBuffer(Name(s_SmokeNameRefractionTileProbeQueue), s_RefTileQueueWords, false, false);
-        const auto arguments = createBuffer(Name(s_SmokeNameRefractionTileProbeArguments), s_RefTileArgumentWords, true, false);
-        const auto visits = createBuffer(Name(s_SmokeNameRefractionTileProbeVisits), s_RefTileVisitWords, false, false);
-        const auto readback = createBuffer(Name(s_SmokeNameRefractionTileProbeReadback), s_RefTileReadbackWords, false, true);
-        Core::TextureDesc depthDesc;
-        depthDesc.setWidth(s_RefractionTileProbeWidth).setHeight(s_RefractionTileProbeHeight).setFormat(Core::Format::R32_FLOAT).setName(probeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
-        const auto depth = graphics.createTexture(depthDesc);
-        if(!classify || !finalize || !verifyCompact || !verifyDense || !queue || !reversedQueue || !arguments || !visits || !readback || !depth)
-            return false;
-        Core::BufferHandle slotsBuffer;
-        Array<Core::GpuDescriptorHandle, 6u> descriptors{};
-        Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
-        const Array<Core::BufferHandle, 4u> storageBuffers{ *queue, *arguments, *visits, *reversedQueue };
-        for(u32 index = 0u; index < storageBuffers.size(); ++index){
-            const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-            if(!descriptor)
-                return false;
-            descriptors[index] = *descriptor;
-            if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, storageBuffers[index].get())))
-                return false;
-        }
-        const auto sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-        if(!sampled)
-            return false;
-        descriptors[4] = *sampled;
-        if(!heap.write(*sampled, Core::DescriptorWriteItem::TextureSrv(0u, depth->get(), depthDesc.format, Core::TextureSubresourceSet{}, Core::TextureDimension::Texture2D)))
-            return false;
-        Impl::DeferredBindlessResourceSlots slots;
-        slots.refractionDepth = sampled->slot();
-        Core::GraphicsStandaloneService::BufferSetupDesc setup;
-        setup.bufferDesc.setDebugName(Name(s_SmokeNameRefractionTileProbeSlots)).setByteSize(sizeof(slots)).setIsConstantBuffer(true).enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer);
-        setup.data = &slots;
-        setup.dataSize = sizeof(slots);
-        setup.queue = Core::CommandQueue::Graphics;
-        const auto uploadedSlots = graphics.standaloneGraph().setupBuffer(setup);
-        if(!uploadedSlots)
-            return false;
-        slotsBuffer = *uploadedSlots;
-        const auto uniform = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-        if(!uniform)
-            return false;
-        descriptors[5] = *uniform;
-        if(!heap.write(*uniform, Core::DescriptorWriteItem::ConstantBuffer(0u, slotsBuffer.get())))
-            return false;
-        TStringView stage = FOUNDATION_TEXT("probe initialization");
-        RefractionTileProbeTask::Payload payload{ *depth, *queue, *reversedQueue, *arguments, *visits, slotsBuffer, *readback, *classify, *finalize, *verifyCompact, *verifyDense, heap, stage, {} };
-        payload.denseTileListSlot = descriptors[3].slot();
-        payload.push.width = s_RefractionTileProbeWidth;
-        payload.push.height = s_RefractionTileProbeHeight;
-        payload.push.deferredResourcesHeapSlot = uniform->slot();
-        payload.push.tileListSlot = descriptors[0].slot();
-        payload.push.tileArgumentsSlot = descriptors[1].slot();
-        payload.push.materialContextSlotsHeapSlot = descriptors[2].slot();
-        const u64 argBytes = payload.arguments->getCreationDescription().byteSize;
-        const u64 queueBytes = payload.queue->getCreationDescription().byteSize;
-        const u64 visitBytes = payload.visits->getCreationDescription().byteSize;
-        const u64 readbackBytes = payload.readback->getCreationDescription().byteSize;
-        for(u32 phase = 0u; phase < s_RefractionTileProbePhaseCount; ++phase){
-            payload.phase = phase;
-            const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareRefractionTileProbe);
-            if(!token){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RefractionTileProbe: phase {} standalone graph rejected at {}"), phase, stage);
-                return false;
-            }
-            if(!device.waitForSubmissionToken(*token)){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RefractionTileProbe: phase {} completion wait failed"), phase);
-                return false;
-            }
-            const auto mapping = device.mapBuffer(*payload.readback, Core::CpuAccessMode::Read);
-            if(!mapping || !*mapping)
-                return false;
-            ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*payload.readback); });
-            const Span<const u32> mappedWords(static_cast<const u32*>(*mapping), s_RefTileReadbackWords);
-            if(!VerifyRefractionTileProbeReadback(phase, mappedWords, argBytes, queueBytes, visitBytes, readbackBytes))
-                return false;
-        }
-        ok = true;
     }
-    if(ok){
-        [essential] info(
+    const auto sampled = heap.allocate(GpuDescriptorClass::SampledImage);
+    if(!sampled.has_value())
+        return false;
+    descriptors[4] = sampled.value();
+    if(!heap.write(sampled.value(), DescriptorWriteItemTextureSrv(0u, depth.value().deref(), depthDesc.format, TextureSubresourceSet(), TextureDimension::Texture2D)))
+        return false;
+    DeferredBindlessResourceSlots slots;
+    slots.refractionDepth = sampled.value().slot();
+    const auto slotBuffer = CreateProbeSlots(graphics, s_SmokeNameRefractionTileProbeSlots, slots, descriptors[5u]);
+    if(!slotBuffer.has_value())
+        return false;
+    GpuProbeProgress progress;
+    RefractionTileProbeTask payload(heap, progress);
+    payload.depth = depth.value();
+    payload.queue = queue.value();
+    payload.reversedQueue = reversedQueue.value();
+    payload.arguments = arguments.value();
+    payload.visits = visits.value();
+    payload.slots = slotBuffer.value();
+    payload.readback = readback.value();
+    payload.classify = classify;
+    payload.finalize = finalize;
+    payload.verifyCompact = verifyCompact;
+    payload.verifyDense = verifyDense;
+    payload.denseTileListSlot = descriptors[3].slot();
+    payload.push.width = s_RefractionTileProbeWidth;
+    payload.push.height = s_RefractionTileProbeHeight;
+    payload.push.deferredResourcesHeapSlot = descriptors[5u].slot();
+    payload.push.tileListSlot = descriptors[0].slot();
+    payload.push.tileArgumentsSlot = descriptors[1].slot();
+    payload.push.materialContextSlotsHeapSlot = descriptors[2].slot();
+    const u64 argBytes = payload.arguments.deref().getCreationDescription().byteSize;
+    const u64 queueBytes = payload.queue.deref().getCreationDescription().byteSize;
+    const u64 visitBytes = payload.visits.deref().getCreationDescription().byteSize;
+    const u64 readbackBytes = payload.readback.deref().getCreationDescription().byteSize;
+    for(u32 phase = 0u; phase < s_RefractionTileProbePhaseCount; ++phase){
+        payload.phase = phase;
+        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(
+            lambda[in payload](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{ return DeclareRefractionTileProbe(payload, graph); }, GpuPhysicalQueueId());
+        if(!token.has_value()){
+            error("RefractionTileProbe: phase {} standalone graph rejected at {}", phase, progress.stage);
+            return false;
+        }
+        if(!device.waitForSubmissionToken(token.value())){
+            error("RefractionTileProbe: phase {} completion wait failed", phase);
+            return false;
+        }
+        Vector<u32> words;
+        words.resize(s_RefractionTileProbeReadbackWords);
+        if(!device.readMappedBuffer(payload.readback.deref(), words)
+            || !VerifyRefractionTileProbeReadback(phase, Span<u32>(words), argBytes, queueBytes, visitBytes, readbackBytes))
+            return false;
+    }
+    [essential] info(
             "RefractionTileProbe: passed 6 phases at 2049x2049 with 66049 tiles, production finalizer, specialized dense/compact mapping, all 32 argument bytes, all-but-one sparse boundary, queue uniqueness, 65535/65536 boundary, indirect Y tail, 25190406 pixel checks and guards"
         );
-    }
-    return ok;
+    return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

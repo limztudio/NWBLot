@@ -9,132 +9,68 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const i32 s_LoaderShutdownFailure = 73;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_cpu_task_cleanup_tests{
-
-using namespace NWB::Core;
-using CpuTaskSchedulerTestSupport::LifetimeProbe;
-
-inline constexpr int s_LoaderShutdownFailure = 73;
-
-struct ReentrantRetirementProbe{
-    CpuTaskScheduler& m_scheduler;
-    const CpuTaskHandle& m_handle;
-    b8& m_incomplete;
-    usize& m_outstanding;
-    b8 m_active = true;
-
-
-public:
-    ReentrantRetirementProbe(CpuTaskScheduler& scheduler, const CpuTaskHandle& handle, b8& incomplete, usize& outstanding)noexcept
-        : m_scheduler(scheduler)
-        , m_handle(handle)
-        , m_incomplete(incomplete)
-        , m_outstanding(outstanding)
-    {}
-    ReentrantRetirementProbe(const ReentrantRetirementProbe&) = delete;
-    ReentrantRetirementProbe(ReentrantRetirementProbe&& other)noexcept
-        : m_scheduler(other.m_scheduler)
-        , m_handle(other.m_handle)
-        , m_incomplete(other.m_incomplete)
-        , m_outstanding(other.m_outstanding)
-        , m_active(other.m_active)
-    {
-        other.m_active = false;
+class ReentrantRetirementProbe{
+    private mut CpuTaskScheduler scheduler;
+    private in CpuTaskHandle handle;
+    private mut b8 incomplete;
+    private mut usize outstanding;
+    public ReentrantRetirementProbe(mut CpuTaskScheduler scheduler, in borrow CpuTaskHandle handle, mut b8 incomplete, mut usize outstanding){
+        this.scheduler = scheduler;
+        this.handle = handle;
+        this.incomplete = incomplete;
+        this.outstanding = outstanding;
     }
-    ~ReentrantRetirementProbe()noexcept{
-        if(m_active){
-            m_incomplete = !m_scheduler.isComplete(m_handle);
-            m_outstanding = m_scheduler.statistics().outstandingTasks;
-        }
+    public void retire(){
+        this.incomplete = !this.scheduler.isComplete(this.handle);
+        this.outstanding = this.scheduler.statistics().outstandingTasks;
     }
-};
-
-struct CallbackLoanRetirementProbe final : NoCopy{
-    b8& ownerAlive;
-    Atomic<u32>& retirements;
-    Atomic<u32>& lateRetirements;
-    b8 active = true;
-
-
-public:
-    CallbackLoanRetirementProbe(b8& alive, Atomic<u32>& retired, Atomic<u32>& late)noexcept
-        : ownerAlive(alive)
-        , retirements(retired)
-        , lateRetirements(late)
-    {}
-    CallbackLoanRetirementProbe(CallbackLoanRetirementProbe&& other)noexcept
-        : ownerAlive(other.ownerAlive)
-        , retirements(other.retirements)
-        , lateRetirements(other.lateRetirements)
-        , active(other.active)
-    {
-        other.active = false;
+}
+class CallbackLoan{
+    public mut b8 ownerAlive;
+    private mut Atomic<u32> retirements;
+    private mut Atomic<u32> lateRetirements;
+    public CallbackLoan(mut b8 alive, mut Atomic<u32> retired, mut Atomic<u32> late){
+        this.ownerAlive = alive;
+        this.retirements = retired;
+        this.lateRetirements = late;
     }
-    ~CallbackLoanRetirementProbe()noexcept{
-        if(!active)
-            return;
-        retirements.fetch_add(1u, MemoryOrder::release);
-        if(!ownerAlive)
-            lateRetirements.fetch_add(1u, MemoryOrder::release);
+    public void retire(){
+        this.retirements.fetch_add(1u, MemoryOrder::release);
+        if(!this.ownerAlive) this.lateRetirements.fetch_add(1u, MemoryOrder::release);
     }
-};
-
-class ShutdownSubmittingCallbacks final : public NWB::IProjectEntryCallbacks{
-public:
-    ShutdownSubmittingCallbacks(CpuTaskScope& tasks, b8& ownerAlive, Atomic<u32>& retirements, Atomic<u32>& lateRetirements, u32& callbacks)noexcept
-        : m_tasks(tasks)
-        , m_ownerAlive(ownerAlive)
-        , m_retirements(retirements)
-        , m_lateRetirements(lateRetirements)
-        , m_callbacks(callbacks)
-    {}
-    virtual ~ShutdownSubmittingCallbacks()noexcept override{ m_ownerAlive = false; }
-
-
-public:
-    virtual void onShutdown()override{
-        const auto first = m_tasks.submit([this]() {
-            ++m_callbacks;
-            throw TerminalTaskError{ .code = s_LoaderShutdownFailure };
-        }, { .target = CpuTaskTarget::MainThread });
-        EXPECT_TRUE(first);
-        if(!first)
-            return;
-        const CpuTaskHandle dependency = *first;
-        const auto second = m_tasks.submit([this, probe = CallbackLoanRetirementProbe(m_ownerAlive, m_retirements, m_lateRetirements)]()noexcept {
-            if(probe.active && probe.ownerAlive)
-                ++m_callbacks;
-        }, { .target = CpuTaskTarget::MainThread }, &dependency, 1u);
-        EXPECT_TRUE(second);
-    }
-
-
-private:
-    CpuTaskScope& m_tasks;
-    b8& m_ownerAlive;
-    Atomic<u32>& m_retirements;
-    Atomic<u32>& m_lateRetirements;
-    u32& m_callbacks;
-};
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+class ShutdownSubmittingCallbacks : ProjectShutdownListener{
+    private mut CpuTaskScope scope;
+    private mut b8 ownerAlive;
+    private mut Atomic<u32> retirements;
+    private mut Atomic<u32> lateRetirements;
+    private mut u32 callbacks;
+    public ShutdownSubmittingCallbacks(mut CpuTaskScope tasks, mut b8 alive, mut Atomic<u32> retired, mut Atomic<u32> late, mut u32 callbacks){
+        this.scope = tasks;
+        this.ownerAlive = alive;
+        this.retirements = retired;
+        this.lateRetirements = late;
+        this.callbacks = callbacks;
+    }
+    public ~ShutdownSubmittingCallbacks(){ this.ownerAlive = false; }
+    [cpp_unwind]
+    public void onShutdown()override{
+        const auto first = this.scope.submit(lambda[mut this]() -> void{
+            ++this.callbacks;
+            ThrowTestException<TerminalTaskError>(TerminalTaskError(s_LoaderShutdownFailure));
+        }, MainThreadOptions());
+        EXPECT_TRUE(first.has_value());
+        if(!first.has_value()) return;
+        const CallbackLoan loan(this.ownerAlive, this.retirements, this.lateRetirements);
+        const auto second = SubmitAfter(this.scope, RetireAfterTask(loan, lambda[mut this](in CallbackLoan capture, in b8 active) -> void{
+            if(active && capture.ownerAlive) ++this.callbacks;
+        }), MainThreadOptions(), first.value());
+        EXPECT_TRUE(second.has_value());
+    }
+}
 
 const u32 s_CleanupWaitIntervalMS = 20u;
 const u32 s_CleanupTaskTimeoutMS = 4000u;
@@ -285,45 +221,44 @@ void VerifyCpuTaskCancellationTests_ParallelRangesPreserveHistoryInRecycledSlots
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 void VerifyCpuTaskCleanupTests_SchedulerDestructorPropagatesCallerFailureToTheTerminalEntry(){
     Atomic<u32> retirements(0u);
     u32 callbacks = 0u;
     u32 handled = 0u;
     u32 retiredOnCatch = 0u;
     i32 result = 0;
-    native(mut retirements, mut callbacks, mut handled, mut retiredOnCatch, mut result){
-        using namespace __hidden_cpu_task_cleanup_tests;
-        result = InvokeTerminalEntry<TerminalTaskError>([&]()->int {
-            CpuTaskScheduler scheduler(0u);
-            const auto cpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)]() {
-                EXPECT_TRUE(probe.retirements != nullptr);
-                ++callbacks;
-                throw TerminalTaskError{ .code = 17 };
-            }, { .target = CpuTaskTarget::MainThread });
-            EXPECT_TRUE(cpuTaskAdmission);
-            if(cpuTaskAdmission)
-                EXPECT_TRUE(cpuTaskAdmission->valid());
-            const auto secondCpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)]() {
-                EXPECT_TRUE(probe.retirements != nullptr);
-                ++callbacks;
-                throw TerminalTaskError{ .code = 29 };
-            });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-            return 0;
-        }, [&](const TerminalTaskError& err) {
-            ++handled;
-            retiredOnCatch = retirements.load(MemoryOrder::acquire);
-            return err.code;
-        }, []()noexcept { return -1; });
-    }
+    result = CatchTaskFailure<TerminalTaskError>(lambda[mut retirements, mut callbacks]() -> i32{
+        CpuTaskScheduler scheduler(0u);
+        const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
+            EXPECT_TRUE(active);
+            ++callbacks;
+            ThrowTestException<TerminalTaskError>(TerminalTaskError(17));
+        }), MainThreadOptions());
+        EXPECT_TRUE(cpuTaskAdmission.has_value());
+        if(cpuTaskAdmission.has_value())
+            EXPECT_TRUE(cpuTaskAdmission.value().valid());
+        const auto secondCpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
+            EXPECT_TRUE(active);
+            ++callbacks;
+            ThrowTestException<TerminalTaskError>(TerminalTaskError(29));
+        }));
+        EXPECT_TRUE(secondCpuTaskAdmission.has_value());
+        if(secondCpuTaskAdmission.has_value())
+            EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
+        return 0;
+    }, lambda[mut retirements, mut handled, mut retiredOnCatch](in TerminalTaskError err) -> i32{
+        ++handled;
+        retiredOnCatch = retirements.load(MemoryOrder::acquire);
+        return err.code;
+    }, lambda[]() -> i32{ return -1; });
     EXPECT_EQ(retiredOnCatch, 2u);
     EXPECT_EQ(result, 17);
     EXPECT_EQ(handled, 1u);
     EXPECT_EQ(callbacks, 1u);
 }
 
+[cpp_unwind]
 void VerifyCpuTaskCleanupTests_ScopeDestructorPropagatesCallerFailureAfterDrainingItsTasks(){
     CpuTaskScheduler scheduler(0u);
     Atomic<u32> retirements(0u);
@@ -331,76 +266,73 @@ void VerifyCpuTaskCleanupTests_ScopeDestructorPropagatesCallerFailureAfterDraini
     u32 retiredOnCatch = 0u;
     usize outstandingOnCatch = 1u;
     i32 result = 0;
-    native(mut scheduler, mut retirements, mut callbacks, mut retiredOnCatch, mut outstandingOnCatch, mut result){
-        using namespace __hidden_cpu_task_cleanup_tests;
-        result = InvokeTerminalEntry<TerminalTaskError>([&]()->int {
-            CpuTaskScope scope(scheduler);
-            const auto cpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)]() {
-                EXPECT_TRUE(probe.retirements != nullptr);
-                ++callbacks;
-                throw TerminalTaskError{ .code = 37 };
-            }, { .target = CpuTaskTarget::MainThread });
-            EXPECT_TRUE(cpuTaskAdmission);
-            if(cpuTaskAdmission)
-                EXPECT_TRUE(cpuTaskAdmission->valid());
-            const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)]() {
-                EXPECT_TRUE(probe.retirements != nullptr);
-                ++callbacks;
-                throw TerminalTaskError{ .code = 41 };
-            });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-            return 0;
-        }, [&](const TerminalTaskError& err) {
-            retiredOnCatch = retirements.load(MemoryOrder::acquire);
-            outstandingOnCatch = scheduler.statistics().outstandingTasks;
-            return err.code;
-        }, []()noexcept { return -1; });
-    }
+    result = CatchTaskFailure<TerminalTaskError>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
+        CpuTaskScope scope(scheduler);
+        const auto cpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
+            EXPECT_TRUE(active);
+            ++callbacks;
+            ThrowTestException<TerminalTaskError>(TerminalTaskError(37));
+        }), MainThreadOptions());
+        EXPECT_TRUE(cpuTaskAdmission.has_value());
+        if(cpuTaskAdmission.has_value())
+            EXPECT_TRUE(cpuTaskAdmission.value().valid());
+        const auto secondCpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
+            EXPECT_TRUE(active);
+            ++callbacks;
+            ThrowTestException<TerminalTaskError>(TerminalTaskError(41));
+        }));
+        EXPECT_TRUE(secondCpuTaskAdmission.has_value());
+        if(secondCpuTaskAdmission.has_value())
+            EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
+        return 0;
+    }, lambda[mut scheduler, mut retirements, mut retiredOnCatch, mut outstandingOnCatch](in TerminalTaskError err) -> i32{
+        retiredOnCatch = retirements.load(MemoryOrder::acquire);
+        outstandingOnCatch = scheduler.statistics().outstandingTasks;
+        return err.code;
+    }, lambda[]() -> i32{ return -1; });
     EXPECT_EQ(retiredOnCatch, 2u);
     EXPECT_EQ(outstandingOnCatch, 0u);
     EXPECT_EQ(result, 37);
     EXPECT_EQ(callbacks, 1u);
 }
 
+[cpp_unwind]
 void VerifyCpuTaskCleanupTests_UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOriginalFailure(){
     Atomic<u32> retirements(0u);
     u32 callbacks = 0u;
     u32 retiredOnCatch = 0u;
     i32 result = 0;
-    native(mut retirements, mut callbacks, mut retiredOnCatch, mut result){
-        using namespace __hidden_cpu_task_cleanup_tests;
-        result = InvokeTerminalEntry<TerminalTaskError>([&]()->int {
-            CpuTaskScheduler scheduler(0u);
-            CpuTaskScope scope(scheduler);
-            const auto cpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)]() {
-                EXPECT_TRUE(probe.retirements != nullptr);
-                ++callbacks;
-                throw TerminalTaskError{ .code = 53 };
-            }, { .target = CpuTaskTarget::MainThread });
-            EXPECT_TRUE(cpuTaskAdmission);
-            if(cpuTaskAdmission)
-                EXPECT_TRUE(cpuTaskAdmission->valid());
-            const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)]() {
-                EXPECT_TRUE(probe.retirements != nullptr);
-                ++callbacks;
-                throw TerminalTaskError{ .code = 59 };
-            });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-            throw TerminalTaskError{ .code = 47 };
-        }, [&](const TerminalTaskError& err) {
-            retiredOnCatch = retirements.load(MemoryOrder::acquire);
-            return err.code;
-        }, []()noexcept { return -1; });
-    }
+    result = CatchTaskFailure<TerminalTaskError>(lambda[mut retirements, mut callbacks]() -> i32{
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
+            EXPECT_TRUE(active);
+            ++callbacks;
+            ThrowTestException<TerminalTaskError>(TerminalTaskError(53));
+        }), MainThreadOptions());
+        EXPECT_TRUE(cpuTaskAdmission.has_value());
+        if(cpuTaskAdmission.has_value())
+            EXPECT_TRUE(cpuTaskAdmission.value().valid());
+        const auto secondCpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
+            EXPECT_TRUE(active);
+            ++callbacks;
+            ThrowTestException<TerminalTaskError>(TerminalTaskError(59));
+        }));
+        EXPECT_TRUE(secondCpuTaskAdmission.has_value());
+        if(secondCpuTaskAdmission.has_value())
+            EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
+        ThrowTestException<TerminalTaskError>(TerminalTaskError(47));
+        return 0;
+    }, lambda[mut retirements, mut retiredOnCatch](in TerminalTaskError err) -> i32{
+        retiredOnCatch = retirements.load(MemoryOrder::acquire);
+        return err.code;
+    }, lambda[]() -> i32{ return -1; });
     EXPECT_EQ(retiredOnCatch, 2u);
     EXPECT_EQ(result, 47);
     EXPECT_EQ(callbacks, 0u);
 }
 
+[cpp_unwind]
 void VerifyCpuTaskCleanupTests_TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCaptures(){
     const TestSchedulerConfig config = HomogeneousWorkers(1u);
     CpuTaskScheduler scheduler(config);
@@ -412,28 +344,25 @@ void VerifyCpuTaskCleanupTests_TerminalDrainJoinsAnActiveWorkerAndRetiresCancele
     Atomic<b8> finished(false);
     Atomic<b8> expired(false);
     u32 canceledCallbacks = 0u;
-    native(mut scope, mut retirements, mut started, mut released, mut finished, mut expired, mut canceledCallbacks){
-        using namespace __hidden_cpu_task_cleanup_tests;
-        const auto cpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)]() {
-            EXPECT_TRUE(probe.retirements != nullptr);
-            started.store(true, MemoryOrder::release);
-            if(!WaitUntil(released, s_CleanupTaskTimeoutMS))
-                expired.store(true, MemoryOrder::release);
-            finished.store(true, MemoryOrder::release);
-        });
-        EXPECT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            EXPECT_TRUE(cpuTaskAdmission->valid());
-        EXPECT_TRUE(WaitUntil(started, s_CleanupTaskTimeoutMS));
-        const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)]() {
-            EXPECT_TRUE(probe.retirements != nullptr);
-            ++canceledCallbacks;
-            throw TerminalTaskError{ .code = 61 };
-        }, { .target = CpuTaskTarget::MainThread });
-        EXPECT_TRUE(secondCpuTaskAdmission);
-        if(secondCpuTaskAdmission)
-            EXPECT_TRUE(secondCpuTaskAdmission->valid());
-    }
+    const auto cpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut started, mut released, mut finished, mut expired](mut LifetimeProbe probe, in b8 active) -> void{
+        EXPECT_TRUE(active);
+        started.store(true, MemoryOrder::release);
+        if(!WaitUntil(released, s_CleanupTaskTimeoutMS))
+            expired.store(true, MemoryOrder::release);
+        finished.store(true, MemoryOrder::release);
+    }));
+    EXPECT_TRUE(cpuTaskAdmission.has_value());
+    if(cpuTaskAdmission.has_value())
+        EXPECT_TRUE(cpuTaskAdmission.value().valid());
+    EXPECT_TRUE(WaitUntil(started, s_CleanupTaskTimeoutMS));
+    const auto secondCpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut canceledCallbacks](mut LifetimeProbe probe, in b8 active) -> void{
+        EXPECT_TRUE(active);
+        ++canceledCallbacks;
+        ThrowTestException<TerminalTaskError>(TerminalTaskError(61));
+    }), MainThreadOptions());
+    EXPECT_TRUE(secondCpuTaskAdmission.has_value());
+    if(secondCpuTaskAdmission.has_value())
+        EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
     JoiningThread releaseWorker(lambda[mut drainStarted, mut expired, mut released]() -> void{
         if(!WaitUntil(drainStarted, s_CleanupTaskTimeoutMS)){
             expired.store(true, MemoryOrder::release);
@@ -453,6 +382,7 @@ void VerifyCpuTaskCleanupTests_TerminalDrainJoinsAnActiveWorkerAndRetiresCancele
     EXPECT_FALSE(postDrainAdmission.has_value());
 }
 
+[cpp_unwind]
 void VerifyCpuTaskCleanupTests_NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheReceivingScope(){
     Atomic<u32> retirements(0u);
     CpuTaskScheduler scheduler(0u);
@@ -460,28 +390,25 @@ void VerifyCpuTaskCleanupTests_NestedRangeFailureJoinsItsSubtreeBeforeUnwindingT
     u32 retiredOnCatch = 0u;
     usize outstandingOnCatch = 1u;
     i32 result = 0;
-    native(mut retirements, mut scheduler, mut callbacks, mut retiredOnCatch, mut outstandingOnCatch, mut result){
-        using namespace __hidden_cpu_task_cleanup_tests;
-        result = InvokeTerminalEntry<TerminalTaskError>([&]()->int {
-            CpuTaskScope scope(scheduler);
-            const auto cpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)]() {
-                EXPECT_TRUE(probe.retirements != nullptr);
-                EXPECT_TRUE((scope.parallelFor(0u, 16u, 1u, [&](usize) {
-                    ++callbacks;
-                    throw TerminalTaskError{ .code = 67 };
-                })));
-            });
-            EXPECT_TRUE(cpuTaskAdmission);
-            if(cpuTaskAdmission)
-                EXPECT_TRUE(cpuTaskAdmission->valid());
-            scope.wait();
-            return 0;
-        }, [&](const TerminalTaskError& err) {
-            retiredOnCatch = retirements.load(MemoryOrder::acquire);
-            outstandingOnCatch = scheduler.statistics().outstandingTasks;
-            return err.code;
-        }, []()noexcept { return -1; });
-    }
+    result = CatchTaskFailure<TerminalTaskError>(lambda[mut scheduler, mut retirements, mut callbacks]() -> i32{
+        CpuTaskScope scope(scheduler);
+        const auto cpuTaskAdmission = scope.submit(RetireAfterTask(LifetimeProbe(retirements, 0u), lambda[mut scope, mut callbacks](mut LifetimeProbe probe, in b8 active) -> void{
+            EXPECT_TRUE(active);
+            EXPECT_TRUE((scope.parallelFor(0u, 16u, 1u, lambda[mut callbacks](in usize index) -> void{
+                ++callbacks;
+                ThrowTestException<TerminalTaskError>(TerminalTaskError(67));
+            })));
+        }));
+        EXPECT_TRUE(cpuTaskAdmission.has_value());
+        if(cpuTaskAdmission.has_value())
+            EXPECT_TRUE(cpuTaskAdmission.value().valid());
+        scope.wait();
+        return 0;
+    }, lambda[mut scheduler, mut retirements, mut retiredOnCatch, mut outstandingOnCatch](in TerminalTaskError err) -> i32{
+        retiredOnCatch = retirements.load(MemoryOrder::acquire);
+        outstandingOnCatch = scheduler.statistics().outstandingTasks;
+        return err.code;
+    }, lambda[]() -> i32{ return -1; });
     EXPECT_EQ(retiredOnCatch, 1u);
     EXPECT_EQ(outstandingOnCatch, 0u);
     EXPECT_EQ(result, 67);
@@ -495,18 +422,15 @@ void VerifyCpuTaskCleanupTests_DescendantRetirementCanReenterSchedulerBeforePare
     usize outstandingDuringRetirement = 0u;
     CpuTaskScheduler scheduler(0u);
     u32 callbacks = 0u;
-    native(mut scheduler, mut parent, mut incompleteDuringRetirement, mut outstandingDuringRetirement, mut callbacks){
-        using namespace __hidden_cpu_task_cleanup_tests;
-        const auto cpuTaskAdmission = scheduler.submit([&scheduler, &callbacks, probe = ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement)]() {
-            EXPECT_TRUE(probe.m_active);
-            const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept { ++callbacks; });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-        });
-        ASSERT_TRUE(cpuTaskAdmission);
-        parent = *cpuTaskAdmission;
-    }
+    const auto cpuTaskAdmission = scheduler.submit(RetireAfterTask(ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement), lambda[mut scheduler, mut callbacks](mut ReentrantRetirementProbe probe, in b8 active) -> void{
+        EXPECT_TRUE(active);
+        const auto secondCpuTaskAdmission = scheduler.submit(lambda[mut callbacks]() -> void{ ++callbacks; });
+        EXPECT_TRUE(secondCpuTaskAdmission.has_value());
+        if(secondCpuTaskAdmission.has_value())
+            EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
+    }));
+    ASSERT_TRUE(cpuTaskAdmission.has_value());
+    parent = cpuTaskAdmission.value();
     ASSERT_TRUE(parent.valid());
     const auto thirdCpuTaskAdmission = scheduler.submit(lambda[mut incompleteDuringRetirement, mut outstandingDuringRetirement, mut callbacks]() -> void{
         EXPECT_TRUE(incompleteDuringRetirement);
@@ -521,6 +445,7 @@ void VerifyCpuTaskCleanupTests_DescendantRetirementCanReenterSchedulerBeforePare
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
+[cpp_unwind]
 void VerifyCpuTaskCleanupTests_LoaderShutdownJoinsPostCallbackTasksBeforeCallbackOwnerExpires(){
     b8 ownerAlive = true;
     Atomic<u32> retirements(0u);
@@ -533,33 +458,18 @@ void VerifyCpuTaskCleanupTests_LoaderShutdownJoinsPostCallbackTasksBeforeCallbac
     u32 lateRetiredOnCatch = 1u;
     usize outstandingOnCatch = 1u;
     i32 result = 0;
-    native(
-        mut ownerAlive,
-        mut retirements,
-        mut lateRetirements,
-        mut scheduler,
-        mut scope,
-        mut callbacks,
-        mut ownerAliveOnCatch,
-        mut retiredOnCatch,
-        mut lateRetiredOnCatch,
-        mut outstandingOnCatch,
-        mut result
-    ){
-        using namespace __hidden_cpu_task_cleanup_tests;
-        result = InvokeTerminalEntry<TerminalTaskError>([&]()->int {
-            ShutdownSubmittingCallbacks owner(scope, ownerAlive, retirements, lateRetirements, callbacks);
-            NWB::LoaderDetail::CallbackShutdownGuard shutdown(owner, scope);
-            shutdown.activate();
-            return 0;
-        }, [&](const TerminalTaskError& err) {
-            ownerAliveOnCatch = ownerAlive;
-            retiredOnCatch = retirements.load(MemoryOrder::acquire);
-            lateRetiredOnCatch = lateRetirements.load(MemoryOrder::acquire);
-            outstandingOnCatch = scheduler.statistics().outstandingTasks;
-            return err.code;
-        }, []()noexcept { return -1; });
-    }
+    result = CatchTaskFailure<TerminalTaskError>(lambda[mut scope, mut retirements, mut callbacks, mut ownerAlive, mut lateRetirements]() -> i32{
+        ShutdownSubmittingCallbacks owner(scope, ownerAlive, retirements, lateRetirements, callbacks);
+        LoaderShutdownGuard shutdown(owner, scope);
+        shutdown.activate();
+        return 0;
+    }, lambda[mut scheduler, mut retirements, mut retiredOnCatch, mut outstandingOnCatch, mut ownerAlive, mut lateRetirements, mut ownerAliveOnCatch, mut lateRetiredOnCatch](in TerminalTaskError err) -> i32{
+        ownerAliveOnCatch = ownerAlive;
+        retiredOnCatch = retirements.load(MemoryOrder::acquire);
+        lateRetiredOnCatch = lateRetirements.load(MemoryOrder::acquire);
+        outstandingOnCatch = scheduler.statistics().outstandingTasks;
+        return err.code;
+    }, lambda[]() -> i32{ return -1; });
     EXPECT_FALSE(ownerAliveOnCatch);
     EXPECT_EQ(retiredOnCatch, 1u);
     EXPECT_EQ(lateRetiredOnCatch, 0u);

@@ -1,0 +1,106 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "cook_tools.adhd"
+#include <tests/common/value_storage.adhd>
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_BunchItemsField = "items";
+const StringView s_BunchValuesField = "values";
+const StringView s_BunchIdField = "id";
+const StringView s_ProjectFixturesBundleFirst = "project/fixtures/bundle/first";
+const StringView s_BunchLocal = "local";
+const StringView s_BunchLabel = "label";
+const StringView s_ASeparatelyOwnedMetadataString = "a separately owned metadata string";
+const StringView s_StaleRelativeOutput = "stale/output";
+
+[cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch")]
+extern Expected<ExpandedAssetMetadataVector> ExpandFixtureAssetBunch(in GraphicsOwnedPath root, in StringView virtualRoot, in GraphicsOwnedPath path, in MetascriptDocument document, mut ScratchStorage storage);
+
+[ordered]
+class BunchFixture{
+    public HeapStorage metadataArena(s_AssetCaseTestsAssetBunchMetadata);
+    public HeapStorage outputArena(s_AssetCaseTestsAssetBunchOutput);
+    public ScratchStorage scratchArena(s_AssetCaseTestsAssetBunchScratch);
+    public MetascriptDocument document(this.metadataArena);
+    public GraphicsOwnedPath assetRoot(this.outputArena, "tests/asset_bunch/assets");
+    public GraphicsOwnedPath filePath(this.outputArena, "tests/asset_bunch/assets/fixtures/bundle.nwb");
+}
+
+b8 HasMetaField(in MetascriptValue value, in StringView field){ return value.hasField(field); }
+in MetascriptValue GetMetaField(in borrow MetascriptValue value, in StringView field){
+    const Optional<in MetascriptValue> found = value.borrowField(field);
+    return found.value();
+}
+b8 HasMetaVariable(in MetascriptDocument document, in StringView name){ return document.hasVariable(name); }
+in MetascriptValue GetMetaVariable(in borrow MetascriptDocument document, in StringView name){
+    const Optional<in MetascriptValue> found = document.borrowVariable(name);
+    return found.value();
+}
+
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Core::Metascript::Document::Declaration")]
+extern class TestMetaDeclaration{
+    String type;
+    String variable;
+};
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::Declaration")]
+extern Optional<in TestMetaDeclaration> FindTestDeclaration(in borrow MetascriptDocument document, in StringView name);
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::FirstDeclaration")]
+extern Optional<in TestMetaDeclaration> FirstTestDeclaration(in borrow MetascriptDocument document);
+
+b8 HasMetaDeclaration(in MetascriptDocument document, in StringView name){ return document.declarationType(name).has_value(); }
+String GetMetaDeclarationVariable(in MetascriptDocument document, in StringView name){
+    const Optional<in TestMetaDeclaration> found = FindTestDeclaration(document, name);
+    if(found.has_value())
+        return String(found.value().variable);
+    return "";
+}
+StringView GetMetaDeclarationType(in MetascriptDocument document, in StringView name){ return document.declarationType(name).value_or(""); }
+b8 IsFirstMetaDeclaration(in MetascriptDocument document, in StringView name){
+    const Optional<in TestMetaDeclaration> found = FindTestDeclaration(document, name);
+    const Optional<in TestMetaDeclaration> first = FirstTestDeclaration(document);
+    return first.has_value() && found.has_value() && TestValueAddress(found.value()) == TestValueAddress(first.value());
+}
+
+void VerifyOwnedBunchOutput(in ExpandedAssetMetadataVector output, in MetascriptDocument document){
+    ASSERT_EQ(output.size(), 2u);
+    EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
+    EXPECT_EQ(output[1u].virtualPath, Name(s_ProjectFixturesBundleFirst));
+    const Optional<in MetascriptValue> items = output[0u].value.borrowField(s_BunchItemsField);
+    ASSERT_TRUE(items.has_value());
+    ASSERT_TRUE(items.value().isList());
+    ASSERT_EQ(items.value().listView().size(), 2u);
+    const Optional<in MetascriptValue> label = items.value().listView()[0u].borrowField(s_BunchLabel);
+    ASSERT_TRUE(label.has_value());
+    EXPECT_EQ(label.value().asString(), s_ASeparatelyOwnedMetadataString);
+    const Optional<in MetascriptValue> target = items.value().listView()[1u].borrowField(s_FieldTarget);
+    ASSERT_TRUE(target.has_value());
+    EXPECT_EQ(target.value().asString(), s_ProjectFixturesBundleFirst);
+    const Optional<in MetascriptValue> first = document.borrowVariable("first");
+    ASSERT_TRUE(first.has_value());
+    const Optional<in MetascriptValue> sourceTarget = first.value().borrowField(s_FieldTarget);
+    ASSERT_TRUE(sourceTarget.has_value());
+    EXPECT_TRUE(sourceTarget.value().isReference());
+    EXPECT_EQ(sourceTarget.value().asReference(), "second");
+    const Optional<in MetascriptValue> sourceLocal = first.value().borrowField(s_BunchLocal);
+    ASSERT_TRUE(sourceLocal.has_value());
+    EXPECT_TRUE(sourceLocal.value().isReference());
+    EXPECT_EQ(sourceLocal.value().asReference(), s_BunchLocal);
+}
+
+b8 ParseBunchLookupFixture(in StringView metadata, in usize unused, mut BunchFixture fixture){
+    String source;
+    source.reserve(unused * 32u + metadata.size());
+    for(usize i = 0u; i < unused; ++i)
+        GraphicsStringAppendFormat(source, "metadata unused_{};\n", i);
+    source.append(metadata);
+    return fixture.document.parse(source);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

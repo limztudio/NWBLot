@@ -8,112 +8,104 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::ByteAddress")]
+extern class ByteAddress;
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::ReadAddress")]
+extern class ReadAddress;
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::s_HasVirtualPages")]
+extern const b8 s_HasVirtualPages;
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::WritableBytesStart")]
+extern ByteAddress WritableBytesStart(mut auto buffer);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::LoadByte")]
+extern u8 LoadByte(in ReadAddress bytes, in usize offset);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::StoreByte")]
+extern void StoreByte(in ByteAddress bytes, in usize offset, in u8 value);
+
+[cpp_header("<global/simd/memory.h>"), cpp_name("::SIMDMemoryCopy")]
+extern void CopyTestBytes(in ByteAddress destination, in usize capacity, in ReadAddress source, in usize count);
+
+[cpp_header("<global/simd/memory.h>"), cpp_name("FOUNDATION_SIMD_MEMCPY")]
+extern void MacroCopyTestBytes(in ByteAddress destination, in usize capacity, in ReadAddress source, in usize count);
+
+[cpp_header("<cstring>"), cpp_name("::memset")]
+extern void FillTestBytes(in ByteAddress target, in u8 value, in usize count);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::VirtualPageSize")]
+extern usize VirtualPageSize();
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::ReserveVirtualPages")]
+extern ByteAddress ReserveVirtualPages(in usize bytes);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::MakeVirtualPagesWritable")]
+extern b8 MakeVirtualPagesWritable(in ByteAddress first, in usize bytes);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::ReleaseVirtualPages")]
+extern b8 ReleaseVirtualPages(in ByteAddress first, in usize bytes);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::HasByteAddress")]
+extern b8 HasByteAddress(in ReadAddress address);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::GuardAddress")]
+extern ByteAddress GuardAddress(in ReadAddress base, in usize offset);
+
+[cpp_header("<tests/common/virtual_pages.h>"), cpp_name("::NWB::Tests::BeginByteLifetimes")]
+extern ByteAddress BeginByteLifetimes(in ByteAddress first, in usize count);
+
+[cpp_header("<cstdlib>"), cpp_name("::_Exit")]
+extern void ExitImmediately(in i32 code);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <engine_namespace.h>
+[ordered]
+class GuardedBytes : NoCopy{
+    public ByteAddress mapping = ByteAddress();
+    public ByteAddress data = ByteAddress();
+    public ByteAddress lowerGuard = ByteAddress();
+    public ByteAddress upperGuard = ByteAddress();
+    public usize pageBytes = 0u;
+    public usize accessibleBytes = 0u;
+    public usize mappingBytes = 0u;
 
-#include <global/global.h>
-#include <global/limit.h>
-#include <global/process.h>
-#include <global/simd/memory.h>
+    public GuardedBytes(){
+        this.prepare();
+    }
 
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-#include <Windows.h>
-#elif defined(FOUNDATION_PLATFORM_LINUX)
-#include <sys/mman.h>
-#include <unistd.h>
-#endif
+    public ~GuardedBytes(){
+        if(HasByteAddress(this.mapping) && !ReleaseVirtualPages(this.mapping, this.mappingBytes))
+            TerminateInvariant();
+    }
 
-NWB_BEGIN
-
-namespace Tests{
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
-struct GuardedBytes final : NoCopy{
-    void* mapping = nullptr;
-    u8* data = nullptr;
-    u8* lowerGuard = nullptr;
-    u8* upperGuard = nullptr;
-    usize pageBytes = 0u;
-    usize accessibleBytes = 0u;
-    usize mappingBytes = 0u;
-
-
-public:
-    GuardedBytes()noexcept;
-    ~GuardedBytes()noexcept;
-};
-
-FOUNDATION_INLINE GuardedBytes::GuardedBytes()noexcept{
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    SYSTEM_INFO systemInfo{};
-    GetSystemInfo(&systemInfo);
-    pageBytes = static_cast<usize>(systemInfo.dwPageSize);
-#else
-    const long systemPageBytes = sysconf(_SC_PAGESIZE);
-    if(systemPageBytes <= 0)
-        return;
-    pageBytes = static_cast<usize>(systemPageBytes);
-#endif
-    if(pageBytes == 0u || pageBytes % s_SIMDMemoryCopyAlignment != 0u || pageBytes > Limit<usize>::s_Max / 6u)
-        return;
-    accessibleBytes = pageBytes * 4u;
-    mappingBytes = pageBytes * 6u;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    mapping = VirtualAlloc(nullptr, mappingBytes, MEM_RESERVE, PAGE_NOACCESS);
-    if(mapping == nullptr)
-        return;
-    void* const committed = VirtualAlloc(static_cast<u8*>(mapping) + pageBytes, accessibleBytes, MEM_COMMIT, PAGE_READWRITE);
-    if(committed == nullptr)
-        return;
-#else
-    void* const allocated = mmap(nullptr, mappingBytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if(allocated == MAP_FAILED)
-        return;
-    mapping = allocated;
-    if(mprotect(static_cast<u8*>(mapping) + pageBytes, accessibleBytes, PROT_READ | PROT_WRITE) != 0)
-        return;
-#endif
-    // The copy API writes existing byte objects, including at both ends of this accessible region.
-    data = ::new(static_cast<u8*>(mapping) + pageBytes) u8[accessibleBytes];
-    lowerGuard = static_cast<u8*>(mapping);
-    upperGuard = data + accessibleBytes;
+    private void prepare(){
+        this.pageBytes = VirtualPageSize();
+        if(this.pageBytes == 0u || this.pageBytes % s_SIMDMemoryCopyAlignment != 0u || this.pageBytes > usize.max / 6u)
+            return;
+        this.accessibleBytes = this.pageBytes * 4u;
+        this.mappingBytes = this.pageBytes * 6u;
+        this.mapping = ReserveVirtualPages(this.mappingBytes);
+        if(!HasByteAddress(this.mapping))
+            return;
+        auto first = GuardAddress(this.mapping, this.pageBytes);
+        if(!MakeVirtualPagesWritable(first, this.accessibleBytes))
+            return;
+        this.data = BeginByteLifetimes(first, this.accessibleBytes);
+        this.lowerGuard = this.mapping;
+        this.upperGuard = GuardAddress(this.data, this.accessibleBytes);
+    }
 }
-
-FOUNDATION_INLINE GuardedBytes::~GuardedBytes()noexcept{
-    if(mapping == nullptr)
-        return;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    if(VirtualFree(mapping, 0u, MEM_RELEASE) == 0)
-        abort();
-#else
-    if(munmap(mapping, mappingBytes) != 0)
-        abort();
-#endif
-}
-
-[[nodiscard]] FOUNDATION_INLINE u8* GuardAddress(const void* base, const usize byteOffset)noexcept{
-    return reinterpret_cast<u8*>(reinterpret_cast<usize>(base) + byteOffset);
-}
-
-FOUNDATION_INLINE void ExitOnAbort([[maybe_unused]] const int signalNumber)noexcept{
-    _exit(s_SIMDMemoryAbortExitCode);
-}
-#endif
-
-};
-
-NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void ExitOnAbort(in i32 signalNumber){
+    ExitImmediately(s_SIMDMemoryAbortExitCode);
 }
 
 

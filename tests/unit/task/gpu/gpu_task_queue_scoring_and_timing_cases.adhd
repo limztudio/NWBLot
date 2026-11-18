@@ -9,107 +9,33 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-FOUNDATION_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOptions& options, const Core::GpuTaskTimingHistorySnapshot& snapshot)noexcept{
-    options.timingHistory = &snapshot;
+Optional<GpuTaskTimingAssignmentState> FindTimingAssignmentStateValue(in GpuTaskTimingHistoryStore store, in GpuTaskTimingAssignmentKey key){
+    const Optional<in GpuTaskTimingAssignmentState> found = BorrowStoreTimingAssignment(store, key);
+    if(found.has_value()){
+        in GpuTaskTimingAssignmentState value = found.value();
+        return value;
+    }
+    return Optional<GpuTaskTimingAssignmentState>();
 }
 
-[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindTimingAssignmentStateValue(
-    const Core::GpuTaskTimingHistoryStore& store,
-    const Core::GpuTaskTimingAssignmentKey& key
-)noexcept{
-    if(const Core::GpuTaskTimingAssignmentState* const found = store.findAssignment(key))
-        return *found;
-    return {};
+b8 FragmentHasNullState(in TrackedResourceStateFragment fragment){
+    return !fragment.borrowState().has_value();
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 CollectGpuScoringLatestFragments(
-    const ScratchTrackedStates& states,
-    const TrackedResourceStateHistory& history,
-    const Core::GpuTaskGraphResourceView& resource,
-    const ScratchResourceRanges& requested,
-    Core::Alloc::ScratchArena& scratchArena,
-    ScratchStateFragments& fragments
-){
-    return Core::GpuTaskGraphCompilerDetail::CollectLatestResourceStateFragments(states, history, resource, requested, scratchArena, fragments);
+b8 FragmentMatchesTrackedState(in TrackedResourceStateFragment fragment, in TrackedStates states, in usize index){
+    const Optional<in TrackedCompiledResourceState> state = fragment.borrowState();
+    if(index >= states.size() || !state.has_value())
+        return false;
+    in TrackedCompiledResourceState value = state.value();
+    return SameAddress(value, states[index]);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 CollectGpuScoringTerminalFragments(
-    const ScratchTrackedStates& states,
-    const TrackedResourceStateHistory& history,
-    const Core::GpuTaskGraphResourceView& resource,
-    Core::Alloc::ScratchArena& scratchArena,
-    ScratchStateFragments& fragments
-){
-    return Core::GpuTaskGraphCompilerDetail::CollectTerminalResourceStateFragments(states, history, resource, scratchArena, fragments);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 FragmentHasNullState(const TrackedResourceStateFragment& fragment)noexcept{
-    return fragment.state == nullptr;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 FragmentMatchesTrackedState(
-    const TrackedResourceStateFragment& fragment,
-    const ScratchTrackedStates& states,
-    const usize index
-)noexcept{
-    return index < states.size() && fragment.state == &states[index];
-}
-
-FOUNDATION_INLINE void SeedFragmentWithFirstState(const ScratchTrackedStates& states, ScratchStateFragments& fragments){
-    TrackedResourceStateFragment seed{};
-    seed.state = &states[0u];
+void SeedFragmentWithFirstState(in TrackedStates states, mut TrackedStateFragments fragments){
+    TrackedResourceStateFragment seed;
+    seed.setState(states[0u]);
     seed.stateIndex = 0u;
     fragments.push_back(seed);
     fragments.push_back(seed);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 
@@ -584,7 +510,7 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
     timingPolicy.minimumRelativeBenefit = 0.1;
     timingPolicy.minimumFramesBetweenSwitches = 10u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 9u;
 
@@ -677,7 +603,7 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     timingPolicy.calibrationIntervalFrames = 1u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuTaskTimingKey timingKey = GpuTaskTimingKey();
@@ -754,7 +680,7 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     intervalTimingPolicy.minimumSampleCount = 2u;
     intervalTimingPolicy.calibrationIntervalFrames = 2u;
     GpuTaskGraphQueueAssignmentOptions intervalAssignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(intervalAssignmentOptions, intervalTimingSnapshot);
+    intervalAssignmentOptions.setTimingHistory(intervalTimingSnapshot);
     intervalAssignmentOptions.timingFeedbackPolicy = intervalTimingPolicy;
     intervalAssignmentOptions.timingFrameIndex = 12u;
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology, intervalAssignmentOptions));
@@ -832,7 +758,7 @@ void VerifyGpuScoring_IgnoresTimingFeedbackWithoutAnyEnabledRoute(){
     timingPolicy.minimumSampleCount = 1u;
     timingPolicy.calibrationIntervalFrames = 1u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology, assignmentOptions));
@@ -955,7 +881,7 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
     timingPolicy.minimumRelativeBenefit = 0.1;
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     GpuTaskGraphQueueAssignmentOptions options = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(options, timingSnapshot);
+    options.setTimingHistory(timingSnapshot);
     options.timingFeedbackPolicy = timingPolicy;
     options.timingFrameIndex = 12u;
 
@@ -1112,7 +1038,7 @@ void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
     timingPolicy.minimumRelativeBenefit = 0.1;
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 10u;
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology, assignmentOptions));
@@ -1230,7 +1156,7 @@ void VerifyGpuScoring_CrossClassTimingCalibrationPreservesStaticBaselineAndHonor
     timingPolicy.minimumRelativeBenefit = 0.1;
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 0u;
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology, assignmentOptions));
@@ -1404,7 +1330,7 @@ void GpuScoringRunRejectedCrossClassCase(
     timingPolicy.calibrationIntervalFrames = 0u;
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 20u;
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
@@ -1515,7 +1441,7 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     timingPolicy.minimumRelativeBenefit = 0.1;
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 12u;
 
@@ -1649,7 +1575,7 @@ void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnersh
     timingPolicy.minimumRelativeBenefit = 0.1;
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     GpuTaskGraphQueueAssignmentOptions assignmentOptions = GpuTaskGraphQueueAssignmentOptions();
-    SetGpuScoringTimingHistory(assignmentOptions, timingSnapshot);
+    assignmentOptions.setTimingHistory(timingSnapshot);
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 8u;
     GpuTaskGraphCompileOptions compileOptions = GpuTaskGraphCompileOptions();
@@ -1747,7 +1673,7 @@ ExpectedBufferFragment GpuScoringExpectedFragment(in usize stateIndex, in u64 of
 }
 
 void GpuScoringAppendBufferState(
-    mut ScratchTrackedStates states,
+    mut TrackedStates states,
     mut TrackedResourceStateHistory history,
     in GpuGraphResourceId resource,
     in u64 offset,
@@ -1766,8 +1692,8 @@ void GpuScoringAppendBufferState(
 }
 
 void GpuScoringExpectBufferFragments(
-    in ScratchStateFragments fragments,
-    in ScratchTrackedStates states,
+    in TrackedStateFragments fragments,
+    in TrackedStates states,
     in Span<ExpectedBufferFragment> expected
 ){
     ASSERT_EQ(fragments.size(), expected.size());
@@ -1789,7 +1715,7 @@ void GpuScoringExpectBufferFragments(
 
 void VerifyGpuScoring_LatestPartialOverwritesKeepProducerAndFragmentOrderBeforeInitialGaps(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     states.reserve(5u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
@@ -1801,10 +1727,10 @@ void VerifyGpuScoring_LatestPartialOverwritesKeepProducerAndFragmentOrderBeforeI
     GpuScoringAppendBufferState(states, history, otherBuffer, 16u, 16u);
     ScratchResourceRanges requested = ScratchResourceRanges(scratch.scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 128u));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
 
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     Array<ExpectedBufferFragment, 7> expected = Array<ExpectedBufferFragment, 7>();
     expected[0u] = GpuScoringExpectedFragment(0u, 16u, 16u);
     expected[1u] = GpuScoringExpectedFragment(0u, 48u, 16u);
@@ -1815,7 +1741,7 @@ void VerifyGpuScoring_LatestPartialOverwritesKeepProducerAndFragmentOrderBeforeI
     expected[6u] = GpuScoringExpectedFragment(s_GpuScoringInitialState, 112u, 16u);
     GpuScoringExpectBufferFragments(fragments, states, expected);
 
-    ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, scratch.scratchArena, fragments));
     Array<ExpectedBufferFragment, 5> terminal = Array<ExpectedBufferFragment, 5>();
     terminal[0u] = GpuScoringExpectedFragment(0u, 16u, 16u);
     terminal[1u] = GpuScoringExpectedFragment(0u, 48u, 16u);
@@ -1828,7 +1754,7 @@ void VerifyGpuScoring_LatestPartialOverwritesKeepProducerAndFragmentOrderBeforeI
 
 void VerifyGpuScoring_SparseProducerIndicesRetainUnsortedRequestOrderWithinEachProducer(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     states.reserve(130u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
@@ -1845,10 +1771,10 @@ void VerifyGpuScoring_SparseProducerIndicesRetainUnsortedRequestOrderWithinEachP
     requested.push_back(GpuScoringBufferRange(48u, 8u));
     requested.push_back(GpuScoringBufferRange(144u, 8u));
     requested.push_back(GpuScoringBufferRange(0u, 8u));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
 
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     Array<ExpectedBufferFragment, 6> expected = Array<ExpectedBufferFragment, 6>();
     expected[0u] = GpuScoringExpectedFragment(0u, 80u, 8u);
     expected[1u] = GpuScoringExpectedFragment(0u, 16u, 8u);
@@ -1862,7 +1788,7 @@ void VerifyGpuScoring_SparseProducerIndicesRetainUnsortedRequestOrderWithinEachP
 
 void VerifyGpuScoring_EmptyAndUntrackedRequestsClearPriorOutputAndPreserveInitialOrder(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     const GpuGraphResourceId otherBuffer = GpuScoringOtherBufferId();
@@ -1870,28 +1796,28 @@ void VerifyGpuScoring_EmptyAndUntrackedRequestsClearPriorOutputAndPreserveInitia
     requested.reserve(2u);
     requested.push_back(GpuScoringBufferRange(64u, 8u));
     requested.push_back(GpuScoringBufferRange(0u, 8u));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
 
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     Array<ExpectedBufferFragment, 2> expected = Array<ExpectedBufferFragment, 2>();
     expected[0u] = GpuScoringExpectedFragment(s_GpuScoringInitialState, 64u, 8u);
     expected[1u] = GpuScoringExpectedFragment(s_GpuScoringInitialState, 0u, 8u);
     GpuScoringExpectBufferFragments(fragments, states, expected);
     GpuScoringAppendBufferState(states, history, otherBuffer, 0u, 128u);
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, expected);
     requested.clear();
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     EXPECT_TRUE(fragments.empty());
-    ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, scratch.scratchArena, fragments));
     EXPECT_TRUE(fragments.empty());
     EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_SymbolicBufferTailRemainsAfterFiniteRemainderWithinOldestProducer(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     states.reserve(2u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
@@ -1899,23 +1825,23 @@ void VerifyGpuScoring_SymbolicBufferTailRemainsAfterFiniteRemainderWithinOldestP
     GpuScoringAppendBufferState(states, history, buffer, 16u, 16u);
     ScratchResourceRanges requested = ScratchResourceRanges(scratch.scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, s_GpuAllBytes));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
     Array<ExpectedBufferFragment, 3> expected = Array<ExpectedBufferFragment, 3>();
     expected[0u] = GpuScoringExpectedFragment(0u, 0u, 16u);
     expected[1u] = GpuScoringExpectedFragment(0u, 32u, s_GpuAllBytes);
     expected[2u] = GpuScoringExpectedFragment(1u, 16u, 16u);
 
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, expected);
-    ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, scratch.scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, expected);
     EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_TextureInteriorOverwritePreservesFourRemaindersInDiscoveryOrder(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     states.reserve(2u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
@@ -1942,7 +1868,7 @@ void VerifyGpuScoring_TextureInteriorOverwritePreservesFourRemaindersInDiscovery
 
     ScratchResourceRanges requested = ScratchResourceRanges(scratch.scratchArena);
     requested.push_back(whole);
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Texture);
     Array<TextureSubresourceSet, 5> expected = Array<TextureSubresourceSet, 5>();
     expected[0u] = TextureSubresourceSet(0u, 2u, 0u, 5u);
@@ -1955,9 +1881,9 @@ void VerifyGpuScoring_TextureInteriorOverwritePreservesFourRemaindersInDiscovery
         const ScopedTestTrace trace = ScopedTestTrace(terminal);
         b8 collected = false;
         if(terminal == 0u)
-            collected = CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments);
+            collected = CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments);
         else
-            collected = CollectGpuScoringTerminalFragments(states, history, resource, scratch.scratchArena, fragments);
+            collected = CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, scratch.scratchArena, fragments);
         ASSERT_TRUE(collected);
         ASSERT_EQ(fragments.size(), expected.size());
         for(usize index = 0u; index < expected.size(); ++index){
@@ -1975,7 +1901,7 @@ void VerifyGpuScoring_TextureInteriorOverwritePreservesFourRemaindersInDiscovery
 
 void VerifyGpuScoring_IndexedHistoryKeepsGlobalOrderAcrossIncrementalGrowthAndUnrelatedStates(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     states.reserve(1u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
@@ -1983,9 +1909,9 @@ void VerifyGpuScoring_IndexedHistoryKeepsGlobalOrderAcrossIncrementalGrowthAndUn
     GpuScoringAppendBufferState(states, history, buffer, 0u, 128u);
     ScratchResourceRanges requested = ScratchResourceRanges(scratch.scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 128u));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     Array<ExpectedBufferFragment, 1> before = Array<ExpectedBufferFragment, 1>();
     before[0u] = GpuScoringExpectedFragment(0u, 0u, 128u);
     GpuScoringExpectBufferFragments(fragments, states, before);
@@ -2003,16 +1929,16 @@ void VerifyGpuScoring_IndexedHistoryKeepsGlobalOrderAcrossIncrementalGrowthAndUn
     after[2u] = GpuScoringExpectedFragment(0u, 96u, 32u);
     after[3u] = GpuScoringExpectedFragment(258u, 32u, 16u);
     after[4u] = GpuScoringExpectedFragment(260u, 80u, 16u);
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, after);
-    ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, scratch.scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, after);
     EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_IndexedHistoryRejectsForeignGenerationAndInvalidResourcesWithoutPublication(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     states.reserve(2u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
@@ -2042,18 +1968,18 @@ void VerifyGpuScoring_IndexedHistoryRejectsForeignGenerationAndInvalidResourcesW
 
     ScratchResourceRanges requested = ScratchResourceRanges(scratch.scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 16u));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView foreign = GpuScoringResourceView(MakeGpuResourceId(0u, 2u), GpuGraphResourceType::Buffer);
-    EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, foreign, requested, scratch.scratchArena, fragments));
-    EXPECT_FALSE(CollectGpuScoringTerminalFragments(states, history, foreign, scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, foreign, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, foreign, scratch.scratchArena, fragments));
     EXPECT_TRUE(fragments.empty());
     EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_IndexedHistoryRejectsMismatchedVectorAndBypassedAppend(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
-    ScratchTrackedStates otherStates = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
+    TrackedStates otherStates = TrackedStates(scratch.scratchArena);
     states.reserve(2u);
     otherStates.reserve(1u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
@@ -2063,17 +1989,17 @@ void VerifyGpuScoring_IndexedHistoryRejectsMismatchedVectorAndBypassedAppend(){
     EXPECT_FALSE(history.validFor(otherStates));
     ScratchResourceRanges requested = ScratchResourceRanges(scratch.scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 16u));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
-    EXPECT_FALSE(CollectGpuScoringLatestFragments(otherStates, history, resource, requested, scratch.scratchArena, fragments));
-    EXPECT_FALSE(CollectGpuScoringTerminalFragments(otherStates, history, resource, scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(otherStates), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(otherStates), history, resource, scratch.scratchArena, fragments));
 
     states.push_back(states[0u]);
     EXPECT_FALSE(history.validFor(states));
     EXPECT_FALSE(history.append(states[0u]));
     EXPECT_EQ(states.size(), 2u);
-    EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
-    EXPECT_FALSE(CollectGpuScoringTerminalFragments(states, history, resource, scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, scratch.scratchArena, fragments));
     EXPECT_TRUE(fragments.empty());
     EXPECT_EQ(otherStates.size(), 1u);
     EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
@@ -2081,7 +2007,7 @@ void VerifyGpuScoring_IndexedHistoryRejectsMismatchedVectorAndBypassedAppend(){
 
 void VerifyGpuScoring_IndexedHistorySkipsUnrelatedInvalidRangesButStillRejectsSelectedInvalidRange(){
     TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-    ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+    TrackedStates states = TrackedStates(scratch.scratchArena);
     states.reserve(2u);
     TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
@@ -2090,22 +2016,22 @@ void VerifyGpuScoring_IndexedHistorySkipsUnrelatedInvalidRangesButStillRejectsSe
     GpuScoringAppendBufferState(states, history, otherBuffer, 0u, 0u);
     ScratchResourceRanges requested = ScratchResourceRanges(scratch.scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 64u));
-    ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+    TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
     Array<ExpectedBufferFragment, 3> expected = Array<ExpectedBufferFragment, 3>();
     expected[0u] = GpuScoringExpectedFragment(0u, 16u, 16u);
     expected[1u] = GpuScoringExpectedFragment(s_GpuScoringInitialState, 0u, 16u);
     expected[2u] = GpuScoringExpectedFragment(s_GpuScoringInitialState, 32u, 32u);
-    ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, expected);
     Array<ExpectedBufferFragment, 1> terminal = Array<ExpectedBufferFragment, 1>();
     terminal[0u] = GpuScoringExpectedFragment(0u, 16u, 16u);
-    ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratch.scratchArena, fragments));
+    ASSERT_TRUE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, scratch.scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, terminal);
 
     const GpuTaskGraphResourceView other = GpuScoringResourceView(otherBuffer, GpuGraphResourceType::Buffer);
-    EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, other, requested, scratch.scratchArena, fragments));
-    EXPECT_FALSE(CollectGpuScoringTerminalFragments(states, history, other, scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, other, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
+    EXPECT_FALSE(CollectTerminalResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, other, scratch.scratchArena, fragments));
     EXPECT_EQ(fragments.size(), 1u);
     EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
 }
@@ -2119,7 +2045,7 @@ void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreserves
     for(in GpuGraphResourceTypeEnum resourceType : types){
         const ScopedTestTrace trace = ScopedTestTrace(resourceType);
         TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
-        ScratchTrackedStates states = ScratchTrackedStates(scratch.scratchArena);
+        TrackedStates states = TrackedStates(scratch.scratchArena);
         states.reserve(3u);
         TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratch.scratchArena);
         TrackedCompiledResourceState state = TrackedCompiledResourceState();
@@ -2154,12 +2080,12 @@ void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreserves
         }
         requested.push_back(requestedRange);
 
-        ScratchStateFragments fragments = ScratchStateFragments(scratch.scratchArena);
+        TrackedStateFragments fragments = TrackedStateFragments(scratch.scratchArena);
         fragments.reserve(2u);
         SeedFragmentWithFirstState(states, fragments);
 
         const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, resourceType);
-        ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+        ASSERT_TRUE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
         ASSERT_EQ(fragments.size(), 1u);
         EXPECT_TRUE(FragmentMatchesTrackedState(fragments[0u], states, 1u));
         EXPECT_EQ(fragments[0u].stateIndex, 1u);
@@ -2177,7 +2103,7 @@ void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreserves
             requested[0u].bufferRange = BufferRange(0u, 0u);
         else
             requested[0u].textureSubresources = TextureSubresourceSet(0u, 0u, 0u, 1u);
-        EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+        EXPECT_FALSE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
 
         requested[0u] = validRequestedRange;
         states[1u].range = requested[0u];
@@ -2185,7 +2111,7 @@ void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreserves
             states[1u].range.bufferRange = BufferRange(0u, 0u);
         else
             states[1u].range.textureSubresources = TextureSubresourceSet(0u, 0u, 0u, 1u);
-        EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratch.scratchArena, fragments));
+        EXPECT_FALSE(CollectLatestResourceStateFragments(Span<TrackedCompiledResourceState>(states), history, resource, Span<GpuTaskResourceRange>(requested), scratch.scratchArena, fragments));
         ASSERT_EQ(fragments.size(), 1u);
         EXPECT_TRUE(FragmentMatchesTrackedState(fragments[0u], states, 1u));
         EXPECT_EQ(fragments[0u].stateIndex, 1u);

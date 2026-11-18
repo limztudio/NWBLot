@@ -29,7 +29,7 @@ const StringView s_UiPopupToolsSentinelKey = "sentinel";
 
 
 // Every nested state is a member and remains lent through the outermost endPopup.
-class UiNestedPopupSmokeScene{
+class UiNestedPopupSmokeScene : IUiSmokeInputScene{
     private UiNestedPopupSmokeSource m_source = UiNestedPopupSmokeSource();
     private PopupState m_parent = PopupState();
     private PopupState m_child = PopupState();
@@ -64,8 +64,8 @@ class UiNestedPopupSmokeScene{
 
     public UiNestedPopupSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private b8 paintRoot(mut Builder ui);
     private b8 paintParent(mut Builder ui);
@@ -77,7 +77,7 @@ class UiNestedPopupSmokeScene{
 }
 
 
-class UiNumericEditSmokeScene{
+class UiNumericEditSmokeScene : IUiSmokeInputScene{
     private IntegerEditModel m_integer;
     private FloatEditModel m_float;
     private EditModel m_clipboard;
@@ -95,8 +95,8 @@ class UiNumericEditSmokeScene{
 
     public UiNumericEditSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private void resetModels();
     private Array<u64, 30u> values()const;
@@ -107,7 +107,7 @@ class UiNumericEditSmokeScene{
 }
 
 
-class UiPopupSmokeScene{
+class UiPopupSmokeScene : IUiSmokeInputScene{
     private PopupState m_popup = PopupState();
     private EditModel m_popupText;
     private EditModel m_outsideText;
@@ -130,16 +130,16 @@ class UiPopupSmokeScene{
 
     public UiPopupSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
+    public b8 paint(mut UiPaintContext context)override;
     public b8 paintLaterRoot(mut UiPaintContext context)const;
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private Array<u32, 12u> values()const;
     private void observeState();
 }
 
 
-class UiPopupToolsSmokeScene{
+class UiPopupToolsSmokeScene : IUiSmokeInputScene{
     private UiPopupToolsSmokeSource m_source = UiPopupToolsSmokeSource();
     private ContextMenuState m_menu = ContextMenuState();
     private TooltipState m_tooltip = TooltipState();
@@ -164,8 +164,8 @@ class UiPopupToolsSmokeScene{
 
     public UiPopupToolsSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private Array<u64, 15u> values()const;
     private Rect rowBounds(in u64 key)const;
@@ -615,7 +615,7 @@ Rect UiNestedPopupSmokeScene::rowBounds(in ListState state, in Expected<u64> ind
 UiNumericEditSmokeScene::UiNumericEditSmokeScene(){
     this.m_integer = IntegerEditModel();
     this.m_float = FloatEditModel();
-    this.m_selectionView = CreateSmokeEditBoxView();
+    this.m_selectionView = EditBoxView();
     this.resetModels();
 }
 

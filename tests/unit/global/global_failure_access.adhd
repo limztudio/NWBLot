@@ -1,0 +1,169 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "fixed_vector_case_types.adhd"
+#include "global_text_access.adhd"
+#include <tests/common/value_storage.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::ThrowingByteContainer")]
+extern class ThrowingByteContainer;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::ThrowingLvalueByteContainer")]
+extern class ThrowingLvalueByteContainer;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::ThrowingSizeByteContainer")]
+extern class ThrowingSizeByteContainer;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::CharSink")]
+extern class CharSink{
+    Array<NarrowChar, 40u> data;
+    usize size;
+};
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::HashProbe")]
+extern class HashProbe;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingPlacementCallable")]
+extern class ThrowingPlacementCallable;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingByteSource")]
+extern class ThrowingByteSource;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingPodAddress")]
+extern class ThrowingPodAddress;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingMutableByteSource")]
+extern class ThrowingMutableByteSource;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingDiagnosticView")]
+extern class ThrowingDiagnosticView;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingDiagnosticCleanup")]
+extern class ThrowingDiagnosticCleanup;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::StatefulPlacementCallable")]
+extern class StatefulPlacementCallable;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::FunctionStorage")]
+extern class FunctionStorage;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ResetPlacements")]
+extern void ResetPlacements();
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::Placements")]
+extern u32 Placements();
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_hex_failure_tests::ThrowingHexCapacityString")]
+extern class ThrowingHexCapacityString{
+    CompactString text;
+};
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_hex_failure_tests::ThrowingHexAppendString")]
+extern class ThrowingHexAppendString{
+    CompactString text;
+};
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::FixedVectorCopyOnly")]
+extern class FixedVectorCopyOnly;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::EmptyFixed")]
+extern class EmptyFixed{
+    void clear();
+    b8 empty()const;
+};
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::FixedVectorNonAssignable")]
+extern class FixedVectorNonAssignable;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::FixedVectorResource")]
+extern class FixedVectorResource;
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::ThrowingFixedVectorAssignment")]
+extern class ThrowingFixedVectorAssignment{
+    u32 value;
+};
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AssignCaseStorage")]
+extern void AssignCaseStorage(mut auto target, mut auto value);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::MoveCaseValue")]
+extern T MoveCaseValue<T>(mut T value);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NonemptyCallable")]
+extern b8 NonemptyCallable(in auto callable);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::FillCaseBytes")]
+extern void FillCaseBytes(mut Span<u8> output, in usize count, in Span<u8> pattern);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::FillNullDestination")]
+extern void FillNullDestination(in usize count, in Span<u8> pattern);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::PushTestCopy")]
+extern void PushTestCopy(mut auto container, in auto value);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::ReadBinaryText")]
+extern Expected<StringView> ReadCaseBinaryText(in BinaryByteView source, in usize count, mut usize cursor);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::WriteF32LittleEndianAt")]
+extern void WriteProbeFloat(in f32 value, in usize index, mut auto target);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::WatchAppend")]
+extern CaseCleanup WatchAppend(mut auto values, in auto callback);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::SymmetrizeDenseBitMatrix")]
+extern void SymmetrizeDenseBitMatrix(mut auto matrix, in usize count, in usize words);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::SymmetrizeCompactBitMatrix")]
+extern void SymmetrizeCompactBitMatrix(mut auto matrix, in auto offsets, in auto ranges, in usize count, in usize words);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendSha1Hex")]
+extern void AppendSinkSha1(in Sha1Digest digest, mut CharSink sink);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexByte")]
+extern void AppendSinkByte(in u8 value, mut CharSink sink);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::HashCombine")]
+extern void CombineProbeHash(mut usize seed, in HashProbe probe);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::ReadPOD")]
+extern Expected<T> ReadProbePod<T>(in auto bytes, mut usize offset);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::GlobalFilesystemDetail::MutableReadBuffer")]
+extern auto ProbeMutableReadBuffer(mut ThrowingMutableByteSource bytes);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::MakeDiagnosticEventText")]
+extern DiagnosticEventText FormatProbeText(in StringView format, in auto value);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexU32")]
+extern void AppendProbeHex32(in u32 value, mut auto text);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexU64")]
+extern void AppendProbeHex64(in u64 value, mut auto text);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::AppendHexU32UnsignedLiteral")]
+extern void AppendProbeLiteral(in u32 value, mut auto text);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::CaseIndexSet")]
+extern class CaseIndexSet{
+    void initializeZeros(in Span<u32> flags);
+    u32 takeLowest();
+    void add(in usize index);
+};
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::CallStoredFunction")]
+extern void CallStoredFunction(mut FunctionStorage value);
+
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::ThrowTestRuntime")]
+extern void ThrowTestRuntime(in auto text);
+
+[cpp_header("<global/bit.h>"), cpp_name("::PackFourCharTag")]
+extern u32 PackTestCharTag(in NarrowChar first, in auto second, in auto third, in auto fourth);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -3,178 +3,28 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
-
-#include <global/bit.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_texture_image_builder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiWidgetTests;
-
-class UiTextureImageBuilderTests : public WidgetFixture{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPaintImageTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TextureImageLayoutFixture = PaintImageFixture;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_tooltip_behavior_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-static_assert(!IsConstructible_V<TooltipState, const TooltipState&>);
-static_assert(!IsConstructible_V<TooltipState, TooltipState&&>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_glyph_sdf_tests{
-using UiTextureImageBuilderTests = ::__hidden_ui_texture_image_builder_tests::UiTextureImageBuilderTests;
-using TextureImageLayoutFixture = ::NWB::UiPaintImageTests::TextureImageLayoutFixture;
-using SharedImageSource = ::NWB::Impl::Ui::SharedImageSource;
-using ImageOptions = ::NWB::Impl::Ui::ImageOptions;
-using ImageMetrics = ::NWB::Impl::Ui::ImageMetrics;
-using ImagePlacement = ::NWB::Impl::Ui::ImagePlacement;
-using PopupState = ::NWB::Impl::Ui::PopupState;
-using PopupToken = ::NWB::Impl::Ui::PopupToken;
-using TooltipState = ::NWB::Impl::Ui::TooltipState;
-using TooltipOptions = ::NWB::Impl::Ui::TooltipOptions;
-using ::NWB::Impl::Ui::UpdateTooltipState;
-using Color = ::NWB::Impl::Ui::Color;
-using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
-using InputEvent = ::NWB::Impl::Ui::InputEvent;
-namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
-using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
-namespace PopupPlacementSide = ::NWB::Impl::Ui::PopupPlacementSide;
-using PopupPlacementSideEnum = ::NWB::Impl::Ui::PopupPlacementSide::Enum;
-namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
-namespace UiTextureKey = ::NWB::Core::Key;
-using ::NWB::Impl::Ui::PlaceImage;
-using ::NWB::Impl::Ui::s_PaintMaxImages;
-
-[[nodiscard]] FOUNDATION_INLINE Expected<::NWB::Impl::Ui::SharedImageSource> MakeUiTextureSeededImage(
-    const StringView path,
-    const u8 seed,
-    const u32 width,
-    const u32 height,
-    ::NWB::Core::Alloc::GlobalArena& arena
-){
-    return ::NWB::UiFixtureSupport::MakeSeededImage(path, seed, width, height, arena);
-}
-
-[[nodiscard]] FOUNDATION_INLINE ::NWB::Impl::Ui::ImageOptions MakeUiTextureFixedOptions(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
-    return ::NWB::UiWidgetTests::WidgetFixture::Fixed(width, height);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 UiTextureImageMatchesGeneration(const ::NWB::Impl::Ui::SharedImageSource& source, const u64 generation)noexcept{
-    return static_cast<b8>(source) && source->generation() == generation;
-}
-
-[[nodiscard]] FOUNDATION_INLINE u64 UiTextureImageGeneration(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
-    return source->generation();
-}
-
-[[nodiscard]] FOUNDATION_INLINE u32 UiTextureImageWidth(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
-    return source->texture().width();
-}
-
-[[nodiscard]] FOUNDATION_INLINE u8 UiTextureImageFirstByte(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
-    return source->texture().payloadBytes()[0u];
-}
-
-[[nodiscard]] FOUNDATION_INLINE Expected<::NWB::Impl::Ui::ImageMetrics> UiMeasureTextureImage(
-    const ::NWB::Impl::Ui::ImageOptions& options,
-    const ::NWB::Impl::Ui::SharedImageSource& source
-)noexcept{
-    return ::NWB::Impl::Ui::MeasureImage(options, *source);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd>
+
+type UiTextureImageBuilderTests = WidgetFixture;
+type TextureImageLayoutFixture = PaintImageFixture;
+
+static_assert(!is_cpp_constructible<TooltipState, in TooltipState>());
+static_assert(!is_cpp_constructible<TooltipState, TooltipState>());
+
+ImageOptions MakeUiTextureFixedOptions(){ return MakeFixedImageFixtureOptions(96.0f, 40.0f); }
+ImageOptions MakeUiTextureFixedOptions(in f32 width, in f32 height){ return MakeFixedImageFixtureOptions(width, height); }
+b8 UiTextureImageMatchesGeneration(in SharedImageSource source, in u64 generation){ return cast<b8>(source) && source.deref().generation() == generation; }
+u64 UiTextureImageGeneration(in SharedImageSource source){ return source.deref().generation(); }
+u32 UiTextureImageWidth(in SharedImageSource source){ return source.deref().texture().width(); }
+u8 UiTextureImageFirstByte(in SharedImageSource source){ return source.deref().texture().payloadBytes()[0u]; }
+Expected<ImageMetrics> UiMeasureTextureImage(in ImageOptions options, in SharedImageSource source){ return MeasureImage(options, source.deref()); }
 
 
 const u32 s_UiTextureQuietNaNF32Bits = 0x7fc00000u;
@@ -268,9 +118,9 @@ PopupOptions MakeUiTextureChildOptions(){
     return options;
 }
 
-InputEvent MakeUiTextureTabKeyEvent(in InputEventTypeEnum eventType){
+InputEvent MakeUiTextureTabKeyEvent(in InputEventType eventType){
     InputEvent event = InputEvent();
-    event.key = UiTextureKey::Tab;
+    event.key = Key::Tab;
     event.type = eventType;
     return event;
 }
@@ -293,7 +143,7 @@ PopupToken MakeUiTooltipPopup(){
 
 
 void VerifyUiTextureImageBuilderTests_DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease(mut UiTextureImageBuilderTests self){
-    auto sourceResult = MakeUiTextureSeededImage(s_UiTextureCopiedImagePath, 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage(s_UiTextureCopiedImagePath, 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -302,7 +152,7 @@ void VerifyUiTextureImageBuilderTests_DeclarationRetainsSourceAndOptionsAcrossCa
     options.tint = Color(2.0f, 0.8f, 0.6f, 0.5f);
     ASSERT_TRUE(self.panel(1u));
     ASSERT_TRUE(self.m_builder.image("image", source, options));
-    auto sourceReplacement = MakeUiTextureSeededImage(s_UiTextureCopiedImagePath, 73u, 9u, 7u, self.m_arena);
+    auto sourceReplacement = MakeSeededImage(s_UiTextureCopiedImagePath, 73u, 9u, 7u, self.pool);
     ASSERT_TRUE(sourceReplacement.has_value());
     source = sourceReplacement.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -327,7 +177,7 @@ void VerifyUiTextureImageBuilderTests_DeclarationRetainsSourceAndOptionsAcrossCa
 }
 
 void VerifyUiTextureImageBuilderTests_FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease(mut UiTextureImageBuilderTests self){
-    auto sourceResult = MakeUiTextureSeededImage(s_UiTextureFrozenImagePath, 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage(s_UiTextureFrozenImagePath, 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -338,7 +188,7 @@ void VerifyUiTextureImageBuilderTests_FrozenSnapshotsKeepVersionsAcrossBuilderRe
     DrawSnapshot retained = self.m_paint.freeze();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     source.reset();
-    auto sourceReplacement = MakeUiTextureSeededImage(s_UiTextureFrozenImagePath, 73u, 9u, 7u, self.m_arena);
+    auto sourceReplacement = MakeSeededImage(s_UiTextureFrozenImagePath, 73u, 9u, 7u, self.pool);
     ASSERT_TRUE(sourceReplacement.has_value());
     source = sourceReplacement.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -370,9 +220,9 @@ void VerifyUiTextureImageBuilderTests_FrozenSnapshotsKeepVersionsAcrossBuilderRe
 }
 
 void VerifyUiTextureImageBuilderTests_SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding(mut UiTextureImageBuilderTests self){
-    auto firstResult = MakeUiTextureSeededImage(s_UiTextureVersionedImagePath, 37u, 20u, 12u, self.m_arena);
+    auto firstResult = MakeSeededImage(s_UiTextureVersionedImagePath, 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(firstResult.has_value());
-    auto secondResult = MakeUiTextureSeededImage(s_UiTextureVersionedImagePath, 73u, 9u, 7u, self.m_arena);
+    auto secondResult = MakeSeededImage(s_UiTextureVersionedImagePath, 73u, 9u, 7u, self.pool);
     ASSERT_TRUE(secondResult.has_value());
     const SharedImageSource first = firstResult.value();
     const SharedImageSource second = secondResult.value();
@@ -406,7 +256,7 @@ void VerifyUiTextureImageBuilderTests_SamePathVersionsStayDistinctAndRepeatedHan
 }
 
 void VerifyUiTextureImageBuilderTests_ExternalClipTrimsFullImageUvsAndRestoresThePaintStack(mut UiTextureImageBuilderTests self){
-    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     const SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -437,7 +287,7 @@ void VerifyUiTextureImageBuilderTests_ExternalClipTrimsFullImageUvsAndRestoresTh
 }
 
 void VerifyUiTextureImageBuilderTests_TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads(mut UiTextureImageBuilderTests self){
-    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     const SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -454,7 +304,7 @@ void VerifyUiTextureImageBuilderTests_TransparentAndZeroAxisImagesAreValidWithou
 }
 
 void VerifyUiTextureImageBuilderTests_ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput(mut UiTextureImageBuilderTests self){
-    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     const SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -487,7 +337,7 @@ void VerifyUiTextureImageBuilderTests_ActiveNullSourceRejectsEvenTransparentPoli
 }
 
 void VerifyUiTextureImageBuilderTests_InvalidOptionsDoNotReplaceTheAcceptedInputFrame(mut UiTextureImageBuilderTests self){
-    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     const SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -520,7 +370,7 @@ void VerifyUiTextureImageBuilderTests_EndedNestedChildRetainsSourceAndOptionsUnt
     PopupState child = PopupState();
     parent.open();
     child.open();
-    auto sourceResult = MakeUiTextureSeededImage("tests/ui/nested_builder_image", 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage("tests/ui/nested_builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -561,7 +411,7 @@ void VerifyUiTextureImageBuilderTests_AncestorClosureSuppressesEndedChildImageAn
     TooltipState tooltip = TooltipState();
     parent.open();
     child.open();
-    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    auto sourceResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
     SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(cast<b8>(source));
@@ -589,12 +439,12 @@ void VerifyUiTextureImageBuilderTests_AncestorClosureSuppressesEndedChildImageAn
 }
 
 void VerifyUiTextureImageBuilderTests_VisibleImageAtFullBindingCapacityRejectsDeferredPaint(mut UiTextureImageBuilderTests self){
-    auto additionResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    auto additionResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(additionResult.has_value());
     Vector<SharedImageSource> images = Vector<SharedImageSource>();
     images.reserve(s_PaintMaxImages);
     for(usize index = 0u; index < s_PaintMaxImages; ++index){
-        const auto imageResult = MakeUiTextureSeededImage(s_UiTextureCapacityImagePath, cast<u8>(index), 4u, 4u, self.m_arena);
+        const auto imageResult = MakeSeededImage(s_UiTextureCapacityImagePath, cast<u8>(index), 4u, 4u, self.pool);
         ASSERT_TRUE(imageResult.has_value());
         const SharedImageSource image = imageResult.value();
         ASSERT_TRUE(cast<b8>(image));
@@ -614,12 +464,12 @@ void VerifyUiTextureImageBuilderTests_VisibleImageAtFullBindingCapacityRejectsDe
 }
 
 void VerifyUiTextureImageBuilderTests_FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot(mut UiTextureImageBuilderTests self){
-    auto additionResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    auto additionResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(additionResult.has_value());
     Vector<SharedImageSource> images = Vector<SharedImageSource>();
     images.reserve(s_PaintMaxImages);
     for(usize index = 0u; index < s_PaintMaxImages; ++index){
-        const auto imageResult = MakeUiTextureSeededImage(s_UiTextureCapacityImagePath, cast<u8>(index), 4u, 4u, self.m_arena);
+        const auto imageResult = MakeSeededImage(s_UiTextureCapacityImagePath, cast<u8>(index), 4u, 4u, self.pool);
         ASSERT_TRUE(imageResult.has_value());
         const SharedImageSource image = imageResult.value();
         ASSERT_TRUE(cast<b8>(image));
@@ -1048,7 +898,7 @@ void VerifyUiTooltipBehaviorTests_InvalidOptionsAreRejectedBeforeAnyBindingOrDel
     invalid[7u].gap = -1.0f;
     invalid[8u].gap = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
     invalid[9u].gap = bit_cast<f32>(s_UiTexturePosInfF32Bits);
-    invalid[10u].side = cast<PopupPlacementSideEnum>(255u);
+    invalid[10u].side = cast<PopupPlacementSide>(255u);
     invalid[11u].enabled = false;
     invalid[11u].maximumWidth = 0.0f;
     const TooltipOptions options = TooltipOptions();

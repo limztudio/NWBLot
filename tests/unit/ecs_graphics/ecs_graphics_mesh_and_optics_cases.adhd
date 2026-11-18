@@ -5,184 +5,95 @@
 #include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.adhd>
 #include <impl/ecs_render/mesh/renderer_mesh_types.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_helpers.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/unit/ecs_graphics/hdr10_shader_types.adhd>
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <impl/assets_mesh/payload_types.adhd>
+#include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.adhd>
+#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd>
+#include <impl/ecs_render/deferred/presentation_settings.adhd>
+#include <impl/ecs_render/deferred/task_graph_present_task.adhd>
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd>
+#include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd>
+#include <impl/ecs_render/mesh/mesh_raytracing_snapshot_policy.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/mesh/mesh_view_state_policy.adhd>
+#include <impl/ecs_render/optics/graph_types.adhd>
+#include <impl/ecs_render/optics/optical_scene_resources.adhd>
+#include <impl/ecs_render/optics/optical_scene_upload.adhd>
+#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.adhd>
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd>
+#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd>
+#include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd>
+#include <impl/ecs_render/raytrace/scene_bvh_upload_policy.adhd>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd>
 #include <tests/unit/ecs_graphics/suite.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<tests/unit/ecs_graphics/hdr10_shader_host.h>"), cpp_name("::NWB::Tests::HdrShaderHost::nwbHdr10SceneToNits")]
+extern ShaderFloat3 nwbHdr10SceneToNits(in ShaderFloat3 color);
+[cpp_header("<tests/unit/ecs_graphics/hdr10_shader_host.h>"), cpp_name("::NWB::Tests::HdrShaderHost::nwbHdr10PqEncodeNits")]
+extern ShaderFloat3 nwbHdr10PqEncodeNits(in ShaderFloat3 color);
+[cpp_header("<tests/unit/ecs_graphics/hdr10_shader_host.h>"), cpp_name("::NWB::Tests::HdrShaderHost::nwbHdr10EncodeScene")]
+extern ShaderFloat3 nwbHdr10EncodeScene(in ShaderFloat3 color);
+[cpp_header("<tests/unit/ecs_graphics/hdr10_shader_host.h>"), cpp_name("::NWB::Tests::HdrShaderHost::nwbHdr10EncodeUiLinear")]
+extern ShaderFloat3 nwbHdr10EncodeUiLinear(in ShaderFloat3 color);
+[cpp_header("<tests/unit/ecs_graphics/hdr10_shader_host.h>"), cpp_name("::NWB::Tests::HdrShaderHost::nwbHdr10EncodeSceneWithUi")]
+extern ShaderFloat3 nwbHdr10EncodeSceneWithUi(in ShaderFloat3 scene, in ShaderFloat3 ui, in f32 alpha);
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_BYTE_SIZE")]
+extern const u64 s_TestShaderMeshObjectVertexByteSize;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID")]
+extern const u32 s_TestShaderRtOpticalSceneFlagBoundsValid;
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT")]
+extern const u32 s_TestShaderRtOpticalInstanceFlagTransparent;
 
+type MeshRayTracingSnapshot = MeshRayTracingResourceSnapshot;
+type MeshViewByteArray = Array<u8, s_MeshViewGpuDataBytes>;
+type ConstByteSpan = Span<u8>;
+type ObjectGeometryCacheSnapshotType = ObjectGeometryCacheSnapshot;
+type RayTracingOpticalUploadControlResult = Expected<RayTracingOpticalUploadControlHandle>;
+type OpticalBoundaryModeEnum = OpticalBoundaryMode;
+type OpticalWorldBoundsResult = Expected<OpticalWorldBounds>;
+type PreparedMeshSwBvhBuildSpan = Span<PreparedMeshSwBvhBuild>;
+type PreparedMeshSwBvhGraphResourceVectorResult = Expected<PreparedMeshSwBvhGraphResourceVector>;
+type PresentationToneMapEnum = PresentationToneMap;
+const usize s_OpticalRuntimeInputGpuBytes = size_of<RayTracingOpticalRuntimeInputGpu>();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/floating_point_environment_guard.adhd.h>
-
-#include <impl/assets/graphics/mesh/object_geometry_constants.h>
-#include <impl/assets_mesh/payload_types.adhd.h>
-#include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.adhd.h>
-#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
-#include <impl/ecs_render/deferred/task_graph_present_task.adhd.h>
-#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
-#include <impl/ecs_render/mesh/mesh_geometry_buffer_policy.adhd.h>
-#include <impl/ecs_render/mesh/mesh_raytracing_snapshot_policy.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/mesh/mesh_view_state_policy.adhd.h>
-#include <impl/ecs_render/optics/graph_types.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
-#include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd.h>
-#include <impl/ecs_render/raytrace/scene_bvh_upload_policy.adhd.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/floating_point_environment.h>
-#include <global/limit.h>
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsOutputLayerColorDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Compile the production Slang color helpers against C++ vector types.
-struct ShaderFloat3{
-    f64 x;
-    f64 y;
-    f64 z;
-
-
-public:
-    ShaderFloat3(const f64 scalar)noexcept
-        : x(scalar)
-        , y(scalar)
-        , z(scalar){}
-    ShaderFloat3(const f64 red, const f64 green, const f64 blue)noexcept
-        : x(red)
-        , y(green)
-        , z(blue){}
-};
-using float3 = ShaderFloat3;
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble sum = VectorDoubleAdd(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
-    return { VectorDoubleGetX(sum), VectorDoubleGetY(sum), VectorDoubleGetZ(sum) };
-}
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
-    return { VectorDoubleGetX(product), VectorDoubleGetY(product), VectorDoubleGetZ(product) };
-}
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble quotient = VectorDoubleDivide(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 1.0));
-    return { VectorDoubleGetX(quotient), VectorDoubleGetY(quotient), VectorDoubleGetZ(quotient) };
-}
-
-// Sum lanes in scalar left-to-right order.
-[[nodiscard]] FOUNDATION_INLINE f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    return (a.x * b.x + a.y * b.y) + a.z * b.z;
-}
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble larger = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
-    return { VectorDoubleGetX(larger), VectorDoubleGetY(larger), VectorDoubleGetZ(larger) };
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 saturate(const f32 a)noexcept{
-    return a > 0.0f ? Min(1.0f, a) : 0.0f;
-}
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
-    // Max then min in this operand order maps NaN and -0 to +0.
-    const SIMDVectorDouble lower = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleZero());
-    const SIMDVectorDouble saturated = VectorDoubleMin(VectorDoubleSplatOne(), lower);
-    return { VectorDoubleGetX(saturated), VectorDoubleGetY(saturated), VectorDoubleGetZ(saturated) };
-}
-
-[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
-    // VectorDoublePow calls Pow per lane, so the bits match.
-    const SIMDVectorDouble power = VectorDoublePow(VectorDoubleSet(a.x, a.y, a.z, 1.0), VectorDoubleReplicate(b));
-    return { VectorDoubleGetX(power), VectorDoubleGetY(power), VectorDoubleGetZ(power) };
-}
-
-[[nodiscard]] ShaderFloat3 EcsGraphicsMeshOptics_nwbHdr10SceneToNits(ShaderFloat3 linearRec709);
-[[nodiscard]] ShaderFloat3 EcsGraphicsMeshOptics_nwbHdr10PqEncodeNits(ShaderFloat3 luminanceNits);
-[[nodiscard]] ShaderFloat3 EcsGraphicsMeshOptics_nwbHdr10EncodeScene(ShaderFloat3 linearRec709);
-[[nodiscard]] ShaderFloat3 EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear(ShaderFloat3 linearRec709);
-[[nodiscard]] ShaderFloat3 EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi(ShaderFloat3 sceneLinearRec709, ShaderFloat3 uiPremultipliedLinearRec709, float uiAlpha);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsMeshOpticsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-struct OpticalSceneContext{
-    Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneUpload) };
-    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneGather) };
-    Core::Alloc::SharedPool versions{ arena };
-    RayTracingOpticalSceneGather gather{ scratch, 4u };
-};
-
-class RecordingLayerContributor final : public Core::IGpuTaskGraphOutputLayerContributor{
-public:
-    virtual b8 prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame&)noexcept override{
-        return true;
+[ordered]
+class OpticalSceneContext{
+    public HeapStorage arena = HeapStorage(s_EcsCaseTestsOpticalSceneUpload);
+    public ScratchStorage scratch = ScratchStorage(s_EcsCaseTestsOpticalSceneGather);
+    public SharedPool versions;
+    public RayTracingOpticalSceneGather gather;
+    public OpticalSceneContext(){
+        this.versions = this.arena.makeValue<SharedPool>();
+        this.gather = this.scratch.makeValue<RayTracingOpticalSceneGather>(4u);
     }
+}
 
-    virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph&)noexcept override{
-        return Core::GpuTaskGraphOutputLayer{};
+class RecordingLayerContributor : IGpuTaskGraphOutputLayerContributor{
+    public u32 acceptanceCount = 0u;
+    public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame) override{ return true; }
+    public Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(mut GpuTaskGraph graph) override{ return GpuTaskGraphOutputLayer(); }
+    public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token) override{ ++this.acceptanceCount; }
+}
+
+[ordered]
+class OpaqueCsgClearContext{
+    public HeapStorage testArena;
+    public GpuTaskGraph graph;
+    public OpaqueCsgClearContext(){
+        this.testArena = HeapStorage();
+        this.graph = GpuTaskGraph(this.testArena);
     }
-
-    virtual void acceptTaskGraphOutputLayer(const u64, const Core::QueueSubmissionToken&)noexcept override{
-        ++acceptanceCount;
-    }
-
-
-public:
-    u32 acceptanceCount = 0u;
-};
-
-struct OpaqueCsgClearContext{
-    Tests::TestArena<> testArena;
-    Core::GpuTaskGraph graph{ testArena.arena };
-};
-
-[[nodiscard]] FOUNDATION_INLINE Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(
-    Core::GpuTaskGraph& graph,
-    DeferredFrameTargets& targets,
-    const Core::GpuTaskId dependency,
-    GraphClearTimingRecordState& clearTimingState
-){
+}
+Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(mut GpuTaskGraph graph, mut DeferredFrameTargets targets,
+    in GpuTaskId dependency, mut GraphClearTimingRecordState clearTimingState){
     OpaqueCsgIntervalClearInputs inputs;
     inputs.width = targets.width;
     inputs.height = targets.height;
@@ -190,185 +101,66 @@ struct OpaqueCsgClearContext{
     OpaqueCsgIntervalClearBuilder builder(graph);
     return builder.declare(inputs, clearTimingState);
 }
-
-[[nodiscard]] FOUNDATION_INLINE u32 ReadCopiedU32(const Span<const u8> bytes, const usize offset)noexcept{
-    u32 value = 0u;
-    FOUNDATION_MEMCPY(&value, sizeof(value), bytes.data() + offset, sizeof(u32));
-    return value;
+u32 ReadCopiedU32(in Span<u8> bytes, in usize offset){
+    Array<u8, 4> word;
+    for(usize i = 0u; i < word.size(); ++i)
+        word[i] = bytes[offset + i];
+    return bit_cast<u32>(word);
+}
+void AcceptNullOutputLayer(in u64 frameGeneration, in QueueSubmissionToken token){
+    AcceptDeferredOutputLayer(Optional<mut IGpuTaskGraphOutputLayerContributor>(), frameGeneration, token);
+}
+void AcceptRecordingOutputLayer(mut RecordingLayerContributor contributor, in u64 frameGeneration, in QueueSubmissionToken token){
+    mut IGpuTaskGraphOutputLayerContributor base = contributor;
+    AcceptDeferredOutputLayer(Optional<mut IGpuTaskGraphOutputLayerContributor>(base), frameGeneration, token);
 }
 
-FOUNDATION_INLINE void AcceptNullOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
-    AcceptDeferredOutputLayer({}, frameGeneration, token);
-}
-
-FOUNDATION_INLINE void AcceptRecordingOutputLayer(RecordingLayerContributor& contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
-    AcceptDeferredOutputLayer(MakeNotNull(static_cast<Core::IGpuTaskGraphOutputLayerContributor*>(&contributor)), frameGeneration, token);
-}
-
-struct PreparedSoftwareBvhGraphResourcesTestsTag{};
-struct BuildContext{
-    Tests::TestArena<PreparedSoftwareBvhGraphResourcesTestsTag> testArena;
-    Core::GpuTaskGraph graph{ testArena.arena };
-    Core::Alloc::ScratchArena scratch{ Name(Tests::EcsGraphicsCases::s_EcsCaseTestsPreparedSwBvhMissing) };
-};
-
-struct RaySceneGraphReadsTestsTag{};
-struct RaySceneGraphReadsContext{
-    Tests::TestArena<RaySceneGraphReadsTestsTag> testArena;
-    Core::GpuTaskGraph graph{ testArena.arena };
-    Core::Alloc::ScratchArena scratch{ Name(Tests::EcsGraphicsCases::s_EcsCaseTestsRaySceneGraphReadsScratch) };
-
-
-public:
-    [[nodiscard]] ArenaMemoryStats scratchMemoryStats()const noexcept{
-        return scratch.memoryStats();
+class EcsGraphReadScope{
+    [owner_result]
+    public Expected<RayTracingSceneGraphReads> read(in RayTracingSceneGraphResources resources, mut GpuTaskGraph graph){
+        const GpuTaskId noReaders = GpuTaskId();
+        return ImportRayTracingSceneGraphReads(resources, ResourceStates::Common, noReaders, graph);
     }
-};
-
-[[nodiscard]] FOUNDATION_INLINE Float34U MakeZeroFloat34U()noexcept{
-    return Float34U{};
+    [owner_result]
+    public Expected<PreparedMeshSwBvhGraphResourceVector> readBuilds(in PreparedMeshSwBvhBuildSpan builds, in GpuTaskGraph graph){
+        return ResolvePreparedSoftwareBvhGraphResources(graph, builds);
+    }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::EcsGraphicsCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MeshResources = Impl::MeshResources;
-using MeshAccelerationStatePolicy = Impl::MeshAccelerationStatePolicy;
-using MeshRayTracingSnapshotPolicy = Impl::MeshRayTracingSnapshotPolicy;
-using MeshRayTracingSnapshot = decltype(Impl::MeshRayTracingSnapshotPolicy().capture(DeclVal<const Impl::MeshResources&>()));
-using MeshViewStatePolicy = Impl::MeshViewStatePolicy;
-using MeshViewGpuData = Impl::MeshViewGpuData;
-using MeshViewByteArray = Array<u8, Impl::s_MeshViewGpuDataBytes>;
-using ConstByteSpan = Span<const u8>;
-
-using ObjectGeometryCacheLayout = Impl::ObjectGeometryCacheLayout;
-using ObjectGeometryCacheSnapshotType = Impl::ObjectGeometryCacheSnapshot;
-using RendererMeshSystem = Impl::RendererMeshSystem;
-inline constexpr u64 s_MeshObjectVertexByteSize = NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
-
-using DeferredGraphResourceImportResult = Impl::DeferredGraphResourceImportResult;
-using GpuGraphResourceId = Core::GpuGraphResourceId;
-using TextureSubresourceSet = Core::TextureSubresourceSet;
-using GpuTaskResourceUse = Core::GpuTaskResourceUse;
-namespace GpuTaskResourceAccess = Core::GpuTaskResourceAccess;
-using BufferHandle = Core::BufferHandle;
-using GpuDescriptorHandle = Core::GpuDescriptorHandle;
-namespace GpuDescriptorClass = Core::GpuDescriptorClass;
-
-using RayTracingOpticalSceneGraphBuffer = Impl::RayTracingOpticalSceneGraphBuffer;
-using RayTracingOpticalSceneGather = Impl::RayTracingOpticalSceneGather;
-using RayTracingOpticalSceneUpload = Impl::RayTracingOpticalSceneUpload;
-using RayTracingOpticalUploadControlResult = Expected<Impl::RayTracingOpticalUploadControlHandle>;
-using RendererComponent = Impl::RendererComponent;
-using OpticalBoundaryModeEnum = Impl::OpticalBoundaryMode::Enum;
-using OpticalSceneContext = EcsGraphicsMeshOpticsDetail::OpticalSceneContext;
-using OpticalWorldBoundsResult = decltype(Impl::ComputeOpticalWorldBounds(DeclVal<const SIMDMatrix&>(), DeclVal<const SIMDVectorSingle&>(), DeclVal<const SIMDVectorSingle&>()));
-using FloatingPointEnvironment = ::FloatingPointEnvironment;
-using FloatingPointEnvironmentGuard = Tests::FloatingPointEnvironmentGuard;
-using ::HoldFloatingPointExceptions;
-using Impl::CreateRayTracingOpticalUploadControl;
-using Impl::OpticalUploadByteSizeFits;
-using Impl::OpticalRuntimeInputCountFits;
-using Impl::OpticalSceneInstanceCountFits;
-using Impl::ComputeOpticalWorldBounds;
-inline constexpr i32 s_FeTonearest = FE_TONEAREST;
-inline constexpr i32 s_FeDownward = FE_DOWNWARD;
-inline constexpr i32 s_FeUpward = FE_UPWARD;
-inline constexpr i32 s_FeTowardzero = FE_TOWARDZERO;
-inline constexpr i32 s_FeInvalid = FE_INVALID;
-inline constexpr usize s_OpticalRuntimeInputGpuBytes = sizeof(Impl::RayTracingOpticalRuntimeInputGpu);
-inline constexpr u32 s_RtOpticalSceneHeaderBytes = NWB_RT_OPTICAL_SCENE_HEADER_BYTES;
-inline constexpr u32 s_RtOpticalInstanceBytes = NWB_RT_OPTICAL_INSTANCE_BYTES;
-inline constexpr u32 s_RtOpticalSceneFlagBoundsValid = NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;
-inline constexpr u32 s_RtOpticalInstanceFlagTransparent = NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT;
-inline constexpr usize s_RtOpticalSceneTransparentCountOffset = NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET;
-
-using ShaderFloat3 = EcsGraphicsOutputLayerColorDetail::ShaderFloat3;
-using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10SceneToNits;
-using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10PqEncodeNits;
-using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10EncodeScene;
-using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear;
-using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi;
-
-using ScratchArena = Core::Alloc::ScratchArena;
-using GpuTaskId = Core::GpuTaskId;
-using GpuTaskGraph = Core::GpuTaskGraph;
-using GpuTaskGraphDeclarationReadView = Core::GpuTaskGraph::DeclarationReadView;
-namespace CommandQueue = Core::CommandQueue;
-namespace ResourceStates = Core::ResourceStates;
-using DeferredFrameTargets = Impl::DeferredFrameTargets;
-using GraphClearTimingRecordState = Impl::GraphClearTimingRecordState;
-using OpaqueCsgIntervalClearResult = Impl::OpaqueCsgIntervalClearResult;
-using OpaqueCsgClearContext = EcsGraphicsMeshOpticsDetail::OpaqueCsgClearContext;
-using EcsGraphicsMeshOpticsDetail::DeclareOpaqueCsgIntervalClear;
-using EcsGraphicsMeshOpticsDetail::ReadCopiedU32;
-using RecordingLayerContributor = EcsGraphicsMeshOpticsDetail::RecordingLayerContributor;
-using EcsGraphicsMeshOpticsDetail::AcceptNullOutputLayer;
-using EcsGraphicsMeshOpticsDetail::AcceptRecordingOutputLayer;
-using SwBvhBuildContext = EcsGraphicsMeshOpticsDetail::BuildContext;
-using PreparedMeshSwBvhBuild = Impl::PreparedMeshSwBvhBuild;
-using PreparedMeshSwBvhBuildSpan = Span<const Impl::PreparedMeshSwBvhBuild>;
-using PreparedMeshSwBvhGraphResourceVectorResult = Expected<Impl::PreparedMeshSwBvhGraphResourceVector>;
-[[nodiscard]] FOUNDATION_INLINE PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(SwBvhBuildContext& context, const PreparedMeshSwBvhBuildSpan builds){
-    return Impl::ResolvePreparedSoftwareBvhGraphResources(context.scratch, context.graph, builds);
+[ordered]
+class SwBvhBuildContext{
+    public HeapStorage testArena;
+    public GpuTaskGraph graph;
+    public ScratchStorage scratch = ScratchStorage(s_EcsCaseTestsPreparedSwBvhMissing);
+    public EcsGraphReadScope scope;
+    public SwBvhBuildContext(){
+        this.testArena = HeapStorage();
+        this.graph = GpuTaskGraph(this.testArena);
+        this.scope = this.scratch.makeValue<EcsGraphReadScope>();
+    }
 }
-using RaySceneGraphReadsContext = EcsGraphicsMeshOpticsDetail::RaySceneGraphReadsContext;
-using Impl::ImportRayTracingSceneGraphReads;
-[[nodiscard]] FOUNDATION_INLINE b8 TryImportRaySceneGraphReads(const Impl::RayTracingSceneGraphResources& resources, RaySceneGraphReadsContext& context){
-    return Impl::ImportRayTracingSceneGraphReads(context.scratch, resources, ResourceStates::Common, Core::GpuTaskId(), context.graph).has_value();
+[ordered]
+class RaySceneGraphReadsContext{
+    public HeapStorage testArena;
+    public GpuTaskGraph graph;
+    public ScratchStorage scratch = ScratchStorage(s_EcsCaseTestsRaySceneGraphReadsScratch);
+    public EcsGraphReadScope scope;
+    public RaySceneGraphReadsContext(){
+        this.testArena = HeapStorage();
+        this.graph = GpuTaskGraph(this.testArena);
+        this.scope = this.scratch.makeValue<EcsGraphReadScope>();
+    }
+    public ArenaMemoryStats scratchMemoryStats()const{ return this.scratch.memoryStats(); }
 }
-using EcsGraphicsMeshOpticsDetail::MakeZeroFloat34U;
-
-using PresentationSettings = Impl::PresentationSettings;
-namespace PresentationToneMap = Impl::PresentationToneMap;
-using PresentationToneMapEnum = Impl::PresentationToneMap::Enum;
-using Impl::ValidatePresentationSettings;
-
-using RayTracingSceneGraphResources = Impl::RayTracingSceneGraphResources;
-using RayTracingSceneIdentityBuilder = Impl::RayTracingSceneIdentityBuilder;
-using RayTracingSceneContentStamp = Impl::RayTracingSceneContentStamp;
-using SceneBvhUploadPolicy = Impl::SceneBvhUploadPolicy;
-using RayTracingBuildPolicy = Impl::RayTracingBuildPolicy;
-using RefractiveBoundsIsolation = Impl::RefractiveBoundsIsolation;
-using RayTracingInstanceWorldBounds = Impl::RayTracingInstanceWorldBounds;
-using Impl::s_RefractionCertifiedBoundsMargin;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(mut SwBvhBuildContext context, in PreparedMeshSwBvhBuildSpan builds){
+    return context.scope.readBuilds(builds, context.graph);
 }
+b8 TryImportRaySceneGraphReads(in RayTracingSceneGraphResources resources, mut RaySceneGraphReadsContext context){
+    return context.scope.read(resources, context.graph).has_value();
+}
+f32x3x4u ZeroOpticalAffineMatrix(){ return f32x3x4u(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f); }
+
+
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -476,8 +268,8 @@ void VerifyObjectGeometryCacheTests_LayoutKeepsSentinelVerticesAndPersistentIndi
     const MeshGeometryBufferPolicy policy = MeshGeometryBufferPolicy();
     const Expected<ObjectGeometryCacheLayout> layout = policy.resolveObjectCacheLayout(3u * s_MeshletLocalVertexRefBytes, 3u);
     ASSERT_TRUE(layout.has_value());
-    EXPECT_EQ(layout.value().indexByteOffset, 4u * s_MeshObjectVertexByteSize);
-    EXPECT_EQ(layout.value().bufferByteSize, 5u * s_MeshObjectVertexByteSize);
+    EXPECT_EQ(layout.value().indexByteOffset, 4u * s_TestShaderMeshObjectVertexByteSize);
+    EXPECT_EQ(layout.value().bufferByteSize, 5u * s_TestShaderMeshObjectVertexByteSize);
 }
 
 void VerifyObjectGeometryCacheTests_LayoutRejectsEmptyMisalignedAndOverflowingInputs(){
@@ -496,16 +288,16 @@ void VerifyObjectGeometryCacheTests_LayoutRejectsEmptyMisalignedAndOverflowingIn
 void VerifyObjectGeometryCacheTests_LayoutChecksFinalStructuredPaddingWithinUintByteAddressing(){
     const MeshGeometryBufferPolicy policy = MeshGeometryBufferPolicy();
     const u64 addressableBytes = cast<u64>(u32.max) + 1u;
-    const u64 maximumRecords = addressableBytes / s_MeshObjectVertexByteSize;
+    const u64 maximumRecords = addressableBytes / s_TestShaderMeshObjectVertexByteSize;
     // Reserve a full final structured record for the index region, including its view-alignment padding.
     const u64 lastValidRefBytes = (maximumRecords - 2u) * s_MeshletLocalVertexRefBytes;
     const Expected<ObjectGeometryCacheLayout> layout = policy.resolveObjectCacheLayout(lastValidRefBytes, 3u);
     ASSERT_TRUE(layout.has_value());
     EXPECT_LE(layout.value().bufferByteSize, addressableBytes);
-    EXPECT_EQ(layout.value().bufferByteSize % s_MeshObjectVertexByteSize, 0u);
+    EXPECT_EQ(layout.value().bufferByteSize % s_TestShaderMeshObjectVertexByteSize, 0u);
     EXPECT_EQ(layout.value().indexByteOffset + 3u * 4u, layout.value().bufferByteSize - 36u);
     // Structured alignment padding pushes this index span past uint32 addressing.
-    EXPECT_LE(maximumRecords * s_MeshObjectVertexByteSize + 3u * 4u, addressableBytes);
+    EXPECT_LE(maximumRecords * s_TestShaderMeshObjectVertexByteSize + 3u * 4u, addressableBytes);
     EXPECT_FALSE(policy.resolveObjectCacheLayout(lastValidRefBytes + s_MeshletLocalVertexRefBytes, 3u).has_value());
 }
 
@@ -631,7 +423,7 @@ void VerifyOpticalRuntimeBounds_UploadByteSizeRejectsEmptyMisalignedAndOutOfCapa
 
 void VerifyOpticalRuntimeBounds_FinalizeCountsRespectShaderAddressLimits(){
     const usize maxInputs = cast<usize>(u32.max) / s_OpticalRuntimeInputGpuBytes;
-    const usize maxInstances = cast<usize>(u32.max - s_RtOpticalSceneHeaderBytes) / s_RtOpticalInstanceBytes;
+    const usize maxInstances = cast<usize>(u32.max - s_ShaderRtOpticalSceneHeaderBytes) / s_ShaderRtOpticalInstanceBytes;
     EXPECT_FALSE(OpticalRuntimeInputCountFits(0u, 0u));
     EXPECT_TRUE(OpticalRuntimeInputCountFits(maxInputs, s_OpticalRuntimeInputGpuBytes));
     EXPECT_FALSE(OpticalRuntimeInputCountFits(maxInputs + 1u, s_OpticalRuntimeInputGpuBytes));
@@ -665,7 +457,7 @@ void VerifyOpticalRuntimeBounds_MissingRuntimeBoundsPoisonsUnionWithoutDroppingI
     EXPECT_EQ(gather.header.transparentCount, 1u);
     EXPECT_TRUE(gather.runtimeBounds.empty());
     EXPECT_FALSE(gather.boundsCompleteExceptRuntime);
-    EXPECT_EQ(gather.header.flags & s_RtOpticalSceneFlagBoundsValid, 0u);
+    EXPECT_EQ(gather.header.flags & s_TestShaderRtOpticalSceneFlagBoundsValid, 0u);
 }
 
 void VerifyOpticalRuntimeBounds_RejectedUploadControlDoesNotAllocateOrPublish(){
@@ -693,7 +485,7 @@ void VerifyOpticalScene_OnlyEmittedTransparentPoliciesRequireClosedMedia(){
     renderer.opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
     context.gather.append(EntityID(3u, 0u), renderer, true, zeroVec, oneVec, true);
     EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
-    EXPECT_EQ(context.gather.header.flags, s_RtOpticalSceneFlagBoundsValid);
+    EXPECT_EQ(context.gather.header.flags, s_TestShaderRtOpticalSceneFlagBoundsValid);
 }
 
 void VerifyOpticalScene_ClosedAndUnknownTransparentPoliciesRequireGeneralTransport(){
@@ -718,7 +510,7 @@ void VerifyOpticalScene_ClosedAndUnknownTransparentPoliciesRequireGeneralTranspo
             EXPECT_FALSE(context.gather.unspecifiedBoundariesOnly);
             u32 expectedFlags = 0u;
             if(boundsValid)
-                expectedFlags = s_RtOpticalSceneFlagBoundsValid;
+                expectedFlags = s_TestShaderRtOpticalSceneFlagBoundsValid;
             EXPECT_EQ(context.gather.header.flags, expectedFlags);
         }
     }
@@ -732,7 +524,7 @@ void VerifyOpticalScene_IncompleteBoundsRemainRejectedWithUnspecifiedPolicySpeci
     context.gather.append(EntityID(1u, 0u), renderer, true, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), false);
     EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
     EXPECT_EQ(context.gather.header.flags, 0u);
-    EXPECT_EQ(context.gather.instances[0u].flags, s_RtOpticalInstanceFlagTransparent);
+    EXPECT_EQ(context.gather.instances[0u].flags, s_TestShaderRtOpticalInstanceFlagTransparent);
 }
 
 void VerifyOpticalScene_OpaqueInstancesPreserveOrderWithoutExpandingOpticalBounds(){
@@ -746,7 +538,7 @@ void VerifyOpticalScene_OpaqueInstancesPreserveOrderWithoutExpandingOpticalBound
     EXPECT_EQ(context.gather.instances[0u].flags, 0u);
     EXPECT_EQ(context.gather.header.transparentCount, 1u);
     EXPECT_EQ(context.gather.header.boundsMin.x, -1.0f);
-    EXPECT_EQ(context.gather.header.flags, s_RtOpticalSceneFlagBoundsValid);
+    EXPECT_EQ(context.gather.header.flags, s_TestShaderRtOpticalSceneFlagBoundsValid);
 }
 
 void VerifyOpticalScene_UntrustedTransparentBoundsCannotBecomeAnAirShortcut(){
@@ -757,26 +549,26 @@ void VerifyOpticalScene_UntrustedTransparentBoundsCannotBecomeAnAirShortcut(){
 
     EXPECT_EQ(context.gather.header.transparentCount, 2u);
     EXPECT_EQ(context.gather.header.flags, 0u);
-    EXPECT_EQ(context.gather.instances[0u].flags, s_RtOpticalInstanceFlagTransparent);
+    EXPECT_EQ(context.gather.instances[0u].flags, s_TestShaderRtOpticalInstanceFlagTransparent);
 }
 
 void VerifyOpticalScene_NonfiniteAndInvertedBoundsRejectTheProof(){
     OpticalSceneContext context = OpticalSceneContext();
     RendererComponent renderer = RendererComponent();
-    Array<Float3U, 2> invalidMins = Array<Float3U, 2>();
-    invalidMins[0u] = Float3U(bit_cast<f32>(0x7F800000u), 0.0f, 0.0f);
-    invalidMins[1u] = Float3U(2.0f, 0.0f, 0.0f);
-    for(in Float3U boundsMin : invalidMins){
-        RayTracingOpticalSceneGather gather = RayTracingOpticalSceneGather(context.scratch, 1u);
-        gather.append(EntityID(1u, 0u), renderer, true, LoadFloat(boundsMin), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), true);
+    Array<f32x3u, 2> invalidMins = Array<f32x3u, 2>();
+    invalidMins[0u] = f32x3u(bit_cast<f32>(0x7F800000u), 0.0f, 0.0f);
+    invalidMins[1u] = f32x3u(2.0f, 0.0f, 0.0f);
+    for(in f32x3u boundsMin : invalidMins){
+        RayTracingOpticalSceneGather gather = context.scratch.makeValue<RayTracingOpticalSceneGather>(1u);
+        gather.append(EntityID(1u, 0u), renderer, true, VectorSingle(boundsMin), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), true);
         EXPECT_EQ(gather.header.flags, 0u);
-        EXPECT_EQ(gather.instances[0u].flags, s_RtOpticalInstanceFlagTransparent);
+        EXPECT_EQ(gather.instances[0u].flags, s_TestShaderRtOpticalInstanceFlagTransparent);
     }
 }
 
 void VerifyOpticalScene_MissingGeometryInvalidatesEvenAnOtherwiseEmptyScene(){
     OpticalSceneContext context = OpticalSceneContext();
-    EXPECT_EQ(context.gather.header.flags, s_RtOpticalSceneFlagBoundsValid);
+    EXPECT_EQ(context.gather.header.flags, s_TestShaderRtOpticalSceneFlagBoundsValid);
     context.gather.markIncomplete();
     EXPECT_EQ(context.gather.header.transparentCount, 0u);
     EXPECT_EQ(context.gather.header.flags, 0u);
@@ -795,35 +587,35 @@ void VerifyOpticalScene_FrozenUploadOwnsBytesAfterGatherChanges(){
     OpticalSceneContext context = OpticalSceneContext();
     RendererComponent renderer = RendererComponent();
     context.gather.append(EntityID(7u, 2u), renderer, true, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(1.0f, 2.0f, 3.0f, 0.0f), true);
-    const RayTracingOpticalSceneUpload upload = RayTracingOpticalSceneUpload(context.arena, context.gather);
+    const RayTracingOpticalSceneUpload upload = context.arena.makeValue<RayTracingOpticalSceneUpload>(context.gather);
     context.gather.instances.clear();
     context.gather.header.transparentCount = 0u;
 
-    ASSERT_EQ(upload.bytes.size(), cast<usize>(s_RtOpticalSceneHeaderBytes + s_RtOpticalInstanceBytes));
+    ASSERT_EQ(upload.bytes.size(), cast<usize>(s_ShaderRtOpticalSceneHeaderBytes + s_ShaderRtOpticalInstanceBytes));
     EXPECT_EQ(upload.instanceCount, 1u);
-    const ConstByteSpan uploadedBytes = ConstByteSpan(upload.bytes.data(), upload.bytes.size());
-    const u32 storedCount = ReadCopiedU32(uploadedBytes, s_RtOpticalSceneTransparentCountOffset);
-    const u32 storedEntity = ReadCopiedU32(uploadedBytes, cast<usize>(s_RtOpticalSceneHeaderBytes));
+    const ConstByteSpan uploadedBytes = ConstByteSpan(upload.bytes);
+    const u32 storedCount = ReadCopiedU32(uploadedBytes, s_ShaderRtOpticalSceneTransparentCountOffset);
+    const u32 storedEntity = ReadCopiedU32(uploadedBytes, cast<usize>(s_ShaderRtOpticalSceneHeaderBytes));
     EXPECT_EQ(storedCount, 1u);
     EXPECT_EQ(storedEntity, EntityID(7u, 2u).id);
 }
 
 void VerifyOpticalScene_AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslation(){
-    Float34U transform = MakeZeroFloat34U();
+    f32x3x4u transform = ZeroOpticalAffineMatrix();
     transform._11 = -2.0f;
     transform._12 = 0.25f;
     transform._14 = 100000.0f;
     transform._22 = 3.0f;
     transform._24 = -40000.0f;
     transform._33 = 0.5f;
-    const Float3U localMin = Float3U(-3.0f, -2.0f, -1.0f);
-    const Float3U localMax = Float3U(1.0f, 4.0f, 5.0f);
-    const OpticalWorldBoundsResult bounds = ComputeOpticalWorldBounds(LoadFloat(transform), LoadFloat(localMin), LoadFloat(localMax));
+    const f32x3u localMin = f32x3u(-3.0f, -2.0f, -1.0f);
+    const f32x3u localMax = f32x3u(1.0f, 4.0f, 5.0f);
+    const OpticalWorldBoundsResult bounds = ComputeOpticalWorldBounds(MatrixSingle(transform), VectorSingle(localMin), VectorSingle(localMax));
     ASSERT_TRUE(bounds.has_value());
-    Float3U minimum = Float3U();
-    Float3U maximum = Float3U();
-    StoreFloat(LoadFloat(bounds.value().minimum), minimum);
-    StoreFloat(LoadFloat(bounds.value().maximum), maximum);
+    f32x3u minimum = f32x3u();
+    f32x3u maximum = f32x3u();
+    minimum = f32x3u(VectorSingle(bounds.value().minimum));
+    maximum = f32x3u(VectorSingle(bounds.value().maximum));
     for(u32 corner = 0u; corner < 8u; ++corner){
         Array<f64, 3> coordinates = Array<f64, 3>();
         if((corner & 1u) != 0u)
@@ -839,20 +631,20 @@ void VerifyOpticalScene_AffineBoundsEncloseMirroringNonuniformScaleAndLargeTrans
         else
             coordinates[2u] = cast<f64>(localMin.z);
         for(usize row = 0u; row < 3u; ++row){
-            f64 exact = cast<f64>(transform.m[row][3u]);
+            f64 exact = cast<f64>(MatrixSingle(transform)[row][3u]);
             for(usize column = 0u; column < 3u; ++column)
-                exact += cast<f64>(transform.m[row][column]) * coordinates[column];
-            EXPECT_LT(cast<f64>(minimum.raw[row]), exact);
-            EXPECT_GT(cast<f64>(maximum.raw[row]), exact);
+                exact += cast<f64>(MatrixSingle(transform)[row][column]) * coordinates[column];
+            EXPECT_LT(cast<f64>(VectorSingle(minimum)[row]), exact);
+            EXPECT_GT(cast<f64>(VectorSingle(maximum)[row]), exact);
         }
     }
 }
 
 void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
-    Float34U transform = MakeZeroFloat34U();
-    Float3U point = Float3U();
-    native(mut transform, mut point){
-        Array<volatile f32, 5> inputs = { -0x1p+24f, 0x1.000002p+24f, 0x1p+24f, 1.0f, 0x1.fffffep-1f, };
+    f32x3x4u transform = ZeroOpticalAffineMatrix();
+    f32x3u point = f32x3u();
+    {
+        const Array<f32, 5> inputs(ObserveValue<f32>(bit_cast<f32>(0xcb800000u)), ObserveValue<f32>(bit_cast<f32>(0x4b800001u)), ObserveValue<f32>(bit_cast<f32>(0x4b800000u)), ObserveValue<f32>(1.0f), ObserveValue<f32>(bit_cast<f32>(0x3f7fffffu)));
         transform._11 = inputs[0u];
         transform._12 = inputs[1u];
         transform._21 = inputs[0u];
@@ -862,14 +654,14 @@ void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
         transform._32 = inputs[0u];
         transform._33 = inputs[2u];
         transform._34 = inputs[0u];
-        point = Float3U(inputs[3u], inputs[4u], inputs[3u]);
+        point = f32x3u(inputs[3u], inputs[4u], inputs[3u]);
     }
-    const OpticalWorldBoundsResult bounds = ComputeOpticalWorldBounds(LoadFloat(transform), LoadFloat(point), LoadFloat(point));
+    const OpticalWorldBoundsResult bounds = ComputeOpticalWorldBounds(MatrixSingle(transform), VectorSingle(point), VectorSingle(point));
     ASSERT_TRUE(bounds.has_value());
-    Float3U minimum = Float3U();
-    Float3U maximum = Float3U();
-    StoreFloat(LoadFloat(bounds.value().minimum), minimum);
-    StoreFloat(LoadFloat(bounds.value().maximum), maximum);
+    f32x3u minimum = f32x3u();
+    f32x3u maximum = f32x3u();
+    minimum = f32x3u(VectorSingle(bounds.value().minimum));
+    maximum = f32x3u(VectorSingle(bounds.value().maximum));
 
     // The exact third coordinate is one; cancellation must not make its error budget disappear.
     Array<f64, 3> exact = Array<f64, 3>();
@@ -877,8 +669,8 @@ void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
     exact[1u] = 0.0;
     exact[2u] = 1.0;
     for(usize lane = 0u; lane < 3u; ++lane){
-        EXPECT_LT(cast<f64>(minimum.raw[lane]), exact[lane]);
-        EXPECT_GT(cast<f64>(maximum.raw[lane]), exact[lane]);
+        EXPECT_LT(cast<f64>(VectorSingle(minimum)[lane]), exact[lane]);
+        EXPECT_GT(cast<f64>(VectorSingle(maximum)[lane]), exact[lane]);
     }
 
 }
@@ -888,7 +680,7 @@ void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExcep
     ASSERT_TRUE(originalEnvironment.has_value());
     const FloatingPointEnvironmentGuard restoreEnvironment = FloatingPointEnvironmentGuard(originalEnvironment.value());
 
-    Float34U transform = MakeZeroFloat34U();
+    f32x3x4u transform = ZeroOpticalAffineMatrix();
     transform._11 = -2.0f;
     transform._12 = 0.25f;
     transform._14 = 100000.0f;
@@ -899,21 +691,19 @@ void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExcep
     const VectorSingle localMax = VectorSingle(1.0f, 4.0f, 5.0f, 0.0f);
 
     Array<i32, 4> roundingModes = Array<i32, 4>();
-    roundingModes[0u] = s_FeTonearest;
-    roundingModes[1u] = s_FeDownward;
-    roundingModes[2u] = s_FeUpward;
-    roundingModes[3u] = s_FeTowardzero;
+    roundingModes[0u] = FE_TONEAREST;
+    roundingModes[1u] = FE_DOWNWARD;
+    roundingModes[2u] = FE_UPWARD;
+    roundingModes[3u] = FE_TOWARDZERO;
     for(in i32 roundingMode : roundingModes){
         b8 roundingApplied = false;
         b8 clearedReference = false;
         OpticalWorldBoundsResult reference = OpticalWorldBoundsResult();
         i32 referenceFlags = 0;
-        native(in roundingMode, in transform, in localMin, in localMax, mut roundingApplied, mut clearedReference, mut reference, mut referenceFlags){
-            {
-#pragma STDC FENV_ACCESS ON
-                Array<volatile u32, 1> inactiveRowBits = { 0x7f800123u };
-                SIMDMatrix objectToWorld = LoadFloat(transform);
-                objectToWorld.v[3] = VectorReplicateInt(inactiveRowBits[0]);
+        {
+                const u32 inactiveRowBits = ObserveValue<u32>(0x7f800123u);
+                MatrixSingle objectToWorld = MatrixSingle(transform);
+                objectToWorld[3u] = VectorReplicateInt(inactiveRowBits);
                 roundingApplied = SetFloatingPointRoundingMode(roundingMode).has_value();
                 if(roundingApplied){
                     clearedReference = ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value();
@@ -922,7 +712,6 @@ void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExcep
                         referenceFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                     }
                 }
-            }
         }
         ASSERT_TRUE(roundingApplied);
         ASSERT_TRUE(clearedReference);
@@ -935,31 +724,28 @@ void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExcep
         u32 maximumW = 1u;
         b8 equalMinimum = false;
         b8 equalMaximum = false;
-        native(in transform, in localMin, in localMax, in reference, mut clearedActual, mut bounds, mut actualFlags, mut minimumW, mut maximumW, mut equalMinimum, mut equalMaximum){
-            {
-#pragma STDC FENV_ACCESS ON
-                Array<volatile u32, 2> inactiveBits = { 0x7f800123u, 0xff800456u };
-                SIMDMatrix objectToWorld = LoadFloat(transform);
-                objectToWorld.v[3] = VectorReplicateInt(inactiveBits[0]);
-                const SIMDVectorSingle poisonedMin = VectorSelect(localMin, VectorReplicateInt(inactiveBits[0]), s_SIMDMaskW);
-                const SIMDVectorSingle poisonedMax = VectorSelect(localMax, VectorReplicateInt(inactiveBits[1]), s_SIMDMaskW);
+        {
+                const Array<u32, 2> inactiveBits(ObserveValue<u32>(0x7f800123u), ObserveValue<u32>(0xff800456u));
+                MatrixSingle objectToWorld = MatrixSingle(transform);
+                objectToWorld[3u] = VectorReplicateInt(inactiveBits[0]);
+                const VectorSingle poisonedMin = VectorSetIntW(localMin, inactiveBits[0u]);
+                const VectorSingle poisonedMax = VectorSetIntW(localMax, inactiveBits[1u]);
                 clearedActual = ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value();
                 if(clearedActual){
                     bounds = ComputeOpticalWorldBounds(objectToWorld, poisonedMin, poisonedMax);
                     actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                    if(bounds){
-                        minimumW = VectorGetIntW(LoadFloat(bounds->minimum));
-                        maximumW = VectorGetIntW(LoadFloat(bounds->maximum));
-                        equalMinimum = Vector4EqualInt(LoadFloat(bounds->minimum), LoadFloat(reference->minimum));
-                        equalMaximum = Vector4EqualInt(LoadFloat(bounds->maximum), LoadFloat(reference->maximum));
+                    if(bounds.has_value()){
+                        minimumW = VectorGetIntW(VectorSingle(bounds.value().minimum));
+                        maximumW = VectorGetIntW(VectorSingle(bounds.value().maximum));
+                        equalMinimum = Vector4EqualInt(VectorSingle(bounds.value().minimum), VectorSingle(reference.value().minimum));
+                        equalMaximum = Vector4EqualInt(VectorSingle(bounds.value().maximum), VectorSingle(reference.value().maximum));
                     }
                 }
-            }
         }
         ASSERT_TRUE(clearedActual);
         ASSERT_TRUE(bounds.has_value());
         EXPECT_EQ(actualFlags, referenceFlags);
-        EXPECT_EQ(actualFlags & s_FeInvalid, 0);
+        EXPECT_EQ(actualFlags & FE_INVALID, 0);
         EXPECT_EQ(minimumW, 0u);
         EXPECT_EQ(maximumW, 0u);
         EXPECT_TRUE(equalMinimum);
@@ -968,35 +754,35 @@ void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExcep
 }
 
 void VerifyOpticalScene_NonfiniteAffineBoundsNeverPublishAPartialResult(){
-    Float34U transform = MakeZeroFloat34U();
+    f32x3x4u transform = ZeroOpticalAffineMatrix();
     transform._11 = 1.0f;
     transform._22 = 1.0f;
     transform._33 = 1.0f;
     transform._34 = bit_cast<f32>(0x7F800000u);
-    const OpticalWorldBoundsResult bounds = ComputeOpticalWorldBounds(LoadFloat(transform), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f));
+    const OpticalWorldBoundsResult bounds = ComputeOpticalWorldBounds(MatrixSingle(transform), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(1.0f, 1.0f, 1.0f, 0.0f));
     EXPECT_FALSE(bounds.has_value());
 }
 
 void VerifyOutputLayerColor_TransparentHdrLayerPreservesSceneAndOpaqueUiIgnoresSceneExposure(){
     const ShaderFloat3 scene = ShaderFloat3(0.1, 3.0, 100.0);
-    OutputLayerColor_ExpectColorNear(EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi(scene, ShaderFloat3(0.0), 0.0f), EcsGraphicsMeshOptics_nwbHdr10EncodeScene(scene), 0.000001);
+    OutputLayerColor_ExpectColorNear(nwbHdr10EncodeSceneWithUi(scene, ShaderFloat3(0.0), 0.0f), nwbHdr10EncodeScene(scene), 0.000001);
     const ShaderFloat3 ui = ShaderFloat3(0.2, 0.5, 0.9);
-    const ShaderFloat3 expected = EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear(ui);
-    OutputLayerColor_ExpectColorNear(EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi(scene, ui, 1.0f), expected, 0.000001);
-    OutputLayerColor_ExpectColorNear(EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi(scene * ShaderFloat3(64.0), ui, 1.0f), expected, 0.000001);
+    const ShaderFloat3 expected = nwbHdr10EncodeUiLinear(ui);
+    OutputLayerColor_ExpectColorNear(nwbHdr10EncodeSceneWithUi(scene, ui, 1.0f), expected, 0.000001);
+    OutputLayerColor_ExpectColorNear(nwbHdr10EncodeSceneWithUi(HdrMultiply(scene, ShaderFloat3(64.0)), ui, 1.0f), expected, 0.000001);
 }
 
 void VerifyOutputLayerColor_HdrBlendsInLinearNitsBeforeOnePqEncoding(){
     // Half-opacity paper white over black is 101.5 nits, not half of the encoded paper-white signal.
-    const ShaderFloat3 actual = EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi(ShaderFloat3(0.0), ShaderFloat3(0.5), 0.5f);
-    OutputLayerColor_ExpectColorNear(actual, EcsGraphicsMeshOptics_nwbHdr10PqEncodeNits(ShaderFloat3(101.5)), 0.000001);
-    const ShaderFloat3 encodedBlend = EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear(ShaderFloat3(1.0)) * ShaderFloat3(0.5);
+    const ShaderFloat3 actual = nwbHdr10EncodeSceneWithUi(ShaderFloat3(0.0), ShaderFloat3(0.5), 0.5f);
+    OutputLayerColor_ExpectColorNear(actual, nwbHdr10PqEncodeNits(ShaderFloat3(101.5)), 0.000001);
+    const ShaderFloat3 encodedBlend = HdrMultiply(nwbHdr10EncodeUiLinear(ShaderFloat3(1.0)), ShaderFloat3(0.5));
     EXPECT_GT(actual.x - encodedBlend.x, 0.1);
 }
 
 void VerifyOutputLayerColor_NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound(){
-    EXPECT_LT(EcsGraphicsMeshOptics_nwbHdr10SceneToNits(ShaderFloat3(100.0)).x, 1000.0);
-    OutputLayerColor_ExpectColorNear(EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear(ShaderFloat3(-1.0)), EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear(ShaderFloat3(0.0)), 0.000001);
+    EXPECT_LT(nwbHdr10SceneToNits(ShaderFloat3(100.0)).x, 1000.0);
+    OutputLayerColor_ExpectColorNear(nwbHdr10EncodeUiLinear(ShaderFloat3(-1.0)), nwbHdr10EncodeUiLinear(ShaderFloat3(0.0)), 0.000001);
 }
 
 void PublishRecordingOutputLayer(mut RecordingLayerContributor contributor, in u64 frameGeneration, in QueueSubmissionToken token){
@@ -1147,61 +933,14 @@ void VerifyRayTracingBuildPolicy_StaleTlasCompletionCannotPublishTheOldSceneOrCl
 void VerifyRefractiveBoundsIsolation_TouchingTheCertifiedMarginIsNotIsolated(){
     const RefractiveBoundsIsolation policy = RefractiveBoundsIsolation();
     Array<RayTracingInstanceWorldBounds, 2> bounds = Array<RayTracingInstanceWorldBounds, 2>();
-    bounds[0u].minimum = Float3U(0.0f, 0.0f, 0.0f);
-    bounds[0u].maximum = Float3U(1.0f, 1.0f, 1.0f);
-    bounds[1u].minimum = Float3U(1.0f + s_RefractionCertifiedBoundsMargin, 0.0f, 0.0f);
-    bounds[1u].maximum = Float3U(2.0f, 1.0f, 1.0f);
+    bounds[0u].minimum = f32x3u(0.0f, 0.0f, 0.0f);
+    bounds[0u].maximum = f32x3u(1.0f, 1.0f, 1.0f);
+    bounds[1u].minimum = f32x3u(1.0f + s_RefractionCertifiedBoundsMargin, 0.0f, 0.0f);
+    bounds[1u].maximum = f32x3u(2.0f, 1.0f, 1.0f);
     EXPECT_FALSE(policy.isIsolated(bounds, 0u));
     EXPECT_FALSE(policy.isIsolated(bounds, 2u));
     bounds[1u].minimum.x = 1.0f + s_RefractionCertifiedBoundsMargin * 2.0f;
     EXPECT_TRUE(policy.isIsolated(bounds, 0u));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace EcsGraphicsOutputLayerColorDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#define nwbHdr10Rec709ToRec2020 EcsGraphicsMeshOptics_nwbHdr10Rec709ToRec2020
-#define nwbHdr10UiLinearToNits EcsGraphicsMeshOptics_nwbHdr10UiLinearToNits
-#define nwbOutputLayerOver EcsGraphicsMeshOptics_nwbOutputLayerOver
-#define nwbHdr10SceneToNits EcsGraphicsMeshOptics_nwbHdr10SceneToNits
-#define nwbHdr10PqEncodeNits EcsGraphicsMeshOptics_nwbHdr10PqEncodeNits
-#define nwbHdr10EncodeScene EcsGraphicsMeshOptics_nwbHdr10EncodeScene
-#define nwbHdr10EncodeUiLinear EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear
-#define nwbHdr10EncodeSceneWithUi EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi
-#include <impl/assets/graphics/common/hdr10.slangi>
-#undef nwbHdr10EncodeSceneWithUi
-#undef nwbHdr10EncodeUiLinear
-#undef nwbHdr10EncodeScene
-#undef nwbHdr10PqEncodeNits
-#undef nwbHdr10SceneToNits
-#undef nwbOutputLayerOver
-#undef nwbHdr10UiLinearToNits
-#undef nwbHdr10Rec709ToRec2020
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

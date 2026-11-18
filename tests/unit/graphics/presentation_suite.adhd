@@ -4,165 +4,279 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
+#include <tests/common/value_storage.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkPresentModeKHR")]
+extern type VkPresentModeKHR;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkComponentTypeKHR")]
+extern type VkComponentTypeKHR;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkFormat")]
+extern type VkFormat;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkColorSpaceKHR")]
+extern type VkColorSpaceKHR;
 
-#include <core/graphics/rhi/coopvec.h>
-#include <core/graphics/rhi/hardware_ray_tracing_policy.h>
-#include <core/graphics/rhi/presentation.h>
-#include <core/graphics/vulkan/coopvec_feature_query.h>
-#include <core/graphics/vulkan/coopvec_matrix_policy.h>
-#include <core/graphics/vulkan/physical_queue_registration_policy.h>
-#include <core/graphics/vulkan/physical_queue_sharing_policy.h>
-#include <core/graphics/vulkan/swap_chain_surface_policy.h>
-#include <core/graphics/vulkan/vulkan_queue_request_plan.h>
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkCompositeAlphaFlagsKHR")]
+extern type VkCompositeAlphaFlagsKHR;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkCompositeAlphaFlagBitsKHR")]
+extern type VkCompositeAlphaFlagBitsKHR;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkQueue")]
+extern type VkQueue;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_PRESENT_MODE_MAILBOX_KHR")]
+extern const VkPresentModeKHR VK_PRESENT_MODE_MAILBOX_KHR;
 
-NWB_BEGIN
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_PRESENT_MODE_FIFO_KHR")]
+extern const VkPresentModeKHR VK_PRESENT_MODE_FIFO_KHR;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COMPONENT_TYPE_FLOAT32_KHR")]
+extern const VkComponentTypeKHR VK_COMPONENT_TYPE_FLOAT32_KHR;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COMPONENT_TYPE_FLOAT16_KHR")]
+extern const VkComponentTypeKHR VK_COMPONENT_TYPE_FLOAT16_KHR;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COMPONENT_TYPE_FLOAT_E4M3_NV")]
+extern const VkComponentTypeKHR VK_COMPONENT_TYPE_FLOAT_E4M3_NV;
 
-namespace Tests::GraphicsPresentationDetail{
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COMPONENT_TYPE_BFLOAT16_KHR")]
+extern const VkComponentTypeKHR VK_COMPONENT_TYPE_BFLOAT16_KHR;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_FORMAT_UNDEFINED")]
+extern const VkFormat VK_FORMAT_UNDEFINED;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_FORMAT_R8G8B8A8_SRGB")]
+extern const VkFormat VK_FORMAT_R8G8B8A8_SRGB;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COLOR_SPACE_SRGB_NONLINEAR_KHR")]
+extern const VkColorSpaceKHR VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-struct CooperativeVectorQueryHarness{
-    Tests::TestArena<> arena;
-    Core::GraphicsAllocator allocator{ arena.arena };
-    Core::CpuTaskScheduler scheduler{ 1u };
-    Core::GraphicsBackend::VulkanContext context{ allocator, scheduler };
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR")]
+extern const VkCompositeAlphaFlagBitsKHR VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR")]
+extern const VkCompositeAlphaFlagBitsKHR VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
 
-public:
-    CooperativeVectorQueryHarness()noexcept;
-
-    [[nodiscard]] Expected<Core::CooperativeVectorDeviceFeatures> queryEmptyDriverList();
-    [[nodiscard]] u32 callCount()const noexcept;
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkExtent2D"), cpp_flags(self_defaulted, brace_init)]
+extern class VkExtent2D{
+    u32 width;
+    u32 height;
 };
 
-[[nodiscard]] VkQueue MakeDummyVkQueue(usize handleValue)noexcept;
-
-struct QueuePlanVerification{
-    Core::Alloc::ScratchArena scratch{ NWB::Tests::s_TestArena };
-    Vector<VkQueueFamilyProperties, Core::Alloc::ScratchArena> families;
-    Tests::TestArena<> arena;
-    Core::DeviceCreationParameters params;
-    Optional<Core::GraphicsBackend::VulkanQueueRequestPlan> plan;
-
-
-public:
-    explicit QueuePlanVerification(Span<const u32> expectedCounts);
-
-    [[nodiscard]] Span<const Core::GraphicsBackend::VulkanQueueRequestPlan::SameClassQueueRequest> sameClassRequests()const noexcept{
-        return plan->sameClassQueueRequests();
-    }
-
-    [[nodiscard]] Span<const VkDeviceQueueCreateInfo> queueDescriptions()const noexcept{
-        return plan->queueDescriptions();
-    }
-
-    [[nodiscard]] b8 sharesFirstQueuePriorities(const u32 index)const noexcept{
-        const auto& queues = plan->queueDescriptions();
-        return queues[index].pQueuePriorities == queues[0u].pQueuePriorities;
-    }
-
-    [[nodiscard]] f32 queuePriorityAt(const u32 queueIndex, const u32 priorityIndex)const noexcept{
-        return plan->queueDescriptions()[queueIndex].pQueuePriorities[priorityIndex];
-    }
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkSurfaceFormatKHR"), cpp_flags(self_defaulted, brace_init)]
+extern class VkSurfaceFormatKHR{
+    VkFormat format;
+    VkColorSpaceKHR colorSpace;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkSurfaceCapabilitiesKHR"), cpp_flags(self_defaulted, brace_init)]
+extern class VkSurfaceCapabilitiesKHR{
+    VkExtent2D currentExtent;
+    VkExtent2D minImageExtent;
+    VkExtent2D maxImageExtent;
+    u32 minImageCount;
+    u32 maxImageCount;
+    VkCompositeAlphaFlagsKHR supportedCompositeAlpha;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::GraphicsPresentation{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using CooperativeVectorQueryHarness = Tests::GraphicsPresentationDetail::CooperativeVectorQueryHarness;
-using CooperativeVectorDeviceFeatures = Core::CooperativeVectorDeviceFeatures;
-namespace CooperativeVectorDataType = Core::CooperativeVectorDataType;
-namespace CooperativeVectorMatrixLayout = Core::CooperativeVectorMatrixLayout;
-using CooperativeVectorMatrixPolicy = Core::GraphicsBackend::CooperativeVectorMatrixPolicy;
-using StandardMatrixLayout = Core::GraphicsBackend::CooperativeVectorMatrixPolicy::StandardMatrixLayout;
-
-using SwapChainSurfacePolicy = Core::GraphicsBackend::SwapChainSurfacePolicy;
-using SwapChainSurfaceFormatSelection = Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection;
-namespace SwapChainOutputMode = Core::SwapChainOutputMode;
-namespace Format = Core::Format;
-namespace CommandQueue = Core::CommandQueue;
-namespace GpuQueueCapability = Core::GpuQueueCapability;
-namespace ResourceStates = Core::ResourceStates;
-namespace HardwareRayTracingPolicy = Core::HardwareRayTracingPolicy;
-
-using PhysicalQueueRegistrationPolicy = Core::GraphicsBackend::PhysicalQueueRegistrationPolicy;
-using PhysicalQueueRegistrationResult = Core::GraphicsBackend::PhysicalQueueRegistrationPolicy::Result;
-using PhysicalQueueSharingPolicy = Core::GraphicsBackend::PhysicalQueueSharingPolicy;
-using SharedQueueFamilies = decltype(Core::GraphicsBackend::PhysicalQueueSharingPolicy::Resolve(Span<const Core::GpuPhysicalQueueInfo>{}, 0u, 0u, 0u));
-using NativeQueueState = Core::GraphicsBackend::NativeQueueState;
-using VulkanPhysicalQueueDesc = Core::GraphicsBackend::VulkanPhysicalQueueDesc;
-using VulkanNativeQueueDesc = Core::GraphicsBackend::VulkanNativeQueueDesc;
-using GpuPhysicalQueueInfo = Core::GpuPhysicalQueueInfo;
-using PrimaryQueueFlags = Array<b8, static_cast<u32>(Core::CommandQueue::kCount)>;
-
-using AcquiredBackBuffer = Core::AcquiredBackBuffer;
-using PresentationReceipt = Core::PresentationReceipt;
-namespace PresentationReceiptStatus = Core::PresentationReceiptStatus;
-
-static_assert(IsTriviallyCopyable_V<PresentationReceipt>);
-
-using Tests::GraphicsPresentationDetail::MakeDummyVkQueue;
-using QueuePlanVerification = Tests::GraphicsPresentationDetail::QueuePlanVerification;
-using SameClassQueueRequestSpan = Span<const Core::GraphicsBackend::VulkanQueueRequestPlan::SameClassQueueRequest>;
-using VkDeviceQueueCreateInfoSpan = Span<const VkDeviceQueueCreateInfo>;
-using Core::GetCooperativeVectorOptimalMatrixStride;
-using Core::IsValidHardwareRayTracingPolicy;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkQueueFamilyProperties"), cpp_flags(self_defaulted, brace_init)]
+extern class VkQueueFamilyProperties{
+    u32 queueCount;
 };
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkDeviceQueueCreateInfo"), cpp_flags(self_defaulted, brace_init)]
+extern class VkDeviceQueueCreateInfo{
+    u32 queueCount;
+    u32 queueFamilyIndex;
+};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkPhysicalDeviceCooperativeVectorFeaturesNV"), cpp_flags(self_defaulted, brace_init)]
+extern class VkPhysicalDeviceCooperativeVectorFeaturesNV{
+    u32 cooperativeVector;
+    u32 cooperativeVectorTraining;
+};
 
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::VkPhysicalDeviceCooperativeVectorPropertiesNV"), cpp_flags(self_defaulted, brace_init)]
+extern class VkPhysicalDeviceCooperativeVectorPropertiesNV{
+    u32 cooperativeVectorTrainingFloat16Accumulation;
+};
 
-NWB_END
+[cpp_header("<core/graphics/vulkan/coopvec_matrix_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::CooperativeVectorMatrixPolicy::StandardMatrixLayout")]
+extern class StandardMatrixLayout{
+    usize stride;
+    usize byteSize;
+};
 
+[cpp_header("<core/graphics/vulkan/swap_chain_surface_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection")]
+extern class SwapChainSurfaceFormatSelection{
+    VkSurfaceFormatKHR surfaceFormat;
+    SwapChainOutputMode outputMode;
+};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<core/graphics/vulkan/physical_queue_sharing_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::PhysicalQueueSharingPolicy::Result")]
+extern class SharedQueueFamilies{
+    i32 graphics;
+    i32 auxiliaryGraphics;
+    i32 auxiliaryCompute;
+    b8 asyncComputeLaneEnabled;
+    b8 transferQueueEnabled;
+};
 
+[cpp_header("<core/graphics/vulkan/native_queue_state.h>"), cpp_name("::NWB::Core::GraphicsBackend::NativeQueueState"), cpp_flags(no_copy, no_assign)]
+extern class NativeQueueState;
 
+[cpp_header("<core/graphics/vulkan/physical_queue_registration_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanPhysicalQueueDesc"), cpp_flags(self_defaulted, brace_init)]
+extern class VulkanPhysicalQueueDesc{
+    CommandQueue queueClass;
+    GpuQueueCapability capabilities;
+    u32 timestampValidBits;
+    b8 primaryForClass;
+};
+
+[cpp_header("<core/graphics/vulkan/physical_queue_registration_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanNativeQueueDesc"), cpp_flags(self_defaulted, brace_init)]
+extern class VulkanNativeQueueDesc{
+    VkQueue queue;
+    u32 familyIndex;
+    u32 queueIndex;
+};
+
+[cpp_header("<core/graphics/vulkan/physical_queue_registration_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::PhysicalQueueRegistrationPolicy::Result::Enum")]
+extern enum PhysicalQueueRegistrationResult : u8{ Valid, Invalid, DuplicateQueue, DuplicatePrimary };
+
+[cpp_header("<core/graphics/vulkan/vulkan_queue_request_plan.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanQueueRequestPlan::SameClassQueueRequest")]
+extern class SameClassQueueRequest{
+    i32 family;
+    u32 queueIndex;
+};
+
+[cpp_header("<core/graphics/vulkan/vulkan_queue_request_plan.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanQueueRequestPlan::Input"), cpp_flags(brace_init)]
+extern class VulkanQueuePlanInput;
+
+[cpp_header("<core/graphics/vulkan/vulkan_queue_request_plan.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanQueueRequestPlan"), cpp_flags(no_copy, no_assign)]
+extern class VulkanQueueRequestPlan{
+    Span<SameClassQueueRequest> sameClassQueueRequests()const;
+    Span<VkDeviceQueueCreateInfo> queueDescriptions()const;
+};
+
+[cpp_header("<tests/unit/graphics/vulkan_test_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::VulkanExtensions")]
+extern class VulkanExtensions{ b8 nvCooperativeVector; };
+
+[cpp_header("<core/graphics/vulkan/backend_core_context.h>"), cpp_name("::NWB::Core::GraphicsBackend::VulkanContext"), cpp_flags(no_copy, no_assign)]
+extern class VulkanContext{
+    VulkanExtensions extensions;
+    VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures;
+    VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties;
+};
+
+[cpp_header("<core/graphics/vulkan/coopvec_feature_query.h>"), cpp_name("::NWB::Core::GraphicsBackend::CooperativeVectorFeatureQuery::Query")]
+extern Expected<CooperativeVectorDeviceFeatures> QueryCooperativeVectorFeatures(mut VulkanContext context, mut CpuTaskScheduler scheduler);
+
+[cpp_header("<core/graphics/vulkan/coopvec_matrix_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::CooperativeVectorMatrixPolicy::StandardLayoutSize")]
+extern Expected<StandardMatrixLayout> StandardLayoutSize(in usize elementBytes, in u32 rows, in u32 columns, in CooperativeVectorMatrixLayout layout, in usize requestedStride);
+
+[cpp_header("<core/graphics/vulkan/coopvec_matrix_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::CooperativeVectorMatrixPolicy::IsTypeConversionSupported")]
+extern b8 IsTypeConversionSupported(in VkComponentTypeKHR source, in VkComponentTypeKHR destination);
+
+[cpp_header("<core/graphics/vulkan/swap_chain_surface_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::SwapChainSurfacePolicy::SelectPresentMode")]
+extern Expected<VkPresentModeKHR> SelectPresentMode(in Span<VkPresentModeKHR> modes, in b8 vsync);
+
+[cpp_header("<core/graphics/vulkan/swap_chain_surface_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::SwapChainSurfacePolicy::SelectFormat")]
+extern Expected<SwapChainSurfaceFormatSelection> SelectFormat(in Span<VkSurfaceFormatKHR> formats, in Format requested, in b8 allowHdr);
+
+[cpp_header("<core/graphics/vulkan/swap_chain_surface_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::SwapChainSurfacePolicy::ResolveExtent")]
+extern VkExtent2D ResolveExtent(in VkSurfaceCapabilitiesKHR capabilities, in u32 width, in u32 height);
+
+[cpp_header("<core/graphics/vulkan/swap_chain_surface_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::SwapChainSurfacePolicy::ImageCount")]
+extern u32 ImageCount(in VkSurfaceCapabilitiesKHR capabilities, in u32 requested);
+
+[cpp_header("<core/graphics/vulkan/swap_chain_surface_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::SwapChainSurfacePolicy::SelectCompositeAlpha")]
+extern Expected<VkCompositeAlphaFlagBitsKHR> SelectCompositeAlpha(in VkSurfaceCapabilitiesKHR capabilities);
+
+[cpp_header("<core/graphics/vulkan/physical_queue_registration_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::PhysicalQueueRegistrationPolicy::Validate")]
+extern PhysicalQueueRegistrationResult ValidatePhysicalQueue(in VulkanPhysicalQueueDesc queue, in NativeQueueState state, in Span<GpuPhysicalQueueInfo> existing, in PrimaryQueueFlags primaries);
+
+[cpp_header("<core/graphics/vulkan/physical_queue_registration_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::PhysicalQueueRegistrationPolicy::ValidateCanonical")]
+extern PhysicalQueueRegistrationResult ValidateCanonical(in Span<VulkanNativeQueueDesc> queues, in Span<VkQueueFamilyProperties> families);
+
+[cpp_header("<core/graphics/vulkan/physical_queue_sharing_policy.h>"), cpp_name("::NWB::Core::GraphicsBackend::PhysicalQueueSharingPolicy::Resolve")]
+extern SharedQueueFamilies ResolveSharedQueueFamilies(in Span<GpuPhysicalQueueInfo> queues, in u32 graphics, in u32 compute, in u32 transfer);
+
+[cpp_header("<tests/unit/graphics/vulkan_test_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::MakeDummyVkQueue")]
+extern VkQueue MakeDummyVkQueue(in usize handle);
+
+[cpp_header("<tests/unit/graphics/vulkan_test_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::BindCooperativeVectorQuery")]
+extern void BindCooperativeVectorQuery(mut VulkanContext context, mut auto receiver);
+
+[cpp_header("<tests/unit/graphics/vulkan_test_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::SharesQueuePriorities")]
+extern b8 SharesQueuePriorities(in VkDeviceQueueCreateInfo left, in VkDeviceQueueCreateInfo right);
+
+[cpp_header("<tests/unit/graphics/vulkan_test_sdk.h>"), cpp_name("::NWB::Tests::VulkanSdk::QueuePriorityAt")]
+extern f32 QueuePriorityAt(in VkDeviceQueueCreateInfo queue, in usize index);
+
+const usize s_QueueClassCount = cast<usize>(CommandQueue::kCount);
+type PrimaryQueueFlags = Array<b8, s_QueueClassCount>;
+type SameClassQueueRequestSpan = Span<SameClassQueueRequest>;
+type VkDeviceQueueCreateInfoSpan = Span<VkDeviceQueueCreateInfo>;
+static_assert(is_trivially_copyable<PresentationReceipt>());
+
+class CooperativeVectorDriver{
+    public u32 calls = 0u;
+    public void query(mut u32 count, in b8 propertiesSupplied){
+        ++this.calls;
+        EXPECT_FALSE(propertiesSupplied);
+        count = 0u;
+    }
 }
 
+[ordered]
+class CooperativeVectorQueryHarness{
+    public HeapStorage arena;
+    public GraphicsAllocator allocator = GraphicsAllocator(this.arena);
+    public CpuTaskScheduler scheduler = CpuTaskScheduler(1u);
+    public VulkanContext context = VulkanContext(this.allocator, this.scheduler);
+    public CooperativeVectorDriver driver;
+    public CooperativeVectorQueryHarness(){
+        this.context.extensions.nvCooperativeVector = true;
+        this.context.coopVecFeatures.cooperativeVector = 1u;
+        this.context.coopVecFeatures.cooperativeVectorTraining = 1u;
+        this.context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation = 1u;
+        BindCooperativeVectorQuery(this.context, this.driver);
+    }
+    public Expected<CooperativeVectorDeviceFeatures> queryEmptyDriverList(){ return QueryCooperativeVectorFeatures(this.context, this.scheduler); }
+    public u32 callCount()const{ return this.driver.calls; }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[ordered]
+class QueuePlanVerification{
+    public ScratchStorage scratch = ScratchStorage(s_TestArena);
+    public ScratchStorageVector<VkQueueFamilyProperties> families = ScratchStorageVector<VkQueueFamilyProperties>(this.scratch);
+    public HeapStorage arena;
+    public DeviceCreationParameters params = DeviceCreationParameters(this.arena);
+    public TestValueSlot<VulkanQueueRequestPlan> planStorage;
 
+    public QueuePlanVerification(in Span<u32> expectedCounts){
+        this.families.resize(expectedCounts.size());
+        for(usize index = 0u; index < expectedCounts.size(); ++index)
+            this.families[index].queueCount = expectedCounts[index];
+        this.params.enableSameClassMultiQueue = true;
+        this.params.headlessDevice = false;
+        const VulkanQueuePlanInput input(this.params, this.families,
+            0, 1, 1, 2, -1, 3, -1, true, true, false, true, false);
+        this.planStorage.constructIn(this.scratch, input);
+    }
+    private in VulkanQueueRequestPlan builtPlan()const{ return this.planStorage.value(); }
+    public Span<SameClassQueueRequest> sameClassRequests()const{ return this.builtPlan().sameClassQueueRequests(); }
+    public Span<VkDeviceQueueCreateInfo> queueDescriptions()const{ return this.builtPlan().queueDescriptions(); }
+    public b8 sharesFirstQueuePriorities(in u32 index)const{ return SharesQueuePriorities(this.builtPlan().queueDescriptions()[index], this.builtPlan().queueDescriptions()[0u]); }
+    public f32 queuePriorityAt(in u32 index, in u32 priority)const{ return QueuePriorityAt(this.builtPlan().queueDescriptions()[index], priority); }
+}
 
 type CooperativeVectorDataTypeEnum = CooperativeVectorDataType;
 type CooperativeVectorMatrixLayoutEnum = CooperativeVectorMatrixLayout;
@@ -194,15 +308,15 @@ void VerifyCooperativeVectorFeatureQuery_EmptyDriverPropertyListDoesNotReadOrPub
 }
 
 void VerifyCooperativeVectorMatrixPolicy_RejectsTightMisalignedAndOverflowingStrides(){
-    const Expected<StandardMatrixLayout> layout = CooperativeVectorMatrixPolicy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u);
+    const Expected<StandardMatrixLayout> layout = StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u);
     ASSERT_TRUE(layout.has_value());
     EXPECT_EQ(layout.value().stride, 16u);
     EXPECT_EQ(layout.value().byteSize, 28u);
-    EXPECT_FALSE(CooperativeVectorMatrixPolicy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 12u).has_value());
-    EXPECT_FALSE(CooperativeVectorMatrixPolicy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 14u).has_value());
-    EXPECT_FALSE(CooperativeVectorMatrixPolicy::StandardLayoutSize(usize.max, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u).has_value());
-    EXPECT_TRUE(CooperativeVectorMatrixPolicy::IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT32_KHR, VK_COMPONENT_TYPE_FLOAT16_KHR));
-    EXPECT_FALSE(CooperativeVectorMatrixPolicy::IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT_E4M3_NV, VK_COMPONENT_TYPE_BFLOAT16_KHR));
+    EXPECT_FALSE(StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 12u).has_value());
+    EXPECT_FALSE(StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 14u).has_value());
+    EXPECT_FALSE(StandardLayoutSize(usize.max, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u).has_value());
+    EXPECT_TRUE(IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT32_KHR, VK_COMPONENT_TYPE_FLOAT16_KHR));
+    EXPECT_FALSE(IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT_E4M3_NV, VK_COMPONENT_TYPE_BFLOAT16_KHR));
 }
 
 void VerifyCooperativeVectorMatrixStride_FailsClosedForInvalidOrDriverOptimalInputs(){
@@ -233,16 +347,16 @@ void VerifyDeviceCreationPolicy_SurfacePolicyKeepsFallbackOrderAndRejectsMissing
     Array<VkPresentModeKHR, 2> modes = Array<VkPresentModeKHR, 2>();
     modes[0u] = VK_PRESENT_MODE_MAILBOX_KHR;
     modes[1u] = VK_PRESENT_MODE_FIFO_KHR;
-    const Expected<VkPresentModeKHR> mode = SwapChainSurfacePolicy::SelectPresentMode(modes, false);
+    const Expected<VkPresentModeKHR> mode = SelectPresentMode(modes, false);
     ASSERT_TRUE(mode.has_value());
     EXPECT_EQ(mode.value(), VK_PRESENT_MODE_FIFO_KHR);
     const Span<VkPresentModeKHR> emptyModes = Span<VkPresentModeKHR>();
-    EXPECT_FALSE(SwapChainSurfacePolicy::SelectPresentMode(emptyModes, false).has_value());
+    EXPECT_FALSE(SelectPresentMode(emptyModes, false).has_value());
 
     Array<VkSurfaceFormatKHR, 1> formats = Array<VkSurfaceFormatKHR, 1>();
     formats[0u].format = VK_FORMAT_UNDEFINED;
     formats[0u].colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-    const Expected<SwapChainSurfaceFormatSelection> format = SwapChainSurfacePolicy::SelectFormat(formats, Format::RGBA8_UNORM_SRGB, true);
+    const Expected<SwapChainSurfaceFormatSelection> format = SelectFormat(formats, Format::RGBA8_UNORM_SRGB, true);
     ASSERT_TRUE(format.has_value());
     EXPECT_EQ(format.value().surfaceFormat.format, VK_FORMAT_R8G8B8A8_SRGB);
     EXPECT_EQ(format.value().outputMode, SwapChainOutputMode::SDR);
@@ -256,13 +370,13 @@ void VerifyDeviceCreationPolicy_SurfacePolicyKeepsFallbackOrderAndRejectsMissing
     caps.maxImageExtent.height = 600u;
     caps.minImageCount = 2u;
     caps.maxImageCount = 3u;
-    const VkExtent2D extent = SwapChainSurfacePolicy::ResolveExtent(caps, 1u, 900u);
+    const VkExtent2D extent = ResolveExtent(caps, 1u, 900u);
     EXPECT_EQ(extent.width, 100u);
     EXPECT_EQ(extent.height, 600u);
-    EXPECT_EQ(SwapChainSurfacePolicy::ImageCount(caps, 5u), 3u);
-    EXPECT_FALSE(SwapChainSurfacePolicy::SelectCompositeAlpha(caps).has_value());
+    EXPECT_EQ(ImageCount(caps, 5u), 3u);
+    EXPECT_FALSE(SelectCompositeAlpha(caps).has_value());
     caps.supportedCompositeAlpha = cast<VkCompositeAlphaFlagsKHR>(VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR) | cast<VkCompositeAlphaFlagsKHR>(VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR);
-    const Expected<VkCompositeAlphaFlagBitsKHR> alpha = SwapChainSurfacePolicy::SelectCompositeAlpha(caps);
+    const Expected<VkCompositeAlphaFlagBitsKHR> alpha = SelectCompositeAlpha(caps);
     ASSERT_TRUE(alpha.has_value());
     EXPECT_EQ(alpha.value(), VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR);
 }
@@ -275,16 +389,16 @@ void VerifyDeviceCreationPolicy_QueueRegistrationRejectsBoundaryAndDuplicateIden
     desc.timestampValidBits = 35u;
     PrimaryQueueFlags primaries = PrimaryQueueFlags();
     const Span<GpuPhysicalQueueInfo> emptyExisting = Span<GpuPhysicalQueueInfo>();
-    EXPECT_EQ(PhysicalQueueRegistrationPolicy::Validate(desc, nativeQueue, emptyExisting, primaries), PhysicalQueueRegistrationResult::Invalid);
+    EXPECT_EQ(ValidatePhysicalQueue(desc, nativeQueue, emptyExisting, primaries), PhysicalQueueRegistrationResult::Invalid);
     desc.timestampValidBits = 36u;
-    EXPECT_EQ(PhysicalQueueRegistrationPolicy::Validate(desc, nativeQueue, emptyExisting, primaries), PhysicalQueueRegistrationResult::Valid);
+    EXPECT_EQ(ValidatePhysicalQueue(desc, nativeQueue, emptyExisting, primaries), PhysicalQueueRegistrationResult::Valid);
     Array<GpuPhysicalQueueInfo, 1> existing = Array<GpuPhysicalQueueInfo, 1>();
     existing[0u].familyIndex = 4u;
     existing[0u].queueIndex = 2u;
-    EXPECT_EQ(PhysicalQueueRegistrationPolicy::Validate(desc, nativeQueue, existing, primaries), PhysicalQueueRegistrationResult::DuplicateQueue);
+    EXPECT_EQ(ValidatePhysicalQueue(desc, nativeQueue, existing, primaries), PhysicalQueueRegistrationResult::DuplicateQueue);
     desc.primaryForClass = true;
     primaries[cast<usize>(CommandQueue::Graphics)] = true;
-    EXPECT_EQ(PhysicalQueueRegistrationPolicy::Validate(desc, nativeQueue, emptyExisting, primaries), PhysicalQueueRegistrationResult::DuplicatePrimary);
+    EXPECT_EQ(ValidatePhysicalQueue(desc, nativeQueue, emptyExisting, primaries), PhysicalQueueRegistrationResult::DuplicatePrimary);
 }
 
 void VerifyDeviceCreationPolicy_QueueSharingUsesFirstDistinctFamilyAndHandlesMissingPrimary(){
@@ -300,13 +414,13 @@ void VerifyDeviceCreationPolicy_QueueSharingUsesFirstDistinctFamilyAndHandlesMis
     queues[3u].familyIndex = 4u;
     queues[4u].queueClass = CommandQueue::Transfer;
     queues[4u].familyIndex = 9u;
-    const SharedQueueFamilies shared = PhysicalQueueSharingPolicy::Resolve(queues, 4u, 4u, 9u);
+    const SharedQueueFamilies shared = ResolveSharedQueueFamilies(queues, 4u, 4u, 9u);
     EXPECT_EQ(shared.graphics, 4);
     EXPECT_EQ(shared.auxiliaryGraphics, 7);
     EXPECT_EQ(shared.auxiliaryCompute, -1);
     EXPECT_FALSE(shared.asyncComputeLaneEnabled);
     EXPECT_TRUE(shared.transferQueueEnabled);
-    const SharedQueueFamilies missingGraphics = PhysicalQueueSharingPolicy::Resolve(queues, missing, 4u, 4u);
+    const SharedQueueFamilies missingGraphics = ResolveSharedQueueFamilies(queues, missing, 4u, 4u);
     EXPECT_EQ(missingGraphics.graphics, -1);
     EXPECT_EQ(missingGraphics.auxiliaryGraphics, -1);
     EXPECT_FALSE(missingGraphics.asyncComputeLaneEnabled);
@@ -323,12 +437,12 @@ void VerifyDeviceCreationPolicy_CanonicalQueuesRejectAliasedHandlesAndOutOfRange
     queues[1u].queue = MakeDummyVkQueue(2u);
     queues[1u].familyIndex = 0u;
     queues[1u].queueIndex = 1u;
-    EXPECT_EQ(PhysicalQueueRegistrationPolicy::ValidateCanonical(queues, families), PhysicalQueueRegistrationResult::Valid);
+    EXPECT_EQ(ValidateCanonical(queues, families), PhysicalQueueRegistrationResult::Valid);
     queues[1u].queue = queues[0u].queue;
-    EXPECT_EQ(PhysicalQueueRegistrationPolicy::ValidateCanonical(queues, families), PhysicalQueueRegistrationResult::DuplicateQueue);
+    EXPECT_EQ(ValidateCanonical(queues, families), PhysicalQueueRegistrationResult::DuplicateQueue);
     queues[1u].queue = MakeDummyVkQueue(2u);
     queues[1u].queueIndex = 2u;
-    EXPECT_EQ(PhysicalQueueRegistrationPolicy::ValidateCanonical(queues, families), PhysicalQueueRegistrationResult::Invalid);
+    EXPECT_EQ(ValidateCanonical(queues, families), PhysicalQueueRegistrationResult::Invalid);
 }
 
 void VerifyDeviceCreationPolicy_QueuePlanKeepsCrossFamilyOrderAndStablePriorities(){
@@ -453,109 +567,6 @@ void VerifyPresentationReceipt_ResetAtLifetimeBoundaryRemovesEarlierAcquisitionE
     receipt.reset();
     EXPECT_FALSE(receipt.valid());
     EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Pending);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::GraphicsPresentationDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_presentation_coop_vector_query{
-
-static u32 s_EmptyPropertyQueryCalls = 0u;
-
-static VkResult VKAPI_CALL QueryNoCooperativeVectorProperties(VkPhysicalDevice, uint32_t* const count, VkCooperativeVectorPropertiesNV* const properties){
-    ++s_EmptyPropertyQueryCalls;
-    EXPECT_EQ(properties, nullptr);
-    *count = 0u;
-    return VK_SUCCESS;
-}
-
-};
-
-CooperativeVectorQueryHarness::CooperativeVectorQueryHarness()noexcept{
-    context.extensions.nvCooperativeVector = true;
-    context.coopVecFeatures.cooperativeVector = VK_TRUE;
-    context.coopVecFeatures.cooperativeVectorTraining = VK_TRUE;
-    context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation = VK_TRUE;
-    context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV = &__hidden_presentation_coop_vector_query::QueryNoCooperativeVectorProperties;
-    __hidden_presentation_coop_vector_query::s_EmptyPropertyQueryCalls = 0u;
-}
-
-Expected<Core::CooperativeVectorDeviceFeatures> CooperativeVectorQueryHarness::queryEmptyDriverList(){
-    return Core::GraphicsBackend::CooperativeVectorFeatureQuery::Query(context, scheduler);
-}
-
-u32 CooperativeVectorQueryHarness::callCount()const noexcept{
-    return __hidden_presentation_coop_vector_query::s_EmptyPropertyQueryCalls;
-}
-
-VkQueue MakeDummyVkQueue(const usize handleValue)noexcept{
-    return reinterpret_cast<VkQueue>(handleValue);
-}
-
-QueuePlanVerification::QueuePlanVerification(const Span<const u32> expectedCounts)
-    : families(scratch)
-    , params(arena.arena)
-{
-    families.resize(expectedCounts.size());
-    for(usize index = 0u; index < expectedCounts.size(); ++index)
-        families[index].queueCount = expectedCounts[index];
-    params.enableSameClassMultiQueue = true;
-    params.headlessDevice = false;
-    const Core::GraphicsBackend::VulkanQueueRequestPlan::Input input{
-        .deviceParams = params,
-        .physicalQueueFamilies = families,
-        .graphicsQueueFamily = 0,
-        .secondaryGraphicsQueueFamily = 1,
-        .presentQueueFamily = 1,
-        .schedulerComputeQueueFamily = 2,
-        .secondaryComputeQueueFamily = -1,
-        .transferQueueFamily = 3,
-        .secondaryTransferQueueFamily = -1,
-        .createCrossFamilySecondaryGraphicsQueue = true,
-        .createComputeQueue = true,
-        .createCrossFamilySecondaryComputeQueue = false,
-        .createDedicatedTransferQueue = true,
-        .createCrossFamilySecondaryTransferQueue = false,
-    };
-    plan.emplace(scratch, input);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

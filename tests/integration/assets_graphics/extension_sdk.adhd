@@ -1,0 +1,71 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+#include <tests/common/value_storage.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Alignment128")]
+extern class Alignment128;
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::ParsedMetadataExtension"), cpp_flags(no_copy)]
+extern class ErasedExtension{
+    void reset();
+};
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::ParsedMetadataExtensionMap"), cpp_flags(no_copy)]
+extern class PlainExtensionMap{
+    mut ErasedExtension at(in Name key);
+    usize size()const;
+    b8 empty()const;
+    usize erase(in Name name);
+    void clear();
+};
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::PolicyMap"), cpp_flags(no_copy)]
+extern class PolicyExtensionMap<Policy>{
+    void reserve(in usize count);
+    b8 empty()const;
+};
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Map")]
+extern mut PlainExtensionMap ExtensionMap(mut ParsedAssetMetadata metadata);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::MakeMap")]
+extern PlainExtensionMap NewExtensionMap(mut HeapStorage storage);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Require")]
+extern mut T RequireExtension<T>(mut ParsedAssetMetadata metadata, in Name name, ...);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Make")]
+extern ErasedExtension NewExtension<T>(mut HeapStorage owner, ...);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Find")]
+extern usize FindExtensionAddress<T>(mut ParsedAssetMetadata metadata, in Name name);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Find")]
+extern usize FindConstExtensionAddress<T>(in ParsedAssetMetadata metadata, in Name name);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::OwnerAddress")]
+extern usize ExtensionAddress(in ErasedExtension value);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Stored")]
+extern mut T StoredExtension<T>(mut ErasedExtension value);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Insert")]
+extern b8 InsertExtension(mut auto map, in Name name, mut ErasedExtension owner);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::MakePolicyMap")]
+extern PolicyExtensionMap<Policy> NewPolicyExtensionMap<Policy>(mut HeapStorage storage, mut Policy policy);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::SavedNameCallbacks"), cpp_flags(no_copy, no_assign)]
+extern class SavedNameCallbacks;
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::s_DebugNames")]
+extern const b8 s_DebugNameBinding;
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NameDetail::s_SymbolTextBufferCount")]
+extern const usize s_NameBufferCount;
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::RegisterNonStandaloneAssetType")]
+extern void RegisterInferredAssetType(in Name type);
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::Hasher<Name>{}")]
+extern usize HashExtensionKey(in Name key);
+
+
+[cpp_header("<type_traits>"), cpp_name("::std::is_copy_constructible")]
+extern b8 TestIsCopyConstructible<T>();
+[cpp_header("<type_traits>"), cpp_name("::std::is_nothrow_move_constructible")]
+extern b8 TestIsNothrowMoveConstructible<T>();
+[cpp_header("<type_traits>"), cpp_name("::std::is_nothrow_destructible")]
+extern b8 TestIsNothrowDestructible<T>();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

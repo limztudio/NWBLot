@@ -2,141 +2,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <utilities/cli/tool_cli.adhd>
 
+[cpp_header("<cerrno>"), cpp_name("E2BIG")]
+extern const i32 s_ArgumentListTooLong;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::ReadPowerError")]
+extern i32 CurrentMathErrno();
 
+[cpp_header("<tests/common/floating_point_control.h>"), cpp_name("::NWB::Tests::FloatingPointControl::WritePowerError")]
+extern void SetMathErrno(in i32 value);
 
-#include <tests/common/floating_point_environment_guard.adhd.h>
-
-#include <global/array.h>
-#include <global/diagnostics.h>
-#include <global/expected.h>
-#include <global/floating_point_environment.h>
-#include <global/scope_exit.h>
-#include <global/simdmath.h>
-#include <global/text_utils.h>
-#include <global/timer.h>
-
-namespace SimdOptimizationBenchmark{
-using NWB::Tests::FloatingPointEnvironmentGuard;
-
-namespace SimdBaselineKernels{
-// The references use the same floating-point environment as the candidates.
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Dot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY), VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY));
-    return VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
+void WriteBenchmarkStdout(in StringView text){ ConsoleWrite(text); }
+void WriteBenchmarkStderr(in StringView text){ ConsoleWriteError(text); }
+u64 SimdGetDoubleLaneBits(in VectorDouble value, in usize lane){ return VectorDoubleGetIntByIndex(value, lane); }
+u32 SimdGetSingleLaneBits(in VectorSingle value, in usize lane){ return VectorGetIntByIndex(value, lane); }
+f32 SimdGetSingleLane(in VectorSingle value, in usize lane){ return VectorGetByIndex(value, lane); }
+i32 SimdRoundingModeByIndex(in usize index){
+    const Array<i32, 4> modes(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+    return modes[index];
 }
-
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Dot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMask3), VectorDoubleAndInt(rhs, s_DoubleSIMDMask3));
-    const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
-    return VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
-}
-
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Dot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const SIMDVectorDouble product = VectorDoubleMultiply(lhs, rhs);
-    const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
-    const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
-    return VectorDoubleAdd(xyz, VectorDoubleSplatW(product));
-}
-
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Sum(const SIMDVectorDouble value)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(value), VectorDoubleSplatY(value));
-    const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(value));
-    return VectorDoubleAdd(xyz, VectorDoubleSplatW(value));
-}
-}
-
-FOUNDATION_INLINE void WriteBenchmarkStdout(const AStringView text){
-    FOUNDATION_COUT << text;
-}
-
-FOUNDATION_INLINE void WriteBenchmarkStderr(const AStringView text){
-    FOUNDATION_CERR << text;
-}
-
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineDot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    return SimdBaselineKernels::Dot2(lhs, rhs);
-}
-
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineDot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    return SimdBaselineKernels::Dot3(lhs, rhs);
-}
-
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineDot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    return SimdBaselineKernels::Dot4(lhs, rhs);
-}
-
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineSum(const SIMDVectorDouble value)noexcept{
-    return SimdBaselineKernels::Sum(value);
-}
-
-[[nodiscard]] FOUNDATION_INLINE u64 FOUNDATION_SIMD_CALL SimdGetDoubleLaneBits(const SIMDVectorDouble value, const usize lane)noexcept{
-    return VectorDoubleGetIntByIndex(value, lane);
-}
-
-[[nodiscard]] FOUNDATION_INLINE u32 FOUNDATION_SIMD_CALL SimdGetSingleLaneBits(const SIMDVectorSingle value, const usize lane)noexcept{
-    return VectorGetIntByIndex(value, lane);
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 FOUNDATION_SIMD_CALL SimdGetSingleLane(const SIMDVectorSingle value, const usize lane)noexcept{
-    return VectorGetByIndex(value, lane);
-}
-
-[[nodiscard]] inline constexpr i32 SimdRoundingModeByIndex(const usize index)noexcept{
-    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    return s_Modes[index];
-}
-
-template<typename EvalT>
-[[nodiscard]] FOUNDATION_INLINE b8 ObserveBinaryEvaluation(const EvalT& evaluator, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, Array<u64, 4>& outBits, i32& outFlags, i32& outError)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
-        return false;
-    errno = E2BIG;
-    const SIMDVectorDouble value = evaluator.evaluate(lhs, rhs);
-    outFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    outError = errno;
-    for(usize lane = 0u; lane < 4u; ++lane)
-        outBits[lane] = VectorDoubleGetIntByIndex(value, lane);
-    return true;
-}
-
-template<usize LanesPerIteration, typename DatasetT, typename ReduceFn>
-FOUNDATION_NOINLINE SIMDVectorDouble ThroughputWorkload(const DatasetT& data, const usize dataCount, const usize iterations, ReduceFn&& reduce)noexcept{
-    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
-    for(usize lane = 0u; lane < 8u; ++lane)
-        accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-#pragma clang loop unroll(full)
-        for(usize lane = 0u; lane < LanesPerIteration; ++lane){
-            const usize index = (iteration * LanesPerIteration + lane) % dataCount;
-            accumulators[lane] = VectorDoubleAdd(accumulators[lane], reduce(LoadDouble(data.left[index]), LoadDouble(data.right[index])));
-        }
-    }
-    SIMDVectorDouble result = accumulators[0];
-    for(usize lane = 1u; lane < 8u; ++lane)
-        result = VectorDoubleAdd(result, accumulators[lane]);
-    return result;
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const usize s_DataCount = 64u;
 const u64 s_InitialSeed = 0x8923409102431291ull;
@@ -257,19 +143,29 @@ b8 EqualObservation(in Observation lhs, in Observation rhs){
 
 // The references use the same floating-point environment as the candidates.
 VectorDouble BaselineDot2(in VectorDouble lhs, in VectorDouble rhs){
-    return SimdBaselineDot2(lhs, rhs);
+    const VectorDouble mask = VectorDouble(u64x4(u64.max, u64.max, 0u, 0u));
+    const VectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, mask), VectorDoubleAndInt(rhs, mask));
+    return VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
 }
 
 VectorDouble BaselineDot3(in VectorDouble lhs, in VectorDouble rhs){
-    return SimdBaselineDot3(lhs, rhs);
+    const VectorDouble mask = VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u));
+    const VectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, mask), VectorDoubleAndInt(rhs, mask));
+    const VectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
+    return VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
 }
 
 VectorDouble BaselineDot4(in VectorDouble lhs, in VectorDouble rhs){
-    return SimdBaselineDot4(lhs, rhs);
+    const VectorDouble product = VectorDoubleMultiply(lhs, rhs);
+    const VectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
+    const VectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
+    return VectorDoubleAdd(xyz, VectorDoubleSplatW(product));
 }
 
 VectorDouble BaselineSum(in VectorDouble value){
-    return SimdBaselineSum(value);
+    const VectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(value), VectorDoubleSplatY(value));
+    const VectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(value));
+    return VectorDoubleAdd(xyz, VectorDoubleSplatW(value));
 }
 
 Expected<Observation> ObserveBinary<EvalT : IDoubleBinaryEvaluator>(
@@ -278,8 +174,14 @@ Expected<Observation> ObserveBinary<EvalT : IDoubleBinaryEvaluator>(
     in VectorDouble rhs
 ){
     Observation observation = Observation();
-    if(!ObserveBinaryEvaluation(evaluator, lhs, rhs, observation.bits, observation.flags, observation.error))
+    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure());
+    SetMathErrno(s_ArgumentListTooLong);
+    const VectorDouble value = evaluator.evaluate(lhs, rhs);
+    observation.flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    observation.error = CurrentMathErrno();
+    for(usize lane = 0u; lane < 4u; ++lane)
+        observation.bits[lane] = VectorDoubleGetIntByIndex(value, lane);
     return observation;
 }
 
@@ -452,3 +354,22 @@ Expected<MeasureOptions> ParseMeasureOptions(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+VectorDouble ThroughputWorkload<const usize Lanes, Reducer : IDoubleBinaryEvaluator>(in Dataset data, in usize dataCount, in usize iterations, in Reducer reduce){
+    Array<f64x4, 8> accumulators;
+    for(usize lane = 0u; lane < 8u; ++lane)
+        accumulators[lane] = f64x4(0.125, 0.25, 0.5, 1.0);
+    for(usize iteration = 0u; iteration < iterations; ++iteration){
+        for(usize lane = 0u; lane < Lanes; ++lane){
+            const usize index = (iteration * Lanes + lane) % dataCount;
+            accumulators[lane] = f64x4(VectorDoubleAdd(VectorDouble(accumulators[lane]), reduce.evaluate(VectorDouble(data.left[index]), VectorDouble(data.right[index]))));
+        }
+    }
+    VectorDouble result = VectorDouble(accumulators[0u]);
+    for(usize lane = 1u; lane < 8u; ++lane)
+        result = VectorDoubleAdd(result, VectorDouble(accumulators[lane]));
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

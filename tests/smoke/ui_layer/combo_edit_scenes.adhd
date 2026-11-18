@@ -26,7 +26,7 @@ const StringView s_UiListSmokeTag = "UiListSmoke";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiComboSmokeScene{
+class UiComboSmokeScene : IUiSmokeInputScene{
     private UiComboSmokeSource m_source = UiComboSmokeSource();
     private ComboState m_state = ComboState();
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
@@ -43,8 +43,8 @@ class UiComboSmokeScene{
     private b8 m_bottom = false;
     private b8 m_displayChanged = false;
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private Array<u64, 16u> values()const;
     private Rect cursorRow()const;
@@ -52,7 +52,7 @@ class UiComboSmokeScene{
 }
 
 
-class UiEditSmokeScene{
+class UiEditSmokeScene : IUiSmokeInputScene{
     private EditModel m_primary;
     private EditModel m_secondary;
     private EditBoxView m_selectionView;
@@ -73,8 +73,8 @@ class UiEditSmokeScene{
 
     public UiEditSmokeScene();
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private void resetModels();
     private Array<u32, 12u> values()const;
@@ -82,7 +82,7 @@ class UiEditSmokeScene{
 }
 
 
-class UiImageSmokeScene{
+class UiImageSmokeScene : IUiSmokeInputScene{
     private PopupState m_parent = PopupState();
     private PopupState m_child = PopupState();
     private UiImageSnapshot m_declared = UiImageSnapshot();
@@ -91,8 +91,8 @@ class UiImageSmokeScene{
     private u32 m_afterClicks = 0u;
     private b8 m_phase = false;
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private b8 paintMain(mut Builder ui, in Rect bounds);
     private b8 paintFrozen(mut Builder ui, in Rect bounds);
@@ -103,13 +103,13 @@ class UiImageSmokeScene{
 }
 
 
-class UiInteractiveSmokeScene{
+class UiInteractiveSmokeScene : IUiSmokeScene{
     private DisplayMetrics m_lastDisplay = DisplayMetrics();
     private u32 m_count = 0u;
     private u32 m_actions = 0u;
     private b8 m_enabled = true;
 
-    public b8 paint(mut UiPaintContext context);
+    public b8 paint(mut UiPaintContext context)override;
 
     private void observeDisplay(in DisplayMetrics display);
     private void logAction(in StringView action);
@@ -117,7 +117,7 @@ class UiInteractiveSmokeScene{
 }
 
 
-class UiListSmokeScene{
+class UiListSmokeScene : IUiSmokeInputScene{
     private UiListSmokeSource m_source = UiListSmokeSource();
     private ListState m_state = ListState();
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
@@ -130,8 +130,8 @@ class UiListSmokeScene{
     private b8 m_visible = true;
     private b8 m_displayChanged = false;
 
-    public b8 paint(mut UiPaintContext context);
-    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
+    public b8 paint(mut UiPaintContext context)override;
+    public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
 
     private Array<u64, 12u> values()const;
     private Rect selectedRow()const;
@@ -354,7 +354,7 @@ void UiComboSmokeScene::observeState(){
 
 
 UiEditSmokeScene::UiEditSmokeScene(){
-    this.m_selectionView = CreateSmokeEditBoxView();
+    this.m_selectionView = EditBoxView();
     this.resetModels();
 }
 

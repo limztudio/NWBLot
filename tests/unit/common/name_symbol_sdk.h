@@ -1,0 +1,55 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+#include <core/common/name_symbols.h>
+#include <core/common/log.h>
+#include <tests/common/gtest_sdk.h>
+#include <tests/common/memory_sdk.h>
+#include <tests/common/name_symbols.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+namespace Tests::CommonNameCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using MeasuredText = ::AString<Core::Alloc::GlobalArena>;
+using MeasuredPlatformText = ::TString<Core::Alloc::GlobalArena>;
+
+template<typename Text>
+void DecodeMeasuredText(Tests::HeapStorage& storage, Text& text){ Core::Common::NameSymbols::DecodeHashTokens(storage.arena, text); }
+
+[[nodiscard]] inline AStringView NarrowView(const MeasuredText& text)noexcept{ return AStringView(text); }
+
+[[nodiscard]] inline TStringView PlatformView(const MeasuredPlatformText& text)noexcept{ return TStringView(text); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_TEST_UNBRACED_IF_ELSE(condition, statement, alternative) do{ if(condition) statement; else (alternative)(); }while(false)
+
+#if defined(FOUNDATION_UNICODE)
+#define NWB_GTEST_UNICODE_CASE(Suite, Case, Fn) NWB_GTEST_CASE(Suite, Case, Fn)
+#else
+#define NWB_GTEST_UNICODE_CASE(Suite, Case, Fn)
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

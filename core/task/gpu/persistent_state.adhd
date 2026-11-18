@@ -6,6 +6,7 @@
 extern class GpuPersistentStateCandidate{
     b8 valid()const;
     b8 empty()const;
+    Optional<in CommandListResourceStateHandoff> borrowSource()const;
 };
 
 [cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache"), cpp_flags(no_copy, no_assign)]

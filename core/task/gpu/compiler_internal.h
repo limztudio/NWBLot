@@ -88,6 +88,13 @@ struct TrackedResourceStateFragment{
     GpuTaskResourceRange range;
     const TrackedCompiledResourceState* state = nullptr;
     usize stateIndex = Limit<usize>::s_Max;
+
+
+    [[nodiscard]] Optional<NotNull<const TrackedCompiledResourceState*>> borrowState()const noexcept{
+        return state ? Optional<NotNull<const TrackedCompiledResourceState*>>(MakeNotNull(state)) : Optional<NotNull<const TrackedCompiledResourceState*>>();
+    }
+    void setState(const TrackedCompiledResourceState& value)noexcept{ state = &value; }
+    void setState(const TrackedCompiledResourceState&&) = delete;
 };
 
 struct PendingCompiledEpilogueBarrier{

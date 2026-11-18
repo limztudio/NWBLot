@@ -79,11 +79,5 @@ const u32 s_GlobalProcessContinuousOutputTimeoutMS = 100u;
 const u32 s_GlobalProcessMaximumCaptureElapsedMS = 1000u;
 
 
-class NameRecursiveProbe{
-    public u32 recordCount = 0u;
-    public b8 nestedAccepted = false;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

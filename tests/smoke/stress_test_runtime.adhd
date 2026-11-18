@@ -2,62 +2,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "stress_crowd_scenes.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-#include <core/graphics/backend_selection/backend.h>
-#endif
-
-namespace NWB::Tests::Smoke{
-[[nodiscard]] FOUNDATION_INLINE AStringView StressTestProjectName()noexcept{
+StringView StressTestProjectName(){
     return "StressTestSmokeProject";
 }
 
-[[nodiscard]] FOUNDATION_INLINE AStringView StressCpuTimingOwnerName()noexcept{
+StringView StressCpuTimingOwnerName(){
     return "stress";
 }
 
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-inline constexpr b8 s_StressAsyncShadowM4Benchmark = true;
+const b8 s_StressAsyncShadowM4Benchmark = true;
 #else
-inline constexpr b8 s_StressAsyncShadowM4Benchmark = false;
+const b8 s_StressAsyncShadowM4Benchmark = false;
 #endif
 
 #if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
-inline constexpr b8 s_StressAsyncComputeRequested = false;
+const b8 s_StressAsyncComputeRequested = false;
 #else
-inline constexpr b8 s_StressAsyncComputeRequested = true;
+const b8 s_StressAsyncComputeRequested = true;
 #endif
 
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-inline constexpr b8 s_StressHardwareShadowBenchmark = true;
+const b8 s_StressHardwareShadowBenchmark = true;
 #else
-inline constexpr b8 s_StressHardwareShadowBenchmark = false;
+const b8 s_StressHardwareShadowBenchmark = false;
 #endif
 
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK) || defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-inline constexpr b8 s_StressContinuousBenchmarkRendering = true;
+const b8 s_StressContinuousBenchmarkRendering = true;
 #else
-inline constexpr b8 s_StressContinuousBenchmarkRendering = false;
+const b8 s_StressContinuousBenchmarkRendering = false;
 #endif
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,9 +78,9 @@ class StressM4QueueInfoSnapshot{
 
 [arena]
 class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
-    public StressTestSmokeProjectImpl(mut ProjectRuntimeContext context){
+    public StressTestSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateStressTestWorldOrDie(context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_timingRenderPass = AvboitTimingRenderPass(context.graphics);
         this.m_timingEnabled = StressTimingEnabled();
         this.m_fpsProbe = PresentationFpsProbe(StressFpsWarmupSeconds(StressTimingEnabled()), StressFpsMeasurementSeconds(StressTimingEnabled()));
@@ -110,7 +93,8 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     public ~StressTestSmokeProjectImpl(){
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         this.m_timingRenderPass.stop();
         this.destroyWorld();
     }
@@ -196,7 +180,8 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
 
     public void onShutdown()override{
         this.m_context.graphics.setFrameSubmissionSuspended(false);
-        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        mut InputDispatcher input = this.m_context.input;
+        input.removeHandler(this.m_arrowYawInput);
         this.m_timingRenderPass.stop();
         if(this.m_timingEnabled && !this.m_timingComplete)
             error("StressTestSmokeProject: presentation measurement incomplete");
@@ -245,7 +230,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
         if(!this.m_scene.update(currentYaw, SmokeWorldRef(this.m_world)))
             return false;
 
-        SetSmokeWindowTitleSuffix(this.m_context, FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_yaw.manualControl(), s_StressTwoPi));
+        SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_yaw.manualControl(), s_StressTwoPi));
 
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
@@ -378,7 +363,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NotNullUniquePtr<World> CreateStressTestWorldOrDie(mut ProjectRuntimeContext context){
+Expected<NotNullUniquePtr<World>> CreateStressTestWorld(mut ProjectRuntimeContext context){
     SmokeRenderQualitySettings settings = SmokeRenderQualitySettings();
     settings.shadow.transparentSampling = TransparentShadowSampling::TemporalOne;
     settings.shadow.receiverResolution = ShadowReceiverResolution::Quarter;
@@ -390,7 +375,7 @@ NotNullUniquePtr<World> CreateStressTestWorldOrDie(mut ProjectRuntimeContext con
         settings.caustic.photonGridDivisor = 2u;
     else
         settings.caustic.photonGridDivisor = 4u;
-    return CreateSmokeSkinnedRenderWorldOrDie(StressTestProjectName(), settings, context);
+    return CreateSmokeSkinnedRenderWorld(StressTestProjectName(), settings, context);
 }
 
 b8 StressTimingEnabled(){
@@ -457,59 +442,38 @@ b8 ValidateStressM4QueueTopology(mut ProjectRuntimeContext context){
     Vector<StressM4QueueEntry> queues;
     u16 deviceGeneration = 0u;
     b8 hasTopology = false;
-    native(
-        mut context,
-        mut graphicsQueue,
-        mut computeQueue,
-        mut graphicsInfo,
-        mut computeInfo,
-        mut queues,
-        mut deviceGeneration,
-        mut hasTopology
-    ){
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-        const auto& device = context.graphics.getDevice();
-        const auto rawGraphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-        const auto rawComputeQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Compute);
-        graphicsQueue.index = rawGraphicsQueue.index;
-        graphicsQueue.deviceGeneration = rawGraphicsQueue.deviceGeneration;
-        computeQueue.index = rawComputeQueue.index;
-        computeQueue.deviceGeneration = rawComputeQueue.deviceGeneration;
-        if(const auto* const info = device.getPhysicalQueueInfo(rawGraphicsQueue)){
-            graphicsInfo.present = true;
-            graphicsInfo.id.index = info->id.index;
-            graphicsInfo.id.deviceGeneration = info->id.deviceGeneration;
-        }
-        if(const auto* const info = device.getPhysicalQueueInfo(rawComputeQueue)){
-            computeInfo.present = true;
-            computeInfo.id.index = info->id.index;
-            computeInfo.id.deviceGeneration = info->id.deviceGeneration;
-            computeInfo.dedicated = info->dedicated;
-            computeInfo.computeSupported = (info->capabilities & Core::GpuQueueCapability::Compute) != Core::GpuQueueCapability::None;
-            computeInfo.graphicsSupported = (info->capabilities & Core::GpuQueueCapability::Graphics) != Core::GpuQueueCapability::None;
-        }
-        const auto topology = device.getPhysicalQueueTopology();
-        deviceGeneration = device.getDeviceGeneration();
-        hasTopology = topology.queues != nullptr && topology.queueCount != 0u;
-        if(hasTopology){
-            queues.reserve(topology.queueCount);
-            for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
-                StressM4QueueEntry entry;
-                entry.index = topology.queues[queueIndex].id.index;
-                entry.deviceGeneration = topology.queues[queueIndex].id.deviceGeneration;
-                queues.push_back(entry);
-            }
-        }
-#else
-        (void)context;
-        (void)graphicsQueue;
-        (void)computeQueue;
-        (void)graphicsInfo;
-        (void)computeInfo;
-        (void)queues;
-        (void)deviceGeneration;
-        (void)hasTopology;
-#endif
+    mut GraphicsRuntime graphics = context.graphics;
+    mut Device device = graphics.getDevice();
+    const GpuPhysicalQueueId rawGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueId rawComputeQueue = device.getPrimaryPhysicalQueue(CommandQueue::Compute);
+    graphicsQueue.index = rawGraphicsQueue.index;
+    graphicsQueue.deviceGeneration = rawGraphicsQueue.deviceGeneration;
+    computeQueue.index = rawComputeQueue.index;
+    computeQueue.deviceGeneration = rawComputeQueue.deviceGeneration;
+    GpuPhysicalQueueInfo info;
+    if(device.tryGetPhysicalQueueInfo(rawGraphicsQueue, info)){
+        graphicsInfo.present = true;
+        graphicsInfo.id.index = info.id.index;
+        graphicsInfo.id.deviceGeneration = info.id.deviceGeneration;
+    }
+    if(device.tryGetPhysicalQueueInfo(rawComputeQueue, info)){
+        computeInfo.present = true;
+        computeInfo.id.index = info.id.index;
+        computeInfo.id.deviceGeneration = info.id.deviceGeneration;
+        computeInfo.dedicated = info.dedicated;
+        computeInfo.computeSupported = (info.capabilities & GpuQueueCapability::Compute) != GpuQueueCapability::None;
+        computeInfo.graphicsSupported = (info.capabilities & GpuQueueCapability::Graphics) != GpuQueueCapability::None;
+    }
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    deviceGeneration = device.getDeviceGeneration();
+    const Span<GpuPhysicalQueueInfo> physicalQueues = topology.queueSpan();
+    hasTopology = !physicalQueues.empty();
+    queues.reserve(physicalQueues.size());
+    for(in GpuPhysicalQueueInfo queue : physicalQueues){
+        StressM4QueueEntry entry;
+        entry.index = queue.id.index;
+        entry.deviceGeneration = queue.id.deviceGeneration;
+        queues.push_back(entry);
     }
 
     b8 graphicsRegistered = false;
@@ -592,35 +556,27 @@ b8 ValidateStressM4QueueTopology(mut ProjectRuntimeContext context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
+PlatformStringView GetProjectWindowTitle(){
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-    return FOUNDATION_TEXT("NWB Hardware Shadow Boundary Benchmark");
+    return PlatformTextLiteral("NWB Hardware Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-    return FOUNDATION_TEXT("NWB Async Shadow M4 Benchmark");
+    return PlatformTextLiteral("NWB Async Shadow M4 Benchmark");
 #else
-    return FOUNDATION_TEXT("NWB Stress Test Smoke");
+    return PlatformTextLiteral("NWB Stress Test Smoke");
 #endif
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::StressTestSmokeProjectImpl>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateStressTestWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<StressTestSmokeProjectImpl>(owner, context);
 }
 
 

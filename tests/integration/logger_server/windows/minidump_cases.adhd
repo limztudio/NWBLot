@@ -1,0 +1,318 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../name_cases.adhd"
+#include <logger/server/crash_symbolicate.adhd>
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/memory.adhd>
+#include "minidump_records.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/crash/package_names.h>"), cpp_name("::NWB::Core::Crash::PackageNames::s_ProcessDumpFileName")]
+extern const StringView s_WindowsProcessDumpFile;
+
+[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashSymbolicationConfig"), cpp_flags(no_copy, no_assign)]
+extern class DumpSymbolicationConfig;
+
+[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashPackageSummary"), cpp_flags(no_copy, no_assign)]
+extern class DumpSymbolicationSummary{
+    String platform;
+    u64 threadId;
+};
+
+[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashScratchPath")]
+extern class DumpScratchPath;
+
+[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashReportText")]
+extern class DumpReportText;
+
+[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::BuildCrashSymbolicationReport")]
+extern DumpReportText SymbolicateDump(in DumpScratchPath directory, in DumpSymbolicationSummary summary, in DumpSymbolicationConfig config, mut HeapStorage storage, mut ScratchStorage scratch);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, ordered]
+class MinidumpBoundaryTests{
+    private HeapStorage m_storage;
+    private ScratchStorage m_scratch = ScratchStorage(s_LoggerCrashFixtureNameTestsMinidumpBoundaryScratch);
+    private Path m_directory = Path("logserver_minidump_boundary_tests");
+    private CapturingLogger m_logger;
+    private LoggerRegistrationGuard m_registration = LoggerRegistrationGuard(this.m_logger, LoggerBreakPolicy::ReportOnly);
+
+    public void setup(){
+        ASSERT_TRUE(EnsureEmptyDirectory(this.m_directory).has_value());
+    }
+
+    public void teardown(){
+        EXPECT_TRUE(RemoveAllIfExists(this.m_directory));
+    }
+
+    public Path dumpPath()const{
+        return this.m_directory / s_WindowsProcessDumpFile;
+    }
+
+    public String symbolicate(in u64 threadId){
+        DumpSymbolicationSummary summary(this.m_storage);
+        summary.platform = "windows";
+        summary.threadId = threadId;
+        DumpSymbolicationConfig config(this.m_storage);
+        const DumpScratchPath directory(this.m_scratch, this.m_directory);
+        const auto report = SymbolicateDump(directory, summary, config, this.m_storage, this.m_scratch);
+        return String(StringView(report));
+    }
+
+    public Expected<String> report(in Span<u8> bytes){
+        if(!WriteBinaryFile(this.dumpPath(), bytes))
+            return MakeUnexpected(Failure());
+        return this.symbolicate(1u);
+    }
+}
+
+class InvalidDumpModuleName{
+    public u32 byteCount = 0u;
+    public b8 terminated = false;
+    public b8 includeTerminator = false;
+}
+
+
+void StoreDumpRecord<T>(in usize offset, in T record, mut Vector<u8> bytes){
+    const Span<u8> source = PodBytes(record);
+    ASSERT_LE(offset, bytes.size());
+    ASSERT_LE(source.size(), bytes.size() - offset);
+    for(usize index = 0u; index < source.size(); ++index)
+        bytes[offset + index] = source[index];
+}
+
+Vector<u8> ExceptionDump(in u32 secondStream, in usize secondStreamBytes){
+    const usize s_DirectoryCount = 2u;
+    const usize s_ExceptionOffset = size_of<WinDumpHeader>() + s_DirectoryCount * size_of<WinDumpDirectory>();
+    const usize s_ContextOffset = s_ExceptionOffset + size_of<WinDumpException>();
+    const usize s_SecondStreamOffset = s_ContextOffset + size_of<WinDumpContext>();
+    Vector<u8> bytes;
+    bytes.resize(s_SecondStreamOffset + secondStreamBytes, 0u);
+    WinDumpHeader header = WinDumpHeader();
+    header.Signature = s_DumpSignature;
+    header.Version = s_DumpVersion;
+    header.NumberOfStreams = s_DirectoryCount;
+    header.StreamDirectoryRva = size_of<WinDumpHeader>();
+    StoreDumpRecord(0u, header, bytes);
+    WinDumpDirectory exceptionDirectory = WinDumpDirectory();
+    exceptionDirectory.StreamType = s_ExceptionStream;
+    exceptionDirectory.Location.DataSize = size_of<WinDumpException>();
+    exceptionDirectory.Location.Rva = s_ExceptionOffset;
+    StoreDumpRecord(size_of<WinDumpHeader>(), exceptionDirectory, bytes);
+    WinDumpException exception = WinDumpException();
+    exception.ThreadId = 1u;
+    exception.ThreadContext.DataSize = size_of<WinDumpContext>();
+    exception.ThreadContext.Rva = s_ContextOffset;
+    StoreDumpRecord(s_ExceptionOffset, exception, bytes);
+    WinDumpDirectory secondDirectory = WinDumpDirectory();
+    secondDirectory.StreamType = secondStream;
+    secondDirectory.Location.DataSize = secondStreamBytes;
+    secondDirectory.Location.Rva = s_SecondStreamOffset;
+    StoreDumpRecord(size_of<WinDumpHeader>() + size_of<WinDumpDirectory>(), secondDirectory, bytes);
+    return bytes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyMinidumpBoundaryTests_MissingDumpRetainsNativeReadFailureInReturnedReport(mut MinidumpBoundaryTests self){
+    const auto missing = FileSize(self.dumpPath());
+    ASSERT_FALSE(missing.has_value());
+    const String result = self.symbolicate(0u);
+    const String diagnostic = StringFormat("native_category={}\nnative_code={}\n", ErrorCodeCategoryName(missing.error()), missing.error().value());
+    EXPECT_TRUE(Contains(StringView(result), "status=not_decoded"));
+    EXPECT_TRUE(Contains(StringView(result), StringView(diagnostic)));
+}
+
+void VerifyMinidumpBoundaryTests_TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode(mut MinidumpBoundaryTests self){
+    u32 notDecodedCount = 0u;
+    Vector<u8> bytes;
+    bytes.resize(size_of<WinDumpHeader>(), 0u);
+    for(in usize size : Array<usize, 3u>(1u, size_of<WinDumpHeader>() - 1u, size_of<WinDumpHeader>())){
+        bytes.resize(size, 0u);
+        const auto actual = self.report(Span<u8>(bytes));
+        ASSERT_TRUE(actual.has_value());
+        if(Contains(StringView(actual.value()), "status=not_decoded"))
+            ++notDecodedCount;
+    }
+    bytes.resize(size_of<WinDumpHeader>(), 0u);
+    WinDumpHeader header = WinDumpHeader();
+    header.Signature = s_DumpSignature;
+    header.Version = s_DumpVersion;
+    header.StreamDirectoryRva = size_of<WinDumpHeader>();
+    for(in u32 count : Array<u32, 2u>(1u, u32.max)){
+        header.NumberOfStreams = count;
+        StoreDumpRecord(0u, header, bytes);
+        const auto actual = self.report(Span<u8>(bytes));
+        ASSERT_TRUE(actual.has_value());
+        if(Contains(StringView(actual.value()), "status=not_decoded"))
+            ++notDecodedCount;
+    }
+    header.NumberOfStreams = 1u;
+    header.StreamDirectoryRva = u32.max;
+    StoreDumpRecord(0u, header, bytes);
+    const auto actual = self.report(Span<u8>(bytes));
+    ASSERT_TRUE(actual.has_value());
+    if(Contains(StringView(actual.value()), "status=not_decoded"))
+        ++notDecodedCount;
+    EXPECT_EQ(notDecodedCount, 6u);
+}
+
+void VerifyMinidumpBoundaryTests_TruncatedThreadListCountCannotReadBeyondItsAdmittedStream(mut MinidumpBoundaryTests self){
+    String actualReport = String();
+    Vector<u8> bytes = ExceptionDump(s_ThreadListStream, size_of<u32>());
+    const u32 count = u32.max;
+    StoreDumpRecord(bytes.size() - size_of<u32>(), count, bytes);
+    const auto actual = self.report(Span<u8>(bytes));
+    ASSERT_TRUE(actual.has_value());
+    actualReport.assign(StringView(actual.value()));
+    EXPECT_TRUE(Contains(StringView(actualReport), "status=not_decoded"));
+}
+
+void VerifyMinidumpBoundaryTests_ShortExceptionContextCannotBorrowSurroundingFileBytes(mut MinidumpBoundaryTests self){
+    String actualReport = String();
+    Vector<u8> bytes = ExceptionDump(s_UnusedStream, 0u);
+    const usize s_ExceptionOffset = size_of<WinDumpHeader>() + 2u * size_of<WinDumpDirectory>();
+    WinDumpException exception = WinDumpException();
+    exception.ThreadId = 1u;
+    exception.ThreadContext.DataSize = size_of<WinDumpContext>() - 1u;
+    exception.ThreadContext.Rva = s_ExceptionOffset + size_of<WinDumpException>();
+    StoreDumpRecord(s_ExceptionOffset, exception, bytes);
+    const auto actual = self.report(Span<u8>(bytes));
+    ASSERT_TRUE(actual.has_value());
+    actualReport.assign(StringView(actual.value()));
+    EXPECT_TRUE(Contains(StringView(actualReport), "status=not_decoded"));
+    EXPECT_TRUE(Contains(StringView(actualReport), "no usable thread context"));
+}
+
+void VerifyMinidumpBoundaryTests_Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile(mut MinidumpBoundaryTests self){
+    u32 notDecodedReports = 0u;
+    u32 invalidRangeReports = 0u;
+    for(in b8 oversizedOffset : Array<b8, 2u>(false, true)){
+        const usize s_StreamSize = offset_of<WinDumpMemoryList>(MemoryRanges) + size_of<WinDumpMemoryRange>();
+        Vector<u8> bytes = ExceptionDump(s_Memory64ListStream, s_StreamSize);
+        const usize streamOffset = bytes.size() - s_StreamSize;
+        const u64 count = 1u;
+        u64 baseRva = bytes.size() - 1u;
+        if(oversizedOffset)
+            baseRva += cast<u64>(1u) << 32u;
+        WinDumpMemoryRange memory = WinDumpMemoryRange();
+        memory.StartOfMemoryRange = 0x1000u;
+        memory.DataSize = 1u;
+        if(!oversizedOffset)
+            memory.DataSize += cast<u64>(1u) << 32u;
+        StoreDumpRecord(streamOffset + offset_of<WinDumpMemoryList>(NumberOfMemoryRanges), count, bytes);
+        StoreDumpRecord(streamOffset + offset_of<WinDumpMemoryList>(BaseRva), baseRva, bytes);
+        StoreDumpRecord(streamOffset + offset_of<WinDumpMemoryList>(MemoryRanges), memory, bytes);
+        const auto actual = self.report(Span<u8>(bytes));
+        ASSERT_TRUE(actual.has_value());
+        if(Contains(StringView(actual.value()), "status=not_decoded"))
+            ++notDecodedReports;
+        if(Contains(StringView(actual.value()), "minidump contains invalid memory ranges"))
+            ++invalidRangeReports;
+    }
+    EXPECT_EQ(notDecodedReports, 2u);
+    EXPECT_EQ(invalidRangeReports, 2u);
+}
+
+void VerifyMinidumpBoundaryTests_TruncatedModuleListCannotReadBeyondItsAdmittedStream(mut MinidumpBoundaryTests self){
+    String actualReport = String();
+    Vector<u8> bytes = ExceptionDump(s_ModuleListStream, size_of<u32>());
+    const u32 count = u32.max;
+    StoreDumpRecord(bytes.size() - size_of<u32>(), count, bytes);
+    const auto actual = self.report(Span<u8>(bytes));
+    ASSERT_TRUE(actual.has_value());
+    actualReport.assign(StringView(actual.value()));
+    EXPECT_TRUE(Contains(StringView(actualReport), "module_load=invalid_module_list"));
+}
+
+void VerifyMinidumpBoundaryTests_InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes(mut MinidumpBoundaryTests self){
+    u32 invalidModuleReports = 0u;
+    const Array<InvalidDumpModuleName, 4u> invalidNames = Array<InvalidDumpModuleName, 4u>(
+        InvalidDumpModuleName(1u, true, true),
+        InvalidDumpModuleName(u32.max - 1u, true, true),
+        InvalidDumpModuleName(size_of<u16>(), false, true),
+        InvalidDumpModuleName(size_of<u16>(), false, false)
+    );
+    for(in InvalidDumpModuleName invalid : invalidNames){
+        const usize s_StreamSize = offset_of<WinDumpModuleList>(Modules) + size_of<WinDumpModule>();
+        Vector<u8> bytes = ExceptionDump(s_ModuleListStream, s_StreamSize);
+        const usize streamOffset = bytes.size() - s_StreamSize;
+        const u32 count = 1u;
+        const u32 nameOffset = cast<u32>(bytes.size());
+        WinDumpModule module = WinDumpModule();
+        module.ModuleNameRva = nameOffset;
+        StoreDumpRecord(streamOffset, count, bytes);
+        StoreDumpRecord(streamOffset + offset_of<WinDumpModuleList>(Modules), module, bytes);
+        bytes.resize(bytes.size() + size_of<u32>() + size_of<u16>(), 0u);
+        if(invalid.includeTerminator)
+            bytes.resize(bytes.size() + size_of<u16>(), 0u);
+        StoreDumpRecord(nameOffset, invalid.byteCount, bytes);
+        const u16 character = 97u;
+        StoreDumpRecord(nameOffset + size_of<u32>(), character, bytes);
+        if(invalid.includeTerminator){
+            u16 terminator = 0u;
+            if(!invalid.terminated)
+                terminator = 120u;
+            StoreDumpRecord(nameOffset + size_of<u32>() + size_of<u16>(), terminator, bytes);
+        }
+        const auto actual = self.report(Span<u8>(bytes));
+        ASSERT_TRUE(actual.has_value());
+        if(Contains(StringView(actual.value()), "module_load=invalid_module_list"))
+            ++invalidModuleReports;
+    }
+    EXPECT_EQ(invalidModuleReports, 4u);
+}
+
+void VerifyMinidumpBoundaryTests_UnalignedExceptionAndContextRecordsKeepTheirBoundedValues(mut MinidumpBoundaryTests self){
+    String actualReport = String();
+    const auto original = ExceptionDump(s_UnusedStream, 0u);
+    const usize s_ExceptionOffset = size_of<WinDumpHeader>() + 2u * size_of<WinDumpDirectory>();
+    Vector<u8> bytes;
+    bytes.reserve(original.size() + 1u);
+    AppendTriviallyCopyableVector(bytes, Span<u8>(original).first(s_ExceptionOffset));
+    bytes.push_back(0u);
+    AppendTriviallyCopyableVector(bytes, Span<u8>(original).subspan(s_ExceptionOffset));
+    WinDumpDirectory directory = WinDumpDirectory();
+    directory.StreamType = s_ExceptionStream;
+    directory.Location.DataSize = size_of<WinDumpException>();
+    directory.Location.Rva = s_ExceptionOffset + 1u;
+    StoreDumpRecord(size_of<WinDumpHeader>(), directory, bytes);
+    WinDumpException exception = WinDumpException();
+    exception.ThreadId = 1u;
+    exception.ThreadContext.DataSize = size_of<WinDumpContext>();
+    exception.ThreadContext.Rva = s_ExceptionOffset + size_of<WinDumpException>() + 1u;
+    StoreDumpRecord(s_ExceptionOffset + 1u, exception, bytes);
+    const auto actual = self.report(Span<u8>(bytes));
+    ASSERT_TRUE(actual.has_value());
+    actualReport.assign(StringView(actual.value()));
+    EXPECT_TRUE(Contains(StringView(actualReport), "status=decoded"));
+    EXPECT_FALSE(Contains(StringView(actualReport), "status=not_decoded"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, MissingDumpRetainsNativeReadFailureInReturnedReport, VerifyMinidumpBoundaryTests_MissingDumpRetainsNativeReadFailureInReturnedReport)
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode, VerifyMinidumpBoundaryTests_TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode)
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, TruncatedThreadListCountCannotReadBeyondItsAdmittedStream, VerifyMinidumpBoundaryTests_TruncatedThreadListCountCannotReadBeyondItsAdmittedStream)
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, ShortExceptionContextCannotBorrowSurroundingFileBytes, VerifyMinidumpBoundaryTests_ShortExceptionContextCannotBorrowSurroundingFileBytes)
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile, VerifyMinidumpBoundaryTests_Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile)
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, TruncatedModuleListCannotReadBeyondItsAdmittedStream, VerifyMinidumpBoundaryTests_TruncatedModuleListCannotReadBeyondItsAdmittedStream)
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes, VerifyMinidumpBoundaryTests_InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes)
+NWB_ADHD_GTEST_F(MinidumpBoundaryTests, UnalignedExceptionAndContextRecordsKeepTheirBoundedValues, VerifyMinidumpBoundaryTests_UnalignedExceptionAndContextRecordsKeepTheirBoundedValues)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

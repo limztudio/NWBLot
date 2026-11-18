@@ -156,5 +156,9 @@ extern const u8 s_SwapChainOutputModeSDRBase;
 extern const usize s_UuidByteCount;
 
 
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionPreSubmitHook::Bind")]
+extern QueueSubmissionPreSubmitHook BindQueuePreSubmitHook(in u64 identity, mut auto observer);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

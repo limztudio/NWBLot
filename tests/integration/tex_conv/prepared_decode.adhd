@@ -2,60 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <utilities/cli/tool_cli.adhd>
 #include "name_cases.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_texture/cook.adhd.h>
-#include <impl/assets_texture/texture_mip_decoder.adhd.h>
-
-#include <basisu_transcoder.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::TextureDecodeCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Impl::Texture;
-using Impl::TextureCookEntry;
-using Impl::TextureMipLevel;
-using Impl::BuildTextureAsset;
-using Impl::ParseTextureCookMetadata;
-
-struct DecodeTestArena{
-    Core::Assets::AssetArena arena;
-    Core::Alloc::ScratchArena scratchArena;
-    explicit DecodeTestArena(const Name& scopeName)
-        : arena(scopeName)
-        , scratchArena(scopeName)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/assets_texture/cook.adhd>
+#include <impl/assets_texture/texture_mip_decoder.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,11 +39,11 @@ void WriteLittleEndianU32(mut Vector<u8> output, mut usize offset, in u32 value)
     }
 }
 
-Expected<Texture> CookDecodedTexture(in Path sourcePath, in MetascriptDocument document, mut DecodeTestArena testArena){
-    const Expected<TextureCookEntry> entry = ParseTextureCookMetadata(testArena.arena, sourcePath.parentPath(), "tests", sourcePath, document);
+Expected<Texture> CookDecodedTexture(in Path sourcePath, in MetascriptDocument document){
+    const Expected<TextureCookEntry> entry = ParseTextureCookMetadata(sourcePath.parentPath(), "tests", sourcePath, document);
     if(!entry.has_value())
         return MakeUnexpected(Failure());
-    return BuildTextureAsset(testArena.arena, entry.value());
+    return BuildTextureAsset(entry.value());
 }
 
 b8 Decode(in StringView source, in StringView destination, in StringView mipText){
@@ -102,16 +52,16 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
         return false;
     const u32 mipIndex = mipIndexResult.value();
 
-    DecodeTestArena testArena = DecodeTestArena(s_DecodeArena);
     const Path sourcePath = Path(source);
     const Path destinationPath = Path(destination);
     String metadata = "";
     if(!ReadTextFile(sourcePath, metadata).has_value())
         return false;
-    MetascriptDocument document(testArena.arena);
+    MetascriptDocumentWorkspace metadataOwner(s_DecodeArena);
+    mut MetascriptDocument document = metadataOwner.document;
     if(!document.parse(metadata))
         return false;
-    const Expected<Texture> builtTexture = CookDecodedTexture(sourcePath, document, testArena);
+    const Expected<Texture> builtTexture = CookDecodedTexture(sourcePath, document);
     if(!builtTexture.has_value() || cast<usize>(mipIndex) >= builtTexture.value().mipLevels().size())
         return false;
 
@@ -124,21 +74,18 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
     const usize componentCount = cast<usize>(planeTexels * cast<u64>(mip.sliceCount) * cast<u64>(s_ChannelCount));
     const b8 hdr = IsHdrTexturePayloadFormat(texture.payloadFormat());
 
-    Vector<u8> decodedBytes = Vector<u8>();
-    b8 decodedOk = false;
-    native(in texture, in mip, in mipIndex, in hdr, mut testArena, mut decodedBytes, mut decodedOk){
-        basist::basisu_transcoder_init();
-        NWB::Impl::TextureMipDecoder decoder;
-        const auto decoded = decoder.decode(testArena.scratchArena, texture, mip, mipIndex, hdr ? NWB::Core::Format::RGBA16_FLOAT : NWB::Core::Format::RGBA8_UNORM);
-        if(!decoded)
-            return false;
-        decodedBytes.assign(decoded->bytes.begin(), decoded->bytes.end());
-        decodedOk = true;
-    }
+    Format format = Format::RGBA8_UNORM;
+    if(hdr)
+        format = Format::RGBA16_FLOAT;
+    TextureMipDecoder decoder;
+    const auto decoded = decoder.decode(texture, mip, mipIndex, format);
+    if(!decoded.has_value())
+        return false;
+    in Vector<u8> decodedBytes = decoded.value().bytes;
     usize bytesPerComponent = 1u;
     if(hdr)
         bytesPerComponent = 2u;
-    if(!decodedOk || decodedBytes.size() != componentCount * bytesPerComponent)
+    if(decodedBytes.size() != componentCount * bytesPerComponent)
         return false;
 
     // Export the selected mip extent followed by interleaved linear RGBA binary32 values in little-endian order.
@@ -167,45 +114,13 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <logger/client/module.h>
-
-#include <core/common/application_entry.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_tex_conv_prepared_decode{
-int Run(const int argc, char** argv){
-    using namespace NWB::Tests::TextureDecodeCases;
-    NWB::Log::ClientStandalone logger;
-    if(!logger.init(FOUNDATION_TEXT("tex_conv_prepared_decode"))){
-        FOUNDATION_TCERR << FOUNDATION_TEXT("[tex_conv_prepared_decode] logger.init() failed\n");
-        return 1;
-    }
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    constexpr int s_ExpectedArgCount = 4;
-    if(argc != s_ExpectedArgCount || !Decode(argv[1], argv[2], argv[3])){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv_prepared_decode: expected valid texture metadata with its paired raw sidecar, output filename, and mip index."));
+[cpp_unwind]
+i32 RunConsole(in ConsoleArguments args){
+    if(args.count != 4 || !Decode(args.text(1), args.text(2), args.text(3))){
+        error("tex_conv_prepared_decode: expected valid texture metadata with its paired raw sidecar, output filename, and mip index.");
         return 1;
     }
     return 0;
-}
-};
-
-NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(__hidden_tex_conv_prepared_decode::Run)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

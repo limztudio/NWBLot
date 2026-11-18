@@ -234,7 +234,7 @@ class RefractionGalleryBuilder{
             f32x4 normalDistance = f32x4(0.0f, 0.0f, -1.0f, 1.0f);
             if(index == 0u)
                 normalDistance = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-            if(!CreateSmokeCsgPlaneCutter(group, s_CsgPlaneShapeName, true, normalDistance, this.m_world).valid())
+            if(!CreateSmokeCsgPlaneCutter(group, s_CsgPlaneShapeName, true, VectorSingle(normalDistance), this.m_world).valid())
                 return MakeUnexpected(Failure());
         }
         return entity;
@@ -242,7 +242,7 @@ class RefractionGalleryBuilder{
 
     public b8 farPlaneReceiver(in EntityID entity, in Name group){
         AddStaticCsgMeshReceiver(entity, group, false, true, this.m_world);
-        return CreateSmokeCsgPlaneCutter(group, s_CsgPlaneShapeName, true, f32x4(-1.0f, 0.0f, 0.0f, 10.0f), this.m_world).valid();
+        return CreateSmokeCsgPlaneCutter(group, s_CsgPlaneShapeName, true, VectorSingle(-1.0f, 0.0f, 0.0f, 10.0f), this.m_world).valid();
     }
 
     public b8 identitySlab(in StringView caseName){

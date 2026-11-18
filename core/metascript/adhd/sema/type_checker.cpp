@@ -300,6 +300,11 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             for(ClassDecl* cls : unit.classes){
                 if(!cls || cls->isExtern || cls->isSerialize || !cls->subsystemTypeName.empty() || cls->needsClassArena)
                     continue;
+                if(cls->concreteBase && cls->concreteBase->canBorrowMotherArena() && cls->concreteBase->needsClassArena){
+                    cls->needsClassArena = true;
+                    changed = true;
+                    continue;
+                }
                 for(const FieldDecl* field : cls->fields){
                     if(field && !field->isStatic && field->type && preLayoutAnalyzer.requiresMotherArena(*field->type)){
                         cls->needsClassArena = true;

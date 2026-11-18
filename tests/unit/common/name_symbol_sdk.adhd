@@ -1,0 +1,65 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+#include <tests/common/name_symbols.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/unit/common/name_symbol_sdk.h>"), cpp_name("::NWB::Tests::CommonNameCases::MeasuredText")]
+extern class MeasuredText{
+    void push_back(in u8 value);
+    void reserve(in usize size);
+    void append(...);
+    void clear();
+    usize size()const;
+};
+
+[cpp_header("<tests/unit/common/name_symbol_sdk.h>"), cpp_name("::NWB::Tests::CommonNameCases::MeasuredPlatformText")]
+extern class MeasuredPlatformText{
+    void push_back(in u8 value);
+    void reserve(in usize size);
+    void append(...);
+    void clear();
+    usize size()const;
+};
+
+[cpp_header("<tests/unit/common/name_symbol_sdk.h>"), cpp_name("::NWB::Tests::CommonNameCases::DecodeMeasuredText")]
+extern void DecodeMeasuredText(mut HeapStorage storage, mut auto text);
+
+[cpp_header("<tests/unit/common/name_symbol_sdk.h>"), cpp_name("::NWB::Tests::CommonNameCases::NarrowView")]
+extern StringView NarrowView(in MeasuredText text);
+
+[cpp_header("<tests/unit/common/name_symbol_sdk.h>"), cpp_name("::NWB::Tests::CommonNameCases::PlatformView")]
+extern PlatformStringView PlatformView(in MeasuredPlatformText text);
+
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::ReadTextFile")]
+extern Expected<void, ErrorCode> ReadMeasuredFile(in Path path, mut MeasuredText text);
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::Serialize")]
+extern Expected<void> SerializeMeasured(mut MeasuredText text);
+
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::LoadFile")]
+extern Expected<b8, ErrorCode> LoadSymbolFile(in Path path, mut ScratchStorage storage);
+
+[cpp_header("<core/common/log.h>"), cpp_name("::NWB::Core::Common::LoggerDetail::EnqueueMessage")]
+extern void EnqueueTestLog(mut auto logger, in LogType kind, in PlatformStringView text);
+
+[cpp_header("<tests/unit/common/name_symbol_sdk.h>"), cpp_name("NWB_TEST_UNBRACED_IF_ELSE")]
+extern void UnbracedIfElse(in b8 condition, in auto statement, in auto alternative);
+
+[cpp_header("<core/common/log.h>"), cpp_name("NWB_LOGGER_ESSENTIAL_INFO")]
+extern void WriteEssentialLog(in PlatformStringView text);
+
+[cpp_header("<core/common/log.h>"), cpp_name("NWB_LOGGER_ERROR")]
+extern void WriteErrorLog(in PlatformStringView text);
+
+[cpp_header("<tests/unit/common/name_symbol_sdk.h>"), cpp_name("NWB_GTEST_UNICODE_CASE")]
+extern registration GoogleTestUnicodeCase(suite, caseName, verifier);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

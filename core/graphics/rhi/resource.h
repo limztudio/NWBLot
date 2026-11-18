@@ -7,6 +7,8 @@
 
 #include "format.h"
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,6 +70,11 @@ namespace CpuAccessMode{
 struct StagingTextureMapping{
     void* data = nullptr;
     usize rowPitch = 0u;
+    usize byteSize = 0u;
+
+    [[nodiscard]] Span<const u8> readBytes()const noexcept{
+        return data ? Span<const u8>(static_cast<const u8*>(data), byteSize) : Span<const u8>{};
+    }
 };
 
 // Sharing intent for multi-transport resources. Hides family indices; a set becomes concurrent sharing only for created families.

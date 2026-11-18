@@ -73,5 +73,9 @@ extern const usize s_EncodedStreamHeaderByteSize;
 extern const u32 s_StreamMagic;
 
 
+[cpp_header("<core/telemetry/codec.h>"), cpp_name("::NWB::Core::Telemetry::EncodeEventStream")]
+extern b8 EncodeEventStream(in EventView events, mut TelemetryBytes output);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

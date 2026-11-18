@@ -173,6 +173,8 @@
 #include <core/task/gpu/queue_assignment_telemetry.adhd>
 #include <core/task/gpu/resource_hazard_tracker.adhd>
 #include <core/task/gpu/scheduler.adhd>
+#include <core/task/gpu/scheduler_callback_bindings.adhd>
+#include <core/task/gpu/scheduler_submission_bindings.adhd>
 #include <core/task/gpu/task_desc.adhd>
 #include <core/task/gpu/task_graph.adhd>
 #include <core/task/gpu/task_graph_declaration_view.adhd>

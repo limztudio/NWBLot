@@ -4,7 +4,9 @@
 
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/font_fixture.adhd>
-#include <tests/common/test_context.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/common/value_storage.adhd>
+#include <impl/assets_font/cook.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include "name_cases.adhd"
 
@@ -12,89 +14,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_name("NWB_REPO_ROOT")]
+extern const StringView s_RepoRoot;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_font/asset.adhd.h>
-
-#include <global/binary.h>
-#include <global/binary_big_endian.h>
-
-#include <ft2build.h>
-#include FT_FREETYPE_H
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::FontCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FontTestArenaTag{};
-using FontTestArena = TestArena<FontTestArenaTag>;
-
-struct PreparedSourceTestArenaTag{};
-using SourceTestArena = TestArena<PreparedSourceTestArenaTag>;
-
-using AssetArena = Core::Assets::AssetArena;
-using AssetBytes = Core::Assets::AssetBytes;
-using AssetGroupVector = Core::Assets::AssetVector<Impl::PreparedFontImageGroup>;
-using GlobalArena = Core::Alloc::GlobalArena;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-using Impl::Font;
-using Impl::FontAssetCodec;
-using Impl::FontBinaryHeader;
-using Impl::FontSfntDirectory;
-using Impl::FontSfntTable;
-using Impl::PreparedFontImageGroup;
-using Impl::PreparedFontImageView;
-using Impl::PreparedFontSource;
-using Impl::ReadFontSfntDirectory;
-using Impl::ReadPreparedFontSource;
-using Impl::WritePreparedFontSource;
-using Impl::ValidateFontSource;
-using Impl::s_FontMaxSourceBytes;
-using Impl::s_FontMaxTableCount;
-using Impl::s_FontSfntHeadTag;
-using Impl::s_FontSfntHeaderBytes;
-using Impl::s_FontSfntMaxpTag;
-using Impl::s_TrueTypeSignature;
-
-inline constexpr auto s_BreakOnFatal = Core::Common::LoggerBreakPolicy::BreakOnFatal;
-inline constexpr usize s_FontBinaryHeaderSize = sizeof(FontBinaryHeader);
-inline constexpr usize s_PreparedGroupSize = sizeof(PreparedFontImageGroup);
-inline constexpr AStringView s_RepoRoot = NWB_REPO_ROOT;
-
-[[nodiscard]] FOUNDATION_INLINE AssetBytes CopyAssetBytes(const Span<const u8> source, AssetArena& arena){
-    AssetBytes copy(arena);
-    copy.resize(source.size());
-    for(usize index = 0u; index < source.size(); ++index)
-        copy[index] = source[index];
-    return copy;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_header("<tests/integration/assets_font/freetype_probe.h>"), cpp_name("::NWB::Tests::FontCases::FreeTypeProbe"), cpp_flags(no_copy, no_assign)]
+extern class FreeTypeProbe{
+    i32 initialize();
+    i32 open(in Span<u8> bytes);
+    i32 closeFace();
+    i32 closeLibrary();
 };
 
+const usize s_FontBinaryHeaderSize = size_of<FontBinaryHeader>();
+const usize s_PreparedGroupSize = size_of<PreparedFontImageGroup>();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Vector<u8> CopyAssetBytes(in Span<u8> source){
+    Vector<u8> bytes;
+    bytes.reserve(source.size());
+    for(in u8 value : source)
+        bytes.push_back(value);
+    return bytes;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const u32 s_CollectionSignature = 0x74746366u;
 
@@ -131,13 +71,12 @@ const StringView s_ErrFtNewMemoryFace = "native_operation=FT_New_Memory_Face nat
 const StringView s_ErrImageHashDiffers = "image content hash differs";
 const StringView s_ErrSfntHashDiffers = "SFNT content hash differs";
 
-class SourceFixture{
-    public AssetGroupVector groups;
+class SourceFixture : NoCopy{
+    public Vector<PreparedFontImageGroup> groups;
     public Array<PreparedFontImageView, 4u> views = Array<PreparedFontImageView, 4u>();
     public Array<u8, 7u> sfnt = Array<u8, 7u>();
 
-    public SourceFixture(mut SourceTestArena testArena){
-        this.groups = AssetGroupVector(testArena.arena);
+    public SourceFixture(){
         this.sfnt[0u] = 0u;
         this.sfnt[1u] = 1u;
         this.sfnt[2u] = 4u;
@@ -147,7 +86,7 @@ class SourceFixture{
         this.sfnt[6u] = 255u;
         this.groups.reserve(s_GroupCount);
         for(u32 index = 0u; index < s_GroupCount; ++index){
-            this.groups.emplace_back(testArena.arena);
+            this.groups.emplace_back();
             mut PreparedFontImageGroup group = this.groups.back();
             group.width = 3u;
             group.height = 5u;
@@ -189,28 +128,28 @@ Path BundledFontRoot(){
     return Path(s_RepoRoot) / "impl" / "assets" / "ui" / "fonts" / "default";
 }
 
-void WriteBigU32At(mut AssetBytes bytes, in usize offset, in u32 value){
+void WriteBigU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
     bytes[offset] = cast<u8>(value >> 24u);
     bytes[offset + 1u] = cast<u8>(value >> 16u);
     bytes[offset + 2u] = cast<u8>(value >> 8u);
     bytes[offset + 3u] = cast<u8>(value);
 }
 
-u32 ReadBigU32At(in AssetBytes bytes, in usize offset){
+u32 ReadBigU32At(in Vector<u8> bytes, in usize offset){
     return (cast<u32>(bytes[offset]) << 24u)
         | (cast<u32>(bytes[offset + 1u]) << 16u)
         | (cast<u32>(bytes[offset + 2u]) << 8u)
         | cast<u32>(bytes[offset + 3u]);
 }
 
-void WriteLittleU32At(mut AssetBytes bytes, in usize offset, in u32 value){
+void WriteLittleU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
     bytes[offset] = cast<u8>(value);
     bytes[offset + 1u] = cast<u8>(value >> 8u);
     bytes[offset + 2u] = cast<u8>(value >> 16u);
     bytes[offset + 3u] = cast<u8>(value >> 24u);
 }
 
-usize FindTableRecord(in AssetBytes bytes, in u32 tag){
+usize FindTableRecord(in Vector<u8> bytes, in u32 tag){
     const u32 tableCount = (cast<u32>(bytes[s_SfntTableCountHighByte]) << 8u) | cast<u32>(bytes[s_SfntTableCountLowByte]);
     for(u32 index = 0u; index < tableCount; ++index){
         const usize record = s_FontSfntHeaderBytes + cast<usize>(index) * s_SfntTableRecordBytes;
@@ -220,21 +159,18 @@ usize FindTableRecord(in AssetBytes bytes, in u32 tag){
     return 0u;
 }
 
-b8 SpanDataOffsetMatches(in Span<u8> tableBytes, in AssetBytes source, in usize offset){
-    b8 matches = false;
-    native(in tableBytes, in source, in offset, mut matches){
-        matches = tableBytes.data() == source.data() + offset;
-    }
-    return matches;
+b8 SpanDataOffsetMatches(in Span<u8> tableBytes, in Vector<u8> source, in usize offset){
+    const Span<u8> sourceView = source;
+    return tableBytes.data() == sourceView.subspan(offset).data();
 }
 
-b8 LoadLatin(mut FontTestArena testArena, mut Font outFont){
+b8 LoadLatin(mut Font outFont){
     const Path path = BundledFontRoot() / "latin.font";
-    Expected<AssetBytes, StringView> sourceResult = ReadBundledFontBytes(path, testArena.arena);
+    Expected<Vector<u8>, StringView> sourceResult = ReadBundledFontBytes(path);
     if(!sourceResult.has_value())
         return false;
-    Font candidate(testArena.arena, Name(s_FontCaseEngineUiFontsDefaultLatinFace));
-    AssetBytes source = sourceResult.value();
+    Font candidate(Name(s_FontCaseEngineUiFontsDefaultLatinFace));
+    Vector<u8> source = sourceResult.value();
     candidate.setFontBytes(source);
     if(!candidate.validatePayload())
         return false;
@@ -242,8 +178,8 @@ b8 LoadLatin(mut FontTestArena testArena, mut Font outFont){
     return true;
 }
 
-AssetBytes MakeBinary(in FontBinaryHeader header, in AssetBytes source, mut FontTestArena testArena){
-    AssetBytes binary(testArena.arena);
+Vector<u8> MakeBinary(in FontBinaryHeader header, in Vector<u8> source){
+    Vector<u8> binary;
     binary.reserve(s_FontBinaryHeaderSize + source.size());
     AppendPOD(binary, header);
     for(usize index = 0u; index < source.size(); ++index)
@@ -251,16 +187,11 @@ AssetBytes MakeBinary(in FontBinaryHeader header, in AssetBytes source, mut Font
     return binary;
 }
 
-b8 SerializeFixtureSource(in SourceFixture fixture, mut SourceTestArena testArena, mut AssetBytes outBinary){
-    b8 ok = false;
-    native(in fixture, mut testArena, mut outBinary, mut ok){
-        (void)testArena;
-        ok = WritePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, outBinary).has_value();
-    }
-    return ok;
+b8 SerializeFixtureSource(in SourceFixture fixture, mut Vector<u8> outBinary){
+    return WritePreparedFontSource(TestByteView(fixture.sfnt, fixture.sfnt.size(), true), 0u, fixture.views, outBinary).has_value();
 }
 
-b8 WriteCase(in StringView filename, in AssetBytes binary, mut Path outPath){
+b8 WriteCase(in StringView filename, in Vector<u8> binary, mut Path outPath){
     const Path candidate = Path(s_RepoRoot) / "__artifacts" / "font_source_tests" / filename;
     if(!EnsureDirectories(candidate.parentPath()).has_value() || !WriteBinaryFile(candidate, binary))
         return false;
@@ -268,21 +199,33 @@ b8 WriteCase(in StringView filename, in AssetBytes binary, mut Path outPath){
     return true;
 }
 
-b8 ReadPreparedInto(in Path path, in b8 includePixels, mut SourceTestArena testArena, mut PreparedFontSource outSource){
-    Expected<PreparedFontSource, StringView> result = ReadPreparedFontSource(testArena.arena, path, includePixels);
+b8 ReadPreparedInto(in Path path, in b8 includePixels, mut PreparedFontSource outSource){
+    Expected<PreparedFontSource, StringView> result = ReadPreparedFontSource(path, includePixels);
     if(!result.has_value())
         return false;
     outSource = result.value();
     return true;
 }
 
-b8 CanReadPrepared(in Path path, in b8 includePixels, mut SourceTestArena testArena){
-    return ReadPreparedFontSource(testArena.arena, path, includePixels).has_value();
+class PreparedFontReader{
+    [owner_result]
+    public Expected<PreparedFontSource, StringView> read(in Path path, in b8 includePixels){
+        return ReadPreparedFontSource(path, includePixels);
+    }
+}
+
+b8 CanReadPrepared(in Path path, in b8 includePixels, mut HeapStorage storage){
+    TestValueSlot<PreparedFontReader> slot;
+    mut PreparedFontReader reader = slot.constructIn(storage);
+    return reader.read(path, includePixels).has_value();
+}
+
+b8 CanReadPrepared(in Path path, in b8 includePixels){
+    return ReadPreparedFontSource(path, includePixels).has_value();
 }
 
 void VerifyAssetsFont_SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts(){
-    FontTestArena testArena = FontTestArena();
-    AssetBytes bytes(testArena.arena);
+    Vector<u8> bytes;
     bytes.resize(s_OneTableDirectoryBytes, 0u);
     WriteBigU32At(bytes, 0u, s_TrueTypeSignature);
     bytes[s_SfntTableCountLowByte] = 1u;
@@ -299,7 +242,7 @@ void VerifyAssetsFont_SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCou
     EXPECT_FALSE(ReadFontSfntDirectory(bytes).has_value());
     bytes[s_SfntTableCountLowByte] = 0u;
     EXPECT_FALSE(ReadFontSfntDirectory(bytes).has_value());
-    AssetBytes maximumDirectory(testArena.arena);
+    Vector<u8> maximumDirectory;
     maximumDirectory.resize(s_FontSfntHeaderBytes + s_FontMaxTableCount * s_SfntTableRecordBytes, 0u);
     maximumDirectory[s_SfntTableCountHighByte] = 1u;
     const Expected<FontSfntDirectory> maximumResult = ReadFontSfntDirectory(maximumDirectory);
@@ -311,8 +254,7 @@ void VerifyAssetsFont_SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherReco
     // Two records, then the first table's data right after the directory.
     const u32 tableDataOffset = 44u;
     const u32 tableDataBytes = 4u;
-    FontTestArena testArena = FontTestArena();
-    AssetBytes bytes(testArena.arena);
+    Vector<u8> bytes;
     bytes.resize(tableDataOffset + tableDataBytes, 0u);
     WriteBigU32At(bytes, 0u, s_TrueTypeSignature);
     bytes[s_SfntTableCountLowByte] = 2u;
@@ -350,8 +292,7 @@ void VerifyAssetsFont_SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherReco
 }
 
 void VerifyAssetsFont_SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy(){
-    FontTestArena testArena = FontTestArena();
-    AssetBytes bytes(testArena.arena);
+    Vector<u8> bytes;
     bytes.resize(32u, 0u);
     // Signature admission remains with Font validation.
     WriteBigU32At(bytes, 0u, s_CollectionSignature);
@@ -390,8 +331,7 @@ void VerifyAssetsFont_SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAdding
 
 void VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRuntimeImport(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontTestArena testArena = FontTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     const Path bundledRoot = BundledFontRoot();
     Array<StringView, 2u> bundledFilenames = Array<StringView, 2u>();
     bundledFilenames[0u] = "latin.font";
@@ -400,20 +340,19 @@ void VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedBy
         Name fontName = s_FontCaseEngineUiFontsDefaultLatinFace;
         if(index == 1u)
             fontName = s_FontCaseEngineUiFontsDefaultKoreanFace;
-        Font font(testArena.arena, fontName);
+        Font font(fontName);
         const Path bundledPath = bundledRoot / bundledFilenames[index];
-        const Expected<AssetBytes, StringView> sourceResult = ReadBundledFontBytes(bundledPath, testArena.arena);
+        const Expected<Vector<u8>, StringView> sourceResult = ReadBundledFontBytes(bundledPath);
         ASSERT_TRUE(sourceResult.has_value());
-        const AssetBytes source = CopyAssetBytes(sourceResult.value(), testArena.arena);
-        AssetBytes sourceCopy = CopyAssetBytes(source, testArena.arena);
+        const Vector<u8> source = CopyAssetBytes(sourceResult.value());
+        Vector<u8> sourceCopy = CopyAssetBytes(source);
         font.setFontBytes(sourceCopy);
         ASSERT_TRUE(font.validatePayload());
-        AssetBytes prepared(testArena.arena);
+        Vector<u8> prepared;
         ASSERT_TRUE(ReadBinaryFile(bundledPath, prepared).has_value());
 
-        FontAssetCodec codec = FontAssetCodec();
-        AssetBytes binary(testArena.arena);
-        ASSERT_TRUE(codec.serialize(font, binary));
+            Vector<u8> binary;
+        ASSERT_TRUE(SerializeFontAssetPayload(font, binary));
         EXPECT_EQ(binary.size(), s_FontBinaryHeaderSize + source.size());
         EXPECT_LT(binary.size(), prepared.size());
         EXPECT_FALSE(font.loadBinary(prepared));
@@ -424,11 +363,10 @@ void VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedBy
 
 void VerifyAssetsFont_MalformedBinaryPreservesThePreviouslyLoadedFont(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontTestArena testArena = FontTestArena();
-    Font font(testArena.arena, s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(testArena, font));
-    const AssetBytes original = CopyAssetBytes(font.fontBytes(), testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    Font font(s_FontCaseEngineUiFontsDefaultLatinFace);
+    ASSERT_TRUE(LoadLatin(font));
+    const Vector<u8> original = CopyAssetBytes(font.fontBytes());
     FontBinaryHeader validHeader = FontBinaryHeader();
     validHeader.byteCount = original.size();
     for(u32 variant = 0u; variant < 7u; ++variant){
@@ -444,17 +382,17 @@ void VerifyAssetsFont_MalformedBinaryPreservesThePreviouslyLoadedFont(){
         case 6u: header.byteCount += 1u; break;
         default: break;
         }
-        EXPECT_FALSE(font.loadBinary(MakeBinary(header, original, testArena)));
+        EXPECT_FALSE(font.loadBinary(MakeBinary(header, original)));
         EXPECT_EQ(font.fontBytes(), original);
         EXPECT_EQ(font.faceIndex(), 0u);
     }
-    AssetBytes binary = MakeBinary(validHeader, original, testArena);
+    Vector<u8> binary = MakeBinary(validHeader, original);
     binary.resize(s_FontBinaryHeaderSize - 1u);
     EXPECT_FALSE(font.loadBinary(binary));
-    binary = MakeBinary(validHeader, original, testArena);
+    binary = MakeBinary(validHeader, original);
     binary.push_back(0u);
     EXPECT_FALSE(font.loadBinary(binary));
-    binary = MakeBinary(validHeader, original, testArena);
+    binary = MakeBinary(validHeader, original);
     binary.pop_back();
     EXPECT_FALSE(font.loadBinary(binary));
     EXPECT_EQ(font.fontBytes(), original);
@@ -462,13 +400,12 @@ void VerifyAssetsFont_MalformedBinaryPreservesThePreviouslyLoadedFont(){
 
 void VerifyAssetsFont_OversizedCountIsRejectedBeforeSourceAllocation(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontTestArena testArena = FontTestArena();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     FontBinaryHeader header = FontBinaryHeader();
     header.byteCount = cast<u64>(s_FontMaxSourceBytes) + 1u;
-    AssetBytes binary(testArena.arena);
+    Vector<u8> binary;
     AppendPOD(binary, header);
-    Font font(testArena.arena, s_FontCaseProjectFontsTest);
+    Font font(s_FontCaseProjectFontsTest);
     EXPECT_FALSE(font.loadBinary(binary));
     EXPECT_TRUE(font.fontBytes().empty());
     EXPECT_TRUE(SawCapturedError(logger, s_ErrSourceSizeRange));
@@ -481,17 +418,16 @@ void VerifyAssetsFont_OversizedCountIsRejectedBeforeSourceAllocation(){
 
 void VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontTestArena testArena = FontTestArena();
-    Font font(testArena.arena, s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(testArena, font));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    Font font(s_FontCaseEngineUiFontsDefaultLatinFace);
+    ASSERT_TRUE(LoadLatin(font));
     Array<u32, 4u> unsupportedSignatures = Array<u32, 4u>();
     unsupportedSignatures[0u] = 0x74746366u;
     unsupportedSignatures[1u] = 0x774f4646u;
     unsupportedSignatures[2u] = 0x774f4632u;
     unsupportedSignatures[3u] = 0x74727565u;
     for(usize index = 0u; index < unsupportedSignatures.size(); ++index){
-        AssetBytes bytes = CopyAssetBytes(font.fontBytes(), testArena.arena);
+        Vector<u8> bytes = CopyAssetBytes(font.fontBytes());
         WriteBigU32At(bytes, 0u, unsupportedSignatures[index]);
         EXPECT_FALSE(ValidateFontSource(bytes, 0u));
     }
@@ -499,7 +435,7 @@ void VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables(){
     variableTags[0u] = 0x66766172u;
     variableTags[1u] = 0x43464632u;
     for(usize index = 0u; index < variableTags.size(); ++index){
-        AssetBytes bytes = CopyAssetBytes(font.fontBytes(), testArena.arena);
+        Vector<u8> bytes = CopyAssetBytes(font.fontBytes());
         WriteBigU32At(bytes, s_FontSfntHeaderBytes, variableTags[index]);
         EXPECT_FALSE(ValidateFontSource(bytes, 0u));
     }
@@ -508,13 +444,12 @@ void VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables(){
 
 void VerifyAssetsFont_RejectsMalformedDirectoriesAndNativeFaceMetrics(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontTestArena testArena = FontTestArena();
-    Font font(testArena.arena, s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(testArena, font));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    Font font(s_FontCaseEngineUiFontsDefaultLatinFace);
+    ASSERT_TRUE(LoadLatin(font));
     for(u32 variant = 0u; variant < 7u; ++variant){
         const ScopedTestTrace trace(variant);
-        AssetBytes bytes = CopyAssetBytes(font.fontBytes(), testArena.arena);
+        Vector<u8> bytes = CopyAssetBytes(font.fontBytes());
         switch(variant){
         case 0u:
             bytes[s_SfntTableCountHighByte] = 0u;
@@ -556,11 +491,14 @@ void VerifyAssetsFont_RejectsMalformedDirectoriesAndNativeFaceMetrics(){
 
 void VerifyAssetsFont_NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocations(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    FontTestArena testArena = FontTestArena();
-    Font font(testArena.arena, s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(testArena, font));
-    AssetBytes bytes = CopyAssetBytes(font.fontBytes(), testArena.arena);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena;
+    TestValueSlot<Font> fontSlot;
+    mut Font font = fontSlot.constructIn(testArena, s_FontCaseEngineUiFontsDefaultLatinFace);
+    ASSERT_TRUE(LoadLatin(font));
+    TestValueSlot<Vector<u8>> bytesSlot;
+    mut Vector<u8> bytes = bytesSlot.constructIn(testArena);
+    bytes = font.fontBytes();
     const usize head = FindTableRecord(bytes, s_FontSfntHeadTag);
     ASSERT_NE(head, 0u);
     const u32 offset = ReadBigU32At(bytes, head + s_SfntRecordOffsetField);
@@ -568,46 +506,35 @@ void VerifyAssetsFont_NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAl
     bytes[offset + s_HeadUnitsPerEmOffset] = 0u;
     bytes[offset + s_HeadUnitsPerEmOffset + 1u] = 0u;
 
-    i64 expectedNativeError = 0;
-    b8 probedNativeError = false;
-    native(in bytes, mut expectedNativeError, mut probedNativeError){
-        FT_Library library = nullptr;
-        if(FT_Init_FreeType(&library) == 0){
-            FT_Face nativeFace = nullptr;
-            const FT_Error nativeError = FT_New_Memory_Face(library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &nativeFace);
-            const FT_Error faceClosed = nativeFace ? FT_Done_Face(nativeFace) : 0;
-            const FT_Error libraryClosed = FT_Done_FreeType(library);
-            if(faceClosed == 0 && libraryClosed == 0 && nativeError != 0){
-                expectedNativeError = nativeError;
-                probedNativeError = true;
-            }
-        }
-    }
-    ASSERT_TRUE(probedNativeError);
+    FreeTypeProbe probe;
+    ASSERT_EQ(probe.initialize(), 0);
+    const i32 expectedNativeError = probe.open(bytes);
+    ASSERT_EQ(probe.closeFace(), 0);
+    ASSERT_EQ(probe.closeLibrary(), 0);
+    ASSERT_NE(expectedNativeError, 0);
 
-    const u64 baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
+    const u64 baselineUsedBytes = testArena.memoryStats().usedBytes;
     EXPECT_FALSE(ValidateFontSource(bytes, 0u));
-    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
+    EXPECT_EQ(testArena.memoryStats().usedBytes, baselineUsedBytes);
     EXPECT_TRUE(SawCapturedError(logger, s_ErrFtNewMemoryFace));
     const String expectedDiagnostic = StringFormat("native_code={}", expectedNativeError);
     EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(ValidateFontSource(font.fontBytes(), 0u));
-    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
+    EXPECT_EQ(testArena.memoryStats().usedBytes, baselineUsedBytes);
 }
 
 void VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompactPlanes(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    SourceTestArena testArena = SourceTestArena();
-    SourceFixture fixture(testArena);
-    AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializeFixtureSource(fixture, testArena, binary));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    SourceFixture fixture;
+    Vector<u8> binary;
+    ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
     ASSERT_EQ(binary.size(), s_PixelOffset + 150u);
     Path path = Path();
     ASSERT_TRUE(WriteCase("image_integrity_control.font", binary, path));
-    PreparedFontSource original(testArena.arena);
-    ASSERT_TRUE(ReadPreparedInto(path, true, testArena, original));
+    PreparedFontSource original;
+    ASSERT_TRUE(ReadPreparedInto(path, true, original));
     ASSERT_EQ(original.groups.size(), s_GroupCount);
 
     Array<StringView, 5u> corruptImageFilenames = Array<StringView, 5u>();
@@ -620,15 +547,15 @@ void VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCo
     usize imageOffset = s_PixelOffset;
     for(usize index = 0u; index < corruptImageFilenames.size(); ++index){
         const ScopedTestTrace trace(index);
-        AssetBytes corrupted = CopyAssetBytes(binary, testArena.arena);
+        Vector<u8> corrupted = CopyAssetBytes(binary);
         usize corruptionOffset = s_HeaderBytes + 16u;
         if(index < s_GroupCount)
             corruptionOffset = imageOffset;
         corrupted[corruptionOffset] ^= 0x80u;
         ASSERT_TRUE(WriteCase(corruptImageFilenames[index], corrupted, path));
-        EXPECT_FALSE(CanReadPrepared(path, true, testArena));
-        PreparedFontSource fontOnly(testArena.arena);
-        ASSERT_TRUE(ReadPreparedInto(path, false, testArena, fontOnly));
+        EXPECT_FALSE(CanReadPrepared(path, true));
+        PreparedFontSource fontOnly;
+        ASSERT_TRUE(ReadPreparedInto(path, false, fontOnly));
         EXPECT_EQ(fontOnly.fontBytes, original.fontBytes);
         EXPECT_TRUE(fontOnly.fontSha256 == original.fontSha256);
         ASSERT_EQ(fontOnly.groups.size(), s_GroupCount);
@@ -647,14 +574,13 @@ void VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCo
 
 void VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    SourceTestArena testArena = SourceTestArena();
-    SourceFixture fixture(testArena);
-    AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializeFixtureSource(fixture, testArena, binary));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    SourceFixture fixture;
+    Vector<u8> binary;
+    ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
     Path path = Path();
     ASSERT_TRUE(WriteCase("font_integrity_control.font", binary, path));
-    ASSERT_TRUE(CanReadPrepared(path, true, testArena));
+    ASSERT_TRUE(CanReadPrepared(path, true));
     Array<StringView, 2u> corruptSfntFilenames = Array<StringView, 2u>();
     corruptSfntFilenames[0u] = "font_corrupt_bytes.font";
     corruptSfntFilenames[1u] = "font_corrupt_hash.font";
@@ -662,27 +588,27 @@ void VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes(){
         usize offset = s_FontOffset;
         if(index == 1u)
             offset = 24u;
-        AssetBytes corrupted = CopyAssetBytes(binary, testArena.arena);
+        Vector<u8> corrupted = CopyAssetBytes(binary);
         corrupted[offset] ^= 0x40u;
         ASSERT_TRUE(WriteCase(corruptSfntFilenames[index], corrupted, path));
-        EXPECT_FALSE(CanReadPrepared(path, false, testArena));
-        EXPECT_FALSE(CanReadPrepared(path, true, testArena));
+        EXPECT_FALSE(CanReadPrepared(path, false));
+        EXPECT_FALSE(CanReadPrepared(path, true));
     }
     EXPECT_EQ(logger.errorCount(), 4u);
     EXPECT_TRUE(SawCapturedError(logger, s_ErrSfntHashDiffers));
 }
 
-void CheckMalformedPreparedField(in MalformedField field, in AssetBytes binary, mut SourceTestArena testArena, mut SourceTestArena outputArena){
+void CheckMalformedPreparedField(in MalformedField field, in Vector<u8> binary, mut HeapStorage outputArena){
     const ScopedTestTrace trace(field.m_filename);
-    AssetBytes malformed = CopyAssetBytes(binary, testArena.arena);
+    Vector<u8> malformed = CopyAssetBytes(binary);
     WriteLittleU32At(malformed, field.m_offset, field.m_value);
     Path path = Path();
     ASSERT_TRUE(WriteCase(field.m_filename, malformed, path));
     for(u32 mode = 0u; mode < 2u; ++mode){
         const b8 includePixels = mode == 1u;
-        const ArenaMemoryStats before = outputArena.arena.memoryStats();
+        const ArenaMemoryStats before = outputArena.memoryStats();
         EXPECT_FALSE(CanReadPrepared(path, includePixels, outputArena));
-        const ArenaMemoryStats after = outputArena.arena.memoryStats();
+        const ArenaMemoryStats after = outputArena.memoryStats();
         EXPECT_EQ(after.usedBytes, before.usedBytes);
         EXPECT_LE(after.peakUsedBytes, before.usedBytes + 8u * s_PreparedGroupSize);
         if(field.m_rejectsBeforeDirectoryAllocation)
@@ -692,12 +618,11 @@ void CheckMalformedPreparedField(in MalformedField field, in AssetBytes binary, 
 
 void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePayloadAllocation(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    SourceTestArena testArena = SourceTestArena();
-    SourceTestArena outputArena = SourceTestArena(s_FontCaseTestsIntegrationAssetsFontPreparedOutput);
-    SourceFixture fixture(testArena);
-    AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializeFixtureSource(fixture, testArena, binary));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage outputArena(s_FontCaseTestsIntegrationAssetsFontPreparedOutput);
+    SourceFixture fixture;
+    Vector<u8> binary;
+    ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
     Path path = Path();
     ASSERT_TRUE(WriteCase("directory_control.font", binary, path));
     ASSERT_TRUE(CanReadPrepared(path, true, outputArena));
@@ -733,10 +658,10 @@ void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePay
     fields.push_back(MalformedField("image_bytes_overflow.font", s_HeaderBytes + s_GroupImageBytesField, u32.max, false));
 
     for(usize index = 0u; index < fields.size(); ++index)
-        CheckMalformedPreparedField(fields[index], binary, testArena, outputArena);
+        CheckMalformedPreparedField(fields[index], binary, outputArena);
 
     // Valid maximum dimensions still require their full payload length before any SFNT/image allocation.
-    AssetBytes oversized = CopyAssetBytes(binary, testArena.arena);
+    Vector<u8> oversized = CopyAssetBytes(binary);
     WriteLittleU32At(oversized, s_HeaderBytes, s_MaxImageSide);
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupHeightField, s_MaxImageSide);
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount);
@@ -744,23 +669,22 @@ void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePay
     ASSERT_TRUE(WriteCase("missing_large_image.font", oversized, path));
     for(u32 mode = 0u; mode < 2u; ++mode){
         const b8 includePixels = mode == 1u;
-        const ArenaMemoryStats before = outputArena.arena.memoryStats();
+        const ArenaMemoryStats before = outputArena.memoryStats();
         EXPECT_FALSE(CanReadPrepared(path, includePixels, outputArena));
-        EXPECT_LE(outputArena.arena.memoryStats().peakUsedBytes, before.usedBytes + 8u * s_PreparedGroupSize);
+        EXPECT_LE(outputArena.memoryStats().peakUsedBytes, before.usedBytes + 8u * s_PreparedGroupSize);
     }
     EXPECT_EQ(logger.errorCount(), 2u * (fields.size() + 1u));
 }
 
 void VerifyPreparedFontSource_TruncatedSectionsAndTrailingBytesRejectBothReadModes(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    SourceTestArena testArena = SourceTestArena();
-    SourceFixture fixture(testArena);
-    AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializeFixtureSource(fixture, testArena, binary));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    SourceFixture fixture;
+    Vector<u8> binary;
+    ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
     Path path = Path();
     ASSERT_TRUE(WriteCase("length_control.font", binary, path));
-    ASSERT_TRUE(CanReadPrepared(path, true, testArena));
+    ASSERT_TRUE(CanReadPrepared(path, true));
 
     Vector<CutCase> cuts = Vector<CutCase>();
     cuts.reserve(7u);
@@ -774,62 +698,62 @@ void VerifyPreparedFontSource_TruncatedSectionsAndTrailingBytesRejectBothReadMod
 
     for(usize index = 0u; index < cuts.size(); ++index){
         const ScopedTestTrace trace(cuts[index].m_filename);
-        AssetBytes malformed = CopyAssetBytes(binary, testArena.arena);
+        Vector<u8> malformed = CopyAssetBytes(binary);
         malformed.resize(cuts[index].m_byteCount);
         ASSERT_TRUE(WriteCase(cuts[index].m_filename, malformed, path));
-        EXPECT_FALSE(CanReadPrepared(path, false, testArena));
-        EXPECT_FALSE(CanReadPrepared(path, true, testArena));
+        EXPECT_FALSE(CanReadPrepared(path, false));
+        EXPECT_FALSE(CanReadPrepared(path, true));
     }
     EXPECT_EQ(logger.errorCount(), 2u * cuts.size());
 }
 
 void VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    SourceTestArena testArena = SourceTestArena();
-    SourceTestArena outputArena = SourceTestArena(s_FontCaseTestsIntegrationAssetsFontPreparedSerializeOutput);
-    SourceFixture fixture(testArena);
-    AssetBytes validOutput(outputArena.arena);
-    ASSERT_TRUE(SerializeFixtureSource(fixture, outputArena, validOutput));
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage outputArena(s_FontCaseTestsIntegrationAssetsFontPreparedSerializeOutput);
+    SourceFixture fixture;
+    TestValueSlot<Vector<u8>> validSlot;
+    mut Vector<u8> validOutput = validSlot.constructIn(outputArena);
+    ASSERT_TRUE(SerializeFixtureSource(fixture, validOutput));
     const u32 invalidCaseCount = 18u;
     for(u32 variant = 0u; variant < invalidCaseCount; ++variant){
         const ScopedTestTrace trace(variant);
-        const ArenaMemoryStats before = outputArena.arena.memoryStats();
-        b8 accepted = true;
-        native(in fixture, in variant, mut outputArena, mut accepted){
-            constexpr usize s_OverLimitGroupCount = 9u;
-            BinaryByteView sfnt{ fixture.sfnt.data(), fixture.sfnt.size() };
-            Array<PreparedFontImageView, s_OverLimitGroupCount> views = {};
-            for(usize index = 0u; index < s_GroupCount; ++index)
-                views[index] = fixture.views[index];
-            usize groupCount = s_GroupCount;
-            u32 faceIndex = 0u;
-            switch(variant){
-            case 0u: sfnt.byteCount = 0u; break;
-            case 1u: sfnt.bytes = nullptr; break;
-            case 2u: sfnt.byteCount = s_FontMaxSourceBytes + 1u; break;
-            case 3u: faceIndex = 1u; break;
-            case 4u: groupCount = 0u; break;
-            case 5u: groupCount = s_OverLimitGroupCount; break;
-            case 6u: views[0u].width = 0u; break;
-            case 7u: views[0u].width = 2049u; break;
-            case 8u: views[0u].width = Limit<u32>::s_Max; break;
-            case 9u: views[0u].height = 0u; break;
-            case 10u: views[0u].height = 2049u; break;
-            case 11u: views[0u].height = Limit<u32>::s_Max; break;
-            case 12u: views[0u].channelCount = 0u; break;
-            case 13u: views[0u].channelCount = 5u; break;
-            case 14u: views[0u].channelCount = Limit<u32>::s_Max; break;
-            case 15u: views[0u].pixels = Span<const u8>(); break;
-            case 16u: views[0u].pixels = views[0u].pixels.first(views[0u].pixels.size() - 1u); break;
-            case 17u: views[0u].pixels = fixture.views[1u].pixels.first(views[0u].pixels.size() + 1u); break;
-            default: break;
-            }
-            AssetBytes output(outputArena.arena);
-            accepted = WritePreparedFontSource(sfnt, faceIndex, Span<const PreparedFontImageView>(views.data(), groupCount), output).has_value();
+        const ArenaMemoryStats before = outputArena.memoryStats();
+        const usize overLimitGroupCount = 9u;
+        usize reportedSize = fixture.sfnt.size();
+        b8 present = true;
+        Array<PreparedFontImageView, 9u> views;
+        for(usize index = 0u; index < s_GroupCount; ++index)
+            views[index] = fixture.views[index];
+        usize groupCount = s_GroupCount;
+        u32 faceIndex = 0u;
+        switch(variant){
+        case 0u: reportedSize = 0u; break;
+        case 1u: present = false; break;
+        case 2u: reportedSize = s_FontMaxSourceBytes + 1u; break;
+        case 3u: faceIndex = 1u; break;
+        case 4u: groupCount = 0u; break;
+        case 5u: groupCount = overLimitGroupCount; break;
+        case 6u: views[0u].width = 0u; break;
+        case 7u: views[0u].width = 2049u; break;
+        case 8u: views[0u].width = u32.max; break;
+        case 9u: views[0u].height = 0u; break;
+        case 10u: views[0u].height = 2049u; break;
+        case 11u: views[0u].height = u32.max; break;
+        case 12u: views[0u].channelCount = 0u; break;
+        case 13u: views[0u].channelCount = 5u; break;
+        case 14u: views[0u].channelCount = u32.max; break;
+        case 15u: views[0u].pixels = Span<u8>(); break;
+        case 16u: views[0u].pixels = views[0u].pixels.first(views[0u].pixels.size() - 1u); break;
+        case 17u: views[0u].pixels = fixture.views[1u].pixels.first(views[0u].pixels.size() + 1u); break;
+        default: break;
         }
+        TestValueSlot<Vector<u8>> outputSlot;
+        mut Vector<u8> output = outputSlot.constructIn(outputArena);
+        const Span<PreparedFontImageView> allViews = views;
+        const b8 accepted = WritePreparedFontSource(TestByteView(fixture.sfnt, reportedSize, present), faceIndex, allViews.first(groupCount), output).has_value();
         EXPECT_FALSE(accepted);
-        EXPECT_EQ(outputArena.arena.memoryStats().allocationCount, before.allocationCount);
+        EXPECT_EQ(outputArena.memoryStats().allocationCount, before.allocationCount);
     }
     EXPECT_EQ(logger.errorCount(), invalidCaseCount);
 }

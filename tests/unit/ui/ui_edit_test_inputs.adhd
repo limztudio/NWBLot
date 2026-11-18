@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd>
+#include <impl/ecs_ui/toolkit/edit/types.adhd>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EditLimits MakeUiEditLimits(in usize maxBytes, in usize maxHistoryRecords, in usize maxHistoryBytes){
+    EditLimits limits = EditLimits();
+    limits.maxBytes = maxBytes;
+    limits.maxHistoryRecords = maxHistoryRecords;
+    limits.maxHistoryBytes = maxHistoryBytes;
+    return limits;
+}
+
+InputCommandIntent MakeUiCommandIntent(in InputCommand command, in b8 extend, in b8 edit){
+    InputCommandIntent intent = InputCommandIntent();
+    intent.command = command;
+    intent.extend = extend;
+    intent.edit = edit;
+    return intent;
+}
+
+FloatBounds MakeUiFloatBounds(in f64 minimum, in f64 maximum, in NumericBoundsPolicy policy){
+    FloatBounds bounds = FloatBounds();
+    bounds.minimum = minimum;
+    bounds.maximum = maximum;
+    bounds.policy = policy;
+    return bounds;
+}
+
+void ExpectNumericEditRejected(in NumericEditResult result, in b8 restored){
+    EXPECT_TRUE(result.valid);
+    EXPECT_TRUE(result.rejected);
+    EXPECT_FALSE(result.committed);
+    EXPECT_FALSE(result.valueChanged);
+    EXPECT_FALSE(result.cancelled);
+    EXPECT_FALSE(result.clamped);
+    EXPECT_EQ(result.restored, restored);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

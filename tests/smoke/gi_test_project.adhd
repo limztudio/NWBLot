@@ -10,22 +10,23 @@
 
 class GiTestSmokeProject : IProjectEntryCallbacks{
     public GiTestSmokeProject(mut ProjectRuntimeContext context){
-        this.m_impl = GiTestSmokeProjectImpl(context);
+        this.m_impl = CreateProjectCallbacks(context);
     }
 
     public b8 onStartup()override{
-        return this.m_impl.onStartup();
+        return this.m_impl.valid() && this.m_impl.deref().onStartup();
     }
 
     public void onShutdown()override{
-        this.m_impl.onShutdown();
+        if(this.m_impl.valid())
+            this.m_impl.deref().onShutdown();
     }
 
     public b8 onUpdate(in f32 delta)override{
-        return this.m_impl.onUpdate(delta);
+        return this.m_impl.valid() && this.m_impl.deref().onUpdate(delta);
     }
 
-    private GiTestSmokeProjectImpl m_impl;
+    private UniquePtr<IProjectEntryCallbacks> m_impl;
 }
 
 

@@ -242,7 +242,7 @@ Expected<StagingTextureMapping> Device::mapStagingTexture(StagingTexture& stagin
         }
     }
 
-    return StagingTextureMapping{ static_cast<u8*>(staging.m_mappedMemory) + static_cast<usize>(range->byteOffset), static_cast<usize>(range->rowPitch) };
+    return StagingTextureMapping{ static_cast<u8*>(staging.m_mappedMemory) + static_cast<usize>(range->byteOffset), static_cast<usize>(range->rowPitch), static_cast<usize>(range->byteSize) };
 }
 
 void Device::unmapStagingTexture(StagingTexture& staging){

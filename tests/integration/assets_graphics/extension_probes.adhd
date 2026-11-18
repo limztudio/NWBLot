@@ -1,0 +1,100 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "case_types.adhd"
+#include "extension_sdk.adhd"
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ExtensionConstructionFailure{}
+class ExtensionCallerFailure{}
+class ExtensionInsertionFailure{}
+
+class ExtensionMember{
+    private mut MetadataExtensionState state;
+    private Vector<u8> bytes;
+    public ExtensionMember(mut MetadataExtensionState state){
+        this.state = state;
+        this.bytes.resize(513u, 0x5au);
+    }
+    public ~ExtensionMember(){ ++this.state.memberDestructions; }
+}
+
+[ordered]
+class AlignedExtension{
+    private Alignment128 alignment;
+    private ExtensionMember member;
+    private mut MetadataExtensionState state;
+    public usize identity;
+
+    [cpp_unwind]
+    public AlignedExtension(mut MetadataExtensionState state, in b8 fail){
+        this.member = ExtensionMember(state);
+        this.state = state;
+        this.identity = ++state.constructions;
+        if(fail)
+            ThrowTestException(ExtensionConstructionFailure());
+    }
+    public ~AlignedExtension(){ ++this.state.destructions; }
+}
+
+class TextExtension{
+    private mut MetadataExtensionState state;
+    public Vector<String> strings;
+    public TextExtension(mut MetadataExtensionState state){
+        this.state = state;
+        ++state.constructions;
+        this.strings.emplace_back("first separately allocated extension payload");
+        this.strings.emplace_back("second separately allocated extension payload");
+    }
+    public ~TextExtension(){ ++this.state.destructions; }
+}
+
+class ReentrantExtension{
+    private mut MetadataExtensionState state;
+    public usize identity;
+    public usize nested;
+
+    public ReentrantExtension(mut ParsedAssetMetadata metadata, in Name name, mut MetadataExtensionState state, in b8 recurse){
+        this.state = state;
+        this.identity = ++state.constructions;
+        this.nested = 0u;
+        if(recurse){
+            mut ReentrantExtension existing = RequireExtension<ReentrantExtension>(metadata, name, metadata, name, state, false);
+            this.nested = TestValueAddress(existing);
+        }
+    }
+    public ~ReentrantExtension(){ ++this.state.destructions; }
+}
+
+class ThrowingExtensionHasher{
+    public b8 fail = false;
+    [cpp_unwind]
+    public usize hash(in Name key){
+        if(this.fail)
+            ThrowTestException(ExtensionInsertionFailure());
+        return HashExtensionKey(key);
+    }
+}
+
+class RegistryBorrowingExtension{
+    public in CookEntryRegistry registry;
+    private mut usize observed;
+    public RegistryBorrowingExtension(in CookEntryRegistry registry, mut usize observed){
+        this.registry = registry;
+        this.observed = observed;
+    }
+    public ~RegistryBorrowingExtension(){ this.observed = this.registry.bucketCount(); }
+}
+
+static_assert(align_of<AlignedExtension>() >= 128u);
+static_assert(!TestIsCopyConstructible<ErasedExtension>());
+static_assert(TestIsNothrowMoveConstructible<ErasedExtension>());
+static_assert(TestIsNothrowDestructible<ErasedExtension>());
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

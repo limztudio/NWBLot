@@ -10,216 +10,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/edit_clipboard_controller.adhd>
+#include <impl/ecs_ui/layer_types.adhd>
+#include <impl/ecs_ui/text_edit_session.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <tests/unit/ui/multiline_fixture.adhd>
+
+type UiEditNavigationGuardTests = UiEditNavigationHostTests;
+type UiEditNavigationLifetimeTests = UiEditNavigationHostTests;
+type UiEditPointerCaptureTests = UiEditNavigationHostTests;
+type UiEditPointerSourceTests = UiEditBoxHostTests;
+type UiEditWordSelectionTests = UiEditBoxHostTests;
+type UiMultilineClipboardTests = UiEditBoxHostTests;
+type UiMultilineNativeTests = UiEditBoxHostTests;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/edit_clipboard_controller.adhd.h>
-#include <impl/ecs_ui/layer_types.adhd.h>
-#include <impl/ecs_ui/text_edit_session.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 
-#include <tests/unit/ui/multiline_fixture.adhd.h>
-
-#include <global/simd/vector.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_navigation_guard_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiEditNavigationTestSupport;
-
-class UiEditNavigationGuardTests : public UiEditNavigationHostTests{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_navigation_lifetime_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiEditNavigationTestSupport;
-
-class UiEditNavigationLifetimeTests : public UiEditNavigationHostTests{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ecs_ui_edit_pointer_capture_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiEditNavigationTestSupport;
-
-class UiEditPointerCaptureTests : public UiEditNavigationHostTests{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ecs_ui_edit_pointer_source_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiEditBoxTestSupport;
-
-using UiEditPointerSourceTests = UiEditBoxHostTests;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_edit_word_selection_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace UiEditBoxTestSupport;
-
-class UiEditWordSelectionTests : public UiEditBoxHostTests{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_multiline_clipboard_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiEditBoxTestSupport;
-
-class UiMultilineClipboardTests : public UiEditBoxHostTests{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_multiline_native_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace UiEditBoxTestSupport;
-
-class UiMultilineNativeTests : public UiEditBoxHostTests{};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::EcsUi{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using UiEditNavigationGuardTests = __hidden_ui_edit_navigation_guard_tests::UiEditNavigationGuardTests;
-using UiEditNavigationLifetimeTests = __hidden_ui_edit_navigation_lifetime_tests::UiEditNavigationLifetimeTests;
-using UiEditPointerCaptureTests = __hidden_ecs_ui_edit_pointer_capture_tests::UiEditPointerCaptureTests;
-using UiEditPointerSourceTests = __hidden_ecs_ui_edit_pointer_source_tests::UiEditPointerSourceTests;
-using UiEditWordSelectionTests = __hidden_ui_edit_word_selection_tests::UiEditWordSelectionTests;
-using UiMultilineClipboardTests = __hidden_ui_multiline_clipboard_tests::UiMultilineClipboardTests;
-using UiMultilineNativeTests = __hidden_ui_multiline_native_tests::UiMultilineNativeTests;
-using MultilineSnapshot = UiMultilineTests::MultilineSnapshot;
-
-using UiContext = NWB::Impl::Ui::Context;
-using UiControlToken = NWB::Impl::Ui::ControlToken;
-using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
-using UiEditModelSnapshot = NWB::Impl::Ui::EditModelSnapshot;
-using UiEditNavigationResult = NWB::Impl::Ui::EditNavigationResult;
-using UiEditNavigationSnapshot = NWB::Impl::Ui::EditNavigationSnapshot;
-using UiEditNavigationState = NWB::Impl::Ui::EditNavigationState;
-using UiEditLimits = NWB::Impl::Ui::EditLimits;
-using UiFrameDelta = NWB::Impl::UiFrameDelta;
-using UiTextEditOwner = NWB::Impl::UiTextEditOwner;
-using UiTextEditResult = NWB::Impl::UiTextEditResult;
-using UiTextEditSession = NWB::Impl::UiTextEditSession;
-namespace UiEditClipboardStatus = NWB::Impl::UiEditClipboardStatus;
-namespace UiEditTextMode = NWB::Impl::Ui::EditTextMode;
-namespace UiPointerPhase = NWB::Impl::Ui::PointerPhase;
-namespace UiTextEditStatus = NWB::Impl::UiTextEditStatus;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-type KeyEnum = Key;
 
 enum<u8> CallbackMutation{
     IdenticalSelection,
@@ -233,16 +42,16 @@ enum<u8> CallbackMutation{
     FailContext
 }
 
-UiControlToken MakeEcsUiControlToken(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision){
-    UiControlToken token = UiControlToken();
+ControlToken MakeEcsUiControlToken(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision){
+    ControlToken token = ControlToken();
     token.instanceGeneration = instanceGeneration;
     token.contentGeneration = contentGeneration;
     token.contentRevision = contentRevision;
     return token;
 }
 
-b8 SeedPreferredNavigationColumn(mut UiEditNavigationLifetimeTests self, in UiEditBoxOptions options){
-    if(!self.m_navigationModel.setText("abcdef\nx\nabcdef") || !self.m_navigationModel.setSelection(5u, 5u) || !self.activateNavigation(options) || !self.key(Key::Down) || !self.navigationFrame(options)){
+b8 SeedPreferredNavigationColumn(mut UiEditNavigationLifetimeTests self, in EditBoxOptions options){
+    if(!self.m_navigationModel.setText("abcdef\nx\nabcdef") || !self.m_navigationModel.setSelection(5u, 5u) || !self.activateNavigation(options) || !self.core.key(Key::Down) || !self.navigationFrame(options)){
         return false;
     }
     self.m_resolver.records.clear();
@@ -251,14 +60,14 @@ b8 SeedPreferredNavigationColumn(mut UiEditNavigationLifetimeTests self, in UiEd
 }
 
 b8 SeedPreferredNavigationColumn(mut UiEditNavigationLifetimeTests self){
-    return SeedPreferredNavigationColumn(self, UiEditBoxOptions());
+    return SeedPreferredNavigationColumn(self, EditBoxOptions());
 }
 
 b8 WordSelectDown(mut UiEditWordSelectionTests self, in usize byte, in u64 timestampMs, in b8 shift){
-    UiInputEvent event = UiInputEvent();
+    InputEvent event = InputEvent();
     event.timestampMs = timestampMs;
     event.position = self.atByte(byte);
-    event.type = UiInputEventType::PrimaryDown;
+    event.type = InputEventType::PrimaryDown;
     event.shift = shift;
     return self.dispatch(event);
 }
@@ -268,16 +77,16 @@ b8 WordSelectDown(mut UiEditWordSelectionTests self, in usize byte, in u64 times
 }
 
 b8 WordSelectMove(mut UiEditWordSelectionTests self, in usize byte){
-    UiInputEvent event = UiInputEvent();
+    InputEvent event = InputEvent();
     event.position = self.atByte(byte);
-    event.type = UiInputEventType::PointerMove;
+    event.type = InputEventType::PointerMove;
     return self.dispatch(event);
 }
 
 b8 WordSelectUp(mut UiEditWordSelectionTests self, in usize byte){
-    UiInputEvent event = UiInputEvent();
+    InputEvent event = InputEvent();
     event.position = self.atByte(byte);
-    event.type = UiInputEventType::PrimaryUp;
+    event.type = InputEventType::PrimaryUp;
     return self.dispatch(event);
 }
 
@@ -289,41 +98,41 @@ b8 WordSelectClick(mut UiEditWordSelectionTests self, in usize byte, in u64 time
     return WordSelectClick(self, byte, timestampMs, false);
 }
 
-b8 WordSelectClickAt(mut UiEditWordSelectionTests self, in UiPoint point, in u64 timestampMs){
-    UiInputEvent down = UiInputEvent();
+b8 WordSelectClickAt(mut UiEditWordSelectionTests self, in Point point, in u64 timestampMs){
+    InputEvent down = InputEvent();
     down.timestampMs = timestampMs;
     down.position = point;
-    down.type = UiInputEventType::PrimaryDown;
-    UiInputEvent up = UiInputEvent();
+    down.type = InputEventType::PrimaryDown;
+    InputEvent up = InputEvent();
     up.position = point;
-    up.type = UiInputEventType::PrimaryUp;
+    up.type = InputEventType::PrimaryUp;
     return self.dispatch(down) && self.dispatch(up);
 }
 
 
-void RejectEcsUiNavigationTarget(mut UiEditNavigationGuardTests self, in Expected<UiEditNavigationResult> target){
+void RejectEcsUiNavigationTarget(mut UiEditNavigationGuardTests self, in Expected<EditNavigationResult> target){
     ASSERT_TRUE(self.m_navigationModel.setText("e\xcc\x81\nxy"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(self.m_navigation.setPreferredX(70.0f));
     const MultilineSnapshot model = MultilineSnapshot(self.m_navigationModel);
-    const UiEditNavigationSnapshot navigation = self.m_navigation.snapshot();
-    const u64 displayed = self.m_context.input().layoutGeneration();
-    const usize targets = self.m_context.input().targets().size();
+    const EditNavigationSnapshot navigation = self.m_navigation.snapshot();
+    const u64 displayed = self.core.m_context.input().layoutGeneration();
+    const usize targets = self.core.m_context.input().targets().size();
     self.m_resolver.forceResult = true;
     self.m_resolver.forcedResult = target;
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.commitNative("!"));
     ASSERT_FALSE(self.prepareNavigation());
-    EXPECT_FALSE(self.m_result.valid);
+    EXPECT_FALSE(self.core.m_result.valid);
     ASSERT_EQ(self.m_resolver.records.size(), 1u);
     model.expectUnchanged(self.m_navigationModel);
     EXPECT_TRUE(self.m_navigation.matches(navigation));
-    EXPECT_EQ(self.m_context.input().layoutGeneration(), displayed);
-    EXPECT_EQ(self.m_context.input().targets().size(), targets);
+    EXPECT_EQ(self.core.m_context.input().layoutGeneration(), displayed);
+    EXPECT_EQ(self.core.m_context.input().targets().size(), targets);
 }
 
-void ApplyEcsUiNavigationCallbackMutation(mut UiEditNavigationGuardTests self, in CallbackMutation mutation, mut UiEditModelSnapshot callbackModel, mut UiEditNavigationSnapshot callbackNavigation, mut usize callbacks, mut b8 mutationAccepted, mut b8 innerRejected){
+void ApplyEcsUiNavigationCallbackMutation(mut UiEditNavigationGuardTests self, in CallbackMutation mutation, mut EditModelSnapshot callbackModel, mut EditNavigationSnapshot callbackNavigation, mut usize callbacks, mut b8 mutationAccepted, mut b8 innerRejected){
     ++callbacks;
     if(mutation == CallbackMutation::IdenticalSelection){
         mutationAccepted = self.m_navigationModel.setSelection(1u, 1u);
@@ -346,15 +155,15 @@ void ApplyEcsUiNavigationCallbackMutation(mut UiEditNavigationGuardTests self, i
         mutationAccepted = self.m_navigation.setPreferredX(50.0f);
     }
     else if(mutation == CallbackMutation::ResetHost){
-        self.m_host.reset();
+        self.core.m_host.reset();
         mutationAccepted = true;
     }
     else if(mutation == CallbackMutation::ReenterHost){
-        innerRejected = !self.m_host.editNavigated(self.m_widget, UiEditBoxOptions(), UiPopupToken(), self.m_navigationModel, self.m_navigation, self.m_resolver, self.m_actions).valid;
+        innerRejected = !self.core.m_host.editNavigated(self.core.m_widget, EditBoxOptions(), PopupToken(), self.m_navigationModel, self.m_navigation, self.m_resolver, self.m_actions).valid;
         mutationAccepted = true;
     }
     else if(mutation == CallbackMutation::FailContext){
-        self.m_context.fail();
+        self.core.m_context.fail();
         mutationAccepted = true;
     }
     callbackModel.capture(self.m_navigationModel);
@@ -366,20 +175,20 @@ void RejectEcsUiNavigationMutation(mut UiEditNavigationGuardTests self, in Callb
     ASSERT_TRUE(self.m_navigationModel.setSelection(1u, 1u));
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(self.m_navigation.setPreferredX(50.0f));
-    const u64 displayed = self.m_context.input().layoutGeneration();
-    const usize targets = self.m_context.input().targets().size();
-    UiEditModelSnapshot callbackModel = UiEditModelSnapshot(self.m_arena);
-    UiEditNavigationSnapshot callbackNavigation = UiEditNavigationSnapshot();
+    const u64 displayed = self.core.m_context.input().layoutGeneration();
+    const usize targets = self.core.m_context.input().targets().size();
+    EditModelSnapshot callbackModel = EditModelSnapshot();
+    EditNavigationSnapshot callbackNavigation = EditNavigationSnapshot();
     usize callbacks = 0u;
     b8 mutationAccepted = false;
     b8 innerRejected = false;
     self.m_resolver.hook = lambda[mut self, in mutation, mut callbackModel, mut callbackNavigation, mut callbacks, mut mutationAccepted, mut innerRejected]() -> void{
         ApplyEcsUiNavigationCallbackMutation(self, mutation, callbackModel, callbackNavigation, callbacks, mutationAccepted, innerRejected);
     };
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.commitNative("!"));
     ASSERT_FALSE(self.prepareNavigation());
-    EXPECT_FALSE(self.m_result.valid);
+    EXPECT_FALSE(self.core.m_result.valid);
     EXPECT_EQ(callbacks, 1u);
     EXPECT_TRUE(mutationAccepted);
     if(mutation == CallbackMutation::ReenterHost){
@@ -392,20 +201,20 @@ void RejectEcsUiNavigationMutation(mut UiEditNavigationGuardTests self, in Callb
     EXPECT_EQ(self.m_navigationModel.anchor(), 1u);
     EXPECT_EQ(self.m_navigationModel.caret(), 1u);
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_EQ(self.m_context.input().layoutGeneration(), displayed);
-    EXPECT_EQ(self.m_context.input().targets().size(), targets);
+    EXPECT_EQ(self.core.m_context.input().layoutGeneration(), displayed);
+    EXPECT_EQ(self.core.m_context.input().targets().size(), targets);
 }
 
 b8 PublishEcsUiPointerCapturePart(mut UiEditPointerCaptureTests self, in b8 gesture){
-    Array<UiHitTarget, 2> targets = Array<UiHitTarget, 2>();
-    const Expected<UiHitTarget> foundTarget = self.m_context.input().tryFindTarget(self.m_widget.id);
+    Array<HitTarget, 2> targets = Array<HitTarget, 2>();
+    const Expected<HitTarget> foundTarget = self.core.m_context.input().tryFindTarget(self.core.m_widget.id);
     if(!foundTarget.has_value()){
         return false;
     }
     targets[0u] = foundTarget.value();
     targets[0u].control = MakeEcsUiControlToken(91u, 1u, 1u);
-    targets[1u].id = self.m_otherWidget.id;
-    targets[1u].declarationGeneration = self.m_otherWidget.declarationGeneration;
+    targets[1u].id = self.core.m_otherWidget.id;
+    targets[1u].declarationGeneration = self.core.m_otherWidget.declarationGeneration;
     targets[1u].rectangle = MakeEcsUiRect(180.0f, 20.0f, 10.0f, 48.0f);
     targets[1u].clip = targets[0u].clip;
     targets[1u].paintOrder = 1u;
@@ -418,17 +227,17 @@ b8 PublishEcsUiPointerCapturePart(mut UiEditPointerCaptureTests self, in b8 gest
         targets[1u].gestureReference = targets[1u].rectangle;
     }
     // The copied router publication leaves the already accepted text geometry owned by the host.
-    ++self.m_generation;
-    if(!self.m_context.input().commitTargets(targets, self.m_generation)){
+    ++self.core.m_generation;
+    if(!self.core.m_context.input().commitTargets(targets, self.core.m_generation)){
         return false;
     }
-    self.m_host.synchronizeFocus();
+    self.core.m_host.synchronizeFocus();
     return true;
 }
 
 
-UiEditNavigationResult MakeNavigationResult(in usize committedByte, in f32 preferredX){
-    UiEditNavigationResult result = UiEditNavigationResult();
+EditNavigationResult MakeNavigationResult(in usize committedByte, in f32 preferredX){
+    EditNavigationResult result = EditNavigationResult();
     result.committedByte = committedByte;
     result.preferredX = preferredX;
     return result;
@@ -438,20 +247,20 @@ void VerifyUiEditNavigationHostTests_CandidateGeometryCannotReplacePublishedYHit
     ASSERT_TRUE(self.m_navigationModel.setText("ab\ncd\nxy"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(self.activateNavigation());
-    const u64 displayed = self.m_context.input().layoutGeneration();
-    const TextInputRect nativeRect = self.m_textInput.caretRect();
-    const UiRect shiftedBounds = MakeEcsUiRect(10.0f, 80.0f, 180.0f, 48.0f);
-    ASSERT_TRUE(self.prepareNavigation(UiEditBoxOptions(), shiftedBounds));
-    EXPECT_EQ(self.m_context.input().layoutGeneration(), displayed);
-    self.m_host.commitFrame(self.m_generation);
-    EXPECT_EQ(self.m_textInput.caretRect().y, nativeRect.y);
+    const u64 displayed = self.core.m_context.input().layoutGeneration();
+    const TextInputRect nativeRect = self.core.m_textInput.currentCaret();
+    const Rect shiftedBounds = MakeEcsUiRect(10.0f, 80.0f, 180.0f, 48.0f);
+    ASSERT_TRUE(self.prepareNavigation(EditBoxOptions(), shiftedBounds));
+    EXPECT_EQ(self.core.m_context.input().layoutGeneration(), displayed);
+    self.core.m_host.commitFrame(self.core.m_generation);
+    EXPECT_EQ(self.core.m_textInput.currentCaret().y, nativeRect.y);
     ASSERT_TRUE(self.click(MakeEcsUiPoint(20.0f, 38.0f)));
-    ASSERT_TRUE(self.commit());
-    ASSERT_TRUE(self.navigationFrame(UiEditBoxOptions(), shiftedBounds));
+    ASSERT_TRUE(self.core.commit());
+    ASSERT_TRUE(self.navigationFrame(EditBoxOptions(), shiftedBounds));
     EXPECT_EQ(self.m_navigationModel.caret(), 4u);
     EXPECT_EQ(self.m_navigationModel.anchor(), 4u);
-    EXPECT_FLOAT_EQ(self.m_placement.caret.y, 92.0f);
-    EXPECT_EQ(self.m_textInput.caretRect().y, 92);
+    EXPECT_FLOAT_EQ(self.core.m_placement.caret.y, 92.0f);
+    EXPECT_EQ(self.core.m_textInput.currentCaret().y, 92);
     EXPECT_TRUE(self.m_resolver.records.empty());
 }
 
@@ -487,27 +296,27 @@ void VerifyUiEditNavigationHostTests_EarlierCommittedTextRetiresQueuedPublishedP
 }
 
 void VerifyUiEditNavigationGuardTests_UnresolvedCallbackDoesNotApplyItsPlausibleTargetOrLaterText(mut UiEditNavigationGuardTests self){
-    const Expected<UiEditNavigationResult> unresolved = MakeUnexpected(Failure());
+    const Expected<EditNavigationResult> unresolved = MakeUnexpected(Failure());
     RejectEcsUiNavigationTarget(self, unresolved);
 }
 
 void VerifyUiEditNavigationGuardTests_OutOfRangeCallbackTargetRejectsWithoutPartialColumnPublication(mut UiEditNavigationGuardTests self){
-    const Expected<UiEditNavigationResult> target = MakeNavigationResult(8u, 20.0f);
+    const Expected<EditNavigationResult> target = MakeNavigationResult(8u, 20.0f);
     RejectEcsUiNavigationTarget(self, target);
 }
 
 void VerifyUiEditNavigationGuardTests_ScalarEdgeInsideGraphemeCannotBecomeACommittedCaret(mut UiEditNavigationGuardTests self){
-    const Expected<UiEditNavigationResult> target = MakeNavigationResult(1u, 20.0f);
+    const Expected<EditNavigationResult> target = MakeNavigationResult(1u, 20.0f);
     RejectEcsUiNavigationTarget(self, target);
 }
 
 void VerifyUiEditNavigationGuardTests_ByteInsideUtf8ScalarCannotBecomeACommittedCaret(mut UiEditNavigationGuardTests self){
-    const Expected<UiEditNavigationResult> target = MakeNavigationResult(2u, 20.0f);
+    const Expected<EditNavigationResult> target = MakeNavigationResult(2u, 20.0f);
     RejectEcsUiNavigationTarget(self, target);
 }
 
 void VerifyUiEditNavigationGuardTests_NonfinitePreferredColumnRejectsBeforeApplyingTheTarget(mut UiEditNavigationGuardTests self){
-    const Expected<UiEditNavigationResult> target = MakeNavigationResult(4u, bit_cast<f32>(0x7fc00000u));
+    const Expected<EditNavigationResult> target = MakeNavigationResult(4u, bit_cast<f32>(0x7fc00000u));
     RejectEcsUiNavigationTarget(self, target);
 }
 
@@ -549,31 +358,31 @@ void VerifyUiEditNavigationGuardTests_ResolverContextFailureRejectsItsTargetAndL
 
 void VerifyUiEditNavigationLifetimeTests_NativePreeditSuppressesVerticalKeysAndFirstEscapeAllowsFreshNavigation(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    ASSERT_EQ(self.m_textInput.preedit("IME", 0u, 3u), TextInputAdmission::Accepted);
-    self.m_host.collectNative();
+    ASSERT_EQ(self.core.m_textInput.preedit("IME", 0u, 3u), TextInputAdmission::Accepted);
+    self.core.m_host.collectNative();
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_TRUE(self.m_navigationModel.composition().active);
-    UiEditModelSnapshot preedit = UiEditModelSnapshot(self.m_arena);
+    EditModelSnapshot preedit = EditModelSnapshot();
     preedit.capture(self.m_navigationModel);
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
     self.m_resolver.records.clear();
     self.m_actions.records.clear();
 
-    Array<KeyEnum, 4> keys = Array<KeyEnum, 4>();
+    Array<Key, 4> keys = Array<Key, 4>();
     keys[0u] = Key::Up;
     keys[1u] = Key::Down;
     keys[2u] = Key::PageUp;
     keys[3u] = Key::PageDown;
-    for(in KeyEnum value : keys)
-        ASSERT_TRUE(self.key(value));
+    for(in Key value : keys)
+        ASSERT_TRUE(self.core.key(value));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_TRUE(self.m_resolver.records.empty());
     EXPECT_TRUE(preedit.matches(self.m_navigationModel));
     EXPECT_TRUE(self.m_navigation.matches(preferred));
     EXPECT_TRUE(self.m_actions.records.empty());
 
-    ASSERT_TRUE(self.key(Key::Escape));
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Escape));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_FALSE(self.m_navigationModel.composition().active);
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nx\nabcdef");
@@ -582,8 +391,8 @@ void VerifyUiEditNavigationLifetimeTests_NativePreeditSuppressesVerticalKeysAndF
     EXPECT_EQ(self.m_navigationModel.anchor(), 10u);
     EXPECT_EQ(self.m_navigationModel.caret(), 10u);
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_FALSE(self.m_result.cancelled);
-    EXPECT_TRUE(self.m_result.focused);
+    EXPECT_FALSE(self.core.m_result.cancelled);
+    EXPECT_TRUE(self.core.m_result.focused);
     EXPECT_TRUE(self.m_actions.records.empty());
     ASSERT_EQ(self.m_resolver.records.size(), 1u);
     EXPECT_FALSE(self.m_resolver.records[0u].navigation.valid);
@@ -593,58 +402,58 @@ void VerifyUiEditNavigationLifetimeTests_NativePreeditSuppressesVerticalKeysAndF
 
 void VerifyUiEditNavigationLifetimeTests_DisableDiscardsQueuedNavigationAndResetsOnlyTheLentState(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    UiEditModelSnapshot before = UiEditModelSnapshot(self.m_arena);
+    EditModelSnapshot before = EditModelSnapshot();
     before.capture(self.m_navigationModel);
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
-    const TextInputSessionToken oldSession = self.m_textInput.activeSession();
-    ASSERT_TRUE(self.key(Key::Down));
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    const TextInputSessionToken oldSession = self.core.m_textInput.activeSession();
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.commitNative("late"));
     EXPECT_TRUE(self.m_navigation.matches(preferred));
     EXPECT_TRUE(before.matches(self.m_navigationModel));
 
-    UiEditBoxOptions disabled = UiEditBoxOptions();
+    EditBoxOptions disabled = EditBoxOptions();
     disabled.enabled = false;
     ASSERT_TRUE(self.navigationFrame(disabled));
-    EXPECT_TRUE(self.m_result.abandoned);
-    EXPECT_FALSE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.abandoned);
+    EXPECT_FALSE(self.core.m_result.focused);
     EXPECT_TRUE(before.matches(self.m_navigationModel));
     EXPECT_TRUE(self.m_resolver.records.empty());
     EXPECT_FALSE(self.m_navigation.hasPreferredX());
     EXPECT_FALSE(self.m_navigation.matches(preferred));
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 1u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 1u);
     ASSERT_EQ(self.m_actions.records.size(), 1u);
     EXPECT_EQ(self.m_actions.records[0u].text, "abcdef\nx\nabcdef");
-    EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_FALSE(self.core.m_textInput.activeSession().valid());
+    EXPECT_EQ(self.core.m_textInput.sendCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(self.navigationFrame(disabled));
-    EXPECT_FALSE(self.m_result.abandoned);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 1u);
+    EXPECT_FALSE(self.core.m_result.abandoned);
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 1u);
     EXPECT_TRUE(self.m_resolver.records.empty());
 }
 
 void VerifyUiEditNavigationLifetimeTests_BlurResetsPreferredColumnAtItsOrderedPositionBetweenVerticalKeys(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
     ASSERT_TRUE(self.m_navigation.setPreferredX(40.0f));
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
-    UiEditModelSnapshot before = UiEditModelSnapshot(self.m_arena);
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    EditModelSnapshot before = EditModelSnapshot();
     before.capture(self.m_navigationModel);
-    ASSERT_TRUE(self.key(Key::Up));
+    ASSERT_TRUE(self.core.key(Key::Up));
     ASSERT_TRUE(self.focusOther());
     ASSERT_TRUE(self.focusNavigation());
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     EXPECT_TRUE(before.matches(self.m_navigationModel));
     EXPECT_TRUE(self.m_navigation.matches(preferred));
 
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_TRUE(self.m_result.blurred);
-    EXPECT_TRUE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.blurred);
+    EXPECT_TRUE(self.core.m_result.focused);
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nx\nabcdef");
     EXPECT_EQ(self.m_navigationModel.revision(), before.m_expectedRevision);
     EXPECT_EQ(self.m_navigationModel.externalRevision(), before.m_expectedExternalRevision);
     EXPECT_EQ(self.m_navigationModel.anchor(), 8u);
     EXPECT_EQ(self.m_navigationModel.caret(), 8u);
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Blur), 1u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Blur), 1u);
     ASSERT_EQ(self.m_resolver.records.size(), 2u);
     EXPECT_EQ(self.m_resolver.records[0u].caret, 8u);
     EXPECT_TRUE(self.m_resolver.records[0u].navigation.valid);
@@ -660,25 +469,25 @@ void VerifyUiEditNavigationLifetimeTests_BlurResetsPreferredColumnAtItsOrderedPo
 
 void VerifyUiEditNavigationLifetimeTests_BlurPreservesDraftBeforeFreshFocusEpochNavigation(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    const TextInputSessionToken oldSession = self.m_textInput.activeSession();
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    const TextInputSessionToken oldSession = self.core.m_textInput.activeSession();
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
     ASSERT_TRUE(self.commitNative("!"));
     ASSERT_TRUE(self.focusOther());
     ASSERT_TRUE(self.focusNavigation());
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nx\nabcdef");
     EXPECT_TRUE(self.m_navigation.matches(preferred));
     EXPECT_TRUE(self.m_actions.records.empty());
 
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_TRUE(self.m_result.blurred);
-    EXPECT_TRUE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.blurred);
+    EXPECT_TRUE(self.core.m_result.focused);
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nx!\nabcdef");
     EXPECT_EQ(self.m_navigationModel.anchor(), 12u);
     EXPECT_EQ(self.m_navigationModel.caret(), 12u);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Blur), 1u);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Cancel), 0u);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 0u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Blur), 1u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Cancel), 0u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 0u);
     ASSERT_EQ(self.m_actions.records.size(), 1u);
     EXPECT_EQ(self.m_actions.records[0u].text, "abcdef\nx!\nabcdef");
     ASSERT_EQ(self.m_resolver.records.size(), 1u);
@@ -686,8 +495,8 @@ void VerifyUiEditNavigationLifetimeTests_BlurPreservesDraftBeforeFreshFocusEpoch
     EXPECT_EQ(self.m_resolver.records[0u].caret, 9u);
     EXPECT_FALSE(self.m_resolver.records[0u].navigation.valid);
     EXPECT_FLOAT_EQ(self.m_navigation.preferredX(), 20.0f);
-    EXPECT_TRUE(self.m_textInput.activeSession().valid());
-    EXPECT_NE(self.m_textInput.activeSession(), oldSession);
+    EXPECT_TRUE(self.core.m_textInput.activeSession().valid());
+    EXPECT_NE(self.core.m_textInput.activeSession(), oldSession);
     ASSERT_TRUE(self.m_navigationModel.undo());
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nx\nabcdef");
     EXPECT_EQ(self.m_navigationModel.caret(), 8u);
@@ -696,144 +505,144 @@ void VerifyUiEditNavigationLifetimeTests_BlurPreservesDraftBeforeFreshFocusEpoch
 
 void VerifyUiEditNavigationLifetimeTests_OrdinaryCancelRetiresPreferredColumnWhilePreservingTheDraft(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    UiEditModelSnapshot before = UiEditModelSnapshot(self.m_arena);
+    EditModelSnapshot before = EditModelSnapshot();
     before.capture(self.m_navigationModel);
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
-    const TextInputSessionToken oldSession = self.m_textInput.activeSession();
-    ASSERT_TRUE(self.key(Key::Escape));
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    const TextInputSessionToken oldSession = self.core.m_textInput.activeSession();
+    ASSERT_TRUE(self.core.key(Key::Escape));
     EXPECT_TRUE(self.m_navigation.matches(preferred));
     EXPECT_TRUE(before.matches(self.m_navigationModel));
 
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_TRUE(self.m_result.cancelled);
-    EXPECT_FALSE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.cancelled);
+    EXPECT_FALSE(self.core.m_result.focused);
     EXPECT_TRUE(before.matches(self.m_navigationModel));
     EXPECT_FALSE(self.m_navigation.snapshot().valid);
     EXPECT_FALSE(self.m_navigation.matches(preferred));
     EXPECT_TRUE(self.m_resolver.records.empty());
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Cancel), 1u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Cancel), 1u);
     ASSERT_EQ(self.m_actions.records.size(), 1u);
     EXPECT_EQ(self.m_actions.records[0u].text, "abcdef\nx\nabcdef");
-    EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_FALSE(self.core.m_textInput.activeSession().valid());
+    EXPECT_EQ(self.core.m_textInput.sendCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 void VerifyUiEditNavigationLifetimeTests_OldEpochCancelPreservesDraftAndLaterRefocusNavigation(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    const TextInputSessionToken oldSession = self.m_textInput.activeSession();
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    const TextInputSessionToken oldSession = self.core.m_textInput.activeSession();
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
     const u64 revision = self.m_navigationModel.revision();
-    ASSERT_TRUE(self.key(Key::Escape));
+    ASSERT_TRUE(self.core.key(Key::Escape));
     ASSERT_TRUE(self.commitNative("late"));
     ASSERT_TRUE(self.focusOther());
     ASSERT_TRUE(self.focusNavigation());
-    ASSERT_TRUE(self.key(Key::Up));
+    ASSERT_TRUE(self.core.key(Key::Up));
     EXPECT_TRUE(self.m_navigation.matches(preferred));
     EXPECT_EQ(self.m_navigationModel.caret(), 8u);
 
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_TRUE(self.m_result.cancelled);
-    EXPECT_TRUE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.cancelled);
+    EXPECT_TRUE(self.core.m_result.focused);
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nx\nabcdef");
     EXPECT_EQ(self.m_navigationModel.revision(), revision);
     EXPECT_EQ(self.m_navigationModel.anchor(), 1u);
     EXPECT_EQ(self.m_navigationModel.caret(), 1u);
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Cancel), 1u);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Blur), 0u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Cancel), 1u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Blur), 0u);
     ASSERT_EQ(self.m_actions.records.size(), 1u);
     EXPECT_EQ(self.m_actions.records[0u].text, "abcdef\nx\nabcdef");
     ASSERT_EQ(self.m_resolver.records.size(), 1u);
     EXPECT_FALSE(self.m_resolver.records[0u].navigation.valid);
     EXPECT_EQ(self.m_resolver.records[0u].caret, 8u);
     EXPECT_FLOAT_EQ(self.m_navigation.preferredX(), 10.0f);
-    EXPECT_TRUE(self.m_textInput.activeSession().valid());
-    EXPECT_NE(self.m_textInput.activeSession(), oldSession);
-    EXPECT_EQ(self.m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_TRUE(self.core.m_textInput.activeSession().valid());
+    EXPECT_NE(self.core.m_textInput.activeSession(), oldSession);
+    EXPECT_EQ(self.core.m_textInput.sendCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 void VerifyUiEditNavigationLifetimeTests_OmissionLeavesCallerStateExactUntilRedeclarationAbandonsOwnership(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    UiEditModelSnapshot before = UiEditModelSnapshot(self.m_arena);
+    EditModelSnapshot before = EditModelSnapshot();
     before.capture(self.m_navigationModel);
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
-    const u64 declaration = self.m_widget.declarationGeneration;
-    const TextInputSessionToken oldSession = self.m_textInput.activeSession();
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    const u64 declaration = self.core.m_widget.declarationGeneration;
+    const TextInputSessionToken oldSession = self.core.m_textInput.activeSession();
     ASSERT_TRUE(self.commitNative("late"));
-    ASSERT_TRUE(self.emptyFrame());
+    ASSERT_TRUE(self.core.emptyFrame());
     EXPECT_TRUE(self.m_navigation.matches(preferred));
     EXPECT_TRUE(before.matches(self.m_navigationModel));
     EXPECT_TRUE(self.m_actions.records.empty());
     EXPECT_TRUE(self.m_resolver.records.empty());
-    EXPECT_FALSE(self.m_textInput.activeSession().valid());
+    EXPECT_FALSE(self.core.m_textInput.activeSession().valid());
 
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_TRUE(self.m_result.abandoned);
-    EXPECT_NE(self.m_widget.declarationGeneration, declaration);
+    EXPECT_TRUE(self.core.m_result.abandoned);
+    EXPECT_NE(self.core.m_widget.declarationGeneration, declaration);
     EXPECT_TRUE(before.matches(self.m_navigationModel));
     EXPECT_FALSE(self.m_navigation.hasPreferredX());
     EXPECT_FALSE(self.m_navigation.matches(preferred));
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 1u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 1u);
     ASSERT_EQ(self.m_actions.records.size(), 1u);
     EXPECT_EQ(self.m_actions.records[0u].text, "abcdef\nx\nabcdef");
-    EXPECT_EQ(self.m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.core.m_textInput.sendCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_FALSE(self.m_result.abandoned);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 1u);
+    EXPECT_FALSE(self.core.m_result.abandoned);
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 1u);
 }
 
 void VerifyUiEditNavigationLifetimeTests_HostResetCannotTouchUnlentDraftOrPreferredColumn(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    UiEditModelSnapshot before = UiEditModelSnapshot(self.m_arena);
+    EditModelSnapshot before = EditModelSnapshot();
     before.capture(self.m_navigationModel);
-    const UiEditNavigationSnapshot preferred = self.m_navigation.snapshot();
-    const TextInputSessionToken oldSession = self.m_textInput.activeSession();
-    self.m_host.reset();
+    const EditNavigationSnapshot preferred = self.m_navigation.snapshot();
+    const TextInputSessionToken oldSession = self.core.m_textInput.activeSession();
+    self.core.m_host.reset();
     EXPECT_TRUE(before.matches(self.m_navigationModel));
     EXPECT_TRUE(self.m_navigation.matches(preferred));
     EXPECT_TRUE(self.m_actions.records.empty());
     EXPECT_TRUE(self.m_resolver.records.empty());
-    EXPECT_FALSE(self.m_textInput.activeSession().valid());
+    EXPECT_FALSE(self.core.m_textInput.activeSession().valid());
 
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_TRUE(self.m_result.abandoned);
+    EXPECT_TRUE(self.core.m_result.abandoned);
     EXPECT_TRUE(before.matches(self.m_navigationModel));
     EXPECT_FALSE(self.m_navigation.hasPreferredX());
     EXPECT_FALSE(self.m_navigation.matches(preferred));
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 1u);
-    EXPECT_EQ(self.m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 1u);
+    EXPECT_EQ(self.core.m_textInput.sendCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 void VerifyUiEditNavigationLifetimeTests_RebindingResetsOnlyTheNewlyLentModelAndNavigationOwnership(mut UiEditNavigationLifetimeTests self){
     ASSERT_TRUE(SeedPreferredNavigationColumn(self));
-    UiEditModelSnapshot original = UiEditModelSnapshot(self.m_arena);
+    EditModelSnapshot original = EditModelSnapshot();
     original.capture(self.m_navigationModel);
-    const UiEditNavigationSnapshot originalPreferred = self.m_navigation.snapshot();
-    UiEditModel replacement = UiEditModel(self.m_arena, UiEditLimits(), UiEditTextMode::Multiline);
+    const EditNavigationSnapshot originalPreferred = self.m_navigation.snapshot();
+    EditModel replacement = EditModel(EditLimits(), EditTextMode::Multiline);
     ASSERT_TRUE(replacement.setText("zz\nabc"));
     ASSERT_TRUE(replacement.setSelection(1u, 1u));
-    UiEditNavigationState replacementNavigation = UiEditNavigationState();
+    EditNavigationState replacementNavigation = EditNavigationState();
     ASSERT_TRUE(replacementNavigation.setPreferredX(70.0f));
-    const UiEditNavigationSnapshot replacementPreferred = replacementNavigation.snapshot();
-    UiEditModelSnapshot replacementBefore = UiEditModelSnapshot(self.m_arena);
+    const EditNavigationSnapshot replacementPreferred = replacementNavigation.snapshot();
+    EditModelSnapshot replacementBefore = EditModelSnapshot();
     replacementBefore.capture(replacement);
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     EXPECT_TRUE(self.m_navigation.matches(originalPreferred));
     EXPECT_TRUE(replacementNavigation.matches(replacementPreferred));
 
     ASSERT_TRUE(self.prepareNavigationModel(replacement, replacementNavigation));
-    ASSERT_TRUE(self.commit());
-    EXPECT_TRUE(self.m_result.abandoned);
+    ASSERT_TRUE(self.core.commit());
+    EXPECT_TRUE(self.core.m_result.abandoned);
     EXPECT_TRUE(original.matches(self.m_navigationModel));
     EXPECT_TRUE(replacementBefore.matches(replacement));
     EXPECT_TRUE(self.m_navigation.matches(originalPreferred));
     EXPECT_FALSE(replacementNavigation.hasPreferredX());
     EXPECT_FALSE(replacementNavigation.matches(replacementPreferred));
     EXPECT_TRUE(self.m_resolver.records.empty());
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 1u);
-    ASSERT_TRUE(self.key(Key::Down));
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 1u);
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.prepareNavigationModel(replacement, replacementNavigation));
-    ASSERT_TRUE(self.commit());
+    ASSERT_TRUE(self.core.commit());
     EXPECT_EQ(replacement.caret(), 4u);
     ASSERT_EQ(self.m_resolver.records.size(), 1u);
     EXPECT_EQ(self.m_resolver.records[0u].text, "zz\nabc");
@@ -841,15 +650,15 @@ void VerifyUiEditNavigationLifetimeTests_RebindingResetsOnlyTheNewlyLentModelAnd
     EXPECT_FLOAT_EQ(replacementNavigation.preferredX(), 10.0f);
     EXPECT_TRUE(self.m_navigation.matches(originalPreferred));
 
-    const UiEditNavigationSnapshot replacementAccepted = replacementNavigation.snapshot();
+    const EditNavigationSnapshot replacementAccepted = replacementNavigation.snapshot();
     ASSERT_TRUE(self.navigationFrame());
-    EXPECT_TRUE(self.m_result.abandoned);
+    EXPECT_TRUE(self.core.m_result.abandoned);
     EXPECT_TRUE(original.matches(self.m_navigationModel));
     EXPECT_FALSE(self.m_navigation.hasPreferredX());
     EXPECT_TRUE(replacementNavigation.matches(replacementAccepted));
     EXPECT_EQ(replacement.text(), "zz\nabc");
     EXPECT_EQ(replacement.caret(), 4u);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Abandon), 2u);
+    EXPECT_EQ(self.m_actions.count(EditAction::Abandon), 2u);
 }
 
 void VerifyUiEditNavigationHostTests_CopiedCommitDownAndCommitResolveTheCurrentEventPosition(mut UiEditNavigationHostTests self){
@@ -857,7 +666,7 @@ void VerifyUiEditNavigationHostTests_CopiedCommitDownAndCommitResolveTheCurrentE
     ASSERT_TRUE(self.m_navigationModel.setSelection(1u, 1u));
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(self.commitNative("Q"));
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.commitNative("!"));
     EXPECT_EQ(self.m_navigationModel.text(), "ab\ncdef\nxy");
     EXPECT_EQ(self.m_navigationModel.caret(), 1u);
@@ -882,18 +691,18 @@ void VerifyUiEditNavigationHostTests_RepeatedVerticalMovementPreservesTheColumnA
     ASSERT_TRUE(self.m_navigationModel.setSelection(5u, 5u));
     ASSERT_TRUE(self.activateNavigation());
     const u64 revision = self.m_navigationModel.revision();
-    UiInputEvent downEvent = UiInputEvent();
+    InputEvent downEvent = InputEvent();
     downEvent.key = Key::Down;
-    downEvent.type = UiInputEventType::KeyDown;
+    downEvent.type = InputEventType::KeyDown;
     downEvent.shift = true;
-    ASSERT_TRUE(self.dispatch(downEvent));
+    ASSERT_TRUE(self.core.dispatch(downEvent));
     downEvent.repeat = true;
-    ASSERT_TRUE(self.dispatch(downEvent));
-    UiInputEvent upEvent = UiInputEvent();
+    ASSERT_TRUE(self.core.dispatch(downEvent));
+    InputEvent upEvent = InputEvent();
     upEvent.key = Key::Down;
-    upEvent.type = UiInputEventType::KeyUp;
+    upEvent.type = InputEventType::KeyUp;
     upEvent.shift = true;
-    ASSERT_TRUE(self.dispatch(upEvent));
+    ASSERT_TRUE(self.core.dispatch(upEvent));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_resolver.records.size(), 2u);
     ASSERT_TRUE(self.m_resolver.records[0u].result.has_value());
@@ -904,8 +713,8 @@ void VerifyUiEditNavigationHostTests_RepeatedVerticalMovementPreservesTheColumnA
     EXPECT_FLOAT_EQ(self.m_resolver.records[1u].navigation.preferredX, 50.0f);
     EXPECT_EQ(self.m_navigationModel.anchor(), 5u);
     EXPECT_EQ(self.m_navigationModel.caret(), 14u);
-    ASSERT_TRUE(self.key(Key::Up));
-    ASSERT_TRUE(self.key(Key::Up));
+    ASSERT_TRUE(self.core.key(Key::Up));
+    ASSERT_TRUE(self.core.key(Key::Up));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_resolver.records.size(), 4u);
     ASSERT_TRUE(self.m_resolver.records[2u].result.has_value());
@@ -923,12 +732,12 @@ void VerifyUiEditNavigationHostTests_AcceptedEndpointNoOpResetsThePreferredColum
     ASSERT_TRUE(self.m_navigationModel.setText("abcdef\nx\nabcdef"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(5u, 5u));
     ASSERT_TRUE(self.activateNavigation());
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_navigationModel.caret(), 8u);
     const u64 selectionGeneration = self.m_navigationModel.selectionGeneration();
-    ASSERT_TRUE(self.key(Key::End));
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::End));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_resolver.records.size(), 2u);
     EXPECT_GT(self.m_resolver.records[1u].selectionGeneration, selectionGeneration);
@@ -943,10 +752,10 @@ void VerifyUiEditNavigationHostTests_AcceptedNativeInsertionReseedsTheNextVertic
     ASSERT_TRUE(self.m_navigationModel.setText("abcdef\nx\nabcdef"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(5u, 5u));
     ASSERT_TRUE(self.activateNavigation());
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_TRUE(self.commitNative("z"));
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_resolver.records.size(), 2u);
     EXPECT_FALSE(self.m_resolver.records[1u].navigation.valid);
@@ -963,21 +772,21 @@ void VerifyUiEditNavigationHostTests_AppliedDelayedPasteResetsTheColumnAtItsComp
     ASSERT_TRUE(self.m_navigationModel.setText("abcdef\nx\nabcdef"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(5u, 5u));
     ASSERT_TRUE(self.activateNavigation());
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
-    self.m_clipboard.delayed = true;
-    ASSERT_TRUE(self.key(Key::V, false, true));
+    self.core.m_clipboard.delayed = true;
+    ASSERT_TRUE(self.core.key(Key::V, false, true));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_TRUE(self.m_navigation.snapshot().valid);
     EXPECT_FLOAT_EQ(self.m_navigation.snapshot().preferredX, 50.0f);
-    ASSERT_TRUE(self.m_clipboard.pump());
-    const ClipboardRequestToken token = self.m_clipboard.startedToken;
+    ASSERT_TRUE(self.core.m_clipboard.pump());
+    const ClipboardRequestToken token = self.core.m_clipboard.startedToken;
     ASSERT_TRUE(token.valid());
-    ASSERT_TRUE(self.m_clipboard.deliver(token, ClipboardStatus::Success, "zz"));
+    ASSERT_TRUE(self.core.m_clipboard.deliver(token, ClipboardStatus::Success, "zz"));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nxzz\nabcdef");
     EXPECT_FALSE(self.m_navigation.snapshot().valid);
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_resolver.records.size(), 2u);
     EXPECT_FALSE(self.m_resolver.records[1u].navigation.valid);
@@ -990,48 +799,48 @@ void VerifyUiEditNavigationHostTests_FailedAndCancelledPastePreserveTheAcceptedC
     ASSERT_TRUE(self.m_navigationModel.setText("abcdef\nx\nabcdef"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(5u, 5u));
     ASSERT_TRUE(self.activateNavigation());
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
-    self.m_clipboard.delayed = true;
-    ASSERT_TRUE(self.key(Key::V, false, true));
+    self.core.m_clipboard.delayed = true;
+    ASSERT_TRUE(self.core.key(Key::V, false, true));
     ASSERT_TRUE(self.navigationFrame());
-    ASSERT_TRUE(self.m_clipboard.pump());
-    ASSERT_TRUE(self.m_clipboard.deliver(self.m_clipboard.startedToken, ClipboardStatus::NativeFailure));
+    ASSERT_TRUE(self.core.m_clipboard.pump());
+    ASSERT_TRUE(self.core.m_clipboard.deliver(self.core.m_clipboard.startedToken, ClipboardStatus::NativeFailure));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_TRUE(self.m_navigation.snapshot().valid);
     EXPECT_FLOAT_EQ(self.m_navigation.snapshot().preferredX, 50.0f);
     EXPECT_EQ(self.m_navigationModel.caret(), 8u);
-    ASSERT_TRUE(self.key(Key::V, false, true));
+    ASSERT_TRUE(self.core.key(Key::V, false, true));
     ASSERT_TRUE(self.navigationFrame());
-    ASSERT_TRUE(self.m_clipboard.pump());
-    const ClipboardRequestToken cancelled = self.m_clipboard.startedToken;
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.m_clipboard.pump());
+    const ClipboardRequestToken cancelled = self.core.m_clipboard.startedToken;
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_resolver.records.size(), 2u);
     EXPECT_TRUE(self.m_resolver.records[1u].navigation.valid);
     EXPECT_FLOAT_EQ(self.m_resolver.records[1u].navigation.preferredX, 50.0f);
     EXPECT_EQ(self.m_navigationModel.caret(), 14u);
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nx\nabcdef");
-    EXPECT_FALSE(self.m_clipboard.deliver(cancelled, ClipboardStatus::Success, "late"));
+    EXPECT_FALSE(self.core.m_clipboard.deliver(cancelled, ClipboardStatus::Success, "late"));
     EXPECT_FALSE(self.m_navigationModel.canUndo());
 }
 
 void VerifyUiEditNavigationHostTests_PageMovementCarriesTheViewportAcceptedAtInputAdmission(mut UiEditNavigationHostTests self){
     ASSERT_TRUE(self.m_navigationModel.setText("a\nb\nc\nd\ne\nf\ng"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(1u, 1u));
-    ASSERT_TRUE(self.activateNavigation(UiEditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 24.0f)));
-    const u64 displayed = self.m_context.input().layoutGeneration();
-    const UiRect nextBounds = MakeEcsUiRect(10.0f, 20.0f, 180.0f, 36.0f);
-    ASSERT_TRUE(self.prepareNavigation(UiEditBoxOptions(), nextBounds));
-    EXPECT_EQ(self.m_context.input().layoutGeneration(), displayed);
-    ASSERT_TRUE(self.key(Key::PageDown));
-    ASSERT_TRUE(self.commit());
-    ASSERT_TRUE(self.navigationFrame(UiEditBoxOptions(), nextBounds));
+    ASSERT_TRUE(self.activateNavigation(EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 24.0f)));
+    const u64 displayed = self.core.m_context.input().layoutGeneration();
+    const Rect nextBounds = MakeEcsUiRect(10.0f, 20.0f, 180.0f, 36.0f);
+    ASSERT_TRUE(self.prepareNavigation(EditBoxOptions(), nextBounds));
+    EXPECT_EQ(self.core.m_context.input().layoutGeneration(), displayed);
+    ASSERT_TRUE(self.core.key(Key::PageDown));
+    ASSERT_TRUE(self.core.commit());
+    ASSERT_TRUE(self.navigationFrame(EditBoxOptions(), nextBounds));
     ASSERT_EQ(self.m_resolver.records.size(), 1u);
     EXPECT_FLOAT_EQ(self.m_resolver.records[0u].viewportHeight, 24.0f);
     EXPECT_EQ(self.m_navigationModel.caret(), 5u);
-    ASSERT_TRUE(self.key(Key::PageDown));
-    ASSERT_TRUE(self.navigationFrame(UiEditBoxOptions(), nextBounds));
+    ASSERT_TRUE(self.core.key(Key::PageDown));
+    ASSERT_TRUE(self.navigationFrame(EditBoxOptions(), nextBounds));
     ASSERT_EQ(self.m_resolver.records.size(), 2u);
     EXPECT_FLOAT_EQ(self.m_resolver.records[1u].viewportHeight, 36.0f);
     EXPECT_EQ(self.m_navigationModel.caret(), 11u);
@@ -1041,8 +850,8 @@ void VerifyUiEditNavigationHostTests_NewlineThenDownShapesTheNewHardLineBeforeLa
     ASSERT_TRUE(self.m_navigationModel.setText("ab\ncdef"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(1u, 1u));
     ASSERT_TRUE(self.activateNavigation());
-    ASSERT_TRUE(self.key(Key::Enter));
-    ASSERT_TRUE(self.key(Key::Down));
+    ASSERT_TRUE(self.core.key(Key::Enter));
+    ASSERT_TRUE(self.core.key(Key::Down));
     ASSERT_TRUE(self.commitNative("!"));
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_EQ(self.m_resolver.records.size(), 1u);
@@ -1052,8 +861,8 @@ void VerifyUiEditNavigationHostTests_NewlineThenDownShapesTheNewHardLineBeforeLa
     EXPECT_EQ(self.m_resolver.records[0u].result.value().committedByte, 4u);
     EXPECT_EQ(self.m_navigationModel.text(), "a\nb\n!cdef");
     EXPECT_EQ(self.m_navigationModel.caret(), 5u);
-    EXPECT_FALSE(self.m_result.submitted);
-    EXPECT_EQ(self.m_actions.count(UiEditAction::Submit), 0u);
+    EXPECT_FALSE(self.core.m_result.submitted);
+    EXPECT_EQ(self.m_actions.count(EditAction::Submit), 0u);
     ASSERT_TRUE(self.m_navigationModel.undo());
     EXPECT_EQ(self.m_navigationModel.text(), "a\nb\ncdef");
     ASSERT_TRUE(self.m_navigationModel.undo());
@@ -1067,14 +876,14 @@ void VerifyUiEditPointerCaptureTests_ScrollbarGestureFocusCannotCollapseCrossLin
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(PublishEcsUiPointerCapturePart(self, true));
     ASSERT_TRUE(self.m_navigation.setPreferredX(40.0f));
-    const UiEditNavigationSnapshot navigation = self.m_navigation.snapshot();
+    const EditNavigationSnapshot navigation = self.m_navigation.snapshot();
     const u64 revision = self.m_navigationModel.revision();
     const u64 selection = self.m_navigationModel.selectionGeneration();
-    ASSERT_TRUE(self.dispatchPoint(MakeEcsUiPoint(185.0f, 62.0f), UiInputEventType::PrimaryDown));
-    EXPECT_EQ(self.m_context.input().focus(), self.m_widget.id);
-    EXPECT_EQ(self.m_context.input().capture(), self.m_otherWidget.id);
-    ASSERT_TRUE(self.dispatchPoint(MakeEcsUiPoint(450.0f, 180.0f), UiInputEventType::PointerMove));
-    ASSERT_TRUE(self.dispatchPoint(MakeEcsUiPoint(450.0f, 180.0f), UiInputEventType::PrimaryUp));
+    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(185.0f, 62.0f), InputEventType::PrimaryDown));
+    EXPECT_EQ(self.core.m_context.input().focus(), self.core.m_widget.id);
+    EXPECT_EQ(self.core.m_context.input().capture(), self.core.m_otherWidget.id);
+    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(450.0f, 180.0f), InputEventType::PointerMove));
+    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(450.0f, 180.0f), InputEventType::PrimaryUp));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.anchor(), 2u);
     EXPECT_EQ(self.m_navigationModel.caret(), 9u);
@@ -1082,7 +891,7 @@ void VerifyUiEditPointerCaptureTests_ScrollbarGestureFocusCannotCollapseCrossLin
     EXPECT_EQ(self.m_navigationModel.selectionGeneration(), selection);
     EXPECT_TRUE(self.m_navigation.matches(navigation));
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_TRUE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.focused);
 }
 
 void VerifyUiEditPointerCaptureTests_UnfocusedTrackActivationCannotShiftExtendCrossLineSelection(mut UiEditPointerCaptureTests self){
@@ -1092,23 +901,23 @@ void VerifyUiEditPointerCaptureTests_UnfocusedTrackActivationCannotShiftExtendCr
     ASSERT_TRUE(self.focusOther());
     ASSERT_TRUE(self.navigationFrame());
     ASSERT_TRUE(PublishEcsUiPointerCapturePart(self, false));
-    EXPECT_FALSE(self.m_context.input().focus().valid());
+    EXPECT_FALSE(self.core.m_context.input().focus().valid());
     const u64 selection = self.m_navigationModel.selectionGeneration();
     ASSERT_TRUE(self.click(MakeEcsUiPoint(185.0f, 62.0f), true));
-    EXPECT_EQ(self.m_context.input().focus(), self.m_widget.id);
+    EXPECT_EQ(self.core.m_context.input().focus(), self.core.m_widget.id);
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.anchor(), 2u);
     EXPECT_EQ(self.m_navigationModel.caret(), 9u);
     EXPECT_EQ(self.m_navigationModel.selectionGeneration(), selection);
     EXPECT_EQ(self.m_navigationModel.text(), "abcdef\nuvwxyz");
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_TRUE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.focused);
 }
 
 void VerifyUiEditPointerCaptureTests_ReadOnlyScrollbarFocusCannotChangeTextSelection(mut UiEditPointerCaptureTests self){
     ASSERT_TRUE(self.m_navigationModel.setText("abcdef\nuvwxyz"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(2u, 9u));
-    UiEditBoxOptions options = UiEditBoxOptions();
+    EditBoxOptions options = EditBoxOptions();
     options.readOnly = true;
     ASSERT_TRUE(self.activateNavigation(options));
     ASSERT_TRUE(PublishEcsUiPointerCapturePart(self, true));
@@ -1119,7 +928,7 @@ void VerifyUiEditPointerCaptureTests_ReadOnlyScrollbarFocusCannotChangeTextSelec
     EXPECT_EQ(self.m_navigationModel.caret(), 9u);
     EXPECT_EQ(self.m_navigationModel.selectionGeneration(), selection);
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_TRUE(self.m_result.focused);
+    EXPECT_TRUE(self.core.m_result.focused);
 }
 
 void VerifyUiEditPointerCaptureTests_MainEditorCaptureStillClampsAnOutOfBoundsCrossLineDrag(mut UiEditPointerCaptureTests self){
@@ -1127,39 +936,39 @@ void VerifyUiEditPointerCaptureTests_MainEditorCaptureStillClampsAnOutOfBoundsCr
     ASSERT_TRUE(self.m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(PublishEcsUiPointerCapturePart(self, true));
-    ASSERT_TRUE(self.dispatchPoint(MakeEcsUiPoint(20.0f, 26.0f), UiInputEventType::PrimaryDown));
-    EXPECT_EQ(self.m_context.input().capture(), self.m_widget.id);
-    ASSERT_TRUE(self.dispatchPoint(MakeEcsUiPoint(30.0f, 120.0f), UiInputEventType::PointerMove));
-    ASSERT_TRUE(self.dispatchPoint(MakeEcsUiPoint(30.0f, 120.0f), UiInputEventType::PrimaryUp));
+    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(20.0f, 26.0f), InputEventType::PrimaryDown));
+    EXPECT_EQ(self.core.m_context.input().capture(), self.core.m_widget.id);
+    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(30.0f, 120.0f), InputEventType::PointerMove));
+    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(30.0f, 120.0f), InputEventType::PrimaryUp));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.anchor(), 1u);
     EXPECT_EQ(self.m_navigationModel.caret(), 8u);
     EXPECT_EQ(self.m_navigationModel.selectedText(), "b\ncd\nxy");
     EXPECT_FALSE(self.m_navigationModel.canUndo());
-    EXPECT_FALSE(self.m_context.input().capture().valid());
+    EXPECT_FALSE(self.core.m_context.input().capture().valid());
 }
 
 void VerifyUiEditPointerSourceTests_ForeignContactCannotMoveOrEndTheAcceptedEditorSelection(mut UiEditPointerSourceTests self){
     ASSERT_TRUE(self.m_model.setText("abcdef"));
     ASSERT_TRUE(self.activate());
-    const UiInputSource first = MakeEcsUiInputSource(17u, 1u);
-    const UiInputSource second = MakeEcsUiInputSource(17u, 2u);
-    UiPointerInput input = UiPointerInput();
+    const InputSource first = MakeEcsUiInputSource(17u, 1u);
+    const InputSource second = MakeEcsUiInputSource(17u, 2u);
+    PointerInput input = PointerInput();
     input.source = first;
     input.position = self.atByte(1u);
-    input.phase = UiPointerPhase::Press;
+    input.phase = PointerPhase::Press;
     ASSERT_TRUE(self.dispatchPointer(input));
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_EQ(self.m_model.caret(), 1u);
 
     input.source = second;
     input.position = self.atByte(5u);
-    input.phase = UiPointerPhase::Press;
+    input.phase = PointerPhase::Press;
     ASSERT_TRUE(self.dispatchPointer(input));
     input.position = self.atByte(6u);
-    input.phase = UiPointerPhase::Move;
+    input.phase = PointerPhase::Move;
     ASSERT_TRUE(self.dispatchPointer(input));
-    input.phase = UiPointerPhase::Release;
+    input.phase = PointerPhase::Release;
     ASSERT_TRUE(self.dispatchPointer(input));
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_EQ(self.m_model.caret(), 1u);
@@ -1168,9 +977,9 @@ void VerifyUiEditPointerSourceTests_ForeignContactCannotMoveOrEndTheAcceptedEdit
 
     input.source = first;
     input.position = self.atByte(4u);
-    input.phase = UiPointerPhase::Move;
+    input.phase = PointerPhase::Move;
     ASSERT_TRUE(self.dispatchPointer(input));
-    input.phase = UiPointerPhase::Release;
+    input.phase = PointerPhase::Release;
     ASSERT_TRUE(self.dispatchPointer(input));
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_EQ(self.m_model.selectedText(), "bcd");
@@ -1180,21 +989,21 @@ void VerifyUiEditPointerSourceTests_ForeignContactCannotMoveOrEndTheAcceptedEdit
 void VerifyUiEditPointerSourceTests_TouchTimestampsCannotManufactureNativeDoubleClickWordSelection(mut UiEditPointerSourceTests self){
     ASSERT_TRUE(self.m_model.setText("one two"));
     ASSERT_TRUE(self.activate());
-    const UiInputSource touch = MakeEcsUiInputSource(21u, 9u);
+    const InputSource touch = MakeEcsUiInputSource(21u, 9u);
     Array<u64, 2> timestamps = Array<u64, 2>();
     timestamps[0u] = 1000u;
     timestamps[1u] = 1200u;
     for(in u64 timestamp : timestamps){
-        UiPointerInput press = UiPointerInput();
+        PointerInput press = PointerInput();
         press.source = touch;
         press.timestampMs = timestamp;
         press.position = self.atByte(1u);
-        press.phase = UiPointerPhase::Press;
+        press.phase = PointerPhase::Press;
         ASSERT_TRUE(self.dispatchPointer(press));
-        UiPointerInput release = UiPointerInput();
+        PointerInput release = PointerInput();
         release.source = touch;
         release.position = self.atByte(1u);
-        release.phase = UiPointerPhase::Release;
+        release.phase = PointerPhase::Release;
         ASSERT_TRUE(self.dispatchPointer(release));
         ASSERT_TRUE(self.frame(self.m_model));
         EXPECT_EQ(self.m_model.caret(), 1u);
@@ -1206,28 +1015,28 @@ void VerifyUiEditPointerSourceTests_TouchTimestampsCannotManufactureNativeDouble
 void VerifyUiEditPointerSourceTests_CancelledContactCannotEraseAnEarlierCompletedSelection(mut UiEditPointerSourceTests self){
     ASSERT_TRUE(self.m_model.setText("abcdef"));
     ASSERT_TRUE(self.activate());
-    const UiInputSource completed = MakeEcsUiInputSource(31u, 1u);
-    const UiInputSource next = MakeEcsUiInputSource(31u, 2u);
-    Array<UiInputSource, 2> sources = Array<UiInputSource, 2>();
+    const InputSource completed = MakeEcsUiInputSource(31u, 1u);
+    const InputSource next = MakeEcsUiInputSource(31u, 2u);
+    Array<InputSource, 2> sources = Array<InputSource, 2>();
     sources[0u] = completed;
     sources[1u] = next;
-    for(in UiInputSource cancelled : sources){
+    for(in InputSource cancelled : sources){
         ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
         ASSERT_TRUE(self.frame(self.m_model));
 
-        UiPointerInput event = UiPointerInput();
+        PointerInput event = PointerInput();
         event.source = completed;
         event.position = self.atByte(1u);
-        event.phase = UiPointerPhase::Press;
+        event.phase = PointerPhase::Press;
         ASSERT_TRUE(self.dispatchPointer(event));
-        event.phase = UiPointerPhase::Release;
+        event.phase = PointerPhase::Release;
         ASSERT_TRUE(self.dispatchPointer(event));
 
         event.source = cancelled;
         event.position = self.atByte(5u);
-        event.phase = UiPointerPhase::Press;
+        event.phase = PointerPhase::Press;
         ASSERT_TRUE(self.dispatchPointer(event));
-        event.phase = UiPointerPhase::Cancel;
+        event.phase = PointerPhase::Cancel;
         ASSERT_TRUE(self.dispatchPointer(event));
         EXPECT_EQ(self.m_model.caret(), 0u);
         EXPECT_FALSE(self.m_context.input().activePointerSource().valid());
@@ -1238,9 +1047,9 @@ void VerifyUiEditPointerSourceTests_CancelledContactCannotEraseAnEarlierComplete
 
         event.source = cancelled;
         event.position = self.atByte(2u);
-        event.phase = UiPointerPhase::Press;
+        event.phase = PointerPhase::Press;
         ASSERT_TRUE(self.dispatchPointer(event));
-        event.phase = UiPointerPhase::Release;
+        event.phase = PointerPhase::Release;
         ASSERT_TRUE(self.dispatchPointer(event));
         ASSERT_TRUE(self.frame(self.m_model));
         EXPECT_EQ(self.m_model.caret(), 2u);
@@ -1251,154 +1060,154 @@ void VerifyUiEditPointerSourceTests_CancelledContactCannotEraseAnEarlierComplete
 void VerifyUiEditActionHostTests_HeldSubmitObservesReleaseAfterDraftEventsWithoutRepeating(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
     ASSERT_TRUE(self.replaceNative("42"));
-    UiInputEvent down = UiInputEvent();
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
-    ASSERT_TRUE(self.dispatch(down));
+    down.type = InputEventType::KeyDown;
+    ASSERT_TRUE(self.core.dispatch(down));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_FALSE(self.m_result.submitted);
+    EXPECT_FALSE(self.core.m_result.submitted);
     EXPECT_TRUE(self.m_actions.records.empty());
-    EXPECT_EQ(self.m_model.text(), "42");
-    ASSERT_TRUE(self.dispatch(down));
+    EXPECT_EQ(self.core.m_model.text(), "42");
+    ASSERT_TRUE(self.core.dispatch(down));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_FALSE(self.m_result.submitted);
+    EXPECT_FALSE(self.core.m_result.submitted);
     EXPECT_TRUE(self.m_actions.records.empty());
     ASSERT_TRUE(self.commitNative("7"));
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
-    ASSERT_TRUE(self.dispatch(up));
+    up.type = InputEventType::KeyUp;
+    ASSERT_TRUE(self.core.dispatch(up));
     ASSERT_TRUE(self.commitNative("9"));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_TRUE(self.m_result.submitted);
-    ASSERT_EQ(self.actionCount(UiEditAction::Submit), 1u);
+    EXPECT_TRUE(self.core.m_result.submitted);
+    ASSERT_EQ(self.actionCount(EditAction::Submit), 1u);
     EXPECT_EQ(self.m_actions.records[0u].text, "427");
     EXPECT_EQ(self.m_actions.committed, "427");
-    EXPECT_EQ(self.m_model.text(), "4279");
-    ASSERT_TRUE(self.dispatch(up));
+    EXPECT_EQ(self.core.m_model.text(), "4279");
+    ASSERT_TRUE(self.core.dispatch(up));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 1u);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 1u);
 }
 
 void VerifyUiEditActionHostTests_EscapeCancelsConcurrentKeyboardAndControllerSubmitsBeforeRelease(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
     ASSERT_TRUE(self.replaceNative("42"));
-    const UiInputSource controller = MakeEcsUiInputSource(7u, 3u);
-    UiInputEvent keyDown = UiInputEvent();
+    const InputSource controller = MakeEcsUiInputSource(7u, 3u);
+    InputEvent keyDown = InputEvent();
     keyDown.key = Key::Enter;
-    keyDown.type = UiInputEventType::KeyDown;
-    ASSERT_TRUE(self.dispatch(keyDown));
-    UiInputEvent cmdDown = UiInputEvent();
+    keyDown.type = InputEventType::KeyDown;
+    ASSERT_TRUE(self.core.dispatch(keyDown));
+    InputEvent cmdDown = InputEvent();
     cmdDown.source = controller;
-    cmdDown.type = UiInputEventType::CommandDown;
-    cmdDown.command = UiInputCommand::Submit;
-    ASSERT_TRUE(self.dispatch(cmdDown));
+    cmdDown.type = InputEventType::CommandDown;
+    cmdDown.command = InputCommand::Submit;
+    ASSERT_TRUE(self.core.dispatch(cmdDown));
     ASSERT_TRUE(self.actionFrame());
     EXPECT_TRUE(self.m_actions.records.empty());
-    ASSERT_TRUE(self.key(Key::Escape));
+    ASSERT_TRUE(self.core.key(Key::Escape));
     keyDown.repeat = true;
-    ASSERT_TRUE(self.dispatch(keyDown));
-    UiInputEvent keyUp = UiInputEvent();
+    ASSERT_TRUE(self.core.dispatch(keyDown));
+    InputEvent keyUp = InputEvent();
     keyUp.key = Key::Enter;
-    keyUp.type = UiInputEventType::KeyUp;
-    ASSERT_TRUE(self.dispatch(keyUp));
-    UiInputEvent cmdUp = UiInputEvent();
+    keyUp.type = InputEventType::KeyUp;
+    ASSERT_TRUE(self.core.dispatch(keyUp));
+    InputEvent cmdUp = InputEvent();
     cmdUp.source = controller;
-    cmdUp.type = UiInputEventType::CommandUp;
-    ASSERT_TRUE(self.dispatch(cmdUp));
+    cmdUp.type = InputEventType::CommandUp;
+    ASSERT_TRUE(self.core.dispatch(cmdUp));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_FALSE(self.m_result.submitted);
-    EXPECT_TRUE(self.m_result.cancelled);
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 0u);
-    EXPECT_EQ(self.actionCount(UiEditAction::Cancel), 1u);
+    EXPECT_FALSE(self.core.m_result.submitted);
+    EXPECT_TRUE(self.core.m_result.cancelled);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 0u);
+    EXPECT_EQ(self.actionCount(EditAction::Cancel), 1u);
     EXPECT_EQ(self.m_actions.committed, "0");
-    EXPECT_EQ(self.m_model.text(), "0");
+    EXPECT_EQ(self.core.m_model.text(), "0");
     ASSERT_TRUE(self.focusEditor());
     ASSERT_TRUE(self.actionFrame());
-    ASSERT_TRUE(self.key(Key::Enter));
+    ASSERT_TRUE(self.core.key(Key::Enter));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 1u);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 1u);
 }
 
 void VerifyUiEditActionHostTests_FocusDepartureAndReturnCannotRestoreHeldEditorSubmit(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
-    UiInputEvent down = UiInputEvent();
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
-    ASSERT_TRUE(self.dispatch(down));
+    down.type = InputEventType::KeyDown;
+    ASSERT_TRUE(self.core.dispatch(down));
     ASSERT_TRUE(self.focusOther());
     ASSERT_TRUE(self.focusEditor());
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
-    ASSERT_TRUE(self.dispatch(up));
+    up.type = InputEventType::KeyUp;
+    ASSERT_TRUE(self.core.dispatch(up));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_FALSE(self.m_result.submitted);
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 0u);
-    ASSERT_TRUE(self.key(Key::Enter));
+    EXPECT_FALSE(self.core.m_result.submitted);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 0u);
+    ASSERT_TRUE(self.core.key(Key::Enter));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 1u);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 1u);
 }
 
 void VerifyUiEditActionHostTests_ReboundEditorModelCannotReceiveAnEarlierHeldSubmit(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
-    UiInputEvent down = UiInputEvent();
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
-    ASSERT_TRUE(self.dispatch(down));
-    UiEditModel replacement = UiEditModel(self.m_arena);
+    down.type = InputEventType::KeyDown;
+    ASSERT_TRUE(self.core.dispatch(down));
+    EditModel replacement = EditModel();
     ASSERT_TRUE(replacement.setText("replacement"));
-    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self, replacement, UiEditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
-    ASSERT_TRUE(self.commit());
+    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
+    ASSERT_TRUE(self.core.commit());
     self.m_actions.clear();
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
-    ASSERT_TRUE(self.dispatch(up));
-    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self, replacement, UiEditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
-    ASSERT_TRUE(self.commit());
-    EXPECT_FALSE(self.m_result.submitted);
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 0u);
-    ASSERT_TRUE(self.key(Key::Enter));
-    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self, replacement, UiEditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
-    ASSERT_TRUE(self.commit());
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 1u);
+    up.type = InputEventType::KeyUp;
+    ASSERT_TRUE(self.core.dispatch(up));
+    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
+    ASSERT_TRUE(self.core.commit());
+    EXPECT_FALSE(self.core.m_result.submitted);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 0u);
+    ASSERT_TRUE(self.core.key(Key::Enter));
+    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
+    ASSERT_TRUE(self.core.commit());
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 1u);
 }
 
 void VerifyUiEditActionHostTests_ExternalDraftReplacementRetiresThePendingSubmit(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
-    UiInputEvent down = UiInputEvent();
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
-    ASSERT_TRUE(self.dispatch(down));
-    ASSERT_TRUE(self.m_model.setText("external"));
+    down.type = InputEventType::KeyDown;
+    ASSERT_TRUE(self.core.dispatch(down));
+    ASSERT_TRUE(self.core.m_model.setText("external"));
     ASSERT_TRUE(self.actionFrame());
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
-    ASSERT_TRUE(self.dispatch(up));
+    up.type = InputEventType::KeyUp;
+    ASSERT_TRUE(self.core.dispatch(up));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_FALSE(self.m_result.submitted);
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 0u);
-    ASSERT_TRUE(self.key(Key::Enter));
+    EXPECT_FALSE(self.core.m_result.submitted);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 0u);
+    ASSERT_TRUE(self.core.key(Key::Enter));
     ASSERT_TRUE(self.actionFrame());
     EXPECT_EQ(self.m_actions.committed, "external");
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 1u);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 1u);
 }
 
 void VerifyUiEditBoxHostTests_PlainEditorPolicyChangesFenceHeldSubmitEvenAfterRestoration(mut UiEditBoxHostTests self){
     ASSERT_TRUE(self.activate());
-    UiInputEvent down = UiInputEvent();
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
+    down.type = InputEventType::KeyDown;
     ASSERT_TRUE(self.dispatch(down));
-    UiEditBoxOptions options = UiEditBoxOptions();
+    EditBoxOptions options = EditBoxOptions();
     options.readOnly = true;
     ASSERT_TRUE(self.frame(self.m_model, options));
     ASSERT_TRUE(self.frame(self.m_model));
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
+    up.type = InputEventType::KeyUp;
     ASSERT_TRUE(self.dispatch(up));
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_FALSE(self.m_result.submitted);
@@ -1409,51 +1218,51 @@ void VerifyUiEditBoxHostTests_PlainEditorPolicyChangesFenceHeldSubmitEvenAfterRe
 
 void VerifyUiEditActionHostTests_CompositionOwnedEnterRemainsCancelledAfterNativeCommitBeforeRelease(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
-    ASSERT_EQ(self.m_textInput.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.core.m_textInput.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
     ASSERT_TRUE(self.actionFrame());
-    ASSERT_TRUE(self.m_model.composition().active);
-    UiInputEvent down = UiInputEvent();
+    ASSERT_TRUE(self.core.m_model.composition().active);
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
-    ASSERT_TRUE(self.dispatch(down));
+    down.type = InputEventType::KeyDown;
+    ASSERT_TRUE(self.core.dispatch(down));
     ASSERT_TRUE(self.commitNative("X"));
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
-    ASSERT_TRUE(self.dispatch(up));
+    up.type = InputEventType::KeyUp;
+    ASSERT_TRUE(self.core.dispatch(up));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_FALSE(self.m_result.submitted);
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 0u);
-    EXPECT_EQ(self.m_model.text(), "0X");
-    EXPECT_FALSE(self.m_model.composition().active);
+    EXPECT_FALSE(self.core.m_result.submitted);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 0u);
+    EXPECT_EQ(self.core.m_model.text(), "0X");
+    EXPECT_FALSE(self.core.m_model.composition().active);
 }
 
 void VerifyUiEditActionHostTests_PreeditBeginningAndEndingDuringHeldEnterRetiresItsSubmit(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
-    UiInputEvent down = UiInputEvent();
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
-    ASSERT_TRUE(self.dispatch(down));
-    ASSERT_EQ(self.m_textInput.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
+    down.type = InputEventType::KeyDown;
+    ASSERT_TRUE(self.core.dispatch(down));
+    ASSERT_EQ(self.core.m_textInput.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
     ASSERT_TRUE(self.commitNative("X"));
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
-    ASSERT_TRUE(self.dispatch(up));
+    up.type = InputEventType::KeyUp;
+    ASSERT_TRUE(self.core.dispatch(up));
     ASSERT_TRUE(self.actionFrame());
-    EXPECT_FALSE(self.m_result.submitted);
-    EXPECT_EQ(self.actionCount(UiEditAction::Submit), 0u);
-    EXPECT_EQ(self.m_model.text(), "0X");
+    EXPECT_FALSE(self.core.m_result.submitted);
+    EXPECT_EQ(self.actionCount(EditAction::Submit), 0u);
+    EXPECT_EQ(self.core.m_model.text(), "0X");
 }
 
 void VerifyUiEditBoxHostTests_MultilineAcceptEditsOnPressWhileExplicitSubmitWaitsForRelease(mut UiEditBoxHostTests self){
-    UiEditModel multiline = UiEditModel(self.m_arena, UiEditLimits(), UiEditTextMode::Multiline);
+    EditModel multiline = EditModel(EditLimits(), EditTextMode::Multiline);
     ASSERT_TRUE(self.frame(multiline));
     ASSERT_TRUE(self.key(Key::Tab));
     ASSERT_TRUE(self.frame(multiline));
-    UiInputEvent down = UiInputEvent();
+    InputEvent down = InputEvent();
     down.key = Key::Enter;
-    down.type = UiInputEventType::KeyDown;
+    down.type = InputEventType::KeyDown;
     ASSERT_TRUE(self.dispatch(down));
     ASSERT_TRUE(self.frame(multiline));
     EXPECT_EQ(multiline.text(), "\n");
@@ -1462,16 +1271,16 @@ void VerifyUiEditBoxHostTests_MultilineAcceptEditsOnPressWhileExplicitSubmitWait
     ASSERT_TRUE(self.dispatch(down));
     ASSERT_TRUE(self.frame(multiline));
     EXPECT_EQ(multiline.text(), "\n\n");
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = Key::Enter;
-    up.type = UiInputEventType::KeyUp;
+    up.type = InputEventType::KeyUp;
     ASSERT_TRUE(self.dispatch(up));
     ASSERT_TRUE(self.frame(multiline));
     EXPECT_EQ(multiline.text(), "\n\n");
     EXPECT_FALSE(self.m_result.submitted);
-    UiInputEvent ctrlDown = UiInputEvent();
+    InputEvent ctrlDown = InputEvent();
     ctrlDown.key = Key::Enter;
-    ctrlDown.type = UiInputEventType::KeyDown;
+    ctrlDown.type = InputEventType::KeyDown;
     ctrlDown.control = true;
     ASSERT_TRUE(self.dispatch(ctrlDown));
     ASSERT_TRUE(self.frame(multiline));
@@ -1486,7 +1295,7 @@ void VerifyUiEditWordSelectionTests_RightHalfOfFinalWordGlyphSelectsItsWordRathe
     ASSERT_TRUE(self.m_model.setText("one two"));
     ASSERT_TRUE(self.activate());
     const VectorSingle shifted = VectorSingle(self.m_placement.textOrigin.x, self.m_placement.textOrigin.y, 0.0f, 0.0f) + VectorSingle(29.0f, 5.0f, 0.0f, 0.0f);
-    const UiPoint point = MakeEcsUiPoint(shifted.x, shifted.y);
+    const Point point = MakeEcsUiPoint(shifted.x, shifted.y);
     ASSERT_TRUE(WordSelectClickAt(self, point, 1000u));
     ASSERT_TRUE(self.frame(self.m_model));
     ASSERT_TRUE(WordSelectClickAt(self, point, 1200u));
@@ -1508,13 +1317,13 @@ void VerifyUiEditWordSelectionTests_UncapturedPointerMoveBetweenNativeClicksPres
 }
 
 void VerifyUiEditWordSelectionTests_RightHalfAtHardLineEndDoesNotSelectNewline(mut UiEditWordSelectionTests self){
-    UiEditModel multiline = UiEditModel(self.m_arena, UiEditLimits(), UiEditTextMode::Multiline);
+    EditModel multiline = EditModel(EditLimits(), EditTextMode::Multiline);
     ASSERT_TRUE(multiline.setText("one\ntwo"));
     ASSERT_TRUE(self.frame(multiline));
     ASSERT_TRUE(self.key(Key::Tab));
     ASSERT_TRUE(self.frame(multiline));
     const VectorSingle shifted = VectorSingle(self.m_placement.textOrigin.x, self.m_placement.textOrigin.y, 0.0f, 0.0f) + VectorSingle(29.0f, 5.0f, 0.0f, 0.0f);
-    const UiPoint point = MakeEcsUiPoint(shifted.x, shifted.y);
+    const Point point = MakeEcsUiPoint(shifted.x, shifted.y);
     ASSERT_TRUE(WordSelectClickAt(self, point, 1000u));
     ASSERT_TRUE(self.frame(multiline));
     ASSERT_TRUE(WordSelectClickAt(self, point, 1200u));
@@ -1600,17 +1409,17 @@ TextInputRect MakeMultilineCaret(){
 }
 
 void VerifyUiMultilineClipboardTests_NormalizedCapacityFailurePreservesSelectionAndHistory(mut UiMultilineClipboardTests self){
-    UiEditLimits limits = UiEditLimits();
+    EditLimits limits = EditLimits();
     limits.maxBytes = 6u;
-    UiEditModel model = UiEditModel(self.m_arena, limits, UiEditTextMode::Multiline);
-    UiEditClipboardController controller = UiEditClipboardController(self.m_arena, self.m_clipboard);
+    EditModel model = EditModel(limits, EditTextMode::Multiline);
+    UiEditClipboardController controller = UiEditClipboardController(self.m_clipboard);
     const UiTextEditOwner owner = MakeMultilineOwner(51u, model.instanceGeneration());
     ASSERT_TRUE(model.setText("a\nb"));
     ASSERT_TRUE(model.setSelection(1u, 2u));
     const u64 revision = model.revision();
     const u64 selection = model.selectionGeneration();
     self.m_clipboard.delayed = true;
-    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_EQ(controller.request(owner, model, EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\r\ny\r\nz"));
     EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::TooLarge);
@@ -1623,14 +1432,14 @@ void VerifyUiMultilineClipboardTests_NormalizedCapacityFailurePreservesSelection
 }
 
 void VerifyUiMultilineClipboardTests_UnsupportedControlsRejectBeforeReplacement(mut UiMultilineClipboardTests self){
-    UiEditModel model = UiEditModel(self.m_arena, UiEditLimits(), UiEditTextMode::Multiline);
-    UiEditClipboardController controller = UiEditClipboardController(self.m_arena, self.m_clipboard);
+    EditModel model = EditModel(EditLimits(), EditTextMode::Multiline);
+    UiEditClipboardController controller = UiEditClipboardController(self.m_clipboard);
     const UiTextEditOwner owner = MakeMultilineOwner(51u, model.instanceGeneration());
     ASSERT_TRUE(model.setText("a\nb"));
     ASSERT_TRUE(model.selectAll());
     const u64 selection = model.selectionGeneration();
     self.m_clipboard.delayed = true;
-    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_EQ(controller.request(owner, model, EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\x01y"));
     EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::InvalidText);
@@ -1642,8 +1451,8 @@ void VerifyUiMultilineClipboardTests_UnsupportedControlsRejectBeforeReplacement(
 }
 
 void VerifyUiMultilineNativeTests_NoncanonicalPreeditRejectsRatherThanChangingNativeOffsets(mut UiMultilineNativeTests self){
-    UiEditModel model = UiEditModel(self.m_arena, UiEditLimits(), UiEditTextMode::Multiline);
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    EditModel model = EditModel(EditLimits(), EditTextMode::Multiline);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     const UiTextEditOwner owner = MakeMultilineOwner(81u, model.instanceGeneration());
     ASSERT_TRUE(model.setText("a\nb"));
     const u64 selection = model.selectionGeneration();
@@ -1657,10 +1466,10 @@ void VerifyUiMultilineNativeTests_NoncanonicalPreeditRejectsRatherThanChangingNa
 }
 
 void VerifyUiMultilineNativeTests_LaterOversizedCommitPreservesEarlierAcceptedNativeEdit(mut UiMultilineNativeTests self){
-    UiEditLimits limits = UiEditLimits();
+    EditLimits limits = EditLimits();
     limits.maxBytes = 6u;
-    UiEditModel model = UiEditModel(self.m_arena, limits, UiEditTextMode::Multiline);
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    EditModel model = EditModel(limits, EditTextMode::Multiline);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     const UiTextEditOwner owner = MakeMultilineOwner(81u, model.instanceGeneration());
     ASSERT_TRUE(model.setText("a\nb"));
     ASSERT_EQ(session.begin(owner, MakeMultilineCaret(), model), TextInputAdmission::Accepted);

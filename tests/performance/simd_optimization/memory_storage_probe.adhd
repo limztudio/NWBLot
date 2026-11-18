@@ -2,492 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/simd_memory_guard_fixture.adhd.h>
-
-#include <global/allocation_size.h>
-#include <global/array.h>
-#include <global/atomic.h>
-#include <global/floating_point_environment.h>
-#include <global/process.h>
-#include <global/simd/memory.h>
-#include <global/simd/type.h>
-#include <global/simd/vector.h>
-#include <global/span.h>
-#include <global/text_utils.h>
-#include <global/timer.h>
-
-#if defined(FOUNDATION_PLATFORM_LINUX)
-#include <sys/wait.h>
-#endif
-
-namespace SimdOptimizationBenchmark{
-using NWB::Tests::PatternByte;
-
-FOUNDATION_INLINE void WriteProbeStdout(const AStringView text){
-    FOUNDATION_COUT << text;
-}
-
-FOUNDATION_INLINE void WriteProbeStdoutFlush(const AStringView text){
-    FOUNDATION_COUT << text;
-    FOUNDATION_COUT.flush();
-}
-
-FOUNDATION_INLINE void WriteProbeStderr(const AStringView text){
-    FOUNDATION_CERR << text;
-}
-
-namespace MemoryProbeKernels{
-
-using NWB::Tests::ExitOnAbort;
-#if defined(FOUNDATION_PLATFORM_LINUX)
-using NWB::Tests::GuardedBytes;
-#endif
-using NWB::Tests::PatternByte;
-using NWB::Tests::s_SIMDMemoryAbortExitCode;
-using NWB::Tests::s_SIMDMemoryHandlerFailureExitCode;
-using NWB::Tests::s_SIMDMemoryReturnedExitCode;
-
-inline constexpr usize s_Alignment = 64u;
-volatile u64 g_Checksum = 0u;
-
-struct AlignedBytes final{
-    NotNull<void*> storage;
-    NotNull<u8*> data;
-
-public:
-    explicit AlignedBytes(const usize count)
-        : storage(MakeNotNull(::operator new(count, AlignValT{ s_Alignment })))
-        , data(MakeNotNull(::new(storage.get()) u8[count]))
-    {}
-    ~AlignedBytes()noexcept{ ::operator delete(storage.get(), AlignValT{ s_Alignment }); }
-    AlignedBytes(const AlignedBytes&) = delete;
-    AlignedBytes& operator=(const AlignedBytes&) = delete;
-};
-
-// Candidate changes only the internal AVX alignment choice.
-FOUNDATION_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
-#if defined(FOUNDATION_HAS_AVX)
-    if(count == 0u)
-        return;
-    if(count > capacity || destination == nullptr || source == nullptr)
-        ::abort();
-    const usize destinationAddress = reinterpret_cast<usize>(destination), sourceAddress = reinterpret_cast<usize>(source);
-    if(((destinationAddress | sourceAddress) & (s_SIMDMemoryCopyAlignment - 1u)) != 0u)
-        ::abort();
-    const usize separation = destinationAddress >= sourceAddress ? destinationAddress - sourceAddress : sourceAddress - destinationAddress;
-    if(separation < count)
-        ::abort();
-
-    auto dst = MakeNotNull(static_cast<u8*>(__builtin_assume_aligned(destination, s_SIMDMemoryCopyAlignment)));
-    auto src = MakeNotNull(static_cast<const u8*>(__builtin_assume_aligned(source, s_SIMDMemoryCopyAlignment)));
-    if(count > 8192u){
-        __builtin_memcpy(dst.get(), src.get(), count);
-        return;
-    }
-    while(count >= 128u){
-        const __m256i packet0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get()));
-        const __m256i packet1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get() + 32u));
-        const __m256i packet2 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get() + 64u));
-        const __m256i packet3 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get() + 96u));
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get()), packet0);
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get() + 32u), packet1);
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get() + 64u), packet2);
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get() + 96u), packet3);
-        dst = dst.get() + 128u;
-        src = src.get() + 128u;
-        count -= 128u;
-    }
-    while(count >= 32u){
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get()), _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get())));
-        dst = dst.get() + 32u;
-        src = src.get() + 32u;
-        count -= 32u;
-    }
-    if(count >= 16u){
-        _mm_store_si128(reinterpret_cast<__m128i*>(dst.get()), _mm_load_si128(reinterpret_cast<const __m128i*>(src.get())));
-        dst = dst.get() + 16u;
-        src = src.get() + 16u;
-        count -= 16u;
-    }
-    if(count >= 8u){
-        __builtin_memcpy(dst.get(), src.get(), 8u);
-        dst = dst.get() + 8u;
-        src = src.get() + 8u;
-        count -= 8u;
-    }
-    if(count >= 4u){
-        __builtin_memcpy(dst.get(), src.get(), 4u);
-        dst = dst.get() + 4u;
-        src = src.get() + 4u;
-        count -= 4u;
-    }
-    if(count >= 2u){
-        __builtin_memcpy(dst.get(), src.get(), 2u);
-        dst = dst.get() + 2u;
-        src = src.get() + 2u;
-        count -= 2u;
-    }
-    if(count != 0u)
-        __builtin_memcpy(dst.get(), src.get(), 1u);
-#else
-    SIMDMemoryCopy(destination, capacity, source, count);
-#endif
-}
-
-FOUNDATION_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
-#if defined(FOUNDATION_HAS_AVX)
-    const __m256i left = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(lhs.get()));
-    const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs.get()));
-    const __m256 difference = _mm256_xor_ps(_mm256_castsi256_ps(left), _mm256_castsi256_ps(right));
-    const __m256i bits = _mm256_castps_si256(difference);
-    // Use integer VPTEST to check every bit rather than sign-only VTESTPS.
-    return _mm256_testz_si256(bits, bits) != 0;
-#else
-    return MathTypeDetail::EqualElements<u64, 4u>(lhs, rhs);
-#endif
-}
-
-// Preserve an inexpensive first-word rejection before the full-width exact-bit reduction.
-FOUNDATION_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
-    if(lhs.get()[0] != rhs.get()[0])
-        return false;
-    return CandidateEqual(lhs, rhs);
-}
-
-#if defined(FOUNDATION_PLATFORM_LINUX)
-[[nodiscard]] FOUNDATION_INLINE b8 RejectedBeforeAccess(const void* source, const usize count, const usize capacity, void* destination)noexcept{
-    const pid_t child = fork();
-    if(child < 0)
-        return false;
-    if(child == 0){
-        if(signal(SIGABRT, ExitOnAbort) == SIG_ERR)
-            _exit(s_SIMDMemoryHandlerFailureExitCode);
-        CandidateCopy(source, count, capacity, destination);
-        _exit(s_SIMDMemoryReturnedExitCode);
-    }
-    int status = 0;
-    return waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == s_SIMDMemoryAbortExitCode;
-}
-#endif
-
-// Hot operations inline into the batch so per-call vzeroupper/ABI overhead does not substitute for the production callsite behavior.
-template<b8 Candidate, usize FixedCount = 0u>
-FOUNDATION_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
-    usize slot = 0u;
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        AtomicSignalFence(MemoryOrder::seq_cst);
-        const usize count = FixedCount != 0u ? FixedCount : bytes;
-        if constexpr(Candidate)
-            CandidateCopy(source + slot * stride, count, count, destination + slot * stride);
-        else
-            SIMDMemoryCopy(destination + slot * stride, count, source + slot * stride, count);
-        if(++slot == slots)
-            slot = 0u;
-    }
-}
-
-template<b8 Candidate, b8 FirstWord = false>
-FOUNDATION_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
-    usize slot = 0u;
-    u64 total = 0u;
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        AtomicSignalFence(MemoryOrder::seq_cst);
-        if constexpr(Candidate){
-            if constexpr(FirstWord)
-                total += CandidateEqualFirstWord(MakeNotNull(lhs + slot * stride), MakeNotNull(rhs + slot * stride)) ? 1u : 0u;
-            else
-                total += CandidateEqual(MakeNotNull(lhs + slot * stride), MakeNotNull(rhs + slot * stride)) ? 1u : 0u;
-        }
-        else
-            total += MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs + slot * stride), MakeNotNull(rhs + slot * stride)) ? 1u : 0u;
-        if(++slot == slots)
-            slot = 0u;
-    }
-    return total;
-}
-
-using CopyBatchFunction = void(*)(const u8*, usize, usize, usize, usize, u8*)noexcept;
-using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize)noexcept;
-
-[[nodiscard]] FOUNDATION_INLINE f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<const u8*> source, const usize slots, const usize stride, const usize bytes, const usize iterations, const NotNull<u8*> destination)noexcept{
-    const Timer start = TimerNow();
-    function.get()(source.get(), slots, stride, bytes, iterations, destination.get());
-    const Timer end = TimerNow();
-    g_Checksum = g_Checksum + destination.get()[(iterations - 1u) % slots * stride];
-    return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
-}
-
-[[nodiscard]] FOUNDATION_INLINE f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
-    const Timer start = TimerNow();
-    const u64 result = function.get()(lhs, rhs, slots, stride, iterations);
-    const Timer end = TimerNow();
-    g_Checksum = g_Checksum + result;
-    return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 VerifyCopiedBytes(const Span<const u8> bytes, const usize start, const usize count, const usize sourceStart, const u8 poisonByte)noexcept{
-    for(usize index = 0u; index < bytes.size(); ++index){
-        const u8 expected = (index >= start && index - start < count) ? PatternByte(sourceStart + index - start) : poisonByte;
-        if(bytes[index] != expected)
-            return false;
-    }
-    return true;
-}
-
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 QualifyCopyBytesKernel(const Span<const usize> lengths, const u8 poisonByte)noexcept{
-    constexpr usize s_Bytes = 16640u;
-    MemoryProbeKernels::AlignedBytes source(s_Bytes), destination(s_Bytes);
-    for(usize index = 0u; index < s_Bytes; ++index)
-        source.data.get()[index] = MemoryProbeKernels::PatternByte(index);
-    b8 valid = true;
-    for(usize lenIndex = 0u; lenIndex < lengths.size() && valid; ++lenIndex){
-        const usize count = lengths[lenIndex];
-        for(usize sourceOffset = 0u; sourceOffset < 128u && valid; sourceOffset += 16u){
-            for(usize destinationOffset = 0u; destinationOffset < 128u && valid; destinationOffset += 16u){
-                FOUNDATION_MEMSET(destination.data.get(), poisonByte, s_Bytes);
-                MemoryProbeKernels::CandidateCopy(source.data.get() + sourceOffset, count, count, destination.data.get() + destinationOffset);
-                if(!MemoryProbeKernels::VerifyCopiedBytes(Span<const u8>(destination.data.get(), s_Bytes), destinationOffset, count, sourceOffset, poisonByte))
-                    valid = false;
-            }
-        }
-    }
-    for(usize index = 0u; index < s_Bytes && valid; ++index){
-        if(source.data.get()[index] != MemoryProbeKernels::PatternByte(index))
-            valid = false;
-    }
-    for(const usize count : { 16u, 32u, 48u, 64u, 128u, 4096u }){
-        for(const b8 destinationFirst : { false, true }){
-            if(!valid)
-                break;
-            for(usize index = 0u; index < s_Bytes; ++index)
-                destination.data.get()[index] = MemoryProbeKernels::PatternByte(index);
-            const usize destinationStart = destinationFirst ? 0u : count, sourceStart = destinationFirst ? count : 0u;
-            MemoryProbeKernels::CandidateCopy(destination.data.get() + sourceStart, count, count, destination.data.get() + destinationStart);
-            for(usize index = 0u; index < count; ++index){
-                if(destination.data.get()[destinationStart + index] != MemoryProbeKernels::PatternByte(sourceStart + index))
-                    valid = false;
-            }
-        }
-    }
-    if(valid){
-        MemoryProbeKernels::CandidateCopy(nullptr, 0u, 0u, nullptr);
-        MemoryProbeKernels::CandidateCopy(source.data.get() + 3u, 0u, 0u, destination.data.get() + 1u);
-    }
-    return valid;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 QualifyProtectedRangesKernel([[maybe_unused]] const Span<const usize> lengths, [[maybe_unused]] const u8 poisonByte)noexcept{
-    b8 valid = true;
-#if defined(FOUNDATION_PLATFORM_LINUX)
-    MemoryProbeKernels::GuardedBytes source, destination;
-    if(source.data == nullptr || destination.data == nullptr || lengths.empty() || source.accessibleBytes < lengths[lengths.size() - 1u]){
-        valid = false;
-    }
-    else{
-        for(usize index = 0u; index < source.accessibleBytes; ++index)
-            source.data[index] = MemoryProbeKernels::PatternByte(index);
-        for(usize lenIndex = 0u; lenIndex < lengths.size() && valid; ++lenIndex){
-            const usize count = lengths[lenIndex];
-            for(const b8 sourceAtEnd : { false, true }){
-                for(const b8 destinationAtEnd : { false, true }){
-                    FOUNDATION_MEMSET(destination.data, poisonByte, destination.accessibleBytes);
-                    const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~usize{ 15u } : 0u;
-                    const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~usize{ 15u } : 0u;
-                    MemoryProbeKernels::CandidateCopy(source.data + sourceStart, count, count, destination.data + destinationStart);
-                    if(!MemoryProbeKernels::VerifyCopiedBytes(Span<const u8>(destination.data, destination.accessibleBytes), destinationStart, count, sourceStart, poisonByte))
-                        valid = false;
-                }
-            }
-        }
-        for(const b8 sourceAtEnd : { false, true }){
-            for(const b8 destinationAtEnd : { false, true }){
-                if(!valid)
-                    break;
-                const auto left = MakeNotNull(::new(sourceAtEnd ? source.upperGuard - 32u : source.data) u64[4u]);
-                const auto right = MakeNotNull(::new(destinationAtEnd ? destination.upperGuard - 32u : destination.data) u64[4u]);
-                for(usize lane = 0u; lane < 4u; ++lane)
-                    left.get()[lane] = right.get()[lane] = 0x7FF0000000000001ull + lane;
-                if(!MemoryProbeKernels::CandidateEqual(left, right) || !MemoryProbeKernels::CandidateEqualFirstWord(left, right))
-                    valid = false;
-                right.get()[3u] ^= 1u;
-                if(MemoryProbeKernels::CandidateEqual(left, right) || MemoryProbeKernels::CandidateEqualFirstWord(left, right))
-                    valid = false;
-            }
-        }
-        if(valid){
-            MemoryProbeKernels::CandidateCopy(destination.upperGuard, 0u, 0u, source.lowerGuard);
-            if(
-                !MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard, 16u, 15u, destination.lowerGuard)
-                || !MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard, 16u, 16u, nullptr)
-                || !MemoryProbeKernels::RejectedBeforeAccess(nullptr, 16u, 16u, destination.lowerGuard)
-                || !MemoryProbeKernels::RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard)
-                || !MemoryProbeKernels::RejectedBeforeAccess(destination.lowerGuard + 16u, 32u, 32u, destination.lowerGuard)
-                || !MemoryProbeKernels::RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard + 16u)
-            )
-                valid = false;
-            for(usize offset = 1u; offset < 16u && valid; ++offset){
-                if(!MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard, 16u, 16u, destination.lowerGuard + offset) || !MemoryProbeKernels::RejectedBeforeAccess(source.upperGuard + offset, 16u, 16u, destination.lowerGuard))
-                    valid = false;
-            }
-        }
-    }
-#endif
-    return valid;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 QualifyEqualityKernel()noexcept{
-#pragma STDC FENV_ACCESS ON
-    const auto original = HoldFloatingPointExceptions();
-    if(!original)
-        return false;
-    b8 valid = true;
-    alignas(64) Array<u64, 8> lhs = {};
-    alignas(64) Array<u64, 8> rhs = {};
-    constexpr Array<u64, 6> s_Patterns = { 0u, ~u64{ 0u }, 0x8000000000000000ull, 0x7FF0000000000001ull, 0x0000000000000001ull, 0x0123456789ABCDEFull };
-    for(const u64 pattern : s_Patterns){
-        for(usize offset = 0u; offset < 4u; ++offset){
-            for(usize lane = 0u; lane < 4u; ++lane)
-                lhs[offset + lane] = rhs[offset + lane] = pattern ^ static_cast<u64>(lane);
-            if(!MemoryProbeKernels::CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)) || !MemoryProbeKernels::CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)))
-                valid = false;
-            for(usize lane = 0u; lane < 4u; ++lane){
-                for(u32 bit = 0u; bit < 64u; ++bit){
-                    rhs[offset + lane] ^= u64{ 1u } << bit;
-                    if(
-                        MemoryProbeKernels::CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
-                        || MemoryProbeKernels::CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
-                        || MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
-                    )
-                        valid = false;
-                    rhs[offset + lane] ^= u64{ 1u } << bit;
-                }
-            }
-        }
-    }
-    if(TestFloatingPointExceptions(FE_ALL_EXCEPT) != 0 || !RaiseFloatingPointExceptions(FE_DIVBYZERO))
-        valid = false;
-    // Opaque call targets prevent either predicate from being removed between the pre-existing flag and its observation.
-    b8(*volatile wideFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = MemoryProbeKernels::CandidateEqual;
-    b8(*volatile firstWordFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = MemoryProbeKernels::CandidateEqualFirstWord;
-    const b8 wideEqual = wideFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
-    const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    const b8 firstWordEqual = firstWordFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
-    const i32 firstWordFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    if(!wideEqual || !firstWordEqual || wideFlags != FE_DIVBYZERO || firstWordFlags != FE_DIVBYZERO)
-        valid = false;
-    if(!SetFloatingPointEnvironment(*original))
-        valid = false;
-    return valid;
-}
-
-class MemoryCopyBenchmarkBuffers final{
-public:
-    MemoryCopyBenchmarkBuffers(const usize slots, const usize stride, const u8 poisonByte)
-        : m_slots(slots)
-        , m_stride(stride)
-        , m_source(slots * stride + 128u)
-        , m_destination(slots * stride + 128u)
-    {
-        const usize totalBytes = slots * stride + 128u;
-        for(usize index = 0u; index < totalBytes; ++index)
-            m_source.data.get()[index] = MemoryProbeKernels::PatternByte(index);
-        FOUNDATION_MEMSET(m_destination.data.get(), poisonByte, totalBytes);
-    }
-
-public:
-    void warmup(const usize bytes, const usize sourceOffset, const usize destinationOffset)noexcept{
-        const auto baseline = MakeNotNull<MemoryProbeKernels::CopyBatchFunction>(bytes == 5120u ? MemoryProbeKernels::CopyBatch<false, 5120u> : MemoryProbeKernels::CopyBatch<false>);
-        const auto candidate = MakeNotNull<MemoryProbeKernels::CopyBatchFunction>(bytes == 5120u ? MemoryProbeKernels::CopyBatch<true, 5120u> : MemoryProbeKernels::CopyBatch<true>);
-        baseline.get()(m_source.data.get() + sourceOffset, m_slots, m_stride, bytes, 1024u, m_destination.data.get() + destinationOffset);
-        candidate.get()(m_source.data.get() + sourceOffset, m_slots, m_stride, bytes, 1024u, m_destination.data.get() + destinationOffset);
-    }
-
-    [[nodiscard]] f64 timeSample(const b8 useCandidate, const usize bytes, const usize sourceOffset, const usize destinationOffset, const usize iterations)noexcept{
-        const auto fn = MakeNotNull<MemoryProbeKernels::CopyBatchFunction>(
-            useCandidate
-                ? (bytes == 5120u ? MemoryProbeKernels::CopyBatch<true, 5120u> : MemoryProbeKernels::CopyBatch<true>)
-                : (bytes == 5120u ? MemoryProbeKernels::CopyBatch<false, 5120u> : MemoryProbeKernels::CopyBatch<false>)
-        );
-        return MemoryProbeKernels::TimeCopy(
-            fn,
-            MakeNotNull(m_source.data.get() + sourceOffset),
-            m_slots,
-            m_stride,
-            bytes,
-            iterations,
-            MakeNotNull(m_destination.data.get() + destinationOffset)
-        );
-    }
-
-private:
-    usize m_slots;
-    usize m_stride;
-    MemoryProbeKernels::AlignedBytes m_source;
-    MemoryProbeKernels::AlignedBytes m_destination;
-};
-
-class MemoryEqualityBenchmarkBuffers final{
-public:
-    explicit MemoryEqualityBenchmarkBuffers(const usize slots)
-        : m_slots(slots)
-        , m_left(slots * 64u + 64u)
-        , m_right(slots * 64u + 64u)
-        , m_lhs(MakeNotNull(::new(m_left.data.get()) u64[slots * 8u + 8u]))
-        , m_rhs(MakeNotNull(::new(m_right.data.get()) u64[slots * 8u + 8u]))
-    {}
-
-public:
-    void prepareAndWarmup(const b8 firstWord, const usize comparisonCase, const usize offset)noexcept{
-        for(usize slot = 0u; slot < m_slots; ++slot){
-            for(usize lane = 0u; lane < 4u; ++lane)
-                m_lhs.get()[slot * 8u + offset + lane] = m_rhs.get()[slot * 8u + offset + lane] = static_cast<u64>(slot) * 0x0123456789ABCDEFull + lane;
-            if(comparisonCase != 0u)
-                m_rhs.get()[slot * 8u + offset + (firstWord ? comparisonCase - 1u : comparisonCase == 1u ? 0u : 3u)] ^= 1u;
-        }
-        constexpr u32 s_EqualityWarmupIterations = 1024u;
-        const auto candidate = MakeNotNull<MemoryProbeKernels::EqualityBatchFunction>(firstWord ? MemoryProbeKernels::EqualityBatch<true, true> : MemoryProbeKernels::EqualityBatch<true>);
-        const u64 baselineWarmup = MemoryProbeKernels::EqualityBatch<false>(m_lhs.get() + offset, m_rhs.get() + offset, m_slots, 8u, s_EqualityWarmupIterations);
-        const u64 candidateWarmup = candidate.get()(m_lhs.get() + offset, m_rhs.get() + offset, m_slots, 8u, s_EqualityWarmupIterations);
-        const u64 expectedWarmup = comparisonCase == 0u ? s_EqualityWarmupIterations : 0u;
-        if(baselineWarmup != expectedWarmup || candidateWarmup != expectedWarmup){
-            FOUNDATION_CERR << "equality warm-up produced an incorrect result\n";
-            ::abort();
-        }
-        MemoryProbeKernels::g_Checksum = MemoryProbeKernels::g_Checksum + baselineWarmup + candidateWarmup;
-    }
-
-    [[nodiscard]] f64 timeSample(const b8 useCandidate, const b8 firstWord, const usize offset, const usize iterations)noexcept{
-        const auto fn = MakeNotNull<MemoryProbeKernels::EqualityBatchFunction>(
-            useCandidate
-                ? (firstWord ? MemoryProbeKernels::EqualityBatch<true, true> : MemoryProbeKernels::EqualityBatch<true>)
-                : MemoryProbeKernels::EqualityBatch<false>
-        );
-        return MemoryProbeKernels::TimeEquality(fn, m_lhs.get() + offset, m_rhs.get() + offset, m_slots, 8u, iterations);
-    }
-
-private:
-    usize m_slots;
-    MemoryProbeKernels::AlignedBytes m_left;
-    MemoryProbeKernels::AlignedBytes m_right;
-    NotNull<u64*> m_lhs;
-    NotNull<u64*> m_rhs;
-};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include "memory_probe_kernels.adhd"
+#include "memory_measurement.adhd"
+#include <tests/common/posix_child.adhd>
+#include <utilities/cli/tool_cli.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -586,44 +104,193 @@ StringView ResolveEqualityCaseName(in b8 firstWord, in usize comparisonCase){
     return "late_mismatch";
 }
 
-u8 ComputeMemoryPatternByte(in usize index){
-    return PatternByte(index);
+void WriteProbeStdoutFlush(in StringView text){
+    ConsoleWrite(text);
+    FlushProbeStdout();
 }
 
 b8 CheckCopiedRange(in Span<u8> bytes, in usize start, in usize count, in usize sourceStart){
     for(usize index = 0u; index < bytes.size(); ++index){
         u8 expected = s_PoisonByte;
         if(index >= start && index - start < count)
-            expected = ComputeMemoryPatternByte(sourceStart + index - start);
+            expected = PatternByte(sourceStart + index - start);
         if(bytes[index] != expected)
             return false;
     }
     return true;
 }
 
-void FillQualifyLengths(mut Array<usize, s_QualifyLengthCount> lengths){
-    for(usize index = 0u; index < s_QualifyLengthCount; ++index)
-        lengths[index] = QualifyLengthAt(index);
+b8 QualifyCopyBytes(){
+    const usize bytes = 16640u;
+    AlignedProbeBytes source(bytes);
+    AlignedProbeBytes destination(bytes);
+    for(usize index = 0u; index < bytes; ++index)
+        StoreByte(source.data(), index, PatternByte(index));
+    for(usize length = 0u; length < s_QualifyLengthCount; ++length){
+        const usize count = QualifyLengthAt(length);
+        for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += 16u){
+            for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += 16u){
+                FillTestBytes(destination.data(), s_PoisonByte, bytes);
+                CandidateCopy<0u>(GuardAddress(source.data(), sourceOffset), count, count, GuardAddress(destination.data(), destinationOffset));
+                if(!CheckCopiedRange(ProbeByteSpan(destination.data(), bytes), destinationOffset, count, sourceOffset))
+                    return false;
+            }
+        }
+    }
+    for(usize index = 0u; index < bytes; ++index){
+        if(LoadByte(source.data(), index) != PatternByte(index))
+            return false;
+    }
+    const Array<usize, 6u> sizes(16u, 32u, 48u, 64u, 128u, 4096u);
+    const Array<b8, 2u> directions(false, true);
+    for(in usize count : sizes){
+        for(in b8 destinationFirst : directions){
+            for(usize index = 0u; index < bytes; ++index)
+                StoreByte(destination.data(), index, PatternByte(index));
+            usize dst = count;
+            usize src = 0u;
+            if(destinationFirst){
+                dst = 0u;
+                src = count;
+            }
+            CandidateCopy<0u>(GuardAddress(destination.data(), src), count, count, GuardAddress(destination.data(), dst));
+            for(usize index = 0u; index < count; ++index){
+                if(LoadByte(destination.data(), dst + index) != PatternByte(src + index))
+                    return false;
+            }
+        }
+    }
+    CandidateCopy<0u>(ReadAddress(), 0u, 0u, ByteAddress());
+    CandidateCopy<0u>(GuardAddress(source.data(), 3u), 0u, 0u, GuardAddress(destination.data(), 1u));
+    return true;
 }
 
-b8 QualifyCopyBytes(){
-    Array<usize, s_QualifyLengthCount> lengths;
-    FillQualifyLengths(lengths);
-    return QualifyCopyBytesKernel(lengths, s_PoisonByte);
+b8 RejectedBeforeAccess(in ByteAddress source, in usize count, in usize capacity, in ByteAddress destination){
+    const i32 child = ForkTestChild();
+    if(child < 0)
+        return false;
+    if(child == 0){
+        if(!SetSignalHandler(ProcessSignal::Abort, lambda[](in i32 signalNumber) -> void{ ExitOnAbort(signalNumber); }))
+            ExitImmediately(s_SIMDMemoryHandlerFailureExitCode);
+        CandidateCopy<0u>(source, count, capacity, destination);
+        ExitImmediately(s_SIMDMemoryReturnedExitCode);
+    }
+    const ChildWaitResult status = WaitForTestChild(child);
+    return status.collected && status.exited && status.exitCode == s_SIMDMemoryAbortExitCode;
 }
 
 b8 QualifyProtectedRanges(){
-    Array<usize, s_QualifyLengthCount> lengths;
-    FillQualifyLengths(lengths);
-    return QualifyProtectedRangesKernel(lengths, s_PoisonByte);
+    if(!s_ProbeLinux)
+        return true;
+    GuardedBytes source;
+    GuardedBytes destination;
+    if(!HasByteAddress(source.data) || !HasByteAddress(destination.data) || source.accessibleBytes < QualifyLengthAt(s_QualifyLengthCount - 1u))
+        return false;
+    for(usize index = 0u; index < source.accessibleBytes; ++index)
+        StoreByte(source.data, index, PatternByte(index));
+    const Array<b8, 2u> directions(false, true);
+    for(usize length = 0u; length < s_QualifyLengthCount; ++length){
+        const usize count = QualifyLengthAt(length);
+        for(in b8 sourceAtEnd : directions){
+            for(in b8 destinationAtEnd : directions){
+                FillTestBytes(destination.data, s_PoisonByte, destination.accessibleBytes);
+                usize src = 0u;
+                usize dst = 0u;
+                if(sourceAtEnd)
+                    src = (source.accessibleBytes - count) & ~cast<usize>(15u);
+                if(destinationAtEnd)
+                    dst = (destination.accessibleBytes - count) & ~cast<usize>(15u);
+                CandidateCopy<0u>(GuardAddress(source.data, src), count, count, GuardAddress(destination.data, dst));
+                if(!CheckCopiedRange(ProbeByteSpan(destination.data, destination.accessibleBytes), dst, count, src))
+                    return false;
+            }
+        }
+    }
+    for(in b8 sourceAtEnd : directions){
+        for(in b8 destinationAtEnd : directions){
+            usize src = 0u;
+            usize dst = 0u;
+            if(sourceAtEnd)
+                src = source.accessibleBytes - 32u;
+            if(destinationAtEnd)
+                dst = destination.accessibleBytes - 32u;
+            const ByteAddress left = BeginProbeWords(GuardAddress(source.data, src), 4u);
+            const ByteAddress right = BeginProbeWords(GuardAddress(destination.data, dst), 4u);
+            for(usize lane = 0u; lane < 4u; ++lane){
+                ProbeWord(left, lane) = 0x7FF0000000000001ull + lane;
+                ProbeWord(right, lane) = ProbeWord(left, lane);
+            }
+            if(!CandidateEqual<4u>(left, right) || !CandidateEqualFirstWord<4u>(left, right))
+                return false;
+            ProbeWord(right, 3u) ^= 1u;
+            if(CandidateEqual<4u>(left, right) || CandidateEqualFirstWord<4u>(left, right))
+                return false;
+        }
+    }
+    CandidateCopy<0u>(destination.upperGuard, 0u, 0u, source.lowerGuard);
+    const ByteAddress lower = destination.lowerGuard;
+    const ByteAddress upper = source.upperGuard;
+    if(!RejectedBeforeAccess(upper, 16u, 15u, lower)
+        || !RejectedBeforeAccess(upper, 16u, 16u, ByteAddress())
+        || !RejectedBeforeAccess(ByteAddress(), 16u, 16u, lower)
+        || !RejectedBeforeAccess(lower, 32u, 32u, lower)
+        || !RejectedBeforeAccess(GuardAddress(lower, 16u), 32u, 32u, lower)
+        || !RejectedBeforeAccess(lower, 32u, 32u, GuardAddress(lower, 16u)))
+        return false;
+    for(usize offset = 1u; offset < 16u; ++offset){
+        if(!RejectedBeforeAccess(upper, 16u, 16u, GuardAddress(lower, offset)) || !RejectedBeforeAccess(GuardAddress(upper, offset), 16u, 16u, lower))
+            return false;
+    }
+    return true;
 }
 
 b8 QualifyEquality(){
-    return QualifyEqualityKernel();
+    const auto original = HoldFloatingPointExceptions();
+    if(!original.has_value())
+        return false;
+    AlignedProbeBytes leftStorage(64u);
+    AlignedProbeBytes rightStorage(64u);
+    const ByteAddress left = BeginProbeWords(leftStorage.data(), 8u);
+    const ByteAddress right = BeginProbeWords(rightStorage.data(), 8u);
+    const Array<u64, 6u> patterns(0u, u64.max, 0x8000000000000000ull, 0x7FF0000000000001ull, 1u, 0x0123456789ABCDEFull);
+    b8 valid = true;
+    for(in u64 pattern : patterns){
+        for(usize offset = 0u; offset < 4u; ++offset){
+            const ByteAddress lhs = GuardAddress(left, 8u * offset);
+            const ByteAddress rhs = GuardAddress(right, 8u * offset);
+            for(usize lane = 0u; lane < 4u; ++lane){
+                ProbeWord(lhs, lane) = pattern ^ cast<u64>(lane);
+                ProbeWord(rhs, lane) = ProbeWord(lhs, lane);
+            }
+            if(!CandidateEqual<4u>(lhs, rhs) || !CandidateEqualFirstWord<4u>(lhs, rhs))
+                valid = false;
+            for(usize lane = 0u; lane < 4u; ++lane){
+                for(u32 bit = 0u; bit < 64u; ++bit){
+                    ProbeWord(rhs, lane) ^= 1ull << bit;
+                    if(CandidateEqual<4u>(lhs, rhs) || CandidateEqualFirstWord<4u>(lhs, rhs) || BaselineEqual<4u>(lhs, rhs))
+                        valid = false;
+                    ProbeWord(rhs, lane) ^= 1ull << bit;
+                }
+            }
+        }
+    }
+    if(TestFloatingPointExceptions(FE_ALL_EXCEPT) != 0 || !RaiseFloatingPointExceptions(FE_DIVBYZERO).has_value())
+        valid = false;
+    const auto wide = lambda[](in ByteAddress lhs, in ByteAddress rhs) -> b8{ return CandidateEqual<4u>(lhs, rhs); };
+    const auto first = lambda[](in ByteAddress lhs, in ByteAddress rhs) -> b8{ return CandidateEqualFirstWord<4u>(lhs, rhs); };
+    const b8 wideEqual = OpaqueProbeEquality(wide, left, right);
+    const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    const b8 firstEqual = OpaqueProbeEquality(first, left, right);
+    const i32 firstFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    if(!wideEqual || !firstEqual || wideFlags != FE_DIVBYZERO || firstFlags != FE_DIVBYZERO)
+        valid = false;
+    if(!SetFloatingPointEnvironment(original.value()).has_value())
+        valid = false;
+    return valid;
 }
 
 void BenchMemoryCopy(in usize samples){
-    WriteProbeStdout("kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n");
+    ConsoleWrite("kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n");
     Array<b8, 2> streamingModes;
     streamingModes[0] = false;
     streamingModes[1] = true;
@@ -685,7 +352,7 @@ void BenchMemoryCopy(in usize samples){
 }
 
 void BenchMemoryEquality(in usize samples, in b8 firstWord){
-    WriteProbeStdout("kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n");
+    ConsoleWrite("kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n");
     usize caseCount = 3u;
     if(firstWord)
         caseCount = 5u;
@@ -738,19 +405,19 @@ i32 RunMemoryStorageProbeCli(in Span<StringView> args){
     if(args.size() >= 2u)
         option = args[1];
     if(option != s_QualifyOption && option != s_BenchCopyOption && option != s_BenchEqualityOption && option != s_BenchEqualityFirstWordOption){
-        WriteProbeStderr("usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n");
+        ConsoleWriteError("usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n");
         return 2;
     }
     if(!QualifyCopyBytes() || !QualifyEquality()){
-        WriteProbeStderr("byte/equality qualification failed\n");
+        ConsoleWriteError("byte/equality qualification failed\n");
         return 1;
     }
     if(!QualifyProtectedRanges()){
-        WriteProbeStderr("protected-range qualification failed\n");
+        ConsoleWriteError("protected-range qualification failed\n");
         return 1;
     }
     if(option == s_QualifyOption){
-        WriteProbeStdout("qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n");
+        ConsoleWrite("qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n");
         return 0;
     }
     usize samples = 7u;
@@ -771,27 +438,14 @@ i32 RunMemoryStorageProbeCli(in Span<StringView> args){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-int main(int argc, char** argv){
-    if(argc <= 0)
+i32 RunMemoryStorageProbeCliEntry(in ConsoleArguments arguments){
+    if(arguments.count <= 0)
         return 2;
-    Array<StringView, 4> args{};
-    const usize count = Min(static_cast<usize>(argc), args.size());
+    Array<StringView, 4> args;
+    const usize count = Min(cast<usize>(arguments.count), args.size());
     for(usize index = 0u; index < count; ++index)
-        args[index] = StringView(argv[index]);
-    return SimdOptimizationBenchmark::RunMemoryStorageProbeCli(Span<const StringView>(args.data(), count));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        args[index] = arguments.text(cast<i32>(index));
+    return RunMemoryStorageProbeCli(Span<StringView>(args).first(count));
 }
 
 

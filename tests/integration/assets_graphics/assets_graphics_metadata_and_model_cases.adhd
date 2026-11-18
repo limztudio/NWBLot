@@ -3,54 +3,42 @@
 
 
 #include "suite.adhd"
+#include "path_sdk.adhd"
+#include "extension_probes.adhd"
+#include <tests/common/threads.adhd>
 #include <impl/assets_mesh/cook_meshlet_score_state.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_helpers.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void CheckCanonicalNativePath(in PlatformStringView text, in StringView expected, mut ScratchStorage scratch){
+    String reference;
+    ConvertGraphicsNativeText(text, reference);
+    CanonicalizeTextInPlace(reference);
+    EXPECT_EQ(CanonicalGraphicsNativeText(text, expected, scratch), StringView(reference) == expected);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyAssetPaths_CanonicalNativeTextMatchesConversionAtBoundaries(){
-    native{
-        ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
-        const auto check = [&scratchArena](const TStringView text, const AStringView expected){
-            auto reference = PathToString<char>(scratchArena, text);
-            CanonicalizeTextInPlace(reference);
-            EXPECT_EQ(NWB::Core::Assets::AssetPathsDetail::CanonicalNativeTextEquals(text, expected, scratchArena), AStringView(reference) == expected);
-        };
-        check(FOUNDATION_TEXT(".AbC"), ".abc");
-        check(FOUNDATION_TEXT(".AbC"), ".ABC");
-        check({}, {});
-        check(FOUNDATION_TEXT(".a\\b"), ".a/b");
-        const tchar embedded[] = { FOUNDATION_TEXT('.'), FOUNDATION_TEXT('A'), 0, FOUNDATION_TEXT('B') };
-        const char expected[] = { '.', 'a', 0, 'b' };
-        check(TStringView(embedded, 4u), AStringView(expected, 4u));
-#if defined(FOUNDATION_UNICODE)
-        const tchar surrogate[] = { static_cast<tchar>(0xd800u) };
-        check(TStringView(surrogate, 1u), AStringView("\xEF\xBF\xBD", 3u));
-#else
-        const char highByte[] = { static_cast<char>(0xffu) };
-        check(TStringView(highByte, 1u), AStringView(highByte, 1u));
-#endif
+    ScratchStorage scratch(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
+    CheckCanonicalNativePath(PlatformTextLiteral(".AbC"), ".abc", scratch);
+    CheckCanonicalNativePath(PlatformTextLiteral(".AbC"), ".ABC", scratch);
+    CheckCanonicalNativePath(PlatformTextLiteral(""), "", scratch);
+    CheckCanonicalNativePath(PlatformTextLiteral(".a\\b"), ".a/b", scratch);
+    const Array<u32, 4u> embedded(46u, 65u, 0u, 66u);
+    const NativeUnits text = NativeUnits(Span<u32>(embedded));
+    CheckCanonicalNativePath(text.view(), StringView(".a\0b", 4u), scratch);
+    if(s_WideNativeChars){
+        const Array<u32, 1u> units(0xd800u);
+        const NativeUnits malformed = NativeUnits(Span<u32>(units));
+        CheckCanonicalNativePath(malformed.view(), StringView("\xef\xbf\xbd", 3u), scratch);
+    }
+    else{
+        const Array<u32, 1u> units(0xffu);
+        const NativeUnits highByte = NativeUnits(Span<u32>(units));
+        CheckCanonicalNativePath(highByte.view(), StringView("\xff", 1u), scratch);
     }
 }
 
@@ -143,13 +131,7 @@ void VerifyAssetsGraphics_MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries()
         const f32 axisX = boundary.m_axis.x;
         const f32 axisY = boundary.m_axis.y;
         const f32 axisZ = boundary.m_axis.z;
-        u32 packed = 0u;
-        native(in axisX, in axisY, in axisZ, mut packed){
-            volatile f32 x = axisX;
-            volatile f32 y = axisY;
-            volatile f32 z = axisZ;
-            packed = NWB::Impl::PackMeshletConeOct16(VectorSet(x, y, z, 0.0f));
-        }
+        const u32 packed = PackMeshletConeOct16(VectorSingle(ObserveValue<f32>(axisX), ObserveValue<f32>(axisY), ObserveValue<f32>(axisZ), 0.0f));
         EXPECT_EQ(packed, boundary.m_packed);
     }
     EXPECT_EQ(PackMeshletConeOct16(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f)), s_MeshletConeAxisFallback);
@@ -254,9 +236,7 @@ void VerifyMetadataDiscoveryAdmission_DuplicateRootsKeepFirstOwnerAndPaths(){
 
 void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAdmission(){
     if(IsWindowsPlatformHost()){
-        native{
-            GTEST_SKIP() << "The current Windows host identity folds physical path case";
-        }
+        SkipTest("The current Windows host identity folds physical path case");
         return;
     }
 
@@ -273,9 +253,7 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
     b8 casePreserved = false;
     ASSERT_TRUE(ReadTextFileMatches(upperPath, "upper native input", scratch, casePreserved));
     if(!casePreserved){
-        native{
-            GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
-        }
+        SkipTest("The test filesystem does not preserve distinct native path case");
         return;
     }
 
@@ -293,12 +271,12 @@ void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarli
     TestArena testArena = TestArena(s_AssetCaseTestsMetadataDiscoveryRootInspection);
     GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryRootInspectionScratch);
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
 
     const GraphicsTestPath repo = GetAssetArenaRepoRoot(testArena);
     const GraphicsTestPath invalidRoot = BuildUninspectableTestRoot(testArena, repo);
-    ASSERT_FALSE(FileExists(JoinGraphicsPath(invalidRoot, "CMakeLists.txt")).has_value());
-    const Expected<b8, ErrorCode> validFile = FileExists(JoinGraphicsPath(repo, "CMakeLists.txt"));
+    ASSERT_FALSE(GraphicsFileExists(JoinGraphicsPath(invalidRoot, "CMakeLists.txt")).has_value());
+    const Expected<b8, ErrorCode> validFile = GraphicsFileExists(JoinGraphicsPath(repo, "CMakeLists.txt"));
     ASSERT_TRUE(validFile.has_value());
     ASSERT_TRUE(validFile.value());
 
@@ -308,7 +286,7 @@ void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarli
     EXPECT_FALSE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", testArena, scratch));
 
     roots[0u].path = JoinGraphicsPath(repo, "__nwb_missing_virtual_path_root_31c68263");
-    const Expected<b8, ErrorCode> missing = FileExists(roots[0u].path);
+    const Expected<b8, ErrorCode> missing = GraphicsFileExists(roots[0u].path);
     ASSERT_TRUE(missing.has_value());
     ASSERT_FALSE(missing.value());
     EXPECT_TRUE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", testArena, scratch));
@@ -316,250 +294,252 @@ void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarli
 
 void VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPaths(){
     GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryCollidingPaths);
-    DiscoveredPathCollisionProbe probe = MakeDiscoveredPathCollisionProbe(scratch);
-    ASSERT_TRUE(probe.hasSecond());
-    EXPECT_TRUE(probe.insertFirst());
-    EXPECT_TRUE(probe.insertSecond());
-    probe.overwriteFirst();
-    EXPECT_FALSE(probe.insertLiteral("a/first.asset.nwb"));
-    EXPECT_FALSE(probe.insertSecond());
-    EXPECT_EQ(probe.size(), 2u);
+    DiscoveredPathSet seen = NewDiscoveredPaths(scratch.arena);
+    seen.reserve(2u);
+    ScratchString first = MakeScratchString("a/first.asset.nwb", scratch);
+    ScratchString second = MakeScratchString("", scratch);
+    const usize bucket = HashDiscoveredPath(StringView(first)) % seen.bucket_count();
+    for(u32 index = 0u; index < 1024u; ++index){
+        CompactString candidate("b/second_");
+        AppendUnsignedDecimal(candidate, index);
+        candidate.append(".asset.nwb");
+        if(HashDiscoveredPath(candidate.view()) % seen.bucket_count() == bucket){
+            second.assign(candidate.view());
+            break;
+        }
+    }
+    ASSERT_FALSE(second.empty());
+    EXPECT_TRUE(seen.insert(first).second);
+    EXPECT_TRUE(seen.insert(second).second);
+    first.assign("overwritten");
+    const ScratchString original = MakeScratchString("a/first.asset.nwb", scratch);
+    EXPECT_FALSE(seen.insert(original).second);
+    EXPECT_FALSE(seen.insert(second).second);
+    EXPECT_EQ(seen.size(), 2u);
 }
 
 void VerifyMetadataExtensionOwnership_RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject(){
-    ExtensionState alignedState = ExtensionState();
-    ExtensionState textState = ExtensionState();
-    native(mut alignedState, mut textState){
-        AssetArena arena(s_AssetCaseTestsMetadataExtensionRequire);
-        using namespace NWB::Core::Assets;
-        const u64 baseline = arena.memoryStats().usedBytes;
-        {
-            ParsedAssetMetadata metadata(arena);
-            const Name name = s_MetadataExtensionAligned;
-            AlignedExtension& first = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, alignedState);
-            const u64 afterFirst = arena.memoryStats().allocationCount;
-            AlignedExtension& second = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, alignedState, true);
-            EXPECT_EQ(&first, &second);
-            EXPECT_EQ(arena.memoryStats().allocationCount, afterFirst);
-            EXPECT_EQ(reinterpret_cast<usize>(&first) % alignof(AlignedExtension), 0u);
-            const ParsedAssetMetadata& borrowed = metadata;
-            EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(name, borrowed), &first);
-            EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(Name(s_AssetFixtureNameTestsMetadataExtensionAbsent), metadata), nullptr);
-            const Name textName = s_MetadataExtensionText;
-            const TextExtension& text = RequireParsedMetadataExtension<TextExtension>(textName, metadata, arena, textState);
-            EXPECT_EQ(FindParsedMetadataExtension<TextExtension>(textName, metadata), &text);
-        }
-        EXPECT_EQ(alignedState.constructions, 1u);
-        EXPECT_EQ(alignedState.destructions, 1u);
-        EXPECT_EQ(alignedState.memberDestructions, 1u);
-        EXPECT_EQ(textState.destructions, 1u);
-        EXPECT_EQ(arena.memoryStats().usedBytes, baseline);
+    MetadataExtensionState alignedState;
+    MetadataExtensionState textState;
+    HeapStorage arena(s_AssetCaseTestsMetadataExtensionRequire);
+    const u64 baseline = arena.memoryStats().usedBytes;
+    {
+        TestValueSlot<ParsedAssetMetadata> metadataSlot;
+        mut ParsedAssetMetadata metadata = metadataSlot.constructIn(arena);
+        const Name name = s_MetadataExtensionAligned;
+        mut AlignedExtension first = RequireExtension<AlignedExtension>(metadata, name, alignedState, false);
+        const u64 afterFirst = arena.memoryStats().allocationCount;
+        mut AlignedExtension second = RequireExtension<AlignedExtension>(metadata, name, alignedState, true);
+        EXPECT_EQ(TestValueAddress(first), TestValueAddress(second));
+        EXPECT_EQ(arena.memoryStats().allocationCount, afterFirst);
+        EXPECT_EQ(TestValueAddress(first) % align_of<AlignedExtension>(), 0u);
+        EXPECT_EQ(FindConstExtensionAddress<AlignedExtension>(metadata, name), TestValueAddress(first));
+        EXPECT_EQ(FindExtensionAddress<AlignedExtension>(metadata, s_AssetFixtureNameTestsMetadataExtensionAbsent), 0u);
+        const Name textName = s_MetadataExtensionText;
+        in TextExtension text = RequireExtension<TextExtension>(metadata, textName, textState);
+        EXPECT_EQ(FindExtensionAddress<TextExtension>(metadata, textName), TestValueAddress(text));
     }
+    EXPECT_EQ(alignedState.constructions, 1u);
+    EXPECT_EQ(alignedState.destructions, 1u);
+    EXPECT_EQ(alignedState.memberDestructions, 1u);
+    EXPECT_EQ(textState.destructions, 1u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, baseline);
 }
 
 void VerifyMetadataExtensionOwnership_EraseClearAndGrowthDestroyEveryConcretePayloadOnce(){
-    ExtensionState state = ExtensionState();
-    native(mut state){
-        AssetArena arena(s_AssetCaseTestsMetadataExtensionEraseClear);
-        using namespace NWB::Core::Assets;
-        const u64 baseline = arena.memoryStats().usedBytes;
-        {
-            ParsedAssetMetadata metadata(arena);
-            const Name firstName(s_FirstMetadataName);
-            const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(firstName, metadata, arena, state));
-            for(usize index = 0u; index < 80u; ++index){
-                Array<char, 64u> nameText;
-                CopyFixedBuffer(nameText, "tests/metadata_extension/growth_");
-                AppendUnsignedToFixedBuffer(nameText, index);
-                const auto nameResult = ToName(FixedBufferView(nameText));
-                ASSERT_TRUE(nameResult);
-                ASSERT_TRUE(*nameResult);
-                const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(**nameResult, metadata, arena, state);
-                EXPECT_EQ(created.identity, index + 2u);
-            }
-            EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(firstName, metadata), first.get());
-            EXPECT_EQ(metadata.extensions.erase(firstName), 1u);
-            EXPECT_EQ(state.destructions, 1u);
-            metadata.extensions.clear();
-            EXPECT_EQ(state.destructions, 81u);
-            EXPECT_EQ(state.memberDestructions, 81u);
-            EXPECT_TRUE(metadata.extensions.empty());
+    MetadataExtensionState state;
+    HeapStorage arena(s_AssetCaseTestsMetadataExtensionEraseClear);
+    const u64 baseline = arena.memoryStats().usedBytes;
+    {
+        TestValueSlot<ParsedAssetMetadata> metadataSlot;
+        mut ParsedAssetMetadata metadata = metadataSlot.constructIn(arena);
+        const Name firstName = Name(s_FirstMetadataName);
+        in AlignedExtension first = RequireExtension<AlignedExtension>(metadata, firstName, state, false);
+        for(usize index = 0u; index < 80u; ++index){
+            const String text = StringFormat("tests/metadata_extension/growth_{}", index);
+            const auto name = ToName(StringView(text));
+            ASSERT_TRUE(name.has_value());
+            ASSERT_TRUE(name.value().has_value());
+            in AlignedExtension created = RequireExtension<AlignedExtension>(metadata, name.value().value(), state, false);
+            EXPECT_EQ(created.identity, index + 2u);
         }
-        EXPECT_EQ(state.constructions, state.destructions);
-        EXPECT_EQ(arena.memoryStats().usedBytes, baseline);
+        EXPECT_EQ(FindExtensionAddress<AlignedExtension>(metadata, firstName), TestValueAddress(first));
+        EXPECT_EQ(ExtensionMap(metadata).erase(firstName), 1u);
+        EXPECT_EQ(state.destructions, 1u);
+        ExtensionMap(metadata).clear();
+        EXPECT_EQ(state.destructions, 81u);
+        EXPECT_EQ(state.memberDestructions, 81u);
+        EXPECT_TRUE(ExtensionMap(metadata).empty());
     }
+    EXPECT_EQ(state.constructions, state.destructions);
+    EXPECT_EQ(arena.memoryStats().usedBytes, baseline);
 }
 
 void VerifyMetadataExtensionOwnership_MapMoveAndReplacementUseEachOriginalObjectArena(){
-    ExtensionState firstState = ExtensionState();
-    ExtensionState secondState = ExtensionState();
-    native(mut firstState, mut secondState){
-        AssetArena firstMapArena(s_AssetCaseTestsMetadataExtensionMapFirst);
-        AssetArena secondMapArena(s_AssetCaseTestsMetadataExtensionMapSecond);
-        AssetArena firstOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerFirst);
-        AssetArena secondOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerSecond);
-        using namespace NWB::Core::Assets;
-        const Name firstName(s_FirstMetadataName);
-        const Name otherName = s_MetadataExtensionOther;
-        {
-            ParsedMetadataExtensionMap firstMap(0u, Hasher<Name>{}, EqualTo<Name>{}, firstMapArena);
-            ParsedMetadataExtension first = MakeParsedMetadataExtension<AlignedExtension>(firstOwnerArena, firstOwnerArena, firstState);
-            const NotNull<void*> firstAddress = MakeNotNull(first.get());
-            ASSERT_TRUE(firstMap.try_emplace(firstName, Move(first)).second);
-            ParsedMetadataExtensionMap movedMap(Move(firstMap));
-            EXPECT_EQ(movedMap.at(firstName).get(), firstAddress.get());
-            EXPECT_TRUE(firstMap.empty());
-            ParsedMetadataExtensionMap secondMap(0u, Hasher<Name>{}, EqualTo<Name>{}, secondMapArena);
-            ASSERT_TRUE(secondMap.try_emplace(otherName, MakeParsedMetadataExtension<TextExtension>(secondOwnerArena, secondOwnerArena, secondState)).second);
-            secondMap = Move(movedMap);
-            EXPECT_EQ(secondState.destructions, 1u);
-            EXPECT_EQ(secondOwnerArena.memoryStats().usedBytes, 0u);
-            EXPECT_EQ(secondMap.at(firstName).get(), firstAddress.get());
-            EXPECT_TRUE(movedMap.empty());
-            secondMap.at(firstName) = MakeParsedMetadataExtension<TextExtension>(secondOwnerArena, secondOwnerArena, secondState);
-            EXPECT_EQ(firstState.destructions, 1u);
-            EXPECT_EQ(firstState.memberDestructions, 1u);
-            EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
-            ASSERT_GT(secondOwnerArena.memoryStats().usedBytes, 0u);
-            EXPECT_EQ(MakeNotNull(static_cast<TextExtension*>(secondMap.at(firstName).get()))->strings.size(), 2u);
-        }
-        EXPECT_EQ(firstState.destructions, 1u);
-        EXPECT_EQ(secondState.destructions, 2u);
-        EXPECT_EQ(firstMapArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(secondMapArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
+    MetadataExtensionState firstState;
+    MetadataExtensionState secondState;
+    HeapStorage firstMapArena(s_AssetCaseTestsMetadataExtensionMapFirst);
+    HeapStorage secondMapArena(s_AssetCaseTestsMetadataExtensionMapSecond);
+    HeapStorage firstOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerFirst);
+    HeapStorage secondOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerSecond);
+    const Name firstName = Name(s_FirstMetadataName);
+    const Name otherName = s_MetadataExtensionOther;
+    {
+        PlainExtensionMap firstMap = NewExtensionMap(firstMapArena);
+        ErasedExtension first = NewExtension<AlignedExtension>(firstOwnerArena, firstState, false);
+        const usize firstAddress = ExtensionAddress(first);
+        ASSERT_NE(firstAddress, 0u);
+        ASSERT_TRUE(InsertExtension(firstMap, firstName, first));
+        TestValueSlot<PlainExtensionMap> movedSlot;
+        mut PlainExtensionMap movedMap = movedSlot.take(firstMap);
+        EXPECT_EQ(ExtensionAddress(movedMap.at(firstName)), firstAddress);
+        EXPECT_TRUE(firstMap.empty());
+        PlainExtensionMap secondMap = NewExtensionMap(secondMapArena);
+        ErasedExtension other = NewExtension<TextExtension>(secondOwnerArena, secondState);
+        ASSERT_TRUE(InsertExtension(secondMap, otherName, other));
+        TestMoveAssign(secondMap, movedMap);
+        EXPECT_EQ(secondState.destructions, 1u);
         EXPECT_EQ(secondOwnerArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(ExtensionAddress(secondMap.at(firstName)), firstAddress);
+        EXPECT_TRUE(movedMap.empty());
+        secondMap.at(firstName) = NewExtension<TextExtension>(secondOwnerArena, secondState);
+        EXPECT_EQ(firstState.destructions, 1u);
+        EXPECT_EQ(firstState.memberDestructions, 1u);
+        EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
+        EXPECT_GT(secondOwnerArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(StoredExtension<TextExtension>(secondMap.at(firstName)).strings.size(), 2u);
     }
+    EXPECT_EQ(firstState.destructions, 1u);
+    EXPECT_EQ(secondState.destructions, 2u);
+    EXPECT_EQ(firstMapArena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(secondMapArena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(secondOwnerArena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_RequireRefillsAnExplicitlyMovedOutOwner(){
-    const Name name(s_MovedSlotMetadataName);
-    TestArena testArena = TestArena(name);
-    ExtensionState state = ExtensionState();
-    native(in name, mut testArena, mut state){
-        using namespace NWB::Core::Assets;
-        auto& arena = testArena.arena;
-        ParsedAssetMetadata metadata(arena);
-        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state));
-        ParsedMetadataExtension detached = Move(metadata.extensions.at(name));
-        EXPECT_EQ(detached.get(), first.get());
-        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(name, metadata), nullptr);
-        AlignedExtension& replacement = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state);
-        EXPECT_NE(&replacement, first.get());
+    const Name name = Name(s_MovedSlotMetadataName);
+    HeapStorage arena(name);
+    MetadataExtensionState state;
+    {
+        TestValueSlot<ParsedAssetMetadata> metadataSlot;
+        mut ParsedAssetMetadata metadata = metadataSlot.constructIn(arena);
+        in AlignedExtension first = RequireExtension<AlignedExtension>(metadata, name, state, false);
+        TestValueSlot<ErasedExtension> detachedSlot;
+        mut ErasedExtension detached = detachedSlot.take(ExtensionMap(metadata).at(name));
+        EXPECT_EQ(ExtensionAddress(detached), TestValueAddress(first));
+        EXPECT_EQ(FindExtensionAddress<AlignedExtension>(metadata, name), 0u);
+        in AlignedExtension replacement = RequireExtension<AlignedExtension>(metadata, name, state, false);
+        EXPECT_NE(TestValueAddress(replacement), TestValueAddress(first));
         EXPECT_EQ(replacement.identity, 2u);
-        EXPECT_EQ(metadata.extensions.size(), 1u);
+        EXPECT_EQ(ExtensionMap(metadata).size(), 1u);
         detached.reset();
         EXPECT_EQ(state.destructions, 1u);
     }
     EXPECT_EQ(state.destructions, 2u);
-    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
+[cpp_unwind]
 void VerifyMetadataExtensionOwnership_ConstructorUnwindReleasesStorageAndConstructedMembers(){
-    const Name name(s_ConstructorUnwindMetadataName);
-    TestArena testArena = TestArena(name);
-    ExtensionState state = ExtensionState();
-    native(in name, mut testArena, mut state){
-        using namespace NWB::Core::Assets;
-        auto& arena = testArena.arena;
-        ParsedAssetMetadata metadata(arena);
+    const Name name = Name(s_ConstructorUnwindMetadataName);
+    HeapStorage arena(name);
+    MetadataExtensionState state;
+    {
+        TestValueSlot<ParsedAssetMetadata> metadataSlot;
+        mut ParsedAssetMetadata metadata = metadataSlot.constructIn(arena);
         const u64 baseline = arena.memoryStats().usedBytes;
-        EXPECT_THROW({
-            EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state, true).identity, 1u);
-        }, ExtensionConstructionFailure);
-        EXPECT_TRUE(metadata.extensions.empty());
+        EXPECT_TRUE(ThrowsException<ExtensionConstructionFailure>(lambda[mut metadata, in name, mut state]() -> void{
+            in AlignedExtension created = RequireExtension<AlignedExtension>(metadata, name, state, true);
+            EXPECT_EQ(created.identity, 1u);
+        }));
+        EXPECT_TRUE(ExtensionMap(metadata).empty());
         EXPECT_EQ(arena.memoryStats().usedBytes, baseline);
     }
     EXPECT_EQ(state.constructions, 1u);
     EXPECT_EQ(state.destructions, 0u);
     EXPECT_EQ(state.memberDestructions, 1u);
-    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
+[cpp_unwind]
 void VerifyMetadataExtensionOwnership_CallerUnwindDestroysPublishedExtensions(){
-    const Name name(s_CallerUnwindMetadataName);
-    TestArena testArena = TestArena(name);
-    ExtensionState state = ExtensionState();
-    native(in name, mut testArena, mut state){
-        using namespace NWB::Core::Assets;
-        auto& arena = testArena.arena;
-        EXPECT_THROW({
-            ParsedAssetMetadata metadata(arena);
-            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state);
-            EXPECT_EQ(created.identity, 1u);
-            throw ExtensionCallerFailure{};
-        }, ExtensionCallerFailure);
-    }
+    const Name name = Name(s_CallerUnwindMetadataName);
+    HeapStorage arena(name);
+    MetadataExtensionState state;
+    EXPECT_TRUE(ThrowsException<ExtensionCallerFailure>(lambda[mut arena, in name, mut state]() -> void{
+        TestValueSlot<ParsedAssetMetadata> metadataSlot;
+        mut ParsedAssetMetadata metadata = metadataSlot.constructIn(arena);
+        in AlignedExtension created = RequireExtension<AlignedExtension>(metadata, name, state, false);
+        EXPECT_EQ(created.identity, 1u);
+        ThrowTestException(ExtensionCallerFailure());
+    }));
+    EXPECT_EQ(state.constructions, 1u);
     EXPECT_EQ(state.destructions, 1u);
     EXPECT_EQ(state.memberDestructions, 1u);
-    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_ReentrantInsertionReturnsTheActualStoredValue(){
-    const Name name(s_ReentrantMetadataName);
-    TestArena testArena = TestArena(name);
-    ExtensionState state = ExtensionState();
-    native(in name, mut testArena, mut state){
-        using namespace NWB::Core::Assets;
-        auto& arena = testArena.arena;
-        ParsedAssetMetadata metadata(arena);
-        ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(name, metadata, metadata, name, state, true);
+    const Name name = Name(s_ReentrantMetadataName);
+    HeapStorage arena(name);
+    MetadataExtensionState state;
+    {
+        TestValueSlot<ParsedAssetMetadata> metadataSlot;
+        mut ParsedAssetMetadata metadata = metadataSlot.constructIn(arena);
+        in ReentrantExtension result = RequireExtension<ReentrantExtension>(metadata, name, metadata, name, state, true);
         EXPECT_EQ(result.identity, 2u);
-        EXPECT_EQ(result.nested, nullptr);
-        EXPECT_EQ(&result, FindParsedMetadataExtension<ReentrantExtension>(name, metadata));
-        EXPECT_EQ(metadata.extensions.size(), 1u);
+        EXPECT_EQ(result.nested, 0u);
+        EXPECT_EQ(TestValueAddress(result), FindExtensionAddress<ReentrantExtension>(metadata, name));
+        EXPECT_EQ(ExtensionMap(metadata).size(), 1u);
         EXPECT_EQ(state.constructions, 2u);
         EXPECT_EQ(state.destructions, 1u);
     }
     EXPECT_EQ(state.destructions, 2u);
-    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
+[cpp_unwind]
 void VerifyMetadataExtensionOwnership_InsertionUnwindDestroysThePendingErasedOwner(){
-    ExtensionState state = ExtensionState();
-    native(mut state){
-        AssetArena mapArena(s_AssetCaseTestsMetadataExtensionInsertionMap);
-        AssetArena ownerArena(s_AssetCaseTestsMetadataExtensionInsertionOwner);
-        using namespace NWB::Core::Assets;
-        b8 fail = false;
-        {
-            HashMap<Name, ParsedMetadataExtension, AssetArena, ThrowingExtensionHasher, EqualTo<Name>> values(0u, ThrowingExtensionHasher{ MakeNotNull(&fail) }, EqualTo<Name>{}, mapArena);
-            values.reserve(4u);
-            const u64 mapBaseline = mapArena.memoryStats().usedBytes;
-            fail = true;
-            EXPECT_THROW({
-                ParsedMetadataExtension pending = MakeParsedMetadataExtension<AlignedExtension>(ownerArena, ownerArena, state);
-                EXPECT_TRUE(values.try_emplace(Name(s_AssetFixtureNameTestsMetadataExtensionInsertionUnwind), Move(pending)).second);
-            }, ExtensionInsertionFailure);
-            fail = false;
-            EXPECT_TRUE(values.empty());
-            EXPECT_EQ(state.destructions, 1u);
-            EXPECT_EQ(state.memberDestructions, 1u);
-            EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
-            EXPECT_EQ(mapArena.memoryStats().usedBytes, mapBaseline);
-        }
-        EXPECT_EQ(mapArena.memoryStats().usedBytes, 0u);
+    HeapStorage mapArena(s_AssetCaseTestsMetadataExtensionInsertionMap);
+    HeapStorage ownerArena(s_AssetCaseTestsMetadataExtensionInsertionOwner);
+    MetadataExtensionState state;
+    ThrowingExtensionHasher hash;
+    {
+        PolicyExtensionMap<ThrowingExtensionHasher> values = NewPolicyExtensionMap<ThrowingExtensionHasher>(mapArena, hash);
+        values.reserve(4u);
+        const u64 mapBaseline = mapArena.memoryStats().usedBytes;
+        hash.fail = true;
+        EXPECT_TRUE(ThrowsException<ExtensionInsertionFailure>(lambda[mut values, mut ownerArena, mut state]() -> void{
+            ErasedExtension pending = NewExtension<AlignedExtension>(ownerArena, state, false);
+            EXPECT_TRUE(InsertExtension(values, s_AssetFixtureNameTestsMetadataExtensionInsertionUnwind, pending));
+        }));
+        hash.fail = false;
+        EXPECT_TRUE(values.empty());
+        EXPECT_EQ(state.destructions, 1u);
+        EXPECT_EQ(state.memberDestructions, 1u);
+        EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(mapArena.memoryStats().usedBytes, mapBaseline);
     }
+    EXPECT_EQ(mapArena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_ExtensionsRetireBeforeTheEntryRegistryTheyBorrow(){
-    native{
-        ScratchArena scratchArena(s_AssetCaseTestsMetadataExtensionRegistryLifetimeScratch);
-        using namespace NWB::Core::Assets;
-        AssetArena arena{ Name(s_RegistryLifetimeMetadataName) };
-        usize observedBucketCount = 0u;
-        usize expectedBucketCount = 0u;
-        {
-            ParsedAssetMetadata metadata(arena);
-            ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
-            expectedBucketCount = metadata.entryRegistry.bucketCount();
-            ASSERT_GE(expectedBucketCount, 7u);
-            const RegistryBorrowingExtension& created = RequireParsedMetadataExtension<RegistryBorrowingExtension>(Name(s_RegistryLifetimeMetadataName), metadata, metadata.entryRegistry, observedBucketCount);
-            EXPECT_EQ(&created.registry, &metadata.entryRegistry);
-        }
-        EXPECT_EQ(observedBucketCount, expectedBucketCount);
-        EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    ScratchStorage scratch(s_AssetCaseTestsMetadataExtensionRegistryLifetimeScratch);
+    HeapStorage arena(Name(s_RegistryLifetimeMetadataName));
+    usize observedCount = 0u;
+    usize expectedCount = 0u;
+    {
+        TestValueSlot<ParsedAssetMetadata> metadataSlot;
+        mut ParsedAssetMetadata metadata = metadataSlot.constructIn(arena);
+        ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratch));
+        expectedCount = metadata.entryRegistry.bucketCount();
+        ASSERT_GE(expectedCount, 7u);
+        in RegistryBorrowingExtension created = RequireExtension<RegistryBorrowingExtension>(metadata, Name(s_RegistryLifetimeMetadataName), metadata.entryRegistry, observedCount);
+        EXPECT_EQ(TestValueAddress(created.registry), TestValueAddress(metadata.entryRegistry));
     }
+    EXPECT_EQ(observedCount, expectedCount);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_GraphicsParserFailureReleasesItsActualExtensionPayload(){
@@ -567,7 +547,7 @@ void VerifyMetadataExtensionOwnership_GraphicsParserFailureReleasesItsActualExte
     TestArena ownerArena = TestArena(s_AssetCaseTestsMetadataExtensionGraphicsOwner);
     GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataExtensionGraphicsScratch);
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
     MetaDocument document(fixtureArena.arena);
     ASSERT_TRUE(document.parse("compute_shader asset;"));
@@ -587,11 +567,11 @@ void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReser
     TestArena fixtureArena = TestArena(s_AssetCaseTestsMetadataRegistryFixture);
     TestArena parseArena = TestArena(s_AssetCaseTestsMetadataRegistryOutput);
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
     CpuTaskScheduler cpuScheduler(0u);
     const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(fixtureArena), s_BuildDirectory, "metadata_registry_storage");
-    ASSERT_TRUE(EnsureDirectories(root).has_value());
+    ASSERT_TRUE(GraphicsEnsureDirectories(root).has_value());
 
     DiscoveredNwbFileVector files(fixtureArena.arena);
     files.reserve(s_MetadataRegistrySamplerCount + 1u);
@@ -617,7 +597,7 @@ void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReser
 void VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket(){
     TestArena testArena = TestArena(s_AssetCaseTestsMetadataRegistryNullAllocation);
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
     CookEntryRegistry registry(testArena.arena);
     const Name type = s_MetadataRegistryNullBucket;
@@ -643,30 +623,23 @@ void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(
     EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("value_nwb_owned_suffix_71a7"));
     EXPECT_TRUE(HasRegisteredPairedSidecarExtension(scratch, ".nwb_owned_sidecar_71a7"));
 
-    native{
-        using namespace NWB::Core;
-        using namespace NWB::Core::Assets;
-#if defined(NWB_DEBUG)
+    if(s_DebugNameBinding){
         Name fallback = s_NwbOwnedFallback71a7;
-        RegisterNonStandaloneAssetType(fallback);
+        RegisterInferredAssetType(fallback);
         fallback = Name(s_AssetCaseNwbReplacedFallback71a7);
         EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_fallback_71a7"));
-#else
-        const auto previousRecorder = NameDetail::SymbolRecorderState();
-        const auto previousResolver = NameDetail::SymbolResolverState();
-        ScopeExit restore([&]()noexcept{
-            SetNameSymbolRecordCallback(previousRecorder.callback, previousRecorder.userData);
-            SetNameSymbolResolveCallback(previousResolver.callback, previousResolver.userData);
-        });
-        Common::NameSymbols::InstallRuntimeRegistry();
-        const Name fallback{ AStringView("nwb_owned_fallback_71a7") };
-        RegisterNonStandaloneAssetType(fallback);
-        const Name replacement{ AStringView("nwb_replaced_fallback_71a7") };
-        for(usize i = 0u; i < NameDetail::s_SymbolTextBufferCount; ++i)
-            EXPECT_EQ(replacement.resolvedText(), AStringView("nwb_replaced_fallback_71a7"));
-        EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_fallback_71a7"));
-#endif
     }
+    else{
+        SavedNameCallbacks previous;
+        InstallRuntimeRegistry();
+        const Name fallback = Name(StringView("nwb_owned_fallback_71a7"));
+        RegisterInferredAssetType(fallback);
+        const Name replacement = Name(StringView("nwb_replaced_fallback_71a7"));
+        for(usize i = 0u; i < s_NameBufferCount; ++i)
+            EXPECT_EQ(replacement.resolvedText(), "nwb_replaced_fallback_71a7");
+        EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_fallback_71a7"));
+    }
+
 }
 
 void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistinctTokens(){
@@ -677,18 +650,18 @@ void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistin
     tokens.push_back("nwb_owned_thread_c_71a7");
     tokens.push_back("nwb_owned_thread_d_71a7");
 
-    native(in tokens){
-        using namespace NWB::Core::Assets;
-        Array<Thread, 4u> threads;
-        for(usize i = 0u; i < threads.size(); ++i){
-            threads[i] = Thread([&, i](){
-                ScratchArena scratchArena{ Name(s_AssetCaseTestsMetadataRegistryConcurrentTokens) };
-                ScratchString text(tokens[i], scratchArena);
-                RegisterNonStandaloneAssetType(s_NameNone, AStringView(text));
+    {
+        Vector<TestThread> threads;
+        threads.reserve(tokens.size());
+        for(in StringView token : tokens){
+            threads.emplace_back(lambda[in token]() -> void{
+                GraphicsScratchArena scratch(s_AssetCaseTestsMetadataRegistryConcurrentTokens);
+                ScratchString text = MakeScratchString(token, scratch);
+                RegisterMetadataNonStandaloneAssetType(Name(), ViewScratchString(text));
                 text.assign("overwritten");
             });
         }
-        for(Thread& thread : threads)
+        for(mut TestThread thread : threads)
             thread.join();
     }
 
@@ -698,7 +671,7 @@ void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistin
 
 void VerifyModelCookMetadata_UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
 
     for(u32 countIndex = 0u; countIndex < 2u; ++countIndex){
         usize skeletonCount = 1u;
@@ -725,7 +698,7 @@ void VerifyModelCookMetadata_UniqueAssetPathReferencesFailAndLocalObjectReferenc
 
 void VerifyModelCookMetadata_SharedAssetPathCannotSelectAmongLocalSkeletonObjects(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
 
     metadata.addSkeleton(s_ModelMetaRigA, s_SharedModelPath);
@@ -744,7 +717,7 @@ void VerifyModelCookMetadata_SharedAssetPathCannotSelectAmongLocalSkeletonObject
 
 void VerifyModelCookMetadata_UnknownObjectReferencesRemainValidatorErrors(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
 
     metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/known");
@@ -757,7 +730,7 @@ void VerifyModelCookMetadata_UnknownObjectReferencesRemainValidatorErrors(){
 
 void VerifyModelCookMetadata_CanonicalDuplicateObjectNamesRemainValidatorErrors(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
 
     metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/first");
@@ -771,7 +744,7 @@ void VerifyModelCookMetadata_CanonicalDuplicateObjectNamesRemainValidatorErrors(
 
 void VerifyModelCookMetadata_HandlesStaticOnlyAndMissingSkeletonCollections(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
 
     metadata.setNestedFieldString(s_StaticMeshesField, s_PropObjectField, s_ModelMetaMeshField, s_ModelMetaMeshVirtualPath);
@@ -788,7 +761,7 @@ void VerifyModelCookMetadata_HandlesStaticOnlyAndMissingSkeletonCollections(){
 
 void VerifyModelCookMetadata_RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyReferenceRecovers(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
 
     metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/skeleton");
@@ -810,7 +783,7 @@ void VerifyModelCookMetadata_RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyR
 // Metadata construction and result checks stay outside the timed public cook-metadata parsing operation.
 void VerifyModelCookMetadata_FourRowTransformFailsWithoutReplacingPreviousValueAndThreeRowsRecover(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
 
     metadata.initThreeRowStaticTransform(s_PropObjectField, s_ModelMetaMeshVirtualPath, 0.5);
@@ -833,7 +806,7 @@ void VerifyModelCookMetadata_FourRowTransformFailsWithoutReplacingPreviousValueA
 
 void VerifyModelPayload_RejectsDuplicateNamesWithinAndAcrossObjectKinds(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     for(u32 duplicateCase = 0u; duplicateCase < 7u; ++duplicateCase){
         const ScopedTestTrace trace(duplicateCase);
         ModelInputs inputs = ModelInputs();
@@ -855,7 +828,7 @@ void VerifyModelPayload_RejectsDuplicateNamesWithinAndAcrossObjectKinds(){
 
 void VerifyModelPayload_RejectsMissingNamesRequiredReferencesAndEmptyModels(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
         const ScopedTestTrace trace(invalidCase);
         ModelInputs inputs = ModelInputs();
@@ -884,7 +857,7 @@ void VerifyModelPayload_RejectsMissingNamesRequiredReferencesAndEmptyModels(){
 
 void VerifyModelPayload_RejectsMissingOrWrongKindParents(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
         const ScopedTestTrace trace(invalidCase);
         ModelInputs inputs = ModelInputs();
@@ -906,7 +879,7 @@ void VerifyModelPayload_RejectsMissingOrWrongKindParents(){
 
 void VerifyModelPayload_RevalidatesReplacedObjectsAndRecoversAfterRejection(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelInputs inputs = ModelInputs();
 
     ASSERT_TRUE(inputs.validate());
@@ -930,7 +903,7 @@ void VerifyModelPayload_RevalidatesReplacedObjectsAndRecoversAfterRejection(){
 
 void VerifyModelPayload_SingleObjectValidationDoesNotAllocateOrResolveItselfAsASkeleton(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelInputs inputs = ModelInputs();
 
     inputs.skeletonObjects.clear();
@@ -951,7 +924,7 @@ void VerifyModelPayload_SingleObjectValidationDoesNotAllocateOrResolveItselfAsAS
 
 void VerifyModelPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejection(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelInputs inputs = ModelInputs();
 
     ASSERT_TRUE(inputs.validate());
@@ -972,13 +945,14 @@ void VerifyModelPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndRe
 
 void VerifyModelPayload_CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPayload(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelInputs inputs = ModelInputs();
 
     ModelAssetCodec codec = ModelAssetCodec();
     AssetBytes binary = MakeModelInputsBytes(inputs);
     ASSERT_TRUE(SerializeModelAsset(codec, inputs.model, binary));
-    ModelAsset loaded = MakeLoadedModelFromInputs(inputs);
+    TestValueSlot<Model> loadedSlot;
+    mut Model loaded = loadedSlot.constructIn(inputs.storage, inputs.model.virtualPath());
     ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
 
     AssetBytes malformed = MakeModelInputsBytes(inputs);
@@ -1000,14 +974,15 @@ void VerifyModelPayload_CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValid
 
 void VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ModelInputs inputs = ModelInputs();
 
     ModelAssetCodec codec = ModelAssetCodec();
     AssetBytes binary = MakeModelInputsBytes(inputs);
     ASSERT_TRUE(SerializeModelAsset(codec, inputs.model, binary));
     ASSERT_EQ(binary.size(), ExpectedSingleTripleModelBinaryBytes());
-    ModelAsset loaded = MakeLoadedModelFromInputs(inputs);
+    TestValueSlot<Model> loadedSlot;
+    mut Model loaded = loadedSlot.constructIn(inputs.storage, inputs.model.virtualPath());
     ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
 
     AssetBytes malformed = MakeModelInputsBytes(inputs);

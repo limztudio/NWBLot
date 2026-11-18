@@ -1,0 +1,137 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/simd_memory_guard_fixture.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/compile.h>"), cpp_name("FOUNDATION_MEMCPY")]
+extern void CopyStorageBytes(in ByteAddress destination, in usize capacity, in ReadAddress source, in usize count);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::ZeroStorage")]
+extern T ZeroStorage<T>();
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::StorageBytes")]
+extern ByteAddress StorageBytes(mut auto value);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::ConstStorageBytes")]
+extern ReadAddress ConstStorageBytes(in borrow auto value);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::BeginStorage")]
+extern mut T BeginStorage<T>(in ByteAddress address);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::EndStorage")]
+extern void EndStorage<T>(mut T value);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::SetStorageLane")]
+extern void SetStorageLane(mut auto record, in usize index, in auto value);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::StorageSnapshot")]
+extern class StorageSnapshot<T>{
+    void capture(in borrow T value);
+    u8 operator[](in usize index)const;
+};
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::RawEqualityStorage"), cpp_flags(self_defaulted, brace_init)]
+extern class RawEqualityStorage<T, const usize Count>{
+    Array<T, Count> raw;
+};
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::WideStorageInteger")]
+extern class WideStorageInteger;
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::s_HasInt128Storage")]
+extern const b8 s_HasInt128Storage;
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::s_Sse2Storage")]
+extern const b8 s_Sse2Storage;
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::s_LinuxStorage")]
+extern const b8 s_LinuxStorage;
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::WideStorageBit")]
+extern WideStorageInteger WideStorageBit(in usize bit);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::AddWide")]
+extern WideStorageInteger AddWide(in WideStorageInteger left, in WideStorageInteger right);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::NegateWide")]
+extern WideStorageInteger NegateWide(in WideStorageInteger value);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::EqualStorage")]
+extern b8 EqualStorage(in borrow auto lhs, in borrow auto rhs);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::StrictLaneEqual")]
+extern b8 StrictLaneEqual(in borrow auto lhs, in borrow auto rhs, in usize lane);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::DefaultLaneEqual")]
+extern b8 DefaultLaneEqual(in borrow auto lhs, in borrow auto rhs, in usize lane);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::SingleMatrixRow")]
+extern VectorSingle SingleMatrixRow(mut MatrixSingle matrix, in usize row);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::TransformPair")]
+extern usize TransformPair(mut auto output, in usize outStride, in borrow auto input, in usize inStride, in usize count, in MatrixDouble matrix);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::TransformTriple")]
+extern usize TransformTriple(mut auto output, in usize outStride, in borrow auto input, in usize inStride, in usize count, in MatrixDouble matrix);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::StorageLane")]
+extern f32 StorageFloatLane(in borrow auto record, in usize lane);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::StoreDouble")]
+extern void StoreDoubleValue(in auto source, mut auto storage);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::LoadFloat")]
+extern MatrixSingle LoadFloatStorage(in borrow f32x3x3u storage);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::BoundingDoubleBox::CreateFromPoints")]
+extern void StreamBounds(mut BoundingDoubleBox bounds, in usize count, in borrow f64x3 first, in usize stride);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::SingleStreamLoadInput")]
+extern class SingleStreamInput;
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::DoubleStreamLoadInput")]
+extern class DoubleStreamInput;
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::LoadFloat")]
+extern auto LoadSingleStreamInput(in SingleStreamInput input);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::LoadDouble")]
+extern auto LoadDoubleStreamInput(in DoubleStreamInput input);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::LoadVectorResult")]
+extern VectorSingle ReadSingleResult(in borrow auto result);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("NWB_TEST_SINGLE_STREAM")]
+extern void ApplySingleStream(mut auto output, in borrow auto input, in MatrixSingle matrix, in auto callback);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::LoadVectorResult")]
+extern VectorDouble ReadDoubleResult(in borrow auto result);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("NWB_TEST_DOUBLE_STREAM")]
+extern void ApplyDoubleStream(mut auto output, in borrow auto input, in MatrixDouble matrix, in auto callback);
+
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::VectorValueAddress")]
+extern usize VectorValueAddress(in borrow auto result);
+
+
+[cpp_header("<global/simd/collision_triangle.h>"), cpp_name("::TriangleTests::Intersects")]
+extern b8 SingleTrianglesIntersect(in VectorSingle a, in VectorSingle b, in VectorSingle c, in VectorSingle d, in VectorSingle e, in VectorSingle f);
+
+[cpp_header("<global/simd/collision_triangle.h>"), cpp_name("::TriangleDoubleTests::Intersects")]
+extern b8 DoubleTrianglesIntersect(in VectorDouble a, in VectorDouble b, in VectorDouble c, in VectorDouble d, in VectorDouble e, in VectorDouble f);
+
+[cpp_header("<global/simd/result.h>"), cpp_name("::SIMDVectorSingleResult"), cpp_flags(small_value, brace_init)]
+extern class SingleResultCell;
+
+
+[cpp_header("<global/simd/result.h>"), cpp_name("::SIMDVectorDoubleResult"), cpp_flags(small_value, brace_init)]
+extern class DoubleResultCell;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

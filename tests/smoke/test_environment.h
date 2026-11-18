@@ -7,6 +7,8 @@
 
 #include <core/common/global.h>
 
+#include <global/basic_string.h>
+
 #include <cstdlib>
 
 
@@ -22,11 +24,18 @@ NWB_BEGIN
 namespace Tests::Smoke{
 
 
-inline int SetSmokeTestEnvironment(const char* name, const char* value)noexcept{
+template<typename T, typename Initializer>
+[[nodiscard]] inline T InitializeOnce(const Initializer& initialize){
+    static const T value = initialize();
+    return value;
+}
+
+template<typename TNameArena, typename TValueArena>
+inline int SetSmokeTestEnvironment(const AString<TNameArena>& name, const AString<TValueArena>& value, const b8 hasValue)noexcept{
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
-    return ::_putenv_s(name, value ? value : "");
+    return ::_putenv_s(name.c_str(), hasValue ? value.c_str() : "");
 #else
-    return value ? ::setenv(name, value, 1) : ::unsetenv(name);
+    return hasValue ? ::setenv(name.c_str(), value.c_str(), 1) : ::unsetenv(name.c_str());
 #endif
 }
 

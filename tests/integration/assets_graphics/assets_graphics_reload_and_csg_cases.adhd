@@ -3,6 +3,9 @@
 
 
 #include "suite.adhd"
+#include <impl/assets_mesh/cook.adhd>
+#include <impl/assets_model/cook.adhd>
+#include <impl/assets_skeleton/cook.adhd>
 #include <tests/common/gtest_macros.adhd>
 
 
@@ -20,154 +23,142 @@ const StringView s_RendererComponentMetadata = "renderer_component asset;\nasset
 
 void VerifyAssetsGraphics_SkinBinaryRejectsInvalidWeightsJointsMatricesAndReservedFieldsWithoutReplacingState(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    TestArena testArena = TestArena();
-    native(mut testArena){
-        using namespace NWB::Impl;
-        SkinHeaderBinary header;
-        header.meshNameHash = Name(s_AssetCaseProjectMeshesOriginal).hash();
-        header.skeletonNameHash = Name(s_AssetCaseProjectSkeletonsOriginal).hash();
-        header.influenceCount = 1u;
-        header.inverseBindMatrixCount = 1u;
-        SkinInfluence4 influence;
-        influence.weight = Float4U(1.0f, 0.0f, 0.0f, 0.0f);
-        const SkeletonJointMatrix originalMatrix = MatrixIdentity<Float34>();
-        Core::Assets::AssetBytes original(testArena.arena);
-        AppendPOD(original, header);
-        AppendPOD(original, influence);
-        AppendPOD(original, originalMatrix);
-        Skin skin(testArena.arena, Name(s_AssetCaseProjectSkinsOriginal));
-        ASSERT_TRUE(skin.loadBinary(original));
-        SkinAssetCodec codec;
-        for(u32 invalidCase = 0u; invalidCase < 8u; ++invalidCase){
-            SkinHeaderBinary malformedHeader = header;
-            malformedHeader.meshNameHash = Name(s_AssetCaseProjectMeshesReplacement).hash();
-            SkinInfluence4 malformedInfluence = influence;
-            SkeletonJointMatrix matrix = originalMatrix;
-            switch(invalidCase){
-            case 0u: malformedHeader.padding0 = 1u; break;
-            case 1u: malformedInfluence.weight.x = BitCast<f32>(0x7fc00001u); break;
-            case 2u: malformedInfluence.weight.x = -1.0f; break;
-            case 3u: malformedInfluence.weight.x = 0.5f; break;
-            case 4u: malformedInfluence.joint[3u] = 1u; break;
-            case 5u: matrix._11 = 0.0f; break;
-            case 6u: matrix._14 = BitCast<f32>(0x7f800000u); break;
-            }
-            Core::Assets::AssetBytes malformed(testArena.arena);
-            AppendPOD(malformed, malformedHeader);
-            AppendPOD(malformed, malformedInfluence);
-            AppendPOD(malformed, matrix);
-            if(invalidCase == 7u)
-                malformed.push_back(0u);
-            EXPECT_FALSE(skin.loadBinary(malformed)) << invalidCase;
-            Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(skin, retained));
-            EXPECT_EQ(retained, original) << invalidCase;
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    SkinHeaderBinary header;
+    header.meshNameHash = Name(s_AssetCaseProjectMeshesOriginal).hash();
+    header.skeletonNameHash = Name(s_AssetCaseProjectSkeletonsOriginal).hash();
+    header.influenceCount = 1u;
+    header.inverseBindMatrixCount = 1u;
+    SkinInfluence4 influence;
+    influence.weight = f32x4u(1.0f, 0.0f, 0.0f, 0.0f);
+    const SkeletonJointMatrix originalMatrix = MakeIdentitySkeletonJointMatrix();
+    Vector<u8> original;
+    AppendPOD(original, header);
+    AppendPOD(original, influence);
+    AppendPOD(original, originalMatrix);
+    Skin skin(Name(s_AssetCaseProjectSkinsOriginal));
+    ASSERT_TRUE(skin.loadBinary(original));
+    for(u32 invalidCase = 0u; invalidCase < 8u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        SkinHeaderBinary malformedHeader = header;
+        malformedHeader.meshNameHash = Name(s_AssetCaseProjectMeshesReplacement).hash();
+        SkinInfluence4 malformedInfluence = influence;
+        SkeletonJointMatrix matrix = originalMatrix;
+        switch(invalidCase){
+        case 0u: malformedHeader.padding0 = 1u; break;
+        case 1u: malformedInfluence.weight.x = BitCast<f32>(0x7fc00001u); break;
+        case 2u: malformedInfluence.weight.x = -1.0f; break;
+        case 3u: malformedInfluence.weight.x = 0.5f; break;
+        case 4u: malformedInfluence.joint[3u] = 1u; break;
+        case 5u: matrix._11 = 0.0f; break;
+        case 6u: matrix._14 = BitCast<f32>(0x7f800000u); break;
         }
+        Vector<u8> malformed;
+        AppendPOD(malformed, malformedHeader);
+        AppendPOD(malformed, malformedInfluence);
+        AppendPOD(malformed, matrix);
+        if(invalidCase == 7u)
+            malformed.push_back(0u);
+        EXPECT_FALSE(skin.loadBinary(malformed));
+        Vector<u8> retained;
+        ASSERT_TRUE(SerializeSkinAsset(skin, retained));
+        EXPECT_EQ(retained, original);
     }
 }
 
 void VerifyAssetsGraphics_ModelBinaryRejectsNonFiniteTransformsAndReservedFieldsWithoutReplacingState(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    TestArena testArena = TestArena();
-    native(mut testArena){
-        using namespace NWB::Impl;
-        ModelHeaderBinary header;
-        header.skeletonObjectCount = 1u;
-        header.staticMeshObjectCount = 1u;
-        header.skinnedMeshObjectCount = 1u;
-        ModelSkeletonObjectBinary skeleton;
-        skeleton.nameHash = Name(s_AssetCaseRig).hash();
-        skeleton.skeletonNameHash = Name(s_AssetCaseProjectSkeletonsOriginal).hash();
-        skeleton.transform = MatrixIdentity<Float34>();
-        ModelStaticMeshObjectBinary staticMesh;
-        staticMesh.nameHash = Name(s_AssetCaseProp).hash();
-        staticMesh.meshNameHash = Name(s_AssetCaseProjectMeshesProp).hash();
-        staticMesh.transform = MatrixIdentity<Float34>();
-        ModelSkinnedMeshObjectBinary skinnedMesh;
-        skinnedMesh.nameHash = Name(s_AssetCaseBody).hash();
-        skinnedMesh.skinNameHash = Name(s_AssetCaseProjectSkinsBody).hash();
-        skinnedMesh.skeletonObjectNameHash = skeleton.nameHash;
-        skinnedMesh.transform = MatrixIdentity<Float34>();
-        Core::Assets::AssetBytes original(testArena.arena);
-        AppendPOD(original, header);
-        AppendPOD(original, skeleton);
-        AppendPOD(original, staticMesh);
-        AppendPOD(original, skinnedMesh);
-        Model model(testArena.arena, Name(s_AssetCaseProjectModelsOriginal));
-        ASSERT_TRUE(model.loadBinary(original));
-        ModelAssetCodec codec;
-        for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
-            auto malformedHeader = header;
-            auto malformedSkeleton = skeleton;
-            auto malformedStatic = staticMesh;
-            auto malformedSkinned = skinnedMesh;
-            switch(invalidCase){
-            case 0u: malformedHeader.padding0 = 1u; break;
-            case 1u: malformedSkeleton.transform._11 = BitCast<f32>(0x7fc00001u); break;
-            case 2u: malformedStatic.transform._24 = BitCast<f32>(0x7f800000u); break;
-            case 3u: malformedSkinned.transform._33 = BitCast<f32>(0xff800000u); break;
-            case 4u: malformedStatic.nameHash = skeleton.nameHash; break;
-            case 5u: malformedSkinned.skeletonObjectNameHash = staticMesh.nameHash; break;
-            }
-            Core::Assets::AssetBytes malformed(testArena.arena);
-            AppendPOD(malformed, malformedHeader);
-            AppendPOD(malformed, malformedSkeleton);
-            AppendPOD(malformed, malformedStatic);
-            AppendPOD(malformed, malformedSkinned);
-            if(invalidCase == 6u)
-                malformed.pop_back();
-            EXPECT_FALSE(model.loadBinary(malformed)) << invalidCase;
-            Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(model, retained));
-            EXPECT_EQ(retained, original) << invalidCase;
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    ModelHeaderBinary header;
+    header.skeletonObjectCount = 1u;
+    header.staticMeshObjectCount = 1u;
+    header.skinnedMeshObjectCount = 1u;
+    ModelSkeletonObjectBinary skeleton;
+    skeleton.nameHash = Name(s_AssetCaseRig).hash();
+    skeleton.skeletonNameHash = Name(s_AssetCaseProjectSkeletonsOriginal).hash();
+    skeleton.transform = MakeIdentitySkeletonJointMatrix();
+    ModelStaticMeshObjectBinary staticMesh;
+    staticMesh.nameHash = Name(s_AssetCaseProp).hash();
+    staticMesh.meshNameHash = Name(s_AssetCaseProjectMeshesProp).hash();
+    staticMesh.transform = MakeIdentitySkeletonJointMatrix();
+    ModelSkinnedMeshObjectBinary skinnedMesh;
+    skinnedMesh.nameHash = Name(s_AssetCaseBody).hash();
+    skinnedMesh.skinNameHash = Name(s_AssetCaseProjectSkinsBody).hash();
+    skinnedMesh.skeletonObjectNameHash = skeleton.nameHash;
+    skinnedMesh.transform = MakeIdentitySkeletonJointMatrix();
+    Vector<u8> original;
+    AppendPOD(original, header);
+    AppendPOD(original, skeleton);
+    AppendPOD(original, staticMesh);
+    AppendPOD(original, skinnedMesh);
+    Model model(Name(s_AssetCaseProjectModelsOriginal));
+    ASSERT_TRUE(model.loadBinary(original));
+    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        auto malformedHeader = header;
+        auto malformedSkeleton = skeleton;
+        auto malformedStatic = staticMesh;
+        auto malformedSkinned = skinnedMesh;
+        switch(invalidCase){
+        case 0u: malformedHeader.padding0 = 1u; break;
+        case 1u: malformedSkeleton.transform._11 = BitCast<f32>(0x7fc00001u); break;
+        case 2u: malformedStatic.transform._24 = BitCast<f32>(0x7f800000u); break;
+        case 3u: malformedSkinned.transform._33 = BitCast<f32>(0xff800000u); break;
+        case 4u: malformedStatic.nameHash = skeleton.nameHash; break;
+        case 5u: malformedSkinned.skeletonObjectNameHash = staticMesh.nameHash; break;
         }
+        Vector<u8> malformed;
+        AppendPOD(malformed, malformedHeader);
+        AppendPOD(malformed, malformedSkeleton);
+        AppendPOD(malformed, malformedStatic);
+        AppendPOD(malformed, malformedSkinned);
+        if(invalidCase == 6u)
+            malformed.pop_back();
+        EXPECT_FALSE(model.loadBinary(malformed));
+        Vector<u8> retained;
+        ASSERT_TRUE(SerializeModelAsset(model, retained));
+        EXPECT_EQ(retained, original);
     }
 }
 
 void VerifyAssetsGraphics_SkeletonBinaryRejectsNonFinitePosesInvalidParentsAndReservedFieldsWithoutReplacingState(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    TestArena testArena = TestArena();
-    native(mut testArena){
-        using namespace NWB::Impl;
-        SkeletonHeaderBinary header;
-        header.jointCount = 1u;
-        SkeletonJointBinary joint;
-        joint.nameHash = Name(s_AssetCaseRoot).hash();
-        joint.parentIndex = s_SkeletonInvalidJointIndex;
-        joint.localBindPose = MatrixIdentity<Float34>();
-        Core::Assets::AssetBytes original(testArena.arena);
-        AppendPOD(original, header);
-        AppendPOD(original, joint);
-        Skeleton skeleton(testArena.arena, Name(s_AssetCaseProjectSkeletonsOriginal));
-        ASSERT_TRUE(skeleton.loadBinary(original));
-        SkeletonAssetCodec codec;
-        for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
-            auto malformedHeader = header;
-            auto malformedJoint = joint;
-            malformedJoint.nameHash = Name(s_AssetCaseReplacement).hash();
-            switch(invalidCase){
-            case 0u: malformedHeader.padding0 = 1u; break;
-            case 1u: malformedJoint.padding0 = 1u; break;
-            case 2u: malformedJoint.padding1[1u] = 1u; break;
-            case 3u: malformedJoint.localBindPose._14 = BitCast<f32>(0x7fc00001u); break;
-            case 4u: malformedJoint.parentIndex = 0u; break;
-            case 5u: malformedHeader.jointCount = static_cast<u64>(Limit<u32>::s_Max) + 1u; break;
-            }
-            Core::Assets::AssetBytes malformed(testArena.arena);
-            AppendPOD(malformed, malformedHeader);
-            AppendPOD(malformed, malformedJoint);
-            if(invalidCase == 6u)
-                malformed.push_back(0u);
-            EXPECT_FALSE(skeleton.loadBinary(malformed)) << invalidCase;
-            Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(skeleton, retained));
-            EXPECT_EQ(retained, original) << invalidCase;
-            EXPECT_EQ(skeleton.findJointIndex(Name(s_AssetInputNameRoot)), 0u);
-            EXPECT_EQ(skeleton.findJointIndex(Name(s_AssetInputNameReplacement)), s_SkeletonInvalidJointIndex);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    SkeletonHeaderBinary header;
+    header.jointCount = 1u;
+    SkeletonJointBinary joint;
+    joint.nameHash = Name(s_AssetCaseRoot).hash();
+    joint.parentIndex = s_SkeletonInvalidJointIndex;
+    joint.localBindPose = MakeIdentitySkeletonJointMatrix();
+    Vector<u8> original;
+    AppendPOD(original, header);
+    AppendPOD(original, joint);
+    Skeleton skeleton(Name(s_AssetCaseProjectSkeletonsOriginal));
+    ASSERT_TRUE(skeleton.loadBinary(original));
+    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        auto malformedHeader = header;
+        auto malformedJoint = joint;
+        malformedJoint.nameHash = Name(s_AssetCaseReplacement).hash();
+        switch(invalidCase){
+        case 0u: malformedHeader.padding0 = 1u; break;
+        case 1u: malformedJoint.padding0 = 1u; break;
+        case 2u: malformedJoint.padding1[1u] = 1u; break;
+        case 3u: malformedJoint.localBindPose._14 = BitCast<f32>(0x7fc00001u); break;
+        case 4u: malformedJoint.parentIndex = 0u; break;
+        case 5u: malformedHeader.jointCount = cast<u64>(u32.max) + 1u; break;
         }
+        Vector<u8> malformed;
+        AppendPOD(malformed, malformedHeader);
+        AppendPOD(malformed, malformedJoint);
+        if(invalidCase == 6u)
+            malformed.push_back(0u);
+        EXPECT_FALSE(skeleton.loadBinary(malformed));
+        Vector<u8> retained;
+        ASSERT_TRUE(SerializeSkeletonAsset(skeleton, retained));
+        EXPECT_EQ(retained, original);
+        EXPECT_EQ(skeleton.findJointIndex(Name(s_AssetInputNameRoot)), 0u);
+        EXPECT_EQ(skeleton.findJointIndex(Name(s_AssetInputNameReplacement)), s_SkeletonInvalidJointIndex);
     }
 }
 
@@ -261,15 +252,15 @@ void VerifyBuildInputSelection_InferredRootsDeduplicateAssetsAncestorsWithoutDro
     self.appendCookSource("impl/assets/b.nwb", sources);
     self.appendCookSource("assets/empty", sources);
     self.appendCookSource("loose/c.nwb", sources);
-    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> rootsResult = ResolveTestAssetRoots(self.m_root, sources, true, s_DuplicatePolicyExactText, scratch);
+    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> rootsResult = ResolveTestAssetRoots(self.ownedRoot(), sources, true, AssetRootDuplicatePolicy::ExactText, scratch);
     ASSERT_TRUE(rootsResult.has_value());
     const ResolvedAssetRootVector roots = rootsResult.value();
     ASSERT_EQ(roots.size(), 3u);
-    EXPECT_EQ(roots[0u].path, JoinGraphicsPath(self.m_root, s_AssetsDirectory).lexicallyNormal());
+    EXPECT_EQ(roots[0u].path, JoinGraphicsPath(self.ownedRoot(), s_AssetsDirectory).lexicallyNormal());
     EXPECT_EQ(roots[0u].virtualRoot.view(), s_ProjectVirtualRoot);
-    EXPECT_EQ(roots[1u].path, JoinGraphicsPath2(self.m_root, "impl", s_AssetsDirectory).lexicallyNormal());
+    EXPECT_EQ(roots[1u].path, JoinGraphicsPath2(self.ownedRoot(), "impl", s_AssetsDirectory).lexicallyNormal());
     EXPECT_EQ(roots[1u].virtualRoot.view(), "engine");
-    EXPECT_EQ(roots[2u].path, JoinGraphicsPath(self.m_root, "loose").lexicallyNormal());
+    EXPECT_EQ(roots[2u].path, JoinGraphicsPath(self.ownedRoot(), "loose").lexicallyNormal());
     EXPECT_EQ(roots[2u].virtualRoot.view(), s_ProjectVirtualRoot);
 }
 
@@ -280,17 +271,17 @@ void VerifyBuildInputSelection_ExplicitRootsPreserveFirstSpellingAndCallerDuplic
     self.appendCookSource("assets/Case", sources);
     self.appendCookSource("assets/case", sources);
     self.appendCookSource("impl/assets/graphics", sources);
-    self.appendCookPathSource(JoinGraphicsPath2(self.m_root, s_AssetsDirectory, "Case"), sources);
-    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> exactResult = ResolveTestAssetRoots(self.m_root, sources, false, s_DuplicatePolicyExactText, scratch);
+    self.appendCookPathSource(JoinGraphicsPath2(self.ownedRoot(), s_AssetsDirectory, "Case"), sources);
+    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> exactResult = ResolveTestAssetRoots(self.ownedRoot(), sources, false, AssetRootDuplicatePolicy::ExactText, scratch);
     ASSERT_TRUE(exactResult.has_value());
     const ResolvedAssetRootVector exact = exactResult.value();
     ASSERT_EQ(exact.size(), 3u);
-    EXPECT_EQ(exact[0u].path, JoinGraphicsPath2(self.m_root, s_AssetsDirectory, "Case").lexicallyNormal());
-    EXPECT_EQ(exact[1u].path, JoinGraphicsPath2(self.m_root, s_AssetsDirectory, "case").lexicallyNormal());
+    EXPECT_EQ(exact[0u].path, JoinGraphicsPath2(self.ownedRoot(), s_AssetsDirectory, "Case").lexicallyNormal());
+    EXPECT_EQ(exact[1u].path, JoinGraphicsPath2(self.ownedRoot(), s_AssetsDirectory, "case").lexicallyNormal());
     // Explicit roots remain exact directories rather than climbing to their assets ancestor.
-    EXPECT_EQ(exact[2u].path, JoinGraphicsPath3(self.m_root, "impl", s_AssetsDirectory, "graphics").lexicallyNormal());
+    EXPECT_EQ(exact[2u].path, JoinGraphicsPath3(self.ownedRoot(), "impl", s_AssetsDirectory, "graphics").lexicallyNormal());
     EXPECT_EQ(exact[2u].virtualRoot.view(), s_ProjectVirtualRoot);
-    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> hostResult = ResolveTestAssetRoots(self.m_root, sources, false, s_DuplicatePolicyHostFilesystem, scratch);
+    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> hostResult = ResolveTestAssetRoots(self.ownedRoot(), sources, false, AssetRootDuplicatePolicy::HostFilesystem, scratch);
     ASSERT_TRUE(hostResult.has_value());
     const ResolvedAssetRootVector host = hostResult.value();
     if(IsWindowsPlatformHost()){
@@ -309,18 +300,18 @@ void VerifyBuildInputSelection_RootResolutionFailureRetainsSourceIndexWithoutPub
     CookStringVector sources = self.makeCookSources();
     self.appendCookSource("assets", sources);
     self.appendCookSource("", sources);
-    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> rejected = ResolveTestAssetRoots(self.m_root, sources, false, s_DuplicatePolicyExactText, scratch);
+    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> rejected = ResolveTestAssetRoots(self.ownedRoot(), sources, false, AssetRootDuplicatePolicy::ExactText, scratch);
     ASSERT_FALSE(rejected.has_value());
     EXPECT_EQ(rejected.error().sourceIndex, 1u);
-    EXPECT_EQ(rejected.error().reason, s_RootFailureResolvePath);
+    EXPECT_EQ(rejected.error().reason, AssetRootResolutionFailure::ResolvePath);
     EXPECT_TRUE(rejected.error().inputPath.empty());
     EXPECT_TRUE(HasNonZeroErrorCode(rejected.error().error));
     sources[1u].assign("assets/empty");
-    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> recoveredResult = ResolveTestAssetRoots(self.m_root, sources, true, s_DuplicatePolicyExactText, scratch);
+    const Expected<ResolvedAssetRootVector, AssetRootResolutionError> recoveredResult = ResolveTestAssetRoots(self.ownedRoot(), sources, true, AssetRootDuplicatePolicy::ExactText, scratch);
     ASSERT_TRUE(recoveredResult.has_value());
     const ResolvedAssetRootVector recovered = recoveredResult.value();
     ASSERT_EQ(recovered.size(), 1u);
-    EXPECT_EQ(recovered[0u].path, JoinGraphicsPath(self.m_root, s_AssetsDirectory).lexicallyNormal());
+    EXPECT_EQ(recovered[0u].path, JoinGraphicsPath(self.ownedRoot(), s_AssetsDirectory).lexicallyNormal());
 }
 
 void VerifyAssetsGraphics_RendererOpticalVolumeGroupRejectsOnlyAsciiEdgePadding(){
@@ -334,7 +325,7 @@ void VerifyAssetsGraphics_RendererOpticalVolumeGroupRejectsOnlyAsciiEdgePadding(
 
 void VerifyAssetsGraphics_RendererComponentCookAndSerializePreservesOpticalFields(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     const Expected<CookCase> cookCaseResult = PrepareCookCase(testArena, "renderer_component_optical_fields");
     ASSERT_TRUE(cookCaseResult.has_value());
@@ -352,18 +343,18 @@ void VerifyAssetsGraphics_RendererComponentCookAndSerializePreservesOpticalField
     const RendererComponent component = loadedComponent.value();
     EXPECT_EQ(component.material.name(), Name("project/materials/glass"));
     EXPECT_TRUE(component.visible);
-    EXPECT_EQ(component.opticalVolumeCoincidence, s_OpticalCoincidenceSharedGroup);
+    EXPECT_EQ(component.opticalVolumeCoincidence, OpticalVolumeCoincidence::SharedGroup);
     EXPECT_EQ(component.opticalVolumeGroup, Name("lens_assembly"));
     EXPECT_EQ(component.opticalVolumePriority, 4);
-    EXPECT_EQ(component.opticalBoundaryMode, s_OpticalBoundaryClosedPriority);
+    EXPECT_EQ(component.opticalBoundaryMode, OpticalBoundaryMode::ClosedPriority);
     EXPECT_EQ(component.opticalMediumPriority, 9);
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_ShaderPlanningCapacityBoundaries(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     const usize maxSize = usize.max;
     const usize clipExtra = s_CsgClipAddedDefineCount;
     const usize preparedFactor = s_MaxPreparedEntriesPerShaderEntry;
@@ -395,7 +386,7 @@ void VerifyAssetsGraphics_ShaderPlanningCapacityBoundaries(){
 
 void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedDefines(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "evaluator_dependency_plan");
@@ -413,7 +404,8 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
     ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
     paths.cacheDirectory = JoinGraphicsPath(root, s_CacheDirectory);
-    IncludeMetadataMap includeMetadata(testArena.arena);
+    TestValueSlot<IncludeMetadataMap> includeMetadataStorage;
+    mut IncludeMetadataMap includeMetadata = includeMetadataStorage.constructIn(testArena);
     AddEvaluatorIncludeMetadata2(testArena, JoinGraphicsPath(root, "common.slangi"), "SHARED_OPTION", "0", "1", s_CsgAuthoredDefine, includeMetadata);
     AddEvaluatorIncludeMetadata2(testArena, JoinGraphicsPath(csgRoot, "first.slangi"), s_CsgModuleOptionDefine, "0", "1", s_CsgAuthoredDefine, includeMetadata);
     AddEvaluatorIncludeMetadata1(testArena, JoinGraphicsPath(csgRoot, "second.slangi"), s_CsgModuleOptionDefine, "2", s_CsgAuthoredDefine, includeMetadata);
@@ -440,7 +432,7 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
         ASSERT_TRUE(HasPreparedShaderDefine(prepared, s_CsgAuthoredDefine));
         const Vector<String> authoredValues = GetPreparedShaderDefineValues(prepared, s_CsgAuthoredDefine);
         ASSERT_EQ(authoredValues.size(), 1u);
-        EXPECT_EQ(ViewArenaString(authoredValues[0u]), "authored");
+        EXPECT_EQ(StringView(authoredValues[0u]), "authored");
         EXPECT_EQ(prepared.variantCount, expectedVariantCount);
         EXPECT_EQ(plan.plannedFileCount, prepared.variantCount + 1u);
         if(mode == 2u){
@@ -449,8 +441,8 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
             ASSERT_TRUE(HasPreparedShaderDefine(prepared, s_CsgModuleOptionDefine));
             const Vector<String> inheritedValues = GetPreparedShaderDefineValues(prepared, s_CsgModuleOptionDefine);
             ASSERT_EQ(inheritedValues.size(), 2u);
-            EXPECT_EQ(ViewArenaString(inheritedValues[0u]), "0");
-            EXPECT_EQ(ViewArenaString(inheritedValues[1u]), "1");
+            EXPECT_EQ(StringView(inheritedValues[0u]), "0");
+            EXPECT_EQ(StringView(inheritedValues[1u]), "1");
             ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(csgRoot, "second.slangi"), "#include \"../common.slangi\"\n// Changed module.\n"));
             PreparedShaderPlan changedPlan(testArena.arena);
             {
@@ -464,7 +456,7 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
         }
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrationOrder(){
@@ -477,7 +469,8 @@ void VerifyAssetsGraphics_CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegis
     const StringView alphaInclude = "project/csg/generated/alpha.slangi";
     const StringView zebraInclude = "project/csg/generated/zebra.slangi";
 
-    CsgShapeCookEntryVector cookedEntries(testArena.arena);
+    TestValueSlot<CsgShapeCookEntryVector> cookedEntriesStorage;
+    mut CsgShapeCookEntryVector cookedEntries = cookedEntriesStorage.constructIn(testArena);
     // The cooker normalizes its input by name, while the runtime deliberately receives the inverse order.
     AddCsgShapeCookEntry(zebraShape, zebraModule, zebraInclude, testArena, cookedEntries);
     AddCsgShapeCookEntry(alphaShape, alphaModule, alphaInclude, testArena, cookedEntries);
@@ -489,7 +482,8 @@ void VerifyAssetsGraphics_CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegis
     ASSERT_NE(cookedZebraId, s_InvalidCsgShapeTypeId);
     EXPECT_NE(cookedAlphaId, cookedZebraId);
 
-    CsgShapeRegistry registry(testArena.arena);
+    TestValueSlot<CsgShapeRegistry> registryStorage;
+    mut CsgShapeRegistry registry = registryStorage.constructIn(testArena);
     const Expected<CsgShapeTypeId> runtimeZebraId = registry.registerShapeType(MakeCsgCookTestShapeDesc(zebraShape, zebraModule, zebraInclude, testArena));
     ASSERT_TRUE(runtimeZebraId.has_value());
     const Expected<CsgShapeTypeId> runtimeAlphaId = registry.registerShapeType(MakeCsgCookTestShapeDesc(alphaShape, alphaModule, alphaInclude, testArena));
@@ -500,10 +494,11 @@ void VerifyAssetsGraphics_CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegis
 
 void VerifyAssetsGraphics_CsgShapeIdsRejectDuplicateCanonicalNamesBeforePublishingTheDuplicate(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
-    CsgShapeCookEntryVector entries(testArena.arena);
+    TestValueSlot<CsgShapeCookEntryVector> entriesStorage;
+    mut CsgShapeCookEntryVector entries = entriesStorage.constructIn(testArena);
     AddCsgShapeCookEntry(Name("project/csg/duplicate"), Name(s_CsgModulePath), s_CsgGeneratedModulePath, testArena, entries);
     AddCsgShapeCookEntry(Name("PROJECT/CSG/DUPLICATE"), Name(s_CsgModulePath), s_CsgGeneratedModulePath, testArena, entries);
 
@@ -517,7 +512,7 @@ void VerifyAssetsGraphics_CsgShapeIdsRejectDuplicateCanonicalNamesBeforePublishi
 
 void VerifyAssetsGraphics_CsgMixedCaseModuleIncludeRetainsCookedPathAndRuntimeIdentity(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "csg_mixed_case_module_include");
@@ -529,29 +524,33 @@ void VerifyAssetsGraphics_CsgMixedCaseModuleIncludeRetainsCookedPathAndRuntimeId
     ASSERT_TRUE(cookedResult.has_value());
     const CsgShapeCookEntry cooked = cookedResult.value();
     const StringView moduleInclude = "project/csg/Generated/MixedCaseEvaluator.slangi";
-    EXPECT_EQ(ViewArenaString(cooked.moduleInclude), moduleInclude);
-    CsgShapeCookEntryVector entries(testArena.arena);
+    EXPECT_EQ(StringView(cooked.moduleInclude), moduleInclude);
+    TestValueSlot<CsgShapeCookEntryVector> entriesStorage;
+    mut CsgShapeCookEntryVector entries = entriesStorage.constructIn(testArena);
     entries.push_back(cooked);
     ASSERT_TRUE(AssignTestCsgShapeCookIds(entries, scratch));
     const Expected<GraphicsTestPath> generatedRoot = EmitTestCsgShapeModules(JoinGraphicsPath(root, s_CacheDirectory), "tests", entries, scratch);
     ASSERT_TRUE(generatedRoot.has_value());
-    const Expected<b8, ErrorCode> generatedExists = FileExists(JoinGraphicsPath(generatedRoot.value(), moduleInclude));
+    const Expected<b8, ErrorCode> generatedExists = GraphicsFileExists(JoinGraphicsPath(generatedRoot.value(), moduleInclude));
     ASSERT_TRUE(generatedExists.has_value());
     EXPECT_TRUE(generatedExists.value());
-    CsgShapeRegistry registry(testArena.arena);
-    const Expected<CsgShapeTypeId> registered = registry.registerShapeType(MakeCsgCookTestShapeDesc(entries[0u].shapeName, entries[0u].shaderModule, ViewArenaString(entries[0u].moduleInclude), testArena));
+    TestValueSlot<CsgShapeRegistry> registryStorage;
+    mut CsgShapeRegistry registry = registryStorage.constructIn(testArena);
+    const Expected<CsgShapeTypeId> registered = registry.registerShapeType(MakeCsgCookTestShapeDesc(entries[0u].shapeName, entries[0u].shaderModule, StringView(entries[0u].moduleInclude), testArena));
     ASSERT_TRUE(registered.has_value());
-    const Expected<GlobalArenaString> selectedIncludeResult = FindRegistryShaderModuleInclude(registry, entries[0u].shaderModule, testArena);
+    TestValueSlot<Expected<String>> selectedIncludeResultStorage;
+    in Expected<String> selectedIncludeResult = selectedIncludeResultStorage.copy(CallGraphicsWithStorage<Expected<String>>(testArena, SelectRegistryInclude, registry, entries[0u].shaderModule));
     ASSERT_TRUE(selectedIncludeResult.has_value());
-    EXPECT_EQ(ViewArenaString(selectedIncludeResult.value()), ViewArenaString(entries[0u].moduleInclude));
-    EXPECT_TRUE(UsesTestArenaAllocator(selectedIncludeResult.value(), testArena));
+    EXPECT_EQ(StringView(selectedIncludeResult.value()), StringView(entries[0u].moduleInclude));
+    EXPECT_TRUE(TestUsesStorage(selectedIncludeResult.value(), testArena));
     EXPECT_EQ(logger.errorCount(), 0u);
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_CsgRegistryOwnsExactModuleTextAfterSourceRetirementAndReplacement(){
     TestArena registryArena = TestArena();
-    CsgShapeRegistry registry(registryArena.arena);
+    TestValueSlot<CsgShapeRegistry> registryStorage;
+    mut CsgShapeRegistry registry = registryStorage.constructIn(registryArena);
     const Name shapeName = s_ProjectCsgExactTextShape;
     const Name moduleName = s_ProjectCsgExactTextModule;
     const StringView originalInclude = "project/csg/Generated/LongMixedCaseEvaluatorOwnedByTheRegistry.slangi";
@@ -560,9 +559,10 @@ void VerifyAssetsGraphics_CsgRegistryOwnsExactModuleTextAfterSourceRetirementAnd
         const CsgShapeTypeDesc source = MakeCsgCookTestShapeDesc(shapeName, moduleName, originalInclude, sourceArena);
         ASSERT_TRUE(registry.registerShapeType(source).has_value());
     }
-    const Expected<GlobalArenaString> selectedResult = FindRegistryShaderModuleInclude(registry, moduleName, registryArena);
+    TestValueSlot<Expected<String>> selectedResultStorage;
+    in Expected<String> selectedResult = selectedResultStorage.copy(CallGraphicsWithStorage<Expected<String>>(registryArena, SelectRegistryInclude, registry, moduleName));
     ASSERT_TRUE(selectedResult.has_value());
-    const StringView selected = ViewArenaString(selectedResult.value());
+    const StringView selected = StringView(selectedResult.value());
     EXPECT_EQ(selected, originalInclude);
     for(u32 index = 0u; index < 32u; ++index){
         const Expected<Name> extraNameResult = DeriveIndexedTestName(Name(s_AssetCaseProjectCsgExactTextExtra), index);
@@ -570,26 +570,29 @@ void VerifyAssetsGraphics_CsgRegistryOwnsExactModuleTextAfterSourceRetirementAnd
         const CsgShapeTypeDesc extra = MakeCsgCookTestShapeDesc(extraNameResult.value(), s_NameNone, "", registryArena);
         ASSERT_TRUE(registry.registerShapeType(extra).has_value());
     }
-    const Expected<CsgShapeTypeInfo> storedResult = registry.findShapeType(shapeName);
+    TestValueSlot<Expected<CsgShapeTypeInfo>> returned;
+    in Expected<CsgShapeTypeInfo> storedResult = returned.copy(registry.findShapeType(shapeName));
     ASSERT_TRUE(storedResult.has_value());
-    const CsgShapeTypeInfo stored = storedResult.value();
-    EXPECT_EQ(ViewArenaString(stored.desc.shaderModuleInclude), originalInclude);
-    EXPECT_TRUE(UsesTestArenaAllocator(stored.desc.shaderModuleInclude, registryArena));
+    in CsgShapeTypeInfo stored = storedResult.value();
+    EXPECT_EQ(StringView(stored.desc.shaderModuleInclude), originalInclude);
+    EXPECT_TRUE(TestUsesStorage(stored.desc.shaderModuleInclude, registryArena));
     const StringView replacementInclude = "project/csg/Generated/ReplacementMixedCaseEvaluatorOwnedByTheRegistry.slangi";
     const CsgShapeTypeDesc replacement = MakeCsgCookTestShapeDesc(shapeName, moduleName, replacementInclude, registryArena);
     ASSERT_TRUE(registry.registerShapeType(replacement, true).has_value());
-    const Expected<GlobalArenaString> currentResult = FindRegistryShaderModuleInclude(registry, moduleName, registryArena);
+    TestValueSlot<Expected<String>> currentResultStorage;
+    in Expected<String> currentResult = currentResultStorage.copy(CallGraphicsWithStorage<Expected<String>>(registryArena, SelectRegistryInclude, registry, moduleName));
     ASSERT_TRUE(currentResult.has_value());
-    EXPECT_EQ(ViewArenaString(currentResult.value()), replacementInclude);
+    EXPECT_EQ(StringView(currentResult.value()), replacementInclude);
     EXPECT_EQ(selected, originalInclude);
-    EXPECT_EQ(ViewArenaString(stored.desc.shaderModuleInclude), originalInclude);
+    EXPECT_EQ(StringView(stored.desc.shaderModuleInclude), originalInclude);
 }
 
 void VerifyAssetsGraphics_CsgRegistryRejectsQuotedIncludeControlBytesWithoutReplacingPublishedState(){
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
-    CsgShapeRegistry registry(testArena.arena);
+    TestValueSlot<CsgShapeRegistry> registryStorage;
+    mut CsgShapeRegistry registry = registryStorage.constructIn(testArena);
     const Name shapeName = s_ProjectCsgControlByteShape;
     const Name moduleName = s_ProjectCsgControlByteModule;
     const StringView originalInclude = "project/csg/Generated/OriginalEvaluator.slangi";
@@ -614,10 +617,11 @@ void VerifyAssetsGraphics_CsgRegistryRejectsQuotedIncludeControlBytesWithoutRepl
         const Expected<CsgShapeTypeInfo> retainedShape = registry.findShapeType(shapeName);
         ASSERT_TRUE(retainedShape.has_value());
         EXPECT_EQ(retainedShape.value().id, original.value());
-        EXPECT_EQ(ViewArenaString(retainedShape.value().desc.shaderModuleInclude), originalInclude);
-        const Expected<GlobalArenaString> retainedInclude = FindRegistryShaderModuleInclude(registry, moduleName, testArena);
+        EXPECT_EQ(StringView(retainedShape.value().desc.shaderModuleInclude), originalInclude);
+        TestValueSlot<Expected<String>> retainedIncludeStorage;
+        in Expected<String> retainedInclude = retainedIncludeStorage.copy(CallGraphicsWithStorage<Expected<String>>(testArena, SelectRegistryInclude, registry, moduleName));
         ASSERT_TRUE(retainedInclude.has_value());
-        EXPECT_EQ(ViewArenaString(retainedInclude.value()), originalInclude);
+        EXPECT_EQ(StringView(retainedInclude.value()), originalInclude);
     }
     EXPECT_EQ(logger.errorCount(), 6u);
 }
@@ -627,33 +631,34 @@ void VerifyAssetsGraphics_CsgShapeCookRejectsGeneratedModuleIncludeCollisions(){
         return;
 
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
     TestArena testArena = TestArena();
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "csg_module_include_collision");
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
 
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
-    CsgShapeCookEntryVector entries(testArena.arena);
+    TestValueSlot<CsgShapeCookEntryVector> entriesStorage;
+    mut CsgShapeCookEntryVector entries = entriesStorage.constructIn(testArena);
     AddCsgShapeCookEntry(Name(s_AssetCaseProjectCsgFirstShape), Name(s_AssetCaseProjectCsgFirstModule), "project/csg/generated/shared.slangi", testArena, entries);
     AddCsgShapeCookEntry(Name(s_AssetCaseProjectCsgSecondShape), Name(s_AssetCaseProjectCsgSecondModule), "project/csg/generated/SHARED.slangi", testArena, entries);
     const b8 emitted = EmitTestCsgShapeModules(JoinGraphicsPath(root, s_CacheDirectory), "tests", entries, scratch).has_value();
     EXPECT_FALSE(emitted);
     EXPECT_TRUE(SawCapturedError(logger, "generated include"));
-    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
+    EXPECT_TRUE(GraphicsRemoveAllIfExists(root).has_value());
 }
 
 void VerifyAssetsGraphics_DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwritten(){
     TestArena testArena = TestArena();
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetsGraphicsBorrowedIndex);
     ShaderArchiveRecordVector records(testArena.arena);
     ShaderArchiveRecord record(testArena.arena);
     record.shaderName = Name(s_AssetCaseProjectShadersBorrowedIndex);
     record.variantName.assign("BORROWED_VARIANT=nontrivial_owned_text");
     record.stage = Name(s_AssetCasePs);
-    const Expected<Name> virtualPath = BuildVirtualPathName(record.shaderName, ViewArenaString(record.variantName), record.stage);
+    const Expected<Name> virtualPath = BuildVirtualPathName(record.shaderName, StringView(record.variantName), record.stage);
     ASSERT_TRUE(virtualPath.has_value());
     record.virtualPathHash = virtualPath.value().hash();
     records.push_back(record);
@@ -666,7 +671,7 @@ void VerifyAssetsGraphics_DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreO
     const ShaderArchiveRecordVector decoded = decodedResult.value();
     ASSERT_EQ(decoded.size(), 1u);
     ZeroFillGraphicsBytes(encoded);
-    EXPECT_EQ(ViewArenaString(decoded[0u].variantName), ViewArenaString(record.variantName));
+    EXPECT_EQ(StringView(decoded[0u].variantName), StringView(record.variantName));
     EXPECT_EQ(decoded[0u].virtualPathHash, record.virtualPathHash);
     EXPECT_EQ(logger.errorCount(), 0u);
 }
@@ -674,7 +679,7 @@ void VerifyAssetsGraphics_DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreO
 void VerifyGatherInputs_MissingOutputIsRejectedBeforeInputDiscovery(mut GatherInputs self){
     self.m_options.outputDirectory.clear();
     self.addRawInput("missing-gather-input");
-    EXPECT_FALSE(GatherGraphicsAssets(self.m_options));
+    EXPECT_FALSE(GatherAssets(self.m_options));
     EXPECT_TRUE(SawCapturedError(self.m_logger, "output directory is empty"));
     EXPECT_FALSE(SawCapturedError(self.m_logger, "failed to inspect input"));
     EXPECT_EQ(self.m_logger.errorCount(), 1u);
@@ -684,9 +689,9 @@ void VerifyGatherInputs_InputListEncodingRejectsUnrepresentablePathsWithoutLosin
     AssetTestVector<AssetString> validInputs = self.makeInputStrings();
     self.appendInputString("valid path", validInputs);
     self.appendInputString("valid path", validInputs);
-    const Expected<ScratchString> encoded = EncodeTestAssetInputList(validInputs, self.m_scratchArena);
+    const Expected<ScratchString> encoded = EncodeGraphicsInputs(validInputs, self.m_scratchArena);
     ASSERT_TRUE(encoded.has_value());
-    EXPECT_EQ(ViewArenaString(encoded.value()), "valid path\nvalid path\n");
+    EXPECT_EQ(StringView(encoded.value()), "valid path\nvalid path\n");
 
     for(u32 invalidIndex = 0u; invalidIndex < 4u; ++invalidIndex){
         AssetTestVector<AssetString> inputs = self.makeInputStrings();
@@ -700,7 +705,7 @@ void VerifyGatherInputs_InputListEncodingRejectsUnrepresentablePathsWithoutLosin
         else if(invalidIndex == 3u)
             invalid = EmbeddedNulInputPath();
         inputs[1u].assign(invalid);
-        EXPECT_FALSE(EncodeTestAssetInputList(inputs, self.m_scratchArena).has_value());
+        EXPECT_FALSE(EncodeGraphicsInputs(inputs, self.m_scratchArena).has_value());
     }
 }
 
@@ -711,7 +716,7 @@ void VerifyGatherInputs_IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls(mu
     ASSERT_FALSE(self.hasFatalFailure());
     self.duplicateFirstInput();
     self.enableTestMerge();
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
+    ASSERT_TRUE(GatherAssets(self.m_options));
     EXPECT_EQ(self.mergeCallCount(), 0u);
     self.verifyPayloads(64u, 257u, 7u);
     ASSERT_FALSE(self.hasFatalFailure());
@@ -720,10 +725,10 @@ void VerifyGatherInputs_IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls(mu
 void VerifyGatherInputs_ConflictingDuplicatesPreservePublishedVolume(mut GatherInputs self){
     self.writeInputs("a", 4u, 8u, 3u);
     ASSERT_FALSE(self.hasFatalFailure());
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
+    ASSERT_TRUE(GatherAssets(self.m_options));
     self.writeInputs("b", 4u, 8u, 9u);
     ASSERT_FALSE(self.hasFatalFailure());
-    EXPECT_FALSE(GatherGraphicsAssets(self.m_options));
+    EXPECT_FALSE(GatherAssets(self.m_options));
     EXPECT_GT(self.m_logger.errorCount(), 0u);
     self.verifyPayloads(4u, 8u, 3u);
     ASSERT_FALSE(self.hasFatalFailure());
@@ -732,7 +737,7 @@ void VerifyGatherInputs_ConflictingDuplicatesPreservePublishedVolume(mut GatherI
 void VerifyGatherInputs_DuplicateManifestPathsPreservePublishedVolume(mut GatherInputs self){
     self.writeInputs("a", 1u, 8u, 3u);
     ASSERT_FALSE(self.hasFatalFailure());
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
+    ASSERT_TRUE(GatherAssets(self.m_options));
     const Expected<Name> name = GatherInputAssetName(0u);
     ASSERT_TRUE(name.has_value());
     EXPECT_FALSE(self.writeDuplicateEntryManifestVolume(name.value()));
@@ -750,14 +755,14 @@ void VerifyGatherInputs_MergedPayloadIdentitySurvivesLaterIdenticalDuplicate(mut
     ASSERT_FALSE(self.hasFatalFailure());
     // Equal payloads collapse while the distinct third payload is appended once.
     self.enableTestMerge();
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
+    ASSERT_TRUE(GatherAssets(self.m_options));
     EXPECT_EQ(self.mergeCallCount(), 1u);
     self.verifyPayloads(1u, 6u, 5u);
     ASSERT_FALSE(self.hasFatalFailure());
     self.writeInputs("d", 1u, 6u, 5u);
     ASSERT_FALSE(self.hasFatalFailure());
     self.resetMergeCallCount();
-    ASSERT_TRUE(GatherGraphicsAssets(self.m_options));
+    ASSERT_TRUE(GatherAssets(self.m_options));
     EXPECT_EQ(self.mergeCallCount(), 1u);
     self.verifyPayloads(1u, 6u, 5u);
     ASSERT_FALSE(self.hasFatalFailure());
@@ -767,12 +772,13 @@ void VerifyMaterialAvboitShaderGenerator_MissingInterfaceRejectsTransparentEntry
     TestArena testArena = TestArena();
     GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAvboitShaderGeneratorScratch);
     CapturingLogger logger = CapturingLogger();
-    LoggerRegistrationGuard guard(logger, s_ReportOnly);
+    LoggerRegistrationGuard guard(logger, LoggerBreakPolicy::ReportOnly);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "avboit_shader_missing_interface_v2");
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
 
-    MaterialCookEntryVector entries(testArena.arena);
+    TestValueSlot<MaterialCookEntryVector> entriesStorage;
+    mut MaterialCookEntryVector entries = entriesStorage.constructIn(testArena);
     MaterialCookEntry opaqueEntry(testArena.arena);
     opaqueEntry.virtualPath.assign("project/materials/opaque");
     opaqueEntry.surfaceSource.assign("opaque.slang");

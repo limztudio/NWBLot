@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/memory.adhd>
+
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::IClipboardService>"), cpp_flags(no_copy)]
+extern class OsClipboardServiceOwner{
+    b8 valid()const;
+    mut IClipboardService deref()const;
+    void reset();
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::ITextInputService>"), cpp_flags(no_copy)]
+extern class OsTextServiceOwner{
+    b8 valid()const;
+    mut ITextInputService deref()const;
+    void reset();
+};
+
+[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::WindowHandle"), cpp_flags(small_value, self_defaulted)]
+extern class OsWindowHandle;
+[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::s_NullWindow")]
+extern const OsWindowHandle s_OsNullWindow;
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::CreateTextInputService")]
+extern Expected<OsTextServiceOwner> OpenOsTextService(mut HeapStorage storage, in OsWindowHandle window);
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::CreateClipboardService")]
+extern Expected<OsClipboardServiceOwner> OpenOsClipboardService(mut HeapStorage storage, in OsWindowHandle window);
+
+[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::HeapString")]
+extern class OsHeapString{
+    void assign(...);
+    void push_back(in u8 value);
+    b8 empty()const;
+    usize size()const;
+};
+
+[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::DecodeClipboardLatin1")]
+extern ClipboardStatus DecodeOsClipboardLatin1(in StringView text, mut OsHeapString output);
+[cpp_header("<core/os/clipboard_text.h>"), cpp_name("::NWB::Core::EncodeClipboardLatin1")]
+extern ClipboardStatus EncodeOsClipboardLatin1(in StringView text, mut OsHeapString output);
+
+[cpp_header("<core/os/text_input_text.h>"), cpp_name("::Array<char, ::s_Utf8MaxSequenceBytes>"), cpp_flags(self_defaulted)]
+extern class EncodedOsCodePoint;
+[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::EncodedBytesView")]
+extern StringView EncodedBytesView(in EncodedOsCodePoint bytes, in usize length);
+[cpp_header("<core/os/text_input_text.h>"), cpp_name("::NWB::Core::EncodeTextInputCodePoint")]
+extern Expected<usize, TextInputAdmission> EncodeOsTextInputCodePoint(in u32 codePoint, mut EncodedOsCodePoint bytes);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

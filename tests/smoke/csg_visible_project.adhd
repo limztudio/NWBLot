@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
 #include "csg_visible_scene.adhd"
 #include "csg_ray_runtime_probe.adhd"
 #include "presentation_types.adhd"
@@ -13,84 +15,39 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const StringView s_GiTemporalEnvironment = "NWB_CSG_GI_TEMPORAL";
+const f32 s_CameraStartDepth = 6.5f;
+const f32 s_DefaultDirectionalLightPitch = -0.65f;
+const f32 s_DefaultDirectionalLightYaw = 0.45f;
+const f32 s_DefaultDirectionalLightIntensity = 3.0f;
+const f32 s_CubeRotationSpeed = 0.25f;
+const f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/perf/report.h>
-
-#include <global/simd/frame.h>
-#include <global/simdmath.h>
-#include <global/timer.h>
-
-namespace NWB::Tests::Smoke{
-
-[[nodiscard]] FOUNDATION_INLINE FramebufferCaptureOptions MakeCsgTemporalCaptureOptions(u64& nextCaptureFrame)noexcept{
-    return FramebufferCaptureOptions{
-        .shouldCapture = +[](void* const ctx, const u64 frame)noexcept -> b8{
-            return frame >= *MakeNotNull(static_cast<const u64*>(ctx));
-        },
-        .predicateContext = &nextCaptureFrame,
-        .requiredWidth = 1280u,
-        .requiredHeight = 900u,
-        .quitWhenReady = false
-    };
-}
-
-inline constexpr AStringView s_GiTemporalEnvironment = "NWB_CSG_GI_TEMPORAL";
-inline constexpr f32 s_CameraStartDepth = 6.5f;
-inline constexpr Float2U s_CameraStart = Float2U(0.0f, s_CsgVisibleCameraTargetY);
-inline constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
-inline constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
-inline constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
-inline constexpr f32 s_CubeRotationSpeed = 0.25f;
-inline constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
-
-
-[[nodiscard]] FOUNDATION_INLINE AStringView CsgVisibleFpsLabel()noexcept{
+StringView CsgVisibleFpsLabel(){
     return "CsgVisibleSmokeProject";
 }
 
-[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<World> CreateCsgVisibleWorldOrDie(ProjectRuntimeContext& context){
-    auto world = CreateSmokeWorldOrDie(CsgVisibleFpsLabel(), context);
+Expected<NotNullUniquePtr<World>> CreateCsgVisibleWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(CsgVisibleFpsLabel(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
 
-    if(context.graphics.queryFeatureSupport(Core::Feature::Meshlets))
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
+    if(context.graphics.queryFeatureSupport(Feature::Meshlets))
+        [essential] info("CsgVisibleSmokeProject: natural native mesh-shader route selected");
     else
-        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"));
+        [essential] info("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable");
 
-    auto& renderer = AddSmokeRenderSystems(*world, context);
+    mut RendererSystem renderer = AddSmokeRenderSystems(SmokeWorldRef(world), context);
     if(ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
-        Impl::ReflectionSettings reflection;
-        reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
-        FOUNDATION_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), FOUNDATION_TEXT("Invalid temporal reflection settings"));
+        ReflectionSettings reflection;
+        reflection.traceMode = ReflectionTraceMode::Disabled;
+        [essential] assert(renderer.setReflectionSettings(reflection), "Invalid temporal reflection settings");
         renderer.setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_LAGGED"));
     }
 
-    return world;
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    return TakeSmokeWorld(world);
 }
 
 
@@ -120,10 +77,12 @@ const u64 s_TemporalFrameInterval = 8u;
 
 
 [arena]
-class CsgVisibleSmokeProject : IProjectEntryCallbacks{
-    public CsgVisibleSmokeProject(mut ProjectRuntimeContext context){
+class CsgVisibleSmokeProject : IProjectEntryCallbacks, ISmokeCapturePredicate{
+    public b8 shouldCaptureFrame(in u64 frame)const override{ return frame >= this.m_nextCaptureFrame; }
+
+    public CsgVisibleSmokeProject(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateCsgVisibleWorldOrDie(context);
+        this.m_world = TakeSmokeWorld(world);
         this.m_fpsProbe = FpsProbe(CsgVisibleFpsLabel());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(CsgVisibleFpsLabel());
     }
@@ -175,7 +134,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                 return false;
             }
 
-            const FramebufferCaptureOptions captureOptions = MakeCsgTemporalCaptureOptions(this.m_nextCaptureFrame);
+            const FramebufferCaptureOptions captureOptions = MakeSmokeCaptureOptions(this, 1280u, 900u, false);
             SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
             Expected<SmokeCaptureSeries> captureSeries = captureFactory.prepareSeries(StringView(output.value()), s_TemporalSampleCount, captureOptions);
             if(!captureSeries.has_value())
@@ -210,7 +169,7 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
                 [essential] info("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame");
         }
 
-        const EntityID cameraEntity = CreateSmokeCameraAt(VectorSingle(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth, 0.0f), SmokeWorldRef(this.m_world));
+        const EntityID cameraEntity = CreateSmokeCameraAt(VectorSingle(0.0f, s_CsgVisibleCameraTargetY, -s_CameraStartDepth, 0.0f), SmokeWorldRef(this.m_world));
         const EntityID directionalLight = CreateSmokeDirectionalLight(
             s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f,
             VectorSingle(1.0f, 0.96f, 0.88f, 0.0f), s_DefaultDirectionalLightIntensity, SmokeWorldRef(this.m_world)
@@ -325,29 +284,21 @@ class CsgVisibleSmokeProject : IProjectEntryCallbacks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(1280, 900);
 }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return FOUNDATION_TEXT("NWB CSG Visible Smoke");
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB CSG Visible Smoke");
 }
 
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<NWB::Tests::Smoke::CsgVisibleSmokeProject>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateCsgVisibleWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> owner = world.value();
+    return MakeUnique<CsgVisibleSmokeProject>(owner, context);
 }
 
 

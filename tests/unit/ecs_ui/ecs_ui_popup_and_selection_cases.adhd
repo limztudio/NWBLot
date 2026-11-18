@@ -9,81 +9,53 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+type UiSelectionDeletionTests = UiEditBoxHostTests;
+type UiSelectionEpochTests = UiEditBoxHostTests;
 
-namespace NWB::Tests::EcsUi{
+const StringView s_EcsUiPopupKey = "popup";
+const StringView s_EcsUiEditKey = "edit";
+const StringView s_EcsUiChildKey = "child";
 
+[ordered]
+class UiPopupInputTests{
+    public HeapStorage storage = HeapStorage(s_EcsUiPopupInput);
+    public Context m_context;
+    public FakeTextInput m_textInput;
+    public FakeClipboard m_clipboard;
+    public UiEditBoxHost m_host;
+    public EditModel m_baseModel;
+    public EditModel m_popupModel;
+    public EditModel m_childModel;
+    public FixtureShaper m_shaper;
+    public TextLayoutBuilder m_layoutBuilder;
+    public PopupState m_popupState;
+    public PopupState m_childState;
+    public PopupToken m_childToken;
+    public PopupToken m_nestedParentToken;
+    public WidgetState m_childWidget;
+    public PopupToken m_token;
+    public WidgetState m_baseWidget;
+    public WidgetState m_popupWidget;
+    public u64 m_generation = 0u;
+    public Rect m_viewport = MakeEcsUiRect(0.0f, 0.0f, 500.0f, 200.0f);
+    public EditBoxResult m_childResult;
+    public EditBoxResult m_popupResult;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiSelectionDeletionTests : public UiEditBoxHostTests{};
-
-class UiSelectionEpochTests : public UiEditBoxHostTests{};
-
-class UiPopupInputTests : public testing::Test{
-public:
-    static constexpr AStringView s_PopupKey = "popup";
-    static constexpr AStringView s_EditKey = "edit";
-    static constexpr AStringView s_ChildKey = "child";
-
-    UiPopupInputTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_EcsUiPopupInput))
-        , m_context(m_arena), m_textInput(m_arena), m_clipboard(m_arena, true)
-        , m_host(m_arena, m_context, m_textInput, m_clipboard)
-        , m_baseModel(m_arena), m_popupModel(m_arena), m_childModel(m_arena)
-        , m_shaper(m_arena), m_layoutBuilder(m_arena, m_shaper)
-    {}
-
-    virtual void SetUp()override{
-        ASSERT_TRUE(m_textInput.setFocused(true));
-        ASSERT_TRUE(m_baseModel.setText("base"));
-        ASSERT_TRUE(m_popupModel.setText(s_PopupKey));
-        ASSERT_TRUE(m_childModel.setText(s_ChildKey));
+    public UiPopupInputTests(){
+        this.m_textInput = FakeTextInput(this.storage);
+        this.m_clipboard = FakeClipboard(this.storage, true);
+        this.m_host = UiEditBoxHost(this.m_context, this.m_textInput, this.m_clipboard);
+        this.m_layoutBuilder = TextLayoutBuilder(this.m_shaper);
     }
-
-    Alloc::GlobalArena m_arena;
-    Ui::Context m_context;
-    FakeTextInput m_textInput;
-    FakeClipboard m_clipboard;
-    UiEditBoxHost m_host;
-    Ui::EditModel m_baseModel;
-    Ui::EditModel m_popupModel;
-    Ui::EditModel m_childModel;
-    Tests::UiFixtureText::FixtureShaper m_shaper;
-    Ui::TextLayoutBuilder m_layoutBuilder;
-    Ui::PopupState m_popupState;
-    Ui::PopupState m_childState;
-    Ui::PopupToken m_childToken;
-    Ui::PopupToken m_nestedParentToken;
-    Ui::WidgetState m_childWidget;
-    Ui::PopupToken m_token;
-    Ui::WidgetState m_baseWidget;
-    Ui::WidgetState m_popupWidget;
-    u64 m_generation = 0u;
-    const Ui::Rect m_viewport{ 0.0f, 0.0f, 500.0f, 200.0f };
-    Ui::EditBoxResult m_childResult;
-    Ui::EditBoxResult m_popupResult;
-};
-
-using UiEditClipboardActionEnum = NWB::Impl::Ui::EditClipboardAction::Enum;
-using UiPopupScope = NWB::Impl::Ui::PopupScope;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void setup(){
+        ASSERT_TRUE(this.m_textInput.setFocused(true));
+        ASSERT_TRUE(this.m_baseModel.setText("base"));
+        ASSERT_TRUE(this.m_popupModel.setText(s_EcsUiPopupKey));
+        ASSERT_TRUE(this.m_childModel.setText(s_EcsUiChildKey));
+    }
 }
 
 
@@ -115,20 +87,20 @@ UiTextEditOwner SelectionEpochTestOwner(in UiSelectionEpochTests self){
 }
 
 
-UiInputEvent MakeEcsUiFocusLostEvent(){
-    UiInputEvent event = UiInputEvent();
-    event.type = UiInputEventType::FocusLost;
+InputEvent MakeEcsUiFocusLostEvent(){
+    InputEvent event = InputEvent();
+    event.type = InputEventType::FocusLost;
     return event;
 }
 
-UiInputEvent MakeEcsUiFocusGainedEvent(){
-    UiInputEvent event = UiInputEvent();
-    event.type = UiInputEventType::FocusGained;
+InputEvent MakeEcsUiFocusGainedEvent(){
+    InputEvent event = InputEvent();
+    event.type = InputEventType::FocusGained;
     return event;
 }
 
-UiPopupToken MakeEcsUiPopupToken(in UiWidgetState owner, in u64 instanceGen, in u64 openGen){
-    UiPopupToken token = UiPopupToken();
+PopupToken MakeEcsUiPopupToken(in WidgetState owner, in u64 instanceGen, in u64 openGen){
+    PopupToken token = PopupToken();
     token.widget = owner.id;
     token.declarationGeneration = owner.declarationGeneration;
     token.instanceGeneration = instanceGen;
@@ -136,24 +108,24 @@ UiPopupToken MakeEcsUiPopupToken(in UiWidgetState owner, in u64 instanceGen, in 
     return token;
 }
 
-b8 DeclareEcsUiPopupEdit(mut UiPopupInputTests self, in StringView key, in UiRect bounds, mut UiEditModel model, mut UiWidgetState outWidget, mut UiEditBoxResult outResult){
-    outWidget = UiWidgetState();
-    outResult = UiEditBoxResult();
-    if(!DeclareEcsUiWidget(self.m_context, key, UiWidgetKind::EditBox, outWidget)){
+b8 DeclareEcsUiPopupEdit(mut UiPopupInputTests self, in StringView key, in Rect bounds, mut EditModel model, mut WidgetState outWidget, mut EditBoxResult outResult){
+    outWidget = WidgetState();
+    outResult = EditBoxResult();
+    if(!DeclareEcsUiWidget(self.m_context, key, WidgetKind::EditBox, outWidget)){
         return false;
     }
-    const UiEditBoxOptions options = UiEditBoxOptions();
+    const EditBoxOptions options = EditBoxOptions();
     outResult = self.m_host.edit(outWidget, options, model);
-    UiEditBoxView view = UiEditBoxView(self.m_arena);
+    EditBoxView view = EditBoxView();
     if(!outResult.valid || !PrepareEcsUiEditView(model, self.m_layoutBuilder, view)){
         return false;
     }
-    const UiEditBoxStyle style = UiEditBoxStyle();
-    const auto placement = view.arrange(bounds, style.padding, self.m_viewport, UiPoint());
+    const EditBoxStyle style = EditBoxStyle();
+    const auto placement = view.arrange(bounds, style.padding, self.m_viewport, Point());
     if(!placement || !self.m_host.publish(outWidget, view, placement.value(), options)){
         return false;
     }
-    UiHitTarget target = UiHitTarget();
+    HitTarget target = HitTarget();
     target.rectangle = bounds;
     target.clip = self.m_viewport;
     target.focusable = true;
@@ -167,13 +139,13 @@ b8 BeginEcsUiPopupPreparedFrame(mut UiPopupInputTests self){
     if(!self.m_context.beginFrame(self.m_generation)){
         return false;
     }
-    UiDisplayMetrics metrics = UiDisplayMetrics();
+    DisplayMetrics metrics = DisplayMetrics();
     metrics.logicalWidth = self.m_viewport.width;
     metrics.logicalHeight = self.m_viewport.height;
     metrics.pixelScaleX = 1.0f;
     metrics.pixelScaleY = 1.0f;
     self.m_host.beginFrame(self.m_generation, metrics);
-    UiWidgetRoot rootSurface = UiWidgetRoot();
+    WidgetRoot rootSurface = WidgetRoot();
     rootSurface.value = 17u;
     rootSurface.generation = 1u;
     return self.m_context.beginRoot(rootSurface);
@@ -183,7 +155,7 @@ b8 BeginEcsUiPopupBaseFrame(mut UiPopupInputTests self){
     if(!BeginEcsUiPopupPreparedFrame(self)){
         return false;
     }
-    UiEditBoxResult unusedResult = UiEditBoxResult();
+    EditBoxResult unusedResult = EditBoxResult();
     return DeclareEcsUiPopupEdit(self, "base", MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_baseModel, self.m_baseWidget, unusedResult);
 }
 
@@ -199,8 +171,8 @@ b8 PrepareEcsUiPopupFrame(mut UiPopupInputTests self){
     if(!BeginEcsUiPopupBaseFrame(self)){
         return false;
     }
-    UiWidgetState owner = UiWidgetState();
-    if(!DeclareEcsUiWidget(self.m_context, UiPopupInputTests::s_PopupKey, UiWidgetKind::Popup, owner)){
+    WidgetState owner = WidgetState();
+    if(!DeclareEcsUiWidget(self.m_context, s_EcsUiPopupKey, WidgetKind::Popup, owner)){
         return false;
     }
     self.m_token = MakeEcsUiPopupToken(owner, self.m_popupState.instanceGeneration(), self.m_popupState.openGeneration());
@@ -209,20 +181,20 @@ b8 PrepareEcsUiPopupFrame(mut UiPopupInputTests self){
         self.m_popupState.close();
     }
     if(self.m_popupState.isOpen()){
-        UiPopupScope scope = UiPopupScope();
+        PopupScope scope = PopupScope();
         scope.token = self.m_token;
         scope.bounds = MakeEcsUiRect(230.0f, 40.0f, 240.0f, 100.0f);
         scope.viewport = self.m_viewport;
-        if(!self.m_context.beginPopupScope(owner, scope) || !self.m_context.pushScope(UiPopupInputTests::s_PopupKey)){
+        if(!self.m_context.beginPopupScope(owner, scope) || !self.m_context.pushScope(s_EcsUiPopupKey)){
             return false;
         }
-        UiHitTarget barrier = UiHitTarget();
+        HitTarget barrier = HitTarget();
         barrier.rectangle = scope.bounds;
         barrier.clip = self.m_viewport;
         if(!self.m_context.addTarget(owner, barrier)){
             return false;
         }
-        if(!DeclareEcsUiPopupEdit(self, UiPopupInputTests::s_EditKey, MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
+        if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
             return false;
         }
         if(!self.m_context.popScope() || !self.m_context.endPopupScope(true)){
@@ -239,44 +211,44 @@ b8 PrepareEcsUiDeferredPopupFrame(mut UiPopupInputTests self){
     if(!BeginEcsUiPopupPreparedFrame(self)){
         return false;
     }
-    UiWidgetState popup = UiWidgetState();
-    if(!DeclareEcsUiWidget(self.m_context, UiPopupInputTests::s_PopupKey, UiWidgetKind::Popup, popup)){
+    WidgetState popup = WidgetState();
+    if(!DeclareEcsUiWidget(self.m_context, s_EcsUiPopupKey, WidgetKind::Popup, popup)){
         return false;
     }
     self.m_token = MakeEcsUiPopupToken(popup, self.m_popupState.instanceGeneration(), self.m_popupState.openGeneration());
     self.m_context.input().fencePopup(self.m_token);
     if(self.m_popupState.isOpen()){
-        if(!DeclareEcsUiPartWidget(self.m_context, popup, UiPopupInputTests::s_EditKey, UiWidgetKind::EditBox, self.m_popupWidget)){
+        if(!DeclareEcsUiPartWidget(self.m_context, popup, s_EcsUiEditKey, WidgetKind::EditBox, self.m_popupWidget)){
             return false;
         }
-        const UiEditBoxOptions options = UiEditBoxOptions();
+        const EditBoxOptions options = EditBoxOptions();
         self.m_popupResult = self.m_host.editInPopup(self.m_popupWidget, options, self.m_token, self.m_popupModel);
         if(!self.m_popupResult.valid || self.m_context.popupToken().valid()){
             return false;
         }
-        UiEditBoxView view = UiEditBoxView(self.m_arena);
+        EditBoxView view = EditBoxView();
         if(!PrepareEcsUiEditView(self.m_popupModel, self.m_layoutBuilder, view)){
             return false;
         }
-        const UiEditBoxStyle style = UiEditBoxStyle();
-        const auto placement = view.arrange(MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), style.padding, self.m_viewport, UiPoint());
+        const EditBoxStyle style = EditBoxStyle();
+        const auto placement = view.arrange(MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), style.padding, self.m_viewport, Point());
         if(!placement){
             return false;
         }
-        UiPopupScope scope = UiPopupScope();
+        PopupScope scope = PopupScope();
         scope.token = self.m_token;
         scope.bounds = MakeEcsUiRect(230.0f, 40.0f, 240.0f, 100.0f);
         scope.viewport = self.m_viewport;
         if(!self.m_context.beginPopupScope(popup, scope) || !self.m_host.publish(self.m_popupWidget, view, placement.value(), options)){
             return false;
         }
-        UiHitTarget barrier = UiHitTarget();
+        HitTarget barrier = HitTarget();
         barrier.rectangle = scope.bounds;
         barrier.clip = self.m_viewport;
         if(!self.m_context.addTarget(popup, barrier)){
             return false;
         }
-        UiHitTarget target = UiHitTarget();
+        HitTarget target = HitTarget();
         target.rectangle = placement.value().bounds;
         target.clip = self.m_viewport;
         target.focusable = true;
@@ -295,8 +267,8 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
     if(!BeginEcsUiPopupBaseFrame(self)){
         return false;
     }
-    UiWidgetState parent = UiWidgetState();
-    if(!DeclareEcsUiWidget(self.m_context, UiPopupInputTests::s_PopupKey, UiWidgetKind::Popup, parent)){
+    WidgetState parent = WidgetState();
+    if(!DeclareEcsUiWidget(self.m_context, s_EcsUiPopupKey, WidgetKind::Popup, parent)){
         return false;
     }
     self.m_token = MakeEcsUiPopupToken(parent, self.m_popupState.instanceGeneration(), self.m_popupState.openGeneration());
@@ -309,24 +281,24 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
     }
     self.m_nestedParentToken = self.m_token;
     if(self.m_popupState.isOpen()){
-        UiPopupScope scope = UiPopupScope();
+        PopupScope scope = PopupScope();
         scope.token = self.m_token;
         scope.bounds = MakeEcsUiRect(230.0f, 40.0f, 240.0f, 100.0f);
         scope.viewport = self.m_viewport;
-        if(!self.m_context.beginPopupScope(parent, scope) || !self.m_context.pushScope(UiPopupInputTests::s_PopupKey)){
+        if(!self.m_context.beginPopupScope(parent, scope) || !self.m_context.pushScope(s_EcsUiPopupKey)){
             return false;
         }
-        UiHitTarget barrier = UiHitTarget();
+        HitTarget barrier = HitTarget();
         barrier.rectangle = scope.bounds;
         barrier.clip = self.m_viewport;
         if(!self.m_context.addTarget(parent, barrier)){
             return false;
         }
-        if(!DeclareEcsUiPopupEdit(self, UiPopupInputTests::s_EditKey, MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
+        if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
             return false;
         }
-        UiWidgetState child = UiWidgetState();
-        if(!DeclareEcsUiWidget(self.m_context, UiPopupInputTests::s_ChildKey, UiWidgetKind::Popup, child)){
+        WidgetState child = WidgetState();
+        if(!DeclareEcsUiWidget(self.m_context, s_EcsUiChildKey, WidgetKind::Popup, child)){
             return false;
         }
         self.m_childToken = MakeEcsUiPopupToken(child, self.m_childState.instanceGeneration(), self.m_childState.openGeneration());
@@ -338,14 +310,14 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
             scope.token = self.m_childToken;
             scope.parent = self.m_token;
             scope.bounds = MakeEcsUiRect(60.0f, 80.0f, 240.0f, 100.0f);
-            if(!self.m_context.beginPopupScope(child, scope) || !self.m_context.pushScope(UiPopupInputTests::s_ChildKey)){
+            if(!self.m_context.beginPopupScope(child, scope) || !self.m_context.pushScope(s_EcsUiChildKey)){
                 return false;
             }
             barrier.rectangle = scope.bounds;
             if(!self.m_context.addTarget(child, barrier)){
                 return false;
             }
-            if(!DeclareEcsUiPopupEdit(self, UiPopupInputTests::s_EditKey, MakeEcsUiRect(80.0f, 100.0f, 180.0f, 30.0f), self.m_childModel, self.m_childWidget, self.m_childResult)){
+            if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, MakeEcsUiRect(80.0f, 100.0f, 180.0f, 30.0f), self.m_childModel, self.m_childWidget, self.m_childResult)){
                 return false;
             }
             if(!self.m_context.popScope() || !self.m_context.endPopupScope(true)){
@@ -373,16 +345,16 @@ b8 CommitEcsUiPopupFrame(mut UiPopupInputTests self){
     return true;
 }
 
-UiInputRoutingResult DispatchEcsUiPopupEvent(mut UiPopupInputTests self, in UiInputEvent event){
+InputRoutingResult DispatchEcsUiPopupEvent(mut UiPopupInputTests self, in InputEvent event){
     self.m_host.collectNative();
-    const UiWidgetId previousCapture = self.m_context.input().capture();
+    const WidgetId previousCapture = self.m_context.input().capture();
     const auto normalized = self.m_context.input().queue(NativeInput(event));
     EXPECT_TRUE(cast<b8>(normalized));
     if(!normalized){
-        return UiInputRoutingResult();
+        return InputRoutingResult();
     }
     const b8 submit = self.m_host.prepareSubmit(normalized.value());
-    const UiInputRoutingResult result = self.m_context.input().process();
+    const InputRoutingResult result = self.m_context.input().process();
     self.m_host.input(normalized.value(), previousCapture, submit);
     return result;
 }
@@ -395,20 +367,20 @@ b8 NestedFrameEcsUiPopup(mut UiPopupInputTests self){
     return PrepareEcsUiNestedPopupFrame(self) && CommitEcsUiPopupFrame(self);
 }
 
-void DispatchEcsUiPopupKey(mut UiPopupInputTests self, in KeyEnum value, in b8 control){
-    UiInputEvent down = UiInputEvent();
+void DispatchEcsUiPopupKey(mut UiPopupInputTests self, in Key value, in b8 control){
+    InputEvent down = InputEvent();
     down.key = value;
-    down.type = UiInputEventType::KeyDown;
+    down.type = InputEventType::KeyDown;
     down.control = control;
     EXPECT_TRUE(DispatchEcsUiPopupEvent(self, down).commandConsumed);
-    UiInputEvent up = UiInputEvent();
+    InputEvent up = InputEvent();
     up.key = value;
-    up.type = UiInputEventType::KeyUp;
+    up.type = InputEventType::KeyUp;
     up.control = control;
     EXPECT_TRUE(DispatchEcsUiPopupEvent(self, up).commandConsumed);
 }
 
-void DispatchEcsUiPopupKey(mut UiPopupInputTests self, in KeyEnum value){
+void DispatchEcsUiPopupKey(mut UiPopupInputTests self, in Key value){
     DispatchEcsUiPopupKey(self, value, false);
 }
 
@@ -418,7 +390,7 @@ void FocusEcsUiPopupBase(mut UiPopupInputTests self){
     ASSERT_EQ(self.m_context.input().focus(), self.m_baseWidget.id);
     ASSERT_TRUE(FrameEcsUiPopup(self));
     ASSERT_TRUE(self.m_textInput.activeSession().valid());
-    ASSERT_EQ(self.m_textInput.surroundingText(), "base");
+    ASSERT_EQ(self.m_textInput.surrounding(), "base");
 }
 
 void FocusEcsUiPopupEditor(mut UiPopupInputTests self){
@@ -428,7 +400,7 @@ void FocusEcsUiPopupEditor(mut UiPopupInputTests self){
     ASSERT_EQ(self.m_context.input().focus(), self.m_popupWidget.id);
     ASSERT_TRUE(FrameEcsUiPopup(self));
     ASSERT_TRUE(self.m_textInput.activeSession().valid());
-    ASSERT_EQ(self.m_textInput.surroundingText(), UiPopupInputTests::s_PopupKey);
+    ASSERT_EQ(self.m_textInput.surrounding(), s_EcsUiPopupKey);
 }
 
 b8 SeedSelectionDeletion(mut UiSelectionDeletionTests self, in b8 reverse){
@@ -468,7 +440,7 @@ void ExpectSelectionDeletionBaseline(in UiSelectionDeletionTests self, in u64 re
 
 void VerifySelectionDeletionSessionOrder(mut UiSelectionDeletionTests self, in b8 reverse){
     ASSERT_TRUE(SeedSelectionDeletion(self, reverse));
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     ASSERT_EQ(session.begin(SelectionDeletionTestOwner(self), s_SelectionDeletionCaret, self.m_model), TextInputAdmission::Accepted);
     ASSERT_EQ(self.m_textInput.preedit("IME", 0u, 3u), TextInputAdmission::Accepted);
     ASSERT_EQ(session.drain(SelectionDeletionTestOwner(self), self.m_model).status, UiTextEditStatus::Applied);
@@ -509,7 +481,7 @@ void VerifySelectionDeletionSessionOrder(mut UiSelectionDeletionTests self, in b
 
 void VerifySelectionDeletionSessionRejected(mut UiSelectionDeletionTests self, in DeletionMutation mutation){
     ASSERT_TRUE(SeedSelectionDeletion(self, false));
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     ASSERT_EQ(session.begin(SelectionDeletionTestOwner(self), s_SelectionDeletionCaret, self.m_model), TextInputAdmission::Accepted);
     const TextInputSessionToken token = session.token();
     ASSERT_EQ(self.m_textInput.erase(1u, 1u, self.m_textInput.surroundingRevision(self.m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
@@ -532,7 +504,7 @@ void VerifySelectionDeletionSessionRejected(mut UiSelectionDeletionTests self, i
     EXPECT_EQ(self.m_model.canRedo(), canRedo);
     EXPECT_FALSE(session.token().valid());
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
 }
 
 void VerifySelectionDeletionHostRejected(mut UiSelectionDeletionTests self, in DeletionMutation mutation){
@@ -555,7 +527,7 @@ void VerifySelectionDeletionHostRejected(mut UiSelectionDeletionTests self, in D
     EXPECT_EQ(self.m_model.canUndo(), canUndo);
     EXPECT_EQ(self.m_model.canRedo(), canRedo);
     EXPECT_NE(self.m_textInput.activeSession(), token);
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
 }
 
 b8 SeedSelectionEpoch(mut UiSelectionEpochTests self){
@@ -588,10 +560,10 @@ void ExpectSelectionEpochPreserved(in UiSelectionEpochTests self, in u64 revisio
     EXPECT_FALSE(self.m_model.canUndo());
 }
 
-void VerifySelectionEpochClipboardActionRejected(mut UiSelectionEpochTests self, in EpochMutation mutation, in UiEditClipboardActionEnum action){
+void VerifySelectionEpochClipboardActionRejected(mut UiSelectionEpochTests self, in EpochMutation mutation, in EditClipboardAction action){
     const ScopedTestTrace trace = ScopedTestTrace(action);
     ASSERT_TRUE(SeedSelectionEpoch(self));
-    UiEditClipboardController controller = UiEditClipboardController(self.m_arena, self.m_clipboard);
+    UiEditClipboardController controller = UiEditClipboardController(self.m_clipboard);
     ASSERT_EQ(controller.request(SelectionEpochTestOwner(self), self.m_model, action).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     const ClipboardRequestToken token = controller.token();
@@ -611,13 +583,13 @@ void VerifySelectionEpochClipboardActionRejected(mut UiSelectionEpochTests self,
 
 void VerifySelectionEpochClipboardRejected(mut UiSelectionEpochTests self, in EpochMutation mutation){
     self.m_clipboard.delayed = true;
-    VerifySelectionEpochClipboardActionRejected(self, mutation, UiEditClipboardAction::Cut);
-    VerifySelectionEpochClipboardActionRejected(self, mutation, UiEditClipboardAction::Paste);
+    VerifySelectionEpochClipboardActionRejected(self, mutation, EditClipboardAction::Cut);
+    VerifySelectionEpochClipboardActionRejected(self, mutation, EditClipboardAction::Paste);
 }
 
 void VerifySelectionEpochSessionRejected(mut UiSelectionEpochTests self, in EpochMutation mutation, in b8 refresh){
     ASSERT_TRUE(SeedSelectionEpoch(self));
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     ASSERT_EQ(session.begin(SelectionEpochTestOwner(self), s_SessionTestCaret, self.m_model), TextInputAdmission::Accepted);
     const TextInputSessionToken token = session.token();
     const u64 surrounding = session.surroundingRevision();
@@ -634,8 +606,8 @@ void VerifySelectionEpochSessionRejected(mut UiSelectionEpochTests self, in Epoc
         nextCaret.width = 2;
         nextCaret.height = 20;
         EXPECT_EQ(session.refresh(SelectionEpochTestOwner(self), self.m_model, nextCaret), TextInputAdmission::InvalidSession);
-        EXPECT_EQ(self.m_textInput.caretRect().x, s_SessionTestCaret.x);
-        EXPECT_EQ(self.m_textInput.caretRect().y, s_SessionTestCaret.y);
+        EXPECT_EQ(self.m_textInput.currentCaret().x, s_SessionTestCaret.x);
+        EXPECT_EQ(self.m_textInput.currentCaret().y, s_SessionTestCaret.y);
         EXPECT_EQ(session.surroundingRevision(), surrounding);
         EXPECT_EQ(session.token(), token);
     }
@@ -645,7 +617,7 @@ void VerifySelectionEpochSessionRejected(mut UiSelectionEpochTests self, in Epoc
     EXPECT_FALSE(result.textChanged);
     EXPECT_FALSE(session.token().valid());
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
     ExpectSelectionEpochPreserved(self, revision, externalRevision);
 }
 
@@ -664,7 +636,7 @@ void VerifySelectionEpochHostRejected(mut UiSelectionEpochTests self, in EpochMu
     EXPECT_FALSE(self.m_result.selectionChanged);
     EXPECT_EQ(self.m_model.selectionGeneration(), selectionGeneration);
     ExpectSelectionEpochPreserved(self, revision, externalRevision);
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
     EXPECT_NE(self.m_textInput.activeSession(), token);
 }
 
@@ -683,11 +655,11 @@ void VerifyUiPopupInputTests_NestedAcceptanceCancelsTheParentSessionOnlyAfterGeo
     ASSERT_EQ(self.m_context.input().popupCount(), 2u);
     EXPECT_EQ(self.m_context.input().focus(), self.m_childWidget.id);
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(parentSession, "late parent"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(parentSession, "late parent"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(NestedFrameEcsUiPopup(self));
     EXPECT_TRUE(self.m_childResult.focused);
     EXPECT_TRUE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.surroundingText(), "child");
+    EXPECT_EQ(self.m_textInput.surrounding(), "child");
 }
 
 void VerifyUiPopupInputTests_NestedPreeditEscapeCancelsCompositionThenDismissesOnlyTheChild(mut UiPopupInputTests self){
@@ -719,7 +691,7 @@ void VerifyUiPopupInputTests_NestedPreeditEscapeCancelsCompositionThenDismissesO
     ASSERT_EQ(self.m_context.input().popupCount(), 1u);
     EXPECT_EQ(self.m_context.input().focus(), self.m_popupWidget.id);
     ASSERT_TRUE(NestedFrameEcsUiPopup(self));
-    EXPECT_EQ(self.m_textInput.surroundingText(), "popup");
+    EXPECT_EQ(self.m_textInput.surrounding(), "popup");
     EXPECT_NE(self.m_textInput.activeSession(), childSession);
 }
 
@@ -736,7 +708,7 @@ void VerifyUiPopupInputTests_AncestorReopeningFencesQueuedChildNativeAndClipboar
     const ClipboardRequestToken paste = self.m_clipboard.startedToken;
     ASSERT_TRUE(paste.valid());
     ASSERT_TRUE(self.m_clipboard.complete(paste, "late paste"));
-    ASSERT_EQ(self.m_textInput.emitCommit(childSession, "late native"), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.m_textInput.sendCommit(childSession, "late native"), TextInputAdmission::Accepted);
     self.m_popupState.close();
     self.m_popupState.open();
     ASSERT_TRUE(PrepareEcsUiNestedPopupFrame(self));
@@ -744,13 +716,13 @@ void VerifyUiPopupInputTests_AncestorReopeningFencesQueuedChildNativeAndClipboar
     EXPECT_FALSE(self.m_childModel.canUndo());
     EXPECT_FALSE(self.m_childState.isOpen());
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(childSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(childSession, "later"), TextInputAdmission::InvalidSession);
     EXPECT_FALSE(self.m_clipboard.complete(paste, "later"));
     ASSERT_TRUE(CommitEcsUiPopupFrame(self));
     ASSERT_EQ(self.m_context.input().popupCount(), 1u);
     EXPECT_EQ(self.m_context.input().focus(), self.m_popupWidget.id);
     ASSERT_TRUE(NestedFrameEcsUiPopup(self));
-    EXPECT_EQ(self.m_textInput.surroundingText(), "popup");
+    EXPECT_EQ(self.m_textInput.surrounding(), "popup");
 }
 
 void VerifyUiPopupInputTests_NestedFocusLossCancelsTheWholeFamilyWithoutRestoringAnUnfocusedEditor(mut UiPopupInputTests self){
@@ -763,7 +735,7 @@ void VerifyUiPopupInputTests_NestedFocusLossCancelsTheWholeFamilyWithoutRestorin
     EXPECT_TRUE(DispatchEcsUiPopupEvent(self, MakeEcsUiFocusLostEvent()).commandConsumed);
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(childSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(childSession, "late"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(NestedFrameEcsUiPopup(self));
     EXPECT_FALSE(self.m_popupState.isOpen());
     EXPECT_FALSE(self.m_context.input().hasPopup());
@@ -792,7 +764,7 @@ void VerifyUiPopupInputTests_PreparedPopupPreservesBaseSessionAndAcceptedFocusCa
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
     EXPECT_EQ(self.m_textInput.starts, starts);
     EXPECT_EQ(self.m_textInput.ends, ends + 1u);
-    EXPECT_EQ(self.m_textInput.emitCommit(baseSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(baseSession, "late"), TextInputAdmission::InvalidSession);
     EXPECT_EQ(self.m_baseModel.text(), "base");
     EXPECT_EQ(self.m_popupModel.text(), "popup");
 }
@@ -810,7 +782,7 @@ void VerifyUiPopupInputTests_PopupSessionBeginsOnlyAfterAcceptedGeometryAndANewM
     EXPECT_TRUE(self.m_textInput.activeSession().valid());
     EXPECT_NE(self.m_textInput.activeSession(), baseSession);
     EXPECT_EQ(self.m_textInput.starts, starts + 1u);
-    EXPECT_EQ(self.m_textInput.surroundingText(), "popup");
+    EXPECT_EQ(self.m_textInput.surrounding(), "popup");
     ASSERT_TRUE(CommitEcsUiPopupFrame(self));
 }
 
@@ -819,7 +791,7 @@ void VerifyUiPopupInputTests_ReopenedSameModelFencesQueuedNativeAndLocalIntentio
     const TextInputSessionToken oldSession = self.m_textInput.activeSession();
     const usize anchor = self.m_popupModel.anchor();
     const usize caret = self.m_popupModel.caret();
-    ASSERT_EQ(self.m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.m_textInput.sendCommit(oldSession, "late"), TextInputAdmission::Accepted);
     DispatchEcsUiPopupKey(self, Key::Backspace);
     EXPECT_EQ(self.m_popupModel.text(), "popup");
     self.m_popupState.close();
@@ -832,13 +804,13 @@ void VerifyUiPopupInputTests_ReopenedSameModelFencesQueuedNativeAndLocalIntentio
     EXPECT_FALSE(self.m_popupResult.textChanged);
     EXPECT_FALSE(self.m_popupResult.focused);
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(CommitEcsUiPopupFrame(self));
     EXPECT_EQ(self.m_context.input().focus(), self.m_popupWidget.id);
     ASSERT_TRUE(FrameEcsUiPopup(self));
     EXPECT_TRUE(self.m_textInput.activeSession().valid());
     EXPECT_NE(self.m_textInput.activeSession(), oldSession);
-    EXPECT_EQ(self.m_textInput.surroundingText(), "popup");
+    EXPECT_EQ(self.m_textInput.surrounding(), "popup");
 }
 
 void VerifyUiPopupInputTests_ReopenedSameModelRejectsAnAlreadyCompletedPasteFromThePriorPopupLifetime(mut UiPopupInputTests self){
@@ -859,7 +831,7 @@ void VerifyUiPopupInputTests_ReopenedSameModelRejectsAnAlreadyCompletedPasteFrom
     EXPECT_FALSE(self.m_clipboard.complete(oldRequest, "later paste"));
     ASSERT_TRUE(CommitEcsUiPopupFrame(self));
     ASSERT_TRUE(FrameEcsUiPopup(self));
-    EXPECT_EQ(self.m_textInput.surroundingText(), "popup");
+    EXPECT_EQ(self.m_textInput.surrounding(), "popup");
 }
 
 void VerifyUiPopupInputTests_FirstEscapeCancelsTransientPreeditAndSecondDismissesBeforeAcceptedRestoration(mut UiPopupInputTests self){
@@ -896,7 +868,7 @@ void VerifyUiPopupInputTests_FirstEscapeCancelsTransientPreeditAndSecondDismisse
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
     ASSERT_TRUE(FrameEcsUiPopup(self));
     EXPECT_TRUE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.surroundingText(), "base");
+    EXPECT_EQ(self.m_textInput.surrounding(), "base");
 }
 
 void VerifyUiPopupInputTests_NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreAnUnfocusedEditor(mut UiPopupInputTests self){
@@ -906,7 +878,7 @@ void VerifyUiPopupInputTests_NativeFocusLossCancelsSessionAndRemovalDoesNotResto
     EXPECT_TRUE(DispatchEcsUiPopupEvent(self, MakeEcsUiFocusLostEvent()).commandConsumed);
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
     EXPECT_FALSE(self.m_context.input().focus().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(popupSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(popupSession, "late"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(FrameEcsUiPopup(self));
     EXPECT_FALSE(self.m_popupState.isOpen());
     EXPECT_FALSE(self.m_context.input().hasPopup());
@@ -923,7 +895,7 @@ void VerifyUiPopupInputTests_NativeFocusLossCancelsSessionAndRemovalDoesNotResto
     ASSERT_TRUE(FrameEcsUiPopup(self));
     EXPECT_EQ(self.m_context.input().focus(), self.m_baseWidget.id);
     EXPECT_TRUE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.surroundingText(), "base");
+    EXPECT_EQ(self.m_textInput.surrounding(), "base");
 }
 
 void VerifyUiPopupInputTests_DeferredEditorStartsNativeSessionOnlyAfterPopupGeometryAcceptance(mut UiPopupInputTests self){
@@ -938,7 +910,7 @@ void VerifyUiPopupInputTests_DeferredEditorStartsNativeSessionOnlyAfterPopupGeom
     ASSERT_TRUE(PrepareEcsUiDeferredPopupFrame(self));
     EXPECT_TRUE(self.m_popupResult.focused);
     EXPECT_TRUE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.surroundingText(), "popup");
+    EXPECT_EQ(self.m_textInput.surrounding(), "popup");
     ASSERT_TRUE(CommitEcsUiPopupFrame(self));
 }
 
@@ -948,14 +920,14 @@ void VerifyUiPopupInputTests_DeferredEditorRejectsQueuedNativeCommitWhenPopupLif
     ASSERT_TRUE(PrepareEcsUiDeferredPopupFrame(self) && CommitEcsUiPopupFrame(self));
     const TextInputSessionToken old = self.m_textInput.activeSession();
     ASSERT_TRUE(old.valid());
-    ASSERT_EQ(self.m_textInput.emitCommit(old, "late"), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.m_textInput.sendCommit(old, "late"), TextInputAdmission::Accepted);
     self.m_popupState.close();
     self.m_popupState.open();
     ASSERT_TRUE(PrepareEcsUiDeferredPopupFrame(self));
     EXPECT_EQ(self.m_popupModel.text(), "popup");
     EXPECT_FALSE(self.m_popupResult.textChanged);
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(old, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(old, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(CommitEcsUiPopupFrame(self));
 }
 
@@ -1005,7 +977,7 @@ void VerifyUiPopupInputTests_DeferredEditorRejectsNativeIntentionAfterCompositio
     ASSERT_TRUE(PrepareEcsUiDeferredPopupFrame(self) && CommitEcsUiPopupFrame(self));
     const TextInputSessionToken old = self.m_textInput.activeSession();
     ASSERT_TRUE(old.valid());
-    ASSERT_EQ(self.m_textInput.emitCommit(old, "late"), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.m_textInput.sendCommit(old, "late"), TextInputAdmission::Accepted);
     const u64 revision = self.m_popupModel.revision();
     const u64 generation = self.m_popupModel.compositionGeneration();
     ASSERT_TRUE(self.m_popupModel.beginComposition());
@@ -1018,7 +990,7 @@ void VerifyUiPopupInputTests_DeferredEditorRejectsNativeIntentionAfterCompositio
     EXPECT_FALSE(self.m_popupResult.textChanged);
     EXPECT_FALSE(self.m_popupModel.canUndo());
     EXPECT_NE(self.m_textInput.activeSession(), old);
-    EXPECT_EQ(self.m_textInput.emitCommit(old, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(old, "later"), TextInputAdmission::InvalidSession);
 }
 
 void VerifyUiSelectionDeletionTests_ForwardSelectionClearDeleteCommitUsesTheAdjustedReplacementRange(mut UiSelectionDeletionTests self){
@@ -1031,7 +1003,7 @@ void VerifyUiSelectionDeletionTests_ReverseSelectionClearDeleteCommitRestoresDir
 
 void VerifyUiSelectionDeletionTests_CopiedSelectionBasisSurvivesNativeReleaseAndRetainsSelectedBytes(mut UiSelectionDeletionTests self){
     ASSERT_TRUE(SeedSelectionDeletion(self, false));
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     ASSERT_EQ(session.begin(SelectionDeletionTestOwner(self), s_SelectionDeletionCaret, self.m_model), TextInputAdmission::Accepted);
     const u64 surrounding = session.surroundingRevision();
     ASSERT_EQ(self.m_textInput.erase(1u, 1u, surrounding, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
@@ -1072,7 +1044,7 @@ void VerifyUiSelectionDeletionTests_MalformedCopiedDeletionBasisRejectsWithoutCh
 
 void VerifyUiSelectionDeletionTests_CaretDeletionStillRejectsANonemptySelectionAndDropsTheFollowingCommit(mut UiSelectionDeletionTests self){
     ASSERT_TRUE(SeedSelectionDeletion(self, false));
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     ASSERT_EQ(session.begin(SelectionDeletionTestOwner(self), s_SelectionDeletionCaret, self.m_model), TextInputAdmission::Accepted);
     ASSERT_EQ(self.m_textInput.erase(1u, 1u, self.m_textInput.surroundingRevision(self.m_textInput.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(self.m_textInput.commit("X"), TextInputAdmission::Accepted);
@@ -1090,7 +1062,7 @@ void VerifyUiSelectionDeletionTests_CaretDeletionStillRejectsANonemptySelectionA
 
 void VerifyUiSelectionDeletionTests_ANewNativePublicationCannotReviveTheSessionsOldSurroundingSnapshot(mut UiSelectionDeletionTests self){
     ASSERT_TRUE(SeedSelectionDeletion(self, false));
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     ASSERT_EQ(session.begin(SelectionDeletionTestOwner(self), s_SelectionDeletionCaret, self.m_model), TextInputAdmission::Accepted);
     const u64 surrounding = session.surroundingRevision();
     const u64 revision = self.m_model.revision();
@@ -1112,7 +1084,7 @@ void VerifyUiSelectionDeletionTests_ANewNativePublicationCannotReviveTheSessions
 
 void VerifyUiSelectionDeletionTests_AnEarlierUnpublishedCommitMakesTheQueuedSelectionDeletionStale(mut UiSelectionDeletionTests self){
     ASSERT_TRUE(SeedSelectionDeletion(self, false));
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     ASSERT_EQ(session.begin(SelectionDeletionTestOwner(self), s_SelectionDeletionCaret, self.m_model), TextInputAdmission::Accepted);
     ASSERT_EQ(self.m_textInput.commit("X"), TextInputAdmission::Accepted);
     ASSERT_EQ(self.m_textInput.erase(1u, 1u, self.m_textInput.surroundingRevision(self.m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
@@ -1193,7 +1165,7 @@ void VerifyUiSelectionDeletionTests_ReadOnlyPolicyRetiresCollectedSelectionDelet
     ASSERT_EQ(self.m_textInput.erase(1u, 1u, self.m_textInput.surroundingRevision(self.m_textInput.activeSession()), TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     ASSERT_EQ(self.m_textInput.commit("X"), TextInputAdmission::Accepted);
     self.m_host.collectNative();
-    UiEditBoxOptions options = UiEditBoxOptions();
+    EditBoxOptions options = EditBoxOptions();
     options.readOnly = true;
     ASSERT_TRUE(self.frame(self.m_model, options));
     ExpectSelectionDeletionBaseline(self, revision, externalRevision, selectionGeneration);
@@ -1201,7 +1173,7 @@ void VerifyUiSelectionDeletionTests_ReadOnlyPolicyRetiresCollectedSelectionDelet
     EXPECT_FALSE(self.m_result.selectionChanged);
     EXPECT_FALSE(self.m_model.canUndo());
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
 }
 
 void VerifyUiSelectionDeletionTests_OrderedHostFencesApplicationTextSelectionAndExternalOwnershipEpochs(mut UiSelectionDeletionTests self){
@@ -1214,10 +1186,10 @@ void VerifyUiSelectionDeletionTests_OrderedHostFencesApplicationTextSelectionAnd
 }
 
 void VerifyUiSelectionDeletionTests_RejectedCommitPreservesStandaloneDeletionPrefixAndDropsFollowingEvents(mut UiSelectionDeletionTests self){
-    UiEditLimits limits = UiEditLimits();
+    EditLimits limits = EditLimits();
     limits.maxBytes = 10u;
-    UiEditModel model = UiEditModel(self.m_arena, limits);
-    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    EditModel model = EditModel(limits);
+    UiTextEditSession session = UiTextEditSession(self.m_textInput);
     const UiTextEditOwner owner = MakeSelectionDeletionOwner(model.instanceGeneration());
     ASSERT_TRUE(model.setText("abcDEFghi"));
     ASSERT_TRUE(model.setSelection(6u, 3u));
@@ -1239,7 +1211,7 @@ void VerifyUiSelectionDeletionTests_RejectedCommitPreservesStandaloneDeletionPre
     EXPECT_FALSE(model.composition().active);
     EXPECT_FALSE(session.token().valid());
     EXPECT_FALSE(self.m_textInput.activeSession().valid());
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
     EXPECT_EQ(session.drain(owner, model).status, UiTextEditStatus::Idle);
     ASSERT_TRUE(model.undo());
     EXPECT_EQ(model.text(), "abcDEFghi");
@@ -1270,7 +1242,7 @@ void VerifyUiSelectionDeletionTests_RejectedCommitPreservesHostDeletionPrefixAnd
     EXPECT_EQ(self.m_model.caret(), 2u);
     EXPECT_FALSE(self.m_model.composition().active);
     EXPECT_NE(self.m_textInput.activeSession(), token);
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_EQ(self.m_model.text(), "abDEFhi");
     EXPECT_FALSE(self.m_result.textChanged);
@@ -1295,9 +1267,9 @@ void VerifyUiSelectionEpochTests_CompletedCutAndPasteRejectCompositionRoundTrip(
 
 void VerifyUiSelectionEpochTests_RejectedSelectionDoesNotRetireACompletedPaste(mut UiSelectionEpochTests self){
     ASSERT_TRUE(SeedSelectionEpoch(self));
-    UiEditClipboardController controller = UiEditClipboardController(self.m_arena, self.m_clipboard);
+    UiEditClipboardController controller = UiEditClipboardController(self.m_clipboard);
     self.m_clipboard.delayed = true;
-    ASSERT_EQ(controller.request(SelectionEpochTestOwner(self), self.m_model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_EQ(controller.request(SelectionEpochTestOwner(self), self.m_model, EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     const u64 selectionGeneration = self.m_model.selectionGeneration();
     ASSERT_FALSE(self.m_model.setSelection(0u, self.m_model.text().size() + 1u));
@@ -1350,7 +1322,7 @@ void VerifyUiSelectionEpochTests_OrderedHostRetiresOldNativeTextAndKeepsTheAppli
     EXPECT_EQ(self.m_model.caret(), 0u);
     EXPECT_EQ(self.m_model.selectionGeneration(), selectionGeneration);
     EXPECT_FALSE(self.m_model.canUndo());
-    EXPECT_EQ(self.m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(self.m_textInput.sendCommit(token, "later"), TextInputAdmission::InvalidSession);
     ASSERT_EQ(self.m_textInput.commit("fresh"), TextInputAdmission::Accepted);
     self.m_host.collectNative();
     ASSERT_TRUE(self.frame(self.m_model));

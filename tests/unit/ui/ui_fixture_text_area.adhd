@@ -1,0 +1,270 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/ui_fixture_widget_base.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_TextAreaPanelKey = "panel";
+const StringView s_TextAreaKey = "area";
+type UiFixtureHook = Func<128u, void()>;
+
+class AreaEvent{
+    public String text;
+    public usize anchor = 0u;
+    public usize caret = 0u;
+    public InputCommandIntent intent;
+    public EditAction action = EditAction::Submit;
+    public UiFixtureAreaEventKind kind = UiFixtureAreaEventKind::Text;
+}
+
+class AreaPublication{
+    public String text;
+    public EditBoxPlacement placement;
+    public PopupToken popup;
+}
+
+class AreaResolution{
+    public String text;
+    public EditNavigationSnapshot preferred;
+    public Expected<EditNavigationResult> result = MakeUnexpected(Failure());
+    public usize caret = 0u;
+}
+
+[ordered]
+class TextAreaHost : IEditBoxHost{
+    public PaintVector<AreaPublication> publications;
+    public PaintVector<AreaResolution> resolutions;
+    public PaintVector<String> actionTexts;
+    public UiFixtureHook loanHook;
+    public UiFixtureHook publishHook;
+    public WidgetId loanHookWidget;
+    public WidgetId publishHookWidget;
+    public PopupToken lastPopup;
+    public usize loans = 0u;
+    public usize ordinaryLoans = 0u;
+    public usize actionLoans = 0u;
+    public usize publishes = 0u;
+    public f32 viewportHeight = 80.0f;
+    public f32 seededColumn = 0.0f;
+    public b8 seedColumn = false;
+    public b8 focused = true;
+    public in Context m_context;
+    public PaintVector<AreaEvent> m_events;
+    public InputBindings m_bindings;
+
+    public TextAreaHost(in borrow Context context){ this.m_context = context; }
+    public void text(in StringView value){
+        AreaEvent event;
+        event.text.assign(value);
+        this.m_events.push_back(event);
+    }
+    public void key(in i32 value){ this.key(value, false); }
+    public void key(in i32 value, in b8 control){ this.key(value, control, false); }
+    public void key(in i32 value, in b8 control, in b8 shift){
+        AreaEvent event;
+        event.kind = UiFixtureAreaEventKind::Key;
+        i32 modifiers = 0;
+        if(control)
+            modifiers |= cast<i32>(InputModifier::Control);
+        if(shift)
+            modifiers |= cast<i32>(InputModifier::Shift);
+        event.intent = this.m_bindings.resolve(value, modifiers);
+        this.m_events.push_back(event);
+    }
+    public void selection(in usize anchor, in usize caret){
+        AreaEvent event;
+        event.kind = UiFixtureAreaEventKind::Selection;
+        event.anchor = anchor;
+        event.caret = caret;
+        this.m_events.push_back(event);
+    }
+    public void action(in EditAction value){
+        AreaEvent event;
+        event.kind = UiFixtureAreaEventKind::Action;
+        event.action = value;
+        this.m_events.push_back(event);
+    }
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2) override{
+        ++this.ordinaryLoans;
+        return EditBoxResult();
+    }
+    public EditBoxResult editInPopup(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3) override{ return EditBoxResult(); }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{
+        ++this.actionLoans;
+        return EditBoxResult();
+    }
+    public EditBoxResult editNavigated(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, mut EditNavigationState navigation, mut IEditNavigationResolver resolver, mut IEditActionSink sink) override{
+        ++this.loans;
+        this.lastPopup = popup;
+        EditBoxResult result;
+        result.valid = true;
+        result.focused = options.enabled && this.focused;
+        const u64 revision = model.revision();
+        const usize anchor = model.anchor();
+        const usize caret = model.caret();
+        if(this.seedColumn)
+            result.valid = navigation.setPreferredX(this.seededColumn);
+        this.seedColumn = false;
+        for(in AreaEvent event : this.m_events){
+            if(!result.valid)
+                break;
+            const u64 beforeRevision = model.revision();
+            const u64 beforeSelection = model.selectionGeneration();
+            const u64 beforeComposition = model.compositionGeneration();
+            b8 vertical = false;
+            if(event.kind == UiFixtureAreaEventKind::Action)
+                result.valid = this.applyAction(event.action, options.readOnly, model, navigation, sink, result);
+            else if(options.enabled && event.kind == UiFixtureAreaEventKind::Text && !options.readOnly)
+                result.valid = model.replaceSelection(event.text);
+            else if(options.enabled && event.kind == UiFixtureAreaEventKind::Selection)
+                result.valid = model.setSelection(event.anchor, event.caret);
+            else if(options.enabled && event.kind == UiFixtureAreaEventKind::Key){
+                const auto direction = TryTranslateEditNavigation(event.intent);
+                vertical = direction.has_value();
+                if(direction.has_value() && !model.composition().active){
+                    this.resolutions.push_back(AreaResolution());
+                    mut AreaResolution call = this.resolutions.back();
+                    call.text.assign(model.text());
+                    call.caret = model.caret();
+                    call.preferred = navigation.snapshot();
+                    call.result = resolver.resolve(model, direction.value(), call.preferred, this.viewportHeight);
+                    if(call.result.has_value()){
+                        usize targetAnchor = call.result.value().committedByte;
+                        if(event.intent.extend)
+                            targetAnchor = model.anchor();
+                        result.valid = model.setSelection(targetAnchor, call.result.value().committedByte) && navigation.setPreferredX(call.result.value().preferredX);
+                    }
+                    else
+                        result.valid = false;
+                }
+                else if(!vertical){
+                    const EditCommandRequest request = TranslateEditCommand(event.intent, false, model.textMode());
+                    const auto command = ApplyEditCommand(model, request, options.readOnly);
+                    if(command.submitted || command.cancelled){
+                        auto action = EditAction::Cancel;
+                        if(command.submitted)
+                            action = EditAction::Submit;
+                        result.valid = this.applyAction(action, options.readOnly, model, navigation, sink, result);
+                    }
+                }
+            }
+            if(!vertical && (model.revision() != beforeRevision || model.selectionGeneration() != beforeSelection || model.compositionGeneration() != beforeComposition))
+                navigation.reset();
+        }
+        this.m_events.clear();
+        if(this.loanHook && (!this.loanHookWidget.valid() || this.loanHookWidget == widget.id)){
+            UiFixtureHook hook = this.loanHook;
+            this.loanHook = UiFixtureHook();
+            hook();
+        }
+        result.textChanged = model.revision() != revision;
+        result.selectionChanged = model.anchor() != anchor || model.caret() != caret;
+        return result;
+    }
+    public b8 publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions arg3) override{
+        ++this.publishes;
+        this.publications.push_back(AreaPublication());
+        mut AreaPublication record = this.publications.back();
+        record.text.assign(view.displayText());
+        record.placement = placement;
+        record.popup = this.m_context.popupToken();
+        this.viewportHeight = placement.content.height;
+        if(this.publishHook && (!this.publishHookWidget.valid() || this.publishHookWidget == widget.id)){
+            UiFixtureHook hook = this.publishHook;
+            this.publishHook = UiFixtureHook();
+            hook();
+        }
+        return true;
+    }
+    public b8 applyAction(in EditAction action, in b8 readOnly, mut EditModel model, mut EditNavigationState navigation, mut IEditActionSink sink, mut EditBoxResult result){
+        this.actionTexts.push_back(String(model.text()));
+        if(!sink.apply(model, action, readOnly))
+            return false;
+        ApplyTextAreaHostActionFlags(action, navigation, result);
+        return !this.m_context.failed();
+    }
+}
+
+[ordered, extensible]
+class TextAreaFixture : WidgetFixture{
+    public EditModel m_model = EditModel(EditLimits(), EditTextMode::Multiline);
+    public TextAreaState m_state;
+    public TextAreaHost m_host;
+    public EditBoxResult m_result;
+
+    public TextAreaFixture(){ this.m_host = TextAreaHost(this.m_context); }
+    public b8 beginArea(in u64 generation){ return this.beginArea(generation, Rect(20.0f, 20.0f, 740.0f, 520.0f)); }
+    public b8 beginArea(in u64 generation, in Rect bounds){
+        return this.begin(generation) && this.m_builder.beginPanel(s_TextAreaPanelKey, bounds);
+    }
+    public b8 acceptArea(){ return this.finishPanel() && this.m_context.commitFrame(this.m_context.readyGeneration()); }
+    public b8 frameArea(in u64 generation){ return this.frameArea(generation, TextAreaOptions()); }
+    public b8 frameArea(in u64 generation, in TextAreaOptions options){ return this.frameArea(generation, options, Rect(20.0f, 20.0f, 740.0f, 520.0f)); }
+    public b8 frameArea(in u64 generation, in TextAreaOptions options, in Rect bounds){
+        return FrameTextAreaFixture(this, generation, options, bounds);
+    }
+    public void useHost(){ this.m_builder.setEditHost(this.m_host); }
+}
+
+[extensible]
+class TextAreaLoanFixture : TextAreaFixture{
+    public PopupState m_parent;
+    public PopupState m_child;
+
+    public b8 acceptBaseline(){ return AcceptTextAreaLoanBaseline(this); }
+    public b8 beginParent(in u64 generation){
+        return this.begin(generation) && this.m_builder.beginPopup(s_ParentPopupKey, this.m_parent, MakeLargeLoanParentPopupOptions());
+    }
+    public UiFixtureAcceptedInputState<16u> accepted()const{ return CaptureAcceptedInput<16u>(this.m_context.input()); }
+    public void expectRejected(in UiFixtureAcceptedInputState<16u> frame){
+        EXPECT_TRUE(this.m_builder.failed());
+        EXPECT_TRUE(this.m_context.failed());
+        EXPECT_FALSE(this.m_context.ready());
+        EXPECT_FALSE(this.m_context.commitFrame(2u));
+        ExpectAcceptedInput<16u>(this.m_context.input(), frame, true, false, true, false);
+    }
+}
+
+TextAreaOptions MakeTextAreaLoanFixtureOptions(){
+    TextAreaOptions options = TextAreaOptions();
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 96.0f;
+    return options;
+}
+
+void ApplyTextAreaHostActionFlags(in EditAction action, mut EditNavigationState navigation, mut EditBoxResult result){
+    result.submitted = result.submitted || (action == EditAction::Submit);
+    result.cancelled = result.cancelled || (action == EditAction::Cancel);
+    result.blurred = result.blurred || (action == EditAction::Blur);
+    result.abandoned = result.abandoned || (action == EditAction::Abandon);
+    if(action == EditAction::Cancel || action == EditAction::Blur || action == EditAction::Abandon){
+        navigation.reset();
+        if(action == EditAction::Cancel || action == EditAction::Blur)
+            result.focused = false;
+    }
+}
+
+b8 FrameTextAreaFixture(mut TextAreaFixture self, in u64 generation, in TextAreaOptions options, in Rect bounds){
+    if(!self.beginArea(generation, bounds))
+        return false;
+    self.m_result = self.m_builder.textArea(s_TextAreaKey, self.m_model, self.m_state, options);
+    return self.m_result.valid && self.acceptArea();
+}
+
+b8 AcceptTextAreaLoanBaseline(mut TextAreaLoanFixture self){
+    self.useHost();
+    if(!self.m_model.setText("alpha\nbeta") || !self.frameArea(1u, MakeTextAreaLoanFixtureOptions()))
+        return false;
+    self.m_host.publications.clear();
+    self.m_host.publishes = 0u;
+    self.m_host.loans = 0u;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

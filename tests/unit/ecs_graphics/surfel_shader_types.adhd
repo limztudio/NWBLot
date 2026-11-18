@@ -1,0 +1,37 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SurfelCoverageFloat3{
+    public f32 x;
+    public f32 y;
+    public f32 z;
+    public SurfelCoverageFloat3(in f32 value){ this.x = value; this.y = value; this.z = value; }
+    public SurfelCoverageFloat3(in f32 x, in f32 y, in f32 z){ this.x = x; this.y = y; this.z = z; }
+}
+class SurfelCoverageFloat4{
+    public f32 x;
+    public f32 y;
+    public f32 z;
+    public f32 w;
+    public SurfelCoverageFloat4(in SurfelCoverageFloat3 rgb, in f32 alpha){ this.x = rgb.x; this.y = rgb.y; this.z = rgb.z; this.w = alpha; }
+}
+class SurfelHashInt3{
+    public i32 x;
+    public i32 y;
+    public i32 z;
+    public SurfelHashInt3(){ this.x = 0; this.y = 0; this.z = 0; }
+    public SurfelHashInt3(in i32 x, in i32 y, in i32 z){ this.x = x; this.y = y; this.z = z; }
+    public SurfelHashInt3(in f32x3u value){ this.x = cast<i32>(value.x); this.y = cast<i32>(value.y); this.z = cast<i32>(value.z); }
+}
+
+SurfelCoverageFloat3 SurfelCoverageDivide(in SurfelCoverageFloat3 color, in f32 divisor){
+    const VectorSingle value = VectorSingle(color.x, color.y, color.z, 0.0f) / VectorSingle(divisor, divisor, divisor, 1.0f);
+    return SurfelCoverageFloat3(value.x, value.y, value.z);
+}
+f32x3u SurfelPositionDivide(in f32x3u value, in f32 divisor){ return f32x3u(value.x / divisor, value.y / divisor, value.z / divisor); }
+b8 SurfelEqualCells(in SurfelHashInt3 a, in SurfelHashInt3 b){ return a.x == b.x && a.y == b.y && a.z == b.z; }
+f32x3u SurfelFloorPosition(in f32x3u value){ return f32x3u(VectorFloor(VectorSingle(value))); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

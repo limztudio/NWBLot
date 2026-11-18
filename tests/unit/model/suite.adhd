@@ -7,116 +7,38 @@
 #include <tests/common/gtest_macros.adhd>
 #include "name_cases.adhd"
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
+#include <impl/assets_model/asset.adhd>
+#include <impl/ecs_model/system.adhd>
+#include <impl/ecs_scene/components.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_model/asset.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_scene/components.adhd.h>
-#include <impl/ecs_skeleton/components.adhd.h>
+[ordered]
+class EmptyAssetSource : IAssetBinarySource{
+    public mut usize readCount;
 
-#include <core/alloc/scratch.h>
-#include <core/assets/manager.h>
-#include <core/ecs/entity.h>
+    public EmptyAssetSource(mut usize count){
+        this.readCount = count;
+    }
 
-#include <global/arena_memory.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ModelTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct EmptyAssetSource final : public Core::Assets::IAssetBinarySource{
-public:
-    mutable usize readCount = 0u;
-
-
-public:
-    virtual b8 readAssetBinary(const Name&, Core::Assets::AssetBytes& outBinary)const noexcept override{
-        outBinary.clear();
-        ++readCount;
+    public b8 readAssetBinary(in Name path, mut AssetByteBuffer bytes)const override{
+        bytes.clear();
+        ++this.readCount;
         return false;
     }
-};
+}
 
-struct RuntimeContext{
-public:
-    Tests::EcsTestWorld testWorld;
-    Core::Assets::AssetRegistry registry{ testWorld.arena };
-    EmptyAssetSource source;
-    Core::Assets::AssetManager assetManager{ testWorld.arena, registry, source };
-    Impl::ModelSystem system{ testWorld.arena, testWorld.world, assetManager };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::ModelCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using EmptyAssetSource = ModelTests::EmptyAssetSource;
-using RuntimeContext = ModelTests::RuntimeContext;
-using AssetBytes = Core::Assets::AssetBytes;
-using Entity = Core::ECS::Entity;
-using World = Core::ECS::World;
-using Model = Impl::Model;
-using ModelComponent = Impl::ModelComponent;
-using ModelRuntimeComponent = Impl::ModelRuntimeComponent;
-using ModelObjectComponent = Impl::ModelObjectComponent;
-namespace ModelObjectKind = Impl::ModelObjectKind;
-using ModelStaticMeshAttachmentComponent = Impl::ModelStaticMeshAttachmentComponent;
-using SkeletonJointMatrix = Impl::SkeletonJointMatrix;
-using SkeletonPoseComponent = Impl::SkeletonPoseComponent;
-namespace SkeletonSkinningMode = Impl::SkeletonSkinningMode;
-using TransformComponent = Impl::Scene::TransformComponent;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[ordered]
+class RuntimeContext{
+    public EcsTestWorld testWorld;
+    public AssetRegistry registry = AssetRegistry(this.testWorld.arena);
+    private usize sourceReads = 0u;
+    public EmptyAssetSource source = EmptyAssetSource(this.sourceReads);
+    public AssetManager assetManager = AssetManager(this.testWorld.arena, this.registry, this.source);
+    public ModelSystem system = ModelSystem(this.testWorld.world, this.assetManager);
 }
 
 
@@ -169,7 +91,7 @@ EntityID MakeSkeleton(mut RuntimeContext context, in EntityID owner, in usize jo
     pose.parentJoints.reserve(jointCount);
     pose.localJoints.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        u32 parentIndex = Impl::s_SkeletonInvalidJointIndex;
+        u32 parentIndex = s_SkeletonInvalidJointIndex;
         if(jointIndex != 0u)
             parentIndex = cast<u32>(jointIndex - 1u);
         pose.parentJoints.push_back(parentIndex);
@@ -201,7 +123,7 @@ EntityID MakeAttachment(mut RuntimeContext context, in EntityID owner, in Entity
 
 void SetTwoJointPalette(mut SkeletonPoseComponent pose, in f32 firstX, in f32 secondX){
     pose.parentJoints.clear();
-    pose.parentJoints.push_back(Impl::s_SkeletonInvalidJointIndex);
+    pose.parentJoints.push_back(s_SkeletonInvalidJointIndex);
     pose.parentJoints.push_back(0u);
     pose.localJoints.clear();
     pose.localJoints.push_back(MakeTranslation(firstX));
@@ -221,7 +143,7 @@ void VerifyModelAttachmentRevalidatesPoseAndParent(){
     world.entity(parent).getComponent<SkeletonPoseComponent>().localJoints[1u] = MakeTranslation(3.0f);
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<TransformComponent>().position.x, 11.0f);
-    world.entity(parent).getComponent<SkeletonPoseComponent>().parentJoints[1u] = Impl::s_SkeletonInvalidJointIndex;
+    world.entity(parent).getComponent<SkeletonPoseComponent>().parentJoints[1u] = s_SkeletonInvalidJointIndex;
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<TransformComponent>().position.x, 10.0f);
     world.entity(attached).getComponent<ModelStaticMeshAttachmentComponent>().parentEntity = replacement;
@@ -261,10 +183,10 @@ void VerifyModelAttachmentPreservesTransformWriteOrder(){
     mut World world = context.testWorld.world;
     const EntityID owner = MakeModelRuntimeOwner(context);
     world.entity(owner).getComponent<TransformComponent>().position.x = 10.0f;
-    const EntityID first = MakeAttachment(context, owner, s_InvalidEntityId, Impl::s_SkeletonInvalidJointIndex, 2.0f);
-    const EntityID second = MakeAttachment(context, owner, first, Impl::s_SkeletonInvalidJointIndex, 3.0f);
+    const EntityID first = MakeAttachment(context, owner, s_InvalidEntityId, s_SkeletonInvalidJointIndex, 2.0f);
+    const EntityID second = MakeAttachment(context, owner, first, s_SkeletonInvalidJointIndex, 3.0f);
     mut SkeletonPoseComponent pose = world.entity(first).addComponent<SkeletonPoseComponent>();
-    pose.parentJoints.push_back(Impl::s_SkeletonInvalidJointIndex);
+    pose.parentJoints.push_back(s_SkeletonInvalidJointIndex);
     pose.localJoints.push_back(MakeTranslation(1.0f));
     const EntityID jointFirst = MakeAttachment(context, owner, first, 0u, 4.0f);
     const EntityID jointSecond = MakeAttachment(context, owner, first, 0u, 5.0f);

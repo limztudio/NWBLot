@@ -3,371 +3,318 @@
 
 
 #include "benchmark_support.adhd"
+#include "binary_kernel_call.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <utilities/cli/tool_cli.adhd>
 
+[cpp_header("<global/simdmath.h>"), cpp_name("::SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon")]
+extern const f64 s_ReplicatedQuaternionEpsilon;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<global/simdmath.h>"), cpp_name("::s_F64Epsilon")]
+extern const f64 s_ReplicatedMachineEpsilon;
 
+[cpp_header("<global/simdmath.h>"), cpp_name("::SIMDVectorDoubleDetail::SinCosReplicated")]
+extern void ComputeReplicatedSinCos(mut VectorDouble sine, mut VectorDouble cosine, in VectorDouble value);
 
-namespace SimdOptimizationBenchmark{
-namespace ReplicatedKernels{
+[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasSse2")]
+extern const b8 s_BenchmarkHasSse2;
 
-inline constexpr Array<b8, 21> s_ProductionCandidate = {
-    true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, false, false, false, false, false, false,
-};
+[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_UsesSsePairs")]
+extern const b8 s_BenchmarkUsesSsePairs;
 
-FOUNDATION_INLINE SIMDVectorDouble ReplicatedACos(const SIMDVectorDouble value)noexcept{
+[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::SseReplicatedReciprocalSqrt")]
+extern VectorDouble BenchmarkReplicatedReciprocalSqrt(in VectorDouble value);
+
+VectorDouble ReplicatedKernelReplicatedACos(in VectorDouble value){
     return VectorDoubleReplicate(ACos(VectorDoubleGetX(value)));
 }
 
-FOUNDATION_INLINE SIMDVectorDouble ReplicatedSin(const SIMDVectorDouble value)noexcept{
+VectorDouble ReplicatedKernelReplicatedSin(in VectorDouble value){
     return VectorDoubleReplicate(Sin(VectorDoubleGetX(value)));
 }
 
-FOUNDATION_INLINE SIMDVectorDouble ReplicatedATan2(const SIMDVectorDouble y, const SIMDVectorDouble x)noexcept{
+VectorDouble ReplicatedKernelReplicatedATan2(in VectorDouble y, in VectorDouble x){
     return VectorDoubleReplicate(ATan2(VectorDoubleGetX(y), VectorDoubleGetX(x)));
 }
 
-template<u32 Dimension>
-FOUNDATION_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(Dimension == 2u)
+VectorDouble ReplicatedKernelDot<const u32 Dimension>(in VectorDouble lhs, in VectorDouble rhs){
+    if(Dimension == 2u)
         return VectorDouble2Dot(lhs, rhs);
-    else if constexpr(Dimension == 3u)
+    else if(Dimension == 3u)
         return VectorDouble3Dot(lhs, rhs);
     else
         return VectorDouble4Dot(lhs, rhs);
 }
 
-template<u32 Dimension>
-FOUNDATION_INLINE SIMDVectorDouble ReciprocalLength(const SIMDVectorDouble value)noexcept{
-    return VectorDoubleReciprocalSqrt(Dot<Dimension>(value, value));
+VectorDouble ReplicatedKernelReciprocalLength<const u32 Dimension>(in VectorDouble value){
+    return VectorDoubleReciprocalSqrt(ReplicatedKernelDot<Dimension>(value, value));
 }
 
-template<u32 Dimension, b8 Vectors, b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    SIMDVectorDouble cosine = Dot<Dimension>(lhs, rhs);
-    if constexpr(Vectors)
-        cosine = VectorDoubleMultiply(cosine, VectorDoubleMultiply(ReciprocalLength<Dimension>(lhs), ReciprocalLength<Dimension>(rhs)));
-    cosine = VectorDoubleClamp(cosine, s_DoubleSIMDNegativeOne, s_DoubleSIMDOne);
-    if constexpr(Candidate)
-        return ReplicatedACos(cosine);
+VectorDouble ReplicatedKernelAngle<const u32 Dimension, const b8 Vectors, const b8 Candidate>(in VectorDouble lhs, in VectorDouble rhs){
+    VectorDouble cosine = ReplicatedKernelDot<Dimension>(lhs, rhs);
+    if(Vectors)
+        cosine = VectorDoubleMultiply(cosine, VectorDoubleMultiply(ReplicatedKernelReciprocalLength<Dimension>(lhs), ReplicatedKernelReciprocalLength<Dimension>(rhs)));
+    cosine = VectorDoubleClamp(cosine, VectorDouble(-1.0), VectorDouble(1.0));
+    if(Candidate)
+        return ReplicatedKernelReplicatedACos(cosine);
     else
         return VectorDoubleACos(cosine);
 }
 
-template<b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble QuaternionLn(const SIMDVectorDouble value)noexcept{
-    const SIMDVectorDouble bound = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
-    const SIMDVectorDouble w = VectorDoubleSplatW(value), xyz = VectorDoubleAndInt(value, s_DoubleSIMDMask3);
-    const SIMDVectorDouble control = VectorDoubleInBounds(w, bound);
-    const SIMDVectorDouble theta = Candidate ? ReplicatedACos(w) : VectorDoubleACos(w);
-    const SIMDVectorDouble sine = Candidate ? ReplicatedSin(theta) : VectorDoubleSin(theta);
+VectorDouble ReplicatedKernelQuaternionLn<const b8 Candidate>(in VectorDouble value){
+    const VectorDouble bound = VectorDoubleReplicate(1.0 - s_ReplicatedQuaternionEpsilon);
+    const VectorDouble w = VectorDoubleSplatW(value);
+    const VectorDouble xyz = VectorDoubleAndInt(value, VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u)));
+    const VectorDouble control = VectorDoubleInBounds(w, bound);
+    VectorDouble theta = VectorDoubleZero();
+    if(Candidate)
+        theta = ReplicatedKernelReplicatedACos(w);
+    else
+        theta = VectorDoubleACos(w);
+    VectorDouble sine = VectorDoubleZero();
+    if(Candidate)
+        sine = ReplicatedKernelReplicatedSin(theta);
+    else
+        sine = VectorDoubleSin(theta);
     return VectorDoubleSelect(xyz, VectorDoubleMultiply(xyz, VectorDoubleDivide(theta, sine)), control);
 }
 
-template<b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble QuaternionExp(const SIMDVectorDouble value)noexcept{
-    const SIMDVectorDouble theta = VectorDouble3Length(value);
-    SIMDVectorDouble sine{}, cosine{};
-    if constexpr(Candidate)
-        SIMDVectorDoubleDetail::SinCosReplicated(sine, cosine, theta);
+VectorDouble ReplicatedKernelQuaternionExp<const b8 Candidate>(in VectorDouble value){
+    const VectorDouble theta = VectorDouble3Length(value);
+    VectorDouble sine = VectorDoubleZero();
+    VectorDouble cosine = VectorDoubleZero();
+    if(Candidate)
+        ComputeReplicatedSinCos(sine, cosine, theta);
     else
         VectorDoubleSinCos(sine, cosine, theta);
-    const SIMDVectorDouble scale = VectorDoubleDivide(sine, theta);
-    SIMDVectorDouble result = VectorDoubleMultiply(value, scale);
-    result = VectorDoubleSelect(result, value, VectorDoubleNearEqual(theta, VectorDoubleZero(), s_DoubleSIMDEpsilon));
-    return VectorDoubleSelect(cosine, result, s_DoubleSIMDSelect1110);
+    const VectorDouble scale = VectorDoubleDivide(sine, theta);
+    VectorDouble result = VectorDoubleMultiply(value, scale);
+    result = VectorDoubleSelect(result, value, VectorDoubleNearEqual(theta, VectorDoubleZero(), VectorDouble(s_ReplicatedMachineEpsilon)));
+    return VectorDoubleSelect(cosine, result, VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u)));
 }
 
-template<b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    const SIMDVectorDouble t = VectorDoubleReplicate(0.375);
-    const SIMDVectorDouble bound = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
-    SIMDVectorDouble cosine = QuaternionDoubleDot(lhs, rhs);
-    SIMDVectorDouble control = VectorDoubleLess(cosine, VectorDoubleZero());
-    const SIMDVectorDouble sign = VectorDoubleSelect(s_DoubleSIMDOne, s_DoubleSIMDNegativeOne, control);
+VectorDouble ReplicatedKernelQuaternionSlerp<const b8 Candidate>(in VectorDouble lhs, in VectorDouble rhs){
+    const VectorDouble t = VectorDoubleReplicate(0.375);
+    const VectorDouble bound = VectorDoubleReplicate(1.0 - s_ReplicatedQuaternionEpsilon);
+    VectorDouble cosine = QuaternionDoubleDot(lhs, rhs);
+    VectorDouble control = VectorDoubleLess(cosine, VectorDoubleZero());
+    const VectorDouble sign = VectorDoubleSelect(VectorDouble(1.0), VectorDouble(-1.0), control);
     cosine = VectorDoubleMultiply(cosine, sign);
     control = VectorDoubleLess(cosine, bound);
-    const SIMDVectorDouble sine = VectorDoubleSqrt(VectorDoubleNegativeMultiplySubtract(cosine, cosine, s_DoubleSIMDOne));
-    const SIMDVectorDouble omega = Candidate ? ReplicatedATan2(sine, cosine) : VectorDoubleATan2(sine, cosine);
-    SIMDVectorDouble signMask = VectorDoubleSplatSignMask();
-    SIMDVectorDouble weights = VectorDoubleShiftLeft(t, VectorDoubleZero(), 2u);
+    const VectorDouble sine = VectorDoubleSqrt(VectorDoubleNegativeMultiplySubtract(cosine, cosine, VectorDouble(1.0)));
+    VectorDouble omega = VectorDoubleZero();
+    if(Candidate)
+        omega = ReplicatedKernelReplicatedATan2(sine, cosine);
+    else
+        omega = VectorDoubleATan2(sine, cosine);
+    VectorDouble signMask = VectorDoubleSplatSignMask();
+    VectorDouble weights = VectorDoubleShiftLeft(t, VectorDoubleZero(), 2u);
     signMask = VectorDoubleShiftLeft(signMask, VectorDoubleZero(), 3u);
     weights = VectorDoubleXorInt(weights, signMask);
-    weights = VectorDoubleAdd(s_DoubleSIMDIdentityR0, weights);
+    weights = VectorDoubleAdd(VectorDouble(1.0, 0.0, 0.0, 0.0), weights);
     // Nonuniform weighted arguments use the four-lane sine path.
-    SIMDVectorDouble firstWeight = VectorDoubleMultiply(weights, omega);
+    VectorDouble firstWeight = VectorDoubleMultiply(weights, omega);
     firstWeight = VectorDoubleSin(firstWeight);
     firstWeight = VectorDoubleMultiply(firstWeight, VectorDoubleReciprocal(sine));
     firstWeight = VectorDoubleSelect(weights, firstWeight, control);
-    const SIMDVectorDouble secondWeight = VectorDoubleMultiply(VectorDoubleSplatY(firstWeight), sign);
+    const VectorDouble secondWeight = VectorDoubleMultiply(VectorDoubleSplatY(firstWeight), sign);
     firstWeight = VectorDoubleSplatX(firstWeight);
     return VectorDoubleMultiplyAdd(rhs, secondWeight, VectorDoubleMultiply(lhs, firstWeight));
 }
 
-template<u32 Dimension, b8 Reciprocal, b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
-#if defined(FOUNDATION_HAS_SSE2)
-    if constexpr(Candidate){
-        const __m128d input = SIMDVectorDoubleDetail::GetLow(Dot<Dimension>(value, value));
-        __m128d root = _mm_sqrt_sd(input, input);
-        if constexpr(Reciprocal)
-            root = _mm_div_sd(_mm_set_sd(1.0), root);
-        const __m128d result = _mm_unpacklo_pd(root, root);
-        return SIMDVectorDoubleDetail::FromPairs(result, result);
+VectorDouble ReplicatedKernelLength<const u32 Dimension, const b8 Reciprocal, const b8 Candidate>(in VectorDouble value){
+    if(Candidate && s_BenchmarkHasSse2){
+        f64 root = Sqrt(VectorDoubleGetX(ReplicatedKernelDot<Dimension>(value, value)));
+        if(Reciprocal)
+            root = 1.0 / root;
+        return VectorDoubleReplicate(root);
     }
-    else
-#endif
-    if constexpr(Reciprocal)
-        return ReciprocalLength<Dimension>(value);
+
+    if(Reciprocal)
+        return ReplicatedKernelReciprocalLength<Dimension>(value);
     else{
-        if constexpr(Dimension == 2u)
+        if(Dimension == 2u)
             return VectorDouble2Length(value);
-        else if constexpr(Dimension == 3u)
+        else if(Dimension == 3u)
             return VectorDouble3Length(value);
         else
             return VectorDouble4Length(value);
     }
 }
 
-template<u32 Dimension, b8 Clamp, b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const SIMDVectorDouble fallback)noexcept{
-    const SIMDVectorDouble lengthSquared = Dot<Dimension>(value, value);
-    const auto reciprocalLength = [&]()noexcept{
-#if defined(FOUNDATION_HAS_SSE2) && !defined(FOUNDATION_HAS_AVX)
-        if constexpr(Candidate)
-            return SIMDVectorDoubleDetail::ReciprocalSqrtReplicated(lengthSquared);
+VectorDouble ReplicatedKernelControlledLength<const u32 Dimension, const b8 Clamp, const b8 Candidate>(in VectorDouble value, in VectorDouble fallback){
+    const VectorDouble lengthSquared = ReplicatedKernelDot<Dimension>(value, value);
+
+    VectorDouble mask = VectorDoubleTrueInt();
+    if(Dimension == 2u)
+        mask = VectorDouble(u64x4(u64.max, u64.max, 0u, 0u));
+    else if(Dimension == 3u)
+        mask = VectorDouble(u64x4(u64.max, u64.max, u64.max, 0u));
+    if(Clamp){
+        VectorDouble reciprocal = VectorDoubleZero();
+        if(Candidate && s_BenchmarkUsesSsePairs)
+            reciprocal = BenchmarkReplicatedReciprocalSqrt(lengthSquared);
         else
-#endif
-            return VectorDoubleReciprocalSqrt(lengthSquared);
-    };
-    const SIMDVectorDouble mask = Dimension == 2u ? SIMDVectorDouble(s_DoubleSIMDMaskXY) : Dimension == 3u ? SIMDVectorDouble(s_DoubleSIMDMask3) : VectorDoubleTrueInt();
-    if constexpr(Clamp){
-        const SIMDVectorDouble reciprocal = reciprocalLength();
-        const SIMDVectorDouble minimum = VectorDoubleReplicate(0.5), maximum = VectorDoubleReplicate(2.0);
-        const SIMDVectorDouble infinite = VectorDoubleEqualInt(lengthSquared, s_DoubleSIMDInfinity), zero = VectorDoubleEqual(lengthSquared, VectorDoubleZero());
-        const SIMDVectorDouble select = VectorDoubleEqualInt(infinite, zero);
-        SIMDVectorDouble normal = VectorDoubleMultiply(value, reciprocal), length = VectorDoubleMultiply(lengthSquared, reciprocal);
+            reciprocal = VectorDoubleReciprocalSqrt(lengthSquared);
+        const VectorDouble minimum = VectorDoubleReplicate(0.5);
+        const VectorDouble maximum = VectorDoubleReplicate(2.0);
+        const VectorDouble infinite = VectorDoubleEqualInt(lengthSquared, VectorDouble(bit_cast<f64>(0x7ff0000000000000ull)));
+        const VectorDouble zero = VectorDoubleEqual(lengthSquared, VectorDoubleZero());
+        const VectorDouble select = VectorDoubleEqualInt(infinite, zero);
+        VectorDouble normal = VectorDoubleMultiply(value, reciprocal);
+        VectorDouble length = VectorDoubleMultiply(lengthSquared, reciprocal);
         length = VectorDoubleSelect(lengthSquared, length, select);
         normal = VectorDoubleSelect(lengthSquared, normal, select);
-        const SIMDVectorDouble above = VectorDoubleGreater(length, maximum), below = VectorDoubleLess(length, minimum);
-        SIMDVectorDouble clamped = VectorDoubleSelect(length, maximum, above);
+        const VectorDouble above = VectorDoubleGreater(length, maximum);
+        const VectorDouble below = VectorDoubleLess(length, minimum);
+        VectorDouble clamped = VectorDoubleSelect(length, maximum, above);
         clamped = VectorDoubleSelect(clamped, minimum, below);
-        const SIMDVectorDouble result = VectorDoubleMultiply(normal, clamped);
+        const VectorDouble result = VectorDoubleMultiply(normal, clamped);
         return VectorDoubleAndInt(VectorDoubleSelect(result, value, VectorDoubleEqualInt(above, below)), mask);
     }
     else{
-        const SIMDVectorDouble finiteLength = VectorDoubleEqualInt(VectorDoubleOrInt(VectorDoubleIsNaN(lengthSquared), VectorDoubleIsInfinite(lengthSquared)), VectorDoubleFalseInt());
-        const SIMDVectorDouble validLength = VectorDoubleAndInt(VectorDoubleGreater(lengthSquared, VectorDoubleZero()), finiteLength);
-        const SIMDVectorDouble reciprocal = reciprocalLength();
-        const SIMDVectorDouble normalized = VectorDoubleAndInt(VectorDoubleMultiply(value, reciprocal), mask);
-        const SIMDVectorDouble validNormalized = VectorDoubleEqualInt(VectorDoubleOrInt(VectorDoubleIsNaN(normalized), VectorDoubleIsInfinite(normalized)), VectorDoubleFalseInt());
+        const VectorDouble finiteLength = VectorDoubleEqualInt(VectorDoubleOrInt(VectorDoubleIsNaN(lengthSquared), VectorDoubleIsInfinite(lengthSquared)), VectorDoubleFalseInt());
+        const VectorDouble validLength = VectorDoubleAndInt(VectorDoubleGreater(lengthSquared, VectorDoubleZero()), finiteLength);
+        VectorDouble reciprocal = VectorDoubleZero();
+        if(Candidate && s_BenchmarkUsesSsePairs)
+            reciprocal = BenchmarkReplicatedReciprocalSqrt(lengthSquared);
+        else
+            reciprocal = VectorDoubleReciprocalSqrt(lengthSquared);
+        const VectorDouble normalized = VectorDoubleAndInt(VectorDoubleMultiply(value, reciprocal), mask);
+        const VectorDouble validNormalized = VectorDoubleEqualInt(VectorDoubleOrInt(VectorDoubleIsNaN(normalized), VectorDoubleIsInfinite(normalized)), VectorDoubleFalseInt());
         return VectorDoubleSelect(VectorDoubleAndInt(fallback, mask), normalized, VectorDoubleAndInt(validLength, validNormalized));
     }
 }
 
-template<u32 KindIndex, b8 Estimate = false>
-FOUNDATION_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(KindIndex == 0u)
+VectorDouble ReplicatedKernelProductionValue<const u32 KindIndex, const b8 Estimate>(in VectorDouble lhs, in VectorDouble rhs){
+    if(KindIndex == 0u)
         return QuaternionDoubleLn(lhs);
-    else if constexpr(KindIndex == 1u)
+    else if(KindIndex == 1u)
         return QuaternionDoubleExp(lhs);
-    else if constexpr(KindIndex == 2u){
-        if constexpr(Estimate)
+    else if(KindIndex == 2u){
+        if(Estimate)
             return VectorDouble2AngleBetweenNormalsEst(lhs, rhs);
         else
             return VectorDouble2AngleBetweenNormals(lhs, rhs);
     }
-    else if constexpr(KindIndex == 3u){
-        if constexpr(Estimate)
+    else if(KindIndex == 3u){
+        if(Estimate)
             return VectorDouble3AngleBetweenNormalsEst(lhs, rhs);
         else
             return VectorDouble3AngleBetweenNormals(lhs, rhs);
     }
-    else if constexpr(KindIndex == 4u){
-        if constexpr(Estimate)
+    else if(KindIndex == 4u){
+        if(Estimate)
             return VectorDouble4AngleBetweenNormalsEst(lhs, rhs);
         else
             return VectorDouble4AngleBetweenNormals(lhs, rhs);
     }
-    else if constexpr(KindIndex == 5u)
+    else if(KindIndex == 5u)
         return VectorDouble2AngleBetweenVectors(lhs, rhs);
-    else if constexpr(KindIndex == 6u)
+    else if(KindIndex == 6u)
         return VectorDouble3AngleBetweenVectors(lhs, rhs);
-    else if constexpr(KindIndex == 7u)
+    else if(KindIndex == 7u)
         return VectorDouble4AngleBetweenVectors(lhs, rhs);
-    else if constexpr(KindIndex == 8u)
+    else if(KindIndex == 8u)
         return QuaternionDoubleSlerp(lhs, rhs, 0.375);
-    else if constexpr(KindIndex == 9u)
+    else if(KindIndex == 9u)
         return VectorDouble2Length(lhs);
-    else if constexpr(KindIndex == 10u)
+    else if(KindIndex == 10u)
         return VectorDouble3Length(lhs);
-    else if constexpr(KindIndex == 11u)
+    else if(KindIndex == 11u)
         return VectorDouble4Length(lhs);
-    else if constexpr(KindIndex == 12u)
+    else if(KindIndex == 12u)
         return VectorDouble2ReciprocalLength(lhs);
-    else if constexpr(KindIndex == 13u)
+    else if(KindIndex == 13u)
         return VectorDouble3ReciprocalLength(lhs);
-    else if constexpr(KindIndex == 14u)
+    else if(KindIndex == 14u)
         return VectorDouble4ReciprocalLength(lhs);
-    else if constexpr(KindIndex == 15u)
+    else if(KindIndex == 15u)
         return VectorDouble2NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(KindIndex == 16u)
+    else if(KindIndex == 16u)
         return VectorDouble3NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(KindIndex == 17u)
+    else if(KindIndex == 17u)
         return VectorDouble4NormalizeOr(lhs, rhs, 0.0);
-    else if constexpr(KindIndex == 18u)
+    else if(KindIndex == 18u)
         return VectorDouble2ClampLength(lhs, 0.5, 2.0);
-    else if constexpr(KindIndex == 19u)
+    else if(KindIndex == 19u)
         return VectorDouble3ClampLength(lhs, 0.5, 2.0);
     else
         return VectorDouble4ClampLength(lhs, 0.5, 2.0);
 }
 
-template<u32 KindIndex, b8 Estimate = false>
-FOUNDATION_NOINLINE SIMDVectorDouble Production(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    return ProductionValue<KindIndex, Estimate>(lhs, rhs);
+VectorDouble ReplicatedKernelProduction<const u32 KindIndex, const b8 Estimate>(in VectorDouble lhs, in VectorDouble rhs){
+    return EvaluateBinaryKernel(lambda[](in VectorDouble left, in VectorDouble right) -> VectorDouble{
+        return ReplicatedKernelProductionValue<KindIndex, Estimate>(left, right);
+    }, lhs, rhs);
 }
 
-template<u32 KindIndex, b8 Candidate>
-FOUNDATION_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if constexpr(Candidate && s_ProductionCandidate[KindIndex])
-        return ProductionValue<KindIndex>(lhs, rhs);
-    else if constexpr(KindIndex == 0u)
-        return QuaternionLn<Candidate>(lhs);
-    else if constexpr(KindIndex == 1u)
-        return QuaternionExp<Candidate>(lhs);
-    else if constexpr(KindIndex == 2u)
-        return Angle<2u, false, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 3u)
-        return Angle<3u, false, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 4u)
-        return Angle<4u, false, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 5u)
-        return Angle<2u, true, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 6u)
-        return Angle<3u, true, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 7u)
-        return Angle<4u, true, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 8u)
-        return QuaternionSlerp<Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 9u)
-        return Length<2u, false, Candidate>(lhs);
-    else if constexpr(KindIndex == 10u)
-        return Length<3u, false, Candidate>(lhs);
-    else if constexpr(KindIndex == 11u)
-        return Length<4u, false, Candidate>(lhs);
-    else if constexpr(KindIndex == 12u)
-        return Length<2u, true, Candidate>(lhs);
-    else if constexpr(KindIndex == 13u)
-        return Length<3u, true, Candidate>(lhs);
-    else if constexpr(KindIndex == 14u)
-        return Length<4u, true, Candidate>(lhs);
-    else if constexpr(KindIndex == 15u)
-        return ControlledLength<2u, false, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 16u)
-        return ControlledLength<3u, false, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 17u)
-        return ControlledLength<4u, false, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 18u)
-        return ControlledLength<2u, true, Candidate>(lhs, rhs);
-    else if constexpr(KindIndex == 19u)
-        return ControlledLength<3u, true, Candidate>(lhs, rhs);
+VectorDouble ReplicatedKernelReduce<const u32 KindIndex, const b8 Candidate>(in VectorDouble lhs, in VectorDouble rhs){
+    if(Candidate && (KindIndex <= 8u || (KindIndex >= 12u && KindIndex <= 14u)))
+        return ReplicatedKernelProductionValue<KindIndex, false>(lhs, rhs);
+    else if(KindIndex == 0u)
+        return ReplicatedKernelQuaternionLn<Candidate>(lhs);
+    else if(KindIndex == 1u)
+        return ReplicatedKernelQuaternionExp<Candidate>(lhs);
+    else if(KindIndex == 2u)
+        return ReplicatedKernelAngle<2u, false, Candidate>(lhs, rhs);
+    else if(KindIndex == 3u)
+        return ReplicatedKernelAngle<3u, false, Candidate>(lhs, rhs);
+    else if(KindIndex == 4u)
+        return ReplicatedKernelAngle<4u, false, Candidate>(lhs, rhs);
+    else if(KindIndex == 5u)
+        return ReplicatedKernelAngle<2u, true, Candidate>(lhs, rhs);
+    else if(KindIndex == 6u)
+        return ReplicatedKernelAngle<3u, true, Candidate>(lhs, rhs);
+    else if(KindIndex == 7u)
+        return ReplicatedKernelAngle<4u, true, Candidate>(lhs, rhs);
+    else if(KindIndex == 8u)
+        return ReplicatedKernelQuaternionSlerp<Candidate>(lhs, rhs);
+    else if(KindIndex == 9u)
+        return ReplicatedKernelLength<2u, false, Candidate>(lhs);
+    else if(KindIndex == 10u)
+        return ReplicatedKernelLength<3u, false, Candidate>(lhs);
+    else if(KindIndex == 11u)
+        return ReplicatedKernelLength<4u, false, Candidate>(lhs);
+    else if(KindIndex == 12u)
+        return ReplicatedKernelLength<2u, true, Candidate>(lhs);
+    else if(KindIndex == 13u)
+        return ReplicatedKernelLength<3u, true, Candidate>(lhs);
+    else if(KindIndex == 14u)
+        return ReplicatedKernelLength<4u, true, Candidate>(lhs);
+    else if(KindIndex == 15u)
+        return ReplicatedKernelControlledLength<2u, false, Candidate>(lhs, rhs);
+    else if(KindIndex == 16u)
+        return ReplicatedKernelControlledLength<3u, false, Candidate>(lhs, rhs);
+    else if(KindIndex == 17u)
+        return ReplicatedKernelControlledLength<4u, false, Candidate>(lhs, rhs);
+    else if(KindIndex == 18u)
+        return ReplicatedKernelControlledLength<2u, true, Candidate>(lhs, rhs);
+    else if(KindIndex == 19u)
+        return ReplicatedKernelControlledLength<3u, true, Candidate>(lhs, rhs);
     else
-        return ControlledLength<4u, true, Candidate>(lhs, rhs);
+        return ReplicatedKernelControlledLength<4u, true, Candidate>(lhs, rhs);
 }
 
-template<u32 KindIndex, b8 Candidate>
-FOUNDATION_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Candidate && s_ProductionCandidate[KindIndex])
-        return Production<KindIndex>(lhs, rhs);
-    else
-        return Reduce<KindIndex, Candidate>(lhs, rhs);
+VectorDouble ReplicatedKernelEvaluate<const u32 KindIndex, const b8 Candidate>(in VectorDouble lhs, in VectorDouble rhs){
+    return EvaluateBinaryKernel(lambda[](in VectorDouble left, in VectorDouble right) -> VectorDouble{
+        if(Candidate && (KindIndex <= 8u || (KindIndex >= 12u && KindIndex <= 14u)))
+            return ReplicatedKernelProduction<KindIndex, false>(left, right);
+        return ReplicatedKernelReduce<KindIndex, Candidate>(left, right);
+    }, lhs, rhs);
 }
 
-template<u32 KindIndex, b8 Candidate, typename DatasetT>
-FOUNDATION_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
-    return ThroughputWorkload<4u>(
-        data, dataCount, iterations,
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<KindIndex, Candidate>(lhs, rhs); });
+class ReplicatedKernelReducer<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{ return ReplicatedKernelReduce<KindIndex, Candidate>(lhs, rhs); }
 }
 
+VectorDouble ReplicatedKernelRunWorkload<const u32 KindIndex, const b8 Candidate>(in Dataset data, in usize dataCount, in usize iterations){
+    return ThroughputWorkload<4u, ReplicatedKernelReducer<KindIndex, Candidate>>(data, dataCount, iterations, ReplicatedKernelReducer<KindIndex, Candidate>());
 }
-
-namespace ReplicatedKernels{
-
-template<b8 Candidate, u32 Index = 0u>
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchEvaluate(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if(kindIndex == Index)
-        return Evaluate<Index, Candidate>(lhs, rhs);
-    if constexpr(Index + 1u < 21u)
-        return DispatchEvaluate<Candidate, Index + 1u>(kindIndex, lhs, rhs);
-    else
-        return VectorDoubleZero();
-}
-
-template<b8 Estimate, u32 Index = 0u>
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchProduction(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    if(kindIndex == Index)
-        return Production<Index, Estimate>(lhs, rhs);
-    if constexpr(Index + 1u < 21u)
-        return DispatchProduction<Estimate, Index + 1u>(kindIndex, lhs, rhs);
-    else
-        return VectorDoubleZero();
-}
-
-template<b8 Candidate, typename DatasetT, u32 Index = 0u>
-[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchWorkload(const u32 kindIndex, const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
-    if(kindIndex == Index)
-        return RunWorkload<Index, Candidate>(data, dataCount, iterations);
-    if constexpr(Index + 1u < 21u)
-        return DispatchWorkload<Candidate, DatasetT, Index + 1u>(kindIndex, data, dataCount, iterations);
-    else
-        return VectorDoubleZero();
-}
-
-}
-
-FOUNDATION_INLINE void EvaluateReplicatedKernel(const u32 kindIndex, const b8 candidate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
-    const SIMDVectorDouble result = candidate
-        ? ReplicatedKernels::DispatchEvaluate<true>(kindIndex, lhs, rhs)
-        : ReplicatedKernels::DispatchEvaluate<false>(kindIndex, lhs, rhs);
-    StoreDoubleInt(result, outBits);
-}
-
-FOUNDATION_INLINE void EvaluateReplicatedProductionKernel(const u32 kindIndex, const b8 estimate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
-    const SIMDVectorDouble result = estimate
-        ? ReplicatedKernels::DispatchProduction<true>(kindIndex, lhs, rhs)
-        : ReplicatedKernels::DispatchProduction<false>(kindIndex, lhs, rhs);
-    StoreDoubleInt(result, outBits);
-}
-
-template<typename DatasetT>
-FOUNDATION_INLINE void RunReplicatedWorkloadKernel(const u32 kindIndex, const b8 candidate, const DatasetT& data, const usize dataCount, const usize iterations, UInt64x4& outBits)noexcept{
-    const SIMDVectorDouble result = candidate
-        ? ReplicatedKernels::DispatchWorkload<true>(kindIndex, data, dataCount, iterations)
-        : ReplicatedKernels::DispatchWorkload<false>(kindIndex, data, dataCount, iterations);
-    StoreDoubleInt(result, outBits);
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 enum<u32> ReplicatedOperation{
     Ln = 0u,
@@ -436,17 +383,13 @@ b8 IsReplicatedProductionCandidate(in u32 kindIndex){
 
 class ReplicatedEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
     public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
-        EvaluateReplicatedKernel(KindIndex, Candidate, lhs, rhs, bits);
-        return VectorDouble(bits);
+        return ReplicatedKernelEvaluate<KindIndex, Candidate>(lhs, rhs);
     }
 }
 
 class ReplicatedProductionEvaluator<const u32 KindIndex, const b8 Estimate> : IDoubleBinaryEvaluator{
     public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
-        EvaluateReplicatedProductionKernel(KindIndex, Estimate, lhs, rhs, bits);
-        return VectorDouble(bits);
+        return ReplicatedKernelProduction<KindIndex, Estimate>(lhs, rhs);
     }
 }
 
@@ -501,9 +444,7 @@ class ReplicatedWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubl
     }
 
     public VectorDouble run()const override{
-        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
-        RunReplicatedWorkloadKernel(KindIndex, Candidate, this.m_data, s_DataCount, this.m_iterations, bits);
-        return VectorDouble(bits);
+        return ReplicatedKernelRunWorkload<KindIndex, Candidate>(this.m_data, s_DataCount, this.m_iterations);
     }
 }
 
@@ -643,29 +584,15 @@ i32 RunReplicatedBenchmarkCli(in Span<StringView> args){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-int main(const int argc, const char* const* argv){
-    if(argc <= 0)
+i32 RunReplicatedBenchmarkCliEntry(in ConsoleArguments arguments){
+    if(arguments.count <= 0)
         return 2;
-    Array<StringView, 8> args{};
-    const usize count = Min(static_cast<usize>(argc), args.size());
+    Array<StringView, 8> args;
+    const usize count = Min(cast<usize>(arguments.count), args.size());
     for(usize index = 0u; index < count; ++index)
-        args[index] = StringView(argv[index]);
-    return SimdOptimizationBenchmark::RunReplicatedBenchmarkCli(Span<const StringView>(args.data(), count));
+        args[index] = arguments.text(cast<i32>(index));
+    return RunReplicatedBenchmarkCli(Span<StringView>(args).first(count));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

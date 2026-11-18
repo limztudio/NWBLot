@@ -40,7 +40,7 @@ b8 GpuExtFrontier_FirstTransferMatchesSliceStart(in GpuCompiledGraphReadView pla
 }
 
 void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionToken(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -82,7 +82,7 @@ void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionT
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuTaskGraphReadViews views = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
@@ -111,7 +111,7 @@ void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionT
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
         EXPECT_FALSE(ValidateExternalDependencyTokens(declarations, compiledPlan, compiledPlan.allPacketRange()));
     }
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuTaskGraphReadViews views = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
@@ -120,7 +120,7 @@ void VerifyGpuExtFrontier_RejectsSubmissionRangeWithMissingLatePacketCompletionT
 }
 
 void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -234,7 +234,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuTaskGraphReadViews views = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
@@ -249,7 +249,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     GpuTaskGraphAnalysis invalidTopologyAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments invalidTopologyAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph invalidTopologyCompiledGraph = GpuCompiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(invalidTopologyAnalysis, invalidTopologyAssignments, invalidTopologyCompiledGraph, operationScratchArena, graph, missingProducerTopology));
+    EXPECT_FALSE(Compile(invalidTopologyAnalysis, invalidTopologyAssignments, invalidTopologyCompiledGraph, operationScratch, graph, missingProducerTopology));
 
     Array<GpuPhysicalQueueInfo, 3> wrongProducerClassQueues = Array<GpuPhysicalQueueInfo, 3>();
     wrongProducerClassQueues[0u] = GraphicsQueue();
@@ -258,7 +258,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     wrongProducerClassQueues[2u].queueClass = CommandQueue::Compute;
     wrongProducerClassQueues[2u].capabilities = QueueCapabilities(GpuQueueCapability::Compute, GpuQueueCapability::Transfer);
     const GpuPhysicalQueueTopology wrongProducerClassTopology = MakeTopology(wrongProducerClassQueues);
-    EXPECT_FALSE(Compile(invalidTopologyAnalysis, invalidTopologyAssignments, invalidTopologyCompiledGraph, operationScratchArena, graph, wrongProducerClassTopology));
+    EXPECT_FALSE(Compile(invalidTopologyAnalysis, invalidTopologyAssignments, invalidTopologyCompiledGraph, operationScratch, graph, wrongProducerClassTopology));
 
     u64 metadataFirstRevision = 0u;
     {
@@ -332,8 +332,8 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
     GpuTaskGraphAnalysis staleAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments staleAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph staleCompiledGraph = GpuCompiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(staleAnalysis, staleAssignments, staleCompiledGraph, operationScratchArena, graph, staleTopology));
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    EXPECT_FALSE(Compile(staleAnalysis, staleAssignments, staleCompiledGraph, operationScratch, graph, staleTopology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuTaskGraphReadViews views = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
@@ -357,7 +357,7 @@ void VerifyGpuExtFrontier_RetainsAuthoritativeExternalCompletionTokens(){
 }
 
 void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQueue(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -404,7 +404,7 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
         const GpuCompiledTaskView compiledTaskView = compiledPlan.findTask(task);
@@ -490,7 +490,7 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
     sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
     sameFamilyQueues[1u].queueIndex = 1u;
     const GpuPhysicalQueueTopology sameFamilyTopology = MakeTopology(sameFamilyQueues);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, sameFamilyTopology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, sameFamilyTopology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
@@ -500,7 +500,7 @@ void VerifyGpuExtFrontier_ExportsExclusiveImportedResourceOwnershipToExternalQue
 }
 
 void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPackets(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -554,7 +554,7 @@ void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPacke
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuCompiledExternalResourceExportView exportView = compiledPlan.externalResourceExport(texture);
@@ -670,7 +670,7 @@ void VerifyGpuExtFrontier_OrdersExternalFinalTransitionAfterOverlappingConcurren
 }
 
 void VerifyGpuExtFrontier_RejectsUnpublishableExternalFinalStateContracts(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -714,7 +714,7 @@ void VerifyGpuExtFrontier_RejectsUnpublishableExternalFinalStateContracts(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
     EXPECT_FALSE(compiledPlan.valid());
 }
@@ -903,7 +903,7 @@ void VerifyGpuExtFrontier_OrdersExternalFinalTransitionsForWholeAllocationResour
 }
 
 void VerifyGpuExtFrontier_ElidesSamePacketReleaseOnlyExternalFinalizationSelfDependency(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -934,7 +934,7 @@ void VerifyGpuExtFrontier_ElidesSamePacketReleaseOnlyExternalFinalizationSelfDep
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuSubmissionPacketId packet = compiledPlan.packetForTask(pair.earlierReader);
@@ -1019,7 +1019,7 @@ void VerifyGpuExtFrontier_AvoidsTransitiveExternalFinalizationPacketDependencies
 }
 
 void VerifyGpuExtFrontier_FrontierSafePacketizationSplitsBeforeCrossQueueConsumer(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1069,7 +1069,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationSplitsBeforeCrossQueueConsume
     GpuTaskGraphAnalysis explicitMergeAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments explicitMergeAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph explicitMergeGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(explicitMergeAnalysis, explicitMergeAssignments, explicitMergeGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(explicitMergeAnalysis, explicitMergeAssignments, explicitMergeGraph, operationScratch, graph, topology));
     {
         const GpuCompiledGraphReadView explicitMergePlan = GpuCompiledGraphReadView(explicitMergeGraph);
         ASSERT_EQ(explicitMergePlan.packetCount(), 2u);
@@ -1091,7 +1091,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationSplitsBeforeCrossQueueConsume
     GpuTaskGraphAnalysis frontierAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments frontierAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph frontierGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(frontierAnalysis, frontierAssignments, frontierGraph, operationScratchArena, graph, topology, frontierOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(frontierAnalysis, frontierAssignments, frontierGraph, operationScratch, graph, topology, frontierOptions));
     const GpuCompiledGraphReadView frontierPlan = GpuCompiledGraphReadView(frontierGraph);
 
     ASSERT_EQ(frontierPlan.packetCount(), 3u);
@@ -1291,7 +1291,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationRequiresOneDomainAcrossPrec
 }
 
 void VerifyGpuExtFrontier_FrontierScoredPacketizationPreservesCrossQueueConsumerFrontier(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1343,7 +1343,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationPreservesCrossQueueConsumer
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, options));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology, options));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -1360,7 +1360,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationPreservesCrossQueueConsumer
 }
 
 void VerifyGpuExtFrontier_FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierForward(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1432,7 +1432,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationCarriesTailPhysicalQueueFro
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, options));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology, options));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -1465,7 +1465,7 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationCarriesTailPhysicalQueueFro
 }
 
 void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsFrontierAfterExplicitOverride(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1532,7 +1532,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsFrontierAfterExplicitOve
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, options));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology, options));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -1549,7 +1549,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsFrontierAfterExplicitOve
 }
 
 void VerifyGpuExtFrontier_FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediateDependency(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1634,7 +1634,7 @@ void VerifyGpuExtFrontier_FrontierSafeConsumerFrontierOverrideRequiresExplicitIm
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, frontierOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology, frontierOptions));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -1662,7 +1662,7 @@ void VerifyGpuExtFrontier_FrontierSafeConsumerFrontierOverrideRequiresExplicitIm
 }
 
 void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueueConsumer(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1715,7 +1715,7 @@ void VerifyGpuExtFrontier_FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCr
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, frontierOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology, frontierOptions));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 2u);

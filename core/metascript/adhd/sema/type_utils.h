@@ -458,7 +458,6 @@ struct BuiltinSpecialMethodInfo{
 [[nodiscard]] b8 HasBuiltinSimdRegisterField(MStringView typeName)noexcept;
 [[nodiscard]] b8 IsOverAlignedBuiltinType(MStringView typeName)noexcept;
 [[nodiscard]] b8 IsStringBorrowViewType(MStringView name)noexcept;
-[[nodiscard]] b8 IsArenaObjectType(MStringView name)noexcept;
 [[nodiscard]] b8 AllowsInterfaceTypeArg(MStringView name)noexcept;
 [[nodiscard]] b8 IsSmartPointerDerefType(MStringView name)noexcept;
 [[nodiscard]] b8 IsSubsystemVectorContainerType(MStringView name)noexcept;

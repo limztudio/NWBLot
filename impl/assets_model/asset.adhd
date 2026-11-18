@@ -36,7 +36,6 @@ class Model{
     private SkinnedMeshObjectVector m_skinnedMeshObjects;
 
     public b8 validatePayload()const;
-    public b8 validatePayload(mut ScratchArena scratchArena)const;
     public b8 loadBinary(in Span<u8> binary);
 
     public void setObjects(
@@ -69,3 +68,4 @@ class Model{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

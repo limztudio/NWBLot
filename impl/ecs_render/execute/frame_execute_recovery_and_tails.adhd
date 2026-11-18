@@ -117,11 +117,12 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask()noexcept{
     }
     renderer.m_deferredFrameRecoveryArmed = true;
     renderer.m_deferredFrameRecoveryRetiresTiming = retireTiming;
+    Core::Alloc::ScratchArena scratchArena;
     const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
     const b8 recoveryAccepted = scheduler.executeAcceptedFrontierTask(
         renderer.m_deferredLightingCompiledGraph,
         renderer.m_deferredFrameRecoveryTask,
-        *m_scratchArena,
+        scratchArena,
         renderer.m_deferredLightingTaskGraph,
         renderer.m_deferredLightingRecordedGraph,
         renderer.m_deferredLightingSubmissionTransaction,

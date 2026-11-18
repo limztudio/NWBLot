@@ -31,7 +31,9 @@ public:
 
 
 public:
-    explicit GlobalArena(const Name& allocationLog)
+    static inline constexpr Name s_DefaultAllocationLog{ "core/alloc/global" };
+
+    explicit GlobalArena(const Name& allocationLog = s_DefaultAllocationLog)
         : Base(allocationLog, ArenaMemoryReservation::FollowsUsage)
     {}
     ~GlobalArena()noexcept override = default;

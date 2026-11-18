@@ -59,20 +59,20 @@ class OverflowLayoutCase{
     }
 }
 
-b8 TryParseTextureMetadata(in StringView metadata, in StringView caseName, mut TestArena testArena, mut ScratchArena scratchArena){
+b8 TryParseTextureMetadata(in StringView metadata, in StringView caseName, mut TestArena testArena, mut GraphicsScratchArena scratch){
     MetaDocument document(testArena.arena);
     if(!document.parse(metadata))
         return false;
     const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, caseName), s_AssetsDirectory);
     const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_TexturesDirectory, s_CheckerMetadataFilename);
-    return ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena).has_value();
+    return ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratch).has_value();
 }
 
 void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_dependency_directives");
     ASSERT_TRUE(rootResult.has_value());
@@ -86,14 +86,14 @@ void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnpla
 
     ShaderCookPathVector includeDirectories(testArena.arena);
     ShaderCookPathVector dependencies(testArena.arena);
-    ASSERT_TRUE(GatherShaderDependencies(sourcePath, includeDirectories, scratchArena, dependencies));
+    ASSERT_TRUE(GatherShaderDependencies(sourcePath, includeDirectories, scratch, dependencies));
     ASSERT_EQ(dependencies.size(), 2u);
     ASSERT_TRUE(PathVectorContains(dependencies, trackedInclude));
 
-    const Expected<u64> beforeChecksum = ComputeSingleAliasShaderDependencyChecksum(dependencies, includeDirectories, root, "source", scratchArena);
+    const Expected<u64> beforeChecksum = ComputeSingleAliasShaderDependencyChecksum(dependencies, includeDirectories, root, "source", scratch);
     ASSERT_TRUE(beforeChecksum.has_value());
     ASSERT_TRUE(WriteTextFile(trackedInclude, "static const uint trackedValue = 2u;\n"));
-    const Expected<u64> afterChecksum = ComputeSingleAliasShaderDependencyChecksum(dependencies, includeDirectories, root, "source", scratchArena);
+    const Expected<u64> afterChecksum = ComputeSingleAliasShaderDependencyChecksum(dependencies, includeDirectories, root, "source", scratch);
     ASSERT_TRUE(afterChecksum.has_value());
     EXPECT_NE(beforeChecksum.value(), afterChecksum.value());
     EXPECT_EQ(logger.errorCount(), 0u);
@@ -106,19 +106,19 @@ void VerifyAssetsGraphics_ShaderDependenciesTrackContinuedIncludesAndRejectUnpla
     for(in StringView source : unplannedIncludes){
         const ScopedTestTrace trace(source);
         ASSERT_TRUE(WriteTextFile(sourcePath, source));
-        EXPECT_FALSE(GatherShaderDependencies(sourcePath, includeDirectories, scratchArena, dependencies));
+        EXPECT_FALSE(GatherShaderDependencies(sourcePath, includeDirectories, scratch, dependencies));
     }
     const u32 failureErrors = logger.errorCount();
     EXPECT_GT(failureErrors, 0u);
     ASSERT_TRUE(WriteTextFile(sourcePath, validSource));
-    EXPECT_TRUE(GatherShaderDependencies(sourcePath, includeDirectories, scratchArena, dependencies));
+    EXPECT_TRUE(GatherShaderDependencies(sourcePath, includeDirectories, scratch, dependencies));
     EXPECT_EQ(logger.errorCount(), failureErrors);
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_dependency_checksum_alias");
     ASSERT_TRUE(rootResult.has_value());
@@ -137,14 +137,14 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
     firstDependencies.push_back(firstGeneratedInclude);
     secondDependencies.push_back(secondGeneratedInclude);
 
-    const Expected<u64> firstChecksum = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, includeDirectories, firstGeneratedRoot, s_MaterialBindIncludesDirectory, scratchArena);
+    const Expected<u64> firstChecksum = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, includeDirectories, firstGeneratedRoot, s_MaterialBindIncludesDirectory, scratch);
     ASSERT_TRUE(firstChecksum.has_value());
-    const Expected<u64> secondChecksum = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, includeDirectories, secondGeneratedRoot, s_MaterialBindIncludesDirectory, scratchArena);
+    const Expected<u64> secondChecksum = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, includeDirectories, secondGeneratedRoot, s_MaterialBindIncludesDirectory, scratch);
     ASSERT_TRUE(secondChecksum.has_value());
     EXPECT_EQ(firstChecksum.value(), secondChecksum.value());
 
     EXPECT_TRUE(WriteTextFile(secondGeneratedInclude, "changed generated include\n"));
-    const Expected<u64> changedChecksum = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, includeDirectories, secondGeneratedRoot, s_MaterialBindIncludesDirectory, scratchArena);
+    const Expected<u64> changedChecksum = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, includeDirectories, secondGeneratedRoot, s_MaterialBindIncludesDirectory, scratch);
     ASSERT_TRUE(changedChecksum.has_value());
     EXPECT_NE(firstChecksum.value(), changedChecksum.value());
 
@@ -156,7 +156,7 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
 
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
-        EXPECT_FALSE(ComputeSingleAliasShaderDependencyChecksum(unaliasedDependencies, includeDirectories, firstGeneratedRoot, s_MaterialBindIncludesDirectory, scratchArena).has_value());
+        EXPECT_FALSE(ComputeSingleAliasShaderDependencyChecksum(unaliasedDependencies, includeDirectories, firstGeneratedRoot, s_MaterialBindIncludesDirectory, scratch).has_value());
         EXPECT_TRUE(SawCapturedError(logger, "outside the declared dependency root aliases"));
     }
 
@@ -165,7 +165,7 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumAliasesGeneratedRoot(){
 
 void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameFileUnion(){
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_dependency_search_order");
     ASSERT_TRUE(rootResult.has_value());
@@ -187,37 +187,37 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWith
 
     ShaderCookPathVector firstDependencies(testArena.arena);
     ShaderCookPathVector secondDependencies(testArena.arena);
-    ASSERT_TRUE(GatherShaderDependencies(sourcePath, firstDirectories, scratchArena, firstDependencies));
-    ASSERT_TRUE(GatherShaderDependencies(sourcePath, secondDirectories, scratchArena, secondDependencies));
+    ASSERT_TRUE(GatherShaderDependencies(sourcePath, firstDirectories, scratch, firstDependencies));
+    ASSERT_TRUE(GatherShaderDependencies(sourcePath, secondDirectories, scratch, secondDependencies));
     ASSERT_EQ(firstDependencies.size(), 3u);
     ASSERT_EQ(secondDependencies.size(), firstDependencies.size());
     for(in GraphicsTestPath dependency : firstDependencies)
         EXPECT_TRUE(PathVectorContains(secondDependencies, dependency));
 
-    const Expected<u64> firstFileUnion = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, noDirectories, root, "source", scratchArena);
-    const Expected<u64> secondFileUnion = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, noDirectories, root, "source", scratchArena);
+    const Expected<u64> firstFileUnion = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, noDirectories, root, "source", scratch);
+    const Expected<u64> secondFileUnion = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, noDirectories, root, "source", scratch);
     ASSERT_TRUE(firstFileUnion.has_value());
     ASSERT_TRUE(secondFileUnion.has_value());
     EXPECT_EQ(firstFileUnion.value(), secondFileUnion.value());
 
-    const Expected<u64> firstSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratchArena);
-    const Expected<u64> secondSearch = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, secondDirectories, root, "source", scratchArena);
+    const Expected<u64> firstSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratch);
+    const Expected<u64> secondSearch = ComputeSingleAliasShaderDependencyChecksum(secondDependencies, secondDirectories, root, "source", scratch);
     ASSERT_TRUE(firstSearch.has_value());
     ASSERT_TRUE(secondSearch.has_value());
     EXPECT_NE(firstSearch.value(), secondSearch.value());
 
     firstDirectories.push_back(root.parentPath());
-    const Expected<u64> externalSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratchArena);
+    const Expected<u64> externalSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratch);
     ASSERT_TRUE(externalSearch.has_value());
     EXPECT_NE(externalSearch.value(), firstSearch.value());
 
     // Unused case-only search roots keep their exact spelling even on case-insensitive hosts.
     firstDirectories.clear();
     firstDirectories.push_back(JoinGraphicsPath(root, "CaseOnly"));
-    const Expected<u64> upperCaseSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratchArena);
+    const Expected<u64> upperCaseSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratch);
     firstDirectories.clear();
     firstDirectories.push_back(JoinGraphicsPath(root, "caseonly"));
-    const Expected<u64> lowerCaseSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratchArena);
+    const Expected<u64> lowerCaseSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratch);
     ASSERT_TRUE(upperCaseSearch.has_value());
     ASSERT_TRUE(lowerCaseSearch.has_value());
     EXPECT_NE(upperCaseSearch.value(), lowerCaseSearch.value());
@@ -226,7 +226,7 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWith
 
 void VerifyAssetsGraphics_ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAliasedRoots(){
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_dependency_case_identity");
     ASSERT_TRUE(rootResult.has_value());
@@ -243,8 +243,8 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumPreservesPhysicalPathCaseAcros
     ShaderCookPathVector lowerDependencies(testArena.arena);
     upperDependencies.push_back(upperPath);
     lowerDependencies.push_back(lowerPath);
-    const Expected<u64> upperKey = ComputeSingleAliasShaderDependencyChecksum(upperDependencies, noDirectories, firstRoot, "source", scratchArena);
-    const Expected<u64> lowerKey = ComputeSingleAliasShaderDependencyChecksum(lowerDependencies, noDirectories, secondRoot, "source", scratchArena);
+    const Expected<u64> upperKey = ComputeSingleAliasShaderDependencyChecksum(upperDependencies, noDirectories, firstRoot, "source", scratch);
+    const Expected<u64> lowerKey = ComputeSingleAliasShaderDependencyChecksum(lowerDependencies, noDirectories, secondRoot, "source", scratch);
     ASSERT_TRUE(upperKey.has_value());
     ASSERT_TRUE(lowerKey.has_value());
     EXPECT_NE(upperKey.value(), lowerKey.value());
@@ -260,7 +260,7 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
     }
 
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_dependency_case_collection");
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
@@ -273,7 +273,7 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
     ASSERT_TRUE(WriteTextFile(lowerPath, "static const uint lowerValue = 2;\n"));
 
     b8 caseDistinct = false;
-    ASSERT_TRUE(ReadTextFileMatches(upperPath, upperExpected, scratchArena, caseDistinct));
+    ASSERT_TRUE(ReadTextFileMatches(upperPath, upperExpected, scratch, caseDistinct));
     if(!caseDistinct){
         EXPECT_TRUE(RemoveAllIfExists(root));
         native{
@@ -285,15 +285,15 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
     ASSERT_TRUE(WriteTextFile(sourcePath, "#include \"Case.slangi\"\n#include \"case.slangi\"\n"));
     ShaderCookPathVector noDirectories(testArena.arena);
     ShaderCookPathVector dependencies(testArena.arena);
-    ASSERT_TRUE(GatherShaderDependencies(sourcePath, noDirectories, scratchArena, dependencies));
+    ASSERT_TRUE(GatherShaderDependencies(sourcePath, noDirectories, scratch, dependencies));
     ASSERT_EQ(dependencies.size(), 3u);
     EXPECT_TRUE(PathVectorContains(dependencies, upperPath));
     EXPECT_TRUE(PathVectorContains(dependencies, lowerPath));
 
-    const Expected<u64> firstKey = ComputeSingleAliasShaderDependencyChecksum(dependencies, noDirectories, root, "source", scratchArena);
+    const Expected<u64> firstKey = ComputeSingleAliasShaderDependencyChecksum(dependencies, noDirectories, root, "source", scratch);
     ASSERT_TRUE(firstKey.has_value());
     ASSERT_TRUE(WriteTextFile(lowerPath, "static const uint lowerValue = 3;\n"));
-    const Expected<u64> changedKey = ComputeSingleAliasShaderDependencyChecksum(dependencies, noDirectories, root, "source", scratchArena);
+    const Expected<u64> changedKey = ComputeSingleAliasShaderDependencyChecksum(dependencies, noDirectories, root, "source", scratch);
     ASSERT_TRUE(changedKey.has_value());
     EXPECT_NE(firstKey.value(), changedKey.value());
     EXPECT_TRUE(RemoveAllIfExists(root));
@@ -316,9 +316,9 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias(){
     EXPECT_TRUE(WriteTextFile(includeMetaPath, "include asset;\n\nasset.default_variant = \"NWB_FEATURE=0\";\nasset.defines = {\n    \"NWB_FEATURE\": [\"0\", \"1\"],\n};\n"));
     EXPECT_TRUE(WriteTextFile(includeSourcePath, ""));
 
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     ShaderCook shaderCook(testArena.arena);
-    EXPECT_FALSE(CanParseIncludeEntryFile(includeMetaPath, testArena, scratchArena, shaderCook));
+    EXPECT_FALSE(CanParseIncludeEntryFile(includeMetaPath, testArena, scratch, shaderCook));
     EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field 'default_variant'"));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -327,7 +327,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField()
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_retired_type_and_stage");
     ASSERT_TRUE(rootResult.has_value());
@@ -348,11 +348,11 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField()
     for(in StringView metadata : retiredMetadata){
         const ScopedTestTrace trace(metadata);
         ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
-        ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+        ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
         ASSERT_TRUE(WriteTextFile(metadataPath, metadata));
-        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
         ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
-        EXPECT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+        EXPECT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
     }
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -361,7 +361,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_ray_query_metadata");
     ASSERT_TRUE(rootResult.has_value());
@@ -393,7 +393,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
         metadata.append("compute_shader asset;\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.m_fields);
         ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
-        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook), testCase.m_accepted);
+        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook), testCase.m_accepted);
     }
 
     Vector<StringView> shaderAssetTypes = Vector<StringView>();
@@ -406,10 +406,10 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
         metadata.append(shaderAssetType);
         metadata.append(" asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n");
         ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
-        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
     }
     ASSERT_TRUE(WriteTextFile(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
-    ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+    ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
@@ -417,7 +417,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_transport_defines");
     ASSERT_TRUE(rootResult.has_value());
@@ -457,7 +457,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             const ScopedTestTrace traceRetired(retiredValue);
             ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(validShaderMetadata)));
             {
-                Expected<ShaderCookShaderEntry> metadataResult5 = ParseTestShaderEntryFile(shaderPath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookShaderEntry> metadataResult5 = ParseTestShaderEntryFile(shaderPath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(metadataResult5.has_value());
                 shaderEntry = metadataResult5.value();
             }
@@ -471,7 +471,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             obsoleteShaderMetadata.append(retiredValue);
             obsoleteShaderMetadata.append("\"] };\n");
             ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(obsoleteShaderMetadata)));
-            EXPECT_FALSE(CanParseShaderEntryFile(shaderPath, testArena, scratchArena, shaderCook));
+            EXPECT_FALSE(CanParseShaderEntryFile(shaderPath, testArena, scratch, shaderCook));
             EXPECT_FALSE(shaderEntry.defineValues.empty());
 
             TestAString expectedDiagnostic = TestAString();
@@ -482,21 +482,21 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
 
             ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(validShaderMetadata)));
             {
-                Expected<ShaderCookShaderEntry> metadataResult4 = ParseTestShaderEntryFile(shaderPath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookShaderEntry> metadataResult4 = ParseTestShaderEntryFile(shaderPath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(metadataResult4.has_value());
                 shaderEntry = metadataResult4.value();
             }
-            EXPECT_TRUE(ValidateShaderEntryVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry, scratchArena));
-            EXPECT_TRUE(ValidateShaderEntryVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry, scratchArena));
+            EXPECT_TRUE(ValidateShaderEntryVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry, scratch));
+            EXPECT_TRUE(ValidateShaderEntryVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry, scratch));
 
             TestAString invalidSignature = TestAString();
             invalidSignature.append(transportName);
             invalidSignature.append("=1;PROJECT_QUALITY=1");
-            EXPECT_FALSE(ValidateShaderEntryVariantSignature("project/shader", ViewTestString(invalidSignature), shaderEntry, scratchArena));
+            EXPECT_FALSE(ValidateShaderEntryVariantSignature("project/shader", ViewTestString(invalidSignature), shaderEntry, scratch));
 
             ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(validIncludeMetadata)));
             {
-                Expected<ShaderCookIncludeEntry> metadataResult3 = ParseTestIncludeEntryFile(includePath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookIncludeEntry> metadataResult3 = ParseTestIncludeEntryFile(includePath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(metadataResult3.has_value());
                 includeEntry = metadataResult3.value();
             }
@@ -509,16 +509,16 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             obsoleteIncludeMetadata.append(retiredValue);
             obsoleteIncludeMetadata.append("\"] };\n");
             ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(obsoleteIncludeMetadata)));
-            EXPECT_FALSE(CanParseIncludeEntryFile(includePath, testArena, scratchArena, shaderCook));
+            EXPECT_FALSE(CanParseIncludeEntryFile(includePath, testArena, scratch, shaderCook));
             EXPECT_FALSE(includeEntry.defineValues.empty());
 
             ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(validIncludeMetadata)));
             {
-                Expected<ShaderCookIncludeEntry> metadataResult2 = ParseTestIncludeEntryFile(includePath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookIncludeEntry> metadataResult2 = ParseTestIncludeEntryFile(includePath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(metadataResult2.has_value());
                 includeEntry = metadataResult2.value();
             }
-            EXPECT_TRUE(ValidateIncludeEntryVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry, scratchArena));
+            EXPECT_TRUE(ValidateIncludeEntryVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry, scratch));
         }
     }
     EXPECT_TRUE(RemoveAllIfExists(root));
@@ -528,7 +528,7 @@ void VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_invalid_define_name_and_value");
     ASSERT_TRUE(rootResult.has_value());
@@ -537,7 +537,7 @@ void VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape(){
     ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
     ASSERT_TRUE(WriteTextFile(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
     ShaderCook shaderCook(testArena.arena);
-    EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+    EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
     EXPECT_TRUE(SawCapturedError(logger, "must be an ASCII shader identifier"));
     EXPECT_FALSE(SawCapturedError(logger, "values must be a list of strings"));
     EXPECT_TRUE(RemoveAllIfExists(root));
@@ -547,7 +547,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "shader_invalid_define_tokens");
     ASSERT_TRUE(rootResult.has_value());
@@ -590,13 +590,13 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
             const ScopedTestTrace traceDefines(invalidDefines);
             ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(validMetadata)));
             if(isInclude){
-                Expected<ShaderCookIncludeEntry> parsedValid = ParseTestIncludeEntryFile(metadataPath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookIncludeEntry> parsedValid = ParseTestIncludeEntryFile(metadataPath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(parsedValid.has_value());
                 includeEntry = parsedValid.value();
                 ASSERT_FALSE(includeEntry.defineValues.empty());
             }
             else{
-                Expected<ShaderCookShaderEntry> parsedValid = ParseTestShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookShaderEntry> parsedValid = ParseTestShaderEntryFile(metadataPath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(parsedValid.has_value());
                 shaderEntry = parsedValid.value();
                 ASSERT_FALSE(shaderEntry.defineValues.empty());
@@ -609,26 +609,26 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
             invalidMetadata.append(" };\n");
             ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(invalidMetadata)));
             if(isInclude){
-                EXPECT_FALSE(CanParseIncludeEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+                EXPECT_FALSE(CanParseIncludeEntryFile(metadataPath, testArena, scratch, shaderCook));
                 EXPECT_FALSE(includeEntry.defineValues.empty());
             }
             else{
-                EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook));
+                EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
                 EXPECT_FALSE(shaderEntry.defineValues.empty());
             }
 
             ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(validMetadata)));
             if(isInclude){
-                Expected<ShaderCookIncludeEntry> parsedRecovered = ParseTestIncludeEntryFile(metadataPath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookIncludeEntry> parsedRecovered = ParseTestIncludeEntryFile(metadataPath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(parsedRecovered.has_value());
                 includeEntry = parsedRecovered.value();
-                EXPECT_TRUE(ValidateIncludeEntryVariantSignature("project/define_probe", "PROJECT_QUALITY=1", includeEntry, scratchArena));
+                EXPECT_TRUE(ValidateIncludeEntryVariantSignature("project/define_probe", "PROJECT_QUALITY=1", includeEntry, scratch));
             }
             else{
-                Expected<ShaderCookShaderEntry> parsedRecovered = ParseTestShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook);
+                Expected<ShaderCookShaderEntry> parsedRecovered = ParseTestShaderEntryFile(metadataPath, testArena, scratch, shaderCook);
                 ASSERT_TRUE(parsedRecovered.has_value());
                 shaderEntry = parsedRecovered.value();
-                EXPECT_TRUE(ValidateShaderEntryVariantSignature("project/define_probe", "PROJECT_QUALITY=1", shaderEntry, scratchArena));
+                EXPECT_TRUE(ValidateShaderEntryVariantSignature("project/define_probe", "PROJECT_QUALITY=1", shaderEntry, scratch));
             }
         }
     }
@@ -924,7 +924,7 @@ void VerifyAssetsGraphics_TexturePayloadRejectsAlphaTransportIncompatibleWithFor
 
 void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain(){
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_CodecScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
 
     const AssetBytes original = MakeTestTextureUastcPayload(testArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "texture_raw_pair_identity");
@@ -940,7 +940,7 @@ void VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodin
 
     TextureCookEntry entry(testArena.arena);
     {
-        Expected<TextureCookEntry> parsedEntry = ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena);
+        Expected<TextureCookEntry> parsedEntry = ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratch);
         ASSERT_TRUE(parsedEntry.has_value());
         entry = parsedEntry.value();
     }
@@ -1033,7 +1033,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSel
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_CodecScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
 
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "texture_missing_raw_pair");
     ASSERT_TRUE(rootResult.has_value());
@@ -1045,7 +1045,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSel
 
     MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse(s_TextureTestMetadata));
-    EXPECT_FALSE(ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena).has_value());
+    EXPECT_FALSE(ParseTestTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratch).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "failed to read raw texture sidecar"));
     EXPECT_TRUE(SawCapturedError(logger, "checker.tex"));
     EXPECT_TRUE(RemoveAllIfExists(root));
@@ -1055,7 +1055,7 @@ void VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFor
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_CodecScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
 
     const Expected<AssetBytes> prepared = MakeTestTextureRuntimeBinary(testArena);
     ASSERT_TRUE(prepared.has_value());
@@ -1073,7 +1073,7 @@ void VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFor
     formats.push_back(s_FormatRgba16Float);
 
     for(in FormatEnum format : formats)
-        EXPECT_FALSE(CanDecodeFirstTextureMip(decoder, texture, format, scratchArena));
+        EXPECT_FALSE(CanDecodeFirstTextureMip(decoder, texture, format, scratch));
     EXPECT_EQ(logger.errorCount(), 6u);
 }
 
@@ -1110,10 +1110,10 @@ void VerifyAssetsGraphics_TextureCookerRejectsObsoleteAndDerivedMetadata(){
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
         TestArena testArena = TestArena();
-        ScratchArena scratchArena(s_CodecScratchArena);
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         String metadata(s_TextureTestMetadata);
         metadata.append(field.m_assignment);
-        EXPECT_FALSE(TryParseTextureMetadata(metadata, "texture_obsolete_metadata", testArena, scratchArena));
+        EXPECT_FALSE(TryParseTextureMetadata(metadata, "texture_obsolete_metadata", testArena, scratch));
         EXPECT_TRUE(SawCapturedError(logger, field.m_diagnostic));
     }
 }
@@ -1132,12 +1132,12 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingRequiredRawLayoutDescriptor
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
         TestArena testArena = TestArena();
-        ScratchArena scratchArena(s_CodecScratchArena);
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         const usize fieldOffset = baseMetadata.find(field.m_assignment);
         ASSERT_LT(fieldOffset, baseMetadata.size());
         String metadata(StringView(baseMetadata).substr(0u, fieldOffset));
         metadata.append(StringView(baseMetadata).substr(fieldOffset + field.m_assignment.size()));
-        EXPECT_FALSE(TryParseTextureMetadata(metadata, "texture_missing_layout", testArena, scratchArena));
+        EXPECT_FALSE(TryParseTextureMetadata(metadata, "texture_missing_layout", testArena, scratch));
         EXPECT_TRUE(SawCapturedError(logger, field.m_diagnostic));
     }
 }
@@ -1170,10 +1170,10 @@ void VerifyAssetsGraphics_TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeR
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
         TestArena testArena = TestArena();
-        ScratchArena scratchArena(s_CodecScratchArena);
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         String metadata(s_TextureTestMetadata);
         metadata.append(invalid.m_assignment);
-        EXPECT_FALSE(TryParseTextureMetadata(metadata, "texture_invalid_layout", testArena, scratchArena));
+        EXPECT_FALSE(TryParseTextureMetadata(metadata, "texture_invalid_layout", testArena, scratch));
         EXPECT_TRUE(SawCapturedError(logger, invalid.m_diagnostic));
         EXPECT_FALSE(SawCapturedError(logger, "failed to read raw texture sidecar"));
     }

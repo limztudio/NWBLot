@@ -9,12 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class Project : IProjectEntryCallbacks, IInputEventHandler{
     public Project(mut ProjectRuntimeContext context){
         this.m_context = context;
         this.m_world = CreateInitialWorldOrDie(context);
-        this.m_sceneSubsystems = ActiveSceneSubsystems(context.objectArena);
-        this.m_uiPreview = UiSkinPreview(context.objectArena);
+        this.m_sceneSubsystems = ActiveSceneSubsystems();
+        this.m_uiPreview = UiSkinPreview();
     }
 
     public ~Project(){
@@ -25,7 +26,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
     public b8 onStartup()override{
         if(!this.m_sceneSubsystems.loadProjectStartScene(this.m_context.assetManager))
             return false;
-        if(!this.m_uiPreview.loadAssets(this.m_context.objectArena, this.m_context.assetManager, this.m_sceneSubsystems))
+        if(!this.m_uiPreview.loadAssets(this.m_context, this.m_sceneSubsystems))
             return false;
         BindActiveSceneSubsystemsToWorld(this.m_world, this.m_sceneSubsystems);
         if(!CreateStartupCameraAndLights(this.m_world))

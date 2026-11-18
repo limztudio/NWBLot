@@ -15,7 +15,6 @@ extern class Frame{
     mut InputDispatcher input(...)const;
     b8 mainLoop(...);
     mut Session perfSession(...)const;
-    mut GlobalArena projectObjectArena(...)const;
     b8 quitRequested(...)const;
     void requestQuit(...);
     void setPerfCapture(...);

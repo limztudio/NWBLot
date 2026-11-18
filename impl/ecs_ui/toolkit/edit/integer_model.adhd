@@ -33,7 +33,7 @@ class IntegerEditModel final : public NumericEditModelBase<i64, IntegerBounds, I
 
 
 public:
-    explicit IntegerEditModel(Core::Alloc::GlobalArena& arena)
+    explicit IntegerEditModel(::ArenaBase& arena)
         : NumericEditModelBase(arena)
     {
         initializeDefault(s_DefaultIntegerEditValue);
@@ -78,6 +78,26 @@ NWB_IMPL_UI_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::Ui::IntegerEditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class IntegerEditModel{
+    i64 value()const;
+    in EditModel draft()const;
+    b8 dirty()const;
+    u64 revision()const;
+    mut EditModel lendDraft();
+    b8 setDraft(...);
+    NumericEditResult submit(...);
+    NumericEditResult blur(...);
+    NumericEditResult cancel();
+    NumericEditResult abandon();
+    NumericParseStatus status(...)const;
+    b8 setValue(...);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

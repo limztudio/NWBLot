@@ -112,7 +112,7 @@ class HardwareCausticsStageBuilder : NoCopy{
         this.m_raytracingSystem = raytracingSystem;
     }
 
-    public Expected<HardwareCausticsStageResult> declare(in HardwareCausticsStageInputs inputs, mut ScratchArena scratchArena);
+    public Expected<HardwareCausticsStageResult> declare(in HardwareCausticsStageInputs inputs);
 }
 
 

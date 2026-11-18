@@ -186,6 +186,19 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_name("::NWB::Impl::ActiveSceneSubsystems"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class ActiveSceneSubsystems{
+    b8 loadProjectStartScene(...);
+    b8 loadScene(...);
+    b8 instantiateEntities(...)const;
+    b8 valid(...)const;
+    usize subsystemCount(...)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const u32 s_AvboitDepthWarpGuardWords = 4u;
 const u32 s_AvboitDepthWarpBatchSize = 64u;
 const u32 s_AvboitDepthWarpSentinel = 0xa5f07c39u;

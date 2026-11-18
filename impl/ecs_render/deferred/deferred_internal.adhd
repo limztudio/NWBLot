@@ -49,15 +49,13 @@ using DeferredMaterialPassDrawItemPartitions = MaterialPassDrawItemPartitions;
 
 [[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
     const MaterialPassDrawItemPartitions& drawItems,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::GpuTaskGraph& graph
 );
 
 [[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
     const MaterialPassDrawItemPartitions& drawItems,
     const RendererMaterialSystem& materialSystem,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::GpuTaskGraph& graph
 );
 
 

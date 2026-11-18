@@ -32,7 +32,7 @@ extern enum ResourceType : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutDesc")]
+[cpp_header("<core/graphics/rhi/binding.h>"), cpp_name("::NWB::Core::BindingLayoutDesc"), cpp_flags(self_defaulted, arena_first_ctor)]
 extern class BindingLayoutDesc{
     Vector<BindingLayoutItem> bindings;
     ShaderTypeMask visibility;

@@ -490,7 +490,7 @@ void MaterialPassGatherer::gather(
 
 Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
     // Every material pass uses this push-only layout; transparent consumes the full payload.
-    if(!EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), Core::ShaderType::All, m_materialState.m_materialPassBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), Core::ShaderType::All, m_materialState.m_materialPassBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
         return MakeUnexpected(Failure{});
     }
@@ -499,7 +499,7 @@ Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassB
 
 b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
-    if(!EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(MeshComputePushConstants), Core::ShaderType::Compute, m_materialState.m_computeBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(m_graphics.getDevice(), sizeof(MeshComputePushConstants), Core::ShaderType::Compute, m_materialState.m_computeBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
         return false;
     }

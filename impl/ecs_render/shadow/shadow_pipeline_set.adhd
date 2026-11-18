@@ -17,14 +17,12 @@ extern class RtSoftShadowState;
 
 [modular]
 class ShadowPipelineSet : NoCopy{
-    private mut GlobalArena m_arena;
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaderSystem;
     private mut RtShadowState m_shadow;
     private mut RtSoftShadowState m_softShadow;
 
-    public ShadowPipelineSet(mut GlobalArena arena, mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut RtShadowState shadow, mut RtSoftShadowState softShadow){
-        this.m_arena = arena;
+    public ShadowPipelineSet(mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut RtShadowState shadow, mut RtSoftShadowState softShadow){
         this.m_graphics = graphics;
         this.m_shaderSystem = shaderSystem;
         this.m_shadow = shadow;

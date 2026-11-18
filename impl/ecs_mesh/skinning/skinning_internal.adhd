@@ -533,19 +533,16 @@ extern class MeshSkinningGraphDispatchPlanVector;
 class MeshSkinningFramePlanBuilder : NoCopy{
     private mut MeshSkinningSystem m_system;
     private mut GpuTaskGraph m_graph;
-    private mut ScratchArena m_scratchArena;
     private mut MeshSkinningGraphDispatchPlanVector m_plans;
     private GpuTaskId m_terminalTask;
 
     public MeshSkinningFramePlanBuilder(
         mut MeshSkinningSystem system,
         mut GpuTaskGraph graph,
-        mut ScratchArena scratchArena,
         mut MeshSkinningGraphDispatchPlanVector plans
     ){
         this.m_system = system;
         this.m_graph = graph;
-        this.m_scratchArena = scratchArena;
         this.m_plans = plans;
     }
 

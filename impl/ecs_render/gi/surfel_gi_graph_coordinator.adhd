@@ -100,7 +100,6 @@ class SurfelGiGraphCoordinator : NoCopy{
         in GpuTaskId effectsTask,
         in b8 useLaggedLightingHistory,
         in GpuExternalCompletionId surfelCounterReadbackCompletion,
-        mut ScratchArena scratchArena,
         mut DeferredFrameTargets deferredTargets,
         mut GpuTimingSubmissionTicket timingTicket,
         mut Optional<GpuTimingMeasure> asyncTiming

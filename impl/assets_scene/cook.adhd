@@ -242,8 +242,8 @@ b8 SerializeComponentAsset(in IComponent component, mut Vector<u8> outBinary){
     return true;
 }
 
-b8 SerializeEntityAsset(in EntityAsset entity, mut ScratchArena scratchArena, mut Vector<u8> outBinary){
-    if(!entity.validatePayload(scratchArena))
+b8 SerializeEntityAsset(in EntityAsset entity, mut Vector<u8> outBinary){
+    if(!entity.validatePayload())
         return false;
     return SceneAssetBinaryCodec().serializeEntity(Span<ComponentRef>(entity.components()), outBinary);
 }
@@ -254,8 +254,8 @@ b8 SerializeProjectAsset(in ProjectAsset project, mut Vector<u8> outBinary){
     return SceneAssetBinaryCodec().serializeProject(project.startScene().name().hash(), outBinary);
 }
 
-b8 SerializeSceneAsset(in SceneAsset scene, mut ScratchArena scratchArena, mut Vector<u8> outBinary){
-    if(!scene.validatePayload(scratchArena))
+b8 SerializeSceneAsset(in SceneAsset scene, mut Vector<u8> outBinary){
+    if(!scene.validatePayload())
         return false;
     return SceneAssetBinaryCodec().serializeScene(
         Span<SubsystemRef>(scene.subsystems()),
@@ -265,10 +265,10 @@ b8 SerializeSceneAsset(in SceneAsset scene, mut ScratchArena scratchArena, mut V
     );
 }
 
-Expected<EntityAsset> BuildEntityAssetFromComponents(in Name virtualPath, in Vector<ComponentRef> components, mut ScratchArena scratchArena){
+Expected<EntityAsset> BuildEntityAssetFromComponents(in Name virtualPath, in Vector<ComponentRef> components){
     EntityAsset asset(virtualPath);
     asset.setComponents(components);
-    if(!asset.validatePayload(scratchArena))
+    if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
 }
@@ -285,12 +285,11 @@ Expected<SceneAsset> BuildSceneAssetFromContents(
     in Name virtualPath,
     in Vector<SubsystemRef> subsystems,
     in AssetMap assets,
-    in Vector<EntityRef> entities,
-    mut ScratchArena scratchArena
+    in Vector<EntityRef> entities
 ){
     SceneAsset asset(virtualPath);
     asset.setContents(subsystems, assets, entities);
-    if(!asset.validatePayload(scratchArena))
+    if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
 }
@@ -371,8 +370,7 @@ b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
 
     const EntityAsset& entity = *MakeNotNull(checked_cast<const EntityAsset*>(&asset));
-    Core::Alloc::ScratchArena scratchArena(s_EntitySerializeArena);
-    return SerializeEntityAsset(entity, scratchArena, outBinary);
+    return SerializeEntityAsset(entity, outBinary);
 }
 
 b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
@@ -388,8 +386,7 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
         return false;
 
     const SceneAsset& scene = *MakeNotNull(checked_cast<const SceneAsset*>(&asset));
-    Core::Alloc::ScratchArena scratchArena(s_SceneSerializeArena);
-    return SerializeSceneAsset(scene, scratchArena, outBinary);
+    return SerializeSceneAsset(scene, outBinary);
 }
 
 
@@ -505,15 +502,15 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const 
 
     EntityAsset candidate(arena, entry.virtualPath);
     candidate.setComponents(Move(*components));
-    if(!candidate.validatePayload(scratchArena))
+    if(!candidate.validatePayload())
         return MakeUnexpected(Failure{});
     entry.components = candidate.takeComponents(arena);
 
     return entry;
 }
 
-Expected<EntityAsset> BuildEntityAsset(EntityCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return BuildEntityAssetFromComponents(arena, entry.virtualPath, entry.components, scratchArena);
+Expected<EntityAsset> BuildEntityAsset(EntityCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    return BuildEntityAssetFromComponents(arena, entry.virtualPath, entry.components);
 }
 
 
@@ -592,15 +589,15 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
 
     SceneAsset candidate(arena, entry.virtualPath);
     candidate.setContents(Move(entry.subsystems), Move(entry.assets), Move(entry.entities));
-    if(!candidate.validatePayload(scratchArena))
+    if(!candidate.validatePayload())
         return MakeUnexpected(Failure{});
     candidate.takeContents(entry.subsystems, entry.assets, entry.entities);
 
     return entry;
 }
 
-Expected<SceneAsset> BuildSceneAsset(SceneCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return BuildSceneAssetFromContents(arena, entry.virtualPath, entry.subsystems, entry.assets, entry.entities, scratchArena);
+Expected<SceneAsset> BuildSceneAsset(SceneCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    return BuildSceneAssetFromContents(arena, entry.virtualPath, entry.subsystems, entry.assets, entry.entities);
 }
 
 

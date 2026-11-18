@@ -277,7 +277,6 @@ class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
             s_SkinningBenchmarkProjectName,
             s_SmokeNameSkeleton,
             true,
-            this.m_context.objectArena,
             this.m_context.assetManager
         );
         if(!bindJoints.has_value()){

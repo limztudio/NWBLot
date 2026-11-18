@@ -213,6 +213,11 @@ public:
         return service.setFonts(scratchArena, Span(&source, 1u));
     }
 
+    [[nodiscard]] b8 installBundledLatinFont(const Name& scratchName, Font& font, TextService& service){
+        Core::Alloc::ScratchArena scratchArena{ scratchName };
+        return installBundledLatinFont(scratchArena, font, service);
+    }
+
     [[nodiscard]] b8 place(f32 width = 100.0f, f32 scroll = 0.0f)noexcept{
         const auto placement = m_view.arrange({ 10.0f, 20.0f, width, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, { scroll, 0.0f });
         if(!placement)
@@ -1254,10 +1259,9 @@ void VerifyEditBoxLayoutTests_EmptySelectionRejectsInvalidCaretWidthsAndRestores
 }
 
 void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRestoresClipping(mut EditBoxLayoutTests self){
-    ScratchArena fontScratchArena = ScratchArena(s_UiCaseNameFontScratch);
     Font font = Font(self.m_arena, s_UiEditBoxFontAssetName);
     TextService service = TextService(self.m_arena);
-    ASSERT_TRUE(self.installBundledLatinFont(fontScratchArena, font, service));
+    ASSERT_TRUE(self.installBundledLatinFont(s_UiCaseNameFontScratch, font, service));
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("IME", 3u, 3u));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
@@ -1295,10 +1299,9 @@ void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRes
 }
 
 void VerifyEditBoxLayoutTests_PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales(mut EditBoxLayoutTests self){
-    ScratchArena fontScratchArena = ScratchArena(s_UiCaseNameFontScratch);
     Font font = Font(self.m_arena, s_UiEditBoxFontAssetName);
     TextService service = TextService(self.m_arena);
-    ASSERT_TRUE(self.installBundledLatinFont(fontScratchArena, font, service));
+    ASSERT_TRUE(self.installBundledLatinFont(s_UiCaseNameFontScratch, font, service));
     ASSERT_TRUE(self.m_model.setText("ffi"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));

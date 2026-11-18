@@ -117,6 +117,9 @@ f32 ComputePaddedWidth(in ElementBox box){
    - Use `cast<T>(x)` for value conversions and `bit_cast<T>(x)` for bitwise reinterpretation.
    - Use `Array<T, N>`, `FixedVector<T, N>`, or `Vector<T>` instead of `T[N]`.
    - Use `flag<SizeType>` instead of C bitfields.
+9. **No Explicit `*Arena` Types (`ArenaBase`, `AssetArena`, `CookArena`, `GlobalArena`, `GraphicsArena`, `MetaArena`, `PersistentArena`, `ScratchArena`, `TelemetryArena`)**:
+   - Arenas are managed **exclusively and automatically by the `adhd` compiler** (`[arena]` mother-arena propagation and local `__adhd_scratch` borrowing).
+   - Referencing any of these explicit `*Arena` types in non-native `.adhd` parameters, variables, class fields, type aliases, or expressions is a compile-time error; reserve explicit C++ arena manipulation for `[header]`/`[source]`/`native{}` blocks when interoperating with C++ APIs.
 
 ---
 

@@ -17,8 +17,8 @@ b8 CanExpandFixtureBunch(mut BunchFixture fixture){
     return ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena).has_value();
 }
 
-Expected<ExpandedAssetMetadataVector> ExpandBunchWithScratch(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath filePath, in MetaDocument document, mut ScratchArena scratch){
-    return ExpandAssetBunch(assetRoot, virtualRoot, filePath, document, scratch);
+Expected<ExpandedAssetMetadataVector> ExpandBunchWithScratch(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath filePath, in MetaDocument document, mut GraphicsScratchArena scratch){
+    return ExpandAssetBunch(assetRoot, virtualRoot, filePath, document, scratch.scratchArena);
 }
 
 Expected<AssetBunchExpandFailureEnum> TryBunchExpandFailure(mut BunchFixture fixture){
@@ -45,8 +45,8 @@ Expected<SamplerAsset> LoadSamplerFromOutput(in GraphicsTestPath outputDirectory
     return LoadCookedSamplerAsset(outputDirectory, assetName, expectedVolumeFileCount, testArena);
 }
 
-void PrepareCacheRecordHelper(in GraphicsTestPath root, in DiscoveredNwbFile discovered, in StringView metadataText, in Sha256Digest producer, mut ScratchArena scratchArena, mut ScratchString relativePath, mut ScratchString cacheName, mut NwbFileAssetCacheRecord outRecord){
-    PrepareNwbFileAssetCacheRecord(root, JoinGraphicsPath(root, s_CacheDirectory), discovered, metadataText, producer, scratchArena, relativePath, cacheName, outRecord);
+void PrepareCacheRecordHelper(in GraphicsTestPath root, in DiscoveredNwbFile discovered, in StringView metadataText, in Sha256Digest producer, mut GraphicsScratchArena scratch, mut ScratchString relativePath, mut ScratchString cacheName, mut NwbFileAssetCacheRecord outRecord){
+    PrepareNwbFileAssetCacheRecord(root, JoinGraphicsPath(root, s_CacheDirectory), discovered, metadataText, producer, scratch.scratchArena, relativePath, cacheName, outRecord);
 }
 
 void VerifyAssetBunchOwnership_ClearReplacementAndDestructionReleaseAllResolvedValues(){
@@ -151,10 +151,10 @@ void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAn
         const ArenaMemoryStats retainedMetadata = fixture.metadataArena.memoryStats();
 
         // Keep this regression within one chunk per alignment so it isolates string growth from chunk-stack reuse.
-        ScratchArena scratch(s_AssetCaseTestsAssetBunchLongPathScratch, 65536u);
-        ScratchBunchSentinel sentinel(scratch);
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetBunchLongPathScratch, 65536u);
+        ScratchBunchSentinel sentinel(scratch.scratchArena);
         ASSERT_TRUE(sentinel.valid());
-        const ArenaMemoryStats baselineScratch = scratch.memoryStats();
+        const ArenaMemoryStats baselineScratch = scratch.scratchArena.memoryStats();
         ArenaMemoryStats warm = ArenaMemoryStats();
         const StringView virtualRootView = virtualRoot;
         const StringView firstPathView = formattedFirst;
@@ -180,7 +180,7 @@ void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAn
             }
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, retainedMetadata.usedBytes);
             EXPECT_TRUE(sentinel.intact());
-            const ArenaMemoryStats current = scratch.memoryStats();
+            const ArenaMemoryStats current = scratch.scratchArena.memoryStats();
             EXPECT_EQ(current.usedBytes, baselineScratch.usedBytes);
             if(iteration == 0u)
                 warm = current;
@@ -537,7 +537,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
 
     // A cache written by a different producer must not be reused.
     {
-        ScratchArena scratchArena(s_CodecScratchArena);
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         const ExecutablePaths executablePaths = ExecutablePaths();
         const Expected<Path, ErrorCode> executablePath = executablePaths.path();
         ASSERT_TRUE(executablePath.has_value());
@@ -547,13 +547,13 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         Sha256Digest otherProducer = producer;
         otherProducer.bytes[0u] = otherProducer.bytes[0u] ^ 1u;
 
-        DiscoveredNwbFile discovered = MakeDiscoveredNwbFile(assetRoot, mixedCaseNwbPath, s_ProjectVirtualRoot, testArena.arena, scratchArena);
+        DiscoveredNwbFile discovered = MakeDiscoveredNwbFile(assetRoot, mixedCaseNwbPath, s_ProjectVirtualRoot, testArena, scratch);
         NwbFileAssetCacheRecord originalProducer(testArena.arena);
         NwbFileAssetCacheRecord staleProducer(testArena.arena);
-        ScratchString relativePath(scratchArena);
-        ScratchString cacheName(scratchArena);
-        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, producer, scratchArena, relativePath, cacheName, originalProducer);
-        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, otherProducer, scratchArena, relativePath, cacheName, staleProducer);
+        ScratchString relativePath(scratch.scratchArena);
+        ScratchString cacheName(scratch.scratchArena);
+        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, producer, scratch, relativePath, cacheName, originalProducer);
+        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, otherProducer, scratch, relativePath, cacheName, staleProducer);
         ASSERT_TRUE(originalProducer.canWriteCache);
         ASSERT_TRUE(staleProducer.canWriteCache);
         EXPECT_EQ(originalProducer.paramSha256, initialHeader.paramSha256);
@@ -574,21 +574,21 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         const GraphicsTestPath texturePath = JoinGraphicsPath2(assetRoot, "Samplers", "Sidecar_Bunch.tex");
         ASSERT_TRUE(WriteTextFile(fontPath, "font-one"));
         ASSERT_TRUE(WriteTextFile(texturePath, "texture-one"));
-        DiscoveredNwbFile bunch = MakeDiscoveredNwbFile(assetRoot, bunchPath, s_ProjectVirtualRoot, testArena.arena, scratchArena);
-        ScratchString largeMetadata(scratchArena);
+        DiscoveredNwbFile bunch = MakeDiscoveredNwbFile(assetRoot, bunchPath, s_ProjectVirtualRoot, testArena, scratch);
+        ScratchString largeMetadata(scratch.scratchArena);
         AppendRepeatedAsciiByte(largeMetadata, 70000u, 32u);
         largeMetadata.append("ASSET_BUNCH asset; font f; texture t;");
         NwbFileAssetCacheRecord initialSidecars(testArena.arena);
         NwbFileAssetCacheRecord changedFont(testArena.arena);
         NwbFileAssetCacheRecord changedTexture(testArena.arena);
-        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratchArena, relativePath, cacheName, initialSidecars);
+        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratch, relativePath, cacheName, initialSidecars);
         ASSERT_TRUE(initialSidecars.canWriteCache);
         ASSERT_TRUE(WriteTextFile(fontPath, "font-two"));
-        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratchArena, relativePath, cacheName, changedFont);
+        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratch, relativePath, cacheName, changedFont);
         ASSERT_TRUE(changedFont.canWriteCache);
         EXPECT_NE(initialSidecars.paramSha256, changedFont.paramSha256);
         ASSERT_TRUE(WriteTextFile(texturePath, "texture-two"));
-        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratchArena, relativePath, cacheName, changedTexture);
+        PrepareCacheRecordHelper(root, bunch, ViewArenaString(largeMetadata), producer, scratch, relativePath, cacheName, changedTexture);
         ASSERT_TRUE(changedTexture.canWriteCache);
         EXPECT_NE(changedFont.paramSha256, changedTexture.paramSha256);
     }

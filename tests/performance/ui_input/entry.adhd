@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_ui_skin/asset.adhd>
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
 #include <impl/ecs_ui/toolkit/paint_primitives.adhd>
 #include <tests/performance/ui_input/name_cases.adhd>
 
@@ -37,6 +39,7 @@ using NWB::Core::QueuedTextInputService;
 using NWB::Core::TextInputCapabilities;
 using NWB::Core::Alloc::GlobalArena;
 using NWB::Core::Assets::AssetRef;
+using NWB::Impl::RegionVector;
 using NWB::Impl::Texture;
 using NWB::Impl::UiEditBoxHost;
 using NWB::Impl::UiSkin;
@@ -47,8 +50,36 @@ namespace ClipboardStatus = NWB::Core::ClipboardStatus;
 using TextLayoutStatusEnum = TextLayoutStatus::Enum;
 using HitTargetVector = InputVector<HitTarget>;
 
+[[nodiscard]] FOUNDATION_INLINE GlobalArena& BenchmarkFallbackArena()noexcept{
+    static GlobalArena s_Arena{ Name("tests/performance/ui_input") };
+    return s_Arena;
+}
+
+inline thread_local GlobalArena* s_ActiveBenchmarkArena = nullptr;
+
+[[nodiscard]] FOUNDATION_INLINE GlobalArena& ActiveBenchmarkArena()noexcept{
+    return s_ActiveBenchmarkArena != nullptr ? *s_ActiveBenchmarkArena : BenchmarkFallbackArena();
+}
+
+struct BenchmarkScope final : NoCopy{
+    GlobalArena arena;
+    GlobalArena* previous = nullptr;
+
+    explicit BenchmarkScope(const Name& scopeName)noexcept
+        : arena(scopeName)
+        , previous(s_ActiveBenchmarkArena)
+    {
+        s_ActiveBenchmarkArena = &arena;
+    }
+
+    ~BenchmarkScope()noexcept{
+        s_ActiveBenchmarkArena = previous;
+    }
+};
+
 class BenchmarkTextInput final : public QueuedTextInputService{
 public:
+    BenchmarkTextInput() : QueuedTextInputService(ActiveBenchmarkArena()){}
     explicit BenchmarkTextInput(GlobalArena& arena) : QueuedTextInputService(arena){}
 
 public:
@@ -57,6 +88,7 @@ public:
 
 class BenchmarkClipboard final : public QueuedClipboardService{
 public:
+    BenchmarkClipboard() : QueuedClipboardService(ActiveBenchmarkArena()){}
     explicit BenchmarkClipboard(GlobalArena& arena) : QueuedClipboardService(arena){}
 
 public:
@@ -69,13 +101,154 @@ protected:
     }
 };
 
-FOUNDATION_INLINE void WriteUiBenchmarkStdout(const AStringView text){
-    FOUNDATION_COUT << text;
+class BenchmarkContext final : NoCopy{
+public:
+    BenchmarkContext() : m_value(ActiveBenchmarkArena()){}
+
+public:
+    operator Context&()noexcept{ return m_value; }
+    operator const Context&()const noexcept{ return m_value; }
+
+    template<typename... Args>
+    decltype(auto) beginFrame(Args&&... args){ return m_value.beginFrame(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) beginRoot(Args&&... args){ return m_value.beginRoot(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) addTarget(Args&&... args){ return m_value.addTarget(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) endRoot(Args&&... args){ return m_value.endRoot(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) finishFrame(Args&&... args){ return m_value.finishFrame(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) commitFrame(Args&&... args){ return m_value.commitFrame(Forward<Args>(args)...); }
+    [[nodiscard]] const InputRouter& input()const noexcept{ return m_value.input(); }
+
+private:
+    Context m_value;
+};
+
+class BenchmarkEditBoxHost final : NoCopy{
+public:
+    BenchmarkEditBoxHost(Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard)
+        : m_value(ActiveBenchmarkArena(), context, textInput, clipboard)
+    {}
+
+public:
+    template<typename... Args>
+    decltype(auto) beginFrame(Args&&... args){ return m_value.beginFrame(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) edit(Args&&... args){ return m_value.edit(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) publish(Args&&... args){ return m_value.publish(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) finishFrame(Args&&... args){ return m_value.finishFrame(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) commitFrame(Args&&... args){ return m_value.commitFrame(Forward<Args>(args)...); }
+    [[nodiscard]] b8 hasTextFocus()const noexcept{ return m_value.hasTextFocus(); }
+
+private:
+    UiEditBoxHost m_value;
+};
+
+class BenchmarkTextLayoutBuilder final : NoCopy{
+public:
+    explicit BenchmarkTextLayoutBuilder(ITextShaper& shaper)noexcept
+        : m_value(ActiveBenchmarkArena(), shaper)
+    {}
+
+public:
+    operator TextLayoutBuilder&()noexcept{ return m_value; }
+
+private:
+    TextLayoutBuilder m_value;
+};
+
+class BenchmarkTextService final : NoCopy{
+public:
+    BenchmarkTextService() : m_value(ActiveBenchmarkArena()){}
+
+public:
+    operator TextService&()noexcept{ return m_value; }
+
+private:
+    TextService m_value;
+};
+
+class BenchmarkPaintBuilder final : NoCopy{
+public:
+    BenchmarkPaintBuilder()noexcept : m_value(ActiveBenchmarkArena()){}
+
+public:
+    operator PaintBuilder&()noexcept{ return m_value; }
+    operator const PaintBuilder&()const noexcept{ return m_value; }
+
+    template<typename... Args>
+    decltype(auto) begin(Args&&... args){ return m_value.begin(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) reserve(Args&&... args){ return m_value.reserve(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) beginOverlay(Args&&... args){ return m_value.beginOverlay(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) pushClip(Args&&... args){ return m_value.pushClip(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) fillRect(Args&&... args){ return m_value.fillRect(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) popClip(Args&&... args){ return m_value.popClip(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) endOverlay(Args&&... args){ return m_value.endOverlay(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) freeze(Args&&... args){ return m_value.freeze(Forward<Args>(args)...); }
+
+private:
+    PaintBuilder m_value;
+};
+
+class BenchmarkInputRouter final : NoCopy{
+public:
+    BenchmarkInputRouter() : m_value(ActiveBenchmarkArena()){}
+
+public:
+    template<typename... Args>
+    decltype(auto) commitTargets(Args&&... args){ return m_value.commitTargets(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) queuePointer(Args&&... args){ return m_value.queuePointer(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) process(Args&&... args){ return m_value.process(Forward<Args>(args)...); }
+    template<typename... Args>
+    decltype(auto) consumePointerGesture(Args&&... args){ return m_value.consumePointerGesture(Forward<Args>(args)...); }
+    template<typename... Args>
+    [[nodiscard]] decltype(auto) pressed(Args&&... args)const{ return m_value.pressed(Forward<Args>(args)...); }
+    [[nodiscard]] decltype(auto) targets()const noexcept{ return m_value.targets(); }
+    [[nodiscard]] decltype(auto) hover()const noexcept{ return m_value.hover(); }
+    [[nodiscard]] decltype(auto) focus()const noexcept{ return m_value.focus(); }
+    [[nodiscard]] decltype(auto) capture()const noexcept{ return m_value.capture(); }
+    [[nodiscard]] decltype(auto) primaryDown()const noexcept{ return m_value.primaryDown(); }
+    [[nodiscard]] decltype(auto) actions()const noexcept{ return m_value.actions(); }
+    template<typename... Args>
+    [[nodiscard]] decltype(auto) ownsPointerSource(Args&&... args)const{ return m_value.ownsPointerSource(Forward<Args>(args)...); }
+
+private:
+    InputRouter m_value;
+};
+
+[[nodiscard]] FOUNDATION_INLINE ShapedRun CreateBenchmarkShapedRun()noexcept{
+    return ShapedRun(ActiveBenchmarkArena());
 }
 
-FOUNDATION_INLINE void ConfigureEmptySkinAtlas(GlobalArena& arena, UiSkin& skin, const Name textureName){
-    UiSkin::RegionVector regions(arena);
-    skin.setAtlas(AssetRef<Texture>(textureName), 8u, 8u, 1.0f, Move(regions));
+[[nodiscard]] FOUNDATION_INLINE EditBoxView CreateBenchmarkEditBoxView()noexcept{
+    return EditBoxView(ActiveBenchmarkArena());
+}
+
+[[nodiscard]] FOUNDATION_INLINE DrawSnapshot CreateBenchmarkDrawSnapshot()noexcept{
+    return DrawSnapshot(ActiveBenchmarkArena());
+}
+
+[[nodiscard]] FOUNDATION_INLINE HitTargetVector CreateBenchmarkHitTargetVector()noexcept{
+    return HitTargetVector(ActiveBenchmarkArena());
+}
+
+FOUNDATION_INLINE void WriteUiBenchmarkStdout(const AStringView text){
+    FOUNDATION_COUT << text;
 }
 
 FOUNDATION_INLINE b8 AdoptBuiltTextLayout(TextLayoutBuilder& layoutBuilder, const ShapeRequest& request, EditBoxView& view){
@@ -177,8 +350,9 @@ DisplayMetrics MakeDisplayMetrics(in f32 width, in f32 height){
     return metrics;
 }
 
-void ConfigureBenchmarkSkinAtlas(mut GlobalArena arena, mut UiSkin skin){
-    ConfigureEmptySkinAtlas(arena, skin, Name(s_TexturePath));
+void ConfigureBenchmarkSkinAtlas(mut UiSkin skin){
+    RegionVector regions;
+    skin.setAtlas(AssetRef<Texture>(Name(s_TexturePath)), 8u, 8u, 1.0f, regions);
 }
 
 StringView ResolvePointerWorkloadName(in PointerWorkloadKind kind){
@@ -274,14 +448,11 @@ b8 Measure<CaseT : IUiBenchmarkCase>(in StringView name, in u64 setupChecksum, m
 
 
 class BenchmarkShaper : ITextShaper{
-    private mut GlobalArena m_arena;
-
-    public BenchmarkShaper(mut GlobalArena arena){
-        this.m_arena = arena;
+    public BenchmarkShaper(){
     }
 
     public Expected<ShapedRun, TextLayoutStatusEnum> shape(in ShapeRequest request)override{
-        ShapedRun run = ShapedRun(this.m_arena);
+        ShapedRun run = CreateBenchmarkShapedRun();
         run.metrics.ascender = 8.0f;
         run.metrics.descender = 2.0f;
         run.metrics.lineGap = 2.0f;
@@ -292,12 +463,12 @@ class BenchmarkShaper : ITextShaper{
     }
 }
 
+[arena]
 class PublicationCase : IUiBenchmarkCase{
-    private mut GlobalArena m_arena;
-    private mut Context m_context;
-    private UiEditBoxHost m_host;
+    private mut BenchmarkContext m_context;
+    private BenchmarkEditBoxHost m_host;
     private EditModel m_model;
-    private TextLayoutBuilder m_layoutBuilder;
+    private BenchmarkTextLayoutBuilder m_layoutBuilder;
     private EditBoxView m_view;
     private EditBoxPlacement m_placement = EditBoxPlacement();
     private WidgetState m_widget = WidgetState();
@@ -305,19 +476,17 @@ class PublicationCase : IUiBenchmarkCase{
     private u64 m_generation = 0u;
 
     public PublicationCase(
-        mut GlobalArena arena,
-        mut Context context,
+        mut BenchmarkContext context,
         mut BenchmarkTextInput textInput,
         mut BenchmarkClipboard clipboard,
         mut BenchmarkShaper shaper,
         in usize stops
     ){
-        this.m_arena = arena;
         this.m_context = context;
-        this.m_host = UiEditBoxHost(arena, context, textInput, clipboard);
-        this.m_model = EditModel(arena, MakeBenchmarkEditLimits(stops));
-        this.m_layoutBuilder = TextLayoutBuilder(arena, shaper);
-        this.m_view = EditBoxView(arena);
+        this.m_host = BenchmarkEditBoxHost(context, textInput, clipboard);
+        this.m_model = EditModel(MakeBenchmarkEditLimits(stops));
+        this.m_layoutBuilder = BenchmarkTextLayoutBuilder(shaper);
+        this.m_view = CreateBenchmarkEditBoxView();
         this.m_stops = stops;
     }
 
@@ -386,32 +555,29 @@ class PublicationCase : IUiBenchmarkCase{
     }
 }
 
+[arena]
 class EmptySelectionCase : IUiBenchmarkCase{
-    private mut GlobalArena m_arena;
     private UiSkin m_skin;
     private EditModel m_model;
-    private TextLayoutBuilder m_layoutBuilder;
+    private BenchmarkTextLayoutBuilder m_layoutBuilder;
     private EditBoxView m_view;
     private EditBoxPlacement m_placement = EditBoxPlacement();
-    private TextService m_text;
-    private PaintBuilder m_paint;
+    private BenchmarkTextService m_text = BenchmarkTextService();
+    private BenchmarkPaintBuilder m_paint = BenchmarkPaintBuilder();
     private DrawSnapshot m_snapshot;
     private usize m_lines;
 
-    public EmptySelectionCase(mut GlobalArena arena, mut BenchmarkShaper shaper, in usize lines){
-        this.m_arena = arena;
-        this.m_skin = UiSkin(arena, Name(s_SkinPath));
-        this.m_model = EditModel(arena, MakeBenchmarkEditLimits(lines), EditTextMode::Multiline);
-        this.m_layoutBuilder = TextLayoutBuilder(arena, shaper);
-        this.m_view = EditBoxView(arena);
-        this.m_text = TextService(arena);
-        this.m_paint = PaintBuilder(arena);
-        this.m_snapshot = DrawSnapshot(arena);
+    public EmptySelectionCase(mut BenchmarkShaper shaper, in usize lines){
+        this.m_skin = UiSkin(Name(s_SkinPath));
+        this.m_model = EditModel(MakeBenchmarkEditLimits(lines), EditTextMode::Multiline);
+        this.m_layoutBuilder = BenchmarkTextLayoutBuilder(shaper);
+        this.m_view = CreateBenchmarkEditBoxView();
+        this.m_snapshot = CreateBenchmarkDrawSnapshot();
         this.m_lines = lines;
     }
 
     public b8 setup(){
-        ConfigureBenchmarkSkinAtlas(this.m_arena, this.m_skin);
+        ConfigureBenchmarkSkinAtlas(this.m_skin);
         String text = "";
         text.reserve(this.m_lines - 1u);
         for(usize index = 0u; index + 1u < this.m_lines; ++index)
@@ -451,20 +617,20 @@ class EmptySelectionCase : IUiBenchmarkCase{
     }
 }
 
+[arena]
 class PaintCase : IUiBenchmarkCase{
     private UiSkin m_skin;
-    private PaintBuilder m_builder;
+    private BenchmarkPaintBuilder m_builder = BenchmarkPaintBuilder();
     private DrawSnapshot m_snapshot;
     private u32 m_commands;
     private b8 m_descending;
 
-    public PaintCase(mut GlobalArena arena, in u32 commands, in b8 descending){
-        this.m_skin = UiSkin(arena, Name(s_SkinPath));
-        this.m_builder = PaintBuilder(arena);
-        this.m_snapshot = DrawSnapshot(arena);
+    public PaintCase(in u32 commands, in b8 descending){
+        this.m_skin = UiSkin(Name(s_SkinPath));
+        this.m_snapshot = CreateBenchmarkDrawSnapshot();
         this.m_commands = commands;
         this.m_descending = descending;
-        ConfigureBenchmarkSkinAtlas(arena, this.m_skin);
+        ConfigureBenchmarkSkinAtlas(this.m_skin);
     }
 
     public b8 operation()override{
@@ -520,7 +686,7 @@ class PaintCase : IUiBenchmarkCase{
 }
 
 class PointerWorkload : IUiBenchmarkCase{
-    private InputRouter m_router;
+    private BenchmarkInputRouter m_router = BenchmarkInputRouter();
     private HitTargetVector m_targets;
     private usize m_contactCount;
     private u64 m_setupChecksum;
@@ -529,9 +695,8 @@ class PointerWorkload : IUiBenchmarkCase{
     private PointerWorkloadKind m_kind;
     private b8 m_hoverCapable;
 
-    public PointerWorkload(mut GlobalArena arena, in usize targetCount, in PointerWorkloadKind kind, in usize contactCount){
-        this.m_router = InputRouter(arena);
-        this.m_targets = HitTargetVector(arena);
+    public PointerWorkload(in usize targetCount, in PointerWorkloadKind kind, in usize contactCount){
+        this.m_targets = CreateBenchmarkHitTargetVector();
         this.m_contactCount = contactCount;
         this.m_kind = kind;
         this.m_hoverCapable = kind == PointerWorkloadKind::CursorHover || kind == PointerWorkloadKind::CursorGesture || kind == PointerWorkloadKind::PressedSweep;
@@ -700,8 +865,8 @@ b8 MeasurePointerWorkload(mut PointerWorkload workload){
 }
 
 b8 RunPointerCase(in usize targetCount, in PointerWorkloadKind kind, in usize contactCount){
-    GlobalArena arena = GlobalArena(s_UiBenchmarkNameTestsPerformanceUiInputPointer);
-    PointerWorkload workload = PointerWorkload(arena, targetCount, kind, contactCount);
+    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputPointer);
+    PointerWorkload workload = PointerWorkload(targetCount, kind, contactCount);
     return MeasurePointerWorkload(workload);
 }
 
@@ -749,8 +914,8 @@ StringView ResolvePaintBenchmarkName(in usize index, in b8 descending){
 }
 
 b8 RunPaintCase(in u32 commandCount, in b8 descending, in StringView benchmarkName){
-    GlobalArena arena = GlobalArena(s_UiBenchmarkNameTestsPerformanceUiInputPaint);
-    PaintCase benchmark = PaintCase(arena, commandCount, descending);
+    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputPaint);
+    PaintCase benchmark = PaintCase(commandCount, descending);
     if(!benchmark.operation() || !benchmark.checksum().has_value())
         return false;
     const u64 setup = MixChecksum(MixChecksum(s_UiChecksumSeed, cast<u64>(commandCount)), BoolToU64(descending));
@@ -788,21 +953,21 @@ StringView ResolveSelectionBenchmarkName(in usize index){
 }
 
 b8 RunPublicationCase(in usize stops, in StringView benchmarkName){
-    GlobalArena arena = GlobalArena(s_UiBenchmarkNameTestsPerformanceUiInputPublication);
-    Context context = Context(arena);
-    BenchmarkTextInput textInput = BenchmarkTextInput(arena);
-    BenchmarkClipboard clipboard = BenchmarkClipboard(arena);
-    BenchmarkShaper shaper = BenchmarkShaper(arena);
-    PublicationCase publication = PublicationCase(arena, context, textInput, clipboard, shaper, stops);
+    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputPublication);
+    BenchmarkContext context = BenchmarkContext();
+    BenchmarkTextInput textInput = BenchmarkTextInput();
+    BenchmarkClipboard clipboard = BenchmarkClipboard();
+    BenchmarkShaper shaper = BenchmarkShaper();
+    PublicationCase publication = PublicationCase(context, textInput, clipboard, shaper, stops);
     if(!publication.setup() || !publication.operation() || !publication.checksum().has_value())
         return false;
     return Measure(benchmarkName, cast<u64>(stops), publication);
 }
 
 b8 RunEmptySelectionCase(in usize lines, in StringView benchmarkName){
-    GlobalArena arena = GlobalArena(s_UiBenchmarkNameTestsPerformanceUiInputEmptySelection);
-    BenchmarkShaper shaper = BenchmarkShaper(arena);
-    EmptySelectionCase selection = EmptySelectionCase(arena, shaper, lines);
+    BenchmarkScope scope = BenchmarkScope(s_UiBenchmarkNameTestsPerformanceUiInputEmptySelection);
+    BenchmarkShaper shaper = BenchmarkShaper();
+    EmptySelectionCase selection = EmptySelectionCase(shaper, lines);
     if(!selection.setup() || !selection.operation() || !selection.checksum().has_value())
         return false;
     return Measure(benchmarkName, cast<u64>(lines), selection);

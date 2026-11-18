@@ -267,7 +267,7 @@ void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDag
     const ScopedTestTrace shapeTrace = ScopedTestTrace(cast<u32>(shape));
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    ScratchArena declarationScratch = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena declarationScratch = TestScratchArena(s_TaskGraphScratchArena);
     GpuRoutingDeclarePartialDag(graph, TaskCount, shape);
     ASSERT_FALSE(TestHasFatalFailure());
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
@@ -282,15 +282,15 @@ void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDag
     const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
     ASSERT_EQ(view.taskCount(), TaskCount);
 
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch.scratchArena);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
     GpuTaskQueueScoringData scoringData = GpuTaskQueueScoringData(
         view,
         analysis,
         reachability,
         GpuTaskGraphQueueAssignmentOptions(),
-        scratch
+        scratch.scratchArena
     );
     AssignmentGraphicsVector assignments = AssignmentGraphicsVector(testArena.arena);
     U32GraphicsVector indices = U32GraphicsVector(TaskCount, u32.max, testArena.arena);
@@ -304,8 +304,8 @@ void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDag
         assignments.push_back(assignment);
     }
     scoringData.rebuildAssignmentLoads(assignments, topology);
-    ScratchPlacementGroups groups = ScratchPlacementGroups(scratch);
-    ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch, groups).has_value());
+    ScratchPlacementGroups groups = ScratchPlacementGroups(scratch.scratchArena);
+    ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch.scratchArena, groups).has_value());
 
     // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
     Vector<Array<b8, TaskCount>> reachable = Vector<Array<b8, TaskCount>>();
@@ -343,7 +343,7 @@ void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDag
     EXPECT_EQ(scoringData.totalAssignedCost, 0u);
     scoringData.rebuildAssignmentLoads(assignments, topology);
     GpuRoutingExpectIndexedScores<TaskCount>(view, analysis, assignments, indices, topology, reachability, scoringData, queues, groups, reachable);
-    EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
     EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
@@ -355,7 +355,7 @@ void GpuRoutingRunCrossFamilySameClassCase(
     in Name producerIdentity,
     in Name consumerIdentity
 ){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -413,7 +413,7 @@ void GpuRoutingRunCrossFamilySameClassCase(
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
@@ -471,7 +471,7 @@ void GpuRoutingRunCrossFamilySameClassCase(
 }
 
 void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -489,7 +489,7 @@ void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
         const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
@@ -601,14 +601,14 @@ void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
         EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
     }
 
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
         ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
     }
     const GpuPhysicalQueueTopology invalidTopology = GpuPhysicalQueueTopology();
-    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, invalidTopology));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, invalidTopology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     EXPECT_FALSE(compiledPlan.valid());
@@ -618,7 +618,7 @@ void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
 }
 
 void VerifyGpuRouting_ReportsOwnershipRangesWithoutReleaseAcquireDuplicates(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -685,7 +685,7 @@ void VerifyGpuRouting_ReportsOwnershipRangesWithoutReleaseAcquireDuplicates(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuTaskGraphCompileStatistics statistics = compiledPlan.compileStatistics();
@@ -814,7 +814,7 @@ void VerifyGpuRouting_UsesDeclaredTripleQueueSharingForDedicatedTransfer(){
 }
 
 void VerifyGpuRouting_OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -832,7 +832,7 @@ void VerifyGpuRouting_OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes(
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
         GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
         const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledPlan.findTask(pair.producer));
         const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledPlan.findTask(pair.consumer));
@@ -858,7 +858,7 @@ void VerifyGpuRouting_OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes(
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
         GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
         const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledPlan.findTask(pair.producer));
         const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledPlan.findTask(pair.consumer));
@@ -937,7 +937,7 @@ void VerifyGpuRouting_LogicalSharingRequiresTwoSelectedFamiliesAcrossEveryMaskAn
 }
 
 void VerifyGpuRouting_AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFamily(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -959,7 +959,7 @@ void VerifyGpuRouting_AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeF
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, pair.consumer);
@@ -984,7 +984,7 @@ void VerifyGpuRouting_AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeF
 }
 
 void VerifyGpuRouting_RejectsDedicatedTransferUseOutsideConcurrentSharingContract(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1003,7 +1003,7 @@ void VerifyGpuRouting_RejectsDedicatedTransferUseOutsideConcurrentSharingContrac
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     EXPECT_EQ(assignments.diagnostic().status, GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
@@ -1038,7 +1038,7 @@ void VerifyGpuRouting_CompactedPartialDagScoresPreserveMixedCostsAcrossMovesAndR
 }
 
 void VerifyGpuRouting_SparsePartialRowsAndDenseThresholdsBoundPeakScratch(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     Array<GpuRoutingStorageCase, 11> cases = Array<GpuRoutingStorageCase, 11>();
     cases[0u] = GpuRoutingStorageCase(16u, GpuRoutingPartialDagShape::DisjointPairs);
@@ -1066,18 +1066,18 @@ void VerifyGpuRouting_SparsePartialRowsAndDenseThresholdsBoundPeakScratch(){
         GpuRoutingDeclarePartialDag(graph, testCase.taskCount, testCase.shape);
         ASSERT_FALSE(TestHasFatalFailure());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+        ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
         const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
-        ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-        GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
-        ASSERT_EQ(scratch.memoryStats().usedBytes, reachabilityBookkeepingBytes);
+        TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+        GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch.scratchArena);
+        ASSERT_EQ(scratch.scratchArena.memoryStats().usedBytes, reachabilityBookkeepingBytes);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
         const usize wordsPerRow = (testCase.taskCount + bitsPerWord - 1u) / bitsPerWord;
         const usize matrixBytes = testCase.taskCount * wordsPerRow * 8u;
         const usize denseBytes = matrixBytes + testCase.taskCount * s_DenseReachabilityTaskMetadataBytes;
         if(testCase.shape == GpuRoutingPartialDagShape::ReversedPairs){
             // A partial last tile and backward cross-word edges must not allocate the full square matrix.
-            EXPECT_LT(scratch.memoryStats().peakUsedBytes, matrixBytes);
+            EXPECT_LT(scratch.scratchArena.memoryStats().peakUsedBytes, matrixBytes);
             EXPECT_TRUE(reachability.reaches(view.taskAt(512u).id, view.taskAt(511u).id));
             EXPECT_TRUE(reachability.reaches(view.taskAt(64u).id, view.taskAt(63u).id));
             EXPECT_FALSE(reachability.reaches(view.taskAt(63u).id, view.taskAt(64u).id));
@@ -1090,7 +1090,7 @@ void VerifyGpuRouting_SparsePartialRowsAndDenseThresholdsBoundPeakScratch(){
                 boundsBookkeepingBytes = emptyVectorBookkeepingBytes;
             }
             const usize peakBookkeepingBytes = reachabilityBookkeepingBytes + boundsBookkeepingBytes;
-            EXPECT_LE(scratch.memoryStats().peakUsedBytes, denseBytes + boundsBudget + peakBookkeepingBytes);
+            EXPECT_LE(scratch.scratchArena.memoryStats().peakUsedBytes, denseBytes + boundsBudget + peakBookkeepingBytes);
         }
     }
 }
@@ -1106,8 +1106,8 @@ void VerifyGpuRouting_RebuildingRelationsClearsCompactedDenseOrderedAndFailedSta
     shapes[5u] = GpuRoutingPartialDagShape::ReversedPairs;
 
     TestArena testArena = TestArena();
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch.scratchArena);
     GpuTaskId previousTask = GpuTaskId();
     for(in GpuRoutingPartialDagShape shape : shapes){
         const ScopedTestTrace traceShape = ScopedTestTrace(cast<u32>(shape));
@@ -1145,7 +1145,7 @@ void VerifyGpuRouting_RebuildingRelationsClearsCompactedDenseOrderedAndFailedSta
 void VerifyGpuRouting_PartialAssignmentsExcludeRelatedTasksWithoutRequiringOwnAssignment(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    ScratchArena declarationScratch = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena declarationScratch = TestScratchArena(s_TaskGraphScratchArena);
     GpuRoutingDeclarePartialDag(graph, 4u, GpuRoutingPartialDagShape::OneEdge);
     ASSERT_FALSE(TestHasFatalFailure());
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
@@ -1155,15 +1155,15 @@ void VerifyGpuRouting_PartialAssignmentsExcludeRelatedTasksWithoutRequiringOwnAs
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
     const GpuPhysicalQueueTopology topology = MakeTopology(queues);
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch.scratchArena);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
     GpuTaskQueueScoringData scoringData = GpuTaskQueueScoringData(
         view,
         analysis,
         reachability,
         GpuTaskGraphQueueAssignmentOptions(),
-        scratch
+        scratch.scratchArena
     );
     AssignmentGraphicsVector assignments = AssignmentGraphicsVector(testArena.arena);
     U32GraphicsVector indices = U32GraphicsVector(4u, u32.max, testArena.arena);
@@ -1222,7 +1222,7 @@ void VerifyGpuRouting_PartialAssignmentsExcludeRelatedTasksWithoutRequiringOwnAs
     EXPECT_EQ(firstScore.overlap, 8);
     EXPECT_EQ(secondScore.overlap, 9);
     EXPECT_EQ(excludedScore.overlap, 1);
-    EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
     EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
@@ -1276,7 +1276,7 @@ void GpuRoutingExpectScoresWithoutMasks(
 }
 
 void VerifyGpuRouting_OrderedAndUnusedReachabilityAvoidMaskAllocationsAcrossQueueLoadChanges(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     const usize taskCount = 129u;
     Array<b8, 2> buildReachabilityCases = Array<b8, 2>();
@@ -1311,10 +1311,10 @@ void VerifyGpuRouting_OrderedAndUnusedReachabilityAvoidMaskAllocationsAcrossQueu
             ASSERT_TRUE(preceding.valid());
         }
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+        ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
         const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
-        ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-        GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
+        TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+        GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch.scratchArena);
         if(buildReachability){
             ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
             ASSERT_FALSE(reachability.mayContainIndependentTasks());
@@ -1332,7 +1332,7 @@ void VerifyGpuRouting_OrderedAndUnusedReachabilityAvoidMaskAllocationsAcrossQueu
             analysis,
             reachability,
             GpuTaskGraphQueueAssignmentOptions(),
-            scratch
+            scratch.scratchArena
         );
         AssignmentGraphicsVector assignments = AssignmentGraphicsVector(testArena.arena);
         U32GraphicsVector indices = U32GraphicsVector(testArena.arena);
@@ -1356,13 +1356,13 @@ void VerifyGpuRouting_OrderedAndUnusedReachabilityAvoidMaskAllocationsAcrossQueu
         GpuRoutingExpectScoresWithoutMasks(view, analysis, assignments, indices, topology, reachability, scoringData, queues, taskCount);
         scoringData.rebuildAssignmentLoads(assignments, topology);
         GpuRoutingExpectScoresWithoutMasks(view, analysis, assignments, indices, topology, reachability, scoringData, queues, taskCount);
-        EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
         EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
     }
 }
 
 void VerifyGpuRouting_RoutesOptedInWorkAcrossSameClassPhysicalQueues(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1420,7 +1420,7 @@ void VerifyGpuRouting_RoutesOptedInWorkAcrossSameClassPhysicalQueues(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
@@ -1460,7 +1460,7 @@ void VerifyGpuRouting_RoutesOptedInWorkAcrossSameClassPhysicalQueues(){
 }
 
 void VerifyGpuRouting_PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOrder(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1523,7 +1523,7 @@ void VerifyGpuRouting_PreservesLatestDirectDependencyRouteAcrossIncomingAdjacenc
     queues[1u] = auxiliaryGraphicsQueue;
     const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], first);
     EXPECT_EQ(analysis.topologicalOrder()[1u], second);
@@ -1534,7 +1534,7 @@ void VerifyGpuRouting_PreservesLatestDirectDependencyRouteAcrossIncomingAdjacenc
     EXPECT_EQ(producers[1u], first.index);
 
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
+    ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology));
     const Optional<GpuTaskQueueAssignment> firstAssignmentOpt = FindQueueAssignment(assignments, first);
     const Optional<GpuTaskQueueAssignment> secondAssignmentOpt = FindQueueAssignment(assignments, second);
     const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, consumer);
@@ -1548,7 +1548,7 @@ void VerifyGpuRouting_PreservesLatestDirectDependencyRouteAcrossIncomingAdjacenc
 }
 
 void VerifyGpuRouting_RetainsSameFamilyRoutingWithoutCrossFamilyOptIn(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1595,8 +1595,8 @@ void VerifyGpuRouting_RetainsSameFamilyRoutingWithoutCrossFamilyOptIn(){
     const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
-    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
+    ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology));
 
     const Optional<GpuTaskQueueAssignment> firstAssignmentOpt = FindQueueAssignment(assignments, first);
     const Optional<GpuTaskQueueAssignment> secondAssignmentOpt = FindQueueAssignment(assignments, second);
@@ -1607,7 +1607,7 @@ void VerifyGpuRouting_RetainsSameFamilyRoutingWithoutCrossFamilyOptIn(){
 }
 
 void VerifyGpuRouting_RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOwnershipHandoff(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1673,7 +1673,7 @@ void VerifyGpuRouting_RoutesCrossFamilySameClassConcurrentGraphicsResourceWithou
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
@@ -1732,7 +1732,7 @@ void VerifyGpuRouting_RoutesCrossFamilySameClassComputeAndTransferWorkWithOwners
 }
 
 void VerifyGpuRouting_SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse(){
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
 
     const usize taskCount = 129u;
     TestArena testArena = TestArena();
@@ -1762,7 +1762,7 @@ void VerifyGpuRouting_SerialSchedulingReachabilityPreservesStrictQueriesAcrossRe
     }
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, scratch, analysis));
-    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
+    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch.scratchArena);
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
     for(usize sourceIndex = 0u; sourceIndex < taskCount; ++sourceIndex){
@@ -1844,7 +1844,7 @@ void VerifyGpuRouting_SerialSchedulingReachabilityPreservesStrictQueriesAcrossRe
 }
 
 void VerifyGpuRouting_SameClassBalancingCountsMergedAndUnroutedPrefixCosts(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1902,8 +1902,8 @@ void VerifyGpuRouting_SameClassBalancingCountsMergedAndUnroutedPrefixCosts(){
     const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
-    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
+    ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology));
 
     // Keep merged work on queue zero and route task six to queue seven by affinity.
     Array<u16, 8> expectedQueueIndices = Array<u16, 8>();

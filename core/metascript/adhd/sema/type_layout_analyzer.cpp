@@ -23,9 +23,11 @@ b8 TypeLayoutAnalyzer::isNonRootMotherArenaType(const TypeRef& type, const u32 d
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
         return false;
     const ClassDecl* cls = m_symbols.findClass(unwrapped->name);
-    if(!cls || !cls->canBorrowMotherArena())
+    if(!cls)
+        return !m_symbols.hasTypeSymbol(unwrapped->name) && IsArenaFirstCtorType(unwrapped->name) && !SymbolTable::IsArenaBackedContainer(unwrapped->name);
+    if(!cls->canBorrowMotherArena())
         return false;
-    if(cls->needsClassArena || !cls->systemTypeName.empty())
+    if(cls->needsClassArena || !cls->systemTypeName.empty() || cls->arenaCtorMode == 1u)
         return true;
     if(!cls->templateParams.empty() && !unwrapped->templateArgs.empty()){
         for(const FieldDecl* f : cls->fields){

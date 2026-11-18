@@ -249,6 +249,17 @@ using VulkanViewportPolicy = Core::GraphicsBackend::VulkanViewportPolicy;
 using Core::TryComputeGpuTimestampOverlap;
 using Core::TryAggregateGpuPacketEnvelopeMetrics;
 
+FOUNDATION_INLINE void RecordCorrelatorTimestampRange(
+    GpuTimingMetricCorrelator& correlator,
+    const Name& scopeName,
+    const u64 frameIndex,
+    const GpuComparableTimestampRange& range,
+    Core::Alloc::ScratchArena& scratchArena,
+    GpuTimingSinkSampleVector& samples
+){
+    correlator.recordTimestampRange(scopeName, frameIndex, range, scratchArena, samples);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -315,10 +326,6 @@ TimerQueryResult MakeTimerQueryResult(in u64 beginTicks, in u64 endTicks, in f64
     result.timestampValidBits = validBits;
     result.comparableAcrossSubmissions = comparable;
     return result;
-}
-
-void RecordCorrelatorTimestampRange(mut GpuTimingMetricCorrelator correlator, in Name scopeName, in u64 frameIndex, in GpuComparableTimestampRange range, mut ScratchArena scratchArena, mut GpuTimingSinkSampleVector samples){
-    correlator.recordTimestampRange(scopeName, frameIndex, range, scratchArena, samples);
 }
 
 Expected<GpuPacketEnvelopeMetrics> AggregateEnvelopeMetrics(in Span<GpuComparableTimestampRange> ranges, mut PacketMetricsScratchContext context){

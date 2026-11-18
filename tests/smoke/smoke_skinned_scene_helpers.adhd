@@ -30,12 +30,10 @@ native{
 
 namespace NWB::Tests::Smoke{
 using SmokeModelRef = Core::Assets::AssetRef<Impl::Model>;
-using Core::Alloc::GlobalArena;
 using Core::Assets::AssetManager;
 using Impl::SkeletonJointMatrix;
 using ModelObjectKindEnum = Impl::ModelObjectKind::Enum;
 namespace ModelObjectKind = Impl::ModelObjectKind;
-using SkeletonJointMatrixVector = Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>;
 
 [[nodiscard]] FOUNDATION_INLINE Impl::MeshSkinningSystem& SmokeMeshSkinningSystemRef(Core::ECS::World& world)noexcept{
     return *MakeNotNull(world.getSystem<Impl::MeshSkinningSystem>());
@@ -63,6 +61,8 @@ class SmokeRenderQualitySettings;
 StringView DefaultSmokeSkinnedLabel(){
     return "SmokeSkinnedScene";
 }
+
+type SkeletonJointMatrixVector = Vector<f32x3x4>;
 
 b8 SetSmokeSkeletonLocalJoints(in EntityID entity, in Span<f32x3x4> joints, mut World world){
     if(!world.hasComponent<SkeletonPoseComponent>(entity))
@@ -103,7 +103,6 @@ Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
     in StringView projectName,
     in Name preferredSkeletonObject,
     in b8 requireInvertibleBindPose,
-    mut GlobalArena arena,
     mut AssetManager assetManager
 ){
     b8 failedModelLoad = false;
@@ -113,7 +112,7 @@ Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
     b8 failedSkeletonType = false;
     b8 failedEmptyJoints = false;
     b8 failedInvalidBindPose = false;
-    SkeletonJointMatrixVector bindJoints = SkeletonJointMatrixVector(arena);
+    SkeletonJointMatrixVector bindJoints;
     native(
         in modelRef,
         in preferredSkeletonObject,
@@ -217,7 +216,6 @@ Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
     in SmokeModelRef modelRef,
     in Name preferredSkeletonObject,
     in b8 requireInvertibleBindPose,
-    mut GlobalArena arena,
     mut AssetManager assetManager
 ){
     return LoadSmokeSkeletonBindJoints(
@@ -225,7 +223,6 @@ Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
         DefaultSmokeSkinnedLabel(),
         preferredSkeletonObject,
         requireInvertibleBindPose,
-        arena,
         assetManager
     );
 }

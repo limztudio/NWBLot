@@ -135,7 +135,7 @@ Expected<u32> CsgGraphResourceSnapshot::findClipContextHeapSlot()const{
 
 b8 RendererCsgSystem::createCsgClipResources(){
     mut Device device = this.m_graphics.getDevice();
-    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(ShaderDrivenPushConstants), ShaderTypeMask::Mesh | ShaderTypeMask::Compute | ShaderTypeMask::Pixel, this.m_csgState.m_clipBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(ShaderDrivenPushConstants), ShaderTypeMask::Mesh | ShaderTypeMask::Compute | ShaderTypeMask::Pixel, this.m_csgState.m_clipBindingLayout)){
         error("RendererSystem: failed to create CSG clip binding layout");
         return false;
     }
@@ -432,7 +432,7 @@ static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup)noexcept{
+CsgFrameState RendererCsgSystem::buildFrameState(IMaterialSurfaceLookup& materialSurfaceLookup)noexcept{
     auto* ecsMeshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
     Expected<CsgFrameStateCacheSignature> signature = MakeUnexpected(Failure{});
     if(ecsMeshSystemPtr)
@@ -454,6 +454,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
         return frameState;
     };
 
+    Core::Alloc::ScratchArena scratchArena;
     CsgFrameReceiverLookup receiverLookup(*m_world, scratchArena);
     if(receiverLookup.empty())
         return finishFrameState(state);

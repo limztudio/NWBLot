@@ -56,7 +56,6 @@ class RendererAvboitSystem : NoCopy{
     private RendererAvboitTaskGraphStageState m_taskGraphStage;
 
     public RendererAvboitSystem(
-        mut GlobalArena arena,
         mut GraphicsRuntime graphics,
         mut RendererAvboitState avboitState,
         mut RendererShaderSystem shaderSystem,
@@ -115,7 +114,7 @@ class RendererAvboitSystem : NoCopy{
     public b8 createAvboitFrameTargets(mut DeferredFrameTargets createdTargets);
     public b8 registerAvboitFrameTargetDescriptors(mut DeferredFrameTargets createdTargets, mut AvboitFrameTargets avboitTargets);
     public mut RhiSampler linearSampler();
-    public b8 prepareAvboitPassResources(mut ScratchArena scratchArena, in CsgFrameState csgFrameState, mut DeferredFrameTargets targets);
+    public b8 prepareAvboitPassResources(in CsgFrameState csgFrameState, mut DeferredFrameTargets targets);
     public void renderAvboitTransparentCsgIntervals(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,

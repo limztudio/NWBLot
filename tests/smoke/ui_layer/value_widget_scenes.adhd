@@ -73,7 +73,7 @@ class UiRadioGroupSmokeScene{
 
 
 class UiSearchComboSmokeScene{
-    private UiSearchComboSmokeSource m_source;
+    private UiSearchComboSmokeSource m_source = UiSearchComboSmokeSource();
     private SearchComboState m_state;
     private EditBoxView m_selectionView;
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
@@ -89,7 +89,7 @@ class UiSearchComboSmokeScene{
     private b8 m_enabled = true;
     private b8 m_displayChanged = false;
 
-    public UiSearchComboSmokeScene(mut GlobalArena arena);
+    public UiSearchComboSmokeScene();
 
     public b8 paint(mut UiPaintContext context);
     public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
@@ -878,9 +878,8 @@ void UiRadioGroupSmokeScene::paintMarkers(mut UiPaintContext context)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiSearchComboSmokeScene::UiSearchComboSmokeScene(mut GlobalArena arena){
-    this.m_source = UiSearchComboSmokeSource(arena);
-    this.m_selectionView = EditBoxView(arena);
+UiSearchComboSmokeScene::UiSearchComboSmokeScene(){
+    this.m_selectionView = CreateSmokeEditBoxView();
 }
 
 b8 UiSearchComboSmokeScene::paint(mut UiPaintContext context){

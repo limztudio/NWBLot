@@ -12,7 +12,6 @@ extern class FrameGraphBuilder{
     FrameGraphNodeHandle addResource(...);
     void dependsOnByName(...);
     u64 frameIndex(...)const;
-    mut ScratchArena scratchArena(...);
 };
 
 [cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeHandle"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]

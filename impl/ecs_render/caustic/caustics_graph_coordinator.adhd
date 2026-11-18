@@ -101,7 +101,6 @@ class CausticsGraphCoordinator : NoCopy{
         in Span<GpuGraphResourceId> softwareTraceGeometryResources,
         in GpuGraphResourceSetId softwareTraceGeometrySet,
         in GpuGraphResourceSetId traceMaterialSampledTextureSet,
-        mut ScratchArena scratchArena,
         mut DeferredFrameTargets deferredTargets,
         mut GpuTimingSubmissionTicket timingTicket,
         mut Optional<GpuTimingMeasure> causticPhotonTiming,

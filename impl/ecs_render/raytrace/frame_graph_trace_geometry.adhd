@@ -49,7 +49,7 @@ class FrameGraphSoftwareBvhBuildStateImporter : NoCopy{
         this.m_meshSystem = meshSystem;
     }
 
-    public Expected<FrameGraphSoftwareBvhBuildStateResult> declare(in FrameGraphSoftwareBvhBuildStateInputs inputs, mut ScratchArena scratchArena);
+    public Expected<FrameGraphSoftwareBvhBuildStateResult> declare(in FrameGraphSoftwareBvhBuildStateInputs inputs);
 }
 
 
@@ -79,7 +79,7 @@ class FrameGraphTraceGeometryImporter : NoCopy{
         this.m_meshSystem = meshSystem;
     }
 
-    public Expected<FrameGraphTraceGeometryResult> declare(mut ScratchArena scratchArena, in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources);
+    public Expected<FrameGraphTraceGeometryResult> declare(in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources);
     private GpuGraphResourceSetId importSet(in Span<GpuGraphResourceId> members, in Name identity, in StringView markerLabel);
 }
 

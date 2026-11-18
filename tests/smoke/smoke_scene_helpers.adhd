@@ -594,10 +594,6 @@ b8 ApplyReflectionQualitySmokeSettings(in ReflectionSettings baseSettings, mut R
     return true;
 }
 
-b8 ApplyReflectionQualitySmokeSettings(in ReflectionSettings baseSettings, mut RendererSystem renderer, mut ScratchArena arena){
-    return ApplyReflectionQualitySmokeSettings(baseSettings, renderer);
-}
-
 SmokeTintedEntitySetup CreateSmokeTintedEntity(
     in SmokeMaterialRef material,
     in NameTextAscii materialInterfacePath,

@@ -238,7 +238,6 @@ void BuildResolvedSpanSources(in Name shortName, mut b8 longNameCreated, mut Str
 void VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate(){
     NameSymbols::InstallRuntimeRegistry();
     NameSymbols::ClearRuntimeSymbols();
-    GlobalArena arena(Name("Tests/NameSymbols/Boundaries"));
     const Name known(s_DecodeKnownSymbol);
     String source = "";
     BuildBoundaryTokenSource(known, source);
@@ -246,9 +245,10 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate(){
 
     String decoded = "";
     b8 dataPointerUnchanged = false;
-    ArenaMemoryStats before = arena.memoryStats();
-    ArenaMemoryStats after = arena.memoryStats();
-    native(in sourceView, mut arena, mut decoded, mut dataPointerUnchanged, mut before, mut after){
+    ArenaMemoryStats before = ArenaMemoryStats();
+    ArenaMemoryStats after = ArenaMemoryStats();
+    native(in sourceView, mut decoded, mut dataPointerUnchanged, mut before, mut after){
+        GlobalArena arena(Name("Tests/NameSymbols/Boundaries"));
         const AString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<char>(arena, sourceView);
         AString<GlobalArena> text(expected);
         const char* const originalData = text.data();
@@ -278,7 +278,6 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
     if(!unicodeEnabled)
         return;
 
-    GlobalArena arena(Name("Tests/NameSymbols/Boundaries"));
     const Name known(s_DecodeKnownSymbol);
     String source = "";
     BuildBoundaryTokenSource(known, source);
@@ -286,10 +285,11 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
 
     b8 textMatchesExpected = false;
     b8 dataPointerUnchanged = false;
-    ArenaMemoryStats before = arena.memoryStats();
-    ArenaMemoryStats after = arena.memoryStats();
-    native(in sourceView, mut arena, mut textMatchesExpected, mut dataPointerUnchanged, mut before, mut after){
+    ArenaMemoryStats before = ArenaMemoryStats();
+    ArenaMemoryStats after = ArenaMemoryStats();
+    native(in sourceView, mut textMatchesExpected, mut dataPointerUnchanged, mut before, mut after){
 #if defined(FOUNDATION_UNICODE)
+        GlobalArena arena(Name("Tests/NameSymbols/Boundaries"));
         const WString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<wchar>(arena, sourceView);
         WString<GlobalArena> text(expected);
         const wchar* const originalData = text.data();
@@ -300,7 +300,6 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
         dataPointerUnchanged = text.data() == originalData;
 #else
         static_cast<void>(sourceView);
-        static_cast<void>(arena);
         static_cast<void>(textMatchesExpected);
         static_cast<void>(dataPointerUnchanged);
         static_cast<void>(before);
@@ -318,7 +317,6 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
 void VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText(){
     NameSymbols::InstallRuntimeRegistry();
     NameSymbols::ClearRuntimeSymbols();
-    GlobalArena arena(Name("Tests/NameSymbols/Resolved"));
     const Name shortName(s_DecodeShortSymbol);
     b8 longNameCreated = false;
     String source = "";
@@ -328,7 +326,8 @@ void VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedTex
 
     const StringView sourceView = source;
     String decoded = "";
-    native(in sourceView, mut arena, mut decoded){
+    native(in sourceView, mut decoded){
+        GlobalArena arena(Name("Tests/NameSymbols/Resolved"));
         AString<GlobalArena> text = CommonTestsDetail::CopyAsciiText<char>(arena, sourceView);
         NameSymbols::DecodeHashTokens(arena, text);
         decoded.assign(AStringView(text));
@@ -349,7 +348,6 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
     if(!unicodeEnabled)
         return;
 
-    GlobalArena arena(Name("Tests/NameSymbols/Resolved"));
     const Name shortName(s_DecodeShortSymbol);
     b8 longNameCreated = false;
     String source = "";
@@ -361,8 +359,9 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
     const StringView expectedView = expectedSource;
     b8 decodedMatchesExpected = false;
     usize decodedLength = 0u;
-    native(in sourceView, in expectedView, mut arena, mut decodedMatchesExpected, mut decodedLength){
+    native(in sourceView, in expectedView, mut decodedMatchesExpected, mut decodedLength){
 #if defined(FOUNDATION_UNICODE)
+        GlobalArena arena(Name("Tests/NameSymbols/Resolved"));
         WString<GlobalArena> text = CommonTestsDetail::CopyAsciiText<wchar>(arena, sourceView);
         const WString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<wchar>(arena, expectedView);
         NameSymbols::DecodeHashTokens(arena, text);
@@ -371,7 +370,6 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
 #else
         static_cast<void>(sourceView);
         static_cast<void>(expectedView);
-        static_cast<void>(arena);
         static_cast<void>(decodedMatchesExpected);
         static_cast<void>(decodedLength);
 #endif
@@ -382,8 +380,6 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
 }
 
 void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished(){
-    GlobalArena arena(Name("Tests/NameSymbols/EscapedDocument"));
-    ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
     NameSymbols::InstallRuntimeRegistry();
     NameSymbols::ClearRuntimeSymbols();
     const StringView original = s_OriginalEscapedSymbol;
@@ -395,7 +391,9 @@ void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsSta
     String resolvedText = "";
     b8 resolvedInvalid = true;
 
-    native(in stored, mut arena, mut scratchArena, mut serialized, mut documentText, mut loadedFromMemory, mut resolvedStored, mut resolvedText, mut resolvedInvalid){
+    native(in stored, mut serialized, mut documentText, mut loadedFromMemory, mut resolvedStored, mut resolvedText, mut resolvedInvalid){
+        GlobalArena arena(Name("Tests/NameSymbols/EscapedDocument"));
+        ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
         ScopeExit cleanup([]()noexcept{
             NameSymbols::ClearRuntimeSymbols();
             NameSymbols::UninstallRuntimeRegistry();
@@ -433,8 +431,6 @@ void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsSta
 }
 
 void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishingSymbols(){
-    GlobalArena arena(Name("Tests/NameSymbols/DocumentAdmission"));
-    ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
     NameSymbols::InstallRuntimeRegistry();
     NameSymbols::ClearRuntimeSymbols();
     const Name retained(s_RetainedAdmissionSymbol);
@@ -452,7 +448,9 @@ void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishing
     b8 incomingResolvedAfterLoad = false;
     String incomingText = "";
 
-    native(in retained, in rejectedHeaders, mut arena, mut scratchArena, mut rejectedAllInvalidHeaders, mut loadedCurrentDocument, mut retainedStillResolved, mut incomingResolvedAfterLoad, mut incomingText){
+    native(in retained, in rejectedHeaders, mut rejectedAllInvalidHeaders, mut loadedCurrentDocument, mut retainedStillResolved, mut incomingResolvedAfterLoad, mut incomingText){
+        GlobalArena arena(Name("Tests/NameSymbols/DocumentAdmission"));
+        ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
         const NameHash incomingHash = ComputeNameHash(MakeNotNull("admission/incoming"));
         Array<char, NameHashTextCodec::s_TextLength + 1u> incomingToken = {};
         NameHashTextCodec::Format(incomingToken.data(), sizeof(incomingToken), incomingHash);
@@ -491,28 +489,32 @@ void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishing
     EXPECT_EQ(incomingView, "admission/incoming");
 }
 
-Expected<b8, ErrorCode> LoadNameSymbolsFileForTest(in Path path, mut ScratchArena scratchArena){
-    return NameSymbols::LoadFile(path, scratchArena);
+Expected<b8, ErrorCode> LoadNameSymbolsFileForTest(in Path path){
+    Expected<b8, ErrorCode> loaded = false;
+    native(in path, mut loaded){
+        ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
+        loaded = NameSymbols::LoadFile(path, scratchArena);
+    }
+    return loaded;
 }
 
 void VerifyNameSymbolDecodeTests_FileLoadSeparatesHeaderAnswerFromNativeReadFailure(){
-    ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
     const Path path("name_symbol_expected_file_unit.namesym");
     ASSERT_TRUE(RemoveAllIfExists(path).has_value());
 
     const b8 wroteV1 = WriteTextFile(path, "nwb_namesym_v1\n");
     Expected<b8, ErrorCode> accepted = false;
     if(wroteV1)
-        accepted = LoadNameSymbolsFileForTest(path, scratchArena);
+        accepted = LoadNameSymbolsFileForTest(path);
 
     const b8 wroteV2 = wroteV1 && WriteTextFile(path, "nwb_namesym_v2\n");
     Expected<b8, ErrorCode> rejectedHeader = true;
     if(wroteV2)
-        rejectedHeader = LoadNameSymbolsFileForTest(path, scratchArena);
+        rejectedHeader = LoadNameSymbolsFileForTest(path);
 
     const Expected<b8, ErrorCode> removed = RemoveFile(path);
     const Expected<u64, ErrorCode> missingFileSize = FileSize(path);
-    const Expected<b8, ErrorCode> missing = LoadNameSymbolsFileForTest(path, scratchArena);
+    const Expected<b8, ErrorCode> missing = LoadNameSymbolsFileForTest(path);
     const b8 cleanedUp = RemoveFile(path).has_value();
 
     ASSERT_TRUE(wroteV1);
@@ -986,5 +988,4 @@ NWB_ADHD_GTEST(CommonLoggingBoundaries, GuardTeardownInsideEnqueueWaitsForOtherR
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

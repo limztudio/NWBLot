@@ -36,6 +36,13 @@ namespace NWB::Tests::FbxSkinCases{
 
 
 using DefaultTestArena = Tests::TestArena<>;
+struct SkinScratchArena : Tests::TestArena<>{
+    Core::Alloc::ScratchArena scratchArena;
+    SkinScratchArena() = default;
+    explicit SkinScratchArena(const Name& scopeName)
+        : scratchArena(scopeName)
+    {}
+};
 using ScratchArena = Core::Alloc::ScratchArena;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
 using FbxToNwb::FbxMeshSkinningSummary;
@@ -224,15 +231,16 @@ void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
     DefaultTestArena arena = DefaultTestArena();
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkin));
+    SkinScratchArena scratch = SkinScratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkin));
     ImportOptions options = ImportOptions();
     options.bakeTransforms = false;
     options.scale = 1.0;
     MeshInstance instance = MeshInstance();
     for(u32 testCase = 0u; testCase < 3u; ++testCase){
-        ExportContext context(scratchArena);
+        ExportContext context(scratch.scratchArena);
         b8 built = true;
-        native(in instance, in options, in testCase, mut scratchArena, mut context, mut built){
+        native(in instance, in options, in testCase, mut scratch, mut context, mut built){
+            auto& scratchArena = scratch.scratchArena;
             static_assert(sizeof(ufbx_real) == sizeof(f64));
             ufbx_node bone{};
             ufbx_skin_cluster cluster{};
@@ -271,9 +279,9 @@ void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
     DefaultTestArena arena = DefaultTestArena();
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkeleton));
     Array<b8, 4u> accepted = Array<b8, 4u>();
-    native(mut scratchArena, mut accepted){
+    native(mut accepted){
+        ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
         ufbx_node root{};
         ufbx_node* joints[] = { &root };
         NWB::FbxToNwb::JointMatrix bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
@@ -294,8 +302,8 @@ void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
 }
 
 void VerifyFbxSkin_SortsBorrowedAndFallbackJointNames(){
-    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkeleton));
-    native(mut scratchArena){
+    native{
+        ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
         ufbx_node longName{};
         ufbx_node firstFallback{};
         ufbx_node alpha{};
@@ -317,8 +325,8 @@ void VerifyFbxSkin_SortsBorrowedAndFallbackJointNames(){
 }
 
 void VerifyFbxSkin_FallbackNamesOnlyCollideWithPublishedNames(){
-    ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkeleton));
-    native(mut scratchArena){
+    native{
+        ScratchArena scratchArena{ Name(s_FbxSkinFixtureNameTestsFbxSkeleton) };
         using namespace NWB::FbxToNwb;
         UtilityScratchVector<AString<::ArenaBase>> names(scratchArena);
         names.reserve(4u);

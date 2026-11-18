@@ -50,9 +50,8 @@ namespace ECSRenderDetail{
 
 class SoftwareBvhBuilder final : NoCopy{
 public:
-    SoftwareBvhBuilder(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtSceneBvhState& state)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
+    SoftwareBvhBuilder(Core::Alloc::GlobalArena&, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtSceneBvhState& state)noexcept
+        : m_graphics(graphics)
         , m_shaderSystem(shaderSystem)
         , m_state(state)
     {}
@@ -97,7 +96,6 @@ private:
 
 
 private:
-    Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
     RendererShaderSystem& m_shaderSystem;
     RtSceneBvhState& m_state;

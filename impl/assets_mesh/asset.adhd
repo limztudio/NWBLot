@@ -43,7 +43,6 @@ class Mesh{
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
-    public b8 validatePayload(mut ScratchArena scratchArena)const;
 
     public void setPayload(
         in Vector<f32x3u> positions,
@@ -89,3 +88,4 @@ class Mesh{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

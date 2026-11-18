@@ -136,7 +136,7 @@ b8 ShadowPipelineSet::ensureShadowPipeline()noexcept{
 
     // Trace layouts are push-only; resources come from the global heap.
     static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
-    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(ShadowRqSoftPushConstants), Core::ShaderType::Compute, m_shadow->m_shadowBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(ShadowRqSoftPushConstants), Core::ShaderType::Compute, m_shadow->m_shadowBindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow binding layout"));
         m_shadow->m_shadowPipelineFailed = true;
         return false;
@@ -206,7 +206,7 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline()noexcept{
     }
 
     if(!m_shadow->m_swShadowBindingLayout){
-        if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(SwShadowHeapPushConstants), Core::ShaderType::Compute, m_shadow->m_swShadowBindingLayout)){
+        if(!EnsurePushConstantBindingLayout(device, sizeof(SwShadowHeapPushConstants), Core::ShaderType::Compute, m_shadow->m_swShadowBindingLayout)){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create software shadow binding layout"));
             m_shadow->m_swShadowPipelineFailed = true;
             return false;
@@ -292,7 +292,7 @@ b8 ShadowPipelineSet::ensureSoftShadowResolvePipeline()noexcept{
     auto& device = m_graphics->getDevice();
     if(!device.getDescriptorHeap().isInitialized())
         return false;
-    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(ShadowResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(ShadowResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
         resolve.m_scalar.m_failed = true;
         return false;
     }
@@ -306,7 +306,6 @@ b8 ShadowPipelineSet::ensureShadowGeometryDownsamplePipeline()noexcept{
         return false;
 
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        *m_arena,
         m_graphics->getDevice(),
         *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowGeometryDownsampleCs; }),
@@ -344,7 +343,6 @@ b8 ShadowPipelineSet::ensureShadowReprojectMergePipeline()noexcept{
         return false;
 
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        *m_arena,
         m_graphics->getDevice(),
         *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowReprojectMergeCs; }),
@@ -382,7 +380,6 @@ b8 ShadowPipelineSet::ensureSoftwareTransparentSamplingPipeline()noexcept{
     const Array<AStringView, 2u> variants = { s_SwTransparentAdaptiveDisabledVariant, s_SwTransparentAdaptiveEnabledVariant };
     for(u32 index = 0u; index < variants.size(); ++index){
         if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-            *m_arena,
             device,
             *m_shaderSystem,
             SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.swShadowTransparentSoftCs; }),
@@ -423,7 +420,6 @@ b8 ShadowPipelineSet::ensureSoftCombinedWaveletPipeline()noexcept{
     if(resolve.m_combinedWaveletFailed)
         return false;
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        *m_arena,
         m_graphics->getDevice(),
         *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowResolveWaveletCombinedCs; }),
@@ -448,7 +444,6 @@ b8 ShadowPipelineSet::ensureSoftCombinedTemporalPipeline()noexcept{
     if(resolve.m_combinedTemporalFailed)
         return false;
     if(!EnsurePushConstantComputePipeline<ShadowSubsystem>(
-        *m_arena,
         m_graphics->getDevice(),
         *m_shaderSystem,
         SubsystemAssetSelector<ShadowSubsystem, ComputeShader>([](const ShadowSubsystem& s){ return s.shadowReprojectMergeCombinedCs; }),

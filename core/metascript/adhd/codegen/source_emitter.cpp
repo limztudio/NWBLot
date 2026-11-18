@@ -665,8 +665,9 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
                 && !SymbolTable::IsSimdType(baseFieldType)
                 && !SymbolTable::IsUnalignedVectorType(baseFieldType)
                 && m_symbols.findFreeFunction(baseFieldType) == nullptr;
+            const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
             const b8 requiresMemberInit = !m_symbols.isSelfDefaultedType(field->type->name, m_activeOwnerClass);
-            if(field->usesClassArena && !requiresMemberInit)
+            if(field->usesClassArena && !requiresMemberInit && (!isDirectCtorCall || layoutAnalyzer.isTypeAssignable(*field->type, false)))
                 continue;
             if(!isDirectCtorCall && !requiresMemberInit)
                 continue;

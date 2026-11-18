@@ -4,9 +4,7 @@
 
 [cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryParseContext"), cpp_flags(no_assign)]
 extern class CookEntryParseContext{
-    GlobalArena cookArena;
     CpuTaskScheduler cpuScheduler;
-    ScratchArena scratchArena;
     CookEntryPathHashSet seenVirtualPathHashes;
     usize nwbFileIndex;
     u32 nwbSubIndex;
@@ -36,7 +34,6 @@ extern class CookEntrySourceLocation{
 extern class CookEntryWriteContext{
     ICookedAssetWriter writer;
     CookEntryPathHashSet seenVirtualPathHashes;
-    ScratchArena scratchArena;
 };
 
 [cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookEntryBucket"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]

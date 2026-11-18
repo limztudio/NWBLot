@@ -28,6 +28,7 @@ native{
 #include <core/telemetry/frame_graph.h>
 #include <core/telemetry/perf.h>
 #include <core/telemetry/recorder.h>
+#include <core/telemetry/session.h>
 #include <core/telemetry/text_log.h>
 
 #include <global/arena_memory.h>
@@ -51,8 +52,30 @@ namespace Tests::TelemetryCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TestArena : Tests::TestArena<struct TelemetryTestsTag>{
+struct TelemetryTestsTag{};
+
+struct TestArena : Tests::TestArena<TelemetryTestsTag>{
     Core::Alloc::ScratchArena scratchArena{ s_TelemetryScratch };
+
+
+public:
+    TestArena() = default;
+    explicit TestArena(const Name& scopeName)
+        : Tests::TestArena<TelemetryTestsTag>(scopeName)
+    {}
+};
+
+struct TelemetryOwnedArenaTag{};
+using TelemetryOwnedArena = Tests::TestArena<TelemetryOwnedArenaTag>;
+
+struct TelemetryScratchArena{
+    Core::Alloc::ScratchArena scratchArena;
+
+
+public:
+    explicit TelemetryScratchArena(const Name& scopeName = s_TelemetryScratch)
+        : scratchArena(scopeName)
+    {}
 };
 
 struct OwnedAllocation{
@@ -390,6 +413,160 @@ FOUNDATION_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize by
     return arena.allocate(alignment, bytes) != nullptr;
 }
 
+[[nodiscard]] FOUNDATION_INLINE Expected<TelemetryReport> BuildTestTelemetryReport(const EventView& events, TelemetryArena& arena, ScratchArena& scratchArena){
+    return BuildTelemetryReport(events, arena, scratchArena);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 BuildTestTextLogPayload(const LogTypeEnum type, const AStringView message, ScratchArena& scratchArena, TelemetryBytes& outPayload){
+#if defined(FOUNDATION_UNICODE)
+    const auto converted = ConvertString(scratchArena, message);
+    return Core::Telemetry::BuildTextLogPayload(type, TStringView(converted), scratchArena, outPayload);
+#else
+    return Core::Telemetry::BuildTextLogPayload(type, TStringView(message), scratchArena, outPayload);
+#endif
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 BuildTestDiagnosticPayload(const DiagnosticEventRecord& record, TelemetryArena& arena, TelemetryBytes& outPayload){
+    return BuildDiagnosticPayload(record, arena, outPayload);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 BuildTestFrameGraphPayload(
+    const u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    ScratchArena& scratchArena,
+    TelemetryBytes& outPayload
+){
+    return BuildFrameGraphPayload(frameIndex, nodes, edges, scratchArena, outPayload);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 BuildTestFrameGraphPayload(
+    const u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    ScratchArena& scratchArena,
+    TelemetryBytes& outPayload
+){
+    return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, scratchArena, outPayload);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 BuildTestFrameGraphPayload(
+    const u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    ScratchArena& scratchArena,
+    TelemetryBytes& outPayload
+){
+    return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, scratchArena, outPayload);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 RecordTestFrameGraph(
+    TelemetryRecorder& recorder,
+    ScratchArena& scratchArena,
+    const u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const u32 streamId = 0u
+){
+    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, streamId);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 RecordTestFrameGraph(
+    TelemetryRecorder& recorder,
+    ScratchArena& scratchArena,
+    const u64 frameIndex,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    const u32 streamId = 0u
+){
+    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, streamId);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 RecordSessionFrameGraph(
+    Core::Telemetry::CaptureSession& session,
+    ScratchArena& scratchArena,
+    const FrameGraphNodeDescs& nodes,
+    const FrameGraphEdgeDescs& edges,
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
+){
+    return session.recordFrameGraph(scratchArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseTestFrameGraphPayload(
+    TelemetryArena& arena,
+    ScratchArena& scratchArena,
+    const TelemetryBytes& payload,
+    const usize byteCount
+){
+    return ParseFrameGraphSpan(arena, scratchArena, payload, byteCount);
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseTestFrameGraphPayload(
+    TelemetryArena& arena,
+    ScratchArena& scratchArena,
+    const TelemetryBytes& payload
+){
+    return ParseTestFrameGraphPayload(arena, scratchArena, payload, payload.size());
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseFrameGraphEventAt(
+    TelemetryArena& arena,
+    ScratchArena& scratchArena,
+    const EventView& events,
+    const usize eventIndex
+){
+    const Optional<Span<const u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value())
+        return MakeUnexpected(Failure{});
+    return ParseFrameGraphSpan(arena, scratchArena, payload.value(), payload.value().size());
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(
+    TelemetryArena& arena,
+    const TelemetryBytes& bytes,
+    const usize byteCount
+){
+    return DecodeEventSpan(arena, bytes, byteCount);
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(
+    TelemetryArena& arena,
+    const TelemetryBytes& bytes
+){
+    return DecodeTestEventBytes(arena, bytes, bytes.size());
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<usize, DecodeResult> DecodeTestEventStreamBytes(
+    const TelemetryBytes& bytes,
+    const usize byteCount,
+    TelemetryArena& arena,
+    TelemetryRecorder& recorder
+){
+    return DecodeEventStreamSpan(bytes, byteCount, arena, recorder);
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<usize, DecodeResult> DecodeTestEventStreamBytes(
+    const TelemetryBytes& bytes,
+    TelemetryArena& arena,
+    TelemetryRecorder& recorder
+){
+    return DecodeTestEventStreamBytes(bytes, bytes.size(), arena, recorder);
+}
+
+[[nodiscard]] FOUNDATION_INLINE OwnedAllocation Suite_MakeOwnedAllocation(GlobalArena& owner, const usize size){
+    return OwnedAllocation(owner, size);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 Suite_LoadNameSymbolsFromMemory(const AStringView text, ScratchArena& scratchArena){
+    return LoadFromMemory(text, scratchArena);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -495,21 +672,6 @@ DiagnosticEventRecord MakeDiagnosticEvent(in StringView event, in StringView cat
     return record;
 }
 
-Expected<TelemetryReport> BuildTestTelemetryReport(in EventView events, mut TelemetryArena arena, mut ScratchArena scratchArena){
-    return BuildTelemetryReport(events, arena, scratchArena);
-}
-
-b8 BuildTestTextLogPayload(in LogTypeEnum type, in StringView message, mut ScratchArena scratchArena, mut TelemetryBytes outPayload){
-    native(in type, in message, mut scratchArena, mut outPayload){
-#if defined(FOUNDATION_UNICODE)
-        const auto converted = ConvertString(scratchArena, message);
-        return Core::Telemetry::BuildTextLogPayload(type, TStringView(converted), scratchArena, outPayload);
-#else
-        return Core::Telemetry::BuildTextLogPayload(type, TStringView(message), scratchArena, outPayload);
-#endif
-    }
-}
-
 b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message, in u64 frameIndex, in u32 streamId){
     native(in type, in message, in frameIndex, in streamId, mut recorder){
 #if defined(FOUNDATION_UNICODE)
@@ -528,10 +690,6 @@ b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in Str
 
 b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message){
     return RecordTestTextLog(recorder, type, message, 0u, 0u);
-}
-
-b8 BuildTestDiagnosticPayload(in DiagnosticEventRecord record, mut TelemetryArena arena, mut TelemetryBytes outPayload){
-    return BuildDiagnosticPayload(record, arena, outPayload);
 }
 
 b8 RecordTestDiagnostic(mut TelemetryRecorder recorder, in DiagnosticEventRecord record, in u64 frameIndex, in u32 streamId){
@@ -578,77 +736,6 @@ PerfSessionRecordResult RecordTestPerfSessionReport(mut TelemetryRecorder record
     return RecordPerfSessionReport(recorder, report, 0u);
 }
 
-b8 BuildTestFrameGraphPayload(in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, mut ScratchArena scratchArena, mut TelemetryBytes outPayload){
-    return BuildFrameGraphPayload(frameIndex, nodes, edges, scratchArena, outPayload);
-}
-
-b8 BuildTestFrameGraphPayload(
-    in u64 frameIndex,
-    in FrameGraphNodeDescs nodes,
-    in FrameGraphEdgeDescs edges,
-    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
-    mut ScratchArena scratchArena,
-    mut TelemetryBytes outPayload
-){
-    return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, scratchArena, outPayload);
-}
-
-b8 BuildTestFrameGraphPayload(
-    in u64 frameIndex,
-    in FrameGraphNodeDescs nodes,
-    in FrameGraphEdgeDescs edges,
-    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
-    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics,
-    mut ScratchArena scratchArena,
-    mut TelemetryBytes outPayload
-){
-    return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, scratchArena, outPayload);
-}
-
-b8 RecordTestFrameGraph(mut TelemetryRecorder recorder, mut ScratchArena scratchArena, in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, in u32 streamId){
-    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, streamId);
-}
-
-b8 RecordTestFrameGraph(mut TelemetryRecorder recorder, mut ScratchArena scratchArena, in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges){
-    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, 0u);
-}
-
-b8 RecordTestFrameGraph(
-    mut TelemetryRecorder recorder,
-    mut ScratchArena scratchArena,
-    in u64 frameIndex,
-    in FrameGraphNodeDescs nodes,
-    in FrameGraphEdgeDescs edges,
-    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
-    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics,
-    in u32 streamId
-){
-    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, streamId);
-}
-
-b8 RecordTestFrameGraph(
-    mut TelemetryRecorder recorder,
-    mut ScratchArena scratchArena,
-    in u64 frameIndex,
-    in FrameGraphNodeDescs nodes,
-    in FrameGraphEdgeDescs edges,
-    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
-    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics
-){
-    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 0u);
-}
-
-b8 RecordSessionFrameGraph(
-    mut TelemetryCaptureSession session,
-    mut ScratchArena scratchArena,
-    in FrameGraphNodeDescs nodes,
-    in FrameGraphEdgeDescs edges,
-    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
-    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics
-){
-    return session.recordFrameGraph(scratchArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
-}
-
 b8 EncodeTestEvent(in EventRecord event, mut TelemetryBytes outBytes){
     return EncodeEvent(event, outBytes);
 }
@@ -676,9 +763,13 @@ b8 RecordBinaryBytes(mut TelemetryRecorder recorder, in EventKindEnum kind, in u
 }
 
 b8 RecordFilledPayload(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, in usize byteCount, in u8 fillValue, in u32 streamId){
-    TelemetryBytes payload = TelemetryBytes(recorder.arena());
-    payload.resize(byteCount, fillValue);
-    return RecordBinaryBytes(recorder, kind, frameIndex, payload, byteCount, streamId);
+    b8 recorded = false;
+    native(mut recorder, in kind, in frameIndex, in byteCount, in fillValue, in streamId, mut recorded){
+        TelemetryBytes payload(recorder.arena());
+        payload.resize(byteCount, fillValue);
+        recorded = RecordBinarySpan(recorder, kind, frameIndex, payload, byteCount, streamId);
+    }
+    return recorded;
 }
 
 b8 RecordMovedPayload(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, mut TelemetryBytes payload, in u32 streamId){
@@ -780,37 +871,6 @@ Expected<TextLogPayload> ParseTextLogEventAt(in EventView events, in usize event
     if(!payload.has_value())
         return MakeUnexpected(Failure());
     return ParseTextLogSpan(payload.value(), payload.value().size());
-}
-
-Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut TelemetryArena arena, mut ScratchArena scratchArena, in TelemetryBytes payload, in usize byteCount){
-    return ParseFrameGraphSpan(arena, scratchArena, payload, byteCount);
-}
-
-Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut TelemetryArena arena, mut ScratchArena scratchArena, in TelemetryBytes payload){
-    return ParseTestFrameGraphPayload(arena, scratchArena, payload, payload.size());
-}
-
-Expected<FrameGraphPayload> ParseFrameGraphEventAt(mut TelemetryArena arena, mut ScratchArena scratchArena, in EventView events, in usize eventIndex){
-    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
-    if(!payload.has_value())
-        return MakeUnexpected(Failure());
-    return ParseFrameGraphSpan(arena, scratchArena, payload.value(), payload.value().size());
-}
-
-Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut TelemetryArena arena, in TelemetryBytes bytes, in usize byteCount){
-    return DecodeEventSpan(arena, bytes, byteCount);
-}
-
-Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut TelemetryArena arena, in TelemetryBytes bytes){
-    return DecodeTestEventBytes(arena, bytes, bytes.size());
-}
-
-Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, in usize byteCount, mut TelemetryArena arena, mut TelemetryRecorder recorder){
-    return DecodeEventStreamSpan(bytes, byteCount, arena, recorder);
-}
-
-Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, mut TelemetryArena arena, mut TelemetryRecorder recorder){
-    return DecodeTestEventStreamBytes(bytes, bytes.size(), arena, recorder);
 }
 
 StringView ReportJsonView(in TelemetryReport report){
@@ -950,9 +1010,9 @@ EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(in Fram
     return encoded;
 }
 
-void BuildTestFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
-    nodes = FrameGraphNodeDescs(arena);
-    edges = FrameGraphEdgeDescs(arena);
+void BuildTestFrameGraph(mut TelemetryTestArena testArena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    nodes = FrameGraphNodeDescs(testArena.arena);
+    edges = FrameGraphEdgeDescs(testArena.arena);
 
     FrameGraphNodeDesc gbufferNode = FrameGraphNodeDesc();
     gbufferNode.name = s_Gbuffer;
@@ -1240,8 +1300,8 @@ FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStati
     return statistics;
 }
 
-void BuildTestPhysicalQueueRuntimeStatistics(mut TelemetryArena arena, mut FrameGraphPhysicalQueueRuntimeStatisticsRecords records){
-    records = FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
+void BuildTestPhysicalQueueRuntimeStatistics(mut TelemetryTestArena testArena, mut FrameGraphPhysicalQueueRuntimeStatisticsRecords records){
+    records = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
 
     FrameGraphPhysicalQueueRuntimeStatisticsRecord computeRecord = FrameGraphPhysicalQueueRuntimeStatisticsRecord();
     computeRecord.ownerNodeIndex = 0u;
@@ -1254,20 +1314,20 @@ void BuildTestPhysicalQueueRuntimeStatistics(mut TelemetryArena arena, mut Frame
     records.push_back(graphicsRecord);
 }
 
-void BuildTestAssignedFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
-    BuildTestFrameGraph(arena, nodes, edges);
+void BuildTestAssignedFrameGraph(mut TelemetryTestArena testArena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    BuildTestFrameGraph(testArena, nodes, edges);
     nodes[0u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
     nodes[2u].queueAssignment = MakeNotAcceptedFrameGraphQueueAssignment();
 }
 
-void BuildTestCompiledFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
-    BuildTestAssignedFrameGraph(arena, nodes, edges);
+void BuildTestCompiledFrameGraph(mut TelemetryTestArena testArena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    BuildTestAssignedFrameGraph(testArena, nodes, edges);
     nodes[0u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, FrameGraphTaskPacketizationDecision::FirstTask);
     nodes[2u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, FrameGraphTaskPacketizationDecision::MergedExplicit);
 }
 
-void BuildTestRuntimeFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
-    BuildTestCompiledFrameGraph(arena, nodes, edges);
+void BuildTestRuntimeFrameGraph(mut TelemetryTestArena testArena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    BuildTestCompiledFrameGraph(testArena, nodes, edges);
     nodes[0u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
     nodes[2u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
     nodes[2u].runtimeStatistics.graphGeneration = 61u;
@@ -1276,16 +1336,16 @@ void BuildTestRuntimeFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDesc
 }
 
 void BuildTestPacketSubmissionFrameGraph(
-    mut TelemetryArena arena,
+    mut TelemetryTestArena testArena,
     mut FrameGraphNodeDescs nodes,
     mut FrameGraphEdgeDescs edges,
     mut FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
     mut FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics
 ){
-    nodes = FrameGraphNodeDescs(arena);
-    edges = FrameGraphEdgeDescs(arena);
-    physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
-    packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(arena);
+    nodes = FrameGraphNodeDescs(testArena.arena);
+    edges = FrameGraphEdgeDescs(testArena.arena);
+    physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
+    packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(testArena.arena);
 
     FrameGraphRuntimeStatistics runtimeStatistics = FrameGraphRuntimeStatistics();
     runtimeStatistics.graphGeneration = 71u;
@@ -1432,10 +1492,13 @@ void BuildTestPacketSubmissionFrameGraph(
 }
 
 Expected<ArenaMemoryStats> SampleTemporaryScratchStats(in Name scratchName){
-    ScratchArena temporary = ScratchArena(scratchName);
-    if(!ScratchAllocateNonNull(temporary, 1u, 97u))
-        return MakeUnexpected(Failure());
-    return temporary.memoryStats();
+    Expected<ArenaMemoryStats> stats = MakeUnexpected(Failure());
+    native(in scratchName, mut stats){
+        Core::Alloc::ScratchArena temporary(scratchName);
+        if(ScratchAllocateNonNull(temporary, 1u, 97u))
+            stats = temporary.memoryStats();
+    }
+    return stats;
 }
 
 Expected<PerfMemoryPayload> TryParseMemoryEventAt(in EventView events, in usize eventIndex, mut EventHeader outHeader){
@@ -1492,14 +1555,6 @@ MemorySnapshot Suite_MakeOwnerSnapshot(in Name name, in MemorySourceEnum source)
     snapshot.reallocationCount = 2u;
     snapshot.deallocationCount = 1u;
     return snapshot;
-}
-
-OwnedAllocation Suite_MakeOwnedAllocation(mut GlobalArena owner, in usize size){
-    return OwnedAllocation(owner, size);
-}
-
-b8 Suite_LoadNameSymbolsFromMemory(in StringView text, mut ScratchArena scratchArena){
-    return LoadFromMemory(text, scratchArena);
 }
 
 void Suite_ExpectJsonNumber<Number>(in StringView record, in StringView field, in Number value){
@@ -1693,8 +1748,8 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     ASSERT_TRUE(scratchNameResult.has_value());
     const Name scratchName = scratchNameResult.value();
 
-    GlobalArena owner = GlobalArena(ownerName);
-    OwnedAllocation allocation = Suite_MakeOwnedAllocation(owner, 53u);
+    TelemetryOwnedArena owner = TelemetryOwnedArena(ownerName);
+    OwnedAllocation allocation = Suite_MakeOwnedAllocation(owner.arena, 53u);
     ASSERT_TRUE(allocation.valid());
     const u64 firstBytes = allocation.usableBytes();
     EXPECT_GE(firstBytes, allocation.requestedBytes);
@@ -1717,7 +1772,7 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
 
     perfSession.setCaptureOptions(MakePerfMemoryCaptureOptions());
     perfSession.beginFrame(41u);
-    ASSERT_TRUE(perfSession.recordMemorySnapshot(ownerName, owner));
+    ASSERT_TRUE(perfSession.recordMemorySnapshot(ownerName, owner.arena));
     perfSession.publishFrame();
     const MemorySnapshot first = perfSession.memoryView().snapshot(ownerName, MemorySource::Arena);
     ASSERT_TRUE(first.valid());
@@ -1799,8 +1854,8 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     const Name heapName = s_GlobalArenaMemoryHeapBacking;
     EXPECT_TRUE(HasOwnerMemoryEvent(capture.view(), heapName, MemorySource::HeapBacking));
 
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseJsonChecks);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseJsonChecks);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -1838,14 +1893,14 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
 
     PerfSession perfSession = PerfSession(testArena.arena);
     perfSession.setCaptureOptions(MakePerfMemoryCaptureOptions());
-    GlobalArena firstArena = GlobalArena(ownerName);
-    OwnedAllocation firstAllocation = Suite_MakeOwnedAllocation(firstArena, 53u);
+    TelemetryOwnedArena firstArena = TelemetryOwnedArena(ownerName);
+    OwnedAllocation firstAllocation = Suite_MakeOwnedAllocation(firstArena.arena, 53u);
     ASSERT_TRUE(firstAllocation.valid());
     const u64 firstBytes = firstAllocation.usableBytes();
     u64 secondBytes = 0u;
     {
-        GlobalArena secondArena = GlobalArena(ownerName);
-        OwnedAllocation secondAllocation = Suite_MakeOwnedAllocation(secondArena, 101u);
+        TelemetryOwnedArena secondArena = TelemetryOwnedArena(ownerName);
+        OwnedAllocation secondAllocation = Suite_MakeOwnedAllocation(secondArena.arena, 101u);
         ASSERT_TRUE(secondAllocation.valid());
         secondBytes = secondAllocation.usableBytes();
         perfSession.beginFrame(71u);
@@ -1878,8 +1933,8 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
     capture.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
     const PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -1916,8 +1971,8 @@ void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirU
             delta.usedBytes = 10;
         ASSERT_TRUE(RecordTestPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
     }
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseHeapJsonChecks);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseHeapJsonChecks);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -1975,8 +2030,8 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
     ASSERT_TRUE(RecordTestPerfMemory(recorder, secondOwner, StringView(secondHashText), Suite_MakeOwnerSnapshot(secondOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 92u));
     ASSERT_TRUE(RecordTestPerfMemory(recorder, firstOwner, "Producer Display Name", Suite_MakeOwnerSnapshot(firstOwner, MemorySource::ExplicitScope), MakeTestMemoryDelta(-1), 93u));
     ASSERT_TRUE(RecordTestPerfMemory(recorder, unknownOwner, StringView(unknownHashText), Suite_MakeOwnerSnapshot(unknownOwner, MemorySource::HeapBacking), MakeTestMemoryDelta(-1), 94u));
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> beforeReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> beforeReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(beforeReportResult.has_value());
     const TelemetryReport beforeReport = beforeReportResult.value();
     const StringView beforeJson = ReportJsonView(beforeReport);
@@ -1990,8 +2045,8 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
         firstHashText,
         secondHashText
     );
-    ASSERT_TRUE(Suite_LoadNameSymbolsFromMemory(StringView(namesymText), scratchArena));
-    const Expected<TelemetryReport> afterReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(Suite_LoadNameSymbolsFromMemory(StringView(namesymText), reportScratch.scratchArena));
+    const Expected<TelemetryReport> afterReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(afterReportResult.has_value());
     const TelemetryReport afterReport = afterReportResult.value();
     EXPECT_EQ(afterReport.summary.parseFailureCount, 0u);

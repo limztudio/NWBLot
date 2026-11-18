@@ -553,7 +553,7 @@ void VerifyGpuBarrier_PlansCompositeUavDependencies(){
 }
 
 void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExports(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
@@ -585,7 +585,7 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
         GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
         const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -636,7 +636,7 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
         GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
         const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -652,7 +652,7 @@ void VerifyGpuBarrier_TracksFinalOverlappingIntraTaskTextureStateForConsumersAnd
 }
 
 void VerifyGpuBarrier_PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWithinTask(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
@@ -690,7 +690,7 @@ void VerifyGpuBarrier_PlansGraphInitialStateForUncoveredLaterTextureSubresources
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuCompiledTaskView taskView = compiledPlan.findTask(task);
@@ -749,7 +749,7 @@ Expected<GpuTaskId> GpuBarrier_AddBoundaryReadTask(
 }
 
 void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -861,7 +861,7 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     EXPECT_FALSE(HasEdge(analysis, concurrentGraphics, concurrentCompute));
     EXPECT_FALSE(HasEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute));
     EXPECT_FALSE(HasEdge(analysis, exclusiveGraphics, exclusiveCompute));
@@ -956,7 +956,7 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
     GpuTaskGraphAnalysis sameFamilyAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments sameFamilyAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph sameFamilyCompiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(sameFamilyAnalysis, sameFamilyAssignments, sameFamilyCompiledGraph, operationScratchArena, graph, sameFamilyTopology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(sameFamilyAnalysis, sameFamilyAssignments, sameFamilyCompiledGraph, operationScratch, graph, sameFamilyTopology));
     const GpuCompiledGraphReadView sameFamilyPlan = GpuCompiledGraphReadView(sameFamilyCompiledGraph);
     const GpuSubmissionPacketId sameFamilyGraphicsPacket = sameFamilyPlan.packetForTask(concurrentGraphics);
     const GpuSubmissionPacketId sameFamilyComputePacket = sameFamilyPlan.packetForTask(concurrentCompute);
@@ -977,7 +977,7 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
 }
 
 void VerifyGpuBarrier_IndependentIntervalsKeepSeparateInitialStates(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1003,7 +1003,7 @@ void VerifyGpuBarrier_IndependentIntervalsKeepSeparateInitialStates(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     EXPECT_FALSE(HasEdge(analysis, first, tail));
 
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
@@ -1020,7 +1020,7 @@ void VerifyGpuBarrier_IndependentIntervalsKeepSeparateInitialStates(){
 }
 
 void VerifyGpuBarrier_WideConsumerCollectsOlderPrefixAndTailAfterPartialOverwrite(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1053,7 +1053,7 @@ void VerifyGpuBarrier_WideConsumerCollectsOlderPrefixAndTailAfterPartialOverwrit
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     EXPECT_TRUE(HasEdge(analysis, whole, reader));
     EXPECT_TRUE(HasEdge(analysis, middle, reader));
 
@@ -1092,7 +1092,7 @@ void VerifyGpuBarrier_WideConsumerCollectsOlderPrefixAndTailAfterPartialOverwrit
 }
 
 void VerifyGpuBarrier_SameTaskOverlappingDeclarationsSeedOnlyNewBytes(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1119,7 +1119,7 @@ void VerifyGpuBarrier_SameTaskOverlappingDeclarationsSeedOnlyNewBytes(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuCompiledTaskView taskView = plan.findTask(task);
@@ -1152,7 +1152,7 @@ void VerifyGpuBarrier_SameTaskOverlappingDeclarationsSeedOnlyNewBytes(){
 }
 
 void VerifyGpuBarrier_ExportsEveryTerminalIntervalIncludingSymbolicTail(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1189,7 +1189,7 @@ void VerifyGpuBarrier_ExportsEveryTerminalIntervalIncludingSymbolicTail(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
     const GpuCompiledExternalResourceExportView exportView = plan.externalResourceExport(buffer);
     ASSERT_TRUE(exportView.valid());
@@ -1225,7 +1225,7 @@ void VerifyGpuBarrier_ExportsEveryTerminalIntervalIncludingSymbolicTail(){
 }
 
 void VerifyGpuBarrier_CrossQueueFanInTransfersOnlyIntersectingBytes(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1260,7 +1260,7 @@ void VerifyGpuBarrier_CrossQueueFanInTransfersOnlyIntersectingBytes(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     EXPECT_FALSE(HasEdge(analysis, graphics, compute));
 
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
@@ -1285,7 +1285,7 @@ void VerifyGpuBarrier_CrossQueueFanInTransfersOnlyIntersectingBytes(){
 }
 
 void VerifyGpuBarrier_GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrder(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1349,7 +1349,7 @@ void VerifyGpuBarrier_GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrd
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
     for(usize index = 0u; index < resources.size(); ++index){
         const GpuScopedTrace trace = GpuScopedTrace(index);
@@ -1448,7 +1448,7 @@ b8 GpuBarrier_PrepareCallbackGraph(
 
 void GpuBarrier_CheckReorderedBindingsForKind(
     mut TestArena testArena,
-    mut ScratchArena scratch,
+    mut TestScratchArena scratch,
     in usize callbackCount,
     in b8 recordedKind
 ){
@@ -1460,12 +1460,12 @@ void GpuBarrier_CheckReorderedBindingsForKind(
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
     ASSERT_LT(plan.packetCount(), tasks.size());
 
-    CheckReorderedCallbackBindings(declarations, plan, tasks, callbackCount, recordedKind, scratch);
+    CheckReorderedCallbackBindings(declarations, plan, tasks, callbackCount, recordedKind, scratch.scratchArena);
 }
 
 void GpuBarrier_CheckInvalidBindingsForKind(
     mut TestArena testArena,
-    mut ScratchArena scratch,
+    mut TestScratchArena scratch,
     in usize callbackCount,
     in b8 recordedKind
 ){
@@ -1481,12 +1481,12 @@ void GpuBarrier_CheckInvalidBindingsForKind(
         plan.packetIdAt(plan.packetCount() - s_GpuBarrierExcludedPacketCount - 1u)
     );
 
-    CheckInvalidCallbackBindings(declarations, plan, range, tasks, callbackCount, recordedKind, scratch);
+    CheckInvalidCallbackBindings(declarations, plan, range, tasks, callbackCount, recordedKind, scratch.scratchArena);
 }
 
 void VerifyGpuBarrier_ReversedBindingsInvokeInMergedCompiledTaskOrderWithoutLookupAllocation(){
     TestArena testArena = TestArena();
-    ScratchArena scratch = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGpuScratch);
     Array<usize, 2> counts = Array<usize, 2>();
     counts[0u] = s_GpuBarrierInlineCount;
     counts[1u] = s_GpuBarrierIndexedCount;
@@ -1500,7 +1500,7 @@ void VerifyGpuBarrier_ReversedBindingsInvokeInMergedCompiledTaskOrderWithoutLook
 
 void VerifyGpuBarrier_FailedAdmissionClearsPriorBindingsForBothLookupPaths(){
     TestArena testArena = TestArena();
-    ScratchArena scratch = ScratchArena(s_TaskGpuScratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGpuScratch);
     Array<usize, 2> counts = Array<usize, 2>();
     counts[0u] = s_GpuBarrierInlineCount;
     counts[1u] = s_GpuBarrierIndexedCount;

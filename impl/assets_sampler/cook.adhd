@@ -206,8 +206,7 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(
     in Path assetRoot,
     in StringView virtualRoot,
     in Path nwbFilePath,
-    in MetascriptDocument doc,
-    mut ScratchArena scratchArena
+    in MetascriptDocument doc
 ){
     return ParseCookMetadataDocument<SamplerCookEntry>(
         assetRoot,
@@ -217,16 +216,15 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(
         s_SamplerMetaDiagnosticPrefix,
         lambda[in nwbFilePath](in Name virtualPath, in MetascriptValue asset) -> Expected<SamplerCookEntry>{
             return ParseSamplerCookMetadataValue(virtualPath, nwbFilePath, asset);
-        },
-        scratchArena
+        }
     );
 }
 
-Expected<Sampler> BuildSamplerAsset(in SamplerCookEntry samplerEntry, mut AssetArena arena){
+Expected<Sampler> BuildSamplerAsset(in SamplerCookEntry samplerEntry){
     if(!ValidateSamplerCookEntryVirtualPath(samplerEntry.virtualPath))
         return MakeUnexpected(Failure());
 
-    Sampler asset(arena, samplerEntry.virtualPath);
+    Sampler asset(samplerEntry.virtualPath);
     asset.setDescription(samplerEntry.description);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());

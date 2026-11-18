@@ -73,10 +73,6 @@ b8 Mesh::validatePayload()const{
     );
 }
 
-b8 Mesh::validatePayload(mut ScratchArena scratchArena)const{
-    return this.validatePayload();
-}
-
 b8 Mesh::loadBinary(in Span<u8> binary){
     if(!this.checkVirtualPath("Mesh::loadBinary"))
         return false;

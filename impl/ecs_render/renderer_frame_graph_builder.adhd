@@ -193,7 +193,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
 
     FrameGraphTraceGeometryImporter traceGeometryImporter(m_deferredLightingTaskGraph, m_raytracingSystem, m_meshSystem);
-    const auto traceGeometryResult = traceGeometryImporter.declare(scratchArena, scratchArena, rayTracingShadowResources);
+    const auto traceGeometryResult = traceGeometryImporter.declare(scratchArena, rayTracingShadowResources);
     if(!traceGeometryResult)
         return;
     const FrameGraphTraceGeometryResult& traceGeometry = *traceGeometryResult;
@@ -371,7 +371,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         traceGeometry.softwareTraceGeometry,
         traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
-        scratchArena,
         deferredTargets,
         softwareCausticsTimingTicket,
         causticPhotonTiming,
@@ -399,7 +398,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         effectsTask,
         useLaggedLightingHistory,
         m_deferredSurfelGiCounterReadbackCompletion,
-        scratchArena,
         deferredTargets,
         surfelGiTimingTicket,
         surfelGiAsyncTiming
@@ -436,8 +434,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .timingTicket = hardwareCausticsTimingTicket,
                 .photonTiming = causticPhotonTiming,
                 .resolveTiming = causticResolveTiming,
-            },
-            scratchArena
+            }
         );
         if(!hardwareCausticsStageResult){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics stage"));

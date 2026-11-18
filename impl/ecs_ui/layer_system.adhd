@@ -160,7 +160,7 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private void abandonPendingFrame(in b8 resetUi);
     private void resetNormalizedInput();
     private void resetNativeInputState();
-    private b8 loadFonts(mut ScratchArena scratchArena);
+    private b8 loadFonts();
     private AssetRef<UiSkin> basicSkin()const;
     private AssetRef<UiSkin> resolveSkin(in AssetRef<UiSkin> ref)const;
 }
@@ -318,8 +318,7 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
     }
 
     if(!m_fontsReady){
-        Core::Alloc::ScratchArena scratchArena(s_UiLoadFontsArenaName);
-        if(!loadFonts(scratchArena))
+        if(!loadFonts())
             return false;
     }
     if(!m_renderer.validateResources(width, height))
@@ -395,7 +394,7 @@ b8 UiLayerSystem::setInputBindings(const Span<const Ui::InputKeyBinding> binding
     return m_context.input().setBindings(bindings);
 }
 
-b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena)noexcept{
+b8 UiLayerSystem::loadFonts()noexcept{
     if(m_fontsReady)
         return true;
     const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems ? m_activeSceneSubsystems->findSubsystem<UiSubsystem>() : nullptr;
@@ -406,6 +405,7 @@ b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena)noexcept{
         return false;
     Array<UniquePtr<Font>, Ui::s_TextMaxFontSources> assets;
     Array<UniquePtr<FontAtlas>, Ui::s_TextMaxFontSources> atlasAssets;
+    Core::Alloc::ScratchArena scratchArena(s_UiLoadFontsArenaName);
     Vector<Ui::FontSource, Core::Alloc::ScratchArena> sources(scratchArena);
     sources.reserve(fontCount);
     for(usize index = 0u; index < fontCount; ++index){

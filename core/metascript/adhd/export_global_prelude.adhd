@@ -4,7 +4,6 @@
 
 #include <global/algorithm.adhd>
 #include <global/allocation_size.adhd>
-#include <global/arena_base.adhd>
 #include <global/arena_memory.adhd>
 #include <global/atomic.adhd>
 #include <global/atomic_identity.adhd>

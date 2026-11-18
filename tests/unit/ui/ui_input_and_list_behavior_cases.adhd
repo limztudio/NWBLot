@@ -1236,7 +1236,7 @@ void VerifyIntegerModelTests_InvalidIncompleteAndOverflowSubmitPreserveThePendin
         const ScopedTestTrace trace = ScopedTestTrace(text);
         ASSERT_TRUE(self.m_model.setDraft(text));
         ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, text.size()));
-        const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model.draft());
+        const MultilineSnapshot before = MultilineSnapshot(self.m_model.draft());
         const u64 epoch = self.m_model.revision();
         const NumericEditResult result = self.m_model.submit();
         ExpectUiIntegerModelRejected(result, false);
@@ -1269,7 +1269,7 @@ void VerifyIntegerModelTests_BoundsAreInclusiveAndRejectRepresentableValuesOutsi
         EXPECT_TRUE(self.m_model.submit(bounds).committed);
     }
     ASSERT_TRUE(self.m_model.setDraft("11"));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model.draft());
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model.draft());
     EXPECT_EQ(self.m_model.status(bounds), NumericParseStatus::OutOfRange);
     const NumericEditResult result = self.m_model.submit(bounds);
     ExpectUiIntegerModelRejected(result, false);

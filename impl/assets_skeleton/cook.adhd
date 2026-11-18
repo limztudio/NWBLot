@@ -102,8 +102,8 @@ b8 ValidateSkeletonJointEntryMap(in b8 isMap, in Path nwbFilePath, in usize join
     return false;
 }
 
-b8 SerializeSkeletonAsset(in Skeleton skeleton, mut ScratchArena scratchArena, mut Vector<u8> outBinary){
-    if(!skeleton.validatePayload(scratchArena))
+b8 SerializeSkeletonAsset(in Skeleton skeleton, mut Vector<u8> outBinary){
+    if(!skeleton.validatePayload())
         return false;
     return SerializeSkeletonBinaryPayload(skeleton.joints(), skeleton.jointIndices(), outBinary);
 }
@@ -234,7 +234,7 @@ Expected<Vector<SkeletonCookJoint>> ParseSkeletonCookJoints(in Path nwbFilePath,
     return result;
 }
 
-Expected<Skeleton> BuildSkeletonAssetFromCookJoints(in Name virtualPath, in Span<SkeletonCookJoint> cookJoints, mut ScratchArena scratchArena){
+Expected<Skeleton> BuildSkeletonAssetFromCookJoints(in Name virtualPath, in Span<SkeletonCookJoint> cookJoints){
     Vector<SkeletonJoint> joints;
     HashMap<Name, u32> jointIndices;
     if(!BuildSkeletonCookJoints(virtualPath, cookJoints, joints, jointIndices))
@@ -242,7 +242,7 @@ Expected<Skeleton> BuildSkeletonAssetFromCookJoints(in Name virtualPath, in Span
 
     Skeleton asset(virtualPath);
     asset.setJoints(joints, jointIndices);
-    if(!asset.validatePayload(scratchArena))
+    if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
 }
@@ -293,8 +293,7 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         return false;
 
     const Skeleton& skeleton = *MakeNotNull(checked_cast<const Skeleton*>(&asset));
-    Core::Alloc::ScratchArena scratchArena(s_AssetsSkeletonSerializeArena);
-    return SerializeSkeletonAsset(skeleton, scratchArena, outBinary);
+    return SerializeSkeletonAsset(skeleton, outBinary);
 }
 
 Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
@@ -317,8 +316,8 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, con
     return Core::Assets::ParseCookMetadataDocument<SkeletonCookEntry, &ParseSkeletonCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_SkeletonMetaDiagnosticPrefix, arena, scratchArena);
 }
 
-Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return BuildSkeletonAssetFromCookJoints(arena, skeletonEntry.virtualPath, skeletonEntry.joints, scratchArena);
+Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    return BuildSkeletonAssetFromCookJoints(arena, skeletonEntry.virtualPath, skeletonEntry.joints);
 }
 
 

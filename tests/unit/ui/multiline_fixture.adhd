@@ -73,10 +73,6 @@ class MultilineSnapshot{
     private b8 m_undo = false;
     private b8 m_redo = false;
 
-    public MultilineSnapshot(in GlobalArena arena, in EditModel model){
-        this.capture(model);
-    }
-
     public MultilineSnapshot(in EditModel model){
         this.capture(model);
     }

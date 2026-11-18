@@ -323,7 +323,7 @@ public:
 
 
 private:
-    void initialize(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source){
+    void initialize(Core::Alloc::ScratchArena&, Core::Alloc::GlobalArena& arena, const FontSource& source){
         const auto& sourceBytes = source.font.fontBytes();
         m_bytes.assign(sourceBytes.begin(), sourceBytes.end());
         m_memory.user = &arena;
@@ -364,7 +364,7 @@ private:
         if(source.atlas){
             const FontAtlasPayload& payload = source.atlas->payload();
             if(
-                source.atlas->validatePayload(scratchArena) && payload.font == m_identity
+                source.atlas->validatePayload() && payload.font == m_identity
                 && ValidateFontAtlasSourceMatch(payload, source.font)
                 && MatchesBakedAtlasShapingMetrics(payload.faceIndex, source.font.faceIndex(), payload.unitsPerEm, hb_face_get_upem(m_hbFace), payload.sourceGlyphCount, hb_face_get_glyph_count(m_hbFace))
             ){

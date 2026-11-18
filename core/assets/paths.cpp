@@ -86,6 +86,11 @@ b8 HasReservedAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchAren
     return virtualRoot->view() == s_EngineVirtualRoot || virtualRoot->view() == s_ProjectVirtualRoot;
 }
 
+b8 HasReservedAssetVirtualRoot(const AStringView virtualPath){
+    Alloc::ScratchArena scratchArena;
+    return HasReservedAssetVirtualRoot(virtualPath, scratchArena);
+}
+
 Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> assetRoots, const AStringView virtualPath, AssetArena& arena, Alloc::ScratchArena& scratchArena){
     const ::Path<Alloc::ScratchArena> virtualPathPath(scratchArena, virtualPath);
     auto componentIt = virtualPathPath.begin();

@@ -210,11 +210,11 @@ RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Co
     , m_surfelIrradianceReturnState(arena)
     , m_shaderSystem(graphics, assetManager, m_shaderPathResolver)
     , m_meshSystem(arena, world, graphics, assetManager, m_meshState)
-    , m_csgSystem(arena, world, graphics, m_csgShapeRegistry, m_csgState, m_shaderSystem, m_meshSystem)
+    , m_csgSystem(world, graphics, m_csgShapeRegistry, m_csgState, m_shaderSystem, m_meshSystem)
     , m_materialSystem(arena, world, graphics, assetManager, m_csgShapeRegistry, m_materialState, m_shaderSystem, m_meshSystem, m_csgSystem, m_opticalVolumes)
-    , m_deferredSystem(arena, world, graphics, m_deferredState, m_shaderSystem)
+    , m_deferredSystem(world, graphics, m_deferredState, m_shaderSystem)
     , m_reflectionSystem(arena, graphics, m_shaderSystem)
-    , m_avboitSystem(arena, graphics, m_avboitState, m_shaderSystem, m_materialSystem, m_csgSystem)
+    , m_avboitSystem(graphics, m_avboitState, m_shaderSystem, m_materialSystem, m_csgSystem)
     , m_raytracingSystem(arena, world, graphics, m_shaderSystem, m_meshSystem, m_materialSystem, m_rayTracingState, m_opticalVolumes, m_csgShapeRegistry)
     , m_deferredTaskTimingFeedback(arena, graphics, __hidden_renderer_frame_prepare_and_state::s_DeferredTaskTimingFeedbackScopes)
     , m_deferredLightingTaskGraph(arena)
@@ -391,10 +391,10 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_reflectionSystem.pollStatistics();
     m_raytracingSystem.refraction().pollRefractionStatistics();
     if(m_preparedHasTransparentRenderers)
-        m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
+        m_opticalVolumes.prepare(m_world, m_materialSystem);
     else
         m_opticalVolumes.reset();
-    m_preparedCsgFrameState = (isCsgFeatureEnabled() && HasCsgFrameCandidates(m_world)) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
+    m_preparedCsgFrameState = (isCsgFeatureEnabled() && HasCsgFrameCandidates(m_world)) ? m_csgSystem.buildFrameState(m_materialSystem) : CsgFrameState{};
     m_preparedCsgFrameStateValid = true;
     const b8 hasCsgFrameWork = !m_preparedCsgFrameState.empty();
     const b8 rayQuerySupported = m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
@@ -407,10 +407,10 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     // CSG receiver ranges are indexed by material-pass instance; an active pass reserves one range per renderer.
     const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
 
-    if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer, MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState))
+    if(!m_materialSystem.prepareMaterialPassResources(deferredTargets.framebuffer, MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState))
         return false;
 
-    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, m_preparedCsgFrameState, deferredTargets))
+    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(m_preparedCsgFrameState, deferredTargets))
         return false;
 
     // Material owns growth. Once every domain pass prepares, publish one Mesh generation; retain the prior one on refresh.

@@ -22,14 +22,13 @@ class OpaqueGbufferMaterialResources{
 Expected<OpaqueGbufferMaterialResources> GatherOpaqueGbufferMaterialResources(
     in MaterialPassDrawItemPartitions drawItems,
     in DeferredRendererMaterialSystem materialSystem,
-    mut GpuTaskGraph graph,
-    mut ScratchArena scratchArena
+    mut GpuTaskGraph graph
 ){
     OpaqueGbufferMaterialResources resources;
     if(!HasOpaquePartitionMaterialGeometry(drawItems))
         return resources;
 
-    const Expected<GpuGraphResourceSetId> geometrySet = GatherOpaqueGbufferGeometrySet(drawItems, graph, scratchArena);
+    const Expected<GpuGraphResourceSetId> geometrySet = GatherOpaqueGbufferGeometrySet(drawItems, graph);
     resources.geometryStatesGraphOwned = geometrySet.has_value();
     if(!resources.geometryStatesGraphOwned){
         warning("RendererSystem: could not declare prepared opaque material geometry states");
@@ -40,8 +39,7 @@ Expected<OpaqueGbufferMaterialResources> GatherOpaqueGbufferMaterialResources(
     const Expected<GpuGraphResourceSetId> sampledTextureSet = GatherOpaqueGbufferSampledTextureSet(
         drawItems,
         materialSystem,
-        graph,
-        scratchArena
+        graph
     );
     resources.sampledTexturesCollected = sampledTextureSet.has_value();
     if(!resources.sampledTexturesCollected){

@@ -119,7 +119,7 @@ private:
     };
 
 public:
-    explicit UiFilteredListSource(GlobalArena& arena)noexcept
+    explicit UiFilteredListSource(::ArenaBase& arena)noexcept
         : m_state(arena)
         , m_view(*this)
     {}
@@ -159,6 +159,7 @@ void ApplyFlyCameraInputToMainCamera(
 );
 [[nodiscard]] b8 InstantiateSceneSubsystemsEntities(const ActiveSceneSubsystems& sceneSubsystems, NotNullUniquePtr<World>& world);
 [[nodiscard]] AssetRef<Texture> ResolveUiGallerySkinTextureRef(const AssetManager& assets, const ActiveSceneSubsystems& sceneSubsystems);
+[[nodiscard]] Expected<SharedImageSource> LoadUiGallerySkinImageSource(ProjectRuntimeContext& context, const ActiveSceneSubsystems& sceneSubsystems);
 [[nodiscard]] StringView FormatVirtualListRowLabel(u64 rowKey, const Array<u8, 32u>& labelStorage)noexcept;
 
 template<typename ProjectT>
@@ -180,6 +181,52 @@ FOUNDATION_INLINE void AttachProjectUiPaintEntity(NotNullUniquePtr<World>& world
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_name("::NWB::Impl::ActiveSceneSubsystems"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class ActiveSceneSubsystems{
+    b8 loadProjectStartScene(...);
+    b8 loadScene(...);
+    b8 instantiateEntities(...)const;
+    b8 valid(...)const;
+    usize subsystemCount(...)const;
+};
+
+[cpp_name("::NWB::Impl::Ui::EditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class EditModel{
+    EditModel();
+    EditModel(in EditLimits limits);
+    EditModel(in EditLimits limits, in EditTextMode mode);
+    StringView text()const;
+    b8 setText(in StringView value);
+};
+
+[cpp_name("::NWB::Impl::Ui::SearchComboState"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class SearchComboState{
+    mut ComboState combo();
+    in ComboState combo()const;
+};
+
+[cpp_name("::NWB::Impl::Ui::IntegerEditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class IntegerEditModel{
+    i64 value()const;
+    b8 setValue(in i64 value);
+};
+
+[cpp_name("::NWB::Impl::Ui::FloatEditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class FloatEditModel{
+    f64 value()const;
+    b8 setValue(in f64 value);
+};
+
+[cpp_name("::NWB::Impl::Ui::Label"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class Label{
+    TextLayoutStatus setText(...);
+    Expected<Rect> measure(...);
+    b8 paint(...);
+};
+
+[cpp_name("::Testbed::UiFilteredListSource"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class UiFilteredListSource<StateT>;
 
 type CpuTaskAdmissionErrorCode = CpuTaskAdmissionError;
 
@@ -381,6 +428,13 @@ Testbed::AssetRef<Testbed::Texture> Testbed::ResolveUiGallerySkinTextureRef(cons
             return (*skin)->texture();
     }
     return AssetRef<Texture>{};
+}
+
+Expected<Testbed::SharedImageSource> Testbed::LoadUiGallerySkinImageSource(ProjectRuntimeContext& context, const ActiveSceneSubsystems& sceneSubsystems){
+    const AssetRef<Texture> textureRef = ResolveUiGallerySkinTextureRef(context.assetManager, sceneSubsystems);
+    if(!textureRef.valid())
+        return MakeUnexpected(Failure());
+    return LoadImageSource(context.objectArena, context.assetManager, textureRef);
 }
 
 StringView Testbed::FormatVirtualListRowLabel(const u64 rowKey, const Array<u8, 32u>& labelStorage)noexcept{

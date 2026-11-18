@@ -17,6 +17,7 @@
 #include <impl/ecs_ui/toolkit/edit/integer_model.adhd>
 #include <impl/ecs_ui/toolkit/edit/float_model.adhd>
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd>
 #include <impl/ecs_ui/toolkit/widgets/list.adhd>
 #include <impl/ecs_ui/toolkit/widgets/combo.adhd>
 #include <impl/ecs_ui/toolkit/widgets/search_combo.adhd>
@@ -206,6 +207,41 @@ struct SmokeArenaRef final{
     explicit SmokeArenaRef(Core::Alloc::GlobalArena& arena)noexcept : ptr(&arena){}
 };
 
+[[nodiscard]] FOUNDATION_INLINE Core::Alloc::GlobalArena& SmokeFallbackArena()noexcept{
+    static Core::Alloc::GlobalArena s_Arena{ Name("tests/smoke/ui_layer") };
+    return s_Arena;
+}
+
+inline thread_local Core::Alloc::GlobalArena* s_ActiveSmokeArena = nullptr;
+
+[[nodiscard]] FOUNDATION_INLINE Core::Alloc::GlobalArena& ActiveSmokeArena()noexcept{
+    return s_ActiveSmokeArena != nullptr ? *s_ActiveSmokeArena : SmokeFallbackArena();
+}
+
+struct SmokeActiveArenaScope final : NoCopy{
+    Core::Alloc::GlobalArena* previous = nullptr;
+    explicit SmokeActiveArenaScope(Core::Alloc::GlobalArena& arena)noexcept
+        : previous(s_ActiveSmokeArena)
+    {
+        s_ActiveSmokeArena = &arena;
+    }
+    ~SmokeActiveArenaScope()noexcept{
+        s_ActiveSmokeArena = previous;
+    }
+};
+
+[[nodiscard]] FOUNDATION_INLINE SmokeArenaRef MakeSmokeArenaRef()noexcept{
+    return SmokeArenaRef(ActiveSmokeArena());
+}
+
+[[nodiscard]] FOUNDATION_INLINE EditBoxView CreateSmokeEditBoxView()noexcept{
+    return EditBoxView(ActiveSmokeArena());
+}
+
+[[nodiscard]] FOUNDATION_INLINE ClipboardCompletion CreateSmokeClipboardCompletion()noexcept{
+    return ClipboardCompletion(ActiveSmokeArena());
+}
+
 struct SmokeClipboardRef final{
     Core::IClipboardService* ptr = nullptr;
     SmokeClipboardRef()noexcept = default;
@@ -243,12 +279,12 @@ struct SmokeClipboardRef final{
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 CreateSmokeTextAtlasPages(
-    Core::Alloc::GlobalArena& arena,
     const Span<const u8> coverageBytes,
     const Array<Array<u8, 192u>, 4u>& sdfBytes,
     Impl::Ui::SharedGlyphPage& outCoverage,
     Array<Impl::Ui::SharedSdfAtlasPage, 4u>& outSdf
 ){
+    Core::Alloc::GlobalArena& arena = ActiveSmokeArena();
     constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
     constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 
@@ -318,12 +354,12 @@ FOUNDATION_INLINE void ResetSmokeImageSource(Impl::Ui::SharedImageSource& source
 }
 
 FOUNDATION_INLINE void LoadSmokeSkinImageSources(
-    Core::Alloc::GlobalArena& arena,
     Core::Assets::AssetManager& assets,
     const Name& alternateSkinName,
     Impl::Ui::SharedImageSource& outDefault,
     Impl::Ui::SharedImageSource& outAlternate
 ){
+    Core::Alloc::GlobalArena& arena = ActiveSmokeArena();
     auto loadSkinSource = [&](const Core::Assets::AssetRef<Impl::UiSkin>& skinRef) -> Expected<Impl::Ui::SharedImageSource>{
         if(!skinRef.valid())
             return MakeUnexpected(Failure{});
@@ -463,6 +499,7 @@ private:
 
 template<typename SceneT, typename... Args>
 [[nodiscard]] SharedSmokeBox<SmokeSceneBox<SceneT>> CreateSmokeSceneBox(Core::Alloc::GlobalArena& arena, Args&&... args){
+    const SmokeActiveArenaScope activeArena(arena);
     if constexpr(::LeadingArenaConstructible<SceneT>){
         return SharedSmokeBox<SmokeSceneBox<SceneT>>(
             NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
@@ -481,6 +518,7 @@ template<typename SceneT, typename... Args>
 
 template<typename SceneT, typename... Args>
 [[nodiscard]] SharedSmokeBox<SmokeInputSceneBox<SceneT>> CreateSmokeInputSceneBox(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Args&&... args){
+    const SmokeActiveArenaScope activeArena(arena);
     if constexpr(::LeadingArenaConstructible<SceneT>){
         return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
             NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
@@ -578,6 +616,7 @@ private:
 
 
 public:
+    UiNestedPopupSmokeSource()noexcept : UiNestedPopupSmokeSource(ActiveSmokeArena()){}
     explicit UiNestedPopupSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state){}
 
 
@@ -696,6 +735,7 @@ private:
 
 
 public:
+    UiSearchComboSmokeSource()noexcept : UiSearchComboSmokeSource(ActiveSmokeArena()){}
     explicit UiSearchComboSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state, m_label){}
 
 
@@ -845,11 +885,6 @@ Rect CaptureEditSelection(mut EditBoxView view, mut TextService text, in EditMod
         selection.y = origin.y;
     }
     return selection;
-}
-
-Rect CaptureEditSelection(mut GlobalArena arena, mut TextService text, in EditModel model, in EditBoxPlacement placement, in f32 fontSize){
-    EditBoxView view(arena);
-    return CaptureEditSelection(view, text, model, placement, fontSize);
 }
 
 // Compute expected row height from the accepted content extent.

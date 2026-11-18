@@ -183,6 +183,12 @@ private:
     b8 m_rootReady = false;
 };
 
+template<typename PathArenaT>
+[[nodiscard]] FOUNDATION_INLINE Expected<CrashBytes, ErrorCode> BuildCrashArchiveInTemporaryScratch(GlobalArena& arena, const ::Path<PathArenaT>& root){
+    CrashArchiveScratch temporaryScratch;
+    return CrashPackageArchive::Build(arena, temporaryScratch.scratch, root);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -263,11 +269,6 @@ b8 IsDesktopCrashPlatform(){
 
 String FormatProcessGroup(in StringView prefix){
     return StringFormat("{}{}", prefix, CurrentProcessId());
-}
-
-Expected<CrashBytes, ErrorCode> BuildCrashArchiveInTemporaryScratch(mut GlobalArena arena, in Path root){
-    CrashArchiveScratch temporaryScratch = CrashArchiveScratch();
-    return CrashPackageArchive::Build(arena, temporaryScratch.scratch, root);
 }
 
 b8 BytesStartWith(in CrashBytes bytes, in StringView needle){

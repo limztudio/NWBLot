@@ -455,8 +455,8 @@ void PrepareFixture(in u32 packetCount, in u32 ownerCount, mut StatisticsFixture
     }
 }
 
-b8 AppendFixtureStatistics(in u32 packetCount, in u32 ownerCount, mut ScratchArena scratchArena, mut StatisticsFixture fixture){
-    FrameGraphBuilder builder = FrameGraphBuilder(scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
+b8 AppendFixtureStatistics(in u32 packetCount, in u32 ownerCount, mut TelemetryTestArena testArena, mut StatisticsFixture fixture){
+    FrameGraphBuilder builder = FrameGraphBuilder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     const u32 packetsPerOwner = packetCount / ownerCount;
     for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
         const FrameGraphNodeHandle owner = MakeNodeHandle(ownerIndex);
@@ -618,12 +618,12 @@ b8 ReloadRuntimeStatisticsPayload(
     in FrameGraphNodeDescs nodes,
     in FrameGraphEdgeDescs edges,
     in usize runtimeStatisticsOffset,
-    mut ScratchArena scratchArena,
+    mut TelemetryTestArena testArena,
     mut TelemetryBytes outPayload,
     mut EncodedFrameGraphRuntimeStatistics outFirst,
     mut EncodedFrameGraphRuntimeStatistics outSecond
 ){
-    if(!BuildTestFrameGraphPayload(911u, nodes, edges, scratchArena, outPayload))
+    if(!BuildTestFrameGraphPayload(911u, nodes, edges, testArena.scratchArena, outPayload))
         return false;
     ReadTelemetryPod(outPayload, runtimeStatisticsOffset, outFirst);
     ReadTelemetryPod(outPayload, runtimeStatisticsOffset + s_EncodedFrameGraphRuntimeStatisticsByteSize, outSecond);
@@ -855,8 +855,8 @@ void VerifyFrameGraphReport_GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjace
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
 
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     in TelemetryReport report = reportResult.value();
     ASSERT_EQ(report.summary.parseFailureCount, 0u);
@@ -906,11 +906,11 @@ void VerifyFrameGraphReport_RestartsOwnerRangesForEveryCaptureAndReportRebuild()
     AddReportOwner(second, 2u, 7u);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
 
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
-    const Expected<TelemetryReport> reportResult3 = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> reportResult3 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult3.has_value());
     in TelemetryReport report3 = reportResult3.value();
     ASSERT_EQ(report3.summary.frameGraphFrameCount, 2u);
@@ -921,7 +921,7 @@ void VerifyFrameGraphReport_RestartsOwnerRangesForEveryCaptureAndReportRebuild()
 
     recorder.clear();
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
-    const Expected<TelemetryReport> reportResult4 = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> reportResult4 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult4.has_value());
     in TelemetryReport report4 = reportResult4.value();
     ASSERT_EQ(report4.summary.frameGraphFrameCount, 1u);
@@ -938,7 +938,7 @@ void VerifyFrameGraphReport_RejectsMalformedOwnerTablesBeforeReportingAndRetains
     TelemetryBytes original = TelemetryBytes(testArena.arena);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(TelemetryCaptureOptionsAll());
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
 
     ASSERT_TRUE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, original));
     EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
@@ -981,7 +981,7 @@ void VerifyFrameGraphReport_RejectsMalformedOwnerTablesBeforeReportingAndRetains
     ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, malformed, 3u));
     ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, original, 4u));
 
-    const Expected<TelemetryReport> reportResult5 = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> reportResult5 = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult5.has_value());
     in TelemetryReport report = reportResult5.value();
     EXPECT_EQ(report.summary.eventCount, 4u);
@@ -997,7 +997,7 @@ void VerifyTelemetry_FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords()
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    BuildTestRuntimeFrameGraph(testArena, nodes, edges);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
 
     const usize runtimeStatisticsOffset = s_EncodedFrameGraphPayloadHeaderByteSize
@@ -1008,71 +1008,71 @@ void VerifyTelemetry_FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords()
     EncodedFrameGraphRuntimeStatistics first = EncodedFrameGraphRuntimeStatistics();
     EncodedFrameGraphRuntimeStatistics second = EncodedFrameGraphRuntimeStatistics();
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     second.nodeIndex = first.nodeIndex;
     WriteTelemetryPod(payload, runtimeStatisticsOffset + s_EncodedFrameGraphRuntimeStatisticsByteSize, second);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.nodeIndex = 2u;
     second.nodeIndex = 0u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     WriteTelemetryPod(payload, runtimeStatisticsOffset + s_EncodedFrameGraphRuntimeStatisticsByteSize, second);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.nodeIndex = 1u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.nodeIndex = 3u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.reserved = 1u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.graphGeneration = 0u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.planGeneration = 0u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.recordingAttemptGeneration = 0u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.deviceGeneration = 0u;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.compile.declarationSeconds = -1.0;
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.recording.recordingSeconds = bit_cast<f64>(0x7FF0000000000000uLL);
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     first.submission.submissionSeconds = bit_cast<f64>(0x7FF8000000000000uLL);
     WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
     for(usize mutationIndex = 0u; mutationIndex < s_RuntimeStatisticsCountMutationCount; ++mutationIndex){
         ScopedTestTrace trace = ScopedTestTrace(mutationIndex);
-        ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+        ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
         FrameGraphRuntimeStatistics malformed = MakeFrameGraphRuntimeStatistics();
         ApplyRuntimeStatisticsCountMutation(malformed, mutationIndex);
         first = EncodeTestFrameGraphRuntimeStatistics(malformed, first.nodeIndex, first.reserved);
@@ -1080,14 +1080,14 @@ void VerifyTelemetry_FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords()
         EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
     }
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
     ReadTelemetryPod(payload, 0u, header);
     header.runtimeStatisticsCount = 4u;
     WriteTelemetryPod(payload, 0u, header);
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena, payload, first, second));
     EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
 
@@ -1096,53 +1096,53 @@ void VerifyTelemetry_FrameGraphPayloadRejectsInvalidInput(){
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
 
     nodes[0u].kind = FrameGraphNodeKind::Unknown;
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
     String embeddedNulLabel = String("bad");
     embeddedNulLabel.resize(4u);
     embeddedNulLabel.append("label");
     nodes[0u].label = StringView(embeddedNulLabel);
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
     edges[0u].toNodeIndex = 99u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+    BuildTestAssignedFrameGraph(testArena, nodes, edges);
     nodes[0u].queueAssignment.acceptance = FrameGraphQueueAssignmentAcceptance::First;
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+    BuildTestAssignedFrameGraph(testArena, nodes, edges);
     nodes[1u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+    BuildTestCompiledFrameGraph(testArena, nodes, edges);
     nodes[1u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, FrameGraphTaskPacketizationDecision::FirstTask);
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
     nodes[1u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    BuildTestRuntimeFrameGraph(testArena, nodes, edges);
     nodes[0u].runtimeStatistics.graphGeneration = 0u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    BuildTestRuntimeFrameGraph(testArena, nodes, edges);
     nodes[0u].runtimeStatistics.compile.totalSeconds = -1.0;
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    BuildTestRuntimeFrameGraph(testArena, nodes, edges);
     nodes[0u].runtimeStatistics.recording.recordingElapsedSeconds = bit_cast<f64>(0x7FF8000000000000uLL);
     EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     for(usize mutationIndex = 0u; mutationIndex < s_RuntimeStatisticsCountMutationCount; ++mutationIndex){
         ScopedTestTrace trace = ScopedTestTrace(mutationIndex);
-        BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+        BuildTestRuntimeFrameGraph(testArena, nodes, edges);
         ApplyRuntimeStatisticsCountMutation(nodes[0u].runtimeStatistics, mutationIndex);
         EXPECT_FALSE(IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
         EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
@@ -1293,7 +1293,7 @@ void VerifyTelemetry_PacketStatisticsDuplicateRejectionPreservesSeededTables(){
     TelemetryTestArena testArena = TelemetryTestArena();
     StatisticsFixture fixture = StatisticsFixture(testArena.arena);
     PrepareFixture(64u, 2u, fixture);
-    ASSERT_TRUE(AppendFixtureStatistics(64u, 2u, testArena.scratchArena, fixture));
+    ASSERT_TRUE(AppendFixtureStatistics(64u, 2u, testArena, fixture));
     FrameGraphBuilder builder = FrameGraphBuilder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     const FrameGraphPacketSubmissionStatisticsRecord packet = fixture.packets[17u];
     const FrameGraphNodeHandle owner = MakeNodeHandle(packet.ownerNodeIndex);
@@ -1317,7 +1317,7 @@ void VerifyTelemetry_PacketStatisticsPreserveOptionalQueueCoverageAndRejectMisma
     TelemetryTestArena testArena = TelemetryTestArena();
     StatisticsFixture fixture = StatisticsFixture(testArena.arena);
     PrepareFixture(64u, 2u, fixture);
-    ASSERT_TRUE(AppendFixtureStatistics(64u, 2u, testArena.scratchArena, fixture));
+    ASSERT_TRUE(AppendFixtureStatistics(64u, 2u, testArena, fixture));
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     fixture.queues.erase(fixture.queues.begin());
     ASSERT_TRUE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
@@ -1342,7 +1342,7 @@ void VerifyTelemetry_PacketStatisticsSparsePacketIdentifiersRemainValid(){
     TelemetryTestArena testArena = TelemetryTestArena();
     StatisticsFixture fixture = StatisticsFixture(testArena.arena);
     PrepareFixture(2u, 1u, fixture);
-    ASSERT_TRUE(AppendFixtureStatistics(2u, 1u, testArena.scratchArena, fixture));
+    ASSERT_TRUE(AppendFixtureStatistics(2u, 1u, testArena, fixture));
     fixture.nodes[0u].runtimeStatistics.compile.packetCount = u32.max - 1u;
     fixture.nodes[0u].runtimeStatistics.compile.taskCount = u32.max - 1u;
     fixture.packets[0u].packetIndex = u32.max - 2u;
@@ -1406,7 +1406,7 @@ void VerifyTelemetry_PacketStatisticsSeededDuplicatesRemainInvalidPayloads(){
     TelemetryTestArena testArena = TelemetryTestArena();
     StatisticsFixture fixture = StatisticsFixture(testArena.arena);
     PrepareFixture(2u, 1u, fixture);
-    ASSERT_TRUE(AppendFixtureStatistics(2u, 1u, testArena.scratchArena, fixture));
+    ASSERT_TRUE(AppendFixtureStatistics(2u, 1u, testArena, fixture));
     fixture.queues.push_back(fixture.queues[0u]);
     fixture.packets.push_back(fixture.packets[0u]);
     FrameGraphBuilder builder = FrameGraphBuilder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);

@@ -194,10 +194,6 @@ class ReflectionCpuTimingProbe{
         return true;
     }
 
-    public b8 initialize(in StringView caseName, mut ScratchArena scratchArena){
-        return this.initialize(caseName);
-    }
-
     public b8 update(){
         if(this.m_complete)
             return true;

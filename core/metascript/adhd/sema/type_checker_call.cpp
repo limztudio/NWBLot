@@ -133,7 +133,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 constructedRef.templateArgs = expr.callTemplateArgs;
                 if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef)){
                     b8 callerPassedArena = false;
-                    if(!targetCallable){
+                    if(!targetCallable && !(ctorCls->isExtern && ctorCls->arenaCtorMode == 1u)){
                         if(DoesSynthesizedClassCtorPassArena(*ctorCls, baseCallee, callArgCount, argTypeHints.empty() ? MStringView{} : argTypeHints[0]))
                             callerPassedArena = true;
                     }
@@ -148,7 +148,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             }
             else{
                 recordBuiltinTypeHeader(baseCallee);
-                if(!m_symbols.hasTypeSymbol(baseCallee) && SymbolTable::IsArenaBackedContainer(baseCallee))
+                if(!m_symbols.hasTypeSymbol(baseCallee) && (SymbolTable::IsArenaBackedContainer(baseCallee) || IsArenaFirstCtorType(baseCallee)))
                     injectActiveArena();
                 if(!checkBuiltinVectorOrMatrixCtorCall(ownerClass, method, baseCallee, expr.arguments, scope, expr.span, errors, false))
                     ok = false;

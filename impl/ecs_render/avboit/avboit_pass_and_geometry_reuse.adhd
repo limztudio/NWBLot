@@ -122,20 +122,20 @@ void DispatchAvboitCompute(
     commandList.dispatch(groupCountX, 1u, 1u);
 }
 
-b8 RendererAvboitSystem::prepareAvboitPassResources(mut ScratchArena scratchArena, in CsgFrameState csgFrameState, mut DeferredFrameTargets targets){
+b8 RendererAvboitSystem::prepareAvboitPassResources(in CsgFrameState csgFrameState, mut DeferredFrameTargets targets){
     mut AvboitFrameTargets avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return false;
 
     const b8 hasTransparentCsgWork = HasTransparentCsgWork(csgFrameState.hasTransparentStaticWork, csgFrameState.hasTransparentSkinnedWork);
-    if(hasTransparentCsgWork && !this.m_materialSystem.prepareMaterialPassResources(scratchArena, targets.framebuffer, MaterialPipelinePass::CsgReceiverSurface, true, csgFrameState))
+    if(hasTransparentCsgWork && !this.m_materialSystem.prepareMaterialPassResources(targets.framebuffer, MaterialPipelinePass::CsgReceiverSurface, true, csgFrameState))
         return false;
 
     return
-        this.m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitOccupancy, true, csgFrameState, avboitTargets)
-        && this.m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitExtinction, true, csgFrameState, avboitTargets)
-        && this.m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.accumulationFramebuffer, MaterialPipelinePass::AvboitAccumulate, true, csgFrameState, avboitTargets)
-        && (!avboitTargets.refractionFramebuffer.valid() || this.m_materialSystem.prepareMaterialPassResources(scratchArena, avboitTargets.refractionFramebuffer, MaterialPipelinePass::AvboitRefractionCapture, true, csgFrameState, avboitTargets))
+        this.m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitOccupancy, true, csgFrameState, avboitTargets)
+        && this.m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitExtinction, true, csgFrameState, avboitTargets)
+        && this.m_materialSystem.prepareMaterialPassResources(avboitTargets.accumulationFramebuffer, MaterialPipelinePass::AvboitAccumulate, true, csgFrameState, avboitTargets)
+        && (!avboitTargets.refractionFramebuffer.valid() || this.m_materialSystem.prepareMaterialPassResources(avboitTargets.refractionFramebuffer, MaterialPipelinePass::AvboitRefractionCapture, true, csgFrameState, avboitTargets))
     ;
 }
 

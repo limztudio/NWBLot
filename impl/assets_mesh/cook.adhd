@@ -218,10 +218,9 @@ Expected<Skin> BuildSkinAssetFromPayload(
     in AssetRef<Mesh> mesh,
     in AssetRef<Skeleton> skeleton,
     in Vector<SkinInfluence4> influences,
-    in Vector<SkeletonJointMatrix> inverseBindMatrices,
-    mut AssetArena arena
+    in Vector<SkeletonJointMatrix> inverseBindMatrices
 ){
-    Skin asset(arena, virtualPath);
+    Skin asset(virtualPath);
     asset.setMesh(mesh);
     asset.setSkeleton(skeleton);
     asset.setPayload(influences, inverseBindMatrices);
@@ -407,7 +406,7 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
         Move(meshEntry.meshletPrimitiveIndices),
         Move(solidWords)
     );
-    if(!mesh.validatePayload(scratchArena))
+    if(!mesh.validatePayload())
         return MakeUnexpected(Failure{});
     return mesh;
 }
@@ -420,9 +419,8 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!checkSerializeAssetType(asset, MeshBinaryPayload::s_MeshSerializeContext))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(s_MeshValidatePayloadArena);
     const Mesh& mesh = static_cast<const Mesh&>(asset);
-    if(!mesh.validatePayload(scratchArena))
+    if(!mesh.validatePayload())
         return false;
 
     return SerializeMeshBinaryPayload(
@@ -509,7 +507,7 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
 }
 
 Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena){
-    return BuildSkinAssetFromPayload(arena, skinEntry.virtualPath, skinEntry.mesh, skinEntry.skeleton, skinEntry.influences, skinEntry.inverseBindMatrices, arena);
+    return BuildSkinAssetFromPayload(arena, skinEntry.virtualPath, skinEntry.mesh, skinEntry.skeleton, skinEntry.influences, skinEntry.inverseBindMatrices);
 }
 
 

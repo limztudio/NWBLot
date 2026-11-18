@@ -18,7 +18,7 @@ class RendererOpticalVolumeSelection : NoCopy{
 
     public RendererOpticalVolumeSelection(){}
 
-    public void prepare(mut World world, mut RendererMaterialSystem materials, mut ScratchArena scratchArena);
+    public void prepare(mut World world, mut RendererMaterialSystem materials);
 
     // Candidates must contain each entity at most once.
     public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){

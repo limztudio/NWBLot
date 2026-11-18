@@ -280,7 +280,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
 
 b8 SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSystem){
     return EnsurePushConstantComputePipeline<BvhSubsystem>(
-        m_arena, m_graphics.getDevice(), shaderSystem, SubsystemAssetSelector<BvhSubsystem, ComputeShader>([](const BvhSubsystem& s){ return s.sceneRefitCs; }), Core::ShaderArchive::s_DefaultVariant, Name(s_RenderNameSoftwareSceneRefit), NWB_SCENE_BVH_REFIT_PUSH_BYTES, false, m_bindingLayout, m_shader, m_pipeline
+        m_graphics.getDevice(), shaderSystem, SubsystemAssetSelector<BvhSubsystem, ComputeShader>([](const BvhSubsystem& s){ return s.sceneRefitCs; }), Core::ShaderArchive::s_DefaultVariant, Name(s_RenderNameSoftwareSceneRefit), NWB_SCENE_BVH_REFIT_PUSH_BYTES, false, m_bindingLayout, m_shader, m_pipeline
     );
 }
 

@@ -105,7 +105,7 @@ extern class MeshletPipelineHandle{
     mut MeshletPipeline deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::RayTracingPipelineDesc")]
+[cpp_header("<core/graphics/rhi/pipeline.h>"), cpp_name("::NWB::Core::RayTracingPipelineDesc"), cpp_flags(self_defaulted, arena_first_ctor)]
 extern class RayTracingPipelineDesc{
     Vector<RayTracingPipelineShaderDesc> shaders;
     Vector<RayTracingPipelineHitGroupDesc> hitGroups;

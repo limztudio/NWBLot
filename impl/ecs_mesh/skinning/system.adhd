@@ -107,7 +107,6 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     public BindingLayoutHandle m_repackBindingLayout;
     public ShaderHandle m_repackComputeShader;
     public ComputePipelineHandle m_repackComputePipeline;
-    private mut GlobalArena m_arena;
     public mut World m_world;
     private mut GraphicsRuntime m_graphics;
     private mut AssetManager m_assetManager;
@@ -197,14 +196,14 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     }
     // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     private b8 submitFrameSkinningGraph();
-    private b8 prepareRuntimeMeshResources(mut MeshSkinningRuntimeInstance instance, mut ScratchArena scratchArena){
+    private b8 prepareRuntimeMeshResources(mut MeshSkinningRuntimeInstance instance){
         instance.deformationState.invalidateCurrent();
         if(instance.meshlets.empty())
             return true;
         if(!AreMeshSkinningRuntimePipelinesReady(this.skinningPipelineReady(), this.boundsPipelinesReady(), instance.attributeBuffer.valid(), this.repackPipelineReady()))
             return false;
 
-        const Expected<b8> resourcesChanged = this.ensureRuntimeResources(instance, scratchArena);
+        const Expected<b8> resourcesChanged = this.ensureRuntimeResources(instance);
         if(!resourcesChanged.has_value())
             return false;
         if(resourcesChanged.value()){
@@ -217,9 +216,9 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     public b8 recordGraphOwnedSkinningDeformation(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
     public b8 recordGraphOwnedSkinningPostDispatch(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
     public void confirmGraphOwnedSkinningDispatch(in MeshSkinningGraphDispatchPlan plan);
-    private void collectLiveSkinningStateBuffers(mut ScratchArena scratchArena, mut MeshSkinningBufferVector outBuffers)const;
-    private b8 replaceAcceptedSkinningState(in CommandListResourceStateHandoff state, mut ScratchArena scratchArena);
-    private Expected<b8> ensureRuntimeResources(mut MeshSkinningRuntimeInstance instance, mut ScratchArena scratchArena);
+    private void collectLiveSkinningStateBuffers(mut MeshSkinningBufferVector outBuffers)const;
+    private b8 replaceAcceptedSkinningState(in CommandListResourceStateHandoff state);
+    private Expected<b8> ensureRuntimeResources(mut MeshSkinningRuntimeInstance instance);
     private b8 createRuntimeResourceBindlessHeapHandles(mut MeshSkinningRuntimeInstance instance, mut MeshSkinningRuntimeResources resources);
     public void releaseRuntimeResourceBindlessHeapHandles(mut MeshSkinningRuntimeResources resources){
         mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();

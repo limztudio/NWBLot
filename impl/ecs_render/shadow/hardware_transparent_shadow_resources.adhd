@@ -13,13 +13,11 @@
 
 [modular]
 class HardwareTransparentShadowResources : NoCopy{
-    private mut GlobalArena m_arena;
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaderSystem;
     private mut HardwareTransparentShadowState m_state;
 
-    public HardwareTransparentShadowResources(mut GlobalArena arena, mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut HardwareTransparentShadowState state){
-        this.m_arena = arena;
+    public HardwareTransparentShadowResources(mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut HardwareTransparentShadowState state){
         this.m_graphics = graphics;
         this.m_shaderSystem = shaderSystem;
         this.m_state = state;

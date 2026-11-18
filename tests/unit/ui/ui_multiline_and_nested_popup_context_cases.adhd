@@ -486,8 +486,6 @@ FOUNDATION_INLINE void UiNestedPopupLifetimeTests::expectParentControls()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type UiMultilineTextGlobalArena = GlobalArena;
-
 const u32 s_UiMultilineTextUtf8OneByteMaxExclusive = 0x80u;
 const u32 s_UiMultilineTextUnicodeTab = 0x09u;
 const u32 s_UiMultilineTextUnicodeLineFeed = 0x0Au;
@@ -678,8 +676,8 @@ class UiMultilineTextExpectationCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectUiMultilineTextNormalizedError(mut UiMultilineTextGlobalArena arena, in StringView text, in usize maxBytes, in EditTextStatusEnum status){
-    const auto normalized = NormalizeMultilineText(arena, text, maxBytes);
+void ExpectUiMultilineTextNormalizedError(mut UiMultilineTextArena arena, in StringView text, in usize maxBytes, in EditTextStatusEnum status){
+    const auto normalized = NormalizeMultilineText(arena.arena, text, maxBytes);
     EXPECT_FALSE(normalized.has_value());
     if(!normalized.has_value())
         EXPECT_EQ(normalized.error(), status);
@@ -755,7 +753,7 @@ void VerifyUiMultilineText_RejectsEveryC1ControlExceptNelDuringNormalization(){
             EXPECT_EQ(normalized.value(), "a\nb");
         }
         else{
-            ExpectUiMultilineTextNormalizedError(arena.arena, text, 4u, EditTextStatus::InvalidText);
+            ExpectUiMultilineTextNormalizedError(arena, text, 4u, EditTextStatus::InvalidText);
         }
     }
 }
@@ -860,7 +858,7 @@ void VerifyUiMultilineText_RejectsMalformedUtf8AndNonScalarSequences(){
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
         EXPECT_FALSE(ValidateMultilineText(text));
-        ExpectUiMultilineTextNormalizedError(arena.arena, text, 128u, EditTextStatus::InvalidText);
+        ExpectUiMultilineTextNormalizedError(arena, text, 128u, EditTextStatus::InvalidText);
     }
 }
 
@@ -876,7 +874,7 @@ void VerifyUiMultilineText_RejectedControlsAfterNormalizedPrefixesFailWithInvali
     UiMultilineTextArena arena = UiMultilineTextArena();
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
-        ExpectUiMultilineTextNormalizedError(arena.arena, text, 64u, EditTextStatus::InvalidText);
+        ExpectUiMultilineTextNormalizedError(arena, text, 64u, EditTextStatus::InvalidText);
     }
 }
 
@@ -896,7 +894,7 @@ void VerifyUiMultilineText_LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars(){
         ASSERT_TRUE(normalized.has_value());
         const StringView outputView = StringView(normalized.value().data(), normalized.value().size());
         EXPECT_EQ(outputView, test.expected);
-        ExpectUiMultilineTextNormalizedError(arena.arena, test.source, test.expected.size() - 1u, EditTextStatus::TooLarge);
+        ExpectUiMultilineTextNormalizedError(arena, test.source, test.expected.size() - 1u, EditTextStatus::TooLarge);
         EXPECT_TRUE(ValidateMultilineText(outputView));
     }
 }
@@ -913,7 +911,7 @@ void VerifyUiMultilineText_ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNor
     cases[6u] = s_UiMultilineTextParagraphSeparator;
     for(in StringView text : cases){
         const ScopedTestTrace trace = ScopedTestTrace(text);
-        ExpectUiMultilineTextNormalizedError(arena.arena, text, 0u, EditTextStatus::TooLarge);
+        ExpectUiMultilineTextNormalizedError(arena, text, 0u, EditTextStatus::TooLarge);
     }
     const auto nullText = NormalizeMultilineText(arena.arena, StringView(), 0u);
     ASSERT_TRUE(nullText.has_value());
@@ -962,12 +960,12 @@ void VerifyUiMultilineText_RejectedBorrowedViewsPreserveSourceBytesAndStorage(){
     const usize storage = UiMultilineTextStorageAddress(output);
     const usize aliasCapacity = output.capacity();
     const StringView whole = StringView(output.data(), output.size());
-    ExpectUiMultilineTextNormalizedError(arena.arena, whole, 1u, EditTextStatus::TooLarge);
+    ExpectUiMultilineTextNormalizedError(arena, whole, 1u, EditTextStatus::TooLarge);
     EXPECT_EQ(output, savedAlias);
     EXPECT_EQ(UiMultilineTextStorageAddress(output), storage);
     EXPECT_EQ(output.capacity(), aliasCapacity);
     const StringView middle = StringView(output.data(), output.size()).substr(7u, 6u);
-    ExpectUiMultilineTextNormalizedError(arena.arena, middle, 4u, EditTextStatus::TooLarge);
+    ExpectUiMultilineTextNormalizedError(arena, middle, 4u, EditTextStatus::TooLarge);
     EXPECT_EQ(output, savedAlias);
     EXPECT_EQ(UiMultilineTextStorageAddress(output), storage);
     EXPECT_EQ(output.capacity(), aliasCapacity);
@@ -982,7 +980,7 @@ void VerifyUiMultilineText_RejectedBorrowedViewsPreserveSourceBytesAndStorage(){
         const usize invalidStorage = UiMultilineTextStorageAddress(output);
         const usize invalidCapacity = output.capacity();
         const StringView source = StringView(output.data(), output.size()).substr(7u, output.size() - 7u);
-        ExpectUiMultilineTextNormalizedError(arena.arena, source, 64u, EditTextStatus::InvalidText);
+        ExpectUiMultilineTextNormalizedError(arena, source, 64u, EditTextStatus::InvalidText);
         EXPECT_EQ(output, savedInvalid);
         EXPECT_EQ(UiMultilineTextStorageAddress(output), invalidStorage);
         EXPECT_EQ(output.capacity(), invalidCapacity);

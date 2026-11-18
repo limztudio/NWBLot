@@ -586,7 +586,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
     }
 
     // Only tracing differs between hardware and software surfel paths.
-    SurfelGiPipelineSet pipelines(m_arena, m_graphics, m_shaderSystem, m_rayTracingState);
+    SurfelGiPipelineSet pipelines(m_graphics, m_shaderSystem, m_rayTracingState);
     const b8 traceReady = m_rayTracingState.m_surfelUseHwTrace ? pipelines.ensureSurfelTraceHwPipeline() : pipelines.ensureSurfelTracePipeline();
     if(!pipelines.ensureSurfelSpawnPipeline() || !pipelines.ensureSurfelAgeFreePipeline() || !pipelines.ensureSurfelHashBuildPipeline() || !traceReady || !pipelines.ensureSurfelResolvePipeline() || !pipelines.ensureSurfelUpsamplePipeline() || !pipelines.ensureSurfelTraceBuildArgsPipeline())
         return false;

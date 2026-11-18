@@ -125,6 +125,15 @@ public:
     b8 valid = true;
 };
 
+struct RenderPassCollectionHarness{
+    Core::Alloc::GlobalArena arena;
+    Core::GraphicsModuleDetail::RenderPassCollection passes;
+    explicit RenderPassCollectionHarness(const Name& scopeName)
+        : arena(scopeName)
+        , passes(arena)
+    {}
+};
+
 struct LoopCallbackState{
     Core::Frame& frame;
     u32 callbacks = 0u;
@@ -159,6 +168,7 @@ using CpuTaskSchedulerConfig = Core::CpuTaskSchedulerConfig;
 using GpuDescriptorHeapAbi = Core::GpuDescriptorHeapAbi;
 using GraphicsRuntime = Core::GraphicsRuntime;
 using RenderPassCollection = Core::GraphicsModuleDetail::RenderPassCollection;
+using RenderPassCollectionHarness = FrameLifecycleTestsDetail::RenderPassCollectionHarness;
 using CollectionTestPass = FrameLifecycleTestsDetail::CollectionTestPass;
 using UnfocusedLoopRenderPass = FrameLifecycleTestsDetail::UnfocusedLoopRenderPass;
 using LoopLogger = FrameLifecycleTestsDetail::LoopLogger;
@@ -211,27 +221,26 @@ GpuDescriptorHeapAbi MakeShaderlessHeapAbi(){
 }
 
 void CheckRenderPassCollection(mut GraphicsRuntime graphics){
-    GlobalArena arena(s_OneOffNameTestsFrameRenderPassCollection);
-    RenderPassCollection passes(arena);
+    RenderPassCollectionHarness harness(s_OneOffNameTestsFrameRenderPassCollection);
     CollectionTestPass first(graphics);
     CollectionTestPass second(graphics);
-    passes.addToBack(first, 64u, 64u, 1u);
-    passes.addToBack(second, 64u, 64u, 1u);
+    harness.passes.addToBack(first, 64u, 64u, 1u);
+    harness.passes.addToBack(second, 64u, 64u, 1u);
     first.validationCount = 0u;
     second.validationCount = 0u;
     first.valid = false;
-    EXPECT_FALSE(passes.validateResources(64u, 64u, 1u));
+    EXPECT_FALSE(harness.passes.validateResources(64u, 64u, 1u));
     EXPECT_EQ(first.validationCount, 1u);
     EXPECT_EQ(second.validationCount, 1u);
 
     first.valid = true;
-    passes.addToBack(first, 64u, 64u, 1u);
-    ASSERT_EQ(passes.passes().size(), 2u);
-    EXPECT_TRUE(IsSameRenderPass(passes.passes().front(), second));
-    EXPECT_TRUE(IsSameRenderPass(passes.passes().back(), first));
-    passes.remove(first);
+    harness.passes.addToBack(first, 64u, 64u, 1u);
+    ASSERT_EQ(harness.passes.passes().size(), 2u);
+    EXPECT_TRUE(IsSameRenderPass(harness.passes.passes().front(), second));
+    EXPECT_TRUE(IsSameRenderPass(harness.passes.passes().back(), first));
+    harness.passes.remove(first);
     EXPECT_EQ(first.invalidationCount, 1u);
-    EXPECT_EQ(passes.passes().size(), 1u);
+    EXPECT_EQ(harness.passes.passes().size(), 1u);
 }
 
 void CheckInactiveLoop(in b8 renderUnfocused){

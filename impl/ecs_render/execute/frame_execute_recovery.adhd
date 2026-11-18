@@ -91,18 +91,15 @@ extern class RendererFramePipeline;
 [modular]
 class FrameExecuteRecovery : NoCopy{
     private mut RendererFramePipeline m_renderer;
-    private mut ScratchArena m_scratchArena;
     private mut GpuTimingFrameTransaction m_frameTimingTransaction;
     private in GpuCompiledGraphReadView m_compiledPlan;
 
     public FrameExecuteRecovery(
         mut RendererFramePipeline renderer,
-        mut ScratchArena scratchArena,
         mut GpuTimingFrameTransaction frameTimingTransaction,
         in GpuCompiledGraphReadView compiledPlan
     ){
         this.m_renderer = renderer;
-        this.m_scratchArena = scratchArena;
         this.m_frameTimingTransaction = frameTimingTransaction;
         this.m_compiledPlan = compiledPlan;
     }

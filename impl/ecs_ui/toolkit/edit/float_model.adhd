@@ -33,7 +33,7 @@ class FloatEditModel final : public NumericEditModelBase<f64, FloatBounds, Float
 
 
 public:
-    explicit FloatEditModel(Core::Alloc::GlobalArena& arena)
+    explicit FloatEditModel(::ArenaBase& arena)
         : NumericEditModelBase(arena)
     {
         initializeDefault(s_DefaultFloatEditValue);
@@ -78,6 +78,26 @@ NWB_IMPL_UI_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::Ui::FloatEditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class FloatEditModel{
+    f64 value()const;
+    in EditModel draft()const;
+    b8 dirty()const;
+    u64 revision()const;
+    mut EditModel lendDraft();
+    b8 setDraft(...);
+    NumericEditResult submit(...);
+    NumericEditResult blur(...);
+    NumericEditResult cancel();
+    NumericEditResult abandon();
+    NumericParseStatus status(...)const;
+    b8 setValue(...);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

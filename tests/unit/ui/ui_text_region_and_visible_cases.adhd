@@ -425,7 +425,7 @@ public:
         }
         m_baked.setPayload(Move(payload));
         Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisibleBakedValidationScratch)};
-        if(!m_baked.validatePayload(scratchArena))
+        if(!m_baked.validatePayload())
             return false;
         const Array<FontSource, 2> sources{
             FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, &m_baked },
@@ -543,7 +543,7 @@ public:
         group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
         m_measuredBaked.setPayload(Move(payload));
         Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextMeasureSdf)};
-        if(!m_measuredBaked.validatePayload(scratch))
+        if(!m_measuredBaked.validatePayload())
             return false;
         const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, &m_measuredBaked };
         return m_text.setFonts(scratch, Span(&source, 1u));

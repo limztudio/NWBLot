@@ -111,7 +111,7 @@ public:
         , m_postprocess(arena, graphics, shaders)
         , m_feedback(arena, graphics)
         , m_csgDispatchStates(arena)
-        , m_pipelines(arena, graphics, shaders)
+        , m_pipelines(graphics, shaders)
     {}
 
 

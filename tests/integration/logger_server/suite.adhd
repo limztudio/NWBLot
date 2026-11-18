@@ -349,7 +349,7 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
 #endif
     }
 
-    const CrashIngestResult result = ProcessCrashUpload(testArena.arena, archivePath, MakeIngestConfig(testArena.arena, group));
+    const CrashIngestResult result = ProcessCrashUpload(testArena.arena, archivePath, MakeIngestConfig(testArena, group));
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeAssert);
 
@@ -423,7 +423,7 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
 #endif
     }
 
-    const CrashIngestResult result = ProcessCrashUpload(testArena.arena, archivePath, MakeIngestConfig(testArena.arena, group));
+    const CrashIngestResult result = ProcessCrashUpload(testArena.arena, archivePath, MakeIngestConfig(testArena, group));
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeError);
 
@@ -459,7 +459,7 @@ void VerifyLoggerServerCrash_LinuxCrashPackageReportsMissingProcMaps(mut LoggerS
     BeginArchiveWithManifest("linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4198964\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
     String report = "";
@@ -482,7 +482,7 @@ void VerifyLoggerServerCrash_LinuxCrashPackageReportsUnmappedInstructionPointer(
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=7340032\n", archive);
     AppendArchiveFile(s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
     String report = "";
@@ -504,7 +504,7 @@ void VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset(mut Logger
     BeginArchiveWithManifest("linux-offset-overflow-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4097\n", archive);
     AppendArchiveFile(s_ProcMapsFileName, "1000-2000 r-xp ffffffffffffffff 00:00 0 /tmp/overflow\n", archive);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     ASSERT_TRUE(result.accepted);
 
     String report = "";
@@ -524,7 +524,7 @@ void VerifyLoggerServerCrash_AndroidCrashPackageReportsTombstoneWithoutFrames(mu
     BeginArchiveWithManifest("android-no-frames-test", "android", s_Crash, s_ManualDump, 0u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
     String report = "";
@@ -546,7 +546,7 @@ void VerifyLoggerServerCrash_WindowsCrashPackageReportsMissingMinidump(mut Logge
     String archive = "";
     BeginArchiveWithManifest("windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, s_IncludeEventField, ManifestTriggerFields(), archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
     String report = "";
@@ -577,7 +577,7 @@ void VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProc
     // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
     String report = "";
@@ -597,7 +597,7 @@ void VerifyLoggerServerCrash_InvalidCrashPackageIsRejected(mut LoggerServerCrash
 
     String archive = "";
     archive.append(s_InvalidArchiveHeader);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeError);
@@ -620,7 +620,7 @@ void VerifyLoggerServerCrash_UnsafeArchiveEntryCannotEscapePackageDirectory(mut 
     String archive = "";
     archive.append(s_ArchiveHeaderText);
     AppendArchiveFile("../escape", "payload", archive);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_FALSE(result.accepted);
     EXPECT_TRUE(CrashIngestMessageContains(result, "malformed crash archive file header"));
     const Path escapePath = StorageDirectory(group) / "packages" / "escape";
@@ -638,7 +638,7 @@ void VerifyLoggerServerCrash_CrashManifestWithoutEventIsRejected(mut LoggerServe
 
     String archive = "";
     BeginArchiveWithManifest("missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, s_OmitEventField, ManifestTriggerFields(), archive);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeError);
@@ -657,7 +657,7 @@ void VerifyLoggerServerCrash_InvalidManifestBooleanIsRejectedWhileFalseAndZeroRe
 
     String validArchive = "";
     BeginArchiveWithManifest(validStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields(), validArchive);
-    const CrashIngestResult validResult = ProcessCrashArchive(testArena.arena, group, validStem, StringView(validArchive));
+    const CrashIngestResult validResult = ProcessCrashArchive(testArena, group, validStem, StringView(validArchive));
     ASSERT_TRUE(validResult.accepted);
 
     String manifest = BuildManifest(invalidStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields());
@@ -669,7 +669,7 @@ void VerifyLoggerServerCrash_InvalidManifestBooleanIsRejectedWhileFalseAndZeroRe
     String invalidArchive = "";
     invalidArchive.append(s_ArchiveHeaderText);
     AppendArchiveFile(s_ManifestFileName, StringView(manifest), invalidArchive);
-    const CrashIngestResult invalidResult = ProcessCrashArchive(testArena.arena, group, invalidStem, StringView(invalidArchive));
+    const CrashIngestResult invalidResult = ProcessCrashArchive(testArena, group, invalidStem, StringView(invalidArchive));
     EXPECT_FALSE(invalidResult.accepted);
     EXPECT_TRUE(CrashIngestMessageContains(invalidResult, "manifest.json is missing required fields"));
     ExpectIsRegularFile(InvalidArchivePath(group, invalidStem), true);
@@ -686,22 +686,22 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads(mut Logge
     const StringView stem2 = "retention_003";
     RemoveTestArtifacts(group);
 
-    CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
+    CrashIngestConfig config = MakeIngestConfig(testArena, group);
     config.retention.maxExtractedPackages = 2u;
     config.retention.maxRawArchives = 2u;
     config.retention.maxInvalidArchives = 0u;
 
     String archive0 = "";
     BuildLinuxCrashArchive(stem0, archive0);
-    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem0, StringView(archive0), config).accepted);
+    EXPECT_TRUE(ProcessCrashArchive(testArena, group, stem0, StringView(archive0), config).accepted);
 
     String archive1 = "";
     BuildLinuxCrashArchive(stem1, archive1);
-    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem1, StringView(archive1), config).accepted);
+    EXPECT_TRUE(ProcessCrashArchive(testArena, group, stem1, StringView(archive1), config).accepted);
 
     String archive2 = "";
     BuildLinuxCrashArchive(stem2, archive2);
-    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem2, StringView(archive2), config).accepted);
+    EXPECT_TRUE(ProcessCrashArchive(testArena, group, stem2, StringView(archive2), config).accepted);
 
     ExpectPathExists(ExtractedPackageDirectory(group, stem0), false);
     ExpectPathExists(RawArchivePath(group, stem0), false);
@@ -727,8 +727,8 @@ void VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained(mu
     EXPECT_TRUE(EnsureDirectories(storageDir).has_value());
     EXPECT_TRUE(WriteTextFile(rawDirFile, "blocked"));
 
-    const CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive), config);
+    const CrashIngestConfig config = MakeIngestConfig(testArena, group);
+    const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive), config);
 
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeWarning);
@@ -746,18 +746,18 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads(mut Logger
     const StringView stem1 = "invalid_retention_002";
     RemoveTestArtifacts(group);
 
-    CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
+    CrashIngestConfig config = MakeIngestConfig(testArena, group);
     config.retention.maxExtractedPackages = 0u;
     config.retention.maxRawArchives = 0u;
     config.retention.maxInvalidArchives = 1u;
 
     String archive0 = "";
     archive0.append(s_InvalidArchiveHeader);
-    EXPECT_FALSE(ProcessCrashArchive(testArena.arena, group, stem0, StringView(archive0), config).accepted);
+    EXPECT_FALSE(ProcessCrashArchive(testArena, group, stem0, StringView(archive0), config).accepted);
 
     String archive1 = "";
     archive1.append(s_InvalidArchiveHeader);
-    EXPECT_FALSE(ProcessCrashArchive(testArena.arena, group, stem1, StringView(archive1), config).accepted);
+    EXPECT_FALSE(ProcessCrashArchive(testArena, group, stem1, StringView(archive1), config).accepted);
 
     ExpectPathExists(InvalidArchivePath(group, stem0), false);
     ExpectIsRegularFile(InvalidArchivePath(group, stem1), true);

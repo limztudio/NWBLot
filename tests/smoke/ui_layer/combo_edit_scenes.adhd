@@ -71,7 +71,7 @@ class UiEditSmokeScene{
     private b8 m_visible = true;
     private b8 m_displayChanged = false;
 
-    public UiEditSmokeScene(mut GlobalArena arena);
+    public UiEditSmokeScene();
 
     public b8 paint(mut UiPaintContext context);
     public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
@@ -353,8 +353,8 @@ void UiComboSmokeScene::observeState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiEditSmokeScene::UiEditSmokeScene(mut GlobalArena arena){
-    this.m_selectionView = EditBoxView(arena);
+UiEditSmokeScene::UiEditSmokeScene(){
+    this.m_selectionView = CreateSmokeEditBoxView();
     this.resetModels();
 }
 

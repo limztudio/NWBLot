@@ -165,7 +165,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
 
     const Mesh& mesh = **loadedAsset;
     // Mesh::loadBinary already ran the full payload validation (including u32 stream limits).
-    FOUNDATION_ASSERT(mesh.validatePayload(scratchArena));
+    FOUNDATION_ASSERT(mesh.validatePayload());
     FOUNDATION_ASSERT(mesh.meshlets().size() <= static_cast<usize>(Limit<u32>::s_Max));
     FOUNDATION_ASSERT(mesh.meshletPrimitiveIndices().size() <= static_cast<usize>(Limit<u32>::s_Max));
 

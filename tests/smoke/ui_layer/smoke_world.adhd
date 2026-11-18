@@ -71,7 +71,7 @@ class UiDefaultSmokeScene{
     private UiTextSmokeSamples m_textSamples;
     private u32 m_paintFrame = 0u;
 
-    public UiDefaultSmokeScene(mut GlobalArena arena);
+    public UiDefaultSmokeScene();
 
     public void paint(mut UiPaintContext paintContext);
 }
@@ -80,8 +80,8 @@ class UiDefaultSmokeScene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiDefaultSmokeScene::UiDefaultSmokeScene(mut GlobalArena arena){
-    this.m_textSamples = UiTextSmokeSamples(arena);
+UiDefaultSmokeScene::UiDefaultSmokeScene(){
+    this.m_textSamples = UiTextSmokeSamples();
 }
 
 void UiDefaultSmokeScene::paint(mut UiPaintContext paintContext){
@@ -208,10 +208,10 @@ b8 CheckUiLayerSmokePersistentState(mut ProjectRuntimeContext context){
     return passed;
 }
 
-b8 ConfigureSmokeLayerInputProfile(mut GlobalArena arena, mut UiLayerSystem layer){
+b8 ConfigureSmokeLayerInputProfile(mut UiLayerSystem layer){
     if(!ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE"))
         return true;
-    const InputBindings defaults(arena);
+    const InputBindings defaults();
     Vector<InputKeyBinding> bindings = Vector<InputKeyBinding>();
     bindings.reserve(defaults.bindings().size() + 4u);
     for(in InputKeyBinding binding : defaults.bindings()){
@@ -275,7 +275,7 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
         auto entity = world.createEntity();
         auto& paint = entity.addComponent<Impl::UiPaintComponent>();
         if(modes.textureImageSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiTextureImageSmokeScene>(context.objectArena, context.input, context.objectArena, context.assetManager);
+            const auto scene = CreateSmokeInputSceneBox<UiTextureImageSmokeScene>(context.objectArena, context.input, context.assetManager);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
@@ -310,21 +310,21 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
             };
         }
         else if(modes.textAreaSmoke){
-            const auto scene = CreateSmokeSceneBox<UiTextAreaSmokeScene>(context.objectArena, context.objectArena, context.clipboard);
+            const auto scene = CreateSmokeSceneBox<UiTextAreaSmokeScene>(context.objectArena, context.clipboard);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: text area UI paint failed"));
             };
         }
         else if(modes.numericEditSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiNumericEditSmokeScene>(context.objectArena, context.input, context.objectArena);
+            const auto scene = CreateSmokeInputSceneBox<UiNumericEditSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
             };
         }
         else if(modes.nestedPopupSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiNestedPopupSmokeScene>(context.objectArena, context.input, context.objectArena);
+            const auto scene = CreateSmokeInputSceneBox<UiNestedPopupSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
@@ -338,7 +338,7 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
             };
         }
         else if(modes.searchComboSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiSearchComboSmokeScene>(context.objectArena, context.input, context.objectArena);
+            const auto scene = CreateSmokeInputSceneBox<UiSearchComboSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
@@ -373,7 +373,7 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
             };
         }
         else if(modes.editSmoke){
-            const auto scene = CreateSmokeInputSceneBox<UiEditSmokeScene>(context.objectArena, context.input, context.objectArena);
+            const auto scene = CreateSmokeInputSceneBox<UiEditSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
                     NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: edit UI paint failed"));
@@ -394,7 +394,7 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
             };
         }
         else{
-            const auto scene = CreateSmokeSceneBox<UiDefaultSmokeScene>(context.objectArena, context.objectArena);
+            const auto scene = CreateSmokeSceneBox<UiDefaultSmokeScene>(context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 scene->scene.paint(paintContext);
             };
@@ -419,7 +419,7 @@ b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut World world, in
             skin,
             Impl::UiLayerPresentation::Standalone
         );
-        if(ConfigureSmokeLayerInputProfile(context.objectArena, layer)){
+        if(ConfigureSmokeLayerInputProfile(layer)){
             ConfigureSmokeLayerRecordingMode(layer);
             ok = true;
         }

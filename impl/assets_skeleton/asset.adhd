@@ -41,9 +41,10 @@ class Skeleton{
         return s_SkeletonInvalidJointIndex;
     }
 
-    public b8 validatePayload(mut ScratchArena scratchArena)const;
+    public b8 validatePayload()const;
     public b8 loadBinary(in Span<u8> binary);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

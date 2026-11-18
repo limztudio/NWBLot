@@ -20,7 +20,7 @@ b8 ValidateSkeletonRuntimePayload(
     return ValidateSkeletonPayloadData(joints, jointIndices, scratchNamedJoints);
 }
 
-b8 Skeleton::validatePayload(mut ScratchArena scratchArena)const{
+b8 Skeleton::validatePayload()const{
     Vector<u8> namedJoints(this.m_joints.size(), 0u);
     return ValidateSkeletonRuntimePayload(
         this.checkVirtualPath("Skeleton::validatePayload"),
@@ -31,11 +31,10 @@ b8 Skeleton::validatePayload(mut ScratchArena scratchArena)const{
 }
 
 b8 Skeleton::loadBinary(in Span<u8> binary){
-    ScratchArena scratchArena(s_AssetsSkeletonLoadBinaryArena);
     Skeleton candidate(this.virtualPath());
     if(!DeserializeSkeletonBinaryPayload(binary, candidate.m_joints, candidate.m_jointIndices))
         return false;
-    if(!candidate.validatePayload(scratchArena))
+    if(!candidate.validatePayload())
         return false;
     this = candidate;
     return true;

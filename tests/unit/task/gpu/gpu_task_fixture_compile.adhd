@@ -153,6 +153,19 @@ inline constexpr u32 s_GpuAllMipLevels = Core::TextureSubresourceSet::s_AllMipLe
 inline constexpr u32 s_GpuAllArraySlices = Core::TextureSubresourceSet::s_AllArraySlices;
 inline constexpr Core::TextureSubresourceSet s_GpuAllSubresources = Core::s_AllSubresources;
 
+struct TestScratchArena{
+    Core::Alloc::ScratchArena scratchArena;
+
+
+public:
+    TestScratchArena()
+        : scratchArena(s_TaskGraphScratchArena)
+    {}
+    explicit TestScratchArena(const Name& scopeName)
+        : scratchArena(scopeName)
+    {}
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -764,7 +777,7 @@ GpuPhysicalQueueInfo DedicatedTransferQueue(){
 
 b8 Assign(
     mut GpuTaskGraphQueueAssignments assignments,
-    mut ScratchArena scratchArena,
+    mut TestScratchArena scratch,
     in GpuTaskGraph graph,
     in GpuTaskGraphAnalysis analysis,
     in GpuPhysicalQueueTopology topology,
@@ -772,25 +785,25 @@ b8 Assign(
 ){
     const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-    return compiler.assignQueues(declarations, analysis, topology, options, scratchArena, assignments);
+    return compiler.assignQueues(declarations, analysis, topology, options, scratch.scratchArena, assignments);
 }
 
 b8 Assign(
     mut GpuTaskGraphQueueAssignments assignments,
-    mut ScratchArena scratchArena,
+    mut TestScratchArena scratch,
     in GpuTaskGraph graph,
     in GpuTaskGraphAnalysis analysis,
     in GpuPhysicalQueueTopology topology
 ){
     const GpuTaskGraphQueueAssignmentOptions options = GpuTaskGraphQueueAssignmentOptions();
-    return Assign(assignments, scratchArena, graph, analysis, topology, options);
+    return Assign(assignments, scratch, graph, analysis, topology, options);
 }
 
 b8 Compile(
     mut GpuTaskGraphAnalysis analysis,
     mut GpuTaskGraphQueueAssignments assignments,
     mut GpuCompiledGraph compiledGraph,
-    mut ScratchArena scratchArena,
+    mut TestScratchArena scratch,
     in GpuTaskGraph graph,
     in GpuPhysicalQueueTopology topology,
     in GpuTaskGraphCompileOptions options
@@ -800,19 +813,19 @@ b8 Compile(
     // Allow metadata-only tasks in unit packetization helpers.
     metadataOptions.allowMetadataOnlyTasks = true;
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-    return compiler.compile(declarations, topology, metadataOptions, scratchArena, analysis, assignments, compiledGraph);
+    return compiler.compile(declarations, topology, metadataOptions, scratch.scratchArena, analysis, assignments, compiledGraph);
 }
 
 b8 Compile(
     mut GpuTaskGraphAnalysis analysis,
     mut GpuTaskGraphQueueAssignments assignments,
     mut GpuCompiledGraph compiledGraph,
-    mut ScratchArena scratchArena,
+    mut TestScratchArena scratch,
     in GpuTaskGraph graph,
     in GpuPhysicalQueueTopology topology
 ){
     const GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
-    return Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
+    return Compile(analysis, assignments, compiledGraph, scratch, graph, topology, options);
 }
 
 // Compile on a topology where Compute and Transfer capabilities stay on their dedicated queue classes.
@@ -820,13 +833,13 @@ b8 CompileWithSeparatedCommandQueues(
     mut GpuTaskGraphAnalysis analysis,
     mut GpuTaskGraphQueueAssignments assignments,
     mut GpuCompiledGraph compiledGraph,
-    mut ScratchArena scratchArena,
+    mut TestScratchArena scratch,
     in GpuTaskGraph graph,
     in GpuPhysicalQueueTopology topology,
     in GpuTaskGraphCompileOptions options
 ){
     if(!HasTopologyQueuesPtr(topology))
-        return Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
+        return Compile(analysis, assignments, compiledGraph, scratch, graph, topology, options);
 
     const Span<GpuPhysicalQueueInfo> sourceQueues = TopologyQueues(topology);
     b8 hasComputeQueue = false;
@@ -846,19 +859,19 @@ b8 CompileWithSeparatedCommandQueues(
             adjusted.capabilities = MaskOutQueueCapability(adjusted.capabilities, GpuQueueCapability::Transfer);
         queues.push_back(adjusted);
     }
-    return Compile(analysis, assignments, compiledGraph, scratchArena, graph, MakeTopology(queues), options);
+    return Compile(analysis, assignments, compiledGraph, scratch, graph, MakeTopology(queues), options);
 }
 
 b8 CompileWithSeparatedCommandQueues(
     mut GpuTaskGraphAnalysis analysis,
     mut GpuTaskGraphQueueAssignments assignments,
     mut GpuCompiledGraph compiledGraph,
-    mut ScratchArena scratchArena,
+    mut TestScratchArena scratch,
     in GpuTaskGraph graph,
     in GpuPhysicalQueueTopology topology
 ){
     const GpuTaskGraphCompileOptions options = GpuTaskGraphCompileOptions();
-    return CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
+    return CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratch, graph, topology, options);
 }
 
 Optional<GpuTaskDependencyEdge> TryFindEdge(
@@ -1018,10 +1031,10 @@ Expected<GpuTaskId> AddTaskWithCommands(
     return graph.addTask(desc, commands);
 }
 
-b8 Analyze(in GpuTaskGraph graph, mut ScratchArena scratchArena, mut GpuTaskGraphAnalysis analysis){
+b8 Analyze(in GpuTaskGraph graph, mut TestScratchArena scratch, mut GpuTaskGraphAnalysis analysis){
     const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-    return compiler.analyze(declarations, scratchArena, analysis);
+    return compiler.analyze(declarations, scratch.scratchArena, analysis);
 }
 
 b8 HasInferredHazard(

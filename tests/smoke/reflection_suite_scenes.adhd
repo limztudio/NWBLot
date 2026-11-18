@@ -453,7 +453,6 @@ class ReflectionRoughnessScene{
             s_ReflectionSuiteBodyModel,
             s_NameNone,
             false,
-            this.m_context.objectArena,
             this.m_context.assetManager
         );
         if(!bindJoints.has_value() || bindJoints.value().size() < 2u)

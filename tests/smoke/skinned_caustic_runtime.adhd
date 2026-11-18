@@ -73,7 +73,6 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
             SkinnedCausticProjectName(),
             s_NameNone,
             false,
-            this.m_context.objectArena,
             this.m_context.assetManager
         );
         if(!bindJoints.has_value())

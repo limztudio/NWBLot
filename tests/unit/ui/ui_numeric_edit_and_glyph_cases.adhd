@@ -3,6 +3,7 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/multiline_fixture.adhd>
 #include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
 #include <tests/unit/ui/name_cases.adhd>
 
@@ -398,7 +399,6 @@ using NumericLifetimeIntegerFixture = __hidden_ui_numeric_model_lifetime_tests::
 using NumericLifetimeFloatFixture = __hidden_ui_numeric_model_lifetime_tests::NumericLifetimeTests<::NWB::Impl::Ui::FloatEditModel>;
 using IntegerLifetimeTests = __hidden_ui_numeric_model_lifetime_tests::IntegerLifetimeTests;
 using FloatLifetimeTests = __hidden_ui_numeric_model_lifetime_tests::FloatLifetimeTests;
-using UiNumericLifetimeDraftSnapshot = ::NWB::UiNumericTests::DraftSnapshot;
 namespace UiNumericSelectionEpochMutation = __hidden_ui_numeric_selection_epoch_tests::EpochMutation;
 using UiNumericSelectionEpochMutationEnum = __hidden_ui_numeric_selection_epoch_tests::EpochMutation::Enum;
 using UiNumericSelectionEpochSource = __hidden_ui_numeric_selection_epoch_tests::SelectionEpochSource;
@@ -492,8 +492,6 @@ FOUNDATION_INLINE b8 SelectionEpochSource::mutate(EditModel& draft)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type UiNumericLifetimeGlobalArena = GlobalArena;
-
 b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutationEnum mutation, mut EditModel draft){
     const usize anchor = draft.anchor();
     const usize caret = draft.caret();
@@ -506,6 +504,8 @@ b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutationEnum mut
     draft.cancelComposition();
     return true;
 }
+
+type UiNumericLifetimeDraftSnapshot = MultilineSnapshot;
 
 const StringView s_UiNumericEditPanelKey = "panel";
 const StringView s_UiNumericEditIntegerKey = "integer";
@@ -570,13 +570,13 @@ class UiNumericParseFloatCompleteCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectUiNumericAtomicBadIntegerBounds(in IntegerBounds bounds, mut UiNumericLifetimeGlobalArena arena, mut IntegerEditModel model){
+void ExpectUiNumericAtomicBadIntegerBounds(in IntegerBounds bounds, mut IntegerEditModel model){
     ASSERT_TRUE(model.setValue(7));
     ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(model.lendDraft().beginComposition());
     ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
-    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(arena, model.draft());
+    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(model.draft());
     const u64 epoch = model.revision();
     const u64 valueBits = bit_cast<u64>(model.value());
     EXPECT_FALSE(model.submit(bounds).valid);
@@ -588,13 +588,13 @@ void ExpectUiNumericAtomicBadIntegerBounds(in IntegerBounds bounds, mut UiNumeri
     before.expectUnchanged(model.draft());
 }
 
-void ExpectUiNumericAtomicBadFloatBounds(in FloatBounds bounds, mut UiNumericLifetimeGlobalArena arena, mut FloatEditModel model){
+void ExpectUiNumericAtomicBadFloatBounds(in FloatBounds bounds, mut FloatEditModel model){
     ASSERT_TRUE(model.setValue(7.0));
     ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(model.lendDraft().beginComposition());
     ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
-    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(arena, model.draft());
+    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(model.draft());
     const u64 epoch = model.revision();
     const u64 valueBits = bit_cast<u64>(model.value());
     EXPECT_FALSE(model.submit(bounds).valid);
@@ -1396,7 +1396,7 @@ void VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraft
     ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
     ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
-    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(self.m_arena, self.m_model.draft());
+    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(self.m_model.draft());
     const u64 epoch = self.m_model.revision();
     String excessive = "";
     excessive.reserve(s_NumericEditMaxBytes + 1u);
@@ -1426,7 +1426,7 @@ void VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraft
     ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
     ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
-    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(self.m_arena, self.m_model.draft());
+    const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(self.m_model.draft());
     const u64 epoch = self.m_model.revision();
     String excessive = "";
     excessive.reserve(s_NumericEditMaxBytes + 1u);
@@ -1444,17 +1444,17 @@ void VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraft
 }
 
 void VerifyIntegerLifetimeTests_ReversedAndUnknownIntegerBoundsAreAtomic(mut IntegerLifetimeTests self){
-    ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(10, 1, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(10, 1, NumericBoundsPolicy::Reject), self.m_model);
     const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(3u);
-    ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(-10, 10, unknown), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadIntegerBounds(MakeUiIntegerBounds(-10, 10, unknown), self.m_model);
 }
 
 void VerifyFloatLifetimeTests_ReversedNonfiniteAndUnknownFloatBoundsAreAtomic(mut FloatLifetimeTests self){
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(10.0, 1.0, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(UiNumericQuietNaNF64(), 10.0, NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(10.0, 1.0, NumericBoundsPolicy::Reject), self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(UiNumericQuietNaNF64(), 10.0, NumericBoundsPolicy::Reject), self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, UiNumericInfinityF64(), NumericBoundsPolicy::Reject), self.m_model);
     const NumericBoundsPolicyEnum unknown = cast<NumericBoundsPolicyEnum>(3u);
-    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, 10.0, unknown), self.m_arena, self.m_model);
+    ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, 10.0, unknown), self.m_model);
 }
 
 

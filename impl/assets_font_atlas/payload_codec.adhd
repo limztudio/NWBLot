@@ -95,7 +95,7 @@ b8 CheckFontAtlasGuardedOverlap(in FontAtlasPayload payload){
     return true;
 }
 
-b8 ValidateFontAtlasPayload(in FontAtlasPayload payload, mut ScratchArena scratchArena){
+b8 ValidateFontAtlasPayload(in FontAtlasPayload payload){
     if(!ValidateFontAtlasIdentityAndFace(payload.font.valid(), IsFontAtlasDigestNonZero(payload.fontSha256.bytes), payload.faceIndex))
         return false;
     if(!ValidateFontAtlasHeaderParameters(
@@ -223,7 +223,7 @@ Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Sp
     return tables;
 }
 
-b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPayload, mut ScratchArena scratchArena){
+b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPayload){
     usize cursor = 0u;
     Array<u64, s_FontAtlasIdentityLaneCount> identityQwords;
     if(!TryReadFontAtlasBinaryPreambleAndIdentity(bytes, cursor, identityQwords))
@@ -284,12 +284,11 @@ b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPay
             return false;
         tableBytes += cast<u64>(byteCount);
     }
-    return HasConsumedExactFontAtlasBinaryPayload(cursor, bytes.size()) && ValidateFontAtlasPayload(outPayload, scratchArena);
+    return HasConsumedExactFontAtlasBinaryPayload(cursor, bytes.size()) && ValidateFontAtlasPayload(outPayload);
 }
 
 b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
-    ScratchArena scratchArena(s_AssetsFontAtlasSerializeArena);
-    if(!ValidateFontAtlasPayload(payload, scratchArena))
+    if(!ValidateFontAtlasPayload(payload))
         return false;
     usize size = ComputeFontAtlasInitialBinaryBytes(s_FontAtlasBinaryHeaderBytes, s_FontAtlasBinaryGlyphBytes, payload.glyphs.size());
     for(in FontAtlasGroup group : payload.groups)
@@ -337,9 +336,8 @@ Expected<Vector<u8>> SerializeFontAtlasPayload(in FontAtlasPayload payload){
 }
 
 Expected<FontAtlasPayload> DeserializeFontAtlasPayload(in Span<u8> binary){
-    ScratchArena scratchArena(s_AssetsFontAtlasLoadBinaryArena);
     FontAtlasPayload payload = FontAtlasPayload();
-    if(!DeserializeFontAtlasBinaryInto(binary, payload, scratchArena)){
+    if(!DeserializeFontAtlasBinaryInto(binary, payload)){
         LogFontAtlasBinaryDeserializeFailed();
         return MakeUnexpected(Failure());
     }

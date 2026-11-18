@@ -29,7 +29,6 @@ class EntityAsset{
     private ComponentRefVector m_components;
 
     public b8 validatePayload()const;
-    public b8 validatePayload(mut ScratchArena scratchArena)const;
     public b8 loadBinary(in Span<u8> binary);
 
     public void setComponents(in ComponentRefVector components){
@@ -70,7 +69,6 @@ class SceneAsset{
     private AssetMap m_assets;
 
     public b8 validatePayload()const;
-    public b8 validatePayload(mut ScratchArena scratchArena)const;
     public b8 loadBinary(in Span<u8> binary);
 
     public void setContents(
@@ -105,6 +103,16 @@ class SceneAsset{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_name("::NWB::Impl::ActiveSceneSubsystems"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class ActiveSceneSubsystems{
+    b8 loadProjectStartScene(...);
+    b8 loadScene(...);
+    b8 instantiateEntities(...)const;
+    b8 valid(...)const;
+    in SceneRef scene(...)const;
+    usize subsystemCount(...)const;
+};
 
 [cpp_name("::NWB::Impl::ActiveSceneSubsystemsConstPtr"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class ActiveSceneSubsystemsConstPtr;
@@ -186,8 +194,8 @@ public:
     using EntityRef = Core::Assets::AssetRef<EntityAsset>;
     using ComponentRef = Core::Assets::AssetRef<IComponent>;
     using AssetMap = HashMap<Name, Core::Assets::AssetRef<Core::Assets::IAsset>, ::ArenaBase>;
-    using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, Core::Alloc::GlobalArena>;
-    using LoadedComponentVector = Vector<UniquePtr<IComponent>, Core::Alloc::GlobalArena>;
+    using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, ::ArenaBase>;
+    using LoadedComponentVector = Vector<UniquePtr<IComponent>, ::ArenaBase>;
 
 
 public:
@@ -203,11 +211,11 @@ public:
         {}
     };
 
-    using LoadedEntityVector = Vector<LoadedEntity, Core::Alloc::GlobalArena>;
+    using LoadedEntityVector = Vector<LoadedEntity, ::ArenaBase>;
 
 
 public:
-    explicit ActiveSceneSubsystems(Core::Alloc::GlobalArena& arena)noexcept
+    explicit ActiveSceneSubsystems(::ArenaBase& arena)noexcept
         : m_arena(arena)
         , m_sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena)
         , m_loadedSubsystems(arena)
@@ -252,7 +260,7 @@ public:
 
 
 private:
-    Core::Alloc::GlobalArena& m_arena;
+    ::ArenaBase& m_arena;
     SceneRef m_scene;
     AssetMap m_sceneAssets;
     LoadedSubsystemVector m_loadedSubsystems;

@@ -156,9 +156,9 @@ class UiComboGallery{
 }
 
 class UiEditGallery{
-    public UiEditGallery(mut GlobalArena arena){
-        this.m_text = EditModel(arena);
-        this.m_readOnly = EditModel(arena);
+    public UiEditGallery(){
+        this.m_text = EditModel();
+        this.m_readOnly = EditModel();
         const b8 configured = this.m_text.setText("Edit me: \xED\x95\x9C\xEA\xB8\x80") && this.m_readOnly.setText("Read-only: copy this text");
         [essential] assert(configured, "Testbed edit gallery must have valid initial text");
     }
@@ -189,8 +189,8 @@ class UiEditGallery{
 }
 
 class UiImageGallery{
-    public b8 loadAssets(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
-        Expected<SharedImageSource> source = LoadUiGallerySkinImageSource(arena, assets, sceneSubsystems);
+    public b8 loadAssets(mut ProjectRuntimeContext context, in ActiveSceneSubsystems sceneSubsystems){
+        Expected<SharedImageSource> source = LoadUiGallerySkinImageSource(context, sceneSubsystems);
         if(!source.has_value())
             return false;
         this.m_source = source.value();
@@ -226,12 +226,12 @@ class UiImageGallery{
 }
 
 class UiNestedPopupGallery{
-    public UiNestedPopupGallery(mut GlobalArena arena){
-        this.m_source = UiNestedPopupSource(arena);
-        this.m_search = SearchComboState(arena);
-        this.m_beforeText = EditModel(arena);
-        this.m_afterText = EditModel(arena);
-        this.m_childText = EditModel(arena);
+    public UiNestedPopupGallery(){
+        this.m_source = UiNestedPopupSource();
+        this.m_search = SearchComboState();
+        this.m_beforeText = EditModel();
+        this.m_afterText = EditModel();
+        this.m_childText = EditModel();
         const b8 initialized = this.m_beforeText.setText("Before child") && this.m_afterText.setText("After child") && this.m_childText.setText("Inside child");
         [essential] assert(initialized);
         this.m_combo.select(1u);
@@ -340,9 +340,9 @@ class UiNestedPopupGallery{
 }
 
 class UiNumericEditGallery{
-    public UiNumericEditGallery(mut GlobalArena arena){
-        this.m_integer = IntegerEditModel(arena);
-        this.m_float = FloatEditModel(arena);
+    public UiNumericEditGallery(){
+        this.m_integer = IntegerEditModel();
+        this.m_float = FloatEditModel();
         const b8 initialized = this.m_integer.setValue(s_NumericEditInitialInteger) && this.m_float.setValue(s_NumericEditInitialDecimal);
         [essential] assert(initialized);
     }
@@ -479,9 +479,9 @@ class UiRadioGroupGallery{
 }
 
 class UiSearchComboGallery{
-    public UiSearchComboGallery(mut GlobalArena arena){
-        this.m_source = UiSearchComboSource(arena);
-        this.m_state = SearchComboState(arena);
+    public UiSearchComboGallery(){
+        this.m_source = UiSearchComboSource();
+        this.m_state = SearchComboState();
     }
 
     public void paint(mut UiPaintContext context, in f32 x, in f32 y){
@@ -530,8 +530,8 @@ class UiSliderGallery{
 }
 
 class UiTextAreaGallery{
-    public UiTextAreaGallery(mut GlobalArena arena){
-        this.m_document = EditModel(arena, EditLimits(), EditTextMode::Multiline);
+    public UiTextAreaGallery(){
+        this.m_document = EditModel(EditLimits(), EditTextMode::Multiline);
         const b8 initialized = this.m_document.setText("Custom multiline editor\nUp / Down retain the preferred column.\nShift selects; Ctrl+Enter submits.\nClipboard and IME belong to the OS.\n\nLong lines scroll horizontally; longer documents scroll vertically.");
         [essential] assert(initialized);
     }
@@ -562,16 +562,16 @@ class UiTextAreaGallery{
 }
 
 class UiWidgetGallery{
-    public UiWidgetGallery(mut GlobalArena arena){
-        this.m_edits = UiEditGallery(arena);
-        this.m_searchCombos = UiSearchComboGallery(arena);
-        this.m_nestedPopups = UiNestedPopupGallery(arena);
-        this.m_numericEdits = UiNumericEditGallery(arena);
-        this.m_textAreas = UiTextAreaGallery(arena);
+    public UiWidgetGallery(){
+        this.m_edits = UiEditGallery();
+        this.m_searchCombos = UiSearchComboGallery();
+        this.m_nestedPopups = UiNestedPopupGallery();
+        this.m_numericEdits = UiNumericEditGallery();
+        this.m_textAreas = UiTextAreaGallery();
     }
 
-    public b8 loadAssets(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
-        return this.m_images.loadAssets(arena, assets, sceneSubsystems);
+    public b8 loadAssets(mut ProjectRuntimeContext context, in ActiveSceneSubsystems sceneSubsystems){
+        return this.m_images.loadAssets(context, sceneSubsystems);
     }
 
     public void paint(mut UiPaintContext context, in Rect bounds){
@@ -667,15 +667,15 @@ class UiWidgetGallery{
 }
 
 class UiSkinPreview{
-    public UiSkinPreview(mut GlobalArena arena){
-        this.m_normal = Label(arena);
-        this.m_hover = Label(arena);
-        this.m_pressed = Label(arena);
-        this.m_disabled = Label(arena);
-        this.m_edit = Label(arena);
-        this.m_caption = Label(arena);
-        this.m_korean = Label(arena);
-        this.m_widgets = UiWidgetGallery(arena);
+    public UiSkinPreview(){
+        this.m_normal = Label();
+        this.m_hover = Label();
+        this.m_pressed = Label();
+        this.m_disabled = Label();
+        this.m_edit = Label();
+        this.m_caption = Label();
+        this.m_korean = Label();
+        this.m_widgets = UiWidgetGallery();
         const b8 configured = ConfigureLabel("Normal", this.m_normal) && ConfigureLabel("Hover", this.m_hover)
             && ConfigureLabel("Pressed", this.m_pressed) && ConfigureLabel("Disabled", this.m_disabled)
             && ConfigureLabelWithSize("UTF-8 labels", s_GalleryFontSize, this.m_edit) && ConfigureLabelWithSize("FreeType + HarfBuzz", s_GalleryFontSize, this.m_caption)
@@ -683,8 +683,8 @@ class UiSkinPreview{
         [essential] assert(configured, "Testbed UI labels must have valid constant text");
     }
 
-    public b8 loadAssets(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
-        return this.m_widgets.loadAssets(arena, assets, sceneSubsystems);
+    public b8 loadAssets(mut ProjectRuntimeContext context, in ActiveSceneSubsystems sceneSubsystems){
+        return this.m_widgets.loadAssets(context, sceneSubsystems);
     }
 
     public Expected<Rect> galleryBounds(mut UiPaintContext context){

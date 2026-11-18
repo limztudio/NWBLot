@@ -70,8 +70,6 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             b8 callerPassedArena = false;
             if(stmt.isCtorInit && !stmt.arguments.empty()){
                 auto isExplicitArenaArg = [](const Expr& argExpr, const MStringView inferredType)noexcept -> b8{
-                    if(IsArenaObjectType(inferredType))
-                        return true;
                     if(!inferredType.empty())
                         return false;
                     if((argExpr.kind == ExprKind::MemberAccess || argExpr.kind == ExprKind::ThisMember) && KeywordSemantics::IsUnresolvedArenaMemberName(argExpr.text))

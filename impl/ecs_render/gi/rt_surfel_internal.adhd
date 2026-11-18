@@ -284,13 +284,11 @@ class SurfelGiTaskBuilder : NoCopy{
 
 [modular]
 class SurfelGiPipelineSet : NoCopy{
-    private mut GlobalArena m_arena;
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaderSystem;
     private mut RtSurfelGiState m_rayTracingState;
 
-    public SurfelGiPipelineSet(mut GlobalArena arena, mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut RtSurfelGiState state){
-        this.m_arena = arena;
+    public SurfelGiPipelineSet(mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut RtSurfelGiState state){
         this.m_graphics = graphics;
         this.m_shaderSystem = shaderSystem;
         this.m_rayTracingState = state;

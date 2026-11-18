@@ -26,6 +26,19 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct FontPackageTestArena{
+    NWB::Core::Assets::AssetArena arena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
+    FontPackageTestArena(const Name& scopeName, const Name& scratchName)
+        : arena(scopeName)
+        , scratchArena(scratchName)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -62,7 +75,7 @@ b8 WritePositioningTableFile(in Path directory, in StringView tag, in Span<u8> b
     return WriteBinaryFile(directory / name, bytes);
 }
 
-b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
+b8 ExportPayload(in Path directory, in FontAtlasPayload payload){
     if(!WriteAtlasHeaderBinary(directory, payload))
         return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
@@ -80,20 +93,21 @@ b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut AssetArena 
 }
 
 b8 DecodePackage(in StringView source, in StringView destination){
-    AssetArena arena(s_PackageArena);
+    FontPackageTestArena testArena = FontPackageTestArena(s_PackageArena, Name(s_FontPackageNameTestsIntegrationFontBuilderScratch));
     const Path sourcePath = Path(source);
     const Path destinationPath = Path(destination);
-    ScratchArena scratch(Name(s_FontPackageNameTestsIntegrationFontBuilderScratch));
     String metadata = "";
     if(!ReadTextFile(sourcePath, metadata).has_value())
         return false;
 
-    Font font(arena);
-    FontAtlas atlas(arena);
+    Font font(testArena.arena);
+    FontAtlas atlas(testArena.arena);
     b8 foundFont = false;
     b8 foundAtlas = false;
 
-    native(in sourcePath, mut metadata, mut arena, mut scratch, mut font, mut atlas, mut foundFont, mut foundAtlas){
+    native(in sourcePath, mut metadata, mut testArena, mut font, mut atlas, mut foundFont, mut foundAtlas){
+        auto& arena = testArena.arena;
+        auto& scratch = testArena.scratchArena;
         StripUtf8Bom(metadata);
         NWB::Core::Metascript::MetaArena metadataArena{Name(s_FontPackageNameTestsIntegrationFontBuilderMetadata)};
         NWB::Core::Metascript::Document document(metadataArena);
@@ -137,7 +151,7 @@ b8 DecodePackage(in StringView source, in StringView destination){
         return false;
     if(!ValidateFontAtlasSourceMatch(atlas.payload(), font))
         return false;
-    if(!ExportPayload(destinationPath, atlas.payload(), arena, scratch))
+    if(!ExportPayload(destinationPath, atlas.payload()))
         return false;
     return WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
 }

@@ -10,8 +10,6 @@ extern class CookDependencyItemContext{
     Name assetType;
     Name virtualPath;
     MetascriptValue asset;
-    GlobalArena arena;
-    ScratchArena scratchArena;
 };
 
 [cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::CookDependencyRegistry"), cpp_flags(no_copy, no_assign)]

@@ -45,7 +45,7 @@ template<typename Value, typename Bounds, typename Canonicalize, typename Change
     const AStringView draft,
     Canonicalize canonicalize,
     Changed changed,
-    AString<Core::Alloc::GlobalArena>& acceptedDraft,
+    AString<::ArenaBase>& acceptedDraft,
     Value& value
 ){
     const b8 outside = parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum);
@@ -105,7 +105,7 @@ template<typename Canonicalize>
     return result;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+[[nodiscard]] FOUNDATION_INLINE Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<::ArenaBase>& outAcceptedDraft){
     if(!formatted)
         return MakeUnexpected(formatted.error());
     const b8 changed = HasCanonicalDraftChanged(*formatted, inOutDraft.text());
@@ -114,7 +114,7 @@ template<typename Canonicalize>
 }
 
 template<typename Value, typename Formatter>
-[[nodiscard]] FOUNDATION_INLINE Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+[[nodiscard]] FOUNDATION_INLINE Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<::ArenaBase>& outAcceptedDraft){
     Array<char, s_NumericEditMaxBytes> buffer{};
     return CanonicalizeDraft(formatter(value, buffer), inOutDraft, outAcceptedDraft);
 }
@@ -144,7 +144,7 @@ template<typename Canonicalize>
 template<typename TValue, typename TBounds, typename TDerived>
 class NumericEditModelBase : NoCopy{
 protected:
-    explicit NumericEditModelBase(Core::Alloc::GlobalArena& arena)
+    explicit NumericEditModelBase(::ArenaBase& arena)
         : m_draft(arena, { s_NumericEditMaxBytes, s_NumericEditMaxHistoryRecords, s_NumericEditMaxBytes * s_NumericEditHistoryBytesFactor })
         , m_acceptedDraft(arena)
     {
@@ -226,7 +226,7 @@ protected:
 
 protected:
     EditModel m_draft;
-    AString<Core::Alloc::GlobalArena> m_acceptedDraft;
+    AString<::ArenaBase> m_acceptedDraft;
     TValue m_value = TValue{};
     u64 m_revision = 1u;
 };

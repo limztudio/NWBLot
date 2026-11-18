@@ -25,17 +25,14 @@ extern class AssetBunchExpandContext{
     StringView virtualRoot;
     Path nwbFilePath;
     MetascriptDocument doc;
-    ScratchArena scratchArena;
 };
 
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetDocumentMetadataParseContext"), cpp_flags(no_assign)]
 extern class AssetDocumentMetadataParseContext{
-    GlobalArena cookArena;
     DiscoveredNwbFile discoveredNwbFile;
     Name assetType;
     MetascriptDocument doc;
     ParsedAssetMetadata parsedMetadata;
-    ScratchArena scratchArena;
 };
 
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetPairedSidecarRule"), cpp_flags(self_defaulted, small_value, borrow_view, brace_init)]
@@ -45,18 +42,15 @@ extern class AssetPairedSidecarRule{
 
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetValueMetadataParseContext"), cpp_flags(no_assign)]
 extern class AssetValueMetadataParseContext{
-    GlobalArena cookArena;
     DiscoveredNwbFile discoveredNwbFile;
     Name assetType;
     Name virtualPath;
     MetascriptValue value;
     ParsedAssetMetadata parsedMetadata;
-    ScratchArena scratchArena;
 };
 
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParsedAssetMetadata"), cpp_flags(no_assign)]
 extern class ParsedAssetMetadata{
-    GlobalArena arena;
     CookEntryRegistry entryRegistry;
 };
 
@@ -85,9 +79,6 @@ extern AssetMetadataParseResult TryAutoCollectedValueMetadataParsers(mut auto a0
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::TryAutoCollectedAssetBunchExpanders")]
 extern Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure> TryAutoCollectedAssetBunchExpanders(in auto a0);
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParseAssetMetadata")]
-extern b8 ParseAssetMetadata(in auto a0, in Path a1, in Path a2, mut auto a3, mut auto a4, mut auto a5, mut auto a6);
-
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::RegisterCompositeRootAssetType")]
 extern void RegisterCompositeRootAssetType(in Name a0);
 
@@ -113,7 +104,7 @@ extern void RegisterAssetPairedSidecarRule(in auto a0);
 extern b8 AddPlannedFileCount(in u64 a0, mut u64 a1);
 
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParseCookMetadataDocument")]
-extern Expected<T> ParseCookMetadataDocument<T>(in Path a0, in StringView a1, in Path a2, in auto a3, in StringView a4, in auto a5, mut auto a6);
+extern Expected<T> ParseCookMetadataDocument<T>(in Path a0, in StringView a1, in Path a2, in auto a3, in StringView a4, in auto a5);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

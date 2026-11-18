@@ -178,11 +178,16 @@ struct ComputeOutputContext{
     ComputeOutputTestArena testArena;
     Core::GpuTaskGraph graph{ testArena.arena };
     ECSRenderDetail::OpaqueRegularComputeEmulationGraphPlan plan{ testArena.arena };
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsComputeOutputSetEmpty) };
 
 
 public:
     [[nodiscard]] Expected<Core::GpuGraphResourceSetId> gatherOutputs(Core::Alloc::ScratchArena& scratchArena){
         return RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(graph, plan, scratchArena, s_ComputeOutputSetIdentity, s_ComputeOutputSetLabel);
+    }
+
+    [[nodiscard]] Expected<Core::GpuGraphResourceSetId> gatherOutputs(){
+        return gatherOutputs(scratch);
     }
 };
 
@@ -558,7 +563,6 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type SuiteScratchArena = ScratchArena;
 type SuiteGpuGraphResourceSetId = GpuGraphResourceSetId;
 type SuiteGpuPhysicalQueueInfo = GpuPhysicalQueueInfo;
 type SuiteGpuTaskId = GpuTaskId;
@@ -579,8 +583,8 @@ void SuiteResetOpticalVolumes(mut CoincidentSelectionContext context){
     context.selection.reset();
 }
 
-Expected<SuiteGpuGraphResourceSetId> SuiteGatherComputeOutputs(mut ComputeOutputContext context, mut SuiteScratchArena scratch){
-    return context.gatherOutputs(scratch);
+Expected<SuiteGpuGraphResourceSetId> SuiteGatherComputeOutputs(mut ComputeOutputContext context){
+    return context.gatherOutputs();
 }
 
 b8 SuiteBuildCsgSnapshot(mut CsgShadowSnapshotContext context, in Span<CsgShadowReceiverInput> receivers){
@@ -1184,10 +1188,9 @@ void VerifyComputeEmulationLayoutTests_LastIndexWordMayEndAtTheUintAddressBounda
 
 void VerifyComputeEmulationOutputResourceSet_EmptyPlansFailWithoutImporting(){
     ComputeOutputContext context = ComputeOutputContext();
-    SuiteScratchArena scratch = SuiteScratchArena(s_EcsCaseTestsComputeOutputSetEmpty);
-    EXPECT_FALSE(SuiteGatherComputeOutputs(context, scratch).has_value());
+    EXPECT_FALSE(SuiteGatherComputeOutputs(context).has_value());
     context.plan.captured = true;
-    EXPECT_FALSE(SuiteGatherComputeOutputs(context, scratch).has_value());
+    EXPECT_FALSE(SuiteGatherComputeOutputs(context).has_value());
     const SuiteTaskGraphDeclarationReadView view = SuiteTaskGraphDeclarationReadView(context.graph);
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), 0u);

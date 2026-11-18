@@ -167,7 +167,7 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTar
     if(!prepareCausticEmissionTargetResources(scratchArena))
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: caustic emission-target gather failed"));
 
-    ShadowPipelineSet shadowPipelines(m_arena, m_graphics, m_shaderSystem, m_rayTracingState, m_rayTracingState);
+    ShadowPipelineSet shadowPipelines(m_graphics, m_shaderSystem, m_rayTracingState, m_rayTracingState);
     m_shadowVisibilityHardwareSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
     if(m_shadowVisibilityHardwareSupported){
         if(!preparePendingMeshBlasResources(scratchArena)){
@@ -214,7 +214,7 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTar
 
         // Hardware transparent tracing retains the same half-resolution denoise and multiplicative resolve.
         // Its bounded gather and hardware overflow route never prepare a second software acceleration structure.
-        HardwareTransparentShadowResources transparentResources(m_arena, m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
+        HardwareTransparentShadowResources transparentResources(m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
         m_rayTracingState.m_softTransparentReady = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && transparentResources.prepareHardwareTransparentShadowResources(targets) && shadowPipelines.ensureSoftTransparentResolvePipeline();
         if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && !m_rayTracingState.m_softTransparentReady)
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame"));
@@ -486,9 +486,9 @@ void RendererRayTracingSystem::invalidateResources(){
     RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).releaseRayTraceMaterialContextHeapHandles();
     bvh.releaseSwBvhScratchHeapHandles();
     releaseSurfelGiHeapHandles();
-    HardwareTransparentShadowResources transparentResources(m_arena, m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
+    HardwareTransparentShadowResources transparentResources(m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
     transparentResources.releaseHardwareTransparentShadowResources();
-    LightSpaceResourceSet resources(m_arena, m_graphics, m_shaderSystem, m_lightSpaceShadow, m_shadowVisibilityHardwareSupported);
+    LightSpaceResourceSet resources(m_graphics, m_shaderSystem, m_lightSpaceShadow, m_shadowVisibilityHardwareSupported);
     resources.releaseLightSpaceShadowResources();
     m_refraction.invalidateResources();
     m_rayTracingState.invalidateResources();

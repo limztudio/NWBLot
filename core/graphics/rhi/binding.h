@@ -90,12 +90,12 @@ inline b8 operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)
 static_assert(sizeof(BindingLayoutItem) == BindingLayoutItem::s_ByteSize, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
 struct BindingLayoutDesc{
-    GraphicsVector<BindingLayoutItem> bindings;
+    Vector<BindingLayoutItem, ::ArenaBase> bindings;
     ShaderType::Mask visibility = ShaderType::None;
 
 
 public:
-    explicit BindingLayoutDesc(GraphicsArena& arena)noexcept
+    explicit BindingLayoutDesc(::ArenaBase& arena)noexcept
         : bindings(arena)
     {}
 

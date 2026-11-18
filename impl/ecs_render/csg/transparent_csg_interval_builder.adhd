@@ -122,7 +122,6 @@ class TransparentCsgIntervalBuilder : NoCopy{
     }
 
     public Expected<TransparentCsgIntervalProducerResult> declare(
-        mut ScratchArena scratchArena,
         in TransparentCsgIntervalProducerInputs inputs,
         mut AvboitPreGraphTaskPayload avboitPrePayload,
         mut AvboitCsgReceiverSpanGraphTaskPayload receiverSpanPayload,

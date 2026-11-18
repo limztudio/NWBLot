@@ -240,12 +240,20 @@ struct PreparedSoftwareBvhGraphResourcesTestsTag{};
 struct BuildContext{
     Tests::TestArena<PreparedSoftwareBvhGraphResourcesTestsTag> testArena;
     Core::GpuTaskGraph graph{ testArena.arena };
+    Core::Alloc::ScratchArena scratch{ Name(Tests::EcsGraphicsCases::s_EcsCaseTestsPreparedSwBvhMissing) };
 };
 
 struct RaySceneGraphReadsTestsTag{};
 struct RaySceneGraphReadsContext{
     Tests::TestArena<RaySceneGraphReadsTestsTag> testArena;
     Core::GpuTaskGraph graph{ testArena.arena };
+    Core::Alloc::ScratchArena scratch{ Name(Tests::EcsGraphicsCases::s_EcsCaseTestsRaySceneGraphReadsScratch) };
+
+
+public:
+    [[nodiscard]] ArenaMemoryStats scratchMemoryStats()const noexcept{
+        return scratch.memoryStats();
+    }
 };
 
 [[nodiscard]] FOUNDATION_INLINE Float34U MakeZeroFloat34U()noexcept{
@@ -352,11 +360,14 @@ using SwBvhBuildContext = EcsGraphicsMeshOpticsDetail::BuildContext;
 using PreparedMeshSwBvhBuild = Impl::PreparedMeshSwBvhBuild;
 using PreparedMeshSwBvhBuildSpan = Span<const Impl::PreparedMeshSwBvhBuild>;
 using PreparedMeshSwBvhGraphResourceVectorResult = Expected<Impl::PreparedMeshSwBvhGraphResourceVector>;
-[[nodiscard]] FOUNDATION_INLINE PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(const GpuTaskGraph& graph, const PreparedMeshSwBvhBuildSpan builds, ScratchArena& scratch){
-    return Impl::ResolvePreparedSoftwareBvhGraphResources(scratch, graph, builds);
+[[nodiscard]] FOUNDATION_INLINE PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(SwBvhBuildContext& context, const PreparedMeshSwBvhBuildSpan builds){
+    return Impl::ResolvePreparedSoftwareBvhGraphResources(context.scratch, context.graph, builds);
 }
 using RaySceneGraphReadsContext = EcsGraphicsMeshOpticsDetail::RaySceneGraphReadsContext;
 using Impl::ImportRayTracingSceneGraphReads;
+[[nodiscard]] FOUNDATION_INLINE b8 TryImportRaySceneGraphReads(const Impl::RayTracingSceneGraphResources& resources, RaySceneGraphReadsContext& context){
+    return Impl::ImportRayTracingSceneGraphReads(resources, ResourceStates::Common, Core::GpuTaskId(), context.graph, context.scratch).has_value();
+}
 using EcsGraphicsMeshOpticsDetail::MakeZeroFloat34U;
 
 using PresentationSettings = Impl::PresentationSettings;
@@ -1037,12 +1048,11 @@ void VerifyOutputLayer_MissingContributorInvalidTokenAndZeroGenerationCannotPubl
 
 void VerifyPreparedSoftwareBvhGraphResources_MissingImportedBuildBuffersCannotPublishResources(){
     SwBvhBuildContext context = SwBvhBuildContext();
-    ScratchArena scratch = ScratchArena(Name(s_EcsCaseTestsPreparedSwBvhMissing));
-    const PreparedMeshSwBvhGraphResourceVectorResult emptyResources = ResolveSwBvhGraphResources(context.graph, PreparedMeshSwBvhBuildSpan(), scratch);
+    const PreparedMeshSwBvhGraphResourceVectorResult emptyResources = ResolveSwBvhGraphResources(context, PreparedMeshSwBvhBuildSpan());
     ASSERT_TRUE(emptyResources.has_value());
     EXPECT_TRUE(emptyResources.value().empty());
     const Array<PreparedMeshSwBvhBuild, 1> missingBuilds = Array<PreparedMeshSwBvhBuild, 1>();
-    EXPECT_FALSE(ResolveSwBvhGraphResources(context.graph, PreparedMeshSwBvhBuildSpan(missingBuilds.data(), missingBuilds.size()), scratch).has_value());
+    EXPECT_FALSE(ResolveSwBvhGraphResources(context, PreparedMeshSwBvhBuildSpan(missingBuilds.data(), missingBuilds.size())).has_value());
     const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(context.graph);
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), 0u);
@@ -1086,21 +1096,12 @@ void VerifyEcsGraphics_RaySceneSnapshotDoesNotTreatMissingResourcesAsHardwareAva
     EXPECT_FALSE(resources.valid());
 }
 
-b8 TryImportRaySceneGraphReads(
-    in RayTracingSceneGraphResources resources,
-    mut RaySceneGraphReadsContext context,
-    mut ScratchArena scratchArena
-){
-    return ImportRayTracingSceneGraphReads(resources, ResourceStates::Common, GpuTaskId(), context.graph, scratchArena).has_value();
-}
-
 void VerifyEcsGraphics_RaySceneGraphReadsMissingResourcesRetainScratchArena(){
     const RayTracingSceneGraphResources resources = RayTracingSceneGraphResources();
     RaySceneGraphReadsContext context = RaySceneGraphReadsContext();
-    ScratchArena scratchArena = ScratchArena(Name(s_EcsCaseTestsRaySceneGraphReadsScratch));
-    const ArenaMemoryStats scratchBefore = scratchArena.memoryStats();
-    const b8 hasReads = TryImportRaySceneGraphReads(resources, context, scratchArena);
-    const ArenaMemoryStats scratchAfter = scratchArena.memoryStats();
+    const ArenaMemoryStats scratchBefore = context.scratchMemoryStats();
+    const b8 hasReads = TryImportRaySceneGraphReads(resources, context);
+    const ArenaMemoryStats scratchAfter = context.scratchMemoryStats();
 
     EXPECT_FALSE(hasReads);
     EXPECT_EQ(scratchAfter.usedBytes, scratchBefore.usedBytes);

@@ -192,8 +192,8 @@ void GpuResVersionExpectDeclarationState(in GpuTaskGraph graph, in u64 revision,
 void VerifyGpuResVersion_SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocated(){
     const ArenaMemoryStats before = OwnerStats(s_CoreTaskGpuDeclarationScratch);
     {
-        GlobalArena arena = GlobalArena(s_GpuCaseResourceSetMemorySmall);
-        GpuTaskGraph graph = GpuTaskGraph(arena);
+        TestArena testArena = TestArena(s_GpuCaseResourceSetMemorySmall);
+        GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
         Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
         ASSERT_TRUE(GpuResVersionFillResources(graph, 64u, members));
         GpuGraphResourceSetId lastSet = GpuGraphResourceSetId();
@@ -226,7 +226,7 @@ void VerifyGpuResVersion_SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnalloca
         EXPECT_EQ(after.allocationCount, before.allocationCount);
         EXPECT_EQ(after.reallocationCount, before.reallocationCount);
         EXPECT_EQ(after.deallocationCount, before.deallocationCount);
-        EXPECT_GT(arena.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
     }
     EXPECT_EQ(OwnerStats(s_CoreTaskGpuDeclarationScratch).usedBytes, before.usedBytes);
     EXPECT_EQ(OwnerStats(s_CoreTaskGpuDeclarationScratch).reservedBytes, before.reservedBytes);
@@ -236,8 +236,8 @@ void VerifyGpuResVersion_LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossG
     const ArenaMemoryStats before = OwnerStats(s_CoreTaskGpuDeclarationScratch);
     ArenaMemoryStats warm = ArenaMemoryStats();
     {
-        GlobalArena arena = GlobalArena(s_GpuCaseResourceSetMemoryRepeated);
-        GpuTaskGraph graph = GpuTaskGraph(arena);
+        TestArena testArena = TestArena(s_GpuCaseResourceSetMemoryRepeated);
+        GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
         Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
         Array<usize, 3> counts = Array<usize, 3>();
         counts[0u] = 4096u;
@@ -289,7 +289,7 @@ void VerifyGpuResVersion_LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossG
         const ArenaMemoryStats afterReset = OwnerStats(s_CoreTaskGpuDeclarationScratch);
         EXPECT_EQ(afterReset.usedBytes, before.usedBytes);
         EXPECT_EQ(afterReset.reservedBytes, warm.reservedBytes);
-        EXPECT_GT(arena.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
     }
     const ArenaMemoryStats afterDestruction = OwnerStats(s_CoreTaskGpuDeclarationScratch);
     EXPECT_EQ(afterDestruction.usedBytes, before.usedBytes);
@@ -301,8 +301,8 @@ void VerifyGpuResVersion_LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossG
 void VerifyGpuResVersion_LateRejectedMembersRetireTemporaryStorageBeforeTheNextDeclaration(){
     const ArenaMemoryStats before = OwnerStats(s_CoreTaskGpuDeclarationScratch);
     {
-        GlobalArena arena = GlobalArena(s_GpuCaseResourceSetMemoryRejection);
-        GpuTaskGraph graph = GpuTaskGraph(arena);
+        TestArena testArena = TestArena(s_GpuCaseResourceSetMemoryRejection);
+        GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
         Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
         ASSERT_TRUE(GpuResVersionFillResources(graph, 1024u, members));
         const usize lastIndex = members.size() - 1u;
@@ -355,7 +355,7 @@ void VerifyGpuResVersion_LateRejectedMembersRetireTemporaryStorageBeforeTheNextD
             else
                 EXPECT_EQ(after.reservedBytes, warmReserved);
         }
-        EXPECT_GT(arena.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
     }
     const ArenaMemoryStats after = OwnerStats(s_CoreTaskGpuDeclarationScratch);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
@@ -365,8 +365,8 @@ void VerifyGpuResVersion_LateRejectedMembersRetireTemporaryStorageBeforeTheNextD
 }
 
 void VerifyGpuResVersion_CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdentity(){
-    GlobalArena graphArena = GlobalArena(s_GpuCaseResourceSetValidationGraph);
-    GpuTaskGraph graph = GpuTaskGraph(graphArena);
+    TestArena testArena = TestArena(s_GpuCaseResourceSetValidationGraph);
+    GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
     ASSERT_TRUE(GpuResVersionFillValidationResources(graph, 64u, members));
     GpuGraphResourceSetDesc desc = MakeGpuResVersionValidationSetDesc(s_ResourceSetValidationOrdered, members);
@@ -424,7 +424,7 @@ void VerifyGpuResVersion_CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdentity
     }
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
     EXPECT_EQ(declarations.resourceSetCount(), 2u);
-    EXPECT_GT(graphArena.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuResVersion_EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartialSets(){
@@ -435,8 +435,8 @@ void VerifyGpuResVersion_EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartialSe
     counts[3u] = 33u;
     counts[4u] = 1024u;
     for(in usize count : counts){
-        GlobalArena graphArena = GlobalArena(s_GpuCaseResourceSetValidationGraph);
-        GpuTaskGraph graph = GpuTaskGraph(graphArena);
+        TestArena testArena = TestArena(s_GpuCaseResourceSetValidationGraph);
+        GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
         Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
         ASSERT_TRUE(GpuResVersionFillValidationResources(graph, count, members));
         const GpuGraphResourceSetDesc desc = MakeGpuResVersionValidationSetDesc(s_GpuCaseResourceSetValidationRejected, members);
@@ -481,13 +481,13 @@ void VerifyGpuResVersion_EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartialSe
         }
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         EXPECT_EQ(declarations.resourceSetCount(), 1u);
-        EXPECT_GT(graphArena.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
     }
 }
 
 void VerifyGpuResVersion_EmptySetsRemainValidAndMalformedDescriptorsRemainUnpublished(){
-    GlobalArena graphArena = GlobalArena(s_GpuCaseResourceSetValidationGraph);
-    GpuTaskGraph graph = GpuTaskGraph(graphArena);
+    TestArena testArena = TestArena(s_GpuCaseResourceSetValidationGraph);
+    GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
     ASSERT_TRUE(GpuResVersionFillValidationResources(graph, 1u, members));
     GpuGraphResourceSetDesc desc = MakeGpuResVersionValidationSetDesc(s_GpuCaseResourceSetValidationEmpty, members);
@@ -520,12 +520,12 @@ void VerifyGpuResVersion_EmptySetsRemainValidAndMalformedDescriptorsRemainUnpubl
     desc.memberCount = cast<usize>(u32.max) + 1u;
     EXPECT_FALSE(graph.importResourceSet(desc).has_value());
     GpuResVersionExpectDeclarationState(graph, revision, 1u);
-    EXPECT_GT(graphArena.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuResVersion_ResetRejectsOldGenerationsAndAcceptsFreshIdsAtTheSameIndices(){
-    GlobalArena graphArena = GlobalArena(s_GpuCaseResourceSetValidationGraph);
-    GpuTaskGraph graph = GpuTaskGraph(graphArena);
+    TestArena testArena = TestArena(s_GpuCaseResourceSetValidationGraph);
+    GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
     ASSERT_TRUE(GpuResVersionFillValidationResources(graph, 64u, members));
     const Expected<GpuGraphResourceSetId> previousSetResult = graph.importResourceSet(MakeGpuResVersionValidationSetDesc(s_ResourceSetValidationReset, members));
@@ -550,7 +550,7 @@ void VerifyGpuResVersion_ResetRejectsOldGenerationsAndAcceptsFreshIdsAtTheSameIn
     EXPECT_FALSE(declarations.validResourceSet(previousSet));
     EXPECT_TRUE(declarations.validResourceSet(freshSet));
     EXPECT_EQ(declarations.resourceSetCount(), 1u);
-    EXPECT_GT(graphArena.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuResVersion_StoresDistinctDeclarationsAndInvalidatesThemOnReset(){
@@ -627,7 +627,7 @@ void VerifyGpuResVersion_StoresDistinctDeclarationsAndInvalidatesThemOnReset(){
 }
 
 void VerifyGpuResVersion_RejectsMissingAndDuplicateTaskProducedVersionProducers(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     {
         TestArena testArena = TestArena();
@@ -658,7 +658,7 @@ void VerifyGpuResVersion_RejectsMissingAndDuplicateTaskProducedVersionProducers(
         }
 
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -703,7 +703,7 @@ void VerifyGpuResVersion_RejectsMissingAndDuplicateTaskProducedVersionProducers(
         ASSERT_TRUE(second.valid());
 
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::DuplicateResourceVersionProducer);
         EXPECT_EQ(analysis.diagnostic().task, second);
         EXPECT_EQ(analysis.diagnostic().relatedTask, first);
@@ -713,7 +713,7 @@ void VerifyGpuResVersion_RejectsMissingAndDuplicateTaskProducedVersionProducers(
 }
 
 void VerifyGpuResVersion_RejectsInvalidVersionDeclarations(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     {
         TestArena testArena = TestArena();
@@ -730,7 +730,7 @@ void VerifyGpuResVersion_RejectsInvalidVersionDeclarations(){
         const GpuGraphResourceVersionId version = versionResult.value();
         ASSERT_TRUE(version.valid());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -749,7 +749,7 @@ void VerifyGpuResVersion_RejectsInvalidVersionDeclarations(){
         const GpuGraphResourceVersionId version = versionResult.value();
         ASSERT_TRUE(version.valid());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, staleResource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -772,7 +772,7 @@ void VerifyGpuResVersion_RejectsInvalidVersionDeclarations(){
         const GpuGraphResourceVersionId version = versionResult.value();
         ASSERT_TRUE(version.valid());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -801,7 +801,7 @@ void VerifyGpuResVersion_RejectsInvalidVersionDeclarations(){
         const GpuGraphResourceVersionId version = versionResult.value();
         ASSERT_TRUE(version.valid());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -809,7 +809,7 @@ void VerifyGpuResVersion_RejectsInvalidVersionDeclarations(){
 }
 
 void VerifyGpuResVersion_RejectsStaleRoleAccessAndRangeVersionUses(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     {
         TestArena testArena = TestArena();
@@ -843,7 +843,7 @@ void VerifyGpuResVersion_RejectsStaleRoleAccessAndRangeVersionUses(){
         ASSERT_TRUE(resource.valid());
         ASSERT_TRUE(task.valid());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, staleVersion);
@@ -899,7 +899,7 @@ void VerifyGpuResVersion_RejectsStaleRoleAccessAndRangeVersionUses(){
         ASSERT_TRUE(task.valid());
 
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+        EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
         EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
@@ -941,7 +941,7 @@ void VerifyGpuResVersion_RejectsStaleRoleAccessAndRangeVersionUses(){
 }
 
 void VerifyGpuResVersion_OrdersConsumerBeforeProducerAndPublishesCompileStatistics(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -996,7 +996,7 @@ void VerifyGpuResVersion_OrdersConsumerBeforeProducerAndPublishesCompileStatisti
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(GpuResVersionCompile(analysis, assignments, compiledGraph, operationScratchArena, graph));
+    ASSERT_TRUE(GpuResVersionCompile(analysis, assignments, compiledGraph, operationScratch, graph));
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         ASSERT_TRUE(declarations.valid());
@@ -1011,7 +1011,7 @@ void VerifyGpuResVersion_OrdersConsumerBeforeProducerAndPublishesCompileStatisti
 }
 
 void VerifyGpuResVersion_ExportsDependencyAndLifetimeReasonsWithExplicitOverlap(){
-    ScratchArena scratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1080,7 +1080,7 @@ void VerifyGpuResVersion_ExportsDependencyAndLifetimeReasonsWithExplicitOverlap(
     ASSERT_TRUE(overwriter.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, scratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, scratch, analysis));
     EXPECT_TRUE(analysis.hasExplicitEdge(producer, consumer));
     EXPECT_TRUE(GpuResVersionHasEdge(analysis, producer, consumer, resource, version, GpuTaskHazardType::VersionDependency));
     EXPECT_TRUE(GpuResVersionHasEdge(analysis, consumer, overwriter, resource, version, GpuTaskHazardType::VersionLifetime));
@@ -1088,12 +1088,12 @@ void VerifyGpuResVersion_ExportsDependencyAndLifetimeReasonsWithExplicitOverlap(
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     FrameGraphPendingNameEdges pendingEdges = FrameGraphPendingNameEdges(testArena.arena);
-    FrameGraphBuilder builder = FrameGraphBuilder(scratchArena, nodes, edges, pendingEdges);
+    FrameGraphBuilder builder = FrameGraphBuilder(scratch.scratchArena, nodes, edges, pendingEdges);
     u32 taskNodeOffset = 0u;
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         ASSERT_TRUE(declarations.valid());
-        ASSERT_TRUE(declarations.appendFrameGraphTelemetry(analysis, scratchArena, builder));
+        ASSERT_TRUE(declarations.appendFrameGraphTelemetry(analysis, scratch.scratchArena, builder));
         taskNodeOffset = cast<u32>(declarations.resourceCount());
     }
     const u32 producerNode = taskNodeOffset + producer.index;
@@ -1129,7 +1129,7 @@ void VerifyGpuResVersion_ExportsDependencyAndLifetimeReasonsWithExplicitOverlap(
 }
 
 void VerifyGpuResVersion_DeduplicatesVersionAndPhysicalHazardsInQueueScore(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1180,7 +1180,7 @@ void VerifyGpuResVersion_DeduplicatesVersionAndPhysicalHazardsInQueueScore(){
     ASSERT_TRUE(consumer.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.inferredEdges().size(), 2u);
     ASSERT_EQ(analysis.schedulingEdges().size(), 1u);
     b8 foundVersionDependency = false;
@@ -1202,7 +1202,7 @@ void VerifyGpuResVersion_DeduplicatesVersionAndPhysicalHazardsInQueueScore(){
     queues[1u] = DedicatedComputeQueue();
     const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
+    ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology));
     const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
     const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, consumer);
     ASSERT_TRUE(producerAssignmentOpt.has_value());
@@ -1218,7 +1218,7 @@ void VerifyGpuResVersion_DeduplicatesVersionAndPhysicalHazardsInQueueScore(){
 }
 
 void VerifyGpuResVersion_RetainsExternalCompletionForImportedRootConsumerAndInvalidatesLateAnalysis(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1258,7 +1258,7 @@ void VerifyGpuResVersion_RetainsExternalCompletionForImportedRootConsumerAndInva
     ASSERT_TRUE(consumer.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 0u);
     ASSERT_EQ(analysis.externalDependencies().size(), 1u);
     u64 analyzedRevision = 0u;
@@ -1281,7 +1281,7 @@ void VerifyGpuResVersion_RetainsExternalCompletionForImportedRootConsumerAndInva
 }
 
 void VerifyGpuResVersion_ReportsClosedPureResourceVersionCycle(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1339,7 +1339,7 @@ void VerifyGpuResVersion_ReportsClosedPureResourceVersionCycle(){
     ASSERT_TRUE(taskB.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+    EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
     EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 2u);
     GpuResVersionExpectClosedCycle(analysis);
@@ -1354,7 +1354,7 @@ void VerifyGpuResVersion_ReportsClosedPureResourceVersionCycle(){
 }
 
 void VerifyGpuResVersion_ReportsClosedMixedExplicitAndResourceVersionCycle(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1404,7 +1404,7 @@ void VerifyGpuResVersion_ReportsClosedMixedExplicitAndResourceVersionCycle(){
     ASSERT_TRUE(producer.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+    EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
     EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 1u);
     GpuResVersionExpectClosedCycle(analysis);
@@ -1426,7 +1426,7 @@ void VerifyGpuResVersion_ReportsClosedMixedExplicitAndResourceVersionCycle(){
 }
 
 void VerifyGpuResVersion_PreservesProducedVersionUntilAllConsumersFinish(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1493,7 +1493,7 @@ void VerifyGpuResVersion_PreservesProducedVersionUntilAllConsumersFinish(){
     ASSERT_TRUE(consumer.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], producer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], consumer);
@@ -1503,7 +1503,7 @@ void VerifyGpuResVersion_PreservesProducedVersionUntilAllConsumersFinish(){
 }
 
 void VerifyGpuResVersion_ReportsExplicitClobberCycleWithVersionLifetimeProvenance(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1574,7 +1574,7 @@ void VerifyGpuResVersion_ReportsExplicitClobberCycleWithVersionLifetimeProvenanc
     ASSERT_TRUE(consumer.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+    EXPECT_FALSE(Analyze(graph, operationScratch, analysis));
     EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.diagnostic().resource, resource);
     EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -1598,7 +1598,7 @@ void VerifyGpuResVersion_ReportsExplicitClobberCycleWithVersionLifetimeProvenanc
 }
 
 void VerifyGpuResVersion_HonorsExplicitClobberBeforeVersionProducer(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1667,7 +1667,7 @@ void VerifyGpuResVersion_HonorsExplicitClobberBeforeVersionProducer(){
     ASSERT_TRUE(consumer.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], clobber);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producer);
@@ -1676,7 +1676,7 @@ void VerifyGpuResVersion_HonorsExplicitClobberBeforeVersionProducer(){
 }
 
 void VerifyGpuResVersion_ProtectsImportedRootConsumerFromLaterClobber(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1726,7 +1726,7 @@ void VerifyGpuResVersion_ProtectsImportedRootConsumerFromLaterClobber(){
     ASSERT_TRUE(clobber.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], consumer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], clobber);
@@ -1740,7 +1740,7 @@ void VerifyGpuResVersion_ProtectsImportedRootConsumerFromLaterClobber(){
 }
 
 void VerifyGpuResVersion_TreatsImportedRootLifetimeWriterAsPreBirthForProducedVersion(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1817,7 +1817,7 @@ void VerifyGpuResVersion_TreatsImportedRootLifetimeWriterAsPreBirthForProducedVe
     ASSERT_TRUE(consumer.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], importedConsumer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producer);
@@ -1832,7 +1832,7 @@ Expected<b8, GpuTaskGraphAnalysisStatusEnum> GpuResVersionAnalyzeWholeResourceRa
     in Name identity,
     in GpuTaskResourceRange range
 ){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGpuResourceVersionScratch);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGpuResourceVersionScratch);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1860,7 +1860,7 @@ Expected<b8, GpuTaskGraphAnalysisStatusEnum> GpuResVersionAnalyzeWholeResourceRa
     if(!version.valid())
         return MakeUnexpected(GpuTaskGraphAnalysisStatus::NotAnalyzed);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    if(!Analyze(graph, operationScratchArena, analysis))
+    if(!Analyze(graph, operationScratch, analysis))
         return MakeUnexpected(analysis.diagnostic().status);
     return true;
 }

@@ -4,6 +4,7 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_ui/suite.adhd>
+#include <tests/unit/ui/multiline_fixture.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -305,7 +306,7 @@ void RejectEcsUiNavigationTarget(mut UiEditNavigationGuardTests self, in Expecte
     ASSERT_TRUE(self.m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(self.m_navigation.setPreferredX(70.0f));
-    const MultilineSnapshot model = MultilineSnapshot(self.m_arena, self.m_navigationModel);
+    const MultilineSnapshot model = MultilineSnapshot(self.m_navigationModel);
     const UiEditNavigationSnapshot navigation = self.m_navigation.snapshot();
     const u64 displayed = self.m_context.input().layoutGeneration();
     const usize targets = self.m_context.input().targets().size();

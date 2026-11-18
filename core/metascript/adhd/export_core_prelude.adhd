@@ -3,7 +3,6 @@
 
 
 #include <core/alloc/general.adhd>
-#include <core/alloc/global.adhd>
 #include <core/alloc/scratch.adhd>
 
 #include <core/assets/arena_names.adhd>
@@ -17,7 +16,6 @@
 #include <core/assets/cook_paths.adhd>
 #include <core/assets/expanded_metadata.adhd>
 #include <core/assets/gather_merge_registry.adhd>
-#include <core/assets/global.adhd>
 #include <core/assets/input_list.adhd>
 #include <core/assets/manager.adhd>
 #include <core/assets/metadata_fields.adhd>

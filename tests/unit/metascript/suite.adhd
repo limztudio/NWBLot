@@ -814,7 +814,7 @@ inline constexpr MStringView s_SuiteCoreGlobalExportsShadowAndLayoutSource =
     "    dstMat = f32x4x4u(reg);\r\n"
     "    MatrixDecomposition decomp = MatrixDecomposition();\r\n"
     "    Sha1Digest digest = ComputeSha1(rawBytes);\r\n"
-    "    usize alignedBytes = PersistentArena::StructureAlignedSize(64u);\r\n"
+    "    usize alignedBytes = PersistentArenaStructureAlignedSize(64u);\r\n"
     "    DescriptorWriteItem emptyWrite = DescriptorWriteItem::None();\r\n"
     "    f32x3x4 joint = MatrixIdentity<f32x3x4>();\r\n"
     "    joint._14 = 2.0f;\r\n"
@@ -837,7 +837,6 @@ inline constexpr MStringView s_SuiteHandleDerefRhiAndAssetExportsSource =
     "    mut TextureHandle tex,\r\n"
     "    mut UniquePtr<IAsset> assetPtr,\r\n"
     "    mut RefCountPtr<IAsset> rcAsset,\r\n"
-    "    mut GlobalArena devArena,\r\n"
     "    in Span<u8> indexBytes,\r\n"
     "    mut CookEntryRegistry entryRegistry,\r\n"
     "    in Name vp,\r\n"
@@ -853,10 +852,11 @@ inline constexpr MStringView s_SuiteHandleDerefRhiAndAssetExportsSource =
     "    }\r\n"
     "    cmd.clearState();\r\n"
     "    cmd.close();\r\n"
-    "    auto idxRes = DeserializeIndex(devArena, indexBytes);\r\n"
+    "    auto vpRes = BuildVirtualPathName(vp, \"default\", vp);\r\n"
+    "    auto cmdStreamRes = ValidateGpuCommandIrStream(indexBytes);\r\n"
     "    auto bunchRes = ExpandAssetBunchForAssetCook(bunchCtx);\r\n"
     "    b8 assetOk = assetPtr.valid() && rcAsset.valid() && AcceptMutAsset(assetPtr.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u))) && AcceptMutAsset(rcAsset.deref(), DerefFramebufferPtr(rt.getFramebuffer(0u)));\r\n"
-    "    return dev.getDeviceGeneration() != 0u && bufOk && srv.slot == 0u && idxRes.hasValue() && bunchRes.hasValue() && entryRegistry.has(vp) && entryRegistry.entryCount() == 0u && assetOk;\r\n"
+    "    return dev.getDeviceGeneration() != 0u && bufOk && srv.slot == 0u && vpRes.hasValue() && cmdStreamRes.valid() && bunchRes.hasValue() && entryRegistry.has(vp) && entryRegistry.entryCount() == 0u && assetOk;\r\n"
     "}\r\n";
 
 inline constexpr MStringView s_SuiteCrossNamespaceImportSource =
@@ -1074,6 +1074,16 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFails(arena, "[noinline]\r\nvoid BadNoInlineAttr() {}\r\n", "impl/bad_noinline_attr.adhd");
     ExpectCompileFails(arena, "inline void BadInlineKeyword() {}\r\n", "impl/bad_inline_kw.adhd");
     ExpectCompileFails(arena, "noinline void BadNoInlineKeyword() {}\r\n", "impl/bad_noinline_kw.adhd");
+    ExpectCompileFailsWithMessage(arena, "void BadArenaParam(mut ScratchArena a) {}\r\n", "impl/bad_scratch_param.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "void BadGlobalLocal() {\r\n    GlobalArena a = GlobalArena(\"bad\");\r\n}\r\n", "impl/bad_global_local.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "class BadArenaField {\r\n    public AssetArena a;\r\n}\r\n", "impl/bad_asset_field.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "void BadArenaBase(in ArenaBase a) {}\r\n", "impl/bad_arena_base.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "void BadCookArena(mut CookArena a) {}\r\n", "impl/bad_cook_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "void BadGraphicsArena(mut GraphicsArena a) {}\r\n", "impl/bad_graphics_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "void BadMetaArena(mut MetaArena a) {}\r\n", "impl/bad_meta_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "void BadPersistentArena(mut PersistentArena a) {}\r\n", "impl/bad_persistent_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "void BadTelemetryArena(mut TelemetryArena a) {}\r\n", "impl/bad_telemetry_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
+    ExpectCompileFails(arena, "usize BadScratchStatic() {\r\n    return ScratchArena::s_DefaultInitialChunkBytes;\r\n}\r\n", "impl/bad_scratch_static.adhd");
     ExpectCompileFails(arena, "[arena, serialize, asset(\"bad_asset\")]\r\nclass BadSerializeAsset { public u32 v = 0u; }\r\n", "impl/bad_serialize_asset.adhd");
     ExpectCompileFails(arena, "[asset(\"bad_asset\")]\r\nclass BadNoArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_no_arena_asset.adhd");
     ExpectCompileFails(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadTemplateAsset<T> { public T v; }\r\n", "impl/bad_template_asset.adhd");
@@ -1737,6 +1747,7 @@ void VerifyAdhdCompiler_ResolvesHandleDerefRhiAndAssetExports(){
     const StringView srcView = GeneratedSourceView(res);
     const StringView hdrView = GeneratedHeaderView(res);
     EXPECT_NE(hdrView.find("#include <core/graphics/shader_archive.h>"), usize.max);
+    EXPECT_NE(hdrView.find("#include <core/task/gpu/capture/command_ir.h>"), usize.max);
     EXPECT_NE(hdrView.find("#include <core/assets/bunch/cook.h>"), usize.max);
     EXPECT_NE(srcView.find("buf.deref()"), usize.max);
     EXPECT_NE(srcView.find("assetPtr.deref()"), usize.max);
@@ -1744,7 +1755,8 @@ void VerifyAdhdCompiler_ResolvesHandleDerefRhiAndAssetExports(){
     EXPECT_NE(srcView.find("::NWB::Core::DerefFramebufferPtr((rt.getFramebuffer(0u)))"), usize.max);
     EXPECT_NE(srcView.find("::NWB::Core::DescriptorWriteItem::TextureSrv(0u, tex.deref())"), usize.max);
     EXPECT_NE(srcView.find("srv.setDimension(::NWB::Core::TextureDimension::Texture2D)"), usize.max);
-    EXPECT_NE(srcView.find("::NWB::Core::ShaderArchive::DeserializeIndex(devArena, ([](const auto& __adhd_bytes)"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::Core::ShaderArchive::BuildVirtualPathName(vp, \"default\", vp)"), usize.max);
+    EXPECT_NE(srcView.find("::NWB::Core::ValidateGpuCommandIrStream(([](const auto& __adhd_bytes)"), usize.max);
     EXPECT_NE(srcView.find("::NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunchForAssetCook(bunchCtx)"), usize.max);
 
     ExpectCompileFails(arena, "void MutAsset(mut IAsset a) {}\r\nUniquePtr<IAsset> MakePtr() { return UniquePtr<IAsset>(); }\r\nvoid BadTempUniqueDeref() {\r\n    MutAsset(MakePtr().deref());\r\n}\r\n", "impl/sim/bad_tmp_unique_deref.adhd");
@@ -2067,8 +2079,7 @@ b8 InspectCoreExternApis(
     mut GraphicsRuntime runtime,
     mut GpuTaskGraph graph
 ){
-    ScratchArena scratch = ScratchArena(Name("edge_test"));
-    const usize initialBytes = ScratchArena::s_DefaultInitialChunkBytes;
+    const u32 invalidHandle = GpuDescriptorHandle::s_Invalid;
     const b8 okDefault = doc.parse(src);
     const b8 okAlias = aliasDoc.parse(src);
     b8 visitedVar = false;
@@ -2083,7 +2094,7 @@ b8 InspectCoreExternApis(
     Expected<GpuDescriptorHandle> allocated = heap.allocate(GpuDescriptorClass::Sampler);
     graph.reset();
 
-    return (initialBytes > 0u) && okDefault && okAlias && visitedVar && (frameIdx >= 0u) && heapReady && allocated.hasValue();
+    return (invalidHandle != 0u) && okDefault && okAlias && visitedVar && (frameIdx >= 0u) && heapReady && allocated.hasValue();
 }
 )adhd";
 
@@ -2104,7 +2115,7 @@ b8 InspectCoreExternApis(
         EXPECT_NE(hdr.find("#include <core/graphics/backend_selection/"), AStringView::npos);
         EXPECT_NE(hdr.find("#include <core/task/gpu/task_graph.h>"), AStringView::npos);
         EXPECT_NE(hdr.find("#include <core/graphics/runtime/runtime.h>"), AStringView::npos);
-        EXPECT_NE(cpp.find("::NWB::Core::Alloc::ScratchArena::s_DefaultInitialChunkBytes"), AStringView::npos);
+        EXPECT_NE(cpp.find("::NWB::Core::GpuDescriptorHandle::s_Invalid"), AStringView::npos);
         EXPECT_NE(cpp.find("doc.parse(src)"), AStringView::npos);
         EXPECT_NE(cpp.find("aliasDoc.parse(src)"), AStringView::npos);
         EXPECT_NE(cpp.find("runtime.getFrameIndex()"), AStringView::npos);
@@ -2157,7 +2168,7 @@ b8 ExerciseEmittedAndManualExterns(
     mut MetascriptDocument aliasDoc,
     mut Counter counter
 ){
-    const usize chunk = ScratchArena::s_DefaultInitialChunkBytes;
+    const u32 invalidHandle = GpuDescriptorHandle::s_Invalid;
     const u32 count = Counter::s_Count;
     const u32 nextVal = Counter::Next();
     const u32 updated = counter.addWithDefault();
@@ -2166,7 +2177,7 @@ b8 ExerciseEmittedAndManualExterns(
     const AccessBits bits = AccessBits::Read | AccessBits::Write;
     return doc.parse(src)
         && aliasDoc.parse(src)
-        && (chunk > 0u)
+        && (invalidHandle != 0u)
         && (count <= kMaxItems)
         && (nextVal > 0u)
         && (updated > 0u)
@@ -2320,11 +2331,7 @@ void RunCoreCppHeaderImportVerification(){
     };
 
     const auto* scratch = findClass("ScratchArena");
-    ASSERT_NE(scratch, nullptr);
-    EXPECT_TRUE(scratch->isExtern);
-    EXPECT_EQ(scratch->cppExportName, "::NWB::Core::Alloc::ScratchArena");
-    EXPECT_EQ(scratch->totalSize, 304u);
-    EXPECT_EQ(scratch->totalAlign, 8u);
+    EXPECT_EQ(scratch, nullptr);
 
     const auto* document = findClass("Document");
     ASSERT_NE(document, nullptr);

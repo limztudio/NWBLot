@@ -125,7 +125,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         return false;
 
     // Local layout carries the heap slot plus the swap-chain mode.
-    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(DeferredLightingPushConstants), ShaderTypeMask::Compute, this.m_deferredState.m_lightingBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(DeferredLightingPushConstants), ShaderTypeMask::Compute, this.m_deferredState.m_lightingBindingLayout)){
         error("RendererSystem: failed to create deferred lighting binding layout");
         return false;
     }
@@ -191,12 +191,12 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(DeferredCompositePushConstants), ShaderTypeMask::Compute, this.m_deferredState.m_compositeComputeBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(DeferredCompositePushConstants), ShaderTypeMask::Compute, this.m_deferredState.m_compositeComputeBindingLayout)){
         error("RendererSystem: failed to create deferred composite-compute binding layout");
         return false;
     }
 
-    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(DeferredPresentPushConstants), ShaderTypeMask::Pixel, this.m_deferredState.m_presentBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(DeferredPresentPushConstants), ShaderTypeMask::Pixel, this.m_deferredState.m_presentBindingLayout)){
         error("RendererSystem: failed to create deferred presentation binding layout");
         return false;
     }

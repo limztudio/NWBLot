@@ -552,8 +552,8 @@ b8 WriteArchive(in StringView testGroup, in StringView stem, in StringView archi
     return WriteTextFile(ArchivePath(testGroup, stem), archive);
 }
 
-CrashIngestConfig MakeIngestConfig(mut GlobalArena arena, in StringView testGroup){
-    CrashIngestConfig config = CrashIngestConfig(arena);
+CrashIngestConfig MakeIngestConfig(mut LoggerTestArena testArena, in StringView testGroup){
+    CrashIngestConfig config = CrashIngestConfig(testArena.arena);
     config.storageDirectory = StorageDirectory(testGroup);
     return config;
 }
@@ -565,14 +565,14 @@ void BuildLinuxCrashArchive(in StringView crashId, mut String archive){
     AppendArchiveFile(s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n", archive);
 }
 
-CrashIngestResult ProcessCrashArchive(mut GlobalArena arena, in StringView testGroup, in StringView stem, in StringView archive, in CrashIngestConfig config){
+CrashIngestResult ProcessCrashArchive(mut LoggerTestArena testArena, in StringView testGroup, in StringView stem, in StringView archive, in CrashIngestConfig config){
     EXPECT_TRUE(WriteArchive(testGroup, stem, archive));
-    return ProcessCrashUpload(arena, ArchivePath(testGroup, stem), config);
+    return ProcessCrashUpload(testArena.arena, ArchivePath(testGroup, stem), config);
 }
 
-CrashIngestResult ProcessCrashArchive(mut GlobalArena arena, in StringView testGroup, in StringView stem, in StringView archive){
-    const CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
-    return ProcessCrashArchive(arena, testGroup, stem, archive, config);
+CrashIngestResult ProcessCrashArchive(mut LoggerTestArena testArena, in StringView testGroup, in StringView stem, in StringView archive){
+    const CrashIngestConfig config = MakeIngestConfig(testArena, testGroup);
+    return ProcessCrashArchive(testArena, testGroup, stem, archive, config);
 }
 
 b8 ReadServerSymbolicationText(in StringView testGroup, in StringView stem, mut String outReport){

@@ -938,7 +938,7 @@ void VerifyTelemetry_FrameGraphPayloadPreservesBorrowedLabelsWhenRebuiltInPlace(
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     ASSERT_TRUE(BuildTestFrameGraphPayload(905u, nodes, edges, testArena.scratchArena, payload));
     const Expected<FrameGraphPayload> first = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
@@ -962,7 +962,7 @@ void VerifyTelemetry_FrameGraphPayloadRejectsCorruptedHeaderAfterValidParse(){
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     ASSERT_TRUE(BuildTestFrameGraphPayload(905u, nodes, edges, testArena.scratchArena, payload));
@@ -977,7 +977,7 @@ void VerifyTelemetry_FrameGraphPayloadRejectsNonCurrentVersions(){
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     ASSERT_TRUE(BuildTestFrameGraphPayload(907u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
@@ -1045,7 +1045,7 @@ void VerifyTelemetry_FrameGraphQueueAssignmentPayloadRejectsMalformedRecords(){
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+    BuildTestAssignedFrameGraph(testArena, nodes, edges);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
@@ -1106,7 +1106,7 @@ void VerifyTelemetry_FrameGraphCompiledTaskPayloadRejectsMalformedRecords(){
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+    BuildTestCompiledFrameGraph(testArena, nodes, edges);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
@@ -1205,7 +1205,7 @@ void VerifyTelemetry_InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTo
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     ++nodes[0u].runtimeStatistics.submission.plannedWaitTokenCount;
     ++nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount;
     ++physicalQueueRuntimeStatistics[0u].statistics.submission.plannedWaitTokenCount;
@@ -1260,7 +1260,7 @@ void VerifyTelemetry_PacketSubmissionEncodingIsIndependentOfInputOrder(){
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     ASSERT_TRUE(BuildTestFrameGraphPayload(918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
@@ -1287,29 +1287,29 @@ void VerifyTelemetry_FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformed
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(testArena.arena);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     packetSubmissionStatistics[0u].joinsAcceptedQueueFrontier = false;
     EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].packetGeneration = 99u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].packetIndex = packetSubmissionStatistics[2u].packetIndex;
     EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[2u].commandListCount = 1u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].submissionSeconds += 0.01;
     EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].queue.index = 3u;
     packetSubmissionStatistics[1u].queue.deviceGeneration = 17u;
     packetSubmissionStatistics[1u].queueClass = FrameGraphQueueClass::Compute;
     EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
 
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     const usize packetSubmissionStatisticsOffset = s_EncodedFrameGraphPayloadHeaderByteSize
         + s_EncodedFrameGraphNodeByteSize
@@ -1361,9 +1361,9 @@ void VerifyTelemetry_PhysicalQueueDecodeShrinkingInputClearsPreviousRecords(){
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    BuildTestRuntimeFrameGraph(testArena, nodes, edges);
     FrameGraphPhysicalQueueRuntimeStatisticsRecords records = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
 
     ASSERT_TRUE(BuildTestFrameGraphPayload(916u, nodes, edges, records, testArena.scratchArena, payload));
@@ -1383,83 +1383,83 @@ void VerifyTelemetry_FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalfo
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+    BuildTestRuntimeFrameGraph(testArena, nodes, edges);
     FrameGraphPhysicalQueueRuntimeStatisticsRecords records = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
 
     records[0u].statistics.graphGeneration = 99u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].ownerNodeIndex = 1u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.queue.deviceGeneration = 18u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.queueClass = FrameGraphQueueClass::Unknown;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.recording.recordingSeconds = -1.0;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.submission.submissionSeconds = bit_cast<f64>(0x7FF8000000000000uLL);
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.submission.recoverySubmissionCount = records[0u].statistics.submission.acceptedFrontierSubmissionCount + 1u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     ++records[0u].statistics.submission.recoverySubmissionCount;
     EXPECT_TRUE(IsValidFrameGraphPhysicalQueueRuntimeStatistics(records[0u].statistics));
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     ++records[0u].statistics.compile.mergedTaskCount;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     ++records[0u].statistics.submission.timelineWaitCount;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.compile.taskCount = 79u;
     records[0u].statistics.compile.packetCount = 78u;
     records[0u].statistics.compile.mergedTaskCount = 1u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.recording.recordingSeconds = 0.017;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.compile.taskCount = 29u;
     records[0u].statistics.compile.mergedTaskCount = 2u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     ++records[0u].statistics.submission.plannedWaitTokenCount;
     ++records[0u].statistics.submission.timelineWaitCount;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.compile.epilogueBarrierCount = 4u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.recording.barrierCount = 12u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.recording.taskCount = 13u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.submission.acceptedTaskCount = 13u;
     records[0u].statistics.submission.rejectedPacketCount = 14u;
     records[0u].statistics.submission.rejectedTaskCount = 15u;
     records[0u].statistics.submission.rejectedSubmissionCount = 14u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records[0u].statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 0u;
     records[0u].statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 0u;
     records[0u].statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
     records[0u].statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     records.push_back(records[0u]);
     EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
 
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
+    BuildTestPhysicalQueueRuntimeStatistics(testArena, records);
     ASSERT_TRUE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     const usize statisticsOffset = s_EncodedFrameGraphPayloadHeaderByteSize
         + s_EncodedFrameGraphNodeByteSize * nodes.size()

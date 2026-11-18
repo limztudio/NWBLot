@@ -266,7 +266,7 @@ const usize s_GpuSubmissionNoUse = usize.max;
 void GpuSubmissionRecompileAfterMutation(
     in GpuTaskGraph graph,
     in GpuPhysicalQueueTopology topology,
-    mut ScratchArena operationScratchArena,
+    mut TestScratchArena operationScratch,
     mut GpuTaskGraphAnalysis analysis,
     mut GpuTaskGraphQueueAssignments assignments,
     mut GpuCompiledGraph compiledGraph
@@ -277,7 +277,7 @@ void GpuSubmissionRecompileAfterMutation(
         EXPECT_FALSE(assignments.validFor(reads.declarations));
         EXPECT_FALSE(reads.compiled.validFor(reads.declarations));
     }
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuTaskGraphReadViews reads = GpuTaskGraphReadViews(graph, compiledGraph);
     EXPECT_TRUE(reads.valid());
     EXPECT_TRUE(analysis.validFor(reads.declarations));
@@ -285,7 +285,7 @@ void GpuSubmissionRecompileAfterMutation(
 }
 
 void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -310,7 +310,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     {
         const GpuTaskGraphReadViews reads = GpuTaskGraphReadViews(graph, compiledGraph);
         ASSERT_TRUE(reads.valid());
@@ -334,7 +334,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
         ASSERT_TRUE(secondGpuTaskAdmission.value().valid());
     }
     EXPECT_NE(GpuTaskGraphDeclarationReadView(graph).declarationRevision(), previousRevision);
-    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratchArena, analysis, assignments, compiledGraph);
+    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratch, analysis, assignments, compiledGraph);
 
     previousRevision = GpuTaskGraphDeclarationReadView(graph).declarationRevision();
     const Expected<GpuGraphResourceId> resourceResult = AddBufferMetadata(graph, s_DeclarationCaseDeclarationRevisionResource, "Declaration Revision Resource");
@@ -342,7 +342,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     const GpuGraphResourceId resource = resourceResult.value();
     ASSERT_TRUE(resource.valid());
     EXPECT_NE(GpuTaskGraphDeclarationReadView(graph).declarationRevision(), previousRevision);
-    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratchArena, analysis, assignments, compiledGraph);
+    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratch, analysis, assignments, compiledGraph);
 
     Array<GpuGraphResourceId, 1> resourceSetMembers = Array<GpuGraphResourceId, 1>();
     resourceSetMembers[0u] = resource;
@@ -356,7 +356,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     const GpuGraphResourceSetId resourceSet = resourceSetResult.value();
     ASSERT_TRUE(resourceSet.valid());
     EXPECT_NE(GpuTaskGraphDeclarationReadView(graph).declarationRevision(), previousRevision);
-    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratchArena, analysis, assignments, compiledGraph);
+    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratch, analysis, assignments, compiledGraph);
 
     previousRevision = GpuTaskGraphDeclarationReadView(graph).declarationRevision();
     const Expected<GpuGraphPipelineId> pipelineResult = AddPipelineMetadata(
@@ -369,7 +369,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     const GpuGraphPipelineId pipeline = pipelineResult.value();
     ASSERT_TRUE(pipeline.valid());
     EXPECT_NE(GpuTaskGraphDeclarationReadView(graph).declarationRevision(), previousRevision);
-    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratchArena, analysis, assignments, compiledGraph);
+    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratch, analysis, assignments, compiledGraph);
 
     previousRevision = GpuTaskGraphDeclarationReadView(graph).declarationRevision();
     GpuExternalCompletionDesc completionDesc = GpuExternalCompletionDesc();
@@ -380,7 +380,7 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     const GpuExternalCompletionId completion = completionResult.value();
     ASSERT_TRUE(completion.valid());
     EXPECT_NE(GpuTaskGraphDeclarationReadView(graph).declarationRevision(), previousRevision);
-    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratchArena, analysis, assignments, compiledGraph);
+    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratch, analysis, assignments, compiledGraph);
 
     Array<u8, 4> uploadBytes = Array<u8, 4>();
     uploadBytes[0u] = 0x17u;
@@ -393,11 +393,11 @@ void VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots(
     const GpuUploadBlobId upload = uploadResult.value();
     ASSERT_TRUE(upload.valid());
     EXPECT_NE(GpuTaskGraphDeclarationReadView(graph).declarationRevision(), previousRevision);
-    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratchArena, analysis, assignments, compiledGraph);
+    GpuSubmissionRecompileAfterMutation(graph, topology, operationScratch, analysis, assignments, compiledGraph);
 }
 
 void VerifyGpuSubmission_FailedAndIdempotentDeclarationsPreserveCompilerSnapshots(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -468,7 +468,7 @@ void VerifyGpuSubmission_FailedAndIdempotentDeclarationsPreserveCompilerSnapshot
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const u64 compiledRevision = GpuTaskGraphDeclarationReadView(graph).declarationRevision();
 
     {
@@ -517,7 +517,7 @@ void VerifyGpuSubmission_FailedAndIdempotentDeclarationsPreserveCompilerSnapshot
 }
 
 void VerifyGpuSubmission_ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -542,7 +542,7 @@ void VerifyGpuSubmission_ExternalFinalResourceDeclarationInvalidatesPriorCompile
     GpuTaskGraphAnalysis priorAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments priorAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph priorCompiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(priorAnalysis, priorAssignments, priorCompiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(priorAnalysis, priorAssignments, priorCompiledGraph, operationScratch, graph, topology));
     u64 compiledRevision = 0u;
     {
         const GpuTaskGraphReadViews reads = GpuTaskGraphReadViews(graph, priorCompiledGraph);
@@ -571,13 +571,13 @@ void VerifyGpuSubmission_ExternalFinalResourceDeclarationInvalidatesPriorCompile
     GpuTaskGraphAnalysis freshAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments freshAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph freshCompiledGraph = GpuCompiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(freshAnalysis, freshAssignments, freshCompiledGraph, operationScratchArena, graph, topology));
+    EXPECT_FALSE(Compile(freshAnalysis, freshAssignments, freshCompiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView freshCompiledPlan = GpuCompiledGraphReadView(freshCompiledGraph);
     EXPECT_FALSE(freshCompiledPlan.valid());
 }
 
 void VerifyGpuSubmission_ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -639,7 +639,7 @@ void VerifyGpuSubmission_ReducesSchedulingDagWithoutLosingRawDependencyDiagnosti
     ASSERT_TRUE(third.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.edges().size(), 3u);
     EXPECT_EQ(analysis.edges()[0u].producer, first);
     EXPECT_EQ(analysis.edges()[0u].consumer, second);
@@ -662,7 +662,7 @@ void VerifyGpuSubmission_ReducesSchedulingDagWithoutLosingRawDependencyDiagnosti
     GpuTaskGraphAnalysis separateAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments separateAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph separateGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(separateAnalysis, separateAssignments, separateGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(separateAnalysis, separateAssignments, separateGraph, operationScratch, graph, topology));
     {
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(separateGraph);
         ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -697,7 +697,7 @@ void VerifyGpuSubmission_ReducesSchedulingDagWithoutLosingRawDependencyDiagnosti
     GpuTaskGraphAnalysis scoredAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments scoredAssignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph scoredGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(scoredAnalysis, scoredAssignments, scoredGraph, operationScratchArena, graph, topology, scoredOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(scoredAnalysis, scoredAssignments, scoredGraph, operationScratch, graph, topology, scoredOptions));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(scoredGraph);
     ASSERT_EQ(compiledPlan.packetCount(), 2u);
     const GpuSubmissionPacketId scoredFirstPacket = compiledPlan.packetForTask(first);
@@ -719,7 +719,7 @@ void VerifyGpuSubmission_ReducesSchedulingDagWithoutLosingRawDependencyDiagnosti
 }
 
 void VerifyGpuSubmission_SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -753,7 +753,7 @@ void VerifyGpuSubmission_SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset(){
     ASSERT_TRUE(second.valid());
 
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+    ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(first);
     const GpuTaskGraphSchedulingTaskIndexView producers = analysis.schedulingProducers(second);
     ASSERT_EQ(consumers.taskCount, 1u);
@@ -809,7 +809,7 @@ void VerifyGpuSubmission_SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset(){
 }
 
 void VerifyGpuSubmission_PackedSchedulingReachabilityPreservesStrictClosureAcrossWordBoundaries(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     const usize maxTaskCount = 129u;
     Array<usize, 7> taskCounts = Array<usize, 7>();
@@ -863,9 +863,9 @@ void VerifyGpuSubmission_PackedSchedulingReachabilityPreservesStrictClosureAcros
         }
 
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
-        ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
-        ScratchArena reachabilityScratchArena = ScratchArena(s_GpuCaseTaskGpuPackedReachabilityScratch);
-        GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(reachabilityScratchArena);
+        ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
+        TestScratchArena reachabilityScratch = TestScratchArena(s_GpuCaseTaskGpuPackedReachabilityScratch);
+        GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(reachabilityScratch.scratchArena);
         u64 graphGeneration = 0u;
         {
             const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
@@ -916,21 +916,21 @@ void VerifyGpuSubmission_PackedSchedulingReachabilityPreservesStrictClosureAcros
         if(taskCount == maxTaskCount){
             GpuTaskGraph emptyGraph = GpuTaskGraph(testArena.arena);
             GpuTaskGraphAnalysis emptyAnalysis = GpuTaskGraphAnalysis(testArena.arena);
-            ASSERT_TRUE(Analyze(emptyGraph, operationScratchArena, emptyAnalysis));
+            ASSERT_TRUE(Analyze(emptyGraph, operationScratch, emptyAnalysis));
             const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(emptyGraph);
             ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, emptyAnalysis, reachability));
             EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[lastEvenTask]));
             EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[lastOddTask]));
             EXPECT_TRUE(declarations.valid());
         }
-        EXPECT_GT(reachabilityScratchArena.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(reachabilityScratch.scratchArena.memoryStats().reservedBytes, 0u);
         EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
     }
-    EXPECT_GT(operationScratchArena.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(operationScratch.scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuSubmission_FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1013,7 +1013,7 @@ void VerifyGpuSubmission_FansInTerminalTextureStateFragmentsForBroadCrossQueueCo
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuCompiledTaskView transferView = compiledPlan.findTask(transferTask);
@@ -1367,12 +1367,12 @@ void VerifyGpuSubmission_PreservesMergedAliasesAndReversedBindingOrderWithoutInv
         if(index % 3u == 1u)
             hookBindings.push_back(fixture.makeHookBinding(index, index + 1u));
     }
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-    GpuSubmissionBindings resolved = GpuSubmissionBindings(scratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+    GpuSubmissionBindings resolved = GpuSubmissionBindings(scratch.scratchArena);
     ASSERT_TRUE(resolved.resolve(declarations, plan, plan.allPacketRange(), timingBindings, hookBindings));
-    GpuSubmissionPacketTickets packetTickets = GpuSubmissionPacketTickets(scratch);
+    GpuSubmissionPacketTickets packetTickets = GpuSubmissionPacketTickets(scratch.scratchArena);
     packetTickets.reserve(resolved.timingTickets.size());
-    const usize collectAllocationCount = scratch.memoryStats().allocationCount;
+    const usize collectAllocationCount = scratch.scratchArena.memoryStats().allocationCount;
     for(usize packetIndex = 0u; packetIndex < plan.packetCount(); ++packetIndex){
         const usize first = packetIndex * 3u;
         const GpuSubmissionPacketId packet = plan.packetForTask(fixture.tasks[first]);
@@ -1396,7 +1396,7 @@ void VerifyGpuSubmission_PreservesMergedAliasesAndReversedBindingOrderWithoutInv
     EXPECT_TRUE(packetTickets.empty());
     EXPECT_FALSE(hookOpt.has_value());
     EXPECT_FALSE(fixture.validateTicketAt(resolved, stalePacket, 0u));
-    EXPECT_EQ(scratch.memoryStats().allocationCount, collectAllocationCount);
+    EXPECT_EQ(scratch.scratchArena.memoryStats().allocationCount, collectAllocationCount);
 
     Array<GpuTaskGraphTaskTimingTicket, 1> singleTiming = Array<GpuTaskGraphTaskTimingTicket, 1>();
     singleTiming[0u] = fixture.makeTimingBinding(0u, 0u);
@@ -1418,7 +1418,7 @@ void VerifyGpuSubmission_PreservesMergedAliasesAndReversedBindingOrderWithoutInv
     EXPECT_TRUE(packetTickets.empty());
     EXPECT_FALSE(hookOpt.has_value());
     EXPECT_TRUE(fixture.validateTicketAt(resolved, stalePacket, 0u));
-    EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
     EXPECT_EQ(fixture.hookInvocationCount, 0u);
 }
 
@@ -1436,8 +1436,8 @@ void VerifyGpuSubmission_RejectsLateDuplicateAnchorsCrossPacketTicketsAndMergedH
         timingBindings.push_back(fixture.makeTimingBinding(index, index));
     for(usize index = 0u; index < plan.packetCount(); ++index)
         hookBindings.push_back(fixture.makeHookBinding(index * 3u, index + 1u));
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-    GpuSubmissionBindings resolved = GpuSubmissionBindings(scratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+    GpuSubmissionBindings resolved = GpuSubmissionBindings(scratch.scratchArena);
     const usize lastTimingIndex = timingBindings.size() - 1u;
     const GpuTaskGraphTaskTimingTicket lastTiming = timingBindings[lastTimingIndex];
     timingBindings[lastTimingIndex].task = timingBindings[0u].task;
@@ -1453,7 +1453,7 @@ void VerifyGpuSubmission_RejectsLateDuplicateAnchorsCrossPacketTicketsAndMergedH
     EXPECT_FALSE(resolved.resolve(declarations, plan, range, Span<GpuTaskGraphTaskTimingTicket>(), hookBindings));
     hookBindings[lastHookIndex] = lastHook;
     ASSERT_TRUE(resolved.resolve(declarations, plan, range, timingBindings, hookBindings));
-    EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
     EXPECT_EQ(fixture.hookInvocationCount, 0u);
 }
 
@@ -1469,8 +1469,8 @@ void VerifyGpuSubmission_RejectsStaleMissingAndOutOfRangeAnchorsAndMalformedBind
     timing[0u] = fixture.makeTimingBinding(1u, 1u);
     Array<GpuTaskGraphTaskSubmissionHook, 1> hook = Array<GpuTaskGraphTaskSubmissionHook, 1>();
     hook[0u] = fixture.makeHookBinding(1u, 2u);
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-    GpuSubmissionBindings resolved = GpuSubmissionBindings(scratch);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+    GpuSubmissionBindings resolved = GpuSubmissionBindings(scratch.scratchArena);
     EXPECT_FALSE(resolved.resolve(declarations, plan, prefix, timing, Span<GpuTaskGraphTaskSubmissionHook>()));
     EXPECT_FALSE(resolved.resolve(declarations, plan, prefix, Span<GpuTaskGraphTaskTimingTicket>(), hook));
     ++timing[0u].task.generation;
@@ -1489,14 +1489,14 @@ void VerifyGpuSubmission_RejectsStaleMissingAndOutOfRangeAnchorsAndMalformedBind
     EXPECT_FALSE(resolved.resolve(declarations, plan, range, Span<GpuTaskGraphTaskTimingTicket>(), hook));
     EXPECT_FALSE(resolved.resolve(declarations, plan, range, MakeNullTimingBindingSpan(1u), Span<GpuTaskGraphTaskSubmissionHook>()));
     EXPECT_FALSE(resolved.resolve(declarations, plan, range, Span<GpuTaskGraphTaskTimingTicket>(), MakeNullHookBindingSpan(1u)));
-    EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(scratch.scratchArena.memoryStats().reservedBytes, 0u);
     EXPECT_EQ(fixture.hookInvocationCount, 0u);
 }
 
 void GpuSubmissionExpectWaitStatistics(in GpuPhysicalQueueId queue, in Span<QueueSubmissionToken> tokens){
-    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
-    const PacketWaitStatistics actual = CountPacketWaitStatistics(queue, tokens, scratch);
-    EXPECT_LE(scratch.memoryStats().usedBytes, scratch.memoryStats().reservedBytes);
+    TestScratchArena scratch = TestScratchArena(s_TaskGraphScratchArena);
+    const PacketWaitStatistics actual = CountPacketWaitStatistics(queue, tokens, scratch.scratchArena);
+    EXPECT_LE(scratch.scratchArena.memoryStats().usedBytes, scratch.scratchArena.memoryStats().reservedBytes);
 
     Vector<u32> identities = Vector<u32>();
     identities.reserve(tokens.size());
@@ -1838,7 +1838,7 @@ void VerifyGpuSubmission_TextureRectangleKeepsMipThenSliceRemainderOrder(){
 }
 
 void VerifyGpuSubmission_CompiledResourceSetExpansionPreservesEveryInitialByteRange(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1888,7 +1888,7 @@ void VerifyGpuSubmission_CompiledResourceSetExpansionPreservesEveryInitialByteRa
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
 
     Array<GpuGraphResourceId, 5> expectedResources = Array<GpuGraphResourceId, 5>();
@@ -1928,7 +1928,7 @@ void VerifyGpuSubmission_CompiledResourceSetExpansionPreservesEveryInitialByteRa
 }
 
 void VerifyGpuSubmission_RepeatedAccelerationStructureUsesKeepOneInitialTransitionAndLastStateExport(){
-    ScratchArena operationScratchArena = ScratchArena(s_TaskGraphScratchArena);
+    TestScratchArena operationScratch = TestScratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1979,7 +1979,7 @@ void VerifyGpuSubmission_RepeatedAccelerationStructureUsesKeepOneInitialTransiti
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratch, graph, topology));
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
 
     const GpuCompiledTaskView view = plan.findTask(task);

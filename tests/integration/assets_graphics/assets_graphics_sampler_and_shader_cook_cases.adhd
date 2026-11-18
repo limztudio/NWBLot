@@ -203,12 +203,11 @@ void VerifyAssetsGraphics_SamplerCookerRequiresTheAssetField(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_CodecScratchArena);
     MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse("sampler configuration; configuration.mip_bias = 2.0;"));
     const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase), s_AssetsDirectory);
     const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_SamplersDirectory, s_LinearClampMetadataFilename);
-    EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena));
+    EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document));
     EXPECT_TRUE(SawCapturedError(logger, "missing asset declaration 'asset'"));
 }
 
@@ -241,12 +240,11 @@ void VerifyAssetsGraphics_SamplerCookerRejectsFixedBorderColorAndUnsupportedRedu
         else
             metadata.append(assignment);
 
-        ScratchArena scratchArena(s_CodecScratchArena);
         MetaDocument document(testArena.arena);
         ASSERT_TRUE(document.parse(StringView(metadata)));
         const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase), s_AssetsDirectory);
         const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_SamplersDirectory, s_LinearClampMetadataFilename);
-        EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena));
+        EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document));
         StringView expectedDiagnostic = "unsupported asset field 'border_color'";
         if(assignment.starts_with(s_ReductionAssignmentPrefix))
             expectedDiagnostic = "unsupported reduction type";
@@ -268,12 +266,11 @@ void VerifyAssetsGraphics_SamplerCookerRejectsDeprecatedVersionMetadata(){
     metadata.append("asset.version = 1;\n");
     metadata.append(StringView(baseMetadata).substr(firstFieldPosition));
 
-    ScratchArena scratchArena(s_CodecScratchArena);
     MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse(StringView(metadata)));
     const GraphicsTestPath assetRoot = JoinGraphicsPath(GetGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase), s_AssetsDirectory);
     const GraphicsTestPath metadataPath = JoinGraphicsPath2(assetRoot, s_SamplersDirectory, s_LinearClampMetadataFilename);
-    EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena, scratchArena));
+    EXPECT_FALSE(ParseTestSamplerCookMetadata(assetRoot, "project", metadataPath, document));
     EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field 'version'"));
 }
 
@@ -299,8 +296,8 @@ void VerifyAssetsGraphics_ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmi
     TestArena testArena = TestArena();
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
-    ScratchArena scratchArena(s_AssetCaseTestsAssetsGraphicsArchiveAdmission);
-    native(in logger, mut testArena, mut scratchArena){
+    native(in logger, mut testArena){
+        ScratchArena scratchArena(s_AssetCaseTestsAssetsGraphicsArchiveAdmission);
         Core::GraphicsVector<Core::ShaderArchive::Record> records(testArena.arena);
         Core::ShaderArchive::Record record(testArena.arena);
         record.shaderName = Name(s_ProjectShadersTestShader);
@@ -652,7 +649,7 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_GatherScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_GatherScratchArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "gather_independent_shaders");
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
@@ -680,7 +677,7 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     SetGatherOutputPath(testArena, outputDirectory, options);
     options.configuration = "tests";
     EnableGraphicsGatherMerge(options);
-    ASSERT_TRUE(GatherGraphicsAssets(options, scratchArena));
+    ASSERT_TRUE(GatherGraphicsAssets(options, scratch));
 
     const Expected<ShaderArchiveRecordVector> recordsResult = LoadShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsResult.has_value());
@@ -702,7 +699,7 @@ void VerifyAssetsGraphics_GatherIndependentShaderBuildsWithoutSources(){
     ASSERT_TRUE(originalChecksumResult.has_value());
     const u64 originalChecksum = originalChecksumResult.value();
     AppendGatherInputPath(testArena, conflictingBuilt, options);
-    EXPECT_FALSE(GatherGraphicsAssets(options, scratchArena));
+    EXPECT_FALSE(GatherGraphicsAssets(options, scratch));
     EXPECT_GT(logger.errorCount(), 0u);
     const Expected<ShaderArchiveRecordVector> recordsResult2 = LoadShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsResult2.has_value());

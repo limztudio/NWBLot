@@ -54,12 +54,6 @@ inline constexpr BuiltinNonCopyableBaseInterfaceInfo s_NonCopyableBaseInterfaces
 #undef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE
 };
 
-inline constexpr MStringView s_ArenaObjectTypeNames[] = {
-#define NWB_ADHD_EXPORT_ARENA_TYPE(adhdName) MStringView(adhdName),
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_ARENA_TYPE
-};
-
 struct PointerLikeGenericTypeEntry{
     MStringView adhdName;
     b8 allowsInterfaceArg;
@@ -1522,10 +1516,6 @@ b8 IsOverAlignedBuiltinType(const MStringView typeName)noexcept{
 
 b8 IsStringBorrowViewType(const MStringView name)noexcept{
     return IsStringLikeType(name) && IsBorrowViewType(name);
-}
-
-b8 IsArenaObjectType(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::ContainsName(__hidden_adhd_type_utils::s_ArenaObjectTypeNames, name);
 }
 
 b8 AllowsInterfaceTypeArg(const MStringView name)noexcept{

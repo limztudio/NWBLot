@@ -160,6 +160,8 @@ b8 FormatNormalizedAdhdDeclName(MetaArena& arena, CXCursor declCursor, MStringVi
     }
 
     outName = __hidden_cpp_header_importer_record_builder::BuildFlattenedClassName(arena, Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
+    if(!KeywordSemantics::FindProhibitedTypeKeywordError(outName).empty())
+        return false;
     outNamespace = __hidden_cpp_header_importer_record_builder::BuildNamespaceString(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()));
     outCppExportName = __hidden_cpp_header_importer_record_builder::BuildCppExportName(arena, Span<const MStringView>(parents.namespaces.data(), parents.namespaces.size()), Span<const MStringView>(parents.classes.data(), parents.classes.size()), leaf);
     return true;

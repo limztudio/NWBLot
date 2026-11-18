@@ -95,7 +95,6 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     // Freeze the transparent CSG interval producer before AVBOIT recording; snapshot covers receiver work only.
     TransparentCsgIntervalBuilder transparentCsgIntervalBuilder(m_graph, m_materialSystem, m_csgSystem, m_avboitSystem);
     const auto transparentCsgIntervalResult = transparentCsgIntervalBuilder.declare(
-        scratchArena,
         TransparentCsgIntervalProducerInputs{
             .targets = inputs.targets,
             .csgFrameState = inputs.csgFrameState,
@@ -126,7 +125,6 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     }
     FrameGraphTransparentCsgTasks transparentCsgTasks(m_graph, m_avboitSystem);
     const auto transparentCsgTaskResult = transparentCsgTasks.declare(
-        scratchArena,
         FrameGraphTransparentCsgTaskInputs{
             .albedo = inputs.resources.albedo,
             .normal = inputs.resources.normal,

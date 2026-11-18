@@ -216,7 +216,6 @@ b8 AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::Comma
 
 
 Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::declare(
-    Core::Alloc::ScratchArena& scratchArena,
     const TransparentCsgIntervalProducerInputs& inputs,
     RendererTaskGraphDetail::AvboitPreGraphTask::Payload& avboitPrePayload,
     ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
@@ -224,6 +223,7 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
     GraphClearTimingRecordState& intervalClearTimingState
 )noexcept{
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
     TransparentCsgIntervalProducerResult result{};
     if(!inputs.prefixTask.valid())
         return MakeUnexpected(Failure{});
@@ -457,7 +457,6 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
 
 
 Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::declare(
-    Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphTransparentCsgTaskInputs& inputs,
     ObjectGeometryCacheGraph& objectGeometry,
     RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,
@@ -466,6 +465,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
 )noexcept{
     FrameGraphTransparentCsgTaskResult result{};
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
     Core::GpuTaskId intervalDependency = inputs.transparentCsgUploadTask;
 
     // Declare interval-producer states here, before native recording, not on the occupancy task.

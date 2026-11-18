@@ -395,7 +395,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
     dispatchPlans.reserve(skinningBindings.candidateCount());
     b8 declarationFailed = false;
 
-    MeshSkinningFramePlanBuilder planBuilder(*this, graph, scratchArena, dispatchPlans);
+    MeshSkinningFramePlanBuilder planBuilder(*this, graph, dispatchPlans);
     skinningBindings.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
         if(!declarationFailed && !planBuilder.declare(entity, binding))
             declarationFailed = true;
@@ -542,7 +542,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
     // Live-buffer list is reused member storage; only capacity growth may allocate, never per-frame creation.
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     liveBuffers.clear();
-    collectLiveSkinningStateBuffers(scratchArena, liveBuffers);
+    collectLiveSkinningStateBuffers(liveBuffers);
     SkinningStateHandoff skinningState(m_acceptedSkinningState, scratchArena, liveBuffers);
     const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{ .task = terminalTask, .context = &skinningState, .invoke = &SkinningStateHandoff::Prepare, };
     const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{ .task = terminalTask, .context = &skinningState, .invoke = &SkinningStateHandoff::Accept, };
@@ -574,7 +574,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph()noexcept{
     return true;
 }
 
-Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena)noexcept{
+Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance)noexcept{
     const b8 hasSkinPayload = !instance.skin.empty();
     if(!ValidateMeshSkinningRuntimeResourceCounts(instance.handle.value, instance.skin.size(), instance.skeletonJointCount))
         return MakeUnexpected(Failure{});
@@ -643,6 +643,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
     rebuilt.jointCount = jointCount;
 
     if(hasSkinPayload){
+        Core::Alloc::ScratchArena scratchArena(s_FrameUploadArena);
         const auto skinInfluences = MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
         if(!skinInfluences)
             return MakeUnexpected(Failure{});

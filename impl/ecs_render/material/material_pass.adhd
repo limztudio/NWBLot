@@ -650,6 +650,27 @@ void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
 }
 
 b8 RendererMaterialSystem::prepareMaterialPassResources(
+    const Core::FramebufferHandle& framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    const b8 transparent,
+    const CsgFrameState& csgFrameState
+){
+    Core::Alloc::ScratchArena scratchArena;
+    return prepareMaterialPassResources(scratchArena, framebuffer, pass, transparent, csgFrameState, nullptr);
+}
+
+b8 RendererMaterialSystem::prepareMaterialPassResources(
+    const Core::FramebufferHandle& framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    const b8 transparent,
+    const CsgFrameState& csgFrameState,
+    const AvboitFrameTargets& avboitTargets
+){
+    Core::Alloc::ScratchArena scratchArena;
+    return prepareMaterialPassResources(scratchArena, framebuffer, pass, transparent, csgFrameState, &avboitTargets);
+}
+
+b8 RendererMaterialSystem::prepareMaterialPassResources(
     Core::Alloc::ScratchArena& scratchArena,
     const Core::FramebufferHandle& framebuffer,
     const MaterialPipelinePass::Enum pass,

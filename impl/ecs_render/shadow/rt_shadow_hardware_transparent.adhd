@@ -77,7 +77,7 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
     auto& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout())
         return false;
-    if(!EnsurePushConstantBindingLayout(*m_arena, device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
         state.m_pipelineFailed = true;
         return false;

@@ -11,9 +11,8 @@
 b8 FontAtlas::loadBinary(in Span<u8> binary){
     if(!this.checkVirtualPath("FontAtlas::loadBinary"))
         return false;
-    ScratchArena scratchArena(s_AssetsFontAtlasLoadBinaryArena);
     FontAtlas candidate(this.virtualPath());
-    if(!DeserializeFontAtlasBinaryInto(binary, candidate.m_payload, scratchArena)){
+    if(!DeserializeFontAtlasBinaryInto(binary, candidate.m_payload)){
         LogFontAtlasBinaryDeserializeFailed();
         return false;
     }
@@ -21,8 +20,8 @@ b8 FontAtlas::loadBinary(in Span<u8> binary){
     return true;
 }
 
-b8 FontAtlas::validatePayload(mut ScratchArena scratchArena)const{
-    return this.checkVirtualPath(s_FontAtlasValidatePayloadContext) && ValidateFontAtlasPayload(this.m_payload, scratchArena);
+b8 FontAtlas::validatePayload()const{
+    return this.checkVirtualPath(s_FontAtlasValidatePayloadContext) && ValidateFontAtlasPayload(this.m_payload);
 }
 
 

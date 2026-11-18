@@ -158,13 +158,13 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     const Span<const Core::GpuGraphResourceId> softwareTraceGeometryResources,
     const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
-    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
 )noexcept{
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
 
     resetDeferredCausticsTaskState();
 

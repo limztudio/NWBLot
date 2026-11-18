@@ -5,7 +5,6 @@
 [cpp_header("<core/metascript/parser_cursor.h>"), cpp_name("::NWB::Core::Metascript::ParserCursor"), cpp_flags(binary_serializable, no_assign)]
 extern class MetascriptParserCursor{
     void advance(...);
-    mut GlobalArena arena(...)const;
     b8 check(...)const;
     b8 checkIdentifier(...)const;
     b8 consumeBalancedBracesRaw(...);

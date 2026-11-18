@@ -36,6 +36,15 @@ using Impl::TextureMipLevel;
 using Impl::BuildTextureAsset;
 using Impl::ParseTextureCookMetadata;
 
+struct DecodeTestArena{
+    Core::Assets::AssetArena arena;
+    Core::Alloc::ScratchArena scratchArena;
+    explicit DecodeTestArena(const Name& scopeName)
+        : arena(scopeName)
+        , scratchArena(scopeName)
+    {}
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -80,11 +89,11 @@ void WriteLittleEndianU32(mut Vector<u8> output, mut usize offset, in u32 value)
     }
 }
 
-Expected<Texture> CookDecodedTexture(in Path sourcePath, in MetascriptDocument document, mut AssetArena assetArena, mut ScratchArena scratchArena){
-    const Expected<TextureCookEntry> entry = ParseTextureCookMetadata(sourcePath.parentPath(), "tests", sourcePath, document, assetArena, scratchArena);
+Expected<Texture> CookDecodedTexture(in Path sourcePath, in MetascriptDocument document, mut DecodeTestArena testArena){
+    const Expected<TextureCookEntry> entry = ParseTextureCookMetadata(sourcePath.parentPath(), "tests", sourcePath, document, testArena.arena, testArena.scratchArena);
     if(!entry.has_value())
         return MakeUnexpected(Failure());
-    return BuildTextureAsset(entry.value(), assetArena);
+    return BuildTextureAsset(entry.value(), testArena.arena);
 }
 
 b8 Decode(in StringView source, in StringView destination, in StringView mipText){
@@ -93,17 +102,16 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
         return false;
     const u32 mipIndex = mipIndexResult.value();
 
-    AssetArena assetArena(s_DecodeArena);
-    ScratchArena scratchArena(s_DecodeArena);
+    DecodeTestArena testArena = DecodeTestArena(s_DecodeArena);
     const Path sourcePath = Path(source);
     const Path destinationPath = Path(destination);
     String metadata = "";
     if(!ReadTextFile(sourcePath, metadata).has_value())
         return false;
-    MetascriptDocument document(assetArena);
+    MetascriptDocument document(testArena.arena);
     if(!document.parse(metadata))
         return false;
-    const Expected<Texture> builtTexture = CookDecodedTexture(sourcePath, document, assetArena, scratchArena);
+    const Expected<Texture> builtTexture = CookDecodedTexture(sourcePath, document, testArena);
     if(!builtTexture.has_value() || cast<usize>(mipIndex) >= builtTexture.value().mipLevels().size())
         return false;
 
@@ -118,10 +126,10 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
 
     Vector<u8> decodedBytes = Vector<u8>();
     b8 decodedOk = false;
-    native(in texture, in mip, in mipIndex, in hdr, mut scratchArena, mut decodedBytes, mut decodedOk){
+    native(in texture, in mip, in mipIndex, in hdr, mut testArena, mut decodedBytes, mut decodedOk){
         basist::basisu_transcoder_init();
         NWB::Impl::TextureMipDecoder decoder;
-        const auto decoded = decoder.decode(scratchArena, texture, mip, mipIndex, hdr ? NWB::Core::Format::RGBA16_FLOAT : NWB::Core::Format::RGBA8_UNORM);
+        const auto decoded = decoder.decode(testArena.scratchArena, texture, mip, mipIndex, hdr ? NWB::Core::Format::RGBA16_FLOAT : NWB::Core::Format::RGBA8_UNORM);
         if(!decoded)
             return false;
         decodedBytes.assign(decoded->bytes.begin(), decoded->bytes.end());

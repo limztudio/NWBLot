@@ -142,6 +142,19 @@ template<typename EntryT, typename RootArenaT, typename FileArenaT, typename Par
     return parseValue(*virtualPathResult, **asset);
 }
 
+template<typename EntryT, typename RootArenaT, typename FileArenaT, typename ParseValueFn>
+[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
+    const ::Path<RootArenaT>& assetRoot,
+    const AStringView virtualRoot,
+    const ::Path<FileArenaT>& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    const AStringView diagnosticPrefix,
+    ParseValueFn&& parseValue
+){
+    Alloc::ScratchArena scratchArena;
+    return ParseCookMetadataDocument<EntryT>(assetRoot, virtualRoot, nwbFilePath, doc, diagnosticPrefix, Forward<ParseValueFn>(parseValue), scratchArena);
+}
+
 template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
 [[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
     const Path& assetRoot,

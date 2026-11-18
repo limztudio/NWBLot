@@ -264,7 +264,6 @@ b8 RendererReflectionPostprocess::preparePipeline(
     const SubsystemAssetSelector<ReflectionSubsystem, ComputeShader> selector([shaderMember](const ReflectionSubsystem& s){ return s.*shaderMember; });
     const Name shaderName = m_shaders.resolveSubsystemAsset<ReflectionSubsystem, ComputeShader>(selector);
     return EnsurePushConstantComputePipeline<ReflectionSubsystem>(
-        m_arena,
         m_graphics.getDevice(),
         m_shaders,
         selector,
@@ -311,8 +310,8 @@ b8 RendererReflectionPipelines::prepare(const b8 prepareHardware, const b8 prepa
     auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
-        !EnsurePushConstantBindingLayout(*m_arena, device, sizeof(u32), Core::ShaderType::Compute, m_bindingLayout)
-        || !EnsurePushConstantBindingLayout(*m_arena, device, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_depthBindingLayout)
+        !EnsurePushConstantBindingLayout(device, sizeof(u32), Core::ShaderType::Compute, m_bindingLayout)
+        || !EnsurePushConstantBindingLayout(device, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_depthBindingLayout)
     )
         return false;
     const auto preparePipeline = [&](
@@ -347,7 +346,7 @@ b8 RendererReflectionPipelines::prepare(const b8 prepareHardware, const b8 prepa
     )
         return false;
     const b8 csgHardware = CanPrepareReflectionHardwarePipelines(prepareCsgHardware, rayQueryReady, true);
-    if(csgHardware && !EnsurePushConstantBindingLayout(*m_arena, device, NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_csgBindingLayout))
+    if(csgHardware && !EnsurePushConstantBindingLayout(device, NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_csgBindingLayout))
         return false;
     if(
         csgHardware

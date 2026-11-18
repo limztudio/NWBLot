@@ -52,7 +52,6 @@ u32 ComputeCausticHalfTargetExtent(in u32 extent){
 
 b8 EnsureSwCausticPipelineVariant(
     in b8 csg,
-    mut GlobalArena arena,
     mut Device device,
     mut RendererShaderSystem shaderSystem,
     mut BindingLayoutHandle inOutLayout,
@@ -66,7 +65,6 @@ b8 EnsureSwCausticPipelineVariant(
         return false;
 
     if(!EnsurePushConstantComputePipeline<RefractiveSubsystem>(
-        arena,
         device,
         shaderSystem,
         lambda[](in RefractiveSubsystem s) -> AssetRef<ComputeShader>{ return s.causticPhotonSwCs; },
@@ -106,7 +104,6 @@ b8 EnsureCausticResolveStagePipeline(
 
 b8 EnsureCausticRtPipelineVariant(
     in b8 csg,
-    mut GlobalArena arena,
     mut GraphicsRuntime graphics,
     mut RendererShaderSystem shaderSystem,
     mut BindingLayoutHandle inOutBindingLayout,
@@ -138,7 +135,7 @@ b8 EnsureCausticRtPipelineVariant(
         return false;
     }
 
-    if(!EnsurePushConstantBindingLayout(arena, device, sizeof(CausticPhotonPushConstants), ShaderTypeMask::AllRayTracing, inOutBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(CausticPhotonPushConstants), ShaderTypeMask::AllRayTracing, inOutBindingLayout)){
         error("RendererSystem: failed to create hardware caustic binding layout");
         failed = true;
         return false;
@@ -156,7 +153,7 @@ b8 EnsureCausticRtPipelineVariant(
         return false;
     }
 
-    RayTracingPipelineDesc pipelineDesc = RayTracingPipelineDesc(arena);
+    RayTracingPipelineDesc pipelineDesc = RayTracingPipelineDesc();
     // The iterative bounce loop needs no shader recursion.
     pipelineDesc.setMaxPayloadSize(s_CausticHwMaxPayloadBytes);
     pipelineDesc.setMaxRecursionDepth(1u);
@@ -219,8 +216,8 @@ b8 EnsureCausticRtPipelineVariant(
 
 b8 CausticPipelineSet::ensureSwCausticPipeline(){
     if(this.m_hasCsg)
-        return EnsureSwCausticPipelineVariant(true, this.m_arena, this.m_graphics.getDevice(), this.m_shaderSystem, this.m_caustic.m_swCausticBindingLayout, this.m_caustic.m_swCausticCsgShader, this.m_caustic.m_swCausticCsgPipeline, this.m_caustic.m_swCausticCsgPipelineFailed);
-    return EnsureSwCausticPipelineVariant(false, this.m_arena, this.m_graphics.getDevice(), this.m_shaderSystem, this.m_caustic.m_swCausticBindingLayout, this.m_caustic.m_swCausticShader, this.m_caustic.m_swCausticPipeline, this.m_caustic.m_swCausticPipelineFailed);
+        return EnsureSwCausticPipelineVariant(true, this.m_graphics.getDevice(), this.m_shaderSystem, this.m_caustic.m_swCausticBindingLayout, this.m_caustic.m_swCausticCsgShader, this.m_caustic.m_swCausticCsgPipeline, this.m_caustic.m_swCausticCsgPipelineFailed);
+    return EnsureSwCausticPipelineVariant(false, this.m_graphics.getDevice(), this.m_shaderSystem, this.m_caustic.m_swCausticBindingLayout, this.m_caustic.m_swCausticShader, this.m_caustic.m_swCausticPipeline, this.m_caustic.m_swCausticPipelineFailed);
 }
 
 b8 CausticPipelineSet::ensureCausticResolvePipeline(){
@@ -238,7 +235,7 @@ b8 CausticPipelineSet::ensureCausticResolvePipeline(){
         return false;
 
     mut Device device = this.m_graphics.getDevice();
-    if(!device.getDescriptorHeap().isInitialized() || !EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(CausticResolvePushConstants), ShaderTypeMask::Compute, resolve.m_bindingLayout)){
+    if(!device.getDescriptorHeap().isInitialized() || !EnsurePushConstantBindingLayout(device, sizeof(CausticResolvePushConstants), ShaderTypeMask::Compute, resolve.m_bindingLayout)){
         error("RendererSystem: failed to create caustic resolve binding layout");
         resolve.m_failed = true;
         return false;
@@ -265,7 +262,6 @@ b8 CausticPipelineSet::ensureCausticGeometryDownsamplePipeline(){
         return false;
 
     if(!EnsurePushConstantComputePipeline<RefractiveSubsystem>(
-        this.m_arena,
         this.m_graphics.getDevice(),
         this.m_shaderSystem,
         lambda[](in RefractiveSubsystem s) -> AssetRef<ComputeShader>{ return s.causticGeometryDownsampleCs; },
@@ -291,7 +287,6 @@ b8 CausticPipelineSet::ensureCausticAccumulatorDecayPipeline(){
         return false;
 
     if(!EnsurePushConstantComputePipeline<RefractiveSubsystem>(
-        this.m_arena,
         this.m_graphics.getDevice(),
         this.m_shaderSystem,
         lambda[](in RefractiveSubsystem s) -> AssetRef<ComputeShader>{ return s.causticAccumulatorDecayCs; },
@@ -312,8 +307,8 @@ b8 CausticPipelineSet::ensureCausticAccumulatorDecayPipeline(){
 
 b8 CausticPipelineSet::ensureCausticRtPipeline(){
     if(this.m_hasCsg)
-        return EnsureCausticRtPipelineVariant(true, this.m_arena, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticCsgPipeline, this.m_caustic.m_hwCausticCsgShaderTable, this.m_caustic.m_hwCausticCsgPipelineFailed);
-    return EnsureCausticRtPipelineVariant(false, this.m_arena, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticPipeline, this.m_caustic.m_hwCausticShaderTable, this.m_caustic.m_hwCausticPipelineFailed);
+        return EnsureCausticRtPipelineVariant(true, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticCsgPipeline, this.m_caustic.m_hwCausticCsgShaderTable, this.m_caustic.m_hwCausticCsgPipelineFailed);
+    return EnsureCausticRtPipelineVariant(false, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticPipeline, this.m_caustic.m_hwCausticShaderTable, this.m_caustic.m_hwCausticPipelineFailed);
 }
 
 b8 CausticActivityResources::prepareCausticResolveActivity(in u32 halfWidth, in u32 halfHeight){
@@ -554,7 +549,7 @@ b8 RendererRayTracingSystem::prepareCausticResources(const MeshViewBufferSnapsho
         return false;
     }
 
-    CausticPipelineSet pipelines(m_arena, m_graphics, m_shaderSystem, m_rayTracingState, m_lightSpaceShadow.m_csg.snapshot.hasCsg);
+    CausticPipelineSet pipelines(m_graphics, m_shaderSystem, m_rayTracingState, m_lightSpaceShadow.m_csg.snapshot.hasCsg);
     const b8 producerReady = RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? pipelines.ensureCausticRtPipeline() : pipelines.ensureSwCausticPipeline());
     // Prepare shared resolve and temporal resources even when the producer is unavailable.
     const b8 resolveReady = pipelines.ensureCausticGeometryDownsamplePipeline() && pipelines.ensureCausticResolvePipeline();

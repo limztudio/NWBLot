@@ -54,7 +54,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena)noexcept{
+Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs)noexcept{
     using namespace RendererTaskGraphDetail;
     HardwareCausticsStageResult result{};
     if(!inputs.declaresHardwareCaustics)
@@ -78,6 +78,7 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
         return MakeUnexpected(Failure{});
     const CausticsStageTargets stageTargets = *stageTargetsResult;
 
+    Core::Alloc::ScratchArena scratchArena;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ scratchArena };
     const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
     const TraceResourceSetUses hardwarePhotonResourceSetUses = MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);

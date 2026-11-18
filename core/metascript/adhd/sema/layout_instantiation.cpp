@@ -329,7 +329,7 @@ void TemplateInstantiationCollector::collectTemplateInstantiationsInType(const T
 }
 
 void TemplateInstantiationCollector::instantiateClassTemplate(const ClassDecl& templateDecl, const Span<const TypeArg> templateArgs, TranslationUnit& unit){
-    if(!ConcreteTypeAnalyzer(m_symbols).isConcreteTemplateArgList(templateDecl.templateParams, templateArgs))
+    if(templateDecl.isExtern || !ConcreteTypeAnalyzer(m_symbols).isConcreteTemplateArgList(templateDecl.templateParams, templateArgs))
         return;
 
     for(const ClassTemplateInstantiation* existing : unit.templateInstantiations){

@@ -131,6 +131,10 @@ namespace Tests{
 
 
 using AssetArena = Core::Assets::AssetArena;
+struct SolidTestAssetArena{
+    AssetArena arena;
+    explicit SolidTestAssetArena(const Name& scopeName) : arena(scopeName){}
+};
 using AssetBytes = Core::Assets::AssetBytes;
 using ScratchArena = Core::Alloc::ScratchArena;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
@@ -175,16 +179,16 @@ NWB_END
 void VerifyMeshSolidCodec_MissingTruncatedOrExtraMembershipWordsAreRejected(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    AssetArena arena(s_SolidCaseMeshSolidCodecTruncated);
+    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecTruncated);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
     ASSERT_TRUE(cooked.has_value());
-    Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh control(arena.arena, s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(control.loadBinary(cooked.value()));
     ASSERT_EQ(control.solidTriangleWords().size(), 1u);
     ASSERT_EQ(control.solidTriangleWords()[0u], 0xfu);
 
-    Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh rejected(arena.arena, s_OneOffNameTestsMeshSolidCodec);
     for(usize removedBytes = 1u; removedBytes <= 4u; ++removedBytes){
         AssetBytes malformed = cooked.value();
         malformed.resize(malformed.size() - removedBytes);
@@ -200,11 +204,11 @@ void VerifyMeshSolidCodec_MissingTruncatedOrExtraMembershipWordsAreRejected(){
 void VerifyMeshSolidCodec_UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreservesLoadedMesh(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    AssetArena arena(s_SolidCaseMeshSolidCodecUnaddressableBounds);
+    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecUnaddressableBounds);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
     ASSERT_TRUE(cooked.has_value());
-    Mesh loaded(arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh loaded(arena.arena, s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(loaded.loadBinary(cooked.value()));
     const usize retainedMeshletCount = loaded.meshlets().size();
     const usize retainedPositionCount = loaded.positionStream().size();
@@ -226,15 +230,15 @@ void VerifyMeshSolidCodec_UnaddressableBoundsCountIsRejectedBeforeStreamReadAndP
 void VerifyMeshSolidCodec_TailPaddingAndInconsistentPrimitiveCountsAreRejected(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    AssetArena arena(s_SolidCaseMeshSolidCodecPadding);
+    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecPadding);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
     ASSERT_TRUE(cooked.has_value());
-    Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh control(arena.arena, s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(control.loadBinary(cooked.value()));
     ASSERT_EQ(control.solidTriangleWords().size(), 1u);
 
-    Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh rejected(arena.arena, s_OneOffNameTestsMeshSolidCodec);
     Array<u32, 2> invalidWords = Array<u32, 2>();
     invalidWords[0u] = 0x1fu;
     invalidWords[1u] = 0x8000000fu;
@@ -254,7 +258,7 @@ void VerifyMeshSolidCodec_TailPaddingAndInconsistentPrimitiveCountsAreRejected()
 void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    AssetArena arena(s_SolidCaseMeshSolidCodecCompactBounds);
+    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecCompactBounds);
 
     Array<u32, 10> words = Array<u32, 10>();
     words[0u] = 0x80000000u;
@@ -268,7 +272,7 @@ void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLast
     words[8u] = 0x00800000u;
     words[9u] = 0x80000001u;
 
-    AssetMeshletBoundsVector bounds(arena);
+    AssetMeshletBoundsVector bounds(arena.arena);
     bounds.resize(2u);
     for(usize index = 0u; index < bounds.size(); ++index){
         bounds[index].sphere = f32x4u(
@@ -280,7 +284,7 @@ void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLast
         bounds[index].conePacked = words[index * 5u + 4u];
     }
 
-    AssetBytes binary(arena);
+    AssetBytes binary(arena.arena);
     ASSERT_TRUE(AppendCompactBoundsPayload(bounds, binary));
     ASSERT_EQ(binary.size(), 4u * words.size());
     usize wordCursor = 0u;
@@ -290,7 +294,7 @@ void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLast
         EXPECT_EQ(stored.value(), word);
     }
 
-    AssetMeshletBoundsVector decoded(arena);
+    AssetMeshletBoundsVector decoded(arena.arena);
     usize cursor = 0u;
     ASSERT_TRUE(ReadCompactBoundsPayload(binary, bounds.size(), cursor, decoded));
     ASSERT_EQ(decoded.size(), bounds.size());
@@ -316,17 +320,17 @@ void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLast
 void VerifyMeshSolidCodec_PreviousMeshMagicCannotAdmitOtherwiseValidCurrentPayload(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
-    AssetArena arena(s_SolidCaseMeshSolidCodecPreviousEncoding);
+    SolidTestAssetArena arena(s_SolidCaseMeshSolidCodecPreviousEncoding);
 
-    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena.arena);
     ASSERT_TRUE(cooked.has_value());
-    Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh control(arena.arena, s_OneOffNameTestsMeshSolidCodec);
     ASSERT_TRUE(control.loadBinary(cooked.value()));
 
     AssetBytes previousEncoding = cooked.value();
     const u32 previousMeshMagic = 0x4d534836u;
     OverwritePodU32(previousEncoding, 0u, previousMeshMagic);
-    Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
+    Mesh rejected(arena.arena, s_OneOffNameTestsMeshSolidCodec);
     EXPECT_FALSE(rejected.loadBinary(previousEncoding));
 
     EXPECT_GT(logger.errorCount(), 0u);

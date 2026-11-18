@@ -237,7 +237,7 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
         this.m_world = CreateSmokeWorldOrDie(GatherBenchmarkProjectName(), context);
         this.m_scene = RendererGatherBenchmarkScene();
         this.m_timingPass = GatherBenchmarkTimingPass(context.graphics);
-        this.m_probe = RendererGatherBenchmarkProbe(context.objectArena);
+        this.m_probe = RendererGatherBenchmarkProbe();
         this.m_compilerProbe = RendererCompilerStatisticsProbe(context.graphics, context.objectArena);
     }
 

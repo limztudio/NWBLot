@@ -13,16 +13,10 @@ extern class ResolvedAssetRoot{
 
 
 [cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::BuildDerivedAssetVirtualPath")]
-extern Expected<Name> BuildDerivedAssetVirtualPath(in Path a0, in StringView a1, in Path a2, mut auto a3);
+extern Expected<Name> BuildDerivedAssetVirtualPath(in Path a0, in StringView a1, in Path a2);
 
 [cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::HasReservedAssetVirtualRoot")]
-extern b8 HasReservedAssetVirtualRoot(in StringView a0, mut auto a1);
-
-[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolvePairedSourcePathFromMetadata")]
-extern Expected<String> ResolvePairedSourcePathFromMetadata(in Path a0, mut auto a1, mut auto a2);
-
-[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolveVirtualAssetPath")]
-extern Expected<Path> ResolveVirtualAssetPath(in auto a0, in StringView a1, mut auto a2, mut auto a3);
+extern b8 HasReservedAssetVirtualRoot(in StringView a0);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

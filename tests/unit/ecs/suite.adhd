@@ -38,6 +38,7 @@ namespace __hidden_ecs_tests{
 
 
 using EcsTestWorld = ::NWB::Tests::EcsTestWorld;
+using EcsParallelTestArena = ::NWB::Tests::TestArena<>;
 using GlobalArena = ::NWB::Core::Alloc::GlobalArena;
 using CpuTaskScheduler = ::NWB::Core::CpuTaskScheduler;
 using CpuTaskScope = ::NWB::Core::CpuTaskScope;
@@ -374,9 +375,9 @@ void RegisterScheduledSystem(mut SystemScheduler scheduler, mut ScheduledSystem 
 }
 
 void VerifyEcs_ParallelEachNestedInTaskBatchCompletes(){
-    GlobalArena arena(s_EcsTestParallelArenaName);
+    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(3u);
-    World world(arena, taskScheduler);
+    World world(testArena.arena, taskScheduler);
 
     for(u32 i = 0u; i < s_EcsTestNestedEntityCount; ++i){
         const EntityID id = world.createEntity().id();
@@ -499,9 +500,9 @@ void VerifyEcs_SystemDependenciesPreserveRegistrationOrderAcrossComponents(){
 }
 
 void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
-    GlobalArena arena(s_EcsTestParallelArenaName);
+    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(3u);
-    World world(arena, taskScheduler);
+    World world(testArena.arena, taskScheduler);
 
     const ComponentTypeId positionType = ComponentType<PositionComponent>();
     Atomic<b8> dependentCompleted(false);
@@ -530,7 +531,7 @@ void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
         }
     );
 
-    SystemScheduler scheduler(arena);
+    SystemScheduler scheduler(testArena.arena);
     RegisterScheduledSystem(scheduler, writer);
     RegisterScheduledSystem(scheduler, independent);
     RegisterScheduledSystem(scheduler, dependent);
@@ -541,9 +542,9 @@ void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
 }
 
 void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
-    GlobalArena arena(s_EcsTestParallelArenaName);
+    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
-    World world(arena, taskScheduler);
+    World world(testArena.arena, taskScheduler);
     b8 executedOnCaller = false;
 
     const ComponentTypeId positionType = ComponentType<PositionComponent>();
@@ -573,7 +574,7 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
         lambda[mut value]() -> void{ EXPECT_EQ(value, 29); }
     );
 
-    SystemScheduler scheduler(arena);
+    SystemScheduler scheduler(testArena.arena);
     RegisterScheduledSystem(scheduler, worker);
     RegisterScheduledSystem(scheduler, caller);
     RegisterScheduledSystem(scheduler, consumer);
@@ -584,9 +585,9 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
 }
 
 void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
-    GlobalArena arena(s_EcsTestParallelArenaName);
+    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
-    World world(arena, taskScheduler);
+    World world(testArena.arena, taskScheduler);
     for(usize i = 0u; i < s_EcsTestDependentQueryEntityCount; ++i)
         world.createEntity().addComponent<PositionComponent>().x = cast<i32>(i);
     usize observed = 0u;
@@ -624,7 +625,7 @@ void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
         }
     );
 
-    SystemScheduler scheduler(arena);
+    SystemScheduler scheduler(testArena.arena);
     RegisterScheduledSystem(scheduler, writer);
     RegisterScheduledSystem(scheduler, reader);
     ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
@@ -633,9 +634,9 @@ void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
 }
 
 void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
-    GlobalArena arena(s_EcsTestParallelArenaName);
+    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
-    World world(arena, taskScheduler);
+    World world(testArena.arena, taskScheduler);
     i32 observed = 0;
 
     const ComponentTypeId positionType = ComponentType<PositionComponent>();
@@ -667,7 +668,7 @@ void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
         }
     );
 
-    SystemScheduler scheduler(arena);
+    SystemScheduler scheduler(testArena.arena);
     RegisterScheduledSystem(scheduler, writer);
     RegisterScheduledSystem(scheduler, reader);
     ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
@@ -676,10 +677,10 @@ void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
 }
 
 void VerifyEcs_WorldClearDoesNotWaitForUnrelatedSchedulerTasks(){
-    GlobalArena arena(s_EcsTestParallelArenaName);
+    EcsParallelTestArena testArena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(2u);
     CpuTaskScope unrelatedTasks(taskScheduler);
-    World world(arena, taskScheduler);
+    World world(testArena.arena, taskScheduler);
 
     Atomic<b8> started(false);
     Atomic<b8> release(false);

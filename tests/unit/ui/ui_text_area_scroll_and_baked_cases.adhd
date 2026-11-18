@@ -212,7 +212,7 @@ public:
             glyph.planeBottom = VectorGetY(planeEnd);
         }
         m_atlas.setPayload(Move(payload));
-        ASSERT_TRUE(m_atlas.validatePayload(m_scratchArena));
+        ASSERT_TRUE(m_atlas.validatePayload());
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.f, Move(regions));
     }

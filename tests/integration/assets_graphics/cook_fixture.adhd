@@ -128,6 +128,16 @@ struct AssetsGraphicsTestArenaTag{};
 
 using ShaderStageMask = ::NWB::Core::ShaderType::Mask;
 using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;
+struct GraphicsScratchArena{
+    Core::Alloc::ScratchArena scratchArena;
+    GraphicsScratchArena() = default;
+    explicit GraphicsScratchArena(const Name& scopeName)
+        : scratchArena(scopeName)
+    {}
+    GraphicsScratchArena(const Name& scopeName, const usize initSize)
+        : scratchArena(scopeName, initSize)
+    {}
+};
 using GraphicsTestPath = NWB::Path;
 using AssetArena = NWB::Core::Assets::AssetArena;
 using AssetBytes = NWB::Core::Assets::AssetBytes;
@@ -2244,12 +2254,12 @@ public:
     }
 
     [[nodiscard]] b8 validate(){
-        return model.validatePayload(scratchArena);
+        return model.validatePayload();
     }
 
     [[nodiscard]] b8 validateUnnamedModel(){
         Impl::Model unnamed(arena);
-        return unnamed.validatePayload(scratchArena);
+        return unnamed.validatePayload();
     }
 
     [[nodiscard]] ArenaMemoryStats scratchStats()const noexcept{
@@ -2325,7 +2335,7 @@ public:
     }
 
     [[nodiscard]] b8 validate(){
-        return skeleton.validatePayload(scratchArena);
+        return skeleton.validatePayload();
     }
 
     [[nodiscard]] ArenaMemoryStats scratchStats()const noexcept{
@@ -2466,6 +2476,31 @@ FOUNDATION_INLINE void AppendAssetBytesImpl(const AssetBytes& extra, AssetBytes&
     return Impl::ShaderCook::ValidateVariantSignature(assetName, signature, entry.defineValues, scratchArena);
 }
 
+template<typename RootArenaT, typename SourceArenaT>
+[[nodiscard]] FOUNDATION_INLINE b8 CanBuildDerivedVirtualPathImpl(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& source, ScratchArena& scratchArena){
+    return BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, source, scratchArena).has_value();
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 CanResolveVirtualAssetPathImpl(const ResolvedAssetRootVector& roots, const AStringView virtualPath, AssetArena& arena, ScratchArena& scratchArena){
+    return NWB::Core::Assets::ResolveVirtualAssetPath(roots, virtualPath, arena, scratchArena).has_value();
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<ScratchString> EncodeTestAssetInputList(const AssetTestVector<AssetString>& inputs, ScratchArena& scratchArena){
+    return EncodeAssetInputList(inputs, scratchArena);
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<ScratchString> EncodeTestAssetInputList(const AssetTestVector<AssetString>& inputs, GraphicsScratchArena& scratch){
+    return EncodeAssetInputList(inputs, scratch.scratchArena);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 GatherGraphicsAssets(const AssetGatherOptions& options, ScratchArena& scratchArena){
+    return GatherAssets(options, scratchArena);
+}
+
+[[nodiscard]] FOUNDATION_INLINE b8 GatherGraphicsAssets(const AssetGatherOptions& options, GraphicsScratchArena& scratch){
+    return GatherAssets(options, scratch.scratchArena);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2599,8 +2634,8 @@ Expected<TestAString> ReadSmokeMeta(mut TestArena testArena, in StringView asset
 }
 
 
-Expected<ResolvedAssetRootVector, AssetRootResolutionError> ResolveTestAssetRoots(in GraphicsTestPath repoRoot, in CookStringVector sources, in b8 inferFromInputs, in AssetRootDuplicatePolicyEnum duplicatePolicy, mut ScratchArena scratchArena){
-    return ResolveAssetRoots(repoRoot, sources, inferFromInputs, duplicatePolicy, scratchArena);
+Expected<ResolvedAssetRootVector, AssetRootResolutionError> ResolveTestAssetRoots(in GraphicsTestPath repoRoot, in CookStringVector sources, in b8 inferFromInputs, in AssetRootDuplicatePolicyEnum duplicatePolicy, mut GraphicsScratchArena scratch){
+    return ResolveAssetRoots(repoRoot, sources, inferFromInputs, duplicatePolicy, scratch.scratchArena);
 }
 
 Expected<RendererComponent> LoadCookedRendererComponent(mut TestArena testArena, in GraphicsTestPath outputDirectory, in Name virtualPath, in usize expectedVolumeFileCount){
@@ -2615,8 +2650,8 @@ void AddEvaluatorIncludeMetadata2(mut TestArena testArena, in GraphicsTestPath p
     InsertEvaluatorIncludeMetadata2Impl(testArena, path, option, val0, val1, authoredDefine, includeMetadata);
 }
 
-Expected<PreparedShaderPlan> PrepareEvaluatorShaderPlan(mut TestArena testArena, mut ScratchArena scratchArena, in ResolvedCookPaths paths, in GraphicsTestPath bindRoot, in GraphicsTestPath csgRoot, in IncludeMetadataMap includeMetadata, in StringView authoredDefine, in u32 mode){
-    return PrepareEvaluatorShaderPlanImpl(testArena, scratchArena, paths, bindRoot, csgRoot, includeMetadata, authoredDefine, mode);
+Expected<PreparedShaderPlan> PrepareEvaluatorShaderPlan(mut TestArena testArena, mut GraphicsScratchArena scratch, in ResolvedCookPaths paths, in GraphicsTestPath bindRoot, in GraphicsTestPath csgRoot, in IncludeMetadataMap includeMetadata, in StringView authoredDefine, in u32 mode){
+    return PrepareEvaluatorShaderPlanImpl(testArena, scratch.scratchArena, paths, bindRoot, csgRoot, includeMetadata, authoredDefine, mode);
 }
 
 void AddCsgShapeCookEntry(in Name shapeName, in Name shaderModule, in StringView moduleInclude, mut TestArena testArena, mut CsgShapeCookEntryVector outEntries){
@@ -2627,17 +2662,17 @@ CsgShapeTypeDesc MakeCsgCookTestShapeDesc(in Name shapeName, in Name shaderModul
     return CsgCookTestShapeDesc(shapeName, shaderModule, moduleInclude, testArena.arena);
 }
 
-b8 AssignTestCsgShapeCookIds(mut CsgShapeCookEntryVector entries, mut ScratchArena scratchArena){
-    return AssignCsgShapeCookIds(entries, scratchArena);
+b8 AssignTestCsgShapeCookIds(mut CsgShapeCookEntryVector entries, mut GraphicsScratchArena scratch){
+    return AssignCsgShapeCookIds(entries, scratch.scratchArena);
 }
 
-Expected<CsgShapeCookEntry> ParseTestCsgShapeMetadata(in GraphicsTestPath nwbFilePath, in MetaDocument doc, mut TestArena testArena, mut ScratchArena scratchArena){
-    return ParseCsgShapeCookMetadata(nwbFilePath, doc, testArena.arena, scratchArena);
+Expected<CsgShapeCookEntry> ParseTestCsgShapeMetadata(in GraphicsTestPath nwbFilePath, in MetaDocument doc, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return ParseCsgShapeCookMetadata(nwbFilePath, doc, testArena.arena, scratch.scratchArena);
 }
 
-Expected<GraphicsTestPath> EmitTestCsgShapeModules(in GraphicsTestPath cacheDirectory, in StringView configurationSafeName, in CsgShapeCookEntryVector entries, mut ScratchArena scratchArena){
+Expected<GraphicsTestPath> EmitTestCsgShapeModules(in GraphicsTestPath cacheDirectory, in StringView configurationSafeName, in CsgShapeCookEntryVector entries, mut GraphicsScratchArena scratch){
     const CsgShapeModuleWriter writer = CsgShapeModuleWriter();
-    return writer.emit(cacheDirectory, configurationSafeName, entries, scratchArena);
+    return writer.emit(cacheDirectory, configurationSafeName, entries, scratch.scratchArena);
 }
 
 Expected<GlobalArenaString> FindRegistryShaderModuleInclude(in CsgShapeRegistry registry, in Name shaderModule, mut TestArena testArena){
@@ -2648,8 +2683,8 @@ void AppendByteToShapeModuleInclude(mut CsgShapeTypeDesc desc, in u8 byte){
     AppendByteToShapeModuleIncludeImpl(desc, byte);
 }
 
-Expected<GraphicsBytes> SerializeTestShaderIndex(in ShaderArchiveRecordVector records, mut TestArena testArena, mut ScratchArena scratchArena){
-    return SerializeIndex(records, testArena.arena, scratchArena);
+Expected<GraphicsBytes> SerializeTestShaderIndex(in ShaderArchiveRecordVector records, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return SerializeIndex(records, testArena.arena, scratch.scratchArena);
 }
 
 Expected<ShaderArchiveRecordVector> DeserializeTestShaderIndex(mut TestArena testArena, in GraphicsBytes encoded){
@@ -2672,24 +2707,20 @@ Expected<u64> FindTestShaderSourceChecksum(in ShaderArchiveRecordVector records,
     return ShaderArchiveFixture::FindShaderArchiveSourceChecksum(records, shaderName, stageName);
 }
 
-Expected<ScratchString> EncodeTestAssetInputList(in AssetTestVector<AssetString> inputs, mut ScratchArena scratchArena){
-    return EncodeAssetInputList(inputs, scratchArena);
+b8 EmitAvboitAccumulateShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut GraphicsScratchArena scratch, mut MaterialCookEntryVector entries){
+    return MaterialAvboitShaderGenerator::EmitAccumulate(cacheDirectory, configName, testArena.arena, scratch.scratchArena, entries).has_value();
 }
 
-b8 EmitAvboitAccumulateShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut ScratchArena scratchArena, mut MaterialCookEntryVector entries){
-    return MaterialAvboitShaderGenerator::EmitAccumulate(cacheDirectory, configName, testArena.arena, scratchArena, entries).has_value();
+b8 EmitAvboitOccupancyShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut GraphicsScratchArena scratch, mut MaterialCookEntryVector entries){
+    return MaterialAvboitShaderGenerator::EmitOccupancy(cacheDirectory, configName, testArena.arena, scratch.scratchArena, entries).has_value();
 }
 
-b8 EmitAvboitOccupancyShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut ScratchArena scratchArena, mut MaterialCookEntryVector entries){
-    return MaterialAvboitShaderGenerator::EmitOccupancy(cacheDirectory, configName, testArena.arena, scratchArena, entries).has_value();
+b8 EmitAvboitExtinctionShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut GraphicsScratchArena scratch, mut MaterialCookEntryVector entries){
+    return MaterialAvboitShaderGenerator::EmitExtinction(cacheDirectory, configName, testArena.arena, scratch.scratchArena, entries).has_value();
 }
 
-b8 EmitAvboitExtinctionShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut ScratchArena scratchArena, mut MaterialCookEntryVector entries){
-    return MaterialAvboitShaderGenerator::EmitExtinction(cacheDirectory, configName, testArena.arena, scratchArena, entries).has_value();
-}
-
-b8 ParseTestSamplerCookMetadata(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath metadataPath, in MetaDocument document, mut TestArena testArena, mut ScratchArena scratchArena){
-    return ParseSamplerCookMetadata(assetRoot, virtualRoot, metadataPath, document, scratchArena).has_value();
+b8 ParseTestSamplerCookMetadata(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath metadataPath, in MetaDocument document){
+    return ParseSamplerCookMetadata(assetRoot, virtualRoot, metadataPath, document).has_value();
 }
 
 b8 AccumulateInheritedShaderDefineReserve(in usize incomingCount, mut usize reserveCount){
@@ -2722,10 +2753,6 @@ void AppendGatherInputPath(mut TestArena testArena, in GraphicsTestPath inputPat
 
 void SetGatherOutputPath(mut TestArena testArena, in GraphicsTestPath outputDirectory, mut AssetGatherOptions options){
     SetGatherOutputPathImpl(testArena, outputDirectory, options);
-}
-
-b8 GatherGraphicsAssets(in AssetGatherOptions options, mut ScratchArena scratchArena){
-    return GatherAssets(options, scratchArena);
 }
 
 Expected<GraphicsTestPath> FindSingleBytecodeCachePath(in GraphicsTestPath cacheDirectory, mut TestArena testArena){
@@ -2776,12 +2803,12 @@ u32x4 PackF32x3MaterialTypedValueMeta(in StringView key){
     return PackF32x3MaterialTypedValueMetaImpl(key);
 }
 
-b8 CanParseMaterialMeta(in StringView metaText, mut TestArena testArena, mut ScratchArena scratchArena){
-    return ParseMaterialEntryFromMetaText(metaText, testArena, scratchArena).has_value();
+b8 CanParseMaterialMeta(in StringView metaText, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return ParseMaterialEntryFromMetaText(metaText, testArena, scratch.scratchArena).has_value();
 }
 
-Expected<MaterialAsset> BuildTestMaterialFromBindAndMeta(in StringView bindText, in StringView materialText, in StringView caseName, mut TestArena testArena, mut ScratchArena scratchArena){
-    return BuildMaterialFromBindAndMeta(bindText, materialText, caseName, testArena, scratchArena);
+Expected<MaterialAsset> BuildTestMaterialFromBindAndMeta(in StringView bindText, in StringView materialText, in StringView caseName, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return BuildMaterialFromBindAndMeta(bindText, materialText, caseName, testArena, scratch.scratchArena);
 }
 
 b8 CanRoundTripMaterialAssetCodec(in MaterialAsset material, mut TestArena testArena, mut MaterialAssetCodec codec){
@@ -2804,24 +2831,24 @@ void AppendMaterialInterfaceTestEntry(mut TestArena testArena, in StringView mat
     AppendMaterialInterfaceTestEntryImpl(testArena, materialInterface, layoutHash, blockByte, outEntries);
 }
 
-b8 ValidateTestMaterialCookInterfaces(in MaterialBindEntryVector bindEntries, mut MaterialShaderCookEntryVector materialEntries, mut ScratchArena scratchArena){
-    return ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena);
+b8 ValidateTestMaterialCookInterfaces(in MaterialBindEntryVector bindEntries, mut MaterialShaderCookEntryVector materialEntries, mut GraphicsScratchArena scratch){
+    return ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratch.scratchArena);
 }
 
-Expected<MaterialBindEntry> ParseTestMaterialBindFromText(in StringView bindText, in GraphicsTestPath root, mut TestArena testArena, mut ScratchArena scratchArena){
-    return MaterialBindFixture::ParseMaterialBindFromText(bindText, root, testArena, scratchArena);
+Expected<MaterialBindEntry> ParseTestMaterialBindFromText(in StringView bindText, in GraphicsTestPath root, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return MaterialBindFixture::ParseMaterialBindFromText(bindText, root, testArena, scratch.scratchArena);
 }
 
 void SetMaterialBindEntryVirtualPath(mut MaterialBindEntry entry, in StringView virtualPath){
     SetMaterialBindEntryVirtualPathImpl(entry, virtualPath);
 }
 
-b8 CanBuildMaterialBindIncludeSource(in MaterialBindEntry entry, mut TestArena testArena, mut ScratchArena scratchArena){
-    return BuildMaterialBindIncludeSource(entry, testArena.arena, scratchArena).has_value();
+b8 CanBuildMaterialBindIncludeSource(in MaterialBindEntry entry, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return BuildMaterialBindIncludeSource(entry, testArena.arena, scratch.scratchArena).has_value();
 }
 
-b8 CanFindOrBuildMaterialBindTypedLayout(in Name cacheInterface, in MaterialBindEntry entry, mut ScratchArena scratchArena, mut MaterialBindTypedLayoutCache layoutCache){
-    return FindOrBuildMaterialBindTypedLayout(cacheInterface, entry, scratchArena, layoutCache).has_value();
+b8 CanFindOrBuildMaterialBindTypedLayout(in Name cacheInterface, in MaterialBindEntry entry, mut GraphicsScratchArena scratch, mut MaterialBindTypedLayoutCache layoutCache){
+    return FindOrBuildMaterialBindTypedLayout(cacheInterface, entry, scratch.scratchArena, layoutCache).has_value();
 }
 
 b8 CookMaterialBindIntegration(in StringView bindText, in StringView materialText, in CookCase cookCase, mut TestArena testArena){
@@ -2896,48 +2923,48 @@ b8 LoadMeshAssetBinary(mut MeshAsset mesh, in AssetBytes binary){
     return mesh.loadBinary(binary);
 }
 
-Expected<ScratchU32Vector> BuildTestMeshletTriangleIndices(in MeshAsset mesh, mut ScratchArena scratchArena){
-    return BuildMeshletTriangleIndices(scratchArena, mesh);
+Expected<ScratchU32Vector> BuildTestMeshletTriangleIndices(in MeshAsset mesh, mut GraphicsScratchArena scratch){
+    return BuildMeshletTriangleIndices(scratch.scratchArena, mesh);
 }
 
-Expected<ShaderCookShaderEntry> ParseTestShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut ScratchArena scratchArena, mut ShaderCook shaderCook){
-    return ParseShaderMetadataFile<ShaderCookShaderEntry>(metadataPath, testArena, scratchArena, shaderCook);
+Expected<ShaderCookShaderEntry> ParseTestShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
+    return ParseShaderMetadataFile<ShaderCookShaderEntry>(metadataPath, testArena, scratch.scratchArena, shaderCook);
 }
 
-Expected<ShaderCookIncludeEntry> ParseTestIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut ScratchArena scratchArena, mut ShaderCook shaderCook){
-    return ParseShaderMetadataFile<ShaderCookIncludeEntry>(metadataPath, testArena, scratchArena, shaderCook);
+Expected<ShaderCookIncludeEntry> ParseTestIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
+    return ParseShaderMetadataFile<ShaderCookIncludeEntry>(metadataPath, testArena, scratch.scratchArena, shaderCook);
 }
 
-b8 CanParseShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut ScratchArena scratchArena, mut ShaderCook shaderCook){
-    return ParseTestShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook).has_value();
+b8 CanParseShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
+    return ParseTestShaderEntryFile(metadataPath, testArena, scratch, shaderCook).has_value();
 }
 
-b8 CanParseIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut ScratchArena scratchArena, mut ShaderCook shaderCook){
-    return ParseTestIncludeEntryFile(metadataPath, testArena, scratchArena, shaderCook).has_value();
+b8 CanParseIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
+    return ParseTestIncludeEntryFile(metadataPath, testArena, scratch, shaderCook).has_value();
 }
 
-b8 GatherShaderDependencies(in GraphicsTestPath sourcePath, in ShaderCookPathVector includeDirectories, mut ScratchArena scratchArena, mut ShaderCookPathVector outDependencies){
-    return GatherShaderDependenciesImpl(sourcePath, includeDirectories, scratchArena, outDependencies);
+b8 GatherShaderDependencies(in GraphicsTestPath sourcePath, in ShaderCookPathVector includeDirectories, mut GraphicsScratchArena scratch, mut ShaderCookPathVector outDependencies){
+    return GatherShaderDependenciesImpl(sourcePath, includeDirectories, scratch.scratchArena, outDependencies);
 }
 
-Expected<u64> ComputeSingleAliasShaderDependencyChecksum(in ShaderCookPathVector dependencies, in ShaderCookPathVector includeDirectories, in GraphicsTestPath aliasRoot, in StringView aliasName, mut ScratchArena scratchArena){
-    return ComputeSingleAliasShaderDependencyChecksumImpl(dependencies, includeDirectories, aliasRoot, aliasName, scratchArena);
+Expected<u64> ComputeSingleAliasShaderDependencyChecksum(in ShaderCookPathVector dependencies, in ShaderCookPathVector includeDirectories, in GraphicsTestPath aliasRoot, in StringView aliasName, mut GraphicsScratchArena scratch){
+    return ComputeSingleAliasShaderDependencyChecksumImpl(dependencies, includeDirectories, aliasRoot, aliasName, scratch.scratchArena);
 }
 
 b8 PathVectorContains(in ShaderCookPathVector paths, in GraphicsTestPath target){
     return PathVectorContainsImpl(paths, target);
 }
 
-b8 ReadTextFileMatches(in GraphicsTestPath path, in StringView expected, mut ScratchArena scratchArena, mut b8 outMatches){
-    return ReadTextFileMatchesImpl(path, expected, scratchArena, outMatches);
+b8 ReadTextFileMatches(in GraphicsTestPath path, in StringView expected, mut GraphicsScratchArena scratch, mut b8 outMatches){
+    return ReadTextFileMatchesImpl(path, expected, scratch.scratchArena, outMatches);
 }
 
-b8 ValidateShaderEntryVariantSignature(in StringView assetName, in StringView signature, in ShaderCookShaderEntry entry, mut ScratchArena scratchArena){
-    return ValidateShaderEntryVariantSignatureImpl(assetName, signature, entry, scratchArena);
+b8 ValidateShaderEntryVariantSignature(in StringView assetName, in StringView signature, in ShaderCookShaderEntry entry, mut GraphicsScratchArena scratch){
+    return ValidateShaderEntryVariantSignatureImpl(assetName, signature, entry, scratch.scratchArena);
 }
 
-b8 ValidateIncludeEntryVariantSignature(in StringView assetName, in StringView signature, in ShaderCookIncludeEntry entry, mut ScratchArena scratchArena){
-    return ValidateIncludeEntryVariantSignatureImpl(assetName, signature, entry, scratchArena);
+b8 ValidateIncludeEntryVariantSignature(in StringView assetName, in StringView signature, in ShaderCookIncludeEntry entry, mut GraphicsScratchArena scratch){
+    return ValidateIncludeEntryVariantSignatureImpl(assetName, signature, entry, scratch.scratchArena);
 }
 
 AssetBytes MakeSkeletonInputsBytes(mut SkeletonInputs inputs){
@@ -2996,8 +3023,8 @@ b8 CanDeserializeTextureAsset(in TextureAssetCodec codec, in Name virtualPath, i
     return codec.deserialize(virtualPath, binary, testArena.arena).has_value();
 }
 
-Expected<TextureCookEntry> ParseTestTextureCookMetadata(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath metadataPath, in MetaDocument document, mut TestArena testArena, mut ScratchArena scratchArena){
-    return ParseTextureCookMetadata(assetRoot, virtualRoot, metadataPath, document, testArena.arena, scratchArena);
+Expected<TextureCookEntry> ParseTestTextureCookMetadata(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath metadataPath, in MetaDocument document, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return ParseTextureCookMetadata(assetRoot, virtualRoot, metadataPath, document, testArena.arena, scratch.scratchArena);
 }
 
 Expected<TextureAsset> BuildTestTextureAsset(in TextureCookEntry entry, mut TestArena testArena){
@@ -3008,8 +3035,8 @@ usize TestArenaUsedBytes(in TestArena testArena){
     return cast<usize>(testArena.arena.memoryStats().usedBytes);
 }
 
-b8 CanDecodeFirstTextureMip(mut TextureMipDecoder decoder, in TextureAsset texture, in FormatEnum format, mut ScratchArena scratchArena){
-    return decoder.decode(scratchArena, texture, texture.mipLevels().front(), 0u, format).has_value();
+b8 CanDecodeFirstTextureMip(mut TextureMipDecoder decoder, in TextureAsset texture, in FormatEnum format, mut GraphicsScratchArena scratch){
+    return decoder.decode(scratch.scratchArena, texture, texture.mipLevels().front(), 0u, format).has_value();
 }
 
 void AppendMeshletDesc(in u32 localVertOffset, in u32 primOffset, in u32 posRefByteOffset, in u32 attrRefByteOffset, in u32 counts, mut MeshletDescVector outMeshlets){
@@ -3040,40 +3067,40 @@ b8 MatchesScalarOct16Reference(in u32 packed){
     return MatchesScalarOct16ReferenceImpl(packed);
 }
 
-GraphicsTestPath GetAssetArenaRepoRoot(mut AssetArena arena){
-    return AssetsGraphicsTestRepoRoot(arena);
+GraphicsTestPath GetAssetArenaRepoRoot(mut TestArena testArena){
+    return AssetsGraphicsTestRepoRoot(testArena.arena);
 }
 
-GraphicsTestPath BuildUninspectableTestRoot(mut AssetArena arena, in GraphicsTestPath repo){
-    return BuildUninspectableTestRootImpl(arena, repo);
+GraphicsTestPath BuildUninspectableTestRoot(mut TestArena testArena, in GraphicsTestPath repo){
+    return BuildUninspectableTestRootImpl(testArena.arena, repo);
 }
 
-void AppendResolvedAssetRoot(mut AssetArena arena, in GraphicsTestPath root, in StringView virtualRoot, mut ResolvedAssetRootVector outRoots){
-    AppendResolvedAssetRootImpl(arena, root, virtualRoot, outRoots);
+void AppendResolvedAssetRoot(mut TestArena testArena, in GraphicsTestPath root, in StringView virtualRoot, mut ResolvedAssetRootVector outRoots){
+    AppendResolvedAssetRootImpl(testArena.arena, root, virtualRoot, outRoots);
 }
 
-Expected<DiscoveredNwbFileVector> DiscoverTestAssetFiles(in ResolvedAssetRootVector roots, in StringView extension, mut AssetArena arena, mut ScratchArena scratchArena){
-    return AssetFileDiscovery::Discover(roots, extension, arena, scratchArena);
+Expected<DiscoveredNwbFileVector> DiscoverTestAssetFiles(in ResolvedAssetRootVector roots, in StringView extension, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return AssetFileDiscovery::Discover(roots, extension, testArena.arena, scratch.scratchArena);
 }
 
-b8 CanResolveVirtualAssetPath(in ResolvedAssetRootVector roots, in StringView virtualPath, mut AssetArena arena, mut ScratchArena scratchArena){
-    return ResolveVirtualAssetPath(roots, virtualPath, arena, scratchArena).has_value();
+b8 CanResolveVirtualAssetPath(in ResolvedAssetRootVector roots, in StringView virtualPath, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return CanResolveVirtualAssetPathImpl(roots, virtualPath, testArena.arena, scratch.scratchArena);
 }
 
 b8 EnsureTestEmptyDirectory(in GraphicsTestPath dir){
     return EnsureEmptyDirectory(dir).has_value();
 }
 
-b8 RunGraphicsParserFailureIteration(mut AssetArena ownerArena, in DiscoveredNwbFile file, in MetaDocument document, mut ScratchArena scratchArena){
-    return RunGraphicsParserFailureIterationImpl(ownerArena, file, document, scratchArena);
+b8 RunGraphicsParserFailureIteration(mut TestArena ownerArena, in DiscoveredNwbFile file, in MetaDocument document, mut GraphicsScratchArena scratch){
+    return RunGraphicsParserFailureIterationImpl(ownerArena.arena, file, document, scratch.scratchArena);
 }
 
-void AppendMetadataRegistrySamplerFile(mut AssetArena fixtureArena, in GraphicsTestPath root, in StringView samplerFields, in usize identity, mut DiscoveredNwbFileVector outFiles){
-    AppendMetadataRegistrySamplerFileImpl(fixtureArena, root, samplerFields, identity, outFiles);
+void AppendMetadataRegistrySamplerFile(mut TestArena fixtureArena, in GraphicsTestPath root, in StringView samplerFields, in usize identity, mut DiscoveredNwbFileVector outFiles){
+    AppendMetadataRegistrySamplerFileImpl(fixtureArena.arena, root, samplerFields, identity, outFiles);
 }
 
-void VerifyMetadataRegistryStoragePass(mut AssetArena fixtureArena, mut AssetArena parseArena, in GraphicsTestPath root, in DiscoveredNwbFileVector files, mut CpuTaskScheduler cpuScheduler, in usize samplerCount, in b8 rejectDuplicate){
-    VerifyMetadataRegistryStoragePassImpl(fixtureArena, parseArena, root, files, cpuScheduler, samplerCount, rejectDuplicate);
+void VerifyMetadataRegistryStoragePass(mut TestArena fixtureArena, mut TestArena parseArena, in GraphicsTestPath root, in DiscoveredNwbFileVector files, mut CpuTaskScheduler cpuScheduler, in usize samplerCount, in b8 rejectDuplicate){
+    VerifyMetadataRegistryStoragePassImpl(fixtureArena.arena, parseArena.arena, root, files, cpuScheduler, samplerCount, rejectDuplicate);
 }
 
 b8 TryRegisterNullAllocatedBucket(mut CookEntryRegistry registry, in Name type){
@@ -3100,8 +3127,8 @@ void RegisterMetadataPairedSidecarExtension(in StringView extension){
     RegisterMetadataPairedSidecarExtensionImpl(extension);
 }
 
-b8 HasRegisteredPairedSidecarExtension(mut ScratchArena scratchArena, in StringView extension){
-    return HasRegisteredPairedSidecarExtensionImpl(scratchArena, extension);
+b8 HasRegisteredPairedSidecarExtension(mut GraphicsScratchArena scratch, in StringView extension){
+    return HasRegisteredPairedSidecarExtensionImpl(scratch.scratchArena, extension);
 }
 
 void PopulateIndexedModelObjects(in usize skeletonCount, in usize meshCount, mut ModelMetadata metadata){
@@ -3136,24 +3163,24 @@ AssetBytes MakeAssetBytes(mut TestArena testArena){
     return MakeAssetBytesImpl(testArena);
 }
 
-ScratchString MakeScratchString(in StringView text, mut ScratchArena scratchArena){
-    return MakeScratchStringImpl(text, scratchArena);
+ScratchString MakeScratchString(in StringView text, mut GraphicsScratchArena scratch){
+    return MakeScratchStringImpl(text, scratch.scratchArena);
 }
 
 StringView ViewScratchString(in ScratchString text){
     return ViewArenaString(text);
 }
 
-DiscoveredNwbFile MakeDiscoveredNwbFile(in GraphicsTestPath root, in GraphicsTestPath path, in StringView virtualRoot, mut AssetArena ownerArena, mut ScratchArena scratchArena){
-    return MakeDiscoveredNwbFileImpl(root, path, virtualRoot, ownerArena, scratchArena);
+DiscoveredNwbFile MakeDiscoveredNwbFile(in GraphicsTestPath root, in GraphicsTestPath path, in StringView virtualRoot, mut TestArena ownerArena, mut GraphicsScratchArena scratch){
+    return MakeDiscoveredNwbFileImpl(root, path, virtualRoot, ownerArena.arena, scratch.scratchArena);
 }
 
 usize GraphicsPathUtf8ByteCount(in GraphicsTestPath path){
     return GraphicsPathUtf8ByteCountImpl(path);
 }
 
-DiscoveredPathCollisionProbe MakeDiscoveredPathCollisionProbe(mut ScratchArena scratchArena){
-    return MakeDiscoveredPathCollisionProbeImpl(scratchArena);
+DiscoveredPathCollisionProbe MakeDiscoveredPathCollisionProbe(mut GraphicsScratchArena scratch){
+    return MakeDiscoveredPathCollisionProbeImpl(scratch.scratchArena);
 }
 
 b8 IsValidAssetName(in Name name){

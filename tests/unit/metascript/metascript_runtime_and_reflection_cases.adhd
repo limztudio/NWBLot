@@ -68,6 +68,10 @@ using ReaderArena = Tests::TestArena<MetaRuntimeReaderArenaTag>;
 using Document = Core::Metascript::Document;
 using Value = Core::Metascript::Value;
 using ScopedTestTrace = Tests::ScopedTestTrace;
+FOUNDATION_INLINE void MetaRuntime_MakeSingleStringList(Value& list, Core::Metascript::MetaArena& arena, const AStringView text){
+    list.makeList();
+    list.append(Value(text, arena));
+}
 [[nodiscard]] FOUNDATION_INLINE b8 TryDecodeCharLiteral(const MStringView text, i64& outValue)noexcept{
     return Core::Metascript::LiteralDecoder::TryDecodeCharLiteral(text, outValue);
 }
@@ -293,11 +297,6 @@ void MetaRuntime_CheckSingleStringListValue(in Value value, in StringView text){
     ASSERT_TRUE(value.isList());
     ASSERT_EQ(value.asList().size(), 1u);
     MetaRuntime_CheckStringListElement(value.asList()[0u], text);
-}
-
-void MetaRuntime_MakeSingleStringList(mut Value list, mut MetaArena arena, in StringView text){
-    list.makeList();
-    list.append(Value(text, arena));
 }
 
 void VerifyMetascript_EmptyAndStructOnlyDocumentsHaveNoImplicitVariables(){

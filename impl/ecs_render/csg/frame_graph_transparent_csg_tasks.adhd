@@ -121,7 +121,6 @@ class FrameGraphTransparentCsgTasks : NoCopy{
     }
 
     public Expected<FrameGraphTransparentCsgTaskResult> declare(
-        mut ScratchArena scratchArena,
         in FrameGraphTransparentCsgTaskInputs inputs,
         mut ObjectGeometryCacheGraph objectGeometry,
         mut AvboitPreGraphTaskPayload prePayload,

@@ -218,7 +218,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
 }
 
 void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const{
-    if(!inst.templateDecl)
+    if(!inst.templateDecl || inst.templateDecl->isExtern)
         return;
 
     const ClassDecl& decl = *inst.templateDecl;

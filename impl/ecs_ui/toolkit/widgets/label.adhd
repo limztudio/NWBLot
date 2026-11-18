@@ -11,6 +11,8 @@ native{
 
 #include <impl/ecs_ui/toolkit/text/service.adhd.h>
 
+#include <global/optional.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,10 +26,9 @@ NWB_IMPL_UI_BEGIN
 // A passive label caches logical layout; paint confines its ink to the supplied region and inherited clip at the current display scale.
 class Label final : NoCopy{
 public:
-    explicit Label(Core::Alloc::GlobalArena& arena)
+    explicit Label(::ArenaBase& arena)
         : m_text(arena)
         , m_language(s_TextDefaultLanguage, arena)
-        , m_layout(arena)
     {}
 
 
@@ -37,7 +38,7 @@ public:
     }
 
     [[nodiscard]] Expected<Rect> measure(TextService& text, const DisplayMetrics& display){
-        if(m_dirty || m_serviceIdentity != text.identity() || m_fontGeneration != text.generation()){
+        if(!m_layout.has_value() || m_dirty || m_serviceIdentity != text.identity() || m_fontGeneration != text.generation()){
             const ShapeRequest request{
                 StringView(m_text.data(), m_text.size()),
                 StringView(m_language.data(), m_language.size()),
@@ -53,7 +54,7 @@ public:
             m_fontGeneration = text.generation();
             m_dirty = false;
         }
-        return text.measure(m_layout, display);
+        return text.measure(*m_layout, display);
     }
 
     [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color = {}){
@@ -61,18 +62,21 @@ public:
         if(!measured)
             return false;
         paint.pushClip(bounds);
-        const b8 painted = text.paint(paint, m_layout, ResolveLabelPaintOrigin(bounds, *measured), color);
+        const b8 painted = text.paint(paint, *m_layout, ResolveLabelPaintOrigin(bounds, *measured), color);
         const b8 restored = paint.popClip();
         return painted && restored;
     }
 
-    [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
+    [[nodiscard]] const TextLayout& layout()const noexcept{
+        FOUNDATION_ASSERT_MSG(m_layout.has_value(), FOUNDATION_TEXT("Label::layout() requires a successful measure() first"));
+        return *m_layout;
+    }
 
 
 private:
-    AString<Core::Alloc::GlobalArena> m_text;
-    AString<Core::Alloc::GlobalArena> m_language;
-    TextLayout m_layout;
+    AString<::ArenaBase> m_text;
+    AString<::ArenaBase> m_language;
+    Optional<TextLayout> m_layout;
     u64 m_serviceIdentity = 0u;
     u64 m_fontGeneration = 0u;
     f32 m_fontSize = s_TextDefaultFontSize;
@@ -92,6 +96,18 @@ NWB_IMPL_UI_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_name("::NWB::Impl::Ui::Label"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
+extern class Label{
+    TextLayoutStatus setText(...);
+    Expected<Rect> measure(...);
+    b8 paint(...);
+    in TextLayout layout(...)const;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

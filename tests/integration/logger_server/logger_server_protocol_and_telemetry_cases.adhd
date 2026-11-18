@@ -243,7 +243,7 @@ void VerifyLoggerProducerContracts_MissingArchiveRetainsNativeReadFailureInOwnin
     const StringView group = "logger_server_missing_archive_native_error_test";
     const StringView stem = "missing_archive_001";
     RemoveTestArtifacts(group);
-    const CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
+    const CrashIngestConfig config = MakeIngestConfig(testArena, group);
     const Path path = ArchivePath(group, stem);
     const Expected<u64, ErrorCode> missing = FileSize(path);
     ASSERT_FALSE(missing.has_value());

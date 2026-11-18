@@ -50,8 +50,7 @@ extern class ReflectionFrameSnapshot;
 
 [modular]
 class RendererReflectionPipelines : NoCopy{
-    public RendererReflectionPipelines(mut GlobalArena arena, mut GraphicsRuntime graphics, mut RendererShaderSystem shaders){
-        this.m_arena = arena;
+    public RendererReflectionPipelines(mut GraphicsRuntime graphics, mut RendererShaderSystem shaders){
         this.m_graphics = graphics;
         this.m_shaders = shaders;
     }
@@ -83,7 +82,6 @@ class RendererReflectionPipelines : NoCopy{
         return this.m_csgUnspecifiedHardwarePipeline;
     }
 
-    private mut GlobalArena m_arena;
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaders;
     private BindingLayoutHandle m_bindingLayout;

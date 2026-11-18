@@ -549,6 +549,10 @@ using Color = ::NWB::Impl::Ui::Color;
 using ControlAction = ::NWB::Impl::Ui::ControlAction;
 using ControlToken = ::NWB::Impl::Ui::ControlToken;
 using GlobalArena = ::NWB::Core::Alloc::GlobalArena;
+struct UiImageSourceCallerArena{
+    ::NWB::Core::Alloc::GlobalArena arena;
+    explicit UiImageSourceCallerArena(const Name& scopeName) : arena(scopeName){}
+};
 using ImageMetrics = ::NWB::Impl::Ui::ImageMetrics;
 using ImageOptions = ::NWB::Impl::Ui::ImageOptions;
 using ImagePlacement = ::NWB::Impl::Ui::ImagePlacement;
@@ -1682,9 +1686,9 @@ void VerifyUiImageSourceTests_NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds(m
 void VerifyUiImageSourceTests_RetainedSourceOutlivesCallerReplacementTextureAndItsArena(mut UiImageSourceTests self){
     SharedImageSource source = SharedImageSource();
     {
-        GlobalArena callerArena = GlobalArena(s_UiCaseTestsUiImageSourceTemporary);
-        Texture texture = Texture(callerArena, s_UiCaseTestsUiImageTemporary);
-        ASSERT_TRUE(self.prepareDefault(callerArena, texture));
+        UiImageSourceCallerArena callerArena = UiImageSourceCallerArena(s_UiCaseTestsUiImageSourceTemporary);
+        Texture texture = Texture(callerArena.arena, s_UiCaseTestsUiImageTemporary);
+        ASSERT_TRUE(self.prepareDefault(callerArena.arena, texture));
         const Expected<SharedImageSource> sourceReplacement = MakeImageSource(self.m_sourceArena, texture);
         ASSERT_TRUE(sourceReplacement.has_value());
         source = sourceReplacement.value();
@@ -1695,7 +1699,7 @@ void VerifyUiImageSourceTests_RetainedSourceOutlivesCallerReplacementTextureAndI
         replacement.height = 1u;
         replacement.alphaMode = TextureAlphaMode::Opaque;
         replacement.seed = 91u;
-        ASSERT_TRUE(self.prepareCustom(callerArena, texture, replacement));
+        ASSERT_TRUE(self.prepareCustom(callerArena.arena, texture, replacement));
         EXPECT_EQ(texture.payloadBytes().size(), 16u);
         EXPECT_EQ(UiReadImageTexture(source).payloadBytes().size(), 144u);
         EXPECT_EQ(UiReadImageTexture(source).width(), 9u);

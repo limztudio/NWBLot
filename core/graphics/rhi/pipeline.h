@@ -207,8 +207,8 @@ public:
 };
 
 struct RayTracingPipelineDesc{
-    GraphicsVector<RayTracingPipelineShaderDesc> shaders;
-    GraphicsVector<RayTracingPipelineHitGroupDesc> hitGroups;
+    Vector<RayTracingPipelineShaderDesc, ::ArenaBase> shaders;
+    Vector<RayTracingPipelineHitGroupDesc, ::ArenaBase> hitGroups;
     BindingLayoutVector globalBindingLayouts;
     u32 maxPayloadSize = 0;
     u32 maxAttributeSize = sizeof(f32) * 2; // typical case: float2 uv;
@@ -220,7 +220,7 @@ struct RayTracingPipelineDesc{
 
 
 public:
-    explicit RayTracingPipelineDesc(GraphicsArena& arena)noexcept
+    explicit RayTracingPipelineDesc(::ArenaBase& arena)noexcept
         : shaders(arena)
         , hitGroups(arena)
     {}

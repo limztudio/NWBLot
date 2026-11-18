@@ -33,9 +33,9 @@ class RelativeAssetPathCase{
     }
 }
 
-b8 DeserializeNullAllocatedCodec(in Name virtualPath, in AssetBytes bytes, mut AssetArena arena){
+b8 DeserializeNullAllocatedCodec(in Name virtualPath, in AssetBytes bytes, mut TestArena testArena){
     NullAllocatedCodec codec = NullAllocatedCodec();
-    return codec.deserialize(virtualPath, bytes, arena).has_value();
+    return codec.deserialize(virtualPath, bytes, testArena.arena).has_value();
 }
 
 b8 BuildRelativeForGraphicsPath(in GraphicsTestPath path, mut ScratchString output){
@@ -46,40 +46,40 @@ b8 BuildRelativeForScratchPath(in ScratchPath path, mut ScratchString output){
     return BuildRelativeAssetPathText(path, output);
 }
 
-Expected<ScratchString> BuildDerivedScratchPath(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath source, mut ScratchArena scratchArena){
-    return BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, source, scratchArena, scratchArena);
+Expected<ScratchString> BuildDerivedScratchPath(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath source, mut GraphicsScratchArena scratch){
+    return BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, source, scratch.scratchArena, scratch.scratchArena);
 }
 
-Expected<AssetString> BuildDerivedOwnedFromScratchSource(mut PathFixture fixture, in ScratchPath source, mut ScratchArena scratchArena){
-    return BuildDerivedAssetVirtualPathText(fixture.assetRoot, s_ProjectVirtualRoot, source, fixture.arena, scratchArena);
+Expected<AssetString> BuildDerivedOwnedFromScratchSource(mut PathFixture fixture, in ScratchPath source, mut GraphicsScratchArena scratch){
+    return BuildDerivedAssetVirtualPathText(fixture.assetRoot, s_ProjectVirtualRoot, source, fixture.arena, scratch.scratchArena);
 }
 
-b8 CanBuildDerivedVirtualPath(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath source, mut ScratchArena scratchArena){
-    return BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, source, scratchArena).has_value();
+b8 CanBuildDerivedVirtualPath(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath source, mut GraphicsScratchArena scratch){
+    return CanBuildDerivedVirtualPathImpl(assetRoot, virtualRoot, source, scratch.scratchArena);
 }
 
-b8 VerifyDerivedFixturePath(in PathFixture fixture, mut ScratchArena scratchArena){
-    return BuildAndVerifyDerivedAssetPath(fixture, scratchArena);
+b8 VerifyDerivedFixturePath(in PathFixture fixture, mut GraphicsScratchArena scratch){
+    return BuildAndVerifyDerivedAssetPath(fixture, scratch.scratchArena);
 }
 
 void PrepareFixturePathWorkload(in usize directoryCount, in StringView directoryToken, in usize tokenRepeats, mut PathFixture fixture){
     PrepareAssetPathWorkload(directoryCount, directoryToken, tokenRepeats, fixture);
 }
 
-b8 GatherBuiltToOutputHelper(mut TestArena testArena, in GraphicsTestPath builtDir, in GraphicsTestPath outDir, mut ScratchArena scratchArena){
-    return GatherBuiltDirectoryToOutput(testArena, builtDir, outDir, scratchArena);
+b8 GatherBuiltToOutputHelper(mut TestArena testArena, in GraphicsTestPath builtDir, in GraphicsTestPath outDir, mut GraphicsScratchArena scratch){
+    return GatherBuiltDirectoryToOutput(testArena, builtDir, outDir, scratch.scratchArena);
 }
 
 Expected<SamplerAsset> LoadCookedSamplerHelper(in GraphicsTestPath outputDirectory, in Name assetName, in usize expectedVolumeFileCount, mut TestArena testArena){
     return LoadCookedSamplerAsset(outputDirectory, assetName, expectedVolumeFileCount, testArena);
 }
 
-b8 WriteBuiltManifestHelper(in GraphicsTestPath directory, in AssetVolumePackManifest manifest, mut ScratchArena scratchArena){
-    return WriteBuiltAssets(directory, manifest, scratchArena);
+b8 WriteBuiltManifestHelper(in GraphicsTestPath directory, in AssetVolumePackManifest manifest, mut GraphicsScratchArena scratch){
+    return WriteBuiltAssets(directory, manifest, scratch.scratchArena);
 }
 
-b8 ReadManifestArtifactPaths(in GraphicsTestPath manifestPath, mut ScratchArena scratchArena, mut AssetTestVector<AssetString> outPaths){
-    return ReadAssetInputList(manifestPath, scratchArena, outPaths, true);
+b8 ReadManifestArtifactPaths(in GraphicsTestPath manifestPath, mut GraphicsScratchArena scratch, mut AssetTestVector<AssetString> outPaths){
+    return ReadAssetInputList(manifestPath, scratch.scratchArena, outPaths, true);
 }
 
 void CorruptLastManifestEntryHash(mut AssetVolumePackManifest manifest){
@@ -87,17 +87,17 @@ void CorruptLastManifestEntryHash(mut AssetVolumePackManifest manifest){
 }
 
 void VerifyAssetCodecAdmission_NullClassAllocationDoesNotCallAssetLoad(){
-    AssetArena arena(s_AssetCaseTestsAssetCodecNullAllocation);
-    AssetBytes bytes(arena);
+    TestArena testArena = TestArena(s_AssetCaseTestsAssetCodecNullAllocation);
+    AssetBytes bytes(testArena.arena);
     NullAllocatedAsset::ResetTracking();
-    EXPECT_FALSE(DeserializeNullAllocatedCodec(s_AssetCaseProjectTestsNullAsset, bytes, arena));
+    EXPECT_FALSE(DeserializeNullAllocatedCodec(s_AssetCaseProjectTestsNullAsset, bytes, testArena));
     EXPECT_EQ(NullAllocatedAsset::ConstructorCalls(), 0u);
     EXPECT_FALSE(NullAllocatedAsset::LoadCalled());
 }
 
 void VerifyAssetConstructorContracts_ImplicitNameBindingCanThrowDespiteNothrowExplicitConversion(){
-    AssetArena arena(s_AssetInputNameTestsAssetConstructorImplicitName);
-    native(mut arena){
+    native{
+        AssetArena arena(s_AssetInputNameTestsAssetConstructorImplicitName);
         EXPECT_THROW(ImplicitNameAsset{}, u32);
         EXPECT_THROW(ImplicitNameAsset{Name(s_AssetInputNameProjectTestsNameConversion)}, u32);
         EXPECT_THROW(ImplicitNameCodec{}, u32);
@@ -120,8 +120,8 @@ void VerifyAssetConstructorContracts_CastIncludesTheCompleteContextualComparison
 }
 
 void VerifyAssetPaths_MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclarationOrder(){
-    AssetArena arena(s_AssetCaseTestsAssetPathMetadataDeclaration);
-    MetaDocument document(arena);
+    TestArena testArena = TestArena(s_AssetCaseTestsAssetPathMetadataDeclaration);
+    MetaDocument document(testArena.arena);
     ASSERT_TRUE(document.parse("metadata helper; sampler decoy; texture asset;"));
     ASSERT_TRUE(HasMetaDeclaration(document, s_MetadataAssetVariable));
     EXPECT_EQ(GetMetaDeclarationVariable(document, s_MetadataAssetVariable), "asset");
@@ -134,8 +134,8 @@ void VerifyAssetPaths_MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDecla
 }
 
 void VerifyAssetPaths_RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText(){
-    AssetArena inputArena(s_AssetCaseTestsAssetPathRelativeInputs);
-    ScratchArena scratchArena(s_AssetCaseTestsAssetPathRelativeScratch);
+    TestArena inputArena = TestArena(s_AssetCaseTestsAssetPathRelativeInputs);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathRelativeScratch);
 
     Vector<RelativeAssetPathCase> cases = Vector<RelativeAssetPathCase>();
     cases.reserve(10u);
@@ -150,31 +150,31 @@ void VerifyAssetPaths_RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText
     cases.push_back(RelativeAssetPathCase("Valid/./../After", "valid", false));
     cases.push_back(RelativeAssetPathCase("/Rooted/After", "", false));
 
-    ScratchString output(scratchArena);
+    ScratchString output(scratch.scratchArena);
     for(in RelativeAssetPathCase testCase : cases){
         const ScopedTestTrace trace(testCase.input);
         output.assign(s_StaleRelativeOutput);
-        const GraphicsTestPath path(inputArena, testCase.input);
+        const GraphicsTestPath path(inputArena.arena, testCase.input);
         EXPECT_EQ(BuildRelativeForGraphicsPath(path, output), testCase.accepted);
         EXPECT_EQ(ViewArenaString(output), testCase.expected);
-        const ScratchPath scratchPath(scratchArena, testCase.input);
+        const ScratchPath scratchPath(scratch.scratchArena, testCase.input);
         EXPECT_EQ(BuildRelativeForScratchPath(scratchPath, output), testCase.accepted);
         EXPECT_EQ(ViewArenaString(output), testCase.expected);
     }
 }
 
 void VerifyAssetPaths_RelativeBackslashesFollowHostComponentRulesBeforeCanonicalization(){
-    AssetArena inputArena(s_AssetCaseTestsAssetPathSeparatorInputs);
-    ScratchArena scratchArena(s_AssetCaseTestsAssetPathSeparatorScratch);
-    ScratchString output(scratchArena);
-    const GraphicsTestPath path(inputArena, "Prefix/Upper\\Name//./File");
+    TestArena inputArena = TestArena(s_AssetCaseTestsAssetPathSeparatorInputs);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathSeparatorScratch);
+    ScratchString output(scratch.scratchArena);
+    const GraphicsTestPath path(inputArena.arena, "Prefix/Upper\\Name//./File");
     if(IsWindowsPlatformHost()){
         ASSERT_TRUE(BuildRelativeForGraphicsPath(path, output));
         EXPECT_EQ(ViewArenaString(output), "prefix/upper/name/file");
-        const GraphicsTestPath driveRoot(inputArena, "C:\\Root\\File");
+        const GraphicsTestPath driveRoot(inputArena.arena, "C:\\Root\\File");
         EXPECT_FALSE(BuildRelativeForGraphicsPath(driveRoot, output));
         EXPECT_TRUE(output.empty());
-        const GraphicsTestPath driveOnly(inputArena, "C:");
+        const GraphicsTestPath driveOnly(inputArena.arena, "C:");
         EXPECT_TRUE(BuildRelativeForGraphicsPath(driveOnly, output));
         EXPECT_EQ(ViewArenaString(output), "c:");
     }
@@ -186,20 +186,20 @@ void VerifyAssetPaths_RelativeBackslashesFollowHostComponentRulesBeforeCanonical
 
 void VerifyAssetPaths_DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText(){
     PathFixture fixture = PathFixture();
-    ScratchArena scratchArena(s_AssetCaseTestsAssetPathDerivedScratch);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathDerivedScratch);
 
     const GraphicsTestPath source = JoinGraphicsPath(fixture.assetRoot, "Models//./Hero.LOD0.NWB");
-    const Expected<ScratchString> output = BuildDerivedScratchPath(fixture.assetRoot, "MiXeD/Root", source, scratchArena);
+    const Expected<ScratchString> output = BuildDerivedScratchPath(fixture.assetRoot, "MiXeD/Root", source, scratch);
     ASSERT_TRUE(output.has_value());
     EXPECT_EQ(ViewArenaString(output.value()), "MiXeD/Root/models/hero.lod0");
 
     const GraphicsTestPath hiddenSource = JoinGraphicsPath(fixture.assetRoot, "Folder.Name/.Hidden");
-    const Expected<ScratchString> hiddenOutput = BuildDerivedScratchPath(fixture.assetRoot, s_ProjectVirtualRoot, hiddenSource, scratchArena);
+    const Expected<ScratchString> hiddenOutput = BuildDerivedScratchPath(fixture.assetRoot, s_ProjectVirtualRoot, hiddenSource, scratch);
     ASSERT_TRUE(hiddenOutput.has_value());
     EXPECT_EQ(ViewArenaString(hiddenOutput.value()), "project/folder.name/.hidden");
 
     const GraphicsTestPath extensionlessSource = JoinGraphicsPath(fixture.assetRoot, "Folder/NoExtension");
-    const Expected<ScratchString> extensionlessOutput = BuildDerivedScratchPath(fixture.assetRoot, "", extensionlessSource, scratchArena);
+    const Expected<ScratchString> extensionlessOutput = BuildDerivedScratchPath(fixture.assetRoot, "", extensionlessSource, scratch);
     ASSERT_TRUE(extensionlessOutput.has_value());
     EXPECT_EQ(ViewArenaString(extensionlessOutput.value()), "/folder/noextension");
 }
@@ -208,11 +208,11 @@ void VerifyAssetPaths_DerivedOwningTextOutlivesBorrowedScratchSourcePath(){
     PathFixture fixture = PathFixture();
     AssetString retained(fixture.arena);
     {
-        ScratchArena scratchArena(s_AssetCaseTestsAssetPathBorrowedSourceScratch);
-        const ScratchPath rootCopy(scratchArena, fixture.assetRoot);
-        const ScratchPath relative(scratchArena, "Models/Hero.LOD0.NWB");
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathBorrowedSourceScratch);
+        const ScratchPath rootCopy(scratch.scratchArena, fixture.assetRoot);
+        const ScratchPath relative(scratch.scratchArena, "Models/Hero.LOD0.NWB");
         const ScratchPath source = rootCopy / relative;
-        Expected<AssetString> output = BuildDerivedOwnedFromScratchSource(fixture, source, scratchArena);
+        Expected<AssetString> output = BuildDerivedOwnedFromScratchSource(fixture, source, scratch);
         ASSERT_TRUE(output.has_value());
         retained = output.value();
     }
@@ -223,13 +223,13 @@ void VerifyAssetPaths_DerivedPathRejectsOutsideAndEmptyLogicalPaths(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     PathFixture fixture = PathFixture();
-    ScratchArena scratchArena(s_AssetCaseTestsAssetPathRejectionScratch);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathRejectionScratch);
 
     const GraphicsTestPath outside = JoinGraphicsPath(fixture.assetRoot, "../Elsewhere/Model.NWB");
-    EXPECT_FALSE(BuildDerivedScratchPath(fixture.assetRoot, s_ProjectVirtualRoot, outside, scratchArena).has_value());
-    EXPECT_FALSE(CanBuildDerivedVirtualPath(fixture.assetRoot, s_ProjectVirtualRoot, outside, scratchArena));
-    EXPECT_FALSE(BuildDerivedScratchPath(fixture.assetRoot, s_ProjectVirtualRoot, fixture.assetRoot, scratchArena).has_value());
-    EXPECT_FALSE(CanBuildDerivedVirtualPath(fixture.assetRoot, s_ProjectVirtualRoot, fixture.assetRoot, scratchArena));
+    EXPECT_FALSE(BuildDerivedScratchPath(fixture.assetRoot, s_ProjectVirtualRoot, outside, scratch).has_value());
+    EXPECT_FALSE(CanBuildDerivedVirtualPath(fixture.assetRoot, s_ProjectVirtualRoot, outside, scratch));
+    EXPECT_FALSE(BuildDerivedScratchPath(fixture.assetRoot, s_ProjectVirtualRoot, fixture.assetRoot, scratch).has_value());
+    EXPECT_FALSE(CanBuildDerivedVirtualPath(fixture.assetRoot, s_ProjectVirtualRoot, fixture.assetRoot, scratch));
     EXPECT_EQ(logger.errorCount(), 4u);
 }
 
@@ -244,21 +244,21 @@ void VerifyAssetPaths_LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerA
             tokenRepeats = 8u;
         }
         PrepareFixturePathWorkload(8u, directoryToken, tokenRepeats, fixture);
-        ScratchArena scratchArena(s_AssetCaseTestsAssetPathRepeatedScratch, 65536u);
-        ScratchArenaSentinel sentinel(scratchArena);
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathRepeatedScratch, 65536u);
+        ScratchArenaSentinel sentinel(scratch.scratchArena);
         ASSERT_TRUE(sentinel.valid());
-        const ArenaMemoryStats retained = scratchArena.memoryStats();
+        const ArenaMemoryStats retained = scratch.scratchArena.memoryStats();
         ArenaMemoryStats warm = ArenaMemoryStats();
         for(usize call = 0u; call < 16u; ++call){
             {
-                ScratchString relative(scratchArena);
+                ScratchString relative(scratch.scratchArena);
                 ASSERT_TRUE(BuildRelativeForGraphicsPath(fixture.relativePath, relative));
                 EXPECT_EQ(ViewArenaString(relative), ViewArenaString(fixture.expectedRelative));
                 EXPECT_TRUE(HasTrailingNullTerminator(relative));
             }
-            EXPECT_TRUE(VerifyDerivedFixturePath(fixture, scratchArena));
+            EXPECT_TRUE(VerifyDerivedFixturePath(fixture, scratch));
             EXPECT_TRUE(sentinel.intact());
-            const ArenaMemoryStats after = scratchArena.memoryStats();
+            const ArenaMemoryStats after = scratch.scratchArena.memoryStats();
             if(call == 0u)
                 warm = after;
             EXPECT_EQ(after.usedBytes, retained.usedBytes);
@@ -267,53 +267,53 @@ void VerifyAssetPaths_LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerA
         const GraphicsTestPath parentInput = JoinGraphicsPath2(fixture.sourcePath, "..", "Second.LOD1.NWB");
         for(usize call = 0u; call < 16u; ++call){
             {
-                const ScratchPath source(scratchArena, parentInput);
+                const ScratchPath source(scratch.scratchArena, parentInput);
                 const ScratchPath normal = source.lexicallyNormal();
                 const ScratchPath stem = normal.stem();
                 const ScratchPath extension = normal.extension();
                 EXPECT_EQ(PathToString(stem), "Second.LOD1");
                 EXPECT_EQ(PathToString(extension), ".NWB");
             }
-            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
+            EXPECT_EQ(scratch.scratchArena.memoryStats().usedBytes, retained.usedBytes);
         }
         for(usize call = 0u; call < 16u; ++call){
             b8 relativeEmpty = true;
             {
-                const ScratchPath source(scratchArena, fixture.relativePath);
-                const ScratchPath emptyBase(scratchArena);
+                const ScratchPath source(scratch.scratchArena, fixture.relativePath);
+                const ScratchPath emptyBase(scratch.scratchArena);
                 const ScratchPath relative = source.lexicallyRelative(emptyBase);
                 relativeEmpty = relative.empty();
             }
             EXPECT_FALSE(relativeEmpty);
-            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
+            EXPECT_EQ(scratch.scratchArena.memoryStats().usedBytes, retained.usedBytes);
         }
         sentinel.release();
     }
 }
 
 void VerifyAssetPaths_RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStorage(){
-    AssetArena inputArena(s_AssetCaseTestsAssetPathUnicodePrefixInputs);
-    AssetString expected(inputArena);
+    TestArena inputArena = TestArena(s_AssetCaseTestsAssetPathUnicodePrefixInputs);
+    AssetString expected(inputArena.arena);
     expected.reserve(512u);
     for(usize index = 0u; index < 8u; ++index)
         expected.append("Étage_한글_東京_😀_");
-    AssetString input(ViewArenaString(expected), inputArena);
+    AssetString input(ViewArenaString(expected), inputArena.arena);
     input.append("/./../Ignored/After");
-    const GraphicsTestPath path(inputArena, ViewArenaString(input));
-    ScratchArena scratchArena(s_AssetCaseTestsAssetPathUnicodePrefixScratch, 65536u);
+    const GraphicsTestPath path(inputArena.arena, ViewArenaString(input));
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathUnicodePrefixScratch, 65536u);
     for(usize call = 0u; call < 16u; ++call){
         {
-            ScratchString output(scratchArena);
+            ScratchString output(scratch.scratchArena);
             EXPECT_FALSE(BuildRelativeForGraphicsPath(path, output));
             EXPECT_EQ(ViewArenaString(output), ViewArenaString(expected));
             EXPECT_TRUE(HasTrailingNullTerminator(output));
         }
-        EXPECT_EQ(scratchArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(scratch.scratchArena.memoryStats().usedBytes, 0u);
     }
 }
 
 void VerifyAssetPaths_StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots(){
-    ScratchArena scratchArena(s_AssetCaseTestsAssetPathNativeFilenameSpans);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetPathNativeFilenameSpans);
     Vector<StemExtensionCase> cases = Vector<StemExtensionCase>();
     cases.reserve(6u);
     cases.push_back(StemExtensionCase("foo.bar/", "foo", ".bar"));
@@ -324,7 +324,7 @@ void VerifyAssetPaths_StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots(){
     cases.push_back(StemExtensionCase("", "", ""));
 
     for(in StemExtensionCase testCase : cases){
-        const ScratchPath path(scratchArena, testCase.input);
+        const ScratchPath path(scratch.scratchArena, testCase.input);
         const ScratchPath stem = path.stem();
         const ScratchPath extension = path.extension();
         EXPECT_EQ(PathToString(stem), testCase.stem);
@@ -463,8 +463,8 @@ void VerifyAssetsGraphics_SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBu
     ASSERT_EQ(GraphicsPathUtf8ByteCount(builtDirectory), 200u);
     ASSERT_TRUE(BuildSingleAssetRoot(testArena, root, builtDirectory, assetRoot, 2u));
 
-    ScratchArena scratchArena(s_GatherScratchArena);
-    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, builtDirectory, outputDirectory, scratchArena));
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_GatherScratchArena);
+    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, builtDirectory, outputDirectory, scratch));
 
     Array<Name, 2> virtualPaths = Array<Name, 2>();
     virtualPaths[0u] = Name(s_FirstSamplerPath);
@@ -482,7 +482,7 @@ void VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVir
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_CodecScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
 
     const Expected<CookCase> cookCase = PrepareCookCase(testArena, "failed_reordered_shared_payloads");
     ASSERT_TRUE(cookCase.has_value());
@@ -505,12 +505,12 @@ void VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVir
     ASSERT_TRUE(ReserveAssetVolumePackManifest(2u, initial));
     ASSERT_TRUE(AppendPayloadBytesToManifest(firstPath, samplerPayload, initial, s_SharedCookKeyHash));
     ASSERT_TRUE(AppendPayloadBytesToManifest(secondPath, samplerPayload, initial, s_SharedCookKeyHash));
-    ASSERT_TRUE(WriteBuiltManifestHelper(publishedDirectory, initial, scratchArena));
+    ASSERT_TRUE(WriteBuiltManifestHelper(publishedDirectory, initial, scratch));
 
     AssetBytes originalList(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(manifestPath, originalList).has_value());
     AssetTestVector<AssetString> originalArtifactPaths(testArena.arena);
-    ASSERT_TRUE(ReadManifestArtifactPaths(manifestPath, scratchArena, originalArtifactPaths));
+    ASSERT_TRUE(ReadManifestArtifactPaths(manifestPath, scratch, originalArtifactPaths));
     ASSERT_EQ(originalArtifactPaths.size(), 2u);
     AssetTestVector<AssetBytes> originalArtifactBytes(testArena.arena);
     originalArtifactBytes.reserve(originalArtifactPaths.size());
@@ -528,7 +528,7 @@ void VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVir
     // Reorder both shared-payload entries before failing, so publication also has to create a new artifact slot.
     ASSERT_TRUE(AppendPayloadBytesToManifest(s_AssetInputNameProjectSamplersFailing, samplerPayload, reordered, s_SharedCookKeyHash));
     CorruptLastManifestEntryHash(reordered);
-    EXPECT_FALSE(WriteBuiltManifestHelper(publishedDirectory, reordered, scratchArena));
+    EXPECT_FALSE(WriteBuiltManifestHelper(publishedDirectory, reordered, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "invalid payload identity"));
 
     AssetBytes retainedList(testArena.arena);
@@ -541,7 +541,7 @@ void VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVir
         EXPECT_EQ(retainedArtifactBytes, originalArtifactBytes[index]);
     }
 
-    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, publishedDirectory, prepared.outputDirectory, scratchArena));
+    ASSERT_TRUE(GatherBuiltToOutputHelper(testArena, publishedDirectory, prepared.outputDirectory, scratch));
     Array<Name, 2> virtualPaths = Array<Name, 2>();
     virtualPaths[0u] = firstPath;
     virtualPaths[1u] = secondPath;

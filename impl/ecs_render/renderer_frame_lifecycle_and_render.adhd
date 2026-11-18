@@ -355,7 +355,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::GpuTaskId terminalPresentationTask = topology.terminalPresentationTask;
     const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue = topology.surfelGiCounterReadbackQueue;
     const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue = topology.laggedLightingHistoryQueue;
-    FrameExecuteRecovery recovery(*this, deferredGraphScratchArena, timing.frameTimingTransaction, deferredCompiledPlan);
+    FrameExecuteRecovery recovery(*this, timing.frameTimingTransaction, deferredCompiledPlan);
     const auto discardRenderPackets = [&](){
         timing.discardAll();
         if(!recovery.discardUnacceptedGraphPackets()){

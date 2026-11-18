@@ -642,15 +642,6 @@ class SmokeCaptureFactory{
         return this.configure(projectName, defaultFrameCount, FramebufferCaptureOptions());
     }
 
-    public Expected<UniquePtr<FramebufferCapture>> configure(
-        in StringView projectName,
-        in u32 defaultFrameCount,
-        in FramebufferCaptureOptions options,
-        mut ScratchArena scratchArena
-    ){
-        return this.configure(projectName, defaultFrameCount, options);
-    }
-
     public Expected<SmokeCaptureSeries> prepareSeries(in StringView outputPath, in u32 sampleCount, in FramebufferCaptureOptions options){
         if(sampleCount == 0u)
             return MakeUnexpected(Failure());

@@ -85,10 +85,6 @@ b8 EntityAsset::validatePayload()const{
     return true;
 }
 
-b8 EntityAsset::validatePayload(mut ScratchArena scratchArena)const{
-    return this.validatePayload();
-}
-
 b8 EntityAsset::loadBinary(in Span<u8> binary){
     EntityAsset candidate(this.virtualPath());
     if(!SceneAssetBinaryCodec().deserializeEntity(binary, candidate.m_components))
@@ -125,10 +121,6 @@ b8 SceneAsset::validatePayload()const{
     if(!ValidateSceneAssetMap(this.m_assets))
         return false;
     return true;
-}
-
-b8 SceneAsset::validatePayload(mut ScratchArena scratchArena)const{
-    return this.validatePayload();
 }
 
 b8 SceneAsset::loadBinary(in Span<u8> binary){

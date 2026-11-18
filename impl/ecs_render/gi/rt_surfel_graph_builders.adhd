@@ -108,12 +108,12 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     const Core::GpuTaskId effectsTask,
     const b8 useLaggedLightingHistory,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
-    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 )noexcept{
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
 
     SurfelGiTaskBuilder surfelGiTasks(context.rayTracing, context.graph);
     m_deferredSurfelGiPreparationTask = {};

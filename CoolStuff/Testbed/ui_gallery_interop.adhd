@@ -65,13 +65,6 @@ usize WriteVirtualListRowLabelBytes(in u64 rowKey, mut Array<u8, s_VirtualListLa
     return s_VirtualListRowPrefixLength + digitCount;
 }
 
-Expected<SharedImageSource> LoadUiGallerySkinImageSource(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
-    const AssetRef<Texture> textureRef = ResolveUiGallerySkinTextureRef(assets, sceneSubsystems);
-    if(!textureRef.valid())
-        return MakeUnexpected(Failure());
-    return LoadImageSource(arena, assets, textureRef);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -16,22 +16,21 @@ b8 IsValidMaterialResourceDependencyName(in b8 parsedOk, in Name resourceName){
     return parsedOk && resourceName != s_NameNone;
 }
 
-b8 IsMaterialResourceParameterValue(in StringView valueText, mut ScratchArena scratchArena){
+b8 IsMaterialResourceParameterValue(in StringView valueText){
     const StringView trimmed = TrimView(valueText);
     if(!IsMaterialResourceParameterCandidate(trimmed))
         return false;
-    return HasReservedAssetVirtualRoot(trimmed, scratchArena);
+    return HasReservedAssetVirtualRoot(trimmed);
 }
 
 Expected<Vector<Name>> CollectSortedMaterialResourceDependencyNames(
-    in HashMap<CompactString, CompactString> parameters,
-    mut ScratchArena scratchArena
+    in HashMap<CompactString, CompactString> parameters
 ){
     Vector<StringView> resourceParameterValues;
     resourceParameterValues.reserve(parameters.size());
     for(in auto entry : parameters){
         const StringView valueView = TrimView(entry.second.view());
-        if(IsMaterialResourceParameterValue(valueView, scratchArena))
+        if(IsMaterialResourceParameterValue(valueView))
             resourceParameterValues.push_back(valueView);
     }
 
@@ -133,7 +132,7 @@ static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCont
             return false;
     }
 
-    const auto resourceNames = CollectSortedMaterialResourceDependencyNames(context.scratchArena, materialEntry->parameters, context.scratchArena);
+    const auto resourceNames = CollectSortedMaterialResourceDependencyNames(context.scratchArena, materialEntry->parameters);
     if(!resourceNames)
         return false;
     for(const Name resourceName : *resourceNames){

@@ -19,7 +19,6 @@ extern enum MetascriptValueType : u8{
 
 [cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value")]
 extern class MetascriptValue{
-    mut GlobalArena arena(...)const;
     f64 asDouble(...)const;
     i64 asInteger(...)const;
     StringView asReference(...)const;
@@ -46,13 +45,6 @@ extern class MetascriptValue{
     MetascriptValueType type(...)const;
     b8 visitField(in StringView a0, in Func<void(in MetascriptValue)> a1)const;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<core/metascript/value.h>"), cpp_name("::NWB::Core::Metascript::Value::Reference")]
-extern MetascriptValue MetascriptValueReference(in StringView a0, mut auto a1);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

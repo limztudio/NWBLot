@@ -219,7 +219,13 @@ template<typename RootArenaT, typename SourceArenaT>
 
     return *virtualPath;
 }
+template<typename RootArenaT, typename SourceArenaT>
+[[nodiscard]] inline Expected<Name> BuildDerivedAssetVirtualPath(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& sourceOrMetaPath){
+    Alloc::ScratchArena scratchArena;
+    return BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, sourceOrMetaPath, scratchArena);
+}
 [[nodiscard]] b8 HasReservedAssetVirtualRoot(AStringView virtualPath, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 HasReservedAssetVirtualRoot(AStringView virtualPath);
 [[nodiscard]] Expected<Path> ResolveVirtualAssetPath(Span<const ResolvedAssetRoot> assetRoots, AStringView virtualPath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
 

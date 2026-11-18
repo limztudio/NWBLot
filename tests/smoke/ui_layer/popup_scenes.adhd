@@ -30,7 +30,7 @@ const StringView s_UiPopupToolsSentinelKey = "sentinel";
 
 // Every nested state is a member and remains lent through the outermost endPopup.
 class UiNestedPopupSmokeScene{
-    private UiNestedPopupSmokeSource m_source;
+    private UiNestedPopupSmokeSource m_source = UiNestedPopupSmokeSource();
     private PopupState m_parent = PopupState();
     private PopupState m_child = PopupState();
     private ListState m_beforeList = ListState();
@@ -62,7 +62,7 @@ class UiNestedPopupSmokeScene{
     private b8 m_childDeclared = false;
     private b8 m_displayChanged = false;
 
-    public UiNestedPopupSmokeScene(mut GlobalArena arena);
+    public UiNestedPopupSmokeScene();
 
     public b8 paint(mut UiPaintContext context);
     public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
@@ -93,7 +93,7 @@ class UiNumericEditSmokeScene{
     private b8 m_readOnly = false;
     private b8 m_clamp = true;
 
-    public UiNumericEditSmokeScene(mut GlobalArena arena);
+    public UiNumericEditSmokeScene();
 
     public b8 paint(mut UiPaintContext context);
     public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
@@ -330,8 +330,7 @@ void ObserveNestedPopupSmokeTargets(
 }
 
 
-UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(mut GlobalArena arena){
-    this.m_source = UiNestedPopupSmokeSource(arena);
+UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(){
     const b8 initialized = this.m_beforeText.setText("Before") && this.m_afterText.setText("After") && this.m_childText.setText("Child");
     [essential] assert(initialized, "UI nested popup smoke models must initialize");
     this.m_combo.select(1u);
@@ -614,10 +613,10 @@ Rect UiNestedPopupSmokeScene::rowBounds(in ListState state, in IListDataSource s
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiNumericEditSmokeScene::UiNumericEditSmokeScene(mut GlobalArena arena){
-    this.m_integer = IntegerEditModel(arena);
-    this.m_float = FloatEditModel(arena);
-    this.m_selectionView = EditBoxView(arena);
+UiNumericEditSmokeScene::UiNumericEditSmokeScene(){
+    this.m_integer = IntegerEditModel();
+    this.m_float = FloatEditModel();
+    this.m_selectionView = CreateSmokeEditBoxView();
     this.resetModels();
 }
 

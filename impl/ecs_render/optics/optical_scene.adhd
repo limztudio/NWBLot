@@ -300,7 +300,8 @@ Expected<OpticalWorldBounds> FOUNDATION_SIMD_CALL ComputeOpticalWorldBounds(cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena)noexcept{
+void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMaterialSystem& materials)noexcept{
+    Core::Alloc::ScratchArena scratchArena;
     auto rendererView = world.view<RendererComponent>();
     const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
     if(!meshSystemPtr || rendererView.candidateCount() < s_MinCoincidentCandidateCount){
@@ -477,7 +478,6 @@ b8 RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem
     if(m_pipeline)
         return true;
     if(!EnsurePushConstantComputePipeline<TransparentSubsystem>(
-        m_arena,
         m_graphics.getDevice(),
         shaderSystem,
         SubsystemAssetSelector<TransparentSubsystem, ComputeShader>([](const TransparentSubsystem& s){ return s.opticalBoundsFinalizeCs; }),

@@ -422,10 +422,10 @@ Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const Opaque
 
 Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
     const MaterialPassDrawItemPartitions& drawItems,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::GpuTaskGraph& graph
 ){
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
 
     const Array<MaterialPassDrawItemsView, 2> drawSets = { drawItems.regular, drawItems.csgReceiverSurface, };
     return GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_GbufferMaterialGeometrySet), "Opaque Material Geometry", graph, scratchArena);
@@ -434,10 +434,10 @@ Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
 Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
     const MaterialPassDrawItemPartitions& drawItems,
     const RendererMaterialSystem& materialSystem,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::GpuTaskGraph& graph
 ){
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
 
     const Array<MaterialPassDrawItemsView, 2> drawSets = { drawItems.regular, drawItems.csgReceiverSurface, };
     return GatherPreparedMaterialSampledTextureResourceSet(

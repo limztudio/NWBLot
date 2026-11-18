@@ -26,10 +26,6 @@ b8 Model::validatePayload()const{
     return ValidateModelPayloadObjects(this.m_skeletonObjects, this.m_staticMeshObjects, this.m_skinnedMeshObjects);
 }
 
-b8 Model::validatePayload(mut ScratchArena scratchArena)const{
-    return this.validatePayload();
-}
-
 b8 Model::loadBinary(in Span<u8> binary){
     Model candidate(this.virtualPath());
     if(!DeserializeModelBinaryPayload(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload())

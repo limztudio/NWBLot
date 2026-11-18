@@ -419,7 +419,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const Core::BufferRange csgCutterRange(0u, ComputeOpaqueBufferByteRangeLength(csgFrameData.cutters.size(), sizeof(CsgCutterGpuData)));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ scratchArena };
-    const auto gbufferMaterialResources = GatherOpaqueGbufferMaterialResources(opaqueDrawItems, context.material, context.graph, scratchArena);
+    const auto gbufferMaterialResources = GatherOpaqueGbufferMaterialResources(opaqueDrawItems, context.material, context.graph);
     if(!gbufferMaterialResources)
         return MakeUnexpected(Failure{});
     gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialResources->geometryStatesGraphOwned;

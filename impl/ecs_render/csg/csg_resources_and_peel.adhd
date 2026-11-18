@@ -287,17 +287,17 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(mut DeferredFrameTargets ta
         return false;
 
     // Push range selects the CSG context and mesh view; the rest is heap-owned.
-    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_intervalPeelBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_intervalPeelBindingLayout)){
         error("RendererSystem: failed to create CSG interval peel binding layout");
         return false;
     }
 
-    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_receiverSpanBuildBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_receiverSpanBuildBindingLayout)){
         error("RendererSystem: failed to create CSG receiver span build binding layout");
         return false;
     }
 
-    if(!EnsurePushConstantBindingLayout(this.m_arena, device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_intervalCombineBindingLayout)){
+    if(!EnsurePushConstantBindingLayout(device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_intervalCombineBindingLayout)){
         error("RendererSystem: failed to create CSG interval combine binding layout");
         return false;
     }

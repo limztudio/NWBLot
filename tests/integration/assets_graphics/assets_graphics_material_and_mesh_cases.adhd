@@ -72,7 +72,7 @@ void ExpectMeshCookFailure(in StringView metaText, in StringView caseName, mut T
     EXPECT_TRUE(RemoveAllIfExists(prepared.root));
 }
 
-void ExpectMaterialBindParseFailure(in StringView bindText, in StringView caseName, in StringView expectedError, mut TestArena testArena, mut ScratchArena scratchArena){
+void ExpectMaterialBindParseFailure(in StringView bindText, in StringView caseName, in StringView expectedError, mut TestArena testArena, mut GraphicsScratchArena scratch){
     const ScopedTestTrace trace(caseName);
     const Expected<GraphicsTestPath> invalidRootResult = PrepareCaseRoot(testArena, caseName);
     ASSERT_TRUE(invalidRootResult.has_value());
@@ -81,7 +81,7 @@ void ExpectMaterialBindParseFailure(in StringView bindText, in StringView caseNa
         CapturingLogger failureLogger = CapturingLogger();
         LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
 
-        EXPECT_FALSE(ParseTestMaterialBindFromText(bindText, invalidRoot, testArena, scratchArena).has_value());
+        EXPECT_FALSE(ParseTestMaterialBindFromText(bindText, invalidRoot, testArena, scratch).has_value());
         EXPECT_TRUE(SawCapturedError(failureLogger, expectedError));
     }
     EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
@@ -137,7 +137,7 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
     MaterialBindEntryVector bindEntries(testArena.arena);
     for(usize index = 0u; index < 2u; ++index)
@@ -146,7 +146,7 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
     MaterialShaderCookEntryVector materialEntries(testArena.arena);
     AppendMaterialInterfaceTestEntry(testArena, s_ProjectMaterialInterfacesTestSurface, 0xF091u, 0x2Au, materialEntries);
 
-    EXPECT_FALSE(ValidateTestMaterialCookInterfaces(bindEntries, materialEntries, scratchArena));
+    EXPECT_FALSE(ValidateTestMaterialCookInterfaces(bindEntries, materialEntries, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "Material bind interface 'project/material_interfaces/test_surface' is duplicated"));
     EXPECT_EQ(materialEntries[0u].typedLayoutHash, 0xF091u);
     ASSERT_EQ(materialEntries[0u].typedBlockBytes.size(), 1u);
@@ -168,13 +168,13 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
-    ExpectMaterialBindParseFailure(s_UnknownBlockClassMaterialBindSource, "material_bind_unknown_block_class", "unsupported attribute 'material_project'", testArena, scratchArena);
-    ExpectMaterialBindParseFailure(s_UnsupportedFieldTypeMaterialBindSource, "material_bind_unsupported_field_type", "unsupported type 'double'", testArena, scratchArena);
-    ExpectMaterialBindParseFailure(s_InvalidDefaultMaterialBindSource, "material_bind_invalid_default", "attribute 'default' requires one non-empty string argument", testArena, scratchArena);
-    ExpectMaterialBindParseFailure(s_MissingDefaultMaterialBindSource, "material_bind_missing_default", "must declare a default attribute", testArena, scratchArena);
-    ExpectMaterialBindParseFailure(s_ResourceAttributeMaterialBindSource, "material_bind_resource_attribute", "has unsupported attribute 'texture_asset'", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(s_UnknownBlockClassMaterialBindSource, "material_bind_unknown_block_class", "unsupported attribute 'material_project'", testArena, scratch);
+    ExpectMaterialBindParseFailure(s_UnsupportedFieldTypeMaterialBindSource, "material_bind_unsupported_field_type", "unsupported type 'double'", testArena, scratch);
+    ExpectMaterialBindParseFailure(s_InvalidDefaultMaterialBindSource, "material_bind_invalid_default", "attribute 'default' requires one non-empty string argument", testArena, scratch);
+    ExpectMaterialBindParseFailure(s_MissingDefaultMaterialBindSource, "material_bind_missing_default", "must declare a default attribute", testArena, scratch);
+    ExpectMaterialBindParseFailure(s_ResourceAttributeMaterialBindSource, "material_bind_resource_attribute", "has unsupported attribute 'texture_asset'", testArena, scratch);
 
     Vector<StringView> resourceTypes = Vector<StringView>();
     resourceTypes.reserve(2u);
@@ -185,31 +185,31 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
         retiredFixtureBind.append("[material_constant] struct NwbResourceMaterial{ [fixture(\"builtin/material_fixture/checker_rgba8\")] ");
         retiredFixtureBind.append(resourceType);
         retiredFixtureBind.append(" resource; }; NwbResourceMaterial surface;");
-        ExpectMaterialBindParseFailure(ViewTestString(retiredFixtureBind), resourceType, "has unsupported attribute 'fixture'", testArena, scratchArena);
+        ExpectMaterialBindParseFailure(ViewTestString(retiredFixtureBind), resourceType, "has unsupported attribute 'fixture'", testArena, scratch);
     }
 
-    ExpectMaterialBindParseFailure(s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", "duplicate variable declaration", testArena, scratchArena);
-    ExpectMaterialBindParseFailure(s_InitializedInstanceMaterialBindSource, "material_bind_initialized_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", "duplicate variable declaration", testArena, scratch);
+    ExpectMaterialBindParseFailure(s_InitializedInstanceMaterialBindSource, "material_bind_initialized_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratch);
 
     const StringView validStruct = "[material_constant] struct Surface { [default(\"float(0.5)\")] float roughness; };\n";
-    ExpectMaterialBindParseFailure(validStruct, "material_bind_missing_instance", "instance declarations must not be empty", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(validStruct, "material_bind_missing_instance", "instance declarations must not be empty", testArena, scratch);
 
     TestAString unknownInstance = TestAString();
     unknownInstance.append(validStruct);
     unknownInstance.append("Unknown surface;");
-    ExpectMaterialBindParseFailure(ViewTestString(unknownInstance), "material_bind_unknown_instance_type", "instance 'surface' references unknown struct type 'Unknown'", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(ViewTestString(unknownInstance), "material_bind_unknown_instance_type", "instance 'surface' references unknown struct type 'Unknown'", testArena, scratch);
 
     TestAString assignedInstance = TestAString();
     assignedInstance.append(validStruct);
     assignedInstance.append("Surface surface; surface.roughness = 0.5;");
-    ExpectMaterialBindParseFailure(ViewTestString(assignedInstance), "material_bind_assigned_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(ViewTestString(assignedInstance), "material_bind_assigned_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratch);
 
     const Expected<GraphicsTestPath> float1DefaultRootResult = PrepareCaseRoot(testArena, "material_bind_float1_default");
     ASSERT_TRUE(float1DefaultRootResult.has_value());
     const GraphicsTestPath float1DefaultRoot = float1DefaultRootResult.value();
     MaterialBindEntry float1DefaultEntry(testArena.arena);
     {
-        Expected<MaterialBindEntry> parsedFloat1 = ParseTestMaterialBindFromText(s_Float1DefaultMaterialBindSource, float1DefaultRoot, testArena, scratchArena);
+        Expected<MaterialBindEntry> parsedFloat1 = ParseTestMaterialBindFromText(s_Float1DefaultMaterialBindSource, float1DefaultRoot, testArena, scratch);
         ASSERT_TRUE(parsedFloat1.has_value());
         float1DefaultEntry = parsedFloat1.value();
     }
@@ -219,7 +219,7 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
         CapturingLogger failureLogger = CapturingLogger();
         LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
 
-        EXPECT_FALSE(CanBuildMaterialBindIncludeSource(float1DefaultEntry, testArena, scratchArena));
+        EXPECT_FALSE(CanBuildMaterialBindIncludeSource(float1DefaultEntry, testArena, scratch));
         EXPECT_TRUE(SawCapturedError(failureLogger, "default 'float1(1.0)'"));
     }
 
@@ -230,7 +230,7 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
         CapturingLogger failureLogger = CapturingLogger();
         LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
 
-        EXPECT_FALSE(CanFindOrBuildMaterialBindTypedLayout(cacheInterface, float1DefaultEntry, scratchArena, layoutCache));
+        EXPECT_FALSE(CanFindOrBuildMaterialBindTypedLayout(cacheInterface, float1DefaultEntry, scratch, layoutCache));
         EXPECT_TRUE(SawCapturedError(failureLogger, "default 'float1(1.0)'"));
     }
     EXPECT_TRUE(layoutCache.entries.empty());
@@ -241,12 +241,12 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     const GraphicsTestPath validCacheRoot = validCacheRootResult.value();
     MaterialBindEntry validCacheEntry(testArena.arena);
     {
-        Expected<MaterialBindEntry> parsedValid = ParseTestMaterialBindFromText(s_MinimalMaterialBindSource, validCacheRoot, testArena, scratchArena);
+        Expected<MaterialBindEntry> parsedValid = ParseTestMaterialBindFromText(s_MinimalMaterialBindSource, validCacheRoot, testArena, scratch);
         ASSERT_TRUE(parsedValid.has_value());
         validCacheEntry = parsedValid.value();
     }
     SetMaterialBindEntryVirtualPath(validCacheEntry, s_ProjectMaterialInterfacesTestSurface);
-    ASSERT_TRUE(CanFindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, scratchArena, layoutCache));
+    ASSERT_TRUE(CanFindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, scratch, layoutCache));
     EXPECT_EQ(layoutCache.entries.size(), 1u);
     EXPECT_EQ(layoutCache.lookup.size(), 1u);
     EXPECT_EQ(logger.errorCount(), 0u);
@@ -518,9 +518,9 @@ void VerifyAssetsGraphics_MaterialCookRejectsMissingAvboitPixelShaders(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
-    const b8 transparentBuilt = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_TransparentMaterialMeta, "material_cook_missing_avboit_transparent", testArena, scratchArena).has_value();
-    const b8 refractiveBuilt = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_RefractiveMaterialMeta, "material_cook_missing_avboit_refractive", testArena, scratchArena).has_value();
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
+    const b8 transparentBuilt = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_TransparentMaterialMeta, "material_cook_missing_avboit_transparent", testArena, scratch).has_value();
+    const b8 refractiveBuilt = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_RefractiveMaterialMeta, "material_cook_missing_avboit_refractive", testArena, scratch).has_value();
     EXPECT_FALSE(transparentBuilt);
     EXPECT_FALSE(refractiveBuilt);
     EXPECT_EQ(logger.errorCount(), 2u);
@@ -535,8 +535,8 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsMissingShaderVariant(){
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     const StringView missingShaderVariantMeta = "material asset;\n\nasset.interface = \"project/material_interfaces/test_surface.bind\";\nasset.bxdf = \"project/shaders/material_bxdf.bxdf\";\nasset.transparent = 0;\nasset.two_sided = 0;\nasset.refractive = 0;\n\nasset.shaders = {\n    \"mesh\": \"project/shaders/material_mesh\",\n    \"ps\": \"project/shaders/material_ps\",\n};\n";
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
-    EXPECT_FALSE(CanParseMaterialMeta(missingShaderVariantMeta, testArena, scratchArena));
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
+    EXPECT_FALSE(CanParseMaterialMeta(missingShaderVariantMeta, testArena, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "field 'shader_variant' is required"));
 }
 
@@ -548,8 +548,8 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsMissingRenderProperties(){
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     const StringView missingRefractiveMeta = "material asset;\n\nasset.interface = \"project/material_interfaces/test_surface.bind\";\nasset.bxdf = \"project/shaders/material_bxdf.bxdf\";\nasset.transparent = 0;\nasset.two_sided = 0;\n\nasset.shaders = {\n    \"mesh\": \"project/shaders/material_mesh\",\n    \"ps\": \"project/shaders/material_ps\",\n};\nasset.shader_variant = \"default\";\n";
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
-    EXPECT_FALSE(CanParseMaterialMeta(missingRefractiveMeta, testArena, scratchArena));
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
+    EXPECT_FALSE(CanParseMaterialMeta(missingRefractiveMeta, testArena, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "'refractive' is required and must be 0 or 1"));
 }
 
@@ -558,14 +558,14 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsExplicitOpticalStages(){
         return;
 
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
     for(u32 opticalIndex = 0u; opticalIndex < 2u; ++opticalIndex){
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
         StringView metaText = s_ExplicitRefractiveMaterialMeta;
         if(opticalIndex == 0u)
             metaText = s_ExplicitTransparentMaterialMeta;
-        EXPECT_FALSE(CanParseMaterialMeta(metaText, testArena, scratchArena));
+        EXPECT_FALSE(CanParseMaterialMeta(metaText, testArena, scratch));
         EXPECT_TRUE(SawCapturedError(logger, "explicit 'shaders' cannot be used with transparent/refractive materials"));
     }
 }
@@ -577,7 +577,7 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsEngineRootedPolicySelectors(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
     Vector<MaterialPolicyRejectionCase> cases = Vector<MaterialPolicyRejectionCase>();
     cases.reserve(4u);
@@ -599,7 +599,7 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsEngineRootedPolicySelectors(){
     ));
 
     for(in MaterialPolicyRejectionCase policyCase : cases){
-        EXPECT_FALSE(CanParseMaterialMeta(policyCase.m_metaText, testArena, scratchArena));
+        EXPECT_FALSE(CanParseMaterialMeta(policyCase.m_metaText, testArena, scratch));
         EXPECT_TRUE(SawCapturedError(logger, policyCase.m_diagnostic));
     }
     EXPECT_EQ(logger.errorCount(), 4u);
@@ -610,13 +610,13 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
         return;
 
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
     MaterialAsset material(testArena.arena);
 
     {
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
-        Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_codec_typed_layout_boundary", testArena, scratchArena);
+        Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_codec_typed_layout_boundary", testArena, scratch);
         EXPECT_TRUE(built.has_value());
         if(!built.has_value())
             return;
@@ -683,11 +683,11 @@ void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAnd
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_MaterialScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
 
     MaterialAsset material(testArena.arena);
     {
-        Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_reload_admission", testArena, scratchArena);
+        Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_reload_admission", testArena, scratch);
         ASSERT_TRUE(built.has_value());
         material = built.value();
     }
@@ -956,14 +956,14 @@ void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
         const TestAString meta = BuildMeshIndexMeta(indexList);
         ASSERT_TRUE(CookSingleMeshMeta(ViewTestString(meta), prepared, testArena));
 
-        ScratchArena scratchArena(s_AssetCaseTestsIntegrationAssetsGraphicsMeshIndexCornerOrder);
+        GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsIntegrationAssetsGraphicsMeshIndexCornerOrder);
         MeshAsset mesh(testArena.arena);
         {
             Expected<MeshAsset> loadedMesh = LoadCookedMeshAsset(testArena, prepared.outputDirectory, Name(s_AssetCaseProjectMeshesMinimalMesh), 1u);
             ASSERT_TRUE(loadedMesh.has_value());
             mesh = loadedMesh.value();
         }
-        const Expected<ScratchU32Vector> triangleIndices = BuildTestMeshletTriangleIndices(mesh, scratchArena);
+        const Expected<ScratchU32Vector> triangleIndices = BuildTestMeshletTriangleIndices(mesh, scratch);
         ASSERT_TRUE(triangleIndices.has_value());
         ASSERT_EQ(triangleIndices.value().size(), 3u);
 
@@ -1047,7 +1047,7 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    ScratchArena scratchArena(s_ShaderScratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
     const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "object_geometry_metadata");
     ASSERT_TRUE(rootResult.has_value());
     const GraphicsTestPath root = rootResult.value();
@@ -1076,7 +1076,7 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
         metadata.append(testCase.m_fields);
         ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
         const u32 priorErrors = logger.errorCount();
-        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook), testCase.m_accepted);
+        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook), testCase.m_accepted);
         if(testCase.m_accepted)
             EXPECT_EQ(logger.errorCount(), priorErrors);
         else

@@ -189,6 +189,8 @@ public:
         b8 emulationOutputReused,
         Optional<Core::GpuTimingMeasure>& emulationOutputTiming
     );
+    [[nodiscard]] b8 prepareMaterialPassResources(const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState);
+    [[nodiscard]] b8 prepareMaterialPassResources(const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets& avboitTargets);
     [[nodiscard]] b8 prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState);
     [[nodiscard]] b8 prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets& avboitTargets);
     [[nodiscard]] b8 prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, const Core::FramebufferHandle& framebuffer, MaterialPipelinePass::Enum pass, b8 transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets);

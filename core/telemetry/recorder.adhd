@@ -16,7 +16,6 @@ extern class EventView{
 
 [cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::Recorder"), cpp_flags(no_copy, no_assign)]
 extern class Recorder{
-    mut GlobalArena arena(...)const;
     void clear(...);
     u64 droppedDiagnosticCount(...)const;
     b8 enabled(...)const;

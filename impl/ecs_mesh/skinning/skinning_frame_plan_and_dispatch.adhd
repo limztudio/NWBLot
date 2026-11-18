@@ -195,7 +195,8 @@ b8 MeshSkinningFramePlanBuilder::declare(const Core::ECS::EntityID entity, Skinn
     const SkeletonPoseComponent* skeletonPose = nullptr;
     __hidden_skinning_frame_plan_and_dispatch::ResolveSkeletonComponents(*m_system->m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
     const auto foundResources = m_system->m_runtimeResources.find(instance->handle.value);
-    RuntimeSkinPayloadScratch payload{ *m_scratchArena };
+    Core::Alloc::ScratchArena scratchArena;
+    RuntimeSkinPayloadScratch payload{ scratchArena };
     // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready mesh from declaring its immutable packet plan.
     if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload)){
         instance->deformationState.invalidateCurrent();

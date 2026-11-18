@@ -563,14 +563,18 @@ void VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles(mut Filesystem
     ASSERT_TRUE(filesystem.get().unmount());
 }
 
-StagedDirectoryPaths BuildStagedVolumePathsForTest(in Path outputDirectory, in StringView volumeName, mut ScratchArena scratchArena){
-    return FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, volumeName, scratchArena);
+StagedDirectoryPaths BuildStagedVolumePathsForTest(in Path outputDirectory, in StringView volumeName){
+    StagedDirectoryPaths paths = StagedDirectoryPaths();
+    native(in outputDirectory, in volumeName, mut paths){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+        paths = decltype(paths)(paths.stageDirectory.arena(), FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, volumeName, scratchArena));
+    }
+    return paths;
 }
 
 void VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories(mut FilesystemVolumeTest self){
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
     Array<u8, 4> payload = Array<u8, 4>();
     payload[0u] = 1u;
@@ -581,7 +585,7 @@ void VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories(m
     ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
     ASSERT_TRUE(filesystem.removeFile(s_FilesystemNameProjectTestsRecoveryGap));
 
-    const StagedDirectoryPaths paths = BuildStagedVolumePathsForTest(self.m_directory, self.m_desc.volumeName.view(), scratchArena);
+    const StagedDirectoryPaths paths = BuildStagedVolumePathsForTest(self.m_directory, self.m_desc.volumeName.view());
     const Path backupDirectory = paths.backupDirectory;
     const Path stageDirectory = paths.stageDirectory;
     ASSERT_TRUE(EnsureDirectories(backupDirectory).has_value());
@@ -621,7 +625,6 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
 
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
     Vector<u8> abandoned;
     abandoned.resize(5000u);
@@ -639,8 +642,9 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
     b8 compactSucceeded = true;
     b8 loggerBlocked = false;
     b8 backupMatchedOriginal = false;
-    native(mut self, mut filesystem, mut scratchArena, mut handleOpened, mut compactSucceeded, mut loggerBlocked, mut backupMatchedOriginal){
+    native(mut self, mut filesystem, mut handleOpened, mut compactSucceeded, mut loggerBlocked, mut backupMatchedOriginal){
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         const auto first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
         const auto second = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
         Vector<u8, ScratchArena> original(scratchArena);
@@ -686,9 +690,9 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
 void VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloadBytes(mut FilesystemVolumeTest self){
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
-    native(mut self, mut filesystem, mut scratchArena){
+    native(mut self, mut filesystem){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         Vector<u8, ScratchArena> first(static_cast<usize>(self.m_desc.segmentSize - self.m_desc.metadataSize), 31u, scratchArena);
         const Array<u8, 128u> gap{};
         Array<u8, 256u> payload{};
@@ -737,7 +741,6 @@ void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsA
 
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
     const usize firstSize = cast<usize>(self.m_desc.segmentSize - self.m_desc.metadataSize);
     Vector<u8> first;
@@ -763,8 +766,9 @@ void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsA
     Vector<u8> loaded;
     for(u32 operation = 0u; operation < 3u; ++operation){
         b8 restored = false;
-        native(in operation, in replacement, mut self, mut filesystem, mut scratchArena, mut restored){
+        native(in operation, in replacement, mut self, mut filesystem, mut restored){
 #if FOUNDATION_OCCUR_WARNING
+            ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
             const ::Path<ScratchArena> directory(scratchArena, self.m_directory);
             const auto metadataSegment = MakeVolumeSegmentPath(directory, self.m_desc.volumeName.view(), 0u);
             auto backupSegment = metadataSegment;
@@ -789,7 +793,6 @@ void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsA
             static_cast<void>(replacement);
             static_cast<void>(self);
             static_cast<void>(filesystem);
-            static_cast<void>(scratchArena);
             static_cast<void>(restored);
 #endif
         }
@@ -855,8 +858,8 @@ void VerifyFilesystemVolumeTest_CompactionPreservesCapacityUntilRequestedTrimAnd
 }
 
 void VerifyFilesystemVolumeTest_RejectsInvalidPathHashFromMetadataIndex(mut FilesystemVolumeTest self){
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-    native(mut self, mut scratchArena){
+    native(mut self){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         using FilesystemVolumeDetail::VolumeHeaderDisk;
         using FilesystemVolumeDetail::VolumeIndexEntryDisk;
         auto filesystemResult = CreateFilesystem(self.m_arena, self.m_desc);
@@ -886,11 +889,11 @@ void VerifyFilesystemVolumeTest_RejectsInvalidPathHashFromMetadataIndex(mut File
 }
 
 void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRemovedRecords(mut FilesystemVolumeTest self){
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
     CreatedFilesystem filesystem(self.m_arena, self.m_desc);
     ASSERT_TRUE(filesystem.valid());
 
-    native(mut self, mut scratchArena, mut filesystem){
+    native(mut self, mut filesystem){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         using FilesystemVolumeDetail::VolumeHeaderDisk;
         using FilesystemVolumeDetail::VolumeIndexEntryDisk;
         Array<NameHash, 3u> hashes{};
@@ -965,10 +968,10 @@ void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRem
 void VerifyFilesystemFactory_PropagatesFactoryAndMountFailures(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
-    GlobalArena arena(s_FilesystemNameTestsFilesystem);
-    VolumeMountDesc desc(arena);
 
-    native(in desc, mut arena){
+    native(){
+        GlobalArena arena(s_FilesystemNameTestsFilesystem);
+        VolumeMountDesc desc(arena);
         const FilesystemFactory emptyFactory = []([[maybe_unused]] GlobalArena& objectArena, [[maybe_unused]] const VolumeMountDesc& mount)noexcept{
             return Expected<UniquePtr<IFilesystem>>(UniquePtr<IFilesystem>());
         };
@@ -977,9 +980,8 @@ void VerifyFilesystemFactory_PropagatesFactoryAndMountFailures(){
             return MakeUnexpected(Failure{});
         };
         EXPECT_FALSE(CreateFilesystem(arena, desc, failedFactory));
+        EXPECT_FALSE(CreateFilesystem(arena, desc).has_value());
     }
-
-    EXPECT_FALSE(CreateFilesystem(arena, desc).has_value());
 }
 
 void VerifyFilesystem_VolumeNamesRejectEmptySeparatorsAndWhitespace(){
@@ -989,7 +991,6 @@ void VerifyFilesystem_VolumeNamesRejectEmptySeparatorsAndWhitespace(){
 }
 
 void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectories(mut FilesystemVolumeTest self){
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
     const Path baseDirectory = self.m_directory;
     StagedDirectoryPaths paths = StagedDirectoryPaths();
     paths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
@@ -998,7 +999,8 @@ void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectorie
     ASSERT_TRUE(EnsureDirectories(paths.backupDirectory).has_value());
 
     b8 published = true;
-    native(in paths, mut self, mut scratchArena, mut published){
+    native(in paths, mut self, mut published){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
         StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
         published = PublishStagedVolume(paths, self.m_directory, self.m_desc.volumeName.view(), 0u, scratchArena, {}, &stageCleanup, &backupCleanup);
@@ -1014,11 +1016,11 @@ void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectorie
 }
 
 void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFiles(mut FilesystemVolumeTest self){
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
     StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 rollbackFailed = false;
 
-    native(mut self, mut scratchArena, mut paths, mut rollbackFailed){
+    native(mut self, mut paths, mut rollbackFailed){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         paths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
         paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
         ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
@@ -1052,11 +1054,11 @@ void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFi
 }
 
 void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback(mut FilesystemVolumeTest self){
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
     StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 rollbackFailed = false;
 
-    native(mut self, mut scratchArena, mut paths, mut rollbackFailed){
+    native(mut self, mut paths, mut rollbackFailed){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         paths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
         paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
         ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
@@ -1090,7 +1092,6 @@ void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback
 }
 
 void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedBytes(mut FilesystemVolumeTest self){
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
     const Path baseDirectory = self.m_directory;
     StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
     stagedPaths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
@@ -1119,7 +1120,12 @@ void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedByte
     ASSERT_TRUE(WriteBinaryFile(secondOutput, secondOld));
     ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
 
-    EXPECT_FALSE(PublishStagedVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratchArena));
+    b8 published = true;
+    native(in stagedPaths, mut self, mut published){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+        published = PublishStagedVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratchArena);
+    }
+    EXPECT_FALSE(published);
     EXPECT_TRUE(SawCapturedError(self.m_logger, "failed to promote staged segment"));
 
     Vector<u8> loaded;
@@ -1142,7 +1148,6 @@ void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedByte
 }
 
 void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedBytesDuringUnwind(mut FilesystemVolumeTest self){
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
     const Path baseDirectory = self.m_directory;
     StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
     stagedPaths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
@@ -1170,7 +1175,8 @@ void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedByte
     ASSERT_TRUE(WriteBinaryFile(secondOutput, secondOld));
     ASSERT_TRUE(WriteBinaryFile(firstStaged, replacement));
 
-    native(in stagedPaths, mut self, mut scratchArena){
+    native(in stagedPaths, mut self){
+        ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
         ThrowingPublishLogger throwingLogger(self.m_logger.arena());
         LoggerRegistrationGuard throwingLoggerGuard(throwingLogger, LoggerBreakPolicy::ReportOnly);
         EXPECT_THROW({ const b8 published = PublishStagedVolume(stagedPaths, self.m_directory, self.m_desc.volumeName.view(), 3u, scratchArena); EXPECT_FALSE(published); }, i32);

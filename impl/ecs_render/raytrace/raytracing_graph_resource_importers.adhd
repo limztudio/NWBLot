@@ -76,9 +76,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(::ArenaBase& __adhd_caller_arena, const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena)noexcept{
+Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(::ArenaBase& __adhd_caller_arena, const FrameGraphSoftwareBvhBuildStateInputs& inputs)noexcept{
     FrameGraphSoftwareBvhBuildStateResult result(__adhd_caller_arena);
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
     const TraceGeometryImportPolicy importPolicy;
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = *inputs.rayTracingShadowResources;
     Vector<Core::GpuGraphResourceId, ::ArenaBase> softwareBvhBuildStateResources{ __adhd_caller_arena };
@@ -132,8 +133,9 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare(::ArenaBase& __adhd_caller_arena, Core::Alloc::ScratchArena& scratchArena, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources)noexcept{
+Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare(::ArenaBase& __adhd_caller_arena, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources)noexcept{
     using namespace RendererTaskGraphDetail;
+    Core::Alloc::ScratchArena scratchArena;
     const TraceGeometryImportPolicy importPolicy;
 
     // Preflight froze the mesh tables; import each buffer once and fan out IDs.
@@ -196,8 +198,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
     FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(*m_graph, *m_meshSystem);
     auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
         __adhd_caller_arena,
-        FrameGraphSoftwareBvhBuildStateInputs(rayTracingShadowResources, result.softwareTraceResourcesPrepared),
-        scratchArena
+        FrameGraphSoftwareBvhBuildStateInputs(rayTracingShadowResources, result.softwareTraceResourcesPrepared)
     );
     if(!softwareBvhBuildStateResult){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import shared software BVH build state"));

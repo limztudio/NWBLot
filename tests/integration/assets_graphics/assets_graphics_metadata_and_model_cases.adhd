@@ -30,8 +30,8 @@ native{
 
 
 void VerifyAssetPaths_CanonicalNativeTextMatchesConversionAtBoundaries(){
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
-    native(mut scratchArena){
+    native{
+        ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
         const auto check = [&scratchArena](const TStringView text, const AStringView expected){
             auto reference = PathToString<char>(scratchArena, text);
             CanonicalizeTextInPlace(reference);
@@ -230,19 +230,19 @@ void VerifyAssetsGraphics_MeshletAttributeDeltasRejectU32WraparoundInEveryChanne
 }
 
 void VerifyMetadataDiscoveryAdmission_DuplicateRootsKeepFirstOwnerAndPaths(){
-    AssetArena arena(s_AssetCaseTestsMetadataDiscoveryDuplicateRoots);
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
+    TestArena testArena = TestArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRoots);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
 
-    const GraphicsTestPath smokeAssets = JoinGraphicsPath3(GetAssetArenaRepoRoot(arena), "tests", "smoke", "assets");
+    const GraphicsTestPath smokeAssets = JoinGraphicsPath3(GetAssetArenaRepoRoot(testArena), "tests", "smoke", "assets");
     const GraphicsTestPath root = JoinGraphicsPath(smokeAssets, "textures");
-    ResolvedAssetRootVector roots(arena);
-    AppendResolvedAssetRoot(arena, root, s_ProjectVirtualRoot, roots);
-    const Expected<DiscoveredNwbFileVector> single = DiscoverTestAssetFiles(roots, s_NwbExtension, arena, scratchArena);
+    ResolvedAssetRootVector roots(testArena.arena);
+    AppendResolvedAssetRoot(testArena, root, s_ProjectVirtualRoot, roots);
+    const Expected<DiscoveredNwbFileVector> single = DiscoverTestAssetFiles(roots, s_NwbExtension, testArena, scratch);
     ASSERT_TRUE(single.has_value());
     ASSERT_FALSE(single.value().empty());
 
-    AppendResolvedAssetRoot(arena, root, s_EngineVirtualRoot, roots);
-    const Expected<DiscoveredNwbFileVector> duplicate = DiscoverTestAssetFiles(roots, s_NwbExtension, arena, scratchArena);
+    AppendResolvedAssetRoot(testArena, root, s_EngineVirtualRoot, roots);
+    const Expected<DiscoveredNwbFileVector> duplicate = DiscoverTestAssetFiles(roots, s_NwbExtension, testArena, scratch);
     ASSERT_TRUE(duplicate.has_value());
     ASSERT_EQ(duplicate.value().size(), single.value().size());
     for(usize i = 0u; i < single.value().size(); ++i){
@@ -260,9 +260,9 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
         return;
     }
 
-    AssetArena arena(s_AssetCaseTestsMetadataDiscoveryCaseIdentity);
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch);
-    const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(arena), s_BuildDirectory, "metadata_discovery_case_identity");
+    TestArena testArena = TestArena(s_AssetCaseTestsMetadataDiscoveryCaseIdentity);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch);
+    const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(testArena), s_BuildDirectory, "metadata_discovery_case_identity");
     ASSERT_TRUE(EnsureTestEmptyDirectory(root));
 
     const GraphicsTestPath upperPath = JoinGraphicsPath(root, "Case.nwb");
@@ -271,7 +271,7 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
     ASSERT_TRUE(WriteTextFile(lowerPath, "lower native input"));
 
     b8 casePreserved = false;
-    ASSERT_TRUE(ReadTextFileMatches(upperPath, "upper native input", scratchArena, casePreserved));
+    ASSERT_TRUE(ReadTextFileMatches(upperPath, "upper native input", scratch, casePreserved));
     if(!casePreserved){
         native{
             GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
@@ -279,10 +279,10 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
         return;
     }
 
-    ResolvedAssetRootVector roots(arena);
-    AppendResolvedAssetRoot(arena, root, s_ProjectVirtualRoot, roots);
-    AppendResolvedAssetRoot(arena, root, s_ProjectVirtualRoot, roots);
-    const Expected<DiscoveredNwbFileVector> files = DiscoverTestAssetFiles(roots, s_NwbExtension, arena, scratchArena);
+    ResolvedAssetRootVector roots(testArena.arena);
+    AppendResolvedAssetRoot(testArena, root, s_ProjectVirtualRoot, roots);
+    AppendResolvedAssetRoot(testArena, root, s_ProjectVirtualRoot, roots);
+    const Expected<DiscoveredNwbFileVector> files = DiscoverTestAssetFiles(roots, s_NwbExtension, testArena, scratch);
     ASSERT_TRUE(files.has_value());
     ASSERT_EQ(files.value().size(), 2u);
     EXPECT_NE(files.value()[0u].filePath, files.value()[1u].filePath);
@@ -290,33 +290,33 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
 }
 
 void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarlierRoot(){
-    AssetArena arena(s_AssetCaseTestsMetadataDiscoveryRootInspection);
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryRootInspectionScratch);
+    TestArena testArena = TestArena(s_AssetCaseTestsMetadataDiscoveryRootInspection);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryRootInspectionScratch);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
 
-    const GraphicsTestPath repo = GetAssetArenaRepoRoot(arena);
-    const GraphicsTestPath invalidRoot = BuildUninspectableTestRoot(arena, repo);
+    const GraphicsTestPath repo = GetAssetArenaRepoRoot(testArena);
+    const GraphicsTestPath invalidRoot = BuildUninspectableTestRoot(testArena, repo);
     ASSERT_FALSE(FileExists(JoinGraphicsPath(invalidRoot, "CMakeLists.txt")).has_value());
     const Expected<b8, ErrorCode> validFile = FileExists(JoinGraphicsPath(repo, "CMakeLists.txt"));
     ASSERT_TRUE(validFile.has_value());
     ASSERT_TRUE(validFile.value());
 
-    ResolvedAssetRootVector roots(arena);
-    AppendResolvedAssetRoot(arena, invalidRoot, s_ProjectVirtualRoot, roots);
-    AppendResolvedAssetRoot(arena, repo, s_ProjectVirtualRoot, roots);
-    EXPECT_FALSE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
+    ResolvedAssetRootVector roots(testArena.arena);
+    AppendResolvedAssetRoot(testArena, invalidRoot, s_ProjectVirtualRoot, roots);
+    AppendResolvedAssetRoot(testArena, repo, s_ProjectVirtualRoot, roots);
+    EXPECT_FALSE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", testArena, scratch));
 
     roots[0u].path = JoinGraphicsPath(repo, "__nwb_missing_virtual_path_root_31c68263");
     const Expected<b8, ErrorCode> missing = FileExists(roots[0u].path);
     ASSERT_TRUE(missing.has_value());
     ASSERT_FALSE(missing.value());
-    EXPECT_TRUE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
+    EXPECT_TRUE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", testArena, scratch));
 }
 
 void VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPaths(){
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryCollidingPaths);
-    DiscoveredPathCollisionProbe probe = MakeDiscoveredPathCollisionProbe(scratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataDiscoveryCollidingPaths);
+    DiscoveredPathCollisionProbe probe = MakeDiscoveredPathCollisionProbe(scratch);
     ASSERT_TRUE(probe.hasSecond());
     EXPECT_TRUE(probe.insertFirst());
     EXPECT_TRUE(probe.insertSecond());
@@ -327,10 +327,10 @@ void VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPath
 }
 
 void VerifyMetadataExtensionOwnership_RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject(){
-    AssetArena arena(s_AssetCaseTestsMetadataExtensionRequire);
     ExtensionState alignedState = ExtensionState();
     ExtensionState textState = ExtensionState();
-    native(mut arena, mut alignedState, mut textState){
+    native(mut alignedState, mut textState){
+        AssetArena arena(s_AssetCaseTestsMetadataExtensionRequire);
         using namespace NWB::Core::Assets;
         const u64 baseline = arena.memoryStats().usedBytes;
         {
@@ -358,9 +358,9 @@ void VerifyMetadataExtensionOwnership_RequireRetainsAlignedTypedPayloadAndReturn
 }
 
 void VerifyMetadataExtensionOwnership_EraseClearAndGrowthDestroyEveryConcretePayloadOnce(){
-    AssetArena arena(s_AssetCaseTestsMetadataExtensionEraseClear);
     ExtensionState state = ExtensionState();
-    native(mut arena, mut state){
+    native(mut state){
+        AssetArena arena(s_AssetCaseTestsMetadataExtensionEraseClear);
         using namespace NWB::Core::Assets;
         const u64 baseline = arena.memoryStats().usedBytes;
         {
@@ -391,13 +391,13 @@ void VerifyMetadataExtensionOwnership_EraseClearAndGrowthDestroyEveryConcretePay
 }
 
 void VerifyMetadataExtensionOwnership_MapMoveAndReplacementUseEachOriginalObjectArena(){
-    AssetArena firstMapArena(s_AssetCaseTestsMetadataExtensionMapFirst);
-    AssetArena secondMapArena(s_AssetCaseTestsMetadataExtensionMapSecond);
-    AssetArena firstOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerFirst);
-    AssetArena secondOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerSecond);
     ExtensionState firstState = ExtensionState();
     ExtensionState secondState = ExtensionState();
-    native(mut firstMapArena, mut secondMapArena, mut firstOwnerArena, mut secondOwnerArena, mut firstState, mut secondState){
+    native(mut firstState, mut secondState){
+        AssetArena firstMapArena(s_AssetCaseTestsMetadataExtensionMapFirst);
+        AssetArena secondMapArena(s_AssetCaseTestsMetadataExtensionMapSecond);
+        AssetArena firstOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerFirst);
+        AssetArena secondOwnerArena(s_AssetCaseTestsMetadataExtensionOwnerSecond);
         using namespace NWB::Core::Assets;
         const Name firstName(s_FirstMetadataName);
         const Name otherName = s_MetadataExtensionOther;
@@ -434,10 +434,11 @@ void VerifyMetadataExtensionOwnership_MapMoveAndReplacementUseEachOriginalObject
 
 void VerifyMetadataExtensionOwnership_RequireRefillsAnExplicitlyMovedOutOwner(){
     const Name name(s_MovedSlotMetadataName);
-    AssetArena arena(name);
+    TestArena testArena = TestArena(name);
     ExtensionState state = ExtensionState();
-    native(in name, mut arena, mut state){
+    native(in name, mut testArena, mut state){
         using namespace NWB::Core::Assets;
+        auto& arena = testArena.arena;
         ParsedAssetMetadata metadata(arena);
         const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state));
         ParsedMetadataExtension detached = Move(metadata.extensions.at(name));
@@ -451,15 +452,16 @@ void VerifyMetadataExtensionOwnership_RequireRefillsAnExplicitlyMovedOutOwner(){
         EXPECT_EQ(state.destructions, 1u);
     }
     EXPECT_EQ(state.destructions, 2u);
-    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_ConstructorUnwindReleasesStorageAndConstructedMembers(){
     const Name name(s_ConstructorUnwindMetadataName);
-    AssetArena arena(name);
+    TestArena testArena = TestArena(name);
     ExtensionState state = ExtensionState();
-    native(in name, mut arena, mut state){
+    native(in name, mut testArena, mut state){
         using namespace NWB::Core::Assets;
+        auto& arena = testArena.arena;
         ParsedAssetMetadata metadata(arena);
         const u64 baseline = arena.memoryStats().usedBytes;
         EXPECT_THROW({
@@ -471,15 +473,16 @@ void VerifyMetadataExtensionOwnership_ConstructorUnwindReleasesStorageAndConstru
     EXPECT_EQ(state.constructions, 1u);
     EXPECT_EQ(state.destructions, 0u);
     EXPECT_EQ(state.memberDestructions, 1u);
-    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_CallerUnwindDestroysPublishedExtensions(){
     const Name name(s_CallerUnwindMetadataName);
-    AssetArena arena(name);
+    TestArena testArena = TestArena(name);
     ExtensionState state = ExtensionState();
-    native(in name, mut arena, mut state){
+    native(in name, mut testArena, mut state){
         using namespace NWB::Core::Assets;
+        auto& arena = testArena.arena;
         EXPECT_THROW({
             ParsedAssetMetadata metadata(arena);
             const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state);
@@ -489,15 +492,16 @@ void VerifyMetadataExtensionOwnership_CallerUnwindDestroysPublishedExtensions(){
     }
     EXPECT_EQ(state.destructions, 1u);
     EXPECT_EQ(state.memberDestructions, 1u);
-    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_ReentrantInsertionReturnsTheActualStoredValue(){
     const Name name(s_ReentrantMetadataName);
-    AssetArena arena(name);
+    TestArena testArena = TestArena(name);
     ExtensionState state = ExtensionState();
-    native(in name, mut arena, mut state){
+    native(in name, mut testArena, mut state){
         using namespace NWB::Core::Assets;
+        auto& arena = testArena.arena;
         ParsedAssetMetadata metadata(arena);
         ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(name, metadata, metadata, name, state, true);
         EXPECT_EQ(result.identity, 2u);
@@ -508,14 +512,14 @@ void VerifyMetadataExtensionOwnership_ReentrantInsertionReturnsTheActualStoredVa
         EXPECT_EQ(state.destructions, 1u);
     }
     EXPECT_EQ(state.destructions, 2u);
-    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_InsertionUnwindDestroysThePendingErasedOwner(){
-    AssetArena mapArena(s_AssetCaseTestsMetadataExtensionInsertionMap);
-    AssetArena ownerArena(s_AssetCaseTestsMetadataExtensionInsertionOwner);
     ExtensionState state = ExtensionState();
-    native(mut mapArena, mut ownerArena, mut state){
+    native(mut state){
+        AssetArena mapArena(s_AssetCaseTestsMetadataExtensionInsertionMap);
+        AssetArena ownerArena(s_AssetCaseTestsMetadataExtensionInsertionOwner);
         using namespace NWB::Core::Assets;
         b8 fail = false;
         {
@@ -539,8 +543,8 @@ void VerifyMetadataExtensionOwnership_InsertionUnwindDestroysThePendingErasedOwn
 }
 
 void VerifyMetadataExtensionOwnership_ExtensionsRetireBeforeTheEntryRegistryTheyBorrow(){
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataExtensionRegistryLifetimeScratch);
-    native(mut scratchArena){
+    native{
+        ScratchArena scratchArena(s_AssetCaseTestsMetadataExtensionRegistryLifetimeScratch);
         using namespace NWB::Core::Assets;
         AssetArena arena{ Name(s_RegistryLifetimeMetadataName) };
         usize observedBucketCount = 0u;
@@ -559,20 +563,20 @@ void VerifyMetadataExtensionOwnership_ExtensionsRetireBeforeTheEntryRegistryThey
 }
 
 void VerifyMetadataExtensionOwnership_GraphicsParserFailureReleasesItsActualExtensionPayload(){
-    AssetArena fixtureArena(s_AssetCaseTestsMetadataExtensionGraphicsFixture);
-    AssetArena ownerArena(s_AssetCaseTestsMetadataExtensionGraphicsOwner);
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataExtensionGraphicsScratch);
+    TestArena fixtureArena = TestArena(s_AssetCaseTestsMetadataExtensionGraphicsFixture);
+    TestArena ownerArena = TestArena(s_AssetCaseTestsMetadataExtensionGraphicsOwner);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataExtensionGraphicsScratch);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
 
-    MetaDocument document(fixtureArena);
+    MetaDocument document(fixtureArena.arena);
     ASSERT_TRUE(document.parse("compute_shader asset;"));
-    const GraphicsTestPath root(fixtureArena, "tests/metadata_extension/assets");
+    const GraphicsTestPath root(fixtureArena.arena, "tests/metadata_extension/assets");
     const GraphicsTestPath path = JoinGraphicsPath(root, "invalid_shader.nwb");
-    const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", s_ProjectVirtualRoot);
+    const DiscoveredNwbFile file(fixtureArena.arena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", s_ProjectVirtualRoot);
     for(usize iteration = 0u; iteration < 4u; ++iteration){
-        EXPECT_TRUE(RunGraphicsParserFailureIteration(ownerArena, file, document, scratchArena));
-        EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
+        EXPECT_TRUE(RunGraphicsParserFailureIteration(ownerArena, file, document, scratch));
+        EXPECT_EQ(ownerArena.arena.memoryStats().usedBytes, 0u);
     }
     EXPECT_TRUE(SawCapturedError(logger, "asset is not a map"));
     ASSERT_TRUE(HasMetaVariable(document, "asset"));
@@ -580,8 +584,8 @@ void VerifyMetadataExtensionOwnership_GraphicsParserFailureReleasesItsActualExte
 }
 
 void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets(){
-    AssetArena fixtureArena(s_AssetCaseTestsMetadataRegistryFixture);
-    AssetArena parseArena(s_AssetCaseTestsMetadataRegistryOutput);
+    TestArena fixtureArena = TestArena(s_AssetCaseTestsMetadataRegistryFixture);
+    TestArena parseArena = TestArena(s_AssetCaseTestsMetadataRegistryOutput);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
 
@@ -589,7 +593,7 @@ void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReser
     const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(fixtureArena), s_BuildDirectory, "metadata_registry_storage");
     ASSERT_TRUE(EnsureDirectories(root).has_value());
 
-    DiscoveredNwbFileVector files(fixtureArena);
+    DiscoveredNwbFileVector files(fixtureArena.arena);
     files.reserve(s_MetadataRegistrySamplerCount + 1u);
     const StringView samplerFields = "sampler asset;\r\nasset.min_filter = \"linear\";\r\nasset.mag_filter = \"linear\";\r\nasset.mip_filter = \"linear\";\r\nasset.address_u = \"wrap\";\r\nasset.address_v = \"wrap\";\r\nasset.address_w = \"wrap\";\r\nasset.reduction = \"standard\";\r\nasset.max_anisotropy = 1.0;\r\n";
     for(usize index = 0u; index < s_MetadataRegistrySamplerCount; ++index){
@@ -602,7 +606,7 @@ void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReser
         if(rejectDuplicate)
             files.push_back(files[0u]);
         VerifyMetadataRegistryStoragePass(fixtureArena, parseArena, root, files, cpuScheduler, s_MetadataRegistrySamplerCount, rejectDuplicate);
-        EXPECT_EQ(parseArena.memoryStats().usedBytes, 0u);
+        EXPECT_EQ(parseArena.arena.memoryStats().usedBytes, 0u);
         if(rejectDuplicate)
             EXPECT_TRUE(SawCapturedError(logger, "duplicate property asset virtual path"));
         else
@@ -611,11 +615,11 @@ void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReser
 }
 
 void VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket(){
-    AssetArena arena(s_AssetCaseTestsMetadataRegistryNullAllocation);
+    TestArena testArena = TestArena(s_AssetCaseTestsMetadataRegistryNullAllocation);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
 
-    CookEntryRegistry registry(arena);
+    CookEntryRegistry registry(testArena.arena);
     const Name type = s_MetadataRegistryNullBucket;
     EXPECT_FALSE(TryRegisterNullAllocatedBucket(registry, type));
     EXPECT_EQ(registry.bucketCount(), 0u);
@@ -624,10 +628,10 @@ void VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket()
 }
 
 void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(){
-    ScratchArena scratchArena(s_AssetCaseTestsMetadataRegistryOwnedTokens);
-    ScratchString token = MakeScratchString("nwb_owned_token_71a7", scratchArena);
-    ScratchString suffix = MakeScratchString("_nwb_owned_suffix_71a7", scratchArena);
-    ScratchString extension = MakeScratchString(".nwb_owned_sidecar_71a7", scratchArena);
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsMetadataRegistryOwnedTokens);
+    ScratchString token = MakeScratchString("nwb_owned_token_71a7", scratch);
+    ScratchString suffix = MakeScratchString("_nwb_owned_suffix_71a7", scratch);
+    ScratchString extension = MakeScratchString(".nwb_owned_sidecar_71a7", scratch);
     RegisterMetadataNonStandaloneAssetType(Name(s_AssetCaseTestsOwnedType71a7), ViewScratchString(token));
     RegisterMetadataNonStandaloneFirstTokenSuffix(ViewScratchString(suffix));
     RegisterMetadataPairedSidecarExtension(ViewScratchString(extension));
@@ -637,7 +641,7 @@ void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(
 
     EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_token_71a7"));
     EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("value_nwb_owned_suffix_71a7"));
-    EXPECT_TRUE(HasRegisteredPairedSidecarExtension(scratchArena, ".nwb_owned_sidecar_71a7"));
+    EXPECT_TRUE(HasRegisteredPairedSidecarExtension(scratch, ".nwb_owned_sidecar_71a7"));
 
     native{
         using namespace NWB::Core;
@@ -991,7 +995,7 @@ void VerifyModelPayload_CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValid
     inputs.skinnedMeshObjects[0u].name = Name(s_ModelRigSegment);
     inputs.publish();
     EXPECT_FALSE(SerializeModelAsset(codec, inputs.model, malformed));
-    EXPECT_TRUE(loaded.validatePayload(inputs.scratchArena));
+    EXPECT_TRUE(loaded.validatePayload());
 }
 
 void VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload(){

@@ -1131,8 +1131,8 @@ void VerifyUiEditNavigationStateTests_FiniteExtremeColumnsRemainFiniteAuthoritat
 }
 
 void VerifyUiEditNavigationStateTests_OsModifiersAndUnrelatedIntentsRejectNavigation(){
-    GlobalArena arena = GlobalArena(s_UiCaseTestsUiEditNavigation);
-    InputBindings bindings = InputBindings(arena);
+    TestArena arena = TestArena(s_UiCaseTestsUiEditNavigation);
+    InputBindings bindings = InputBindings(arena.arena);
     Array<InputKeyBinding, 8u> chords = Array<InputKeyBinding, 8u>();
     chords[0u] = MakeUiEditKeyChord(CoreKey::Up, CoreInputModifier::Control);
     chords[1u] = MakeUiEditKeyChord(CoreKey::Down, CoreInputModifier::Alt);
@@ -1154,7 +1154,7 @@ void VerifyUiEditNavigationStateTests_OsModifiersAndUnrelatedIntentsRejectNaviga
     rejected[5u] = MakeUiCommandIntent(MakeUiEditInvalidInputCommand(), true, true);
     for(in InputCommandIntent intent : rejected)
         EXPECT_FALSE(TryTranslateEditNavigation(intent).has_value());
-    UiKeepEditArenaAlive(arena);
+    UiKeepEditTestArenaAlive(arena);
 }
 
 
@@ -1328,7 +1328,7 @@ void VerifyUiEditSurroundingSelectionTests_AcceptedDeletionCancelsPreeditWithout
 
 void VerifyUiEditSurroundingSelectionTests_ZeroCountsPreserveSelectionPreeditHistoryAndAllEpochs(mut UiEditSurroundingSelectionTests self){
     ASSERT_TRUE(SeedUiEditSurroundingHistoryAndPreedit(s_UiEditSelectionSampleText, 6u, 3u, self.m_model));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     ASSERT_TRUE(self.m_model.eraseAroundSelection(0u, 0u));
     before.expectUnchanged(self.m_model);
     ExpectUiEditRetainedHistory(s_UiEditSelectionSampleText, self.m_model);
@@ -1336,7 +1336,7 @@ void VerifyUiEditSurroundingSelectionTests_ZeroCountsPreserveSelectionPreeditHis
 
 void VerifyUiEditSurroundingSelectionTests_OutOfRangeCountsPreserveTheCompleteDraftAndRedoBranch(mut UiEditSurroundingSelectionTests self){
     ASSERT_TRUE(SeedUiEditSurroundingHistoryAndPreedit(s_UiEditSelectionSampleText, 3u, 6u, self.m_model));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     EXPECT_FALSE(self.m_model.eraseAroundSelection(4u, 0u));
     before.expectUnchanged(self.m_model);
     EXPECT_FALSE(self.m_model.eraseAroundSelection(0u, 4u));
@@ -1351,7 +1351,7 @@ void VerifyUiEditSurroundingSelectionTests_OutOfRangeCountsPreserveTheCompleteDr
 void VerifyUiEditSurroundingSelectionTests_OriginalCutsRejectBothUtf8SplitsAndScalarValidGraphemeSplits(mut UiEditSurroundingSelectionTests self){
     const StringView text = "ae\314\201DEF\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x92\xBBz";
     ASSERT_TRUE(SeedUiEditSurroundingHistoryAndPreedit(text, 4u, 7u, self.m_model));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     EXPECT_FALSE(IsUtf8ScalarBoundary(text, 3u));
     EXPECT_TRUE(IsUtf8ScalarBoundary(text, 2u));
     EXPECT_FALSE(IsUtf8ScalarBoundary(text, 8u));
@@ -1374,7 +1374,7 @@ void VerifyUiEditSurroundingSelectionTests_CandidateSeamMergesRejectEitherEndpoi
     for(in UiEditSeamMergeCase value : cases){
         EditModel model = EditModel();
         ASSERT_TRUE(SeedUiEditSurroundingHistoryAndPreedit(value.text, value.anchor, value.caret, model));
-        const MultilineSnapshot before = MultilineSnapshot(self.m_arena, model);
+        const MultilineSnapshot before = MultilineSnapshot(model);
         EditModel merged = EditModel();
         ASSERT_TRUE(merged.setText(value.merged));
         EXPECT_TRUE(IsUtf8ScalarBoundary(value.merged, value.lostBoundary));
@@ -1452,7 +1452,7 @@ void VerifyFloatModelTests_RejectionAndInvalidBlurRestoreCanonicalCurrentValue(m
     ASSERT_TRUE(self.m_model.submit().committed);
     const FloatBounds bounds = MakeUiFloatBounds(-10.0, 10.0, NumericBoundsPolicy::Reject);
     ASSERT_TRUE(self.m_model.setDraft("99"));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model.draft());
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model.draft());
     ExpectNumericEditRejected(self.m_model.submit(bounds), false);
     before.expectUnchanged(self.m_model.draft());
     ExpectNumericEditRejected(self.m_model.blur(bounds), true);
@@ -1488,7 +1488,7 @@ void VerifyFloatModelTests_NonfiniteExternalAssignmentsPreserveEveryExistingDraf
     ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
     ASSERT_TRUE(self.m_model.lendDraft().updateComposition("3", 0u, 1u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model.draft());
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model.draft());
     const u64 epoch = self.m_model.revision();
     Array<f64, 3u> values = Array<f64, 3u>();
     values[0u] = UiFloatModelInfinity();

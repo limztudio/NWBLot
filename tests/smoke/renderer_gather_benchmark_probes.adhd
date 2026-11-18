@@ -360,11 +360,6 @@ class RendererGatherBenchmarkProbe{
         this.m_gpu.reserve((s_GatherBenchmarkWarmupFrames + s_GatherBenchmarkSampleFrames + s_GatherBenchmarkDrainFrames) * s_GatherBenchmarkGpuScopeCount);
     }
 
-    public RendererGatherBenchmarkProbe(mut GlobalArena arena){
-        this.m_cpu.reserve(s_GatherBenchmarkSampleFrames);
-        this.m_gpu.reserve((s_GatherBenchmarkWarmupFrames + s_GatherBenchmarkSampleFrames + s_GatherBenchmarkDrainFrames) * s_GatherBenchmarkGpuScopeCount);
-    }
-
     public b8 poll(in PerfSessionReport report, in b8 memoryEnabled){
         const Expected<Name, NameTextErrorEnum> frameScopeName = SmokeNameFromText(GatherBenchmarkCpuScopeName(0u));
         if(!frameScopeName.has_value())

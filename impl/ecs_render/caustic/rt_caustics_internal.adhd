@@ -201,20 +201,17 @@ extern class RtCausticState{
 
 [modular]
 class CausticPipelineSet : NoCopy{
-    private mut GlobalArena m_arena;
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaderSystem;
     private mut RtCausticState m_caustic;
     private b8 m_hasCsg;
 
     public CausticPipelineSet(
-        mut GlobalArena arena,
         mut GraphicsRuntime graphics,
         mut RendererShaderSystem shaderSystem,
         mut RtCausticState caustic,
         in b8 hasCsg
     ){
-        this.m_arena = arena;
         this.m_graphics = graphics;
         this.m_shaderSystem = shaderSystem;
         this.m_caustic = caustic;

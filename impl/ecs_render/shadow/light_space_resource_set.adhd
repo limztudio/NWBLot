@@ -15,14 +15,12 @@ extern class LightSpaceShadowState;
 
 [modular]
 class LightSpaceResourceSet : NoCopy{
-    private mut GlobalArena m_arena;
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaderSystem;
     private mut LightSpaceShadowState m_state;
     private b8 m_hardwareSupported;
 
-    public LightSpaceResourceSet(mut GlobalArena arena, mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut LightSpaceShadowState state, in b8 hardwareSupported){
-        this.m_arena = arena;
+    public LightSpaceResourceSet(mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut LightSpaceShadowState state, in b8 hardwareSupported){
         this.m_graphics = graphics;
         this.m_shaderSystem = shaderSystem;
         this.m_state = state;

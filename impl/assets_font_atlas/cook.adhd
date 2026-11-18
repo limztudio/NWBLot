@@ -296,10 +296,10 @@ b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     return SerializeFontAtlasPayloadInto(atlas.payload(), outBinary);
 }
 
-Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontAtlasPayload payload, mut ScratchArena scratchArena){
+Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontAtlasPayload payload){
     FontAtlas candidate(virtualPath);
     candidate.setPayload(payload);
-    if(!candidate.validatePayload(scratchArena))
+    if(!candidate.validatePayload())
         return MakeUnexpected(Failure());
     return candidate;
 }
@@ -309,7 +309,6 @@ b8 PopulateFontAtlasPayloadFromPreparedSource(
     in MetascriptValue asset,
     in PreparedFontSource source,
     in Font font,
-    mut ScratchArena scratchArena,
     mut FontAtlasPayload inOutPayload
 ){
     CopySourceGroups(source, inOutPayload);
@@ -335,7 +334,7 @@ b8 PopulateFontAtlasPayloadFromPreparedSource(
     if(!glyphsResult.has_value())
         return false;
     inOutPayload.glyphs = glyphsResult.value();
-    return ValidateFontAtlasPayload(inOutPayload, scratchArena);
+    return ValidateFontAtlasPayload(inOutPayload);
 }
 
 
@@ -402,7 +401,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, c
     return Core::Assets::ParseCookMetadataDocument<FontAtlasCookEntry, &ParseFontAtlasCookMetadataValue>(assetRoot, virtualRoot, nwbFilePath, doc, s_FontAtlasMetaDiagnosticPrefix, arena, scratchArena);
 }
 
-Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     if(
         !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix)
         || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix, &IsAllowedFontAtlasMetadataField)
@@ -423,14 +422,14 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     PreparedFontSource& source = *sourceResult;
     Font font(arena, candidate.payload.font.name());
     font.setFontBytes(Move(source.fontBytes), source.faceIndex);
-    if(!PopulateFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, scratchArena, candidate.payload))
+    if(!PopulateFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, candidate.payload))
         return MakeUnexpected(Failure{});
     candidate.virtualPath = virtualPath;
     return candidate;
 }
 
-Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return BuildFontAtlasAssetFromPayload(arena, entry.virtualPath, entry.payload, scratchArena);
+Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    return BuildFontAtlasAssetFromPayload(arena, entry.virtualPath, entry.payload);
 }
 
 

@@ -123,12 +123,11 @@ Expected<Model> BuildModelAssetFromObjects(
     in Name virtualPath,
     in Vector<ModelSkeletonObject> skeletonObjects,
     in Vector<ModelStaticMeshObject> staticMeshObjects,
-    in Vector<ModelSkinnedMeshObject> skinnedMeshObjects,
-    mut ScratchArena scratchArena
+    in Vector<ModelSkinnedMeshObject> skinnedMeshObjects
 ){
     Model asset(virtualPath);
     asset.setObjects(skeletonObjects, staticMeshObjects, skinnedMeshObjects);
-    if(!asset.validatePayload(scratchArena))
+    if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
 }
@@ -394,14 +393,13 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
         return false;
 
     const Model& model = static_cast<const Model&>(asset);
-    Core::Alloc::ScratchArena scratchArena(s_AssetsModelSerializeArena);
-    if(!model.validatePayload(scratchArena))
+    if(!model.validatePayload())
         return false;
 
     return SerializeModelBinaryPayload(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
 }
 
-Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     ModelCookEntry entry(arena);
 
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix))
@@ -414,7 +412,7 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
 
     Model candidateModel(entry.skeletonObjects.get_allocator().arena(), entry.virtualPath);
     candidateModel.setObjects(Move(entry.skeletonObjects), Move(entry.staticMeshObjects), Move(entry.skinnedMeshObjects));
-    if(!candidateModel.validatePayload(scratchArena))
+    if(!candidateModel.validatePayload())
         return MakeUnexpected(Failure{});
     candidateModel.takeObjects(entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects);
     return entry;
@@ -424,8 +422,8 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Path& assetRoot, const ASt
     return Core::Assets::ParseCookMetadataDocument<ModelCookEntry, &ParseModelCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_ModelMetaDiagnosticPrefix, arena, scratchArena);
 }
 
-Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return BuildModelAssetFromObjects(arena, modelEntry.virtualPath, modelEntry.skeletonObjects, modelEntry.staticMeshObjects, modelEntry.skinnedMeshObjects, scratchArena);
+Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+    return BuildModelAssetFromObjects(arena, modelEntry.virtualPath, modelEntry.skeletonObjects, modelEntry.staticMeshObjects, modelEntry.skinnedMeshObjects);
 }
 
 

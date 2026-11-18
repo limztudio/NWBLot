@@ -1300,7 +1300,7 @@ void VerifyMultilineCommandTests_RepeatedAcceptInsertsExactlyOneLfWithoutSubmitt
 
 void VerifyMultilineCommandTests_SubmitIntentReportsWithoutEditingAndSuppressesRepeats(mut MultilineCommandTests self){
     ASSERT_TRUE(self.m_model.setText("a\nb"));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     const EditCommandResult submitted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Submit, false, true), false, self.m_model.textMode()));
     EXPECT_TRUE(submitted.handled);
     EXPECT_TRUE(submitted.submitted);
@@ -1316,7 +1316,7 @@ void VerifyMultilineCommandTests_SubmitIntentReportsWithoutEditingAndSuppressesR
 void VerifyMultilineCommandTests_ReadOnlyRejectsNewlineAndMutationsWhileAllowingCopy(mut MultilineCommandTests self){
     ASSERT_TRUE(self.m_model.setText("ab\ncd"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     Array<EditCommandEnum, 9u> mutations = Array<EditCommandEnum, 9u>();
     mutations[0u] = EditCommand::Newline;
     mutations[1u] = EditCommand::Backspace;
@@ -1343,7 +1343,7 @@ void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUnti
     ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("q\nr", 1u, 3u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     Array<EditCommandEnum, 8u> nativeOwned = Array<EditCommandEnum, 8u>();
     nativeOwned[0u] = EditCommand::Newline;
     nativeOwned[1u] = EditCommand::Home;
@@ -1377,7 +1377,7 @@ void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUnti
 void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAllState(mut MultilineCommandTests self){
     EditModel limited = EditModel(MakeUiEditLimits(3u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
+    const MultilineSnapshot before = MultilineSnapshot(limited);
     const EditCommandResult rejected = ApplyEditCommand(limited, MakeUiMultilineCommand(EditCommand::Newline));
     EXPECT_TRUE(rejected.handled);
     EXPECT_FALSE(rejected.textChanged);
@@ -1385,7 +1385,7 @@ void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAl
     before.expectUnchanged(limited);
     EditModel single = EditModel();
     ASSERT_TRUE(single.setText("abc"));
-    const MultilineSnapshot singleBefore = MultilineSnapshot(self.m_arena, single);
+    const MultilineSnapshot singleBefore = MultilineSnapshot(single);
     EXPECT_FALSE(ApplyEditCommand(single, MakeUiMultilineCommand(EditCommand::Newline)).textChanged);
     singleBefore.expectUnchanged(single);
 }
@@ -1436,7 +1436,7 @@ void VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWith
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("x\ny", 2u, 3u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     Array<StringView, 7u> invalid = Array<StringView, 7u>();
     invalid[0u] = "x\r\ny";
     invalid[1u] = "x\ty";
@@ -1460,7 +1460,7 @@ void VerifyMultilineCompositionTests_OverCapacityPreeditAndCommitPreserveEveryMo
     ASSERT_TRUE(limited.setSelection(1u, 2u));
     ASSERT_TRUE(limited.beginComposition());
     ASSERT_TRUE(limited.updateComposition("x", 0u, 1u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
+    const MultilineSnapshot before = MultilineSnapshot(limited);
     EXPECT_FALSE(limited.updateComposition("12\n34", 0u, 5u));
     EXPECT_FALSE(limited.commitComposition("12\n34"));
     before.expectUnchanged(limited);
@@ -1523,7 +1523,7 @@ void VerifyMultilineCompositionTests_EmptyPreeditRetainsTheOriginalCrossLineRepl
 void VerifyMultilineModelTests_SingleLineRejectsHardBreaksAndNulWithoutChangingModel(mut MultilineModelTests self){
     EditModel single = EditModel();
     ASSERT_TRUE(single.setText("a\t\x01\x7F\302\205b"));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, single);
+    const MultilineSnapshot before = MultilineSnapshot(single);
     Array<StringView, 5u> rejectedList = Array<StringView, 5u>();
     rejectedList[0u] = "\n";
     rejectedList[1u] = "\r";
@@ -1567,7 +1567,7 @@ void VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelect
     ASSERT_TRUE(self.m_model.setSelection(1u, 3u));
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("q\nr", 0u, 3u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     Array<StringView, 8u> invalid = Array<StringView, 8u>();
     invalid[0u] = "\r\n";
     invalid[1u] = "\t";
@@ -1619,7 +1619,7 @@ void VerifyMultilineModelTests_CapacityFailureKeepsTheExactBorrowedModelState(mu
     ASSERT_TRUE(limited.setSelection(0u, 1u));
     ASSERT_TRUE(limited.beginComposition());
     ASSERT_TRUE(limited.updateComposition("x", 0u, 1u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, limited);
+    const MultilineSnapshot before = MultilineSnapshot(limited);
     EXPECT_FALSE(limited.setText("abcdef\n"));
     EXPECT_FALSE(limited.replaceSelection("x\nyz"));
     before.expectUnchanged(limited);
@@ -1672,7 +1672,7 @@ void VerifyMultilineModelTests_DeletingLineBreaksJoinsLinesWithoutSplittingGraph
 void VerifyMultilineModelTests_SurroundingDeletionAcrossLinesRemainsBoundaryCheckedAndUndoable(mut MultilineModelTests self){
     ASSERT_TRUE(self.m_model.setText("a\xCC\x81\nz"));
     ASSERT_TRUE(self.m_model.setSelection(4u, 4u));
-    const MultilineSnapshot before = MultilineSnapshot(self.m_arena, self.m_model);
+    const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     EXPECT_FALSE(self.m_model.eraseSurrounding(2u, 0u));
     before.expectUnchanged(self.m_model);
     ASSERT_TRUE(self.m_model.eraseSurrounding(1u, 1u));
@@ -1748,7 +1748,7 @@ void VerifyMultilineModelTests_AcceptedNoopSelectionAndMovementAdvanceTheSelecti
         EXPECT_GT(model.selectionGeneration(), selection);
         EXPECT_EQ(model.revision(), revision);
         EXPECT_EQ(model.externalRevision(), external);
-        const MultilineSnapshot before = MultilineSnapshot(self.m_arena, model);
+        const MultilineSnapshot before = MultilineSnapshot(model);
         EXPECT_FALSE(model.setSelection(1u, 1u));
         EXPECT_FALSE(model.move(bit_cast<EditMoveEnum>(u8(255u))));
         before.expectUnchanged(model);

@@ -1377,7 +1377,7 @@ void VerifyTelemetry_TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame(
 
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 40u, nodes, edges, 7u));
 
     TimingStats secondTiming = MakeTestTimingStats();
@@ -1394,8 +1394,8 @@ void VerifyTelemetry_TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame(
     nodes[0u].label = "Unmatched GBuffer Pass";
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 42u, nodes, edges, 9u));
 
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
@@ -1444,13 +1444,13 @@ void VerifyTelemetry_TelemetryReportDoesNotAttachAggregatedTimingToOneGraph(){
 
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 43u, nodes, edges, 7u));
     nodes[0u].label = "Publish Frame GBuffer Pass";
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 44u, nodes, edges, 8u));
 
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     const StringView dot = ReportGraphView(report);
@@ -1466,23 +1466,23 @@ void VerifyTelemetry_TelemetryReportDistinguishesExactEmptyPacketSubmissionsFrom
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+    BuildTestPacketSubmissionFrameGraph(testArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     nodes[0u].runtimeStatistics.submission = FrameGraphSubmissionRuntimeStatistics();
     physicalQueueRuntimeStatistics.clear();
     packetSubmissionStatistics.clear();
 
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
     TelemetryRecorder exactRecorder = TelemetryRecorder(testArena.arena);
     exactRecorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ASSERT_TRUE(RecordTestFrameGraph(exactRecorder, testArena.scratchArena, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
-    const Expected<TelemetryReport> exactReportResult = BuildTestTelemetryReport(exactRecorder.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> exactReportResult = BuildTestTelemetryReport(exactRecorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(exactReportResult.has_value());
     const TelemetryReport exactReport = exactReportResult.value();
 
     TelemetryRecorder absentRecorder = TelemetryRecorder(testArena.arena);
     absentRecorder.setCaptureOptions(TelemetryCaptureOptionsAll());
     ASSERT_TRUE(RecordTestFrameGraph(absentRecorder, testArena.scratchArena, 59u, nodes, edges, 19u));
-    const Expected<TelemetryReport> absentReportResult = BuildTestTelemetryReport(absentRecorder.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> absentReportResult = BuildTestTelemetryReport(absentRecorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(absentReportResult.has_value());
     const TelemetryReport absentReport = absentReportResult.value();
 
@@ -1496,7 +1496,7 @@ void VerifyTelemetry_TelemetryReportRejectsNonCurrentFrameGraphPayloads(){
     TelemetryTestArena testArena = TelemetryTestArena();
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    BuildTestFrameGraph(testArena, nodes, edges);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     ASSERT_TRUE(BuildTestFrameGraphPayload(55u, nodes, edges, testArena.scratchArena, payload));
 
@@ -1519,8 +1519,8 @@ void VerifyTelemetry_TelemetryReportRejectsNonCurrentFrameGraphPayloads(){
         ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 55u, payload, 15u));
     }
 
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.eventCount, unsupportedCount + 1u);
@@ -1536,11 +1536,11 @@ void VerifyTelemetry_TelemetryReportMarksAbsentRuntimeStatistics(){
 
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
-    BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+    BuildTestCompiledFrameGraph(testArena, nodes, edges);
     ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 53u, nodes, edges, 13u));
 
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    TelemetryScratchArena reportScratch = TelemetryScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, reportScratch.scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
 
@@ -1801,5 +1801,4 @@ NWB_ADHD_GTEST(Telemetry, TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes,
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

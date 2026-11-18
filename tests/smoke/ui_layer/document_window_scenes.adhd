@@ -43,7 +43,7 @@ class UiTextAreaSmokeScene{
     private b8 m_compact = false;
     private b8 m_longDocument = false;
 
-    public UiTextAreaSmokeScene(mut GlobalArena arena, mut IClipboardService clipboard);
+    public UiTextAreaSmokeScene(mut IClipboardService clipboard);
     public ~UiTextAreaSmokeScene();
 
     public b8 paint(mut UiPaintContext context);
@@ -64,7 +64,7 @@ class UiTextSmokeSamples{
     private SharedGlyphPage m_coverage = SharedGlyphPage();
     private Array<SharedSdfAtlasPage, 4u> m_sdf;
 
-    public UiTextSmokeSamples(mut GlobalArena arena);
+    public UiTextSmokeSamples();
 
     public b8 paint(mut UiPaintContext context);
 }
@@ -89,7 +89,7 @@ class UiTextureImageSmokeScene{
     private b8 m_replacementAlternate = false;
     private b8 m_sourcesValid = false;
 
-    public UiTextureImageSmokeScene(mut GlobalArena arena, mut AssetManager assets);
+    public UiTextureImageSmokeScene(mut AssetManager assets);
 
     public b8 paint(mut UiPaintContext context);
     public b8 keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods);
@@ -324,7 +324,6 @@ u8 SmokeChannelUnorm8(in u32 channel, in u32 x){
 }
 
 b8 InitUiTextSmokeSamples(
-    mut GlobalArena arena,
     mut Label latin,
     mut Label korean,
     mut Label clipped,
@@ -348,7 +347,7 @@ b8 InitUiTextSmokeSamples(
         }
     }
 
-    const b8 atlasesCreated = CreateSmokeTextAtlasPages(arena, coveragePixels, sdfPixels, coverage, sdf);
+    const b8 atlasesCreated = CreateSmokeTextAtlasPages(coveragePixels, sdfPixels, coverage, sdf);
 
     ShapeRequest latinRequest();
     latinRequest.text = "office ffi e\xCC\x81 gqyp";
@@ -380,14 +379,13 @@ Rect TextureSmokeUv24(in f32 x, in f32 y){
 }
 
 void InitUiTextureImageSmokeSources(
-    mut GlobalArena arena,
     mut AssetManager assets,
     mut SharedImageSource defaultSource,
     mut SharedImageSource alternateSource,
     mut SharedImageSource replacementSource,
     mut b8 sourcesValid
 ){
-    LoadSmokeSkinImageSources(arena, assets, s_SmokeNameAlternateSkin, defaultSource, alternateSource);
+    LoadSmokeSkinImageSources(assets, s_SmokeNameAlternateSkin, defaultSource, alternateSource);
     replacementSource = defaultSource;
     sourcesValid = SmokeImageSourceValid(defaultSource)
         && SmokeImageSourceValid(alternateSource)
@@ -456,10 +454,10 @@ Rect ResolveSmokeWindowButtonRect(in WindowState state, in WindowMetrics metrics
 }
 
 
-UiTextAreaSmokeScene::UiTextAreaSmokeScene(mut GlobalArena arena, mut IClipboardService clipboard){
+UiTextAreaSmokeScene::UiTextAreaSmokeScene(mut IClipboardService clipboard){
     this.m_clipboard = SmokeClipboardRef(clipboard);
-    this.m_observed = EditBoxView(arena);
-    this.m_completion = ClipboardCompletion(arena);
+    this.m_observed = CreateSmokeEditBoxView();
+    this.m_completion = CreateSmokeClipboardCompletion();
     this.m_longText.reserve(1044u);
     for(u32 line = 0u; line < 16u; ++line)
         this.m_longText.append("abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl\n");
@@ -747,11 +745,11 @@ void UiTextAreaSmokeScene::paintMarkers(mut UiPaintContext context)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextSmokeSamples::UiTextSmokeSamples(mut GlobalArena arena){
-    this.m_latin = Label(arena);
-    this.m_korean = Label(arena);
-    this.m_clipped = Label(arena);
-    const b8 ok = InitUiTextSmokeSamples(arena, this.m_latin, this.m_korean, this.m_clipped, this.m_coverage, this.m_sdf);
+UiTextSmokeSamples::UiTextSmokeSamples(){
+    this.m_latin = Label();
+    this.m_korean = Label();
+    this.m_clipped = Label();
+    const b8 ok = InitUiTextSmokeSamples(this.m_latin, this.m_korean, this.m_clipped, this.m_coverage, this.m_sdf);
     [essential] assert(ok, "UI smoke text, coverage, and compact SDF fixtures must be valid");
 }
 
@@ -785,9 +783,9 @@ b8 UiTextSmokeSamples::paint(mut UiPaintContext context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextureImageSmokeScene::UiTextureImageSmokeScene(mut GlobalArena arena, mut AssetManager assets){
-    this.m_arena = SmokeArenaRef(arena);
-    InitUiTextureImageSmokeSources(arena, assets, this.m_default, this.m_alternate, this.m_replacement, this.m_sourcesValid);
+UiTextureImageSmokeScene::UiTextureImageSmokeScene(mut AssetManager assets){
+    this.m_arena = MakeSmokeArenaRef();
+    InitUiTextureImageSmokeSources(assets, this.m_default, this.m_alternate, this.m_replacement, this.m_sourcesValid);
 }
 
 b8 UiTextureImageSmokeScene::paint(mut UiPaintContext context){

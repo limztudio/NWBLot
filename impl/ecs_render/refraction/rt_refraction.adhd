@@ -92,7 +92,6 @@ b8 RefractionRenderer::prepareRefractionResources(){
 
     if(
         !EnsurePushConstantComputePipeline<RefractiveSubsystem>(
-            m_system.m_arena,
             device,
             m_system.m_shaderSystem,
             SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.refractionClassifyTilesCs; }),
@@ -105,7 +104,6 @@ b8 RefractionRenderer::prepareRefractionResources(){
             m_system.m_rayTracingState.m_refraction.m_refractionClassifyTilesPipeline
         )
         || !EnsurePushConstantComputePipeline<RefractiveSubsystem>(
-            m_system.m_arena,
             device,
             m_system.m_shaderSystem,
             SubsystemAssetSelector<RefractiveSubsystem, ComputeShader>([](const RefractiveSubsystem& s){ return s.refractionFinalizeTilesCs; }),

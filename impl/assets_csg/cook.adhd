@@ -203,8 +203,8 @@ b8 HasCsgSlangIncludeExtension(in StringView includePath){
 }
 
 // `eval` is hand-written source and `module_include` is the generated module include; both are engine/project-rooted virtual paths.
-b8 ValidateCsgReservedVirtualRootPath(in Path nwbFilePath, in StringView fieldName, in StringView includePath, mut ScratchArena scratchArena){
-    return ValidateCsgReservedVirtualRoot(nwbFilePath, fieldName, HasReservedAssetVirtualRoot(includePath, scratchArena));
+b8 ValidateCsgReservedVirtualRootPath(in Path nwbFilePath, in StringView fieldName, in StringView includePath){
+    return ValidateCsgReservedVirtualRoot(nwbFilePath, fieldName, HasReservedAssetVirtualRoot(includePath));
 }
 
 
@@ -297,9 +297,9 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
         return MakeUnexpected(Failure{});
     if(!ValidateCsgSlangIncludeExtension(nwbFilePath, s_CsgModuleIncludeField, HasCsgSlangIncludeExtension(AStringView(entry.moduleInclude))))
         return MakeUnexpected(Failure{});
-    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude), scratchArena))
+    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude)))
         return MakeUnexpected(Failure{});
-    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude), scratchArena))
+    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude)))
         return MakeUnexpected(Failure{});
     return entry;
 }

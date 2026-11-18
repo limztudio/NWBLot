@@ -11,14 +11,11 @@
 #include <core/assets/auto_registration.adhd>
 #include <core/assets/binary_payload_io.adhd>
 #include <core/assets/bunch/cook.adhd>
-#include <core/assets/bunch/dependency_workspace.adhd>
 #include <core/assets/cook_dependency_registry.adhd>
 #include <core/assets/cook_entry_registry.adhd>
 #include <core/assets/cook_metadata.adhd>
 #include <core/assets/cook_paths.adhd>
-#include <core/assets/cook_workspace.adhd>
 #include <core/assets/volume/volume_prepare_registry.adhd>
-#include <core/assets/volume/cook_workspace.adhd>
 #include <core/assets/expanded_metadata.adhd>
 #include <core/assets/family_cook_registration.adhd>
 #include <core/assets/gather_merge_registry.adhd>
@@ -33,7 +30,6 @@
 #include <core/assets/reserved_asset_ref_parser.adhd>
 #include <core/assets/volume/arena_names.adhd>
 
-#include <core/common/cli/tool_cli.adhd>
 #include <core/common/arena_names.adhd>
 #include <core/common/frame_data.adhd>
 #include <core/common/logger_registration.adhd>
@@ -63,15 +59,9 @@
 #include <core/filesystem/volume_staging.adhd>
 #include <core/filesystem/volume_types.adhd>
 
-#include <core/font/file_bytes.adhd>
-#include <core/font/freetype.adhd>
-#include <core/font/harfbuzz.adhd>
-
 #include <core/frame/arena_names.adhd>
 #include <core/frame/module.adhd>
 
-#include <core/graphics/basis_encoder.adhd>
-#include <core/graphics/basis_transcoder.adhd>
 #include <core/graphics/backend_selection/backend.adhd>
 #include <core/graphics/backend_selection/raster_types.adhd>
 #include <core/graphics/backend_selection/texture_contract_types.adhd>
@@ -115,7 +105,6 @@
 #include <core/graphics/runtime/standalone_service.adhd>
 #include <core/graphics/shader_archive.adhd>
 #include <core/graphics/shader_stage_names.adhd>
-#include <core/graphics/slang_toolchain.adhd>
 #include <core/graphics/spirv_entry_point.adhd>
 
 #include <core/input/arena_names.adhd>

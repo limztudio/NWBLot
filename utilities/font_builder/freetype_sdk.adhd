@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font/freetype_sdk.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<utilities/font_builder/freetype_sdk.h>"), cpp_name("::NWB::FontBuilderUtility::FreeTypeSdk::SetUnsignedProperty")]
+extern i32 FreeTypeSetUnsignedProperty(in FreeTypeLibrary library, in String module, in String property, in u32 value);
+
+[cpp_header("<utilities/font_builder/freetype_sdk.h>"), cpp_name("::NWB::FontBuilderUtility::FreeTypeSdk::Ascender")]
+extern i32 FreeTypeAscender(in FreeTypeFaceView face);
+
+[cpp_header("<utilities/font_builder/freetype_sdk.h>"), cpp_name("::NWB::FontBuilderUtility::FreeTypeSdk::Descender")]
+extern i32 FreeTypeDescender(in FreeTypeFaceView face);
+
+[cpp_header("<utilities/font_builder/freetype_sdk.h>"), cpp_name("::NWB::FontBuilderUtility::FreeTypeSdk::Height")]
+extern i32 FreeTypeHeight(in FreeTypeFaceView face);
+
+[cpp_header("<utilities/font_builder/freetype_sdk.h>"), cpp_name("::NWB::FontBuilderUtility::FreeTypeSdk::GlyphAdvanceX")]
+extern i64 FreeTypeGlyphAdvanceX(in FreeTypeFaceView face);
+
+[cpp_header("<utilities/font_builder/freetype_sdk.h>"), cpp_name("::NWB::FontBuilderUtility::FreeTypeSdk::RenderSdf")]
+extern i32 FreeTypeRenderSdf(mut FreeTypeFaceView face);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

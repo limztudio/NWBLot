@@ -50,7 +50,9 @@ Array<SlangStageMapping, 14u> BuildSlangStageMappings(){
     return mappings;
 }
 
-StringView ConfiguredSlangExecutable(){ return s_ConfiguredSlangExecutable; }
+StringView ConfiguredSlangExecutable(){
+    return NWB_SLANGC_EXECUTABLE;
+}
 
 Expected<u64> ComputeSlangCompilerFingerprint(in Path temporaryRoot){
     u64 fingerprint = s_Fnv64OffsetBasis;

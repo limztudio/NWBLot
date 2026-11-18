@@ -2,56 +2,56 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/assets/cook_workspace.adhd>
+#include <pipeline/cook_workspace.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::GatherMergeCallback"), cpp_flags(self_defaulted, small_value)]
+[cpp_header("<pipeline/volume_workspace.h>"), cpp_name("::NWB::Pipeline::GatherMergeCallback"), cpp_flags(self_defaulted, small_value)]
 extern class GatherMergeCallback{
     b8 apply(in Name path, in Span<u8> incoming, mut AssetCookWorkspace workspace, mut Vector<u8> existing)const;
 };
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::RegisteredGatherMerge")]
+[cpp_header("<pipeline/volume_workspace.h>"), cpp_name("::NWB::Pipeline::RegisteredGatherMerge")]
 extern GatherMergeCallback RegisteredGatherMerge(mut AssetCookWorkspace workspace);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePayloadIdentity")]
+[cpp_header("<core/assets/volume/pack_manifest.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePayloadIdentity")]
 extern class CookPayloadIdentity{
     u64 payloadSize;
     u64 payloadHash;
     u64 cookKeyHash;
 };
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePackEntry")]
+[cpp_header("<core/assets/volume/pack_manifest.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePackEntry")]
 extern class CookPackEntry{
     Name virtualPath;
     CookPayloadIdentity identity;
     Vector<u8> payloadBytes;
 };
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest")]
+[cpp_header("<core/assets/volume/pack_manifest.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest")]
 extern class CookPackManifest{
     Vector<CookPackEntry> entries;
     u64 plannedFileCount;
 };
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::BuiltAssetPayload"), cpp_flags(small_value, brace_init)]
+[cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::BuiltAssetPayload"), cpp_flags(small_value, brace_init)]
 extern class BuiltAssetPayload{
     Name virtualPath;
     usize payloadOffset;
 };
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumeWriteResult")]
+[cpp_header("<core/assets/volume/cook_types.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumeWriteResult")]
 extern class CookVolumeWriteResult{
     u64 fileCount;
 };
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookVolumeManifest"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/volume_workspace.h>"), cpp_name("::NWB::Pipeline::CookVolumeManifest"), cpp_flags(no_copy, no_assign)]
 extern class CookVolumeManifest{
     CookPackManifest manifest;
     b8 reserve(in u64 count);
@@ -62,14 +62,14 @@ extern class CookVolumeManifest{
     b8 writeBuiltAssets(in Path output)const;
 };
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename")]
+[cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename")]
 extern const StringView s_BuiltAssetManifestFilename;
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::s_Extension")]
+[cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::s_Extension")]
 extern const StringView s_BuiltAssetExtension;
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeName")]
+[cpp_header("<core/assets/volume/cook_types.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeName")]
 extern const StringView s_CookAssetVolumeName;
 
-[cpp_header("<core/assets/volume/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookVolumePreparation"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/volume_workspace.h>"), cpp_name("::NWB::Pipeline::CookVolumePreparation"), cpp_flags(no_copy, no_assign)]
 extern class CookVolumePreparation{
     u64 plannedFileCount;
     b8 registerEntryTypes();

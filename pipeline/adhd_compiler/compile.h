@@ -25,6 +25,7 @@ struct AdhdCompileOptions{
     Span<const Core::Metascript::MString> includeDirectories;
     Span<const Core::Metascript::MString> cppHeaders;
     Span<const Core::Metascript::MString> cppIncludeDirectories;
+    Span<const Core::Metascript::MString> macroDefinitions;
     Span<const Core::Metascript::MString> cppDefines;
     Span<const Core::Metascript::MString> cppCompilerArgs;
     Core::Metascript::MStringView outputDirectory;

@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font/freetype_sdk.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::FT_BBox"), cpp_flags(self_defaulted)]
+extern class FreeTypeOutlineBox{
+    i64 xMin;
+    i64 yMin;
+    i64 xMax;
+    i64 yMax;
+};
+
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("FT_LOAD_NO_AUTOHINT")]
+extern const i32 s_FreeTypeLoadNoAutohint;
+
+
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiFreeTypeFace"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+extern class UiFreeTypeFace{
+    i32 createLibrary();
+    void addDefaultModules();
+    i32 closeLibrary();
+    i32 open(in Span<u8> bytes, in i64 index);
+    mut FreeTypeFaceView view();
+    i32 closeFace();
+};
+
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::NWB::UiFontSdk::OutlineControlBox")]
+extern FreeTypeOutlineBox OutlineControlBox(in FreeTypeFaceView face);
+
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::NWB::UiFontSdk::IsTrickyFace")]
+extern b8 IsTrickyFace(in FreeTypeFaceView face);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

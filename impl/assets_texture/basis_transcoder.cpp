@@ -10,7 +10,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_BEGIN
+NWB_BEGIN
+namespace TextureBasis{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,24 +46,24 @@ b8 UnpackBasisRgbaBlock(const Span<const u8> source, const usize offset, Array<u
     return true;
 }
 
-b8 TranscodeBasisImage(const BasisTranscodeFormat::Enum format, const BasisTranscodeLayout& layout, const Span<const u8> source, const Span<u8> bytes, const usize offset, const usize count){
+b8 TranscodeBasisImage(const Impl::BasisTranscodeFormat::Enum format, const Impl::BasisTranscodeLayout& layout, const Span<const u8> source, const Span<u8> bytes, const usize offset, const usize count){
     if(offset > bytes.size() || count > bytes.size() - offset)
         return false;
     const Span<u8> destination = bytes.subspan(offset, count);
     using Format = basist::transcoder_texture_format;
     Format target;
     switch(format){
-    case BasisTranscodeFormat::Bc7: target = Format::cTFBC7_RGBA; break;
-    case BasisTranscodeFormat::Bc6h: target = Format::cTFBC6H; break;
-    case BasisTranscodeFormat::AstcHdr4x4: target = Format::cTFASTC_HDR_4x4_RGBA; break;
-    case BasisTranscodeFormat::RgbaHalf: target = Format::cTFRGBA_HALF; break;
+    case Impl::BasisTranscodeFormat::Bc7: target = Format::cTFBC7_RGBA; break;
+    case Impl::BasisTranscodeFormat::Bc6h: target = Format::cTFBC6H; break;
+    case Impl::BasisTranscodeFormat::AstcHdr4x4: target = Format::cTFASTC_HDR_4x4_RGBA; break;
+    case Impl::BasisTranscodeFormat::RgbaHalf: target = Format::cTFRGBA_HALF; break;
     default: return false;
     }
     if(!layout.width || !layout.height || layout.blockCountX != 1u + (layout.width - 1u) / 4u || layout.blockCountY != 1u + (layout.height - 1u) / 4u)
         return false;
     const u64 blocks = static_cast<u64>(layout.blockCountX) * layout.blockCountY;
-    const u32 width = format == BasisTranscodeFormat::RgbaHalf ? layout.width : layout.blockCountX;
-    const u32 rows = format == BasisTranscodeFormat::RgbaHalf ? layout.height : layout.blockCountY;
+    const u32 width = format == Impl::BasisTranscodeFormat::RgbaHalf ? layout.width : layout.blockCountX;
+    const u32 rows = format == Impl::BasisTranscodeFormat::RgbaHalf ? layout.height : layout.blockCountY;
     if(source.size() > Limit<u32>::s_Max || blocks > Limit<u32>::s_Max / sizeof(basist::uastc_block) || blocks * sizeof(basist::uastc_block) != source.size()
         || layout.outputRowPitch < width || static_cast<u64>(layout.outputRowPitch) * rows > layout.outputElements
         || static_cast<u64>(layout.outputElements) * basist::basis_get_bytes_per_block_or_pixel(target) > destination.size())
@@ -72,7 +73,7 @@ b8 TranscodeBasisImage(const BasisTranscodeFormat::Enum format, const BasisTrans
             layout.blockCountX, layout.blockCountY, layout.width, layout.height, layout.mipLevel, 0u, static_cast<u32>(source.size()),
             0u, alpha, false, layout.outputRowPitch, nullptr, layout.height);
     };
-    if(format == BasisTranscodeFormat::Bc7){
+    if(format == Impl::BasisTranscodeFormat::Bc7){
         basist::basisu_lowlevel_uastc_ldr_4x4_transcoder decoder;
         return transcode(decoder, true);
     }
@@ -89,7 +90,8 @@ u16 BasisFloatToHalf(const f32 value)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_END
+};
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

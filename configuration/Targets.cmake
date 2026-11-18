@@ -142,6 +142,13 @@ function(target_sources target)
     endif()
 endfunction()
 
+function(nwb_target_adhd_definitions target_name)
+    target_compile_definitions("${target_name}" PRIVATE ${ARGN})
+    foreach(definition IN LISTS ARGN)
+        set_property(TARGET "${target_name}" APPEND PROPERTY NWB_ADHD_DEFINITION_ARGUMENTS "--define=${definition}")
+    endforeach()
+endfunction()
+
 function(nwb_target_adhd_sources target_name)
     cmake_parse_arguments(PARSE_ARGV 1 ADHD "" "NAMESPACE" "SOURCES")
 
@@ -200,7 +207,8 @@ function(nwb_target_adhd_sources target_name)
 
         add_custom_command(
             OUTPUT "${gen_h}" "${gen_cpp}"
-            COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" --depfile "${gen_h}.d" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args}
+            COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" --depfile "${gen_h}.d" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args} "$<TARGET_PROPERTY:${target_name},NWB_ADHD_DEFINITION_ARGUMENTS>"
+            COMMAND_EXPAND_LISTS
             DEPFILE "${gen_h}.d"
             DEPENDS nwb_adhd_compiler ${_core_prelude_adhd_files} "${adhd_abs}" "${namespace_map_file}"
             COMMENT "Compiling adhd source ${adhd_file}"
@@ -251,7 +259,7 @@ endfunction()
 
 function(nwb_target_console_entry target_name entry_header entry_function entry_label entry_failure)
     set(_entry_source "${CMAKE_CURRENT_BINARY_DIR}/${target_name}_entry.cpp")
-    configure_file("${CMAKE_SOURCE_DIR}/core/common/cli/console_entry.cpp.in" "${_entry_source}" @ONLY)
+    configure_file("${CMAKE_SOURCE_DIR}/utilities/cli/console_entry.cpp.in" "${_entry_source}" @ONLY)
     target_sources(${target_name} PRIVATE "${_entry_source}")
     target_link_libraries(${target_name} PRIVATE nwb_tool_cli nwb_logclient)
 endfunction()

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <utilities/cli/tool_cli.adhd>
 #include <utilities/fbx_to_nwb/scene.adhd>
 #include <utilities/fbx_to_nwb/mesh_build.adhd>
 #include <utilities/fbx_to_nwb/asset_writer.adhd>

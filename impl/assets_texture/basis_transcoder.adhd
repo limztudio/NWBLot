@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_texture/basis_transcode_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::InitializeBasisTranscoder")]
+extern void InitializeBasisTranscoder();
+
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisAstcBlock")]
+extern b8 TranscodeBasisAstcBlock(in Span<u8> source, in usize offset, mut Span<u8> destination, in usize outputOffset);
+
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::UnpackBasisRgbaBlock")]
+extern b8 UnpackBasisRgbaBlock(in Span<u8> source, in usize offset, mut Array<u8, 64> rgba);
+
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisImage")]
+extern b8 TranscodeBasisImage(in BasisTranscodeFormat format, in BasisTranscodeLayout layout, in Span<u8> source, mut Span<u8> bytes, in usize offset, in usize count);
+
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::BasisFloatToHalf")]
+extern u16 BasisFloatToHalf(in f32 value);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

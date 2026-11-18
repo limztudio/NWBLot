@@ -1,0 +1,24 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> BasisTranscodeFormat{
+    Bc7,
+    Bc6h,
+    AstcHdr4x4,
+    RgbaHalf
+}
+
+class BasisTranscodeLayout{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 blockCountX = 0u;
+    public u32 blockCountY = 0u;
+    public u32 mipLevel = 0u;
+    public u32 outputElements = 0u;
+    public u32 outputRowPitch = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

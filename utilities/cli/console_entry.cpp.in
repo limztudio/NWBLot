@@ -4,7 +4,7 @@
 
 #include <@entry_header@>
 #include <core/common/application_entry.h>
-#include <core/common/cli/tool_cli.h>
+#include <utilities/cli/tool_cli.h>
 #include <logger/client/module.h>
 
 
@@ -15,7 +15,7 @@ namespace{
 
 i32 Run(const i32 argc, char** argv){
     try{
-        return @entry_function@(::NWB::Core::Common::ConsoleArguments{ argc, argv });
+        return @entry_function@(::NWB::Utilities::ConsoleArguments{ argc, argv });
     }
     catch(...){
         return @entry_failure@;

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <utilities/cli/tool_cli.adhd>
 #include <utilities/tex_conv/prepare_texture.adhd>
 #include <utilities/tex_conv/publication.adhd>
 
@@ -21,8 +22,10 @@ i32 RunConsole(in ConsoleArguments arguments){
 
     ToolCli app("Convert LDR or HDR images into prepared linear UASTC texture assets.");
     app.addText(s_InputOptionName, input, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
-    app.addTexts(s_CubeOptionName, cube, "Six cubemap faces: +X -X +Y -Y +Z -Z").expected(cast<i32>(s_TextureCubeFaceCount));
-    app.addTexts(s_VolumeOptionName, volume, "Ordered volume Z slices: z0 z1 ... zN").expectedRange(s_MinVolumeSliceCount, s_UnboundedOptionCount);
+    auto cubeOption = app.addTexts(s_CubeOptionName, cube, "Six cubemap faces: +X -X +Y -Y +Z -Z");
+    cubeOption.expected(cast<i32>(s_TextureCubeFaceCount));
+    auto volumeOption = app.addTexts(s_VolumeOptionName, volume, "Ordered volume Z slices: z0 z1 ... zN");
+    volumeOption.expectedRange(s_MinVolumeSliceCount, s_UnboundedOptionCount);
     app.addText(s_OutputOptionName, output, "Output base name or .nwb filename");
     const auto alphaOption = app.addText(s_AlphaOptionName, alphaText, "Alpha source: mask image red channel, white, or black");
     app.addFlag(s_LinearFlagName, linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");

@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/assets/cook_workspace.adhd>
+#include <pipeline/cook_workspace.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/bunch/dependency_workspace.h>"), cpp_name("::NWB::Core::Assets::CookDependencyAccess"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/dependency_computer/dependency_workspace.h>"), cpp_name("::NWB::Pipeline::CookDependencyAccess"), cpp_flags(no_copy, no_assign)]
 extern class CookDependencyAccess{
     CookDependencyRegistry registry;
     b8 registerTypes();
@@ -19,11 +19,11 @@ extern class CookDependencyAccess{
     b8 extract(in DiscoveredNwbFile file, in Name type, in Name path, in MetascriptValue asset, in Optional<in MetascriptDocument> document, in Func<64u, b8(in Name, in Name)> visit)const;
 };
 
-[cpp_header("<core/assets/bunch/dependency_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::HasAssetBunchDeclaration")]
+[cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::HasAssetBunchDeclaration")]
 extern Expected<b8, NameTextError> HasAssetBunchDeclaration(in MetascriptDocument document);
-[cpp_header("<core/assets/bunch/dependency_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::HasCompositeAssetDeclarations")]
+[cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::HasCompositeAssetDeclarations")]
 extern Expected<b8, NameTextError> HasCompositeAssetDeclarations(in MetascriptDocument document);
-[cpp_header("<core/assets/bunch/dependency_workspace.h>"), cpp_name("::NWB::Core::Assets::EncodeCookInputPaths"), cpp_flags(scratch_arena)]
+[cpp_header("<pipeline/dependency_computer/dependency_workspace.h>"), cpp_name("::NWB::Pipeline::EncodeCookInputPaths"), cpp_flags(scratch_arena)]
 extern Expected<String> EncodeCookInputPaths(in Vector<String> inputs);
 
 

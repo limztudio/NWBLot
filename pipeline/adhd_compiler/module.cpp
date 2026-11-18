@@ -44,6 +44,7 @@ int RunPipelineTool(const int argc, char** argv){
         compileOptions.includeDirectories = options.includeDirectories;
         compileOptions.cppHeaders = options.cppHeaders;
         compileOptions.cppIncludeDirectories = options.cppIncludeDirectories;
+        compileOptions.macroDefinitions = options.macroDefinitions;
         compileOptions.cppDefines = options.cppDefines;
         compileOptions.cppCompilerArgs = options.cppCompilerArgs;
         compileOptions.outputDirectory = options.outputPath;

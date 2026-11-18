@@ -2,19 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ConsoleArguments")]
-extern class ConsoleArguments;
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ConsoleArguments")]
+extern class ConsoleArguments{
+    i32 count;
+    StringView text(in i32 index)const;
+};
 
-[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::TryConsoleCommand")]
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::TryConsoleCommand")]
 extern Expected<i32> TryConsoleCommand(in ConsoleArguments arguments, in Func<64u, i32(in ConsoleArguments)> command);
 
-[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ConsoleWrite")]
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ConsoleWrite")]
 extern void ConsoleWrite(in StringView text);
 
-[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ConsoleReadLine")]
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ConsoleWriteError")]
+extern void ConsoleWriteError(in StringView text);
+
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ConsoleReadLine")]
 extern b8 ConsoleReadLine(mut String line);
 
-[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ToolCliOption")]
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ToolCliOption")]
 extern class ToolCliOption{
     void required();
     void expected(in i32 count);
@@ -22,7 +28,7 @@ extern class ToolCliOption{
     usize count()const;
 };
 
-[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ToolCliParseResult")]
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ToolCliParseResult")]
 extern class ToolCliParseResult{
     b8 ok()const;
     b8 helpRequested()const;
@@ -31,7 +37,7 @@ extern class ToolCliParseResult{
     i32 exitLogged()const;
 };
 
-[cpp_header("<core/common/cli/tool_cli.h>"), cpp_name("::NWB::Core::Common::ToolCli"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ToolCli"), cpp_flags(no_copy, no_assign)]
 extern class ToolCli{
     void setHelpFlag(in StringView names, in StringView description);
     ToolCliOption addText(in StringView names, mut String value, in StringView description);

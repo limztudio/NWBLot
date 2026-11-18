@@ -1,5 +1,0 @@
-nwb_declare_interface_library(nwb_freetype)
-target_link_libraries(nwb_freetype INTERFACE nwb_alloc nwb::freetype)
-
-nwb_declare_interface_library(nwb_harfbuzz)
-target_link_libraries(nwb_harfbuzz INTERFACE nwb_alloc nwb::harfbuzz)

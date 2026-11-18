@@ -4,16 +4,17 @@
 
 #pragma once
 
-#include "asset_file_discovery.h"
-#include "cook_input_selection.h"
-#include "cook_paths.h"
+#include <core/assets/asset_file_discovery.h>
+#include <core/assets/cook_input_selection.h>
+#include <core/assets/cook_paths.h>
 #include <core/alloc/adhd_arena.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_BEGIN
+NWB_BEGIN
+namespace Pipeline{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,13 +24,13 @@ class AssetCookWorkspace final : NoCopy{
 public:
     explicit AssetCookWorkspace(const Name scope) : arena(scope), scratch(scope){}
 
-    AssetArena arena;
-    ScratchArena scratch;
+    Core::Assets::AssetArena arena;
+    Core::Assets::ScratchArena scratch;
 };
 
 template<typename Inputs>
-[[nodiscard]] inline AssetVector<AssetString> CopyCookInputStrings(AssetArena& arena, const Inputs& inputs){
-    AssetVector<AssetString> result(arena);
+[[nodiscard]] inline Core::Assets::AssetVector<Core::Assets::AssetString> CopyCookInputStrings(Core::Assets::AssetArena& arena, const Inputs& inputs){
+    Core::Assets::AssetVector<Core::Assets::AssetString> result(arena);
     result.reserve(inputs.size());
     for(const auto& input : inputs)
         result.emplace_back(AStringView(input), arena);
@@ -37,13 +38,13 @@ template<typename Inputs>
 }
 
 template<typename Root, typename A, typename Inputs, typename OnError>
-[[nodiscard]] inline Expected<Vector<Root, ::ArenaBase>> ResolveCookRootEntries(::ArenaBase& output, const ::Path<A>& repo, const Inputs& inputs, const b8 infer, const AssetRootDuplicatePolicy::Enum policy, OnError&& onError){
-    AssetArena arena(output.allocationLog());
-    ScratchArena scratch(output.allocationLog());
+[[nodiscard]] inline Expected<Vector<Root, ::ArenaBase>> ResolveCookRootEntries(::ArenaBase& output, const ::Path<A>& repo, const Inputs& inputs, const b8 infer, const Core::Assets::AssetRootDuplicatePolicy::Enum policy, OnError&& onError){
+    Core::Assets::AssetArena arena(output.allocationLog());
+    Core::Assets::ScratchArena scratch(output.allocationLog());
     const auto text = CopyCookInputStrings(arena, inputs);
-    const auto resolved = ResolveAssetRoots(Path(arena, repo), text, infer, policy, scratch);
+    const auto resolved = Core::Assets::ResolveAssetRoots(Path(arena, repo), text, infer, policy, scratch);
     if(!resolved){
-        onError(AStringView(text[resolved.error().sourceIndex]), resolved.error().reason == AssetRootResolutionFailure::InspectInput);
+        onError(AStringView(text[resolved.error().sourceIndex]), resolved.error().reason == Core::Assets::AssetRootResolutionFailure::InspectInput);
         return MakeUnexpected(Failure{});
     }
     Vector<Root, ::ArenaBase> result(output);
@@ -73,7 +74,7 @@ public:
     }
 
     [[nodiscard]] b8 discover(const AStringView extension){
-        auto result = AssetFileDiscovery::Discover(paths.assetRoots, extension, m_workspace.arena, m_workspace.scratch);
+        auto result = Core::Assets::AssetFileDiscovery::Discover(paths.assetRoots, extension, m_workspace.arena, m_workspace.scratch);
         if(!result)
             return false;
         files = Move(*result);
@@ -82,7 +83,7 @@ public:
 
     template<typename Inputs, typename Bytes, typename Order, typename OnError>
     [[nodiscard]] b8 select(const Inputs& inputs, Bytes& selected, Order& sequence, OnError&& onError)const{
-        Vector<usize, ScratchArena> order(m_workspace.scratch);
+        Vector<usize, Core::Assets::ScratchArena> order(m_workspace.scratch);
         if(!selectInputs(inputs, selected, &order, onError))
             return false;
         sequence.assign(order.begin(), order.end());
@@ -98,13 +99,13 @@ public:
         paths = Move(source.paths);
         files = Move(source.files);
     }
-    void compact(const Span<const u8> selected){ CookInputSelector::Compact(selected, files); }
+    void compact(const Span<const u8> selected){ Core::Assets::CookInputSelector::Compact(selected, files); }
 
 private:
     template<typename Inputs, typename OnError>
-    [[nodiscard]] b8 selectInputs(const Inputs& inputs, const Span<u8> selected, Vector<usize, ScratchArena>* const order, OnError& onError)const{
+    [[nodiscard]] b8 selectInputs(const Inputs& inputs, const Span<u8> selected, Vector<usize, Core::Assets::ScratchArena>* const order, OnError& onError)const{
         const auto text = CopyCookInputStrings(m_workspace.arena, inputs);
-        const auto result = CookInputSelector::Select(paths.repoRoot, paths.assetRoots, files, text, true, m_workspace.scratch, selected, order);
+        const auto result = Core::Assets::CookInputSelector::Select(paths.repoRoot, paths.assetRoots, files, text, true, m_workspace.scratch, selected, order);
         if(!result)
             onError(result.error());
         return result.has_value();
@@ -112,15 +113,16 @@ private:
 
     AssetCookWorkspace& m_workspace;
 public:
-    ResolvedCookPaths paths;
-    DiscoveredNwbFileVector files;
+    Core::Assets::ResolvedCookPaths paths;
+    Core::Assets::DiscoveredNwbFileVector files;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+};
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

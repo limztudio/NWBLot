@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_font/asset.adhd>
+#include <impl/assets_font/freetype_sdk.adhd>
 #include <impl/assets_font/font_binary_codec.adhd>
 
 
@@ -23,6 +24,43 @@ b8 Font::loadBinary(in Span<u8> binary){
 
 b8 Font::validatePayload()const{
     return this.checkVirtualPath("Font::validatePayload") && ValidateFontSource(this.m_fontBytes, this.m_faceIndex);
+}
+
+
+b8 FontSourceValidator::validate(in Span<u8> bytes, in u32 faceIndex)const{
+    if(!ValidateFontSourceDirectory(bytes, faceIndex))
+        return false;
+
+    FreeTypeLibrary validator();
+    const i32 libraryError = validator.createLibrary();
+    if(libraryError != 0){
+        ReportNativeFontFailure(MakeNativeFontFailure(s_FontOpFtNewLibrary, libraryError));
+        return false;
+    }
+    validator.addDefaultModules();
+
+    Expected<void, NativeFontFailure> validation = Expected<void, NativeFontFailure>();
+    Func<64u, void(mut FreeTypeFaceView)> inspect = lambda[mut validation](mut FreeTypeFaceView face) -> void{
+        if(!IsAdmittedStaticScalableFontFace(face.faceCount(), face.glyphCount(), face.unitsPerEm(), face.isSfnt(), face.isScalable(), face.hasMultipleMasters())){
+            validation = MakeUnexpected(MakeNativeFontPolicyFailure(s_FontOpAdmitStaticScalableFace));
+            return;
+        }
+        const i32 charmapError = face.selectUnicodeCharmap();
+        if(charmapError != 0)
+            validation = MakeUnexpected(MakeNativeFontFailure(s_FontOpFtSelectCharmap, charmapError));
+    };
+    const FreeTypeFaceVisitResult visit = validator.visitMemoryFace(bytes, 0, inspect);
+    if(visit.openError != 0)
+        validation = MakeUnexpected(MakeNativeFontFailure(s_FontOpFtNewMemoryFace, visit.openError));
+
+    const i32 cleanupError = validator.closeLibrary();
+    ReportFontCleanupFailure(s_FontOpFtDoneFace, visit.closeError);
+    ReportFontCleanupFailure(s_FontOpFtDoneLibrary, cleanupError);
+    if(!validation.has_value()){
+        ReportNativeFontFailure(validation.error());
+        return false;
+    }
+    return true;
 }
 
 

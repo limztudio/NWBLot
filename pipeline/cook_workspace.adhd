@@ -2,20 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetCookWorkspace"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::AssetCookWorkspace"), cpp_flags(no_copy, no_assign)]
 extern class AssetCookWorkspace;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::AssetRootDuplicatePolicy::Enum")]
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::AssetRootDuplicatePolicy::Enum")]
 extern enum AssetRootDuplicatePolicy : u8{
     ExactText,
     HostFilesystem
 };
 
-[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookInputSelectionFailure::Enum")]
+[cpp_header("<core/assets/cook_input_selection.h>"), cpp_name("::NWB::Core::Assets::CookInputSelectionFailure::Enum")]
 extern enum CookInputSelectionFailure : u8{
     None,
     ResolveInput,
@@ -24,17 +24,17 @@ extern enum CookInputSelectionFailure : u8{
     NoMatchingAsset
 };
 
-[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookInputSelectionError")]
+[cpp_header("<core/assets/cook_input_selection.h>"), cpp_name("::NWB::Core::Assets::CookInputSelectionError")]
 extern class CookInputSelectionError{
     StringView rawInput;
     Path resolvedPath;
     CookInputSelectionFailure reason;
 };
 
-[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::ResolveCookRootEntries"), cpp_flags(scratch_arena)]
+[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::ResolveCookRootEntries"), cpp_flags(scratch_arena)]
 extern Expected<Vector<T>> ResolveCookRootEntries<T>(in Path repo, in Vector<String> inputs, in b8 infer, in AssetRootDuplicatePolicy policy, in Func<64u, void(in StringView, in b8)> onError);
 
-[cpp_header("<core/assets/cook_workspace.h>"), cpp_name("::NWB::Core::Assets::CookFileCatalog"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::CookFileCatalog"), cpp_flags(no_copy, no_assign)]
 extern class CookFileCatalog{
     CookResolvedPaths paths;
     Vector<DiscoveredNwbFile> files;

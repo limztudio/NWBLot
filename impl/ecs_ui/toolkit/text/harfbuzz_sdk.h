@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include "file_bytes.h"
-
 #include <global/containers.h>
 #include <global/expected.h>
 #include <global/span.h>
@@ -18,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_BEGIN
+namespace NWB::UiFontSdk{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,11 +40,9 @@ public:
 
 
 public:
-    [[nodiscard]] b8 open(const FontFileBytes& source, const u32 faceIndex)noexcept{
+    [[nodiscard]] b8 open(const Span<const u8> bytes, const u32 faceIndex)noexcept{
         if(valid())
             return false;
-        m_source = source;
-        const Span<const u8> bytes = m_source.bytes();
         if(bytes.size() > Limit<u32>::s_Max)
             return false;
         hb_blob_t* blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
@@ -70,6 +66,17 @@ public:
         return size;
     }
 
+    [[nodiscard]] b8 copyTable(const u32 tag, const ::Span<u8> destination)const noexcept{
+        hb_blob_t* blob = hb_face_reference_table(hb_font_get_face(m_font), tag);
+        u32 size = 0u;
+        const char* data = hb_blob_get_data(blob, &size);
+        const b8 fits = size == destination.size();
+        if(fits && size != 0u)
+            FOUNDATION_MEMCPY(destination.data(), destination.size(), data, size);
+        hb_blob_destroy(blob);
+        return fits;
+    }
+
     void setOpenTypeFunctions()noexcept{ hb_ot_font_set_funcs(m_font); }
     void setScale(const i32 x, const i32 y)noexcept{ hb_font_set_scale(m_font, x, y); }
     [[nodiscard]] b8 horizontalExtents(hb_font_extents_t& extents)const noexcept{ return hb_font_get_h_extents(m_font, &extents); }
@@ -77,7 +84,6 @@ public:
 
 
 private:
-    FontFileBytes m_source;
     hb_font_t* m_font = hb_font_get_empty();
 };
 
@@ -133,7 +139,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_END
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

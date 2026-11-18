@@ -53,6 +53,7 @@ inline constexpr AStringView s_PipelineNamespaceOption = "--namespace";
 inline constexpr AStringView s_PipelineNamespaceMapOption = "--namespace-map";
 inline constexpr AStringView s_PipelineCppHeaderOption = "--cpp-header";
 inline constexpr AStringView s_PipelineCppIncludeDirOption = "--cpp-include-dir";
+inline constexpr AStringView s_PipelineDefineOption = "-D,--define";
 inline constexpr AStringView s_PipelineCppDefineOption = "--cpp-define";
 inline constexpr AStringView s_PipelineCppArgOption = "--cpp-arg";
 inline constexpr AStringView s_PipelineEmitCppExternsOption = "--emit-cpp-externs";
@@ -63,6 +64,7 @@ struct PipelineOptions{
     Core::Assets::AssetVector<Core::Assets::AssetString> includeDirectories;
     Core::Assets::AssetVector<Core::Assets::AssetString> cppHeaders;
     Core::Assets::AssetVector<Core::Assets::AssetString> cppIncludeDirectories;
+    Core::Assets::AssetVector<Core::Assets::AssetString> macroDefinitions;
     Core::Assets::AssetVector<Core::Assets::AssetString> cppDefines;
     Core::Assets::AssetVector<Core::Assets::AssetString> cppCompilerArgs;
     Core::Assets::AssetString outputPath;
@@ -78,6 +80,7 @@ public:
         , includeDirectories(arena)
         , cppHeaders(arena)
         , cppIncludeDirectories(arena)
+        , macroDefinitions(arena)
         , cppDefines(arena)
         , cppCompilerArgs(arena)
         , outputPath(arena)
@@ -115,6 +118,7 @@ private:
     InteropVector<AInteropString> m_includeDirectories;
     InteropVector<AInteropString> m_cppHeaders;
     InteropVector<AInteropString> m_cppIncludeDirectories;
+    InteropVector<AInteropString> m_macroDefinitions;
     InteropVector<AInteropString> m_cppDefines;
     InteropVector<AInteropString> m_cppCompilerArgs;
     AInteropString m_inputList;

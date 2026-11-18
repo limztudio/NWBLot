@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_ui/toolkit/text/baked_atlas.adhd>
+#include <impl/ecs_ui/toolkit/text/freetype_sdk.adhd>
+#include <impl/ecs_ui/toolkit/text/harfbuzz_sdk.adhd>
 #include <impl/ecs_ui/toolkit/text/shaper_types.adhd>
 #include <impl/ecs_ui/toolkit/text/types.adhd>
 
@@ -91,7 +93,7 @@ GlyphCoverageBounds MeasureFontOutlineCoverage(mut FreeTypeFaceView face, in b8 
         return GlyphCoverageBounds();
     if(face.outlinePointCount() == 0)
         return GlyphCoverageBounds(Rect(), true);
-    const FreeTypeOutlineBox box = face.outlineControlBox();
+    const FreeTypeOutlineBox box = OutlineControlBox(face);
     return ComputeOutlineCoverageBounds(box.xMin, box.yMin, box.xMax, box.yMax, fontSize, face.unitsPerEm());
 }
 
@@ -153,7 +155,7 @@ b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize,
 
 
 [cpp_unwind]
-b8 OpenUiFontFace(mut FreeTypeFace face, in FontFileBytes bytes, in u32 index){
+b8 OpenUiFontFace(mut UiFreeTypeFace face, in Span<u8> bytes, in u32 index){
     if(face.createLibrary() != 0){
         error("UI FreeType initialization failed");
         return false;
@@ -294,10 +296,13 @@ type SharedFontFace = Shared<FontFace>;
 type PlacedGlyph = PlacedGlyphRecord<SharedFontFace>;
 
 // Shaping and rasterization mutate the native font handles on their owning UI thread.
+[ordered]
 class FontFace : NoCopy{
     private AssetRef<Font> m_identity = AssetRef<Font>();
     private u64 m_generation = 0u;
-    private FreeTypeFace m_freeType = FreeTypeFace();
+    // The native faces borrow these bytes for their full lifetime.
+    private Vector<u8> m_sourceBytes;
+    private UiFreeTypeFace m_freeType = UiFreeTypeFace();
     private HarfBuzzFont m_hbFont = HarfBuzzFont();
     private HarfBuzzBuffer m_shapeBuffer = HarfBuzzBuffer();
     private SharedBakedFontAtlas m_bakedAtlas = SharedBakedFontAtlas();
@@ -314,7 +319,8 @@ class FontFace : NoCopy{
         this.m_started = true;
         this.m_identity = source.identity;
         this.m_generation = source.generation;
-        const FontFileBytes bytes(pool, Span<u8>(source.font.fontBytes()));
+        this.m_sourceBytes = source.font.fontBytes();
+        const Span<u8> bytes = this.m_sourceBytes;
         const u32 index = source.font.faceIndex();
         if(!OpenUiFontFace(this.m_freeType, bytes, index))
             return;
@@ -326,7 +332,7 @@ class FontFace : NoCopy{
             return;
         }
         this.m_hbFont.setOpenTypeFunctions();
-        this.m_allowOutlineBounds = !this.m_freeType.view().isTricky();
+        this.m_allowOutlineBounds = !IsTrickyFace(this.m_freeType.view());
         this.m_coverageInkReliable = HasReliableFontCoverage(this.m_hbFont, this.m_allowOutlineBounds);
         if(source.atlas.has_value())
             this.installBakedAtlas(pool, source.font, source.atlas.value());

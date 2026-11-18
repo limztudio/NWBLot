@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/common/global.h>
+#include <engine_namespace.h>
 #include <global/containers.h>
 #include <global/expected.h>
 #include <global/inplace_function.h>
@@ -15,7 +15,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_COMMON_BEGIN
+NWB_BEGIN
+namespace Utilities{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,10 +25,17 @@ NWB_COMMON_BEGIN
 struct ConsoleArguments{
     i32 count;
     char** values;
+
+    [[nodiscard]] AStringView text(const i32 index)const noexcept{
+        if(index < 0 || index >= count || !values[index])
+            return {};
+        return values[index];
+    }
 };
 
 [[nodiscard]] Expected<i32> TryConsoleCommand(const ConsoleArguments& arguments, const InplaceFunction<64u, i32(const ConsoleArguments&)>& command)noexcept;
 void ConsoleWrite(AStringView text);
+void ConsoleWriteError(AStringView text);
 b8 ConsoleReadLine(AString<::ArenaBase>& line);
 
 class ToolCliOption{
@@ -87,7 +95,8 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_COMMON_END
+};
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

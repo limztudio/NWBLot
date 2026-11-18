@@ -47,7 +47,6 @@ if(NWB_BUILD_PIPELINE)
     )
 
     nwb_declare_static_library(nwb_assets_shader_cook)
-    target_sources(nwb_assets_shader_cook PRIVATE "${PROJECT_SOURCE_DIR}/core/graphics/slang_toolchain.cpp")
     nwb_target_adhd_sources(nwb_assets_shader_cook
         NAMESPACE "NWB::Impl"
         SOURCES
@@ -56,7 +55,8 @@ if(NWB_BUILD_PIPELINE)
     )
     unset(_nwb_assets_shader_cook_adhd_sources)
     target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_assets_cook nwb_assets_shader_types nwb_metascript PRIVATE nwb_shader_bytecode)
-    target_compile_definitions(nwb_assets_shader_cook PRIVATE NWB_COOK=1 NWB_SLANGC_EXECUTABLE="${NWB_SLANGC_EXECUTABLE}")
+    target_compile_definitions(nwb_assets_shader_cook PRIVATE NWB_COOK=1)
+    nwb_target_adhd_definitions(nwb_assets_shader_cook "NWB_SLANGC_EXECUTABLE=\"${NWB_SLANGC_EXECUTABLE}\"")
 endif()
 unset(_nwb_assets_shader_type_adhd_sources)
 unset(_nwb_assets_shader_runtime_only_adhd_sources)

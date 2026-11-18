@@ -5,6 +5,8 @@ nwb_target_adhd_sources(nwb_ui_text
         "${CMAKE_CURRENT_LIST_DIR}/atlas.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/baked_atlas.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/font.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/freetype_sdk.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/harfbuzz_sdk.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/glyph_page.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/layout.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/sdf_page.adhd"
@@ -15,4 +17,4 @@ nwb_target_adhd_sources(nwb_ui_text
     NAMESPACE "NWB::Impl::Ui::TextGlyphVisibility"
     SOURCES "${CMAKE_CURRENT_LIST_DIR}/glyph_visibility.adhd"
 )
-target_link_libraries(nwb_ui_text PUBLIC nwb_ui nwb_assets_font_atlas nwb_freetype nwb_harfbuzz)
+target_link_libraries(nwb_ui_text PUBLIC nwb_ui nwb_assets_font_atlas nwb_assets_font_freetype nwb::harfbuzz)

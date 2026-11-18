@@ -16,7 +16,7 @@ nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests::Smoke" SOUR
     "${CMAKE_CURRENT_LIST_DIR}/common/frame_graph_snapshot_validation.adhd"
 )
 nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::UiWidgetTests" SOURCES "${CMAKE_CURRENT_LIST_DIR}/unit/ui/arithmetic_fixture_rows.adhd")
-target_link_libraries(nwb_test_common_names PUBLIC nwb::gtest nwb_common nwb_alloc nwb_freetype PRIVATE nwb_assets_font_types)
+target_link_libraries(nwb_test_common_names PUBLIC nwb::gtest nwb_common nwb_alloc PRIVATE nwb_assets_font_types)
 
 # Use the engine entry point so all GoogleTest suites share runtime initialization.
 function(nwb_declare_gtest_executable target)

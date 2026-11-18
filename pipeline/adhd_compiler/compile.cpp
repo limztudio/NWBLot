@@ -471,6 +471,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         compileOpts.customNamespace = customNs;
         compileOpts.cppHeaders = options.cppHeaders;
         compileOpts.cppIncludeDirectories = cppIncludeDirs;
+        compileOpts.macroDefinitions = options.macroDefinitions;
         compileOpts.cppDefines = options.cppDefines;
         compileOpts.cppCompilerArgs = options.cppCompilerArgs;
         if(!options.emitCppExternsPath.empty())

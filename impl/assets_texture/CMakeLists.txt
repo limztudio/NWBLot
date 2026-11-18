@@ -18,14 +18,17 @@ nwb_target_adhd_sources(nwb_assets_texture
 target_link_libraries(nwb_assets_texture PUBLIC nwb_assets nwb_assets_texture_types)
 
 nwb_declare_static_library(nwb_assets_texture_loader)
+target_sources(nwb_assets_texture_loader PRIVATE "${CMAKE_CURRENT_LIST_DIR}/basis_transcoder.cpp")
 nwb_target_adhd_sources(nwb_assets_texture_loader
     NAMESPACE "NWB::Impl"
     SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/basis_transcode_types.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/basis_transcoder.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/loader.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/texture_mip_decoder.adhd"
 )
 target_link_libraries(nwb_assets_texture_loader PUBLIC nwb_assets nwb_assets_texture nwb_assets_texture_types nwb_graphics)
-target_link_libraries(nwb_assets_texture_loader PRIVATE nwb_basis_transcoder)
+target_link_libraries(nwb_assets_texture_loader PRIVATE nwb::basis_universal)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_texture_cook)

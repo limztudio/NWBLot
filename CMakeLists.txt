@@ -58,6 +58,10 @@ if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_LOADER)
     add_subdirectory(loader)
 endif()
 
+if(NWB_BUILD_PIPELINE OR NWB_BUILD_UTILITIES OR NWB_BUILD_TESTS)
+    add_subdirectory(utilities/cli)
+endif()
+
 if(NWB_BUILD_PIPELINE)
     if(NOT TARGET nwb_assets_volume_cook)
         message(FATAL_ERROR "NWB_BUILD_PIPELINE requires asset build targets to be configured.")

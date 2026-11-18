@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <utilities/cli/tool_cli.adhd>
 #include <utilities/font_builder/bake.adhd>
 #include <utilities/font_builder/command_line.adhd>
 
@@ -16,8 +17,10 @@ i32 RunConsole(in ConsoleArguments arguments){
     String renderer(s_FontAtlasRasterModeBitmap);
     BakeOptions options;
     ToolCli app(s_FontBuilderAppDescription);
-    app.addText(s_FontOptionFlag, source, "Static source .ttf/.otf or prepared .font").required();
-    app.addText(s_OutputOptionFlag, output, "Output .nwb asset bunch; paired binary .font shares its stem").required();
+    auto sourceOption = app.addText(s_FontOptionFlag, source, "Static source .ttf/.otf or prepared .font");
+    sourceOption.required();
+    auto outputOption = app.addText(s_OutputOptionFlag, output, "Output .nwb asset bunch; paired binary .font shares its stem");
+    outputOption.required();
     app.addU32(s_PpemOptionFlag, options.ppem, "Bake pixels per em (16..256, default64)");
     app.addU32(s_SpreadOptionFlag, options.spread, "SDF distance range (2..32, default8)");
     app.addU32(s_ExtentOptionFlag, options.extent, "Maximum square packing extent; final groups are cropped (32..2048, default1024)");

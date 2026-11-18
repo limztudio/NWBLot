@@ -37,43 +37,16 @@ class Font{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateFontSource(in Vector<u8> bytes, in u32 faceIndex){
-    if(!ValidateFontSourceDirectory(bytes, faceIndex))
-        return false;
-
-    FreeTypeFace validator(bytes);
-    const i32 libraryError = validator.createLibrary();
-    if(libraryError != 0){
-        ReportNativeFontFailure(MakeNativeFontFailure(s_FontOpFtNewLibrary, libraryError));
-        return false;
-    }
-    validator.addDefaultModules();
-
-    Expected<void, NativeFontFailure> validation = Expected<void, NativeFontFailure>();
-    Func<64u, void(mut FreeTypeFaceView)> inspect = lambda[mut validation](mut FreeTypeFaceView face) -> void{
-        if(!IsAdmittedStaticScalableFontFace(face.faceCount(), face.glyphCount(), face.unitsPerEm(), face.isSfnt(), face.isScalable(), face.hasMultipleMasters())){
-            validation = MakeUnexpected(MakeNativeFontPolicyFailure(s_FontOpAdmitStaticScalableFace));
-            return;
-        }
-        const i32 charmapError = face.selectUnicodeCharmap();
-        if(charmapError != 0)
-            validation = MakeUnexpected(MakeNativeFontFailure(s_FontOpFtSelectCharmap, charmapError));
-    };
-    const FreeTypeFaceVisitResult visit = validator.visitMemoryFace(bytes, 0, inspect);
-    if(visit.openError != 0)
-        validation = MakeUnexpected(MakeNativeFontFailure(s_FontOpFtNewMemoryFace, visit.openError));
-
-    const i32 cleanupError = validator.closeLibrary();
-    ReportFontCleanupFailure(s_FontOpFtDoneFace, visit.closeError);
-    ReportFontCleanupFailure(s_FontOpFtDoneLibrary, cleanupError);
-    if(!validation.has_value()){
-        ReportNativeFontFailure(validation.error());
-        return false;
-    }
-    return true;
+[modular]
+class FontSourceValidator{
+    public b8 validate(in Span<u8> bytes, in u32 faceIndex)const;
 }
 
-b8 ValidateFontSource(in Vector<u8> bytes){
+b8 ValidateFontSource(in Span<u8> bytes, in u32 faceIndex){
+    return FontSourceValidator().validate(bytes, faceIndex);
+}
+
+b8 ValidateFontSource(in Span<u8> bytes){
     return ValidateFontSource(bytes, 0u);
 }
 

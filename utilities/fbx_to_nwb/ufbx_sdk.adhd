@@ -56,7 +56,7 @@ extern class UfbxSkinWeight{
     f64 weight;
 };
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Node"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Node"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class UfbxNode{
     b8 valid()const;
     usize identity()const;
@@ -66,14 +66,14 @@ extern class UfbxNode{
     in UfbxMatrix geometryToWorld()const;
 };
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Cluster"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Cluster"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class UfbxCluster{
     b8 valid()const;
     UfbxNode bone()const;
     in UfbxMatrix geometryToBone()const;
 };
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Skin"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Skin"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class UfbxSkin{
     b8 valid()const;
     usize clusterCount()const;
@@ -84,7 +84,7 @@ extern class UfbxSkin{
     UfbxSkinWeight weight(in usize index)const;
 };
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Mesh"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Mesh"), cpp_flags(self_defaulted, small_value, brace_init)]
 extern class UfbxMesh{
     b8 valid()const;
     StringView name()const;
@@ -152,35 +152,35 @@ extern enum UfbxGeometryTransformHandling : u32{
     UFBX_GEOMETRY_TRANSFORM_HANDLING_PRESERVE,
 };
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Document"), cpp_flags(self_defaulted, no_copy)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Document"), cpp_flags(self_defaulted, no_copy)]
 extern class UfbxDocument{
     b8 load(in StringView path, in UfbxLoadOptions options, mut UfbxError error);
     usize nodeCount()const;
     UfbxNode node(in usize index)const;
 };
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::NodeMesh")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::NodeMesh")]
 extern UfbxMesh UfbxNodeMesh(in UfbxNode node);
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::FormatError")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::FormatError")]
 extern void FormatUfbxError(in UfbxError error, mut Span<u8> buffer, mut String text);
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Invert")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Invert")]
 extern UfbxMatrix InvertUfbxMatrix(in UfbxMatrix matrix);
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Multiply")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Multiply")]
 extern UfbxMatrix MultiplyUfbxMatrices(in UfbxMatrix a, in UfbxMatrix b);
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::ForNormals")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::ForNormals")]
 extern UfbxMatrix UfbxNormalMatrix(in UfbxMatrix matrix);
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::Determinant")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Determinant")]
 extern f64 UfbxDeterminant(in UfbxMatrix matrix);
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::TransformPosition")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::TransformPosition")]
 extern UfbxVec3 UfbxTransformPosition(in UfbxMatrix matrix, in UfbxVec3 x);
 
-[cpp_header("<core/mesh/ufbx_sdk.h>"), cpp_name("::NWB::Core::Mesh::Ufbx::TransformDirection")]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::TransformDirection")]
 extern UfbxVec3 UfbxTransformDirection(in UfbxMatrix matrix, in UfbxVec3 x);
 
 

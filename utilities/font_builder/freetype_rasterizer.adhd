@@ -3,6 +3,7 @@
 
 
 #include <utilities/font_builder/sdf_raster.adhd>
+#include <utilities/font_builder/freetype_sdk.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,14 +23,14 @@ b8 AdmitBakeFontFace(mut FreeTypeFaceView face){
 }
 
 [cpp_unwind]
-b8 ConfigureBakeFontFace(in BakeOptions options, mut FreeTypeFace library, mut FreeTypeFaceView face, mut FontAtlasPayload payload){
+b8 ConfigureBakeFontFace(in BakeOptions options, mut FreeTypeLibrary library, mut FreeTypeFaceView face, mut FontAtlasPayload payload){
     if(!IsValidBakeFontFaceMetrics(face.glyphCount(), cast<u16>(face.unitsPerEm()))){
         error("font_builder: unsupported glyph count or units per em");
         return false;
     }
     const String module = ResolveBakeFreeTypeSdfModule(options.outline);
     const String property = "spread";
-    const i32 spreadError = library.setUnsignedProperty(module, property, options.spread);
+    const i32 spreadError = FreeTypeSetUnsignedProperty(library, module, property, options.spread);
     if(spreadError != 0){
         error("font_builder: FreeType rejected SDF spread, error {}", spreadError);
         return false;
@@ -53,9 +54,9 @@ b8 ConfigureBakeFontFace(in BakeOptions options, mut FreeTypeFace library, mut F
     payload.spreadPixels = options.spread;
     payload.guardTexels = 1u;
     payload.rasterMode = ResolveBakeFontAtlasRasterMode(options.outline);
-    payload.ascenderUnits = cast<f32>(face.ascender());
-    payload.descenderUnits = cast<f32>(face.descender());
-    payload.lineGapUnits = ComputeBakeFontLineGapUnits(face.height(), face.ascender(), face.descender());
+    payload.ascenderUnits = cast<f32>(FreeTypeAscender(face));
+    payload.descenderUnits = cast<f32>(FreeTypeDescender(face));
+    payload.lineGapUnits = ComputeBakeFontLineGapUnits(FreeTypeHeight(face), FreeTypeAscender(face), FreeTypeDescender(face));
     return true;
 }
 
@@ -75,7 +76,7 @@ b8 RasterizeBakeGlyphs(in BakeOptions options, mut FreeTypeFaceView face, mut Ra
             error("font_builder: design metrics failed for glyph {}, FreeType error {}", glyphId, loadError);
             return false;
         }
-        glyph.record.advanceUnits = cast<f32>(face.glyphAdvanceX());
+        glyph.record.advanceUnits = cast<f32>(FreeTypeGlyphAdvanceX(face));
         if(!face.hasOutline()){
             error("font_builder: glyph {} is not a supported scalable outline", glyphId);
             return false;
@@ -86,7 +87,7 @@ b8 RasterizeBakeGlyphs(in BakeOptions options, mut FreeTypeFaceView face, mut Ra
         if(result == 0 && !options.outline)
             result = face.renderNormal();
         if(result == 0)
-            result = face.renderSdf();
+            result = FreeTypeRenderSdf(face);
         if(result != 0){
             LogBakeSdfRenderFailure(options.outline, glyphId, result);
             return false;
@@ -120,7 +121,7 @@ b8 BakeFontRasterizer::rasterize(in BakeOptions options, in Span<u8> sourceBytes
         error("font_builder: source admission failed");
         return false;
     }
-    FreeTypeFace library(this.glyphs);
+    FreeTypeLibrary library();
     const i32 libraryError = library.createLibrary();
     if(libraryError != 0){
         ReportNativeFontFailure(MakeNativeFontFailure(s_FontOpFtNewLibrary, libraryError));

@@ -5,6 +5,11 @@
 [cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::Document"), cpp_flags(no_assign)]
 extern class MetascriptDocument{
     Span<MetascriptParseError> errors(...)const;
+    Optional<StringView> declarationType(in StringView name)const;
+    usize structCount()const;
+    usize declarationCount()const;
+    b8 forEachStruct(in Func<64u, b8(in StringView, in MetascriptValue)> visitor)const;
+    b8 forEachDeclaration(in Func<64u, b8(in StringView, in StringView)> visitor)const;
     b8 hasErrors(...)const;
     b8 hasVariable(...)const;
     b8 parse(...);

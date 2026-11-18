@@ -2,234 +2,148 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_snapshot_builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_visual_paint.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_snapshot_builder.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_visual_paint.adhd.h>
+[cpp_unwind]
+TextLayoutStatus AdoptEditBoxShapingResult<T>(mut EditBoxView view, mut forward T shaped){
+    mut Expected<TextLayout, TextLayoutStatus> result = shaped;
+    if(!result.has_value())
+        return result.error();
+    if(!view.adoptLayout(result.value()))
+        return TextLayoutStatus::FontFailure;
+    return TextLayoutStatus::Success;
+}
 
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
+// The view owns its display text and the font versions used by its hard lines.
+[move_only]
+class EditBoxView{
+    private String m_display;
+    private Vector<EditCaretMapping> m_mapping;
+    private EditCaretGeometry m_geometry;
+    private Rect m_visualBounds;
+    private EditBoxRange m_selection;
+    private EditBoxRange m_preedit;
+    private EditBoxRange m_replacement;
+    private usize m_caret = 0u;
+    private usize m_committedBytes = 0u;
+    private u64 m_revision = 0u;
+    private EditTextMode m_textMode = EditTextMode::SingleLine;
+    private b8 m_composing = false;
+    private b8 m_ready = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Owns this declaration's display bytes and immutable font versions; the edit model is borrowed only during snapshot().
-// Hard-line LTR geometry interpolates grapheme caret stops inside ligatures; it does not provide wrap or paragraph bidi.
-class EditBoxView final{
-public:
-    explicit EditBoxView(Core::Alloc::GlobalArena& arena)noexcept
-        : m_arena(&arena)
-        , m_display(arena)
-        , m_mapping(arena)
-        , m_geometry(arena)
-    {}
-    EditBoxView(EditBoxView&&)noexcept = default;
-    EditBoxView(const EditBoxView&) = delete;
-
-
-public:
-    EditBoxView& operator=(EditBoxView&&)noexcept = default;
-
-    EditBoxView& operator=(const EditBoxView&) = delete;
-
-
-public:
-    [[nodiscard]] b8 snapshot(const EditModel& model){
-        return EditBoxSnapshotBuilder{}.commit(
-            model.text(),
-            model.graphemeBoundaries(),
-            model.composition(),
-            model.textMode(),
-            model.selectionStart(),
-            model.selectionEnd(),
-            model.caret(),
-            model.revision(),
-            m_display,
-            m_mapping,
-            m_selection,
-            m_preedit,
-            m_replacement,
-            m_caret,
-            m_committedBytes,
-            m_revision,
-            m_textMode,
-            m_composing,
-            m_ready
+    [cpp_unwind]
+    public b8 snapshot(in EditModel model){
+        return EditBoxSnapshotBuilder().commit(
+            model.text(), model.graphemeBoundaries(), model.composition(), model.textMode(),
+            model.selectionStart(), model.selectionEnd(), model.caret(), model.revision(),
+            this.m_display, this.m_mapping, this.m_selection, this.m_preedit, this.m_replacement, this.m_caret,
+            this.m_committedBytes, this.m_revision, this.m_textMode, this.m_composing, this.m_ready
         );
     }
 
-    // request.text is supplied by the owned snapshot. Font size remains logical; TextService applies paint DPI.
-    [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {}){
-        const TextLayoutStatus::Enum validation = PrepareEditBoxShapeRequest(m_revision, displayText(), m_textMode, request);
+    [cpp_unwind]
+    public TextLayoutStatus shape(mut TextService text){ return this.shape(text, ShapeRequest()); }
+    [cpp_unwind]
+    public TextLayoutStatus shape(mut TextService text, in ShapeRequest options){
+        ShapeRequest request = options;
+        const TextLayoutStatus validation = PrepareEditBoxShapeRequest(this.m_revision, this.displayText(), this.m_textMode, request);
         if(validation != TextLayoutStatus::Success)
             return validation;
-        auto candidate = text.layout(request);
-        if(!candidate)
-            return candidate.error();
-        return adoptLayout(Move(*candidate)) ? TextLayoutStatus::Success : TextLayoutStatus::FontFailure;
+        return AdoptEditBoxShapingResult(this, text.layout(request));
     }
 
-    // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
-    [[nodiscard]] b8 adoptLayout(TextLayout&& layout){
-        if(m_revision == 0u)
+    [cpp_unwind]
+    public b8 adoptLayout(mut TextLayout layout){
+        if(this.m_revision == 0u)
             return false;
-        EditCaretGeometry candidate(*m_arena);
-        if(!candidate.adoptLayout(Move(layout), displayText(), m_mapping, m_committedBytes, m_textMode))
+        Array<usize, 3u> carets;
+        carets[0u] = this.m_caret;
+        carets[1u] = this.m_selection.begin;
+        carets[2u] = this.m_selection.end;
+        if(!this.m_geometry.adoptLayout(layout, this.displayText(), this.m_mapping, this.m_committedBytes, this.m_textMode, carets))
             return false;
-        if(!candidate.caretRect(m_caret) || !candidate.caretRect(m_selection.begin) || !candidate.caretRect(m_selection.end))
-            return false;
-        const Point logicalSize = candidate.layout().measure();
-        m_geometry = Move(candidate);
-        m_visualBounds = { 0.0f, 0.0f, logicalSize.x, logicalSize.y };
-        m_ready = true;
+        const Point logicalSize = this.m_geometry.layout().measure();
+        this.m_visualBounds = Rect(0.0f, 0.0f, logicalSize.x, logicalSize.y);
+        this.m_ready = true;
         return true;
     }
-    // Shape at display scale before arranging; measurement keeps line, caret, hit-test, composition coords.
-    [[nodiscard]] b8 measure(TextService& text, const DisplayMetrics& display){
-        return MeasureEditBoxViewVisual(m_ready, layout(), display, text, m_visualBounds);
-    }
-    [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
-        return TryArrangeEditBox(
-            m_ready,
-            bounds,
-            padding,
-            clip,
-            previousScroll,
-            caretWidth,
-            revealCaret,
-            m_textMode,
-            m_visualBounds,
-            layout().measure(),
-            m_geometry.layout().utf8(),
-            m_geometry.layout().lines(),
-            m_geometry.layout().clusters(),
-            m_geometry.boundaries(),
-            m_geometry.lines(),
-            m_caret,
-            m_selection,
-            m_preedit,
-            m_composing
-        );
-    }
-    // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.
-    [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
-        return TryArrangeEditBoxViewport(
-            m_ready,
-            bounds,
-            viewport,
-            clip,
-            previousScroll,
-            caretWidth,
-            revealCaret,
-            m_textMode,
-            m_visualBounds,
-            layout().measure(),
-            m_geometry.layout().utf8(),
-            m_geometry.layout().lines(),
-            m_geometry.layout().clusters(),
-            m_geometry.boundaries(),
-            m_geometry.lines(),
-            m_caret,
-            m_selection,
-            m_preedit,
-            m_composing
-        );
-    }
-    [[nodiscard]] Expected<usize> hitTest(const Point point, const EditBoxPlacement& placement)const noexcept{
-        return TryHitTestEditBoxView(m_ready, m_geometry.ready(), point, placement, m_geometry.lines(), m_geometry.caretStops());
+    [cpp_unwind]
+    public b8 measure(mut TextService text, in DisplayMetrics display){
+        return MeasureEditBoxViewVisual(this.m_ready, this.layout(), display, text, this.m_visualBounds);
     }
 
-    [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const{
-        if(!m_ready)
+    public Expected<EditBoxPlacement> arrange(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll)const{
+        return this.arrange(bounds, padding, clip, previousScroll, 1.0f, true);
+    }
+    public Expected<EditBoxPlacement> arrange(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll, in f32 caretWidth)const{
+        return this.arrange(bounds, padding, clip, previousScroll, caretWidth, true);
+    }
+    public Expected<EditBoxPlacement> arrange(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll, in f32 caretWidth, in b8 revealCaret)const{
+        return TryArrangeEditBox(
+            this.m_ready, bounds, padding, clip, previousScroll, caretWidth, revealCaret, this.m_textMode,
+            this.m_visualBounds, this.layout().measure(), this.layout().utf8(), this.layout().lines(), this.layout().clusters(),
+            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_caret, this.m_selection, this.m_preedit, this.m_composing
+        );
+    }
+
+    public Expected<EditBoxPlacement> arrangeViewport(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll)const{
+        return this.arrangeViewport(bounds, viewport, clip, previousScroll, 1.0f, true);
+    }
+    public Expected<EditBoxPlacement> arrangeViewport(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll, in f32 caretWidth)const{
+        return this.arrangeViewport(bounds, viewport, clip, previousScroll, caretWidth, true);
+    }
+    public Expected<EditBoxPlacement> arrangeViewport(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll, in f32 caretWidth, in b8 revealCaret)const{
+        return TryArrangeEditBoxViewport(
+            this.m_ready, bounds, viewport, clip, previousScroll, caretWidth, revealCaret, this.m_textMode,
+            this.m_visualBounds, this.layout().measure(), this.layout().utf8(), this.layout().lines(), this.layout().clusters(),
+            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_caret, this.m_selection, this.m_preedit, this.m_composing
+        );
+    }
+
+    public Expected<usize> hitTest(in Point point, in EditBoxPlacement placement)const{
+        return TryHitTestEditBoxView(this.m_ready, this.m_geometry.ready(), point, placement, this.m_geometry.lines(), this.m_geometry.caretStops());
+    }
+
+    [cpp_unwind]
+    public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement)const{
+        return this.paint(text, paint, skin, placement, EditBoxStyle(), EditBoxPaintFlags());
+    }
+    [cpp_unwind]
+    public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style)const{
+        return this.paint(text, paint, skin, placement, style, EditBoxPaintFlags());
+    }
+    [cpp_unwind]
+    public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style, in EditBoxPaintFlags flags)const{
+        if(!this.m_ready)
             return false;
         return PaintEditBoxViewVisual(
-            text,
-            paint,
-            skin,
-            layout(),
-            m_geometry.layout().utf8(),
-            m_geometry.layout().lines(),
-            m_geometry.layout().clusters(),
-            m_geometry.boundaries(),
-            m_geometry.lines(),
-            m_selection,
-            m_preedit,
-            m_composing,
-            placement,
-            style,
-            flags
+            text, paint, skin, this.layout(), this.layout().utf8(), this.layout().lines(), this.layout().clusters(),
+            this.m_geometry.boundaries(), this.m_geometry.lines(), this.m_selection, this.m_preedit, this.m_composing,
+            placement, style, flags
         );
     }
 
-    [[nodiscard]] StringView displayText()const noexcept{ return { m_display.data(), m_display.size() }; }
-
-    [[nodiscard]] const TextLayout& layout()const noexcept{ return m_geometry.layout(); }
-
-    [[nodiscard]] const Rect& visualBounds()const noexcept{ return m_visualBounds; }
-
-    [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const noexcept{ return m_geometry.caretStops(); }
-
-    [[nodiscard]] const EditCaretGeometry& caretGeometry()const noexcept{ return m_geometry; }
-
-    [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
-
-    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
-
-    [[nodiscard]] usize committedBytes()const noexcept{ return m_committedBytes; }
-
-    [[nodiscard]] usize displayCaret()const noexcept{ return m_caret; }
-
-    [[nodiscard]] EditBoxRange selectionRange()const noexcept{ return m_selection; }
-
-    [[nodiscard]] EditBoxRange preeditRange()const noexcept{ return m_preedit; }
-
-    [[nodiscard]] EditBoxRange replacementRange()const noexcept{ return m_replacement; }
-
-    [[nodiscard]] b8 composing()const noexcept{ return m_composing; }
-
-    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
-
-
-private:
-    NotNull<Core::Alloc::GlobalArena*> m_arena;
-    AString<Core::Alloc::GlobalArena> m_display;
-    PaintVector<EditCaretMapping> m_mapping;
-    EditCaretGeometry m_geometry;
-    Rect m_visualBounds;
-    EditBoxRange m_selection;
-    EditBoxRange m_preedit;
-    EditBoxRange m_replacement;
-    usize m_caret = 0u;
-    usize m_committedBytes = 0u;
-    u64 m_revision = 0u;
-    EditTextMode::Enum m_textMode = EditTextMode::SingleLine;
-    b8 m_composing = false;
-    b8 m_ready = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public StringView displayText()const{ return StringView(this.m_display); }
+    public in TextLayout layout()const{ return this.m_geometry.layout(); }
+    public in Rect visualBounds()const{ return this.m_visualBounds; }
+    public in Vector<EditBoxCaretStop> caretStops()const{ return this.m_geometry.caretStops(); }
+    public in EditCaretGeometry caretGeometry()const{ return this.m_geometry; }
+    public EditTextMode textMode()const{ return this.m_textMode; }
+    public u64 revision()const{ return this.m_revision; }
+    public usize committedBytes()const{ return this.m_committedBytes; }
+    public usize displayCaret()const{ return this.m_caret; }
+    public EditBoxRange selectionRange()const{ return this.m_selection; }
+    public EditBoxRange preeditRange()const{ return this.m_preedit; }
+    public EditBoxRange replacementRange()const{ return this.m_replacement; }
+    public b8 composing()const{ return this.m_composing; }
+    public b8 ready()const{ return this.m_ready; }
 }
 
 

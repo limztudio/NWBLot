@@ -2,59 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MeshSkinningGraphResourceUses{
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> deformation;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> postDispatch;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> localBounds;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> finalizer;
-
-
-public:
-    explicit MeshSkinningGraphResourceUses(Core::Alloc::ScratchArena& scratchArena)noexcept
-        : deformation(scratchArena)
-        , postDispatch(scratchArena)
-        , localBounds(scratchArena)
-        , finalizer(scratchArena)
-    {}
-};
-
-[[nodiscard]] Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
-    Span<const MeshSkinningGraphDispatchPlan> plans,
-    Core::Alloc::ScratchArena& scratchArena
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,6 +16,117 @@ enum<u8> SkinningGraphResourceUseError{
     FinalizerUsesFailed,
     MissingFinalState
 }
+
+class MeshSkinningGraphResourceUses{
+    public Vector<GpuTaskResourceUse> deformation;
+    public Vector<GpuTaskResourceUse> postDispatch;
+    public Vector<GpuTaskResourceUse> localBounds;
+    public Vector<GpuTaskResourceUse> finalizer;
+}
+
+class SkinningResourceKey{
+    public GpuGraphResourceId resource;
+
+    public SkinningResourceKey(in GpuGraphResourceId resourceId){
+        this.resource = resourceId;
+    }
+
+    public b8 operator==(in SkinningResourceKey other)const{
+        return this.resource == other.resource;
+    }
+
+    public usize hash()const{
+        return HashCombineValue(HashValue(this.resource.generation), this.resource.index);
+    }
+}
+
+class SkinningResourceUseInfo{
+    public usize outputIndex = 0u;
+    public ResourceStates requiredState = ResourceStates::Unknown;
+    public GpuTaskResourceAccess access = GpuTaskResourceAccess::Read;
+}
+
+class SkinningResourceUseEntry{
+    public GpuGraphResourceId resource = GpuGraphResourceId();
+    public SkinningResourceUseInfo useInfo;
+}
+
+type SkinningResourceUseIndex = HashMap<SkinningResourceKey, SkinningResourceUseInfo>;
+
+// Keep one plan on the stack. Index larger sets by the full resource identity.
+class SkinningResourceUseCollector<const usize Capacity>{
+    private Array<SkinningResourceUseEntry, Capacity> m_inline;
+    private Optional<SkinningResourceUseIndex> m_index;
+    private usize m_count = 0u;
+
+    public b8 empty()const{
+        return this.m_count == 0u;
+    }
+
+    public b8 add(in GpuGraphResourceId resource, in ResourceStates state, in GpuTaskResourceAccess access){
+        if(!resource.valid())
+            return false;
+        SkinningResourceUseInfo useInfo = SkinningResourceUseInfo();
+        useInfo.outputIndex = this.m_count;
+        useInfo.requiredState = state;
+        useInfo.access = access;
+
+        if(!this.m_index.has_value()){
+            for(usize index = 0u; index < this.m_count; ++index){
+                mut SkinningResourceUseEntry entry = this.m_inline[index];
+                if(entry.resource == resource)
+                    return MergeSkinningResourceUse(state, access, entry.useInfo);
+            }
+            if(this.m_count < Capacity){
+                this.m_inline[this.m_count].resource = resource;
+                this.m_inline[this.m_count].useInfo = useInfo;
+                ++this.m_count;
+                return true;
+            }
+
+            if(!this.promoteIndex())
+                return false;
+        }
+
+        auto inserted = this.m_index.value().try_emplace(SkinningResourceKey(resource), useInfo);
+        if(inserted.second){
+            ++this.m_count;
+            return true;
+        }
+        return MergeSkinningResourceUse(state, access, inserted.first.value());
+    }
+
+    public void writeTo(mut Vector<GpuTaskResourceUse> uses)const{
+        uses.resize(this.m_count);
+        if(this.m_index.has_value()){
+            in HashMap<SkinningResourceKey, SkinningResourceUseInfo> entries = this.m_index.value();
+            for(auto it = entries.begin(); it != entries.end(); ++it)
+                uses[it.value().outputIndex] = MakeSkinningResourceUse(it.key().resource, it.value());
+        }
+        else{
+            for(usize index = 0u; index < this.m_count; ++index){
+                in SkinningResourceUseEntry entry = this.m_inline[index];
+                uses[index] = MakeSkinningResourceUse(entry.resource, entry.useInfo);
+            }
+        }
+    }
+
+    private b8 promoteIndex(){
+        this.m_index = Optional<SkinningResourceUseIndex>(SkinningResourceUseIndex());
+        this.m_index.value().reserve(ComputePromotedSkinningResourceUseCapacity(Capacity, s_SkinningPromotedIndexCapacityFactor));
+        for(in SkinningResourceUseEntry entry : this.m_inline){
+            if(!this.m_index.value().try_emplace(SkinningResourceKey(entry.resource), entry.useInfo).second){
+                assert(false);
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 usize ComputePromotedSkinningResourceUseCapacity(in usize inlineCapacity, in usize factor){
     return inlineCapacity * factor;
@@ -100,238 +159,116 @@ void ReportSkinningGraphResourceUseError(in SkinningGraphResourceUseError err){
     }
 }
 
+b8 MergeSkinningResourceUse(in ResourceStates state, in GpuTaskResourceAccess access, mut SkinningResourceUseInfo useInfo){
+    if(useInfo.requiredState != state)
+        return false;
+    if(useInfo.access != access)
+        useInfo.access = GpuTaskResourceAccess::ReadWrite;
+    return true;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The result owns ordered uses built from immutable plans.
-namespace __hidden_skinning_graph_resource_uses{
+GpuTaskResourceUse MakeSkinningResourceUse(in GpuGraphResourceId resource, in SkinningResourceUseInfo useInfo){
+    GpuTaskResourceUse use = GpuTaskResourceUse();
+    use.resource = resource;
+    use.requiredState = useInfo.requiredState;
+    use.access = useInfo.access;
+    return use;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ResourceUseInfo{
-    usize outputIndex = 0u;
-    Core::ResourceStates::Mask requiredState = Core::ResourceStates::Unknown;
-    Core::GpuTaskResourceAccess::Enum access = Core::GpuTaskResourceAccess::Read;
-};
-
-struct ResourceUseEntry{
-    Core::GpuGraphResourceId resource;
-    ResourceUseInfo info;
-};
-
-// Inline storage covers one plan's roles; larger sets index unique identities only.
-template<usize InlineCapacity>
-class ResourceUseCollector final : NoCopy{
-private:
-    using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, Core::Alloc::ScratchArena, Core::GpuGraphResourceIdHasher, EqualTo<Core::GpuGraphResourceId>>;
-
-
-public:
-    [[nodiscard]] static b8 MergeUse(const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access, ResourceUseInfo& info)noexcept{
-        if(info.requiredState != state)
-            return false;
-        if(info.access != access)
-            info.access = Core::GpuTaskResourceAccess::ReadWrite;
-        return true;
-    }
-
-
-public:
-    explicit ResourceUseCollector(Core::Alloc::ScratchArena& scratchArena)noexcept
-        : m_scratchArena(scratchArena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 add(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
-        if(!resource.valid())
-            return false;
-        if(m_index)
-            return addIndexed(resource, state, access);
-        for(usize index = 0u; index < m_count; ++index){
-            ResourceUseEntry& entry = m_inline[index];
-            if(entry.resource == resource)
-                return MergeUse(state, access, entry.info);
-        }
-        if(m_count < InlineCapacity){
-            m_inline[m_count] = { resource, { m_count, state, access } };
-            ++m_count;
-            return true;
-        }
-
-        if(!promoteIndex())
-            return false;
-        return addIndexed(resource, state, access);
-    }
-
-    [[nodiscard]] b8 promoteIndex(){
-        FOUNDATION_ASSERT(!m_index && m_count == InlineCapacity);
-        Index index(ComputePromotedSkinningResourceUseCapacity(InlineCapacity, s_SkinningPromotedIndexCapacityFactor), Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
-        for(const ResourceUseEntry& entry : m_inline){
-            const auto [found, inserted] = index.emplace(entry.resource, entry.info);
-            if(!inserted){
-                FOUNDATION_ASSERT(false);
-                return false;
-            }
-        }
-        static_assert(IsNothrowMoveConstructible_V<Index>);
-        m_index.emplace(Move(index));
-        return true;
-    }
-
-    [[nodiscard]] b8 addIndexed(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
-        const auto [found, inserted] = m_index->try_emplace(resource, ResourceUseInfo{ m_count, state, access });
-        if(inserted){
-            ++m_count;
-            return true;
-        }
-        return MergeUse(state, access, found.value());
-    }
-
-    void writeTo(Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses)const{
-        outUses.resize(m_count);
-        const auto writeUse = [&](const Core::GpuGraphResourceId resource, const ResourceUseInfo& info)noexcept{
-            outUses[info.outputIndex] = Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = info.requiredState, .access = info.access };
-        };
-        if(m_index){
-            for(const auto& entry : *m_index)
-                writeUse(entry.first, entry.second);
-        }
-        else{
-            for(usize index = 0u; index < m_count; ++index)
-                writeUse(m_inline[index].resource, m_inline[index].info);
-        }
-    }
-
-
-public:
-    Core::Alloc::ScratchArena& m_scratchArena;
-    Array<ResourceUseEntry, InlineCapacity> m_inline{};
-    usize m_count = 0u;
-    Optional<Index> m_index;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
-    const Span<const MeshSkinningGraphDispatchPlan> plans,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    using namespace __hidden_skinning_graph_resource_uses;
-
-    MeshSkinningGraphResourceUses uses(scratchArena);
+Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Span<MeshSkinningGraphDispatchPlan> plans){
+    MeshSkinningGraphResourceUses uses = MeshSkinningGraphResourceUses();
     if(plans.empty())
         return uses;
     if(!plans.data()){
         ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::MissingPlans);
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     }
 
-    ResourceUseCollector<s_SkinningDeformationUseCapacity> deformation(scratchArena);
-    ResourceUseCollector<s_SkinningPostDispatchUseCapacity> postDispatch(scratchArena);
-    ResourceUseCollector<s_SkinningLocalBoundsUseCapacity> localBounds(scratchArena);
-    ResourceUseCollector<s_SkinningFinalizerUseCapacity> finalizer(scratchArena);
-    for(const MeshSkinningGraphDispatchPlan& plan : plans){
+    SkinningResourceUseCollector<s_SkinningDeformationUseCapacity> deformation = SkinningResourceUseCollector<s_SkinningDeformationUseCapacity>();
+    SkinningResourceUseCollector<s_SkinningPostDispatchUseCapacity> postDispatch = SkinningResourceUseCollector<s_SkinningPostDispatchUseCapacity>();
+    SkinningResourceUseCollector<s_SkinningLocalBoundsUseCapacity> localBounds = SkinningResourceUseCollector<s_SkinningLocalBoundsUseCapacity>();
+    SkinningResourceUseCollector<s_SkinningFinalizerUseCapacity> finalizer = SkinningResourceUseCollector<s_SkinningFinalizerUseCapacity>();
+    for(in MeshSkinningGraphDispatchPlan plan : plans){
         if(!plan.hasActiveSkin)
             continue;
         if(
-            !deformation.add(plan.bindlessResourceSlotsResource, Core::ResourceStates::ConstantBuffer, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.restPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.restNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.restTangentResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.skinnedPositionResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || !deformation.add(plan.skinnedNormalResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || !deformation.add(plan.skinnedTangentResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || !deformation.add(plan.meshletDescResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.meshletPositionRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.meshletAttributeRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.attributeSkinResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.skinResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !deformation.add(plan.jointPaletteResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
+            !deformation.add(plan.bindlessResourceSlotsResource, ResourceStates::ConstantBuffer, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.restPositionResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.restNormalResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.restTangentResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.skinnedPositionResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write)
+            || !deformation.add(plan.skinnedNormalResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write)
+            || !deformation.add(plan.skinnedTangentResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write)
+            || !deformation.add(plan.meshletDescResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.meshletPositionRefDeltaResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.meshletAttributeRefDeltaResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.attributeSkinResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.skinResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !deformation.add(plan.jointPaletteResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::DeformationUsesFailed);
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
         }
     }
 
-    for(const MeshSkinningGraphDispatchPlan& plan : plans){
+    for(in MeshSkinningGraphDispatchPlan plan : plans){
         if(
-            !postDispatch.add(plan.bindlessResourceSlotsResource, Core::ResourceStates::ConstantBuffer, Core::GpuTaskResourceAccess::Read)
-            || !postDispatch.add(plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !postDispatch.add(plan.meshletDescResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !postDispatch.add(plan.meshletPositionRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !postDispatch.add(plan.meshletLocalVertexRefResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !postDispatch.add(plan.meshletPrimitiveIndexResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !postDispatch.add(plan.meshletBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
-            || (plan.updatesMeshletBounds && !postDispatch.add(plan.meshletLocalBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write))
+            !postDispatch.add(plan.bindlessResourceSlotsResource, ResourceStates::ConstantBuffer, GpuTaskResourceAccess::Read)
+            || !postDispatch.add(plan.skinnedPositionResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !postDispatch.add(plan.meshletDescResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !postDispatch.add(plan.meshletPositionRefDeltaResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !postDispatch.add(plan.meshletLocalVertexRefResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !postDispatch.add(plan.meshletPrimitiveIndexResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !postDispatch.add(plan.meshletBoundsResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write)
+            || (plan.updatesMeshletBounds && !postDispatch.add(plan.meshletLocalBoundsResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write))
             || (plan.repacksNormals && (
-                !postDispatch.add(plan.skinnedNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-                || !postDispatch.add(plan.meshletAttributeRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-                || !postDispatch.add(plan.attributeResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
+                !postDispatch.add(plan.skinnedNormalResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+                || !postDispatch.add(plan.meshletAttributeRefDeltaResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+                || !postDispatch.add(plan.attributeResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write)
             ))
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::PostDispatchUsesFailed);
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
         }
     }
 
-    for(const MeshSkinningGraphDispatchPlan& plan : plans){
+    for(in MeshSkinningGraphDispatchPlan plan : plans){
         if(!plan.updatesMeshletBounds)
             continue;
         if(
-            !localBounds.add(plan.bindlessResourceSlotsResource, Core::ResourceStates::ConstantBuffer, Core::GpuTaskResourceAccess::Read)
-            || !localBounds.add(plan.meshletLocalBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-            || !localBounds.add(plan.localBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
+            !localBounds.add(plan.bindlessResourceSlotsResource, ResourceStates::ConstantBuffer, GpuTaskResourceAccess::Read)
+            || !localBounds.add(plan.meshletLocalBoundsResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+            || !localBounds.add(plan.localBoundsResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write)
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::LocalBoundsUsesFailed);
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
         }
     }
 
-    for(const MeshSkinningGraphDispatchPlan& plan : plans){
+    for(in MeshSkinningGraphDispatchPlan plan : plans){
         if(
             (ShouldDeclareSkinningStreamFinalizerUses(plan.hasActiveSkin, plan.copiedRestStreams) && (
-                !finalizer.add(plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-                || !finalizer.add(plan.skinnedNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-                || !finalizer.add(plan.skinnedTangentResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
+                !finalizer.add(plan.skinnedPositionResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+                || !finalizer.add(plan.skinnedNormalResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+                || !finalizer.add(plan.skinnedTangentResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
             ))
             || (plan.updatesMeshletBounds && (
-                !finalizer.add(plan.meshletBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
-                || !finalizer.add(plan.localBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
+                !finalizer.add(plan.meshletBoundsResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
+                || !finalizer.add(plan.localBoundsResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
             ))
-            || (plan.repacksNormals && !finalizer.add(plan.attributeResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read))
+            || (plan.repacksNormals && !finalizer.add(plan.attributeResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read))
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::FinalizerUsesFailed);
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
         }
     }
-    if(finalizer.m_count == 0u){
+    if(finalizer.empty()){
         ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::MissingFinalState);
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     }
 
     deformation.writeTo(uses.deformation);
@@ -339,18 +276,6 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
     localBounds.writeTo(uses.localBounds);
     finalizer.writeTo(uses.finalizer);
     return uses;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -2,8 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/polymorphic_asset_codec.h>"), cpp_name("::NWB::Core::Assets::PolymorphicAssetCodec"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
-extern class PolymorphicAssetCodec;
+[cpp_header("<core/assets/polymorphic_asset_codec.h>"), cpp_name("::NWB::Core::Assets::FamilyAssetCodec")]
+extern class FamilyAssetCodec<FamilyT, PolicyT>;
+
+[cpp_header("<core/assets/polymorphic_asset_codec.h>"), cpp_name("::NWB::Core::Assets::FamilyMemberAssetCodec")]
+extern class FamilyMemberAssetCodec<FamilyT, AssetT, PolicyT>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

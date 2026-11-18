@@ -278,7 +278,7 @@ void VerifyWin32TextInputFixture_MaximumAggregateSupplementaryCommitBatchesWitho
     while(totalBytes < 0xffffu * 4u){
         ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
         ASSERT_EQ(out.event.kind, TextInputEventKind::Commit);
-        const StringView textView = ViewGlobalString(out.event.text);
+        const StringView textView = StringView(out.event.text);
         ASSERT_FALSE(textView.empty());
         EXPECT_LE(textView.size(), s_TextInputMaxEventTextBytes);
         ASSERT_EQ(textView.size() % 4u, 0u);

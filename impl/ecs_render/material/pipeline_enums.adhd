@@ -111,6 +111,13 @@ class GeneratedGeometryOutputLayout{
     public b8 indexed = false;
 }
 
+GeneratedGeometryOutputLayout MakeGeneratedGeometryOutputLayout(in u32 offset, in b8 indexed){
+    GeneratedGeometryOutputLayout layout;
+    layout.indexByteOffset = offset;
+    layout.indexed = indexed;
+    return layout;
+}
+
 // Retain the selected draw metadata so recording rejects changed packet inputs before generating into the shared output.
 class GeneratedGeometryEquivalenceKey{
     public b8 matches(

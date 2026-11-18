@@ -5,6 +5,9 @@
 [cpp_header("<core/task/gpu/frame_timing_begin_task.h>"), cpp_name("::NWB::Core::FrameTimingBeginGraphTask"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class FrameTimingBeginGraphTask;
 
+[cpp_header("<core/task/gpu/frame_timing_begin_task.h>"), cpp_name("::NWB::Core::AddFrameTimingBeginTask")]
+extern Expected<GpuTaskId> AddFrameTimingBeginTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut GpuTimingFrameTransaction transaction, mut Device device, in GpuTimingScopeDefinition scope);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -121,10 +121,10 @@ b8 DecodePackage(in StringView source, in StringView destination){
             if(asset.assetType == Name(s_FontPackageLookupNameFont)){
                 if(foundFont)
                     return false;
-                auto entryResult = NWB::Impl::ParseFontCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena);
+                auto entryResult = NWB::Impl::ParseFontCookMetadataValue(arena, asset.virtualPath, sourcePath, asset.value);
                 if(!entryResult)
                     return false;
-                auto assetResult = NWB::Impl::BuildFontAsset(Move(*entryResult), arena);
+                auto assetResult = NWB::Impl::BuildFontAsset(arena, Move(*entryResult));
                 if(!assetResult)
                     return false;
                 font = Move(*assetResult);
@@ -133,10 +133,10 @@ b8 DecodePackage(in StringView source, in StringView destination){
             else if(asset.assetType == Name(s_FontPackageLookupNameFontAtlas)){
                 if(foundAtlas)
                     return false;
-                auto entryResult = NWB::Impl::ParseFontAtlasCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena, scratch);
+                auto entryResult = NWB::Impl::ParseFontAtlasCookMetadataValue(arena, asset.virtualPath, sourcePath, asset.value);
                 if(!entryResult)
                     return false;
-                auto assetResult = NWB::Impl::BuildFontAtlasAsset(Move(*entryResult), arena, scratch);
+                auto assetResult = NWB::Impl::BuildFontAtlasAsset(arena, Move(*entryResult));
                 if(!assetResult)
                     return false;
                 atlas = Move(*assetResult);

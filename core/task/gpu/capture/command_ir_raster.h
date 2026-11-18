@@ -235,6 +235,11 @@ template<typename T>
     return GpuCommandIrOwnerAnchor(box, s_AdoptRef);
 }
 
+template<typename T>
+[[nodiscard]] Expected<GpuCommandIrOwnerAnchor> RetainGpuCommandIrOwner(GpuCommandIrCapture& capture, const T& owner){
+    return MakeGpuCommandIrOwnerAnchor(capture.ownerArena(), owner);
+}
+
 struct GpuCommandIrRasterStateOwner{
     GraphicsPipelineHandle pipeline;
     FramebufferHandle framebuffer;

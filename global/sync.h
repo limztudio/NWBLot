@@ -81,7 +81,7 @@ private:
 
 
 public:
-    void lock()noexcept{
+    void lock()const noexcept{
         if(try_lock())
             return;
 
@@ -98,12 +98,12 @@ public:
         }
     }
 
-    b8 try_lock()noexcept{
+    b8 try_lock()const noexcept{
         u32 expected = s_Unlocked;
         return m_state.compare_exchange_strong(expected, s_Locked, MemoryOrder::acquire, MemoryOrder::relaxed);
     }
 
-    void unlock()noexcept{
+    void unlock()const noexcept{
         const u32 previous = m_state.fetch_sub(1, MemoryOrder::release);
         if(previous != s_Locked){
             m_state.store(s_Unlocked, MemoryOrder::release);
@@ -113,7 +113,7 @@ public:
 
 
 private:
-    Atomic<u32> m_state{ s_Unlocked };
+    mutable Atomic<u32> m_state{ s_Unlocked };
 };
 
 
@@ -203,6 +203,12 @@ public:
 };
 template<typename... Mutexes>
 ScopedLock(Mutexes&...) -> ScopedLock<Mutexes...>;
+using FutexGuard = ScopedLock<const Futex>;
+
+[[nodiscard]] inline FutexGuard AcquireFutex(const Futex& mutex)noexcept{
+    return FutexGuard(mutex);
+}
+
 template<isize LeastMaxValue>
 class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{
 public:

@@ -30,7 +30,7 @@ target_link_libraries(nwb_assets_shader PUBLIC nwb_assets nwb_assets_shader_type
 
 nwb_declare_static_library(nwb_assets_shader_loader)
 nwb_target_adhd_sources(nwb_assets_shader_loader
-    NAMESPACE "NWB::Impl"
+    NAMESPACE "NWB::Impl::ShaderAssetLoader"
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/loader.adhd"
 )
@@ -47,9 +47,11 @@ if(NWB_BUILD_PIPELINE)
     )
 
     nwb_declare_static_library(nwb_assets_shader_cook)
+    target_sources(nwb_assets_shader_cook PRIVATE "${PROJECT_SOURCE_DIR}/core/graphics/slang_toolchain.cpp")
     nwb_target_adhd_sources(nwb_assets_shader_cook
         NAMESPACE "NWB::Impl"
         SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/shader_types.adhd"
             ${_nwb_assets_shader_cook_adhd_sources}
     )
     unset(_nwb_assets_shader_cook_adhd_sources)

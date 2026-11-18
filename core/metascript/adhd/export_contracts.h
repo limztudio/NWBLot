@@ -28,7 +28,7 @@
 #endif
 
 #ifndef NWB_ADHD_EXPORT_SUBSYSTEM_CONTRACT
-#define NWB_ADHD_EXPORT_SUBSYSTEM_CONTRACT(assetArenaCppType, typedSubsystemBase, assetRefVectorTemplate, assetRefTemplate, fieldDescTemplate, makeFieldDescTemplate)
+#define NWB_ADHD_EXPORT_SUBSYSTEM_CONTRACT(assetArenaCppType, typedAssetBase, familyType, assetVectorTemplate, assetRefTemplate, descriptorType, loadFunction, validateFunction)
 #define NWB_ADHD_EXPORT_SUBSYSTEM_CONTRACT_AUTO_UNDEF
 #endif
 

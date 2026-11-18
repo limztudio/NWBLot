@@ -1,0 +1,221 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/bind.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<StringView> ParseMaterialBindStringField(
+    in Path bindFilePath,
+    in MetascriptValue map,
+    in StringView fieldName,
+    in StringView contextLabel
+){
+    b8 found = false;
+    b8 isString = false;
+    StringView result = "";
+    map.visitField(
+        fieldName,
+        lambda[mut found, mut isString, mut result](in MetascriptValue value) -> void{
+            found = true;
+            isString = value.isString();
+            if(isString)
+                result = value.asString();
+        }
+    );
+    if(!found || !isString){
+        error("Material bind '{}': {} field '{}' must be a string", bindFilePath, contextLabel, fieldName);
+        return MakeUnexpected(Failure());
+    }
+    return result;
+}
+
+Expected<Vector<MaterialBindAttribute>> ParseMaterialBindAttributeList(
+    in Path bindFilePath,
+    in MetascriptValue parentMap,
+    in StringView contextLabel
+){
+    Vector<MaterialBindAttribute> attributes;
+    b8 hasAttributes = false;
+    b8 attributesIsList = false;
+    Span<MetascriptValue> attributeList = Span<MetascriptValue>();
+    parentMap.visitField(
+        s_MaterialBindAttributesKey,
+        lambda[mut hasAttributes, mut attributesIsList, mut attributeList](in MetascriptValue value) -> void{
+            hasAttributes = true;
+            attributesIsList = value.isList();
+            if(attributesIsList)
+                attributeList = value.listView();
+        }
+    );
+    if(!hasAttributes)
+        return attributes;
+    if(!attributesIsList){
+        error("Material bind '{}': {} attributes must be a list", bindFilePath, contextLabel);
+        return MakeUnexpected(Failure());
+    }
+
+    attributes.reserve(attributeList.size());
+    for(usize attributeIndex = 0u; attributeIndex < attributeList.size(); ++attributeIndex){
+        const MetascriptValue attributeValue = attributeList[attributeIndex];
+        if(!attributeValue.isMap()){
+            error("Material bind '{}': {} attribute entries must be maps", bindFilePath, contextLabel);
+            return MakeUnexpected(Failure());
+        }
+
+        const Expected<StringView> parsedName = ParseMaterialBindStringField(bindFilePath, attributeValue, s_MaterialBindNameKey, contextLabel);
+        if(!parsedName.has_value())
+            return MakeUnexpected(Failure());
+        MaterialBindAttribute attribute;
+        attribute.name.assign(parsedName.value());
+        if(!IsAsciiIdentifier(attribute.name)){
+            error("Material bind '{}': invalid attribute name '{}' in {}", bindFilePath, attribute.name, contextLabel);
+            return MakeUnexpected(Failure());
+        }
+
+        b8 hasArguments = false;
+        b8 argumentsIsList = false;
+        Span<MetascriptValue> argumentList = Span<MetascriptValue>();
+        attributeValue.visitField(
+            s_MaterialBindArgumentsKey,
+            lambda[mut hasArguments, mut argumentsIsList, mut argumentList](in MetascriptValue value) -> void{
+                hasArguments = true;
+                argumentsIsList = value.isList();
+                if(argumentsIsList)
+                    argumentList = value.listView();
+            }
+        );
+        if(hasArguments){
+            if(!argumentsIsList){
+                error("Material bind '{}': attribute '{}' arguments must be a list", bindFilePath, attribute.name);
+                return MakeUnexpected(Failure());
+            }
+
+            attribute.arguments.reserve(argumentList.size());
+            for(usize argumentIndex = 0u; argumentIndex < argumentList.size(); ++argumentIndex){
+                const MetascriptValue argumentValue = argumentList[argumentIndex];
+                if(!argumentValue.isString()){
+                    error("Material bind '{}': attribute '{}' arguments must be strings", bindFilePath, attribute.name);
+                    return MakeUnexpected(Failure());
+                }
+
+                String argumentText;
+                argumentText.assign(argumentValue.asString());
+                attribute.arguments.push_back(argumentText);
+            }
+        }
+
+        attributes.push_back(attribute);
+    }
+
+    return attributes;
+}
+
+Expected<MaterialBindField> ParseMaterialBindField(
+    in Path bindFilePath,
+    in StringView bindFilePathText,
+    in MetascriptValue fieldValue,
+    in MaterialBindStruct bindStruct
+){
+    MaterialBindField field;
+    MaterialBindSchemaValidator validator;
+    if(!fieldValue.isMap()){
+        error("Material bind '{}': struct '{}' field entries must be maps", bindFilePath, bindStruct.name);
+        return MakeUnexpected(Failure());
+    }
+
+    const Expected<StringView> parsedType = ParseMaterialBindStringField(bindFilePath, fieldValue, s_MaterialBindTypeKey, bindStruct.name);
+    if(!parsedType.has_value())
+        return MakeUnexpected(Failure());
+    field.type.assign(parsedType.value());
+
+    const Expected<StringView> parsedName = ParseMaterialBindStringField(bindFilePath, fieldValue, s_MaterialBindNameKey, bindStruct.name);
+    if(!parsedName.has_value())
+        return MakeUnexpected(Failure());
+    field.name.assign(parsedName.value());
+
+    if(!validator.validateMaterialBindFieldSpec(bindFilePathText, bindStruct, field))
+        return MakeUnexpected(Failure());
+
+    const Expected<Vector<MaterialBindAttribute>> attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue, field.name);
+    if(!attributes.has_value())
+        return MakeUnexpected(Failure());
+    field.attributes = attributes.value();
+
+    if(!validator.validateMaterialBindFieldAttributes(bindFilePathText, bindStruct, field))
+        return MakeUnexpected(Failure());
+
+    return field;
+}
+
+Expected<MaterialBindStruct> ParseMaterialBindStruct(
+    in Path bindFilePath,
+    in StringView bindFilePathText,
+    in StringView structName,
+    in MetascriptValue structValue
+){
+    MaterialBindStruct bindStruct;
+    MaterialBindSchemaValidator validator;
+    if(!structValue.isMap()){
+        error("Material bind '{}': struct '{}' must be a map", bindFilePath, structName);
+        return MakeUnexpected(Failure());
+    }
+
+    bindStruct.name.assign(structName);
+    if(!IsAsciiIdentifier(bindStruct.name)){
+        error("Material bind '{}': invalid struct name '{}'", bindFilePath, bindStruct.name);
+        return MakeUnexpected(Failure());
+    }
+
+    const Expected<Vector<MaterialBindAttribute>> attributes = ParseMaterialBindAttributeList(bindFilePath, structValue, bindStruct.name);
+    if(!attributes.has_value())
+        return MakeUnexpected(Failure());
+    bindStruct.attributes = attributes.value();
+
+    if(!validator.validateMaterialBindStructAttributes(bindFilePathText, bindStruct))
+        return MakeUnexpected(Failure());
+
+    b8 hasFields = false;
+    b8 fieldsIsList = false;
+    Span<MetascriptValue> fieldsList = Span<MetascriptValue>();
+    structValue.visitField(
+        s_MaterialBindFieldsKey,
+        lambda[mut hasFields, mut fieldsIsList, mut fieldsList](in MetascriptValue value) -> void{
+            hasFields = true;
+            fieldsIsList = value.isList();
+            if(fieldsIsList)
+                fieldsList = value.listView();
+        }
+    );
+    if(!hasFields || !fieldsIsList){
+        error("Material bind '{}': struct '{}' fields must be a list", bindFilePath, bindStruct.name);
+        return MakeUnexpected(Failure());
+    }
+    if(fieldsList.empty()){
+        error("Material bind '{}': struct '{}' must declare at least one field", bindFilePath, bindStruct.name);
+        return MakeUnexpected(Failure());
+    }
+
+    bindStruct.fields.reserve(fieldsList.size());
+    for(usize fieldIndex = 0u; fieldIndex < fieldsList.size(); ++fieldIndex){
+        const Expected<MaterialBindField> field = ParseMaterialBindField(bindFilePath, bindFilePathText, fieldsList[fieldIndex], bindStruct);
+        if(!field.has_value())
+            return MakeUnexpected(Failure());
+
+        if(bindStruct.hasField(field.value().name)){
+            error("Material bind '{}': duplicate field '{}.{}'", bindFilePath, bindStruct.name, field.value().name);
+            return MakeUnexpected(Failure());
+        }
+
+        bindStruct.fields.push_back(field.value());
+    }
+
+    return bindStruct;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

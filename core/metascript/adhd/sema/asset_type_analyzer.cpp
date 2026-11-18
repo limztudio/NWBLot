@@ -15,6 +15,30 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const MethodDecl* AssetTypeAnalyzer::findCookEntryReader(const MStringView name, const b8 acceptsValue)const noexcept{
+    constexpr Array<MStringView, 4u> valueParams = {"Name", "Path", "MetascriptValue", "CpuTaskScheduler"};
+    constexpr Array<MStringView, 4u> documentParams = {"Path", "StringView", "Path", "MetascriptDocument"};
+    const auto match = [&](const Span<const MStringView> types) -> const MethodDecl* {
+        const usize count = types.size();
+        const MethodDecl* reader = m_symbols.findFreeFunction(name, &count, types);
+        if(!reader || reader->isExtern || reader->params.size() != count)
+            return nullptr;
+        for(usize i = 0u; i < count; ++i){
+            const ParamDecl& param = reader->params[i];
+            if(param.mode != ParamPassingMode::In || !param.type || param.type->name != types[i])
+                return nullptr;
+        }
+        return reader;
+    };
+    if(!acceptsValue){
+        if(const MethodDecl* documentReader = match(documentParams))
+            return documentReader;
+    }
+    if(const MethodDecl* valueReader = match(Span<const MStringView>(valueParams).first(3u)))
+        return valueReader;
+    return match(valueParams);
+}
+
 const TypeRef* AssetTypeAnalyzer::findImplementedAssetInterface(const ClassDecl& cls)const noexcept{
     if(cls.assetTypeName.empty())
         return nullptr;

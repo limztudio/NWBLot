@@ -75,7 +75,7 @@ b8 SimdConstructorEmitter::tryEmitLaneOperation(const b8 isDouble, const b8 isIn
     const MStringView maskConst = SimdInPlaceLaneMaskConstant(activeMask, isDouble);
     if(activeLanes < 4u && maskConst.empty())
         return false;
-    out.append("([&]()noexcept{ const auto __a = ");
+    out.append("([&]()").append(m_emitter.lambdaExceptionSpec()).append("{ const auto __a = ");
     m_emitter.emitSimdRegExpr(out, *emitLhs, simdType);
     out.append("; const auto __b = ");
     m_emitter.emitSimdRegExpr(out, *emitRhs, simdType);

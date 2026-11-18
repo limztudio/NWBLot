@@ -202,7 +202,7 @@ void VerifyUiClipboardPublications_CopiedWritePreservesNativeFifoBeforeLaterPast
     EXPECT_EQ(result.status, UiClipboardPublicationStatus::Published);
     EXPECT_EQ(result.published, 1u);
     EXPECT_EQ(publications.pending(), 0u);
-    ClipboardCompletion completion = ClipboardCompletion(rig.arena.arena);
+    ClipboardCompletion completion = ClipboardCompletion();
     ASSERT_EQ(rig.service.poll(readToken, completion), ClipboardPollResult::Completed);
     EXPECT_EQ(completion.text, "copied");
 }
@@ -286,7 +286,7 @@ void VerifyUiClipboardPublications_DestructionCancelsUndeliveredWorkBeforeServic
         old = rig.service.startedToken;
     }
     EXPECT_FALSE(rig.service.deliver(old, ClipboardStatus::Success));
-    ClipboardCompletion completion = ClipboardCompletion(rig.arena.arena);
+    ClipboardCompletion completion = ClipboardCompletion();
     EXPECT_EQ(rig.service.poll(old, completion), ClipboardPollResult::InvalidRequest);
 }
 

@@ -2,98 +2,223 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/shadow/light_space_plan.adhd>
+#include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd>
+#include <impl/ecs_render/mesh/renderer_mesh_types.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
+#include <impl/ecs_render/shadow/light_space_csg_context_packer.adhd>
+#include <impl/ecs_render/shadow/light_space_capture_identity_builder.adhd>
+#include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd>
+#include <impl/ecs_render/csg/clip_bounds.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
-#include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/assets/graphics/shadow/csg_shadow_constants.h>
+[cpp_header("<impl/assets/graphics/shadow/csg_shadow_constants.h>"), cpp_name("NWB_CSG_SHADOW_RAY_FAILURE_OFFSET")]
+extern const u32 s_ShaderCsgShadowRayFailureOffset;
+const u32 s_CsgShadowRayFailureOffset = s_ShaderCsgShadowRayFailureOffset;
 
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/rhi/resource.h>
+[cpp_header("<impl/assets/graphics/shadow/csg_shadow_constants.h>"), cpp_name("NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT")]
+extern const u32 s_ShaderCsgShadowFlagNoOrdinaryTransparent;
+const u32 s_CsgShadowFlagNoOrdinaryTransparent = s_ShaderCsgShadowFlagNoOrdinaryTransparent;
 
-#include <global/span.h>
+[cpp_header("<impl/assets/graphics/shadow/csg_shadow_constants.h>"), cpp_name("NWB_CSG_SHADOW_FLAG_HW_COMPOSE")]
+extern const u32 s_ShaderCsgShadowFlagHwCompose;
+const u32 s_CsgShadowFlagHwCompose = s_ShaderCsgShadowFlagHwCompose;
+
+[cpp_header("<impl/assets/graphics/shadow/csg_shadow_constants.h>"), cpp_name("NWB_CSG_SHADOW_FLAG_ENABLED")]
+extern const u32 s_ShaderCsgShadowFlagEnabled;
+const u32 s_CsgShadowFlagEnabled = s_ShaderCsgShadowFlagEnabled;
+
+[cpp_header("<impl/assets/graphics/shadow/csg_shadow_constants.h>"), cpp_name("NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS")]
+extern const u32 s_ShaderCsgShadowFlagCurrentReceiverCaps;
+const u32 s_CsgShadowFlagCurrentReceiverCaps = s_ShaderCsgShadowFlagCurrentReceiverCaps;
+
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_INSTANCE_BYTES")]
+extern const u32 s_ShaderCsgRayInstanceBytes;
+
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_CONTEXT_BYTES")]
+extern const u32 s_ShaderCsgRayContextBytes;
+
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_MEMBERSHIP_WORD_BYTES")]
+extern const u32 s_ShaderCsgRayMembershipWordBytes;
+static_assert(size_of<LightSpaceCsgInstanceGpu>() == s_ShaderCsgRayInstanceBytes);
+static_assert(offset_of<LightSpaceCsgInstanceGpu>(runtimeBoundsSlot) == size_of<f32x3x4>());
+static_assert(offset_of<LightSpaceCsgInstanceGpu>(localMin) == size_of<f32x3x4>() + size_of<u32>() * 4u);
+static_assert(is_standard_layout<LightSpaceCsgInstanceGpu>());
+static_assert(is_trivially_copyable<LightSpaceCsgInstanceGpu>());
+static_assert(size_of<LightSpaceCsgContextHeader>() == s_ShaderCsgRayContextBytes);
+static_assert(size_of<u32>() == s_ShaderCsgRayMembershipWordBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshRayTracingResourceSnapshot;
-
-namespace ECSRenderDetail{
-    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
-};
-
-static_assert(sizeof(LightSpaceCsgInstanceGpu) == NWB_CSG_RAY_INSTANCE_BYTES);
-static_assert(offsetof(LightSpaceCsgInstanceGpu, runtimeBoundsSlot) == sizeof(Float34));
-static_assert(offsetof(LightSpaceCsgInstanceGpu, localMin) == sizeof(Float34) + sizeof(u32) * 4u);
-static_assert(IsStandardLayout_V<LightSpaceCsgInstanceGpu>);
-static_assert(IsTriviallyCopyable_V<LightSpaceCsgInstanceGpu>);
-
-struct LightSpaceCsgState{
-    CsgShadowSnapshot snapshot;
-    Vector<CsgShadowReceiverInput, Core::Alloc::GlobalArena> receivers;
-    Vector<LightSpaceCsgInstanceGpu, Core::Alloc::GlobalArena> instances;
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> dynamicBounds;
+class LightSpaceCsgState{
+    public CsgShadowSnapshot snapshot;
+    public Vector<CsgShadowReceiverInput> receivers;
+    public Vector<LightSpaceCsgInstanceGpu> instances;
+    public Vector<BufferHandle> dynamicBounds;
     // Current CPU context uploads into independently retained shadow and GI buffers.
-    Vector<u8, Core::Alloc::GlobalArena> bytes;
-    Vector<Span<const u32>, Core::Alloc::GlobalArena> solidTriangleMasks;
-    u64 captureGeometryIdentity = 0u;
-    b8 captureGeometryTrusted = false;
-    b8 gathering = false;
-    b8 hardware = false;
-    b8 limitationLogged = false;
+    public Vector<u8> bytes;
+    public Vector<Span<u32>> solidTriangleMasks;
+    public u64 captureGeometryIdentity = 0u;
+    public b8 captureGeometryTrusted = false;
+    public b8 gathering = false;
+    public b8 hardware = false;
+    public b8 limitationLogged = false;
+
+    public LightSpaceCsgState(){}
+}
 
 
-public:
-    explicit LightSpaceCsgState(Core::Alloc::GlobalArena& arena)noexcept
-        : snapshot(arena)
-        , receivers(arena)
-        , instances(arena)
-        , dynamicBounds(arena)
-        , bytes(arena)
-        , solidTriangleMasks(arena)
-    {}
-};
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Excludes only world transforms; geometry/material edits still invalidate the bounded capture approximation.
-[[nodiscard]] u64 BuildLightSpaceCsgCaptureIdentity(const LightSpaceCsgState& state, Span<const NwbRtInstanceMaterialGpu> materials, Span<const InstanceGpuData> instances, Span<const u8> materialBytes, Span<const Core::TextureHandle> textures)noexcept;
 
-void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, b8 hardware);
+u64 BuildLightSpaceCsgCaptureIdentity(
+    in LightSpaceCsgState state,
+    in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances,
+    in Span<u8> materialBytes,
+    in Span<TextureHandle> textures
+){
+    assert(materials.size() == instances.size());
+    u64 identity = LightSpaceCaptureIdentityBuilder().buildCsgBaseIdentity(
+        state.captureGeometryIdentity,
+        state.snapshot.contentIdentity,
+        materials,
+        instances,
+        materialBytes,
+        textures.size()
+    );
+    for(in TextureHandle texture : textures)
+        Fnv64AppendValue(identity, texture.identity());
+    return identity;
+}
+
+[cpp_unwind]
+void BeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut World world, in usize capacity, in b8 hardware){
+    state.gathering = HasCsgFrameCandidates(world);
+    state.hardware = hardware;
+    state.snapshot.hasCsg = false;
+    state.snapshot.identity = 0u;
+    state.snapshot.contentIdentity = 0u;
+    state.captureGeometryIdentity = s_Fnv64OffsetBasis;
+    state.captureGeometryTrusted = true;
+    state.snapshot.receiverRanges.clear();
+    state.snapshot.cutters.clear();
+    state.receivers.clear();
+    state.instances.clear();
+    state.dynamicBounds.clear();
+    state.bytes.clear();
+    state.solidTriangleMasks.clear();
+    if(!state.gathering)
+        return;
+    state.receivers.reserve(capacity);
+    state.instances.reserve(capacity);
+    state.dynamicBounds.reserve(capacity);
+    state.solidTriangleMasks.reserve(capacity);
+}
+
+[cpp_unwind]
 void AppendLightSpaceCsgReceiver(
-    LightSpaceCsgState& state,
-    Core::ECS::EntityID entity,
-    b8 transparent,
-    const SIMDMatrix& objectToWorld,
-    const SIMDMatrix& worldToObject,
-    SIMDVectorSingle localMin,
-    SIMDVectorSingle localMax,
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
-);
-[[nodiscard]] b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgState& state, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
+    mut LightSpaceCsgState state,
+    in EntityID entity,
+    in b8 transparent,
+    in MatrixSingle objectToWorld,
+    in MatrixSingle worldToObject,
+    in VectorSingle localMin,
+    in VectorSingle localMax,
+    in MeshRayTracingResourceSnapshot mesh
+){
+    if(!state.gathering)
+        return;
+    LightSpaceCaptureIdentityBuilder().updateReceiverGeometry(
+        entity,
+        transparent,
+        mesh.meshName,
+        cast<u64>(mesh.positionBuffer.identity()),
+        cast<u64>(mesh.triangleIndexBuffer.identity()),
+        cast<u64>(mesh.attributeBuffer.identity()),
+        mesh.meshletCount,
+        cast<u64>(mesh.meshletDescBuffer.identity()),
+        cast<u64>(mesh.meshletLocalBoundsBuffer.identity()),
+        mesh.meshletDescHeapHandle.value,
+        mesh.meshletLocalBoundsHeapHandle.value,
+        cast<u64>(mesh.runtimeLocalBoundsBuffer.identity()),
+        mesh.runtimeLocalBoundsHeapHandle.value,
+        cast<u64>(mesh.swBvhNodeBuffer.identity()),
+        mesh.swBvhNodeHeapHandle.value,
+        mesh.meshletPrimitiveIndexCount,
+        mesh.runtimeMeshVersion,
+        mesh.runtimeGeometryContentRevision,
+        mesh.runtimeMesh,
+        state.captureGeometryIdentity,
+        state.captureGeometryTrusted
+    );
 
+    CsgShadowReceiverInput receiver;
+    receiver.entity = entity;
+    receiver.receiverPass = CsgReceiverPass::Opaque;
+    if(transparent)
+        receiver.receiverPass = CsgReceiverPass::Transparent;
+    VectorSingle worldMin(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle worldMax(0.0f, 0.0f, 0.0f, 0.0f);
+    receiver.boundsValid = !mesh.runtimeMesh && CsgReceiverBoundsCanCull(mesh.csgLocalBounds) && TryTransformAabb(objectToWorld, localMin, localMax, worldMin, worldMax);
+    receiver.worldMin = f32x4(worldMin);
+    receiver.worldMax = f32x4(worldMax);
+    state.receivers.push_back(receiver);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    const b8 hasRuntimeBounds = mesh.runtimeLocalBoundsBuffer.valid() && mesh.runtimeLocalBoundsHeapHandle.valid();
+    u32 runtimeSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    if(hasRuntimeBounds){
+        state.dynamicBounds.push_back(mesh.runtimeLocalBoundsBuffer);
+        runtimeSlot = mesh.runtimeLocalBoundsHeapHandle.slot();
+    }
+    u32 nodeSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    if(mesh.swBvhNodeHeapHandle.valid())
+        nodeSlot = mesh.swBvhNodeHeapHandle.slot();
+    state.instances.push_back(BuildLightSpaceCsgInstanceGpu(
+        worldToObject,
+        localMin,
+        localMax,
+        mesh.meshletPrimitiveIndexCount,
+        hasRuntimeBounds,
+        runtimeSlot,
+        state.hardware,
+        mesh.swBvhNodeHeapHandle.valid(),
+        nodeSlot
+    ));
+    state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
+}
 
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+b8 FinishLightSpaceCsgGather(in CsgShapeRegistry registry, mut LightSpaceCsgState state, mut World world){
+    if(!state.gathering)
+        return true;
+    if(state.receivers.size() != state.instances.size())
+        return false;
+    if(!BuildCsgShadowSnapshot(registry, state.receivers, world, state.snapshot))
+        return false;
+    if(!state.snapshot.hasCsg)
+        return true;
+    if(!LightSpaceCsgContextPacker().pack(
+        state.snapshot.receiverRanges,
+        state.snapshot.cutters,
+        state.instances,
+        state.solidTriangleMasks,
+        state.bytes
+    ))
+        return false;
+    LightSpaceCaptureIdentityBuilder().updateCsgInstances(
+        state.instances,
+        state.snapshot.identity
+    );
+    LightSpaceShadowLogReporter().reportUnsupportedLimitations(
+        state.snapshot.receiverRanges,
+        state.limitationLogged
+    );
+    return true;
 }
 
 

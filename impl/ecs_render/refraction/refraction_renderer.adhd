@@ -2,65 +2,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/refraction/statistics_readback.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
+[modular]
+class RefractionRenderer : NoCopy{
+    private mut RendererRayTracingSystem m_system;
+    private RefractionStatisticsReadback m_statistics;
+    private b8 m_diagnosticsEnabled = false;
 
+    public RefractionRenderer(mut RendererRayTracingSystem system, mut GraphicsRuntime graphics){
+        this.m_system = system;
+        this.m_statistics = RefractionStatisticsReadback(graphics);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-class DeferredFrameTargets;
-
-
-class RefractionRenderer final : NoCopy{
-public:
-    RefractionRenderer(RendererRayTracingSystem& system, Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
-        : m_system(system)
-        , m_statistics(arena, graphics)
-    {}
-
-
-public:
-    void setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{ m_diagnosticsEnabled = enabled; }
-    void pollRefractionStatistics(){ m_statistics.pollCompleted(); }
-    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept{ return m_statistics.latestStatistics(); }
-    void invalidateResources()noexcept{ m_statistics.invalidateResources(); }
-    [[nodiscard]] b8 prepareRefractionResources();
-    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources(u32 width, u32 height, u32 frameIndex)const noexcept;
-    [[nodiscard]] b8 recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
-    [[nodiscard]] b8 recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
-
-
-private:
-    RendererRayTracingSystem& m_system;
-    RefractionStatisticsReadback m_statistics;
-    b8 m_diagnosticsEnabled = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void setRefractionDiagnosticsEnabled(in b8 enabled){ this.m_diagnosticsEnabled = enabled; }
+    [cpp_unwind]
+    public void pollRefractionStatistics(){ this.m_statistics.pollCompleted(); }
+    public Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const{ return this.m_statistics.latestStatistics(); }
+    public void invalidateResources(){ this.m_statistics.invalidateResources(); }
+    [cpp_unwind]
+    public b8 prepareRefractionResources();
+    public RayTracingRefractionGraphResources snapshotRefractionGraphResources(in u32 width, in u32 height, in u32 frameIndex)const;
+    [cpp_unwind]
+    public b8 recordRefractionTileClassification(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const;
+    [cpp_unwind]
+    public b8 recordRefractionResolve(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const;
 }
 
 

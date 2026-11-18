@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/bvh_subsystem.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd>
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/raytrace/rt_private.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
 #include <impl/ecs_render/raytrace/raytrace_internal.adhd>
 
 
@@ -75,613 +84,486 @@ u32 BuildBvhBitonicSortSteps(in u32 elementCount, in u32 paddedCount, in u32 key
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cpp_header("<impl/assets/graphics/bvh/binding_slots.h>"), cpp_name("NWB_BVH_BUILD_GROUP_SIZE")]
+extern const u32 s_ShaderBvhBuildGroupSize;
+static_assert(s_BvhBuildGroupSize == cast<u32>(s_ShaderBvhBuildGroupSize));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets/graphics/bvh/binding_slots.h>
-#include <impl/assets_graphics/bvh_subsystem.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
-#include <impl/ecs_render/raytrace/raytrace_internal.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/api.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
-
-#include <global/algorithm.h>
-#include <global/not_null.h>
-#include <global/simdmath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(s_BvhBuildGroupSize == static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE));
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void SoftwareBvhBuilder::releaseSwBvhScratchHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        RetireDescriptor(heap, m_state.m_bvhSortKeysHeapHandle);
-        RetireDescriptor(heap, m_state.m_bvhSortPayloadHeapHandle);
-        RetireDescriptor(heap, m_state.m_bvhVisitCounterHeapHandle);
-        return;
+b8 EnsureBvhStorageDescriptors(mut GpuDescriptorHeap heap, in BufferHandle first, in BufferHandle second, mut GpuDescriptorHandle firstHandle, mut GpuDescriptorHandle secondHandle){
+    GpuDescriptorHandle acquiredFirst = GpuDescriptorHandleInvalid();
+    if(!firstHandle.valid()){
+        const auto registered = RegisterHeapBuffer(heap, first.deref(), GpuDescriptorClass::StorageBuffer, true);
+        if(!registered.has_value())
+            return false;
+        acquiredFirst = registered.value();
     }
-    m_state.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_state.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_state.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    if(!secondHandle.valid()){
+        const auto registered = RegisterHeapBuffer(heap, second.deref(), GpuDescriptorClass::StorageBuffer, true);
+        if(!registered.has_value()){
+            RetireDescriptor(heap, acquiredFirst);
+            return false;
+        }
+        secondHandle = registered.value();
+    }
+    if(acquiredFirst.valid())
+        firstHandle = acquiredFirst;
+    return IsDescriptorClass(firstHandle, GpuDescriptorClass::StorageBuffer) && IsDescriptorClass(secondHandle, GpuDescriptorClass::StorageBuffer);
 }
 
+void CommitBvhBuildBarrier(mut CommandList commandList, mut Buffer keys, mut Buffer payload, mut Buffer nodes, mut Buffer parents, mut Buffer visits){
+    commandList.setBufferState(keys, ResourceStates::UnorderedAccess);
+    commandList.setBufferState(payload, ResourceStates::UnorderedAccess);
+    commandList.setBufferState(nodes, ResourceStates::UnorderedAccess);
+    commandList.setBufferState(parents, ResourceStates::UnorderedAccess);
+    commandList.setBufferState(visits, ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
+}
+
+void DispatchBvhBuildKernel(mut CommandList commandList, mut GpuDescriptorHeap heap, in BvhBuildPushConstants constants, mut ComputePipeline pipeline, in u32 groupCount){
+    ComputeState state;
+    state.setPipeline(pipeline);
+    commandList.setComputeState(state);
+    heap.bindCompute(commandList, pipeline);
+    commandList.setPushConstants(constants);
+    commandList.dispatch(groupCount, 1u, 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+void SoftwareBvhBuilder::releaseSwBvhScratchHeapHandles(){
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        RetireDescriptor(heap, this.m_state.m_bvhSortKeysHeapHandle);
+        RetireDescriptor(heap, this.m_state.m_bvhSortPayloadHeapHandle);
+        RetireDescriptor(heap, this.m_state.m_bvhVisitCounterHeapHandle);
+        return;
+    }
+    this.m_state.m_bvhSortKeysHeapHandle = GpuDescriptorHandleInvalid();
+    this.m_state.m_bvhSortPayloadHeapHandle = GpuDescriptorHandleInvalid();
+    this.m_state.m_bvhVisitCounterHeapHandle = GpuDescriptorHandleInvalid();
+}
+
+[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureBvhSortPipeline(){
-    if(m_state.m_bvhSortPipeline)
+    if(this.m_state.m_bvhSortPipeline.valid())
         return true;
-    if(m_state.m_bvhSortPipelineFailed)
+    if(this.m_state.m_bvhSortPipelineFailed)
         return false;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software BVH sort requires the initialized global descriptor heap"));
-        m_state.m_bvhSortPipelineFailed = true;
+        error("RendererSystem: software BVH sort requires the initialized global descriptor heap");
+        this.m_state.m_bvhSortPipelineFailed = true;
         return false;
     }
 
     // Push-only layout; sort resources use the global heap.
-    if(!EnsurePushConstantBindingLayout(device, sizeof(BvhSortPushConstants), Core::ShaderType::Compute, m_state.m_bvhSortBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BVH sort binding layout"));
-        m_state.m_bvhSortPipelineFailed = true;
+    if(!EnsurePushConstantBindingLayout(device, size_of<BvhSortPushConstants>(), ShaderTypeMask::Compute, this.m_state.m_bvhSortBindingLayout)){
+        error("RendererSystem: failed to create BVH sort binding layout");
+        this.m_state.m_bvhSortPipelineFailed = true;
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader, BvhSubsystem>(SubsystemAssetSelector<BvhSubsystem, ComputeShader>([](const BvhSubsystem& s){ return s.bitonicSortCs; }), Core::ShaderArchive::s_DefaultVariant, "ECSRender_BvhBitonicSort", m_state.m_bvhSortShader)){
-        m_state.m_bvhSortPipelineFailed = true;
+    if(!this.m_shaderSystem.loadShader<ComputeShader, BvhSubsystem>(lambda[](in BvhSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.bitonicSortCs; }, s_ShaderArchiveDefaultVariant,
+        Name("ECSRender_BvhBitonicSort"), this.m_state.m_bvhSortShader)){
+        this.m_state.m_bvhSortPipelineFailed = true;
         return false;
     }
 
-    if(!CreateHeapComputePipeline(device, m_state.m_bvhSortShader, m_state.m_bvhSortBindingLayout, false, m_state.m_bvhSortPipeline)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
-        m_state.m_bvhSortPipelineFailed = true;
+    if(!CreateHeapComputePipeline(device, this.m_state.m_bvhSortShader, this.m_state.m_bvhSortBindingLayout, false, this.m_state.m_bvhSortPipeline)){
+        error("RendererSystem: failed to create BVH sort compute pipeline");
+        this.m_state.m_bvhSortPipelineFailed = true;
         return false;
     }
     return true;
 }
 
-b8 SoftwareBvhBuilder::ensureBvhSortBuffers(usize paddedCount){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+[cpp_unwind]
+b8 SoftwareBvhBuilder::ensureBvhSortBuffers(in usize paddedCount){
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
-    const auto sortHandlesReady = [this]()noexcept{
-        return IsDescriptorClass(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && IsDescriptorClass(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
-    };
-
-    if(m_state.m_bvhSortKeysBuffer && m_state.m_bvhSortPayloadBuffer && m_state.m_bvhSortCapacity >= paddedCount){
-        if(sortHandlesReady())
-            return true;
-
-        // Register only missing handles to preserve live generations.
-        Core::GpuDescriptorHandle acquiredKeys = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::Invalid();
-        const auto acquireDescriptors = [&]() -> Expected<void>{
-            if(!m_state.m_bvhSortKeysHeapHandle.valid()){
-                const auto acquiredKeysResult = RegisterHeapBuffer(heap, *m_state.m_bvhSortKeysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-                if(!acquiredKeysResult)
-                    return MakeUnexpected(Failure{});
-                acquiredKeys = *acquiredKeysResult;
-            }
-            if(!m_state.m_bvhSortPayloadHeapHandle.valid()){
-                const auto acquiredPayloadResult = RegisterHeapBuffer(heap, *m_state.m_bvhSortPayloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-                if(!acquiredPayloadResult)
-                    return MakeUnexpected(Failure{});
-                acquiredPayload = *acquiredPayloadResult;
-            }
-            return {};
-        };
-        if(!acquireDescriptors()){
-            RetireDescriptor(heap, acquiredKeys);
-            RetireDescriptor(heap, acquiredPayload);
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register existing BVH sort scratch in the descriptor heap"));
+    if(this.m_state.m_bvhSortKeysBuffer.valid() && this.m_state.m_bvhSortPayloadBuffer.valid() && this.m_state.m_bvhSortCapacity >= paddedCount){
+        if(!EnsureBvhStorageDescriptors(heap, this.m_state.m_bvhSortKeysBuffer, this.m_state.m_bvhSortPayloadBuffer, this.m_state.m_bvhSortKeysHeapHandle, this.m_state.m_bvhSortPayloadHeapHandle)){
+            error("RendererSystem: failed to register existing BVH sort scratch in the descriptor heap");
             return false;
         }
-        if(acquiredKeys.valid())
-            m_state.m_bvhSortKeysHeapHandle = acquiredKeys;
-        if(acquiredPayload.valid())
-            m_state.m_bvhSortPayloadHeapHandle = acquiredPayload;
-        return sortHandlesReady();
+        return true;
     }
 
-    const usize capacity = ::NextGrowingCapacity(m_state.m_bvhSortCapacity, paddedCount, s_BvhSortInitialCapacity);
+    const usize capacity = NextGrowingCapacity(this.m_state.m_bvhSortCapacity, paddedCount, s_BvhSortInitialCapacity);
 
-    Core::BufferDesc keysBufferDesc;
-    keysBufferDesc.setByteSize(static_cast<u64>(sizeof(u32) * capacity)).setStructStride(sizeof(u32)).setCanHaveUAVs(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhSortKeys)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    auto keysBufferResult = m_graphics.createBuffer(keysBufferDesc);
-    if(!keysBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
+    BufferDesc keysBufferDesc;
+    keysBufferDesc.setByteSize(cast<u64>(size_of<u32>() * capacity)).setStructStride(size_of<u32>()).setCanHaveUAVs(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhSortKeys)).enableAutomaticStateTracking(ResourceStates::Common);
+    auto keysBufferResult = this.m_graphics.createBuffer(keysBufferDesc);
+    if(!keysBufferResult.has_value()){
+        error("RendererSystem: failed to create BVH sort keys buffer");
         return false;
     }
-    Core::BufferHandle keysBuffer = Move(*keysBufferResult);
+    BufferHandle keysBuffer = keysBufferResult.value();
 
-    Core::BufferDesc payloadBufferDesc;
-    payloadBufferDesc.setByteSize(static_cast<u64>(sizeof(u32) * capacity)).setStructStride(sizeof(u32)).setCanHaveUAVs(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhSortPayload)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    auto payloadBufferResult = m_graphics.createBuffer(payloadBufferDesc);
-    if(!payloadBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
+    BufferDesc payloadBufferDesc;
+    payloadBufferDesc.setByteSize(cast<u64>(size_of<u32>() * capacity)).setStructStride(size_of<u32>()).setCanHaveUAVs(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhSortPayload)).enableAutomaticStateTracking(ResourceStates::Common);
+    auto payloadBufferResult = this.m_graphics.createBuffer(payloadBufferDesc);
+    if(!payloadBufferResult.has_value()){
+        error("RendererSystem: failed to create BVH sort payload buffer");
         return false;
     }
-    Core::BufferHandle payloadBuffer = Move(*payloadBufferResult);
+    BufferHandle payloadBuffer = payloadBufferResult.value();
 
-    Core::GpuDescriptorHandle keysHeapHandle;
-    Core::GpuDescriptorHandle payloadHeapHandle;
-    const auto acquireDescriptors = [&]() -> Expected<void>{
-        const auto keysHeapHandleResult = RegisterHeapBuffer(heap, *keysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-        if(!keysHeapHandleResult)
-            return MakeUnexpected(Failure{});
-        keysHeapHandle = *keysHeapHandleResult;
-        const auto payloadHeapHandleResult = RegisterHeapBuffer(heap, *payloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-        if(!payloadHeapHandleResult)
-            return MakeUnexpected(Failure{});
-        payloadHeapHandle = *payloadHeapHandleResult;
-        return {};
-    };
-    if(!acquireDescriptors()){
-        RetireDescriptor(heap, keysHeapHandle);
-        RetireDescriptor(heap, payloadHeapHandle);
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register BVH sort scratch in the descriptor heap"));
+    GpuDescriptorHandle keysHeapHandle;
+    GpuDescriptorHandle payloadHeapHandle;
+    if(!EnsureBvhStorageDescriptors(heap, keysBuffer, payloadBuffer, keysHeapHandle, payloadHeapHandle)){
+        error("RendererSystem: failed to register BVH sort scratch in the descriptor heap");
         return false;
     }
 
-    RetireDescriptor(heap, m_state.m_bvhSortKeysHeapHandle);
-    RetireDescriptor(heap, m_state.m_bvhSortPayloadHeapHandle);
-    m_state.m_bvhSortKeysBuffer = Move(keysBuffer);
-    m_state.m_bvhSortPayloadBuffer = Move(payloadBuffer);
-    m_state.m_bvhSortKeysHeapHandle = keysHeapHandle;
-    m_state.m_bvhSortPayloadHeapHandle = payloadHeapHandle;
-    m_state.m_bvhSortCapacity = capacity;
+    RetireDescriptor(heap, this.m_state.m_bvhSortKeysHeapHandle);
+    RetireDescriptor(heap, this.m_state.m_bvhSortPayloadHeapHandle);
+    this.m_state.m_bvhSortKeysBuffer = keysBuffer;
+    this.m_state.m_bvhSortPayloadBuffer = payloadBuffer;
+    this.m_state.m_bvhSortKeysHeapHandle = keysHeapHandle;
+    this.m_state.m_bvhSortPayloadHeapHandle = payloadHeapHandle;
+    this.m_state.m_bvhSortCapacity = capacity;
     return true;
 }
 
-b8 SoftwareBvhBuilder::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
-    FOUNDATION_ASSERT(m_state.m_bvhSortPipeline);
-    FOUNDATION_ASSERT(m_state.m_bvhSortKeysBuffer);
-    FOUNDATION_ASSERT(m_state.m_bvhSortPayloadBuffer);
-    FOUNDATION_ASSERT(IsDescriptorClass(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
-    FOUNDATION_ASSERT(IsDescriptorClass(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
+[cpp_unwind]
+b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 elementCount, in u32 paddedCount){
+    assert(this.m_state.m_bvhSortPipeline.valid());
+    assert(this.m_state.m_bvhSortKeysBuffer.valid());
+    assert(this.m_state.m_bvhSortPayloadBuffer.valid());
+    assert(IsDescriptorClass(this.m_state.m_bvhSortKeysHeapHandle, GpuDescriptorClass::StorageBuffer));
+    assert(IsDescriptorClass(this.m_state.m_bvhSortPayloadHeapHandle, GpuDescriptorClass::StorageBuffer));
 
     FixedVector<BvhSortPushConstants, s_MaxBvhBitonicSortSteps> sortSteps;
-    const u32 groupCount = BuildBvhBitonicSortSteps(elementCount, paddedCount, m_state.m_bvhSortKeysHeapHandle.slot(), m_state.m_bvhSortPayloadHeapHandle.slot(), sortSteps);
+    const u32 groupCount = BuildBvhBitonicSortSteps(elementCount, paddedCount, this.m_state.m_bvhSortKeysHeapHandle.slot(), this.m_state.m_bvhSortPayloadHeapHandle.slot(), sortSteps);
     if(groupCount == 0u)
         return false;
 
-    const NotNull<Core::Buffer*> keysBuffer(m_state.m_bvhSortKeysBuffer.get());
-    const NotNull<Core::Buffer*> payloadBuffer(m_state.m_bvhSortPayloadBuffer.get());
+    mut Buffer keysBuffer = this.m_state.m_bvhSortKeysBuffer.deref();
+    mut Buffer payloadBuffer = this.m_state.m_bvhSortPayloadBuffer.deref();
 
     // Sort scratch fits the max mesh. Fence only this dispatch's padded lanes, sentinels included.
-    const Core::BufferRange sortRange(0u, static_cast<u64>(paddedCount) * sizeof(u32));
-    commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);
-    commandList.setBufferState(keysBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
-    commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
+    const BufferRange sortRange(0u, cast<u64>(paddedCount) * size_of<u32>());
+    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
+    commandList.setBufferState(keysBuffer, ResourceStates::UnorderedAccess, false, sortRange);
+    commandList.setBufferState(payloadBuffer, ResourceStates::UnorderedAccess, false, sortRange);
     commandList.commitBarriers();
 
-    for(const BvhSortPushConstants& pushConstants : sortSteps){
-        Core::ComputeState computeState;
-        computeState.setPipeline(m_state.m_bvhSortPipeline.get());
+    for(in BvhSortPushConstants pushConstants : sortSteps){
+        ComputeState computeState;
+        computeState.setPipeline(this.m_state.m_bvhSortPipeline.deref());
         commandList.setComputeState(computeState);
-        m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_state.m_bvhSortPipeline.get());
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, this.m_state.m_bvhSortPipeline.deref());
+        commandList.setPushConstants(pushConstants);
         commandList.dispatch(groupCount, 1u, 1u);
-        commandList.setBufferState(keysBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
-        commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
+        commandList.setBufferState(keysBuffer, ResourceStates::UnorderedAccess, false, sortRange);
+        commandList.setBufferState(payloadBuffer, ResourceStates::UnorderedAccess, false, sortRange);
         commandList.commitBarriers();
     }
     return true;
 }
 
+[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureBvhBuildPipeline(){
-    if(m_state.m_bvhMortonPipeline && m_state.m_bvhTopologyPipeline && m_state.m_bvhFitPipeline)
+    if(this.m_state.m_bvhMortonPipeline.valid() && this.m_state.m_bvhTopologyPipeline.valid() && this.m_state.m_bvhFitPipeline.valid())
         return true;
-    if(m_state.m_bvhBuildPipelineFailed)
+    if(this.m_state.m_bvhBuildPipelineFailed)
         return false;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software BVH build requires the initialized global descriptor heap"));
-        m_state.m_bvhBuildPipelineFailed = true;
+        error("RendererSystem: software BVH build requires the initialized global descriptor heap");
+        this.m_state.m_bvhBuildPipelineFailed = true;
         return false;
     }
 
     // Push-only layout; build resources use the global heap.
-    if(!EnsurePushConstantBindingLayout(device, sizeof(BvhBuildPushConstants), Core::ShaderType::Compute, m_state.m_bvhBuildBindingLayout)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BVH build binding layout"));
-        m_state.m_bvhBuildPipelineFailed = true;
+    if(!EnsurePushConstantBindingLayout(device, size_of<BvhBuildPushConstants>(), ShaderTypeMask::Compute, this.m_state.m_bvhBuildBindingLayout)){
+        error("RendererSystem: failed to create BVH build binding layout");
+        this.m_state.m_bvhBuildPipelineFailed = true;
         return false;
     }
 
-    const auto createBuildPipeline = [this, &device](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> BvhSubsystem::* member, const NameText<char> debugLabel)->b8{
-        return EnsurePushConstantComputePipeline<BvhSubsystem>(
-            device, m_shaderSystem, SubsystemAssetSelector<BvhSubsystem, ComputeShader>([member](const BvhSubsystem& s){ return s.*member; }), Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), sizeof(BvhBuildPushConstants), false, m_state.m_bvhBuildBindingLayout, shader, pipeline
-        );
-    };
-
     if(
-        !createBuildPipeline(m_state.m_bvhMortonShader, m_state.m_bvhMortonPipeline, &BvhSubsystem::mortonCs, "ECSRender_BvhMorton")
-        || !createBuildPipeline(m_state.m_bvhTopologyShader, m_state.m_bvhTopologyPipeline, &BvhSubsystem::topologyCs, "ECSRender_BvhTopology")
-        || !createBuildPipeline(m_state.m_bvhFitShader, m_state.m_bvhFitPipeline, &BvhSubsystem::fitCs, "ECSRender_BvhFit")
+        !EnsurePushConstantComputePipeline<BvhSubsystem>(device, this.m_shaderSystem, lambda[](in BvhSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.mortonCs; }, s_ShaderArchiveDefaultVariant,
+            Name("ECSRender_BvhMorton"), size_of<BvhBuildPushConstants>(), false, this.m_state.m_bvhBuildBindingLayout, this.m_state.m_bvhMortonShader, this.m_state.m_bvhMortonPipeline)
+        || !EnsurePushConstantComputePipeline<BvhSubsystem>(device, this.m_shaderSystem, lambda[](in BvhSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.topologyCs; }, s_ShaderArchiveDefaultVariant,
+            Name("ECSRender_BvhTopology"), size_of<BvhBuildPushConstants>(), false, this.m_state.m_bvhBuildBindingLayout, this.m_state.m_bvhTopologyShader, this.m_state.m_bvhTopologyPipeline)
+        || !EnsurePushConstantComputePipeline<BvhSubsystem>(device, this.m_shaderSystem, lambda[](in BvhSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.fitCs; }, s_ShaderArchiveDefaultVariant,
+            Name("ECSRender_BvhFit"), size_of<BvhBuildPushConstants>(), false, this.m_state.m_bvhBuildBindingLayout, this.m_state.m_bvhFitShader, this.m_state.m_bvhFitPipeline)
     ){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BVH build compute pipeline"));
-        m_state.m_bvhBuildPipelineFailed = true;
+        error("RendererSystem: failed to create BVH build compute pipeline");
+        this.m_state.m_bvhBuildPipelineFailed = true;
         return false;
     }
     return true;
 }
 
-b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(usize primitiveCount){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+[cpp_unwind]
+b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(in usize primitiveCount){
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
-    if(m_state.m_bvhVisitCounterBuffer && m_state.m_bvhBuildCapacity >= primitiveCount){
-        if(IsDescriptorClass(m_state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer))
+    if(this.m_state.m_bvhVisitCounterBuffer.valid() && this.m_state.m_bvhBuildCapacity >= primitiveCount){
+        if(IsDescriptorClass(this.m_state.m_bvhVisitCounterHeapHandle, GpuDescriptorClass::StorageBuffer))
             return true;
 
-        if(!m_state.m_bvhVisitCounterHeapHandle.valid()){
-            const auto acquired = RegisterHeapBuffer(heap, *m_state.m_bvhVisitCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-            if(acquired){
-                m_state.m_bvhVisitCounterHeapHandle = *acquired;
+        if(!this.m_state.m_bvhVisitCounterHeapHandle.valid()){
+            const auto acquired = RegisterHeapBuffer(heap, this.m_state.m_bvhVisitCounterBuffer.deref(), GpuDescriptorClass::StorageBuffer, true);
+            if(acquired.has_value()){
+                this.m_state.m_bvhVisitCounterHeapHandle = acquired.value();
                 return true;
             }
         }
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register existing BVH visit counter in the descriptor heap"));
+        error("RendererSystem: failed to register existing BVH visit counter in the descriptor heap");
         return false;
     }
 
-    const usize capacity = ::NextGrowingCapacity(m_state.m_bvhBuildCapacity, primitiveCount, s_BvhBuildInitialCapacity);
+    const usize capacity = NextGrowingCapacity(this.m_state.m_bvhBuildCapacity, primitiveCount, s_BvhBuildInitialCapacity);
 
     // Shared visit-counter scratch is safe because mesh builds are serialized.
-    Core::BufferDesc counterBufferDesc;
-    counterBufferDesc.setByteSize(static_cast<u64>(sizeof(u32) * capacity)).setStructStride(sizeof(u32)).setCanHaveUAVs(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhVisitCounter)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    auto counterBufferResult = m_graphics.createBuffer(counterBufferDesc);
-    if(!counterBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BVH visit counter buffer"));
+    BufferDesc counterBufferDesc;
+    counterBufferDesc.setByteSize(cast<u64>(size_of<u32>() * capacity)).setStructStride(size_of<u32>()).setCanHaveUAVs(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhVisitCounter)).enableAutomaticStateTracking(ResourceStates::Common);
+    auto counterBufferResult = this.m_graphics.createBuffer(counterBufferDesc);
+    if(!counterBufferResult.has_value()){
+        error("RendererSystem: failed to create BVH visit counter buffer");
         return false;
     }
-    Core::BufferHandle counterBuffer = Move(*counterBufferResult);
+    BufferHandle counterBuffer = counterBufferResult.value();
 
-    const auto counterHeapHandle = RegisterHeapBuffer(heap, *counterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-    if(!counterHeapHandle){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
+    const auto counterHeapHandle = RegisterHeapBuffer(heap, counterBuffer.deref(), GpuDescriptorClass::StorageBuffer, true);
+    if(!counterHeapHandle.has_value()){
+        error("RendererSystem: failed to register BVH visit counter in the descriptor heap");
         return false;
     }
 
-    RetireDescriptor(heap, m_state.m_bvhVisitCounterHeapHandle);
-    m_state.m_bvhVisitCounterBuffer = Move(counterBuffer);
-    m_state.m_bvhVisitCounterHeapHandle = *counterHeapHandle;
-    m_state.m_bvhBuildCapacity = capacity;
+    RetireDescriptor(heap, this.m_state.m_bvhVisitCounterHeapHandle);
+    this.m_state.m_bvhVisitCounterBuffer = counterBuffer;
+    this.m_state.m_bvhVisitCounterHeapHandle = counterHeapHandle.value();
+    this.m_state.m_bvhBuildCapacity = capacity;
     return true;
 }
 
-b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterialResources& materials){
+[cpp_unwind]
+b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceMaterialResources materials){
     // Binary scene BVH keeps CPU topology; runtime scenes refit its bounds from live mesh roots.
-    const usize requiredNodes = ComputeBinaryBvhNodeCount(static_cast<usize>(instanceCount));
-    if(!m_state.m_sceneBvhNodeBuffer || m_state.m_sceneBvhNodeCapacity < requiredNodes){
-        const usize capacity = ::NextGrowingCapacity(m_state.m_sceneBvhNodeCapacity, requiredNodes, ComputeBinaryBvhNodeCount(s_SceneBvhInitialInstanceCapacity));
+    const usize requiredNodes = ComputeBinaryBvhNodeCount(cast<usize>(instanceCount));
+    if(!this.m_state.m_sceneBvhNodeBuffer.valid() || this.m_state.m_sceneBvhNodeCapacity < requiredNodes){
+        const usize capacity = NextGrowingCapacity(this.m_state.m_sceneBvhNodeCapacity, requiredNodes, ComputeBinaryBvhNodeCount(s_SceneBvhInitialInstanceCapacity));
 
-        Core::BufferDesc nodeBufferDesc;
-        nodeBufferDesc.setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * capacity)).setStructStride(sizeof(NwbBvhNodeGpu)).setCanHaveUAVs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameSceneBvhNodes)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-        auto nodeBufferResult = m_graphics.createBuffer(nodeBufferDesc);
-        if(!nodeBufferResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene BVH node buffer"));
+        BufferDesc nodeBufferDesc;
+        nodeBufferDesc.setByteSize(cast<u64>(size_of<NwbBvhNodeGpu>() * capacity)).setStructStride(size_of<NwbBvhNodeGpu>()).setCanHaveUAVs(true)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameSceneBvhNodes)).enableAutomaticStateTracking(ResourceStates::Common);
+        auto nodeBufferResult = this.m_graphics.createBuffer(nodeBufferDesc);
+        if(!nodeBufferResult.has_value()){
+            error("RendererSystem: failed to create scene BVH node buffer");
             return false;
         }
-        Core::BufferHandle nodeBuffer = Move(*nodeBufferResult);
+        BufferHandle nodeBuffer = nodeBufferResult.value();
         // Register the new view before replacing ownership to keep the old pair retryable.
-        if(!materials.replaceRayTraceMaterialContextHeapHandle(*nodeBuffer.get(), m_state.m_sceneBvhNodeHeapHandle))
+        if(!materials.replaceRayTraceMaterialContextHeapHandle(nodeBuffer.deref(), this.m_state.m_sceneBvhNodeHeapHandle))
             return false;
-        m_state.m_sceneBvhNodeBuffer = Move(nodeBuffer);
-        m_state.m_sceneBvhNodeCapacity = capacity;
+        this.m_state.m_sceneBvhNodeBuffer = nodeBuffer;
+        this.m_state.m_sceneBvhNodeCapacity = capacity;
     }
 
-    if(!m_state.m_sceneInstanceBuffer || m_state.m_sceneInstanceCapacity < instanceCount){
-        const usize capacity = ::NextGrowingCapacity(m_state.m_sceneInstanceCapacity, instanceCount, s_SceneBvhInitialInstanceCapacity);
+    if(!this.m_state.m_sceneInstanceBuffer.valid() || this.m_state.m_sceneInstanceCapacity < instanceCount){
+        const usize capacity = NextGrowingCapacity(this.m_state.m_sceneInstanceCapacity, instanceCount, s_SceneBvhInitialInstanceCapacity);
 
-        Core::BufferDesc instanceBufferDesc;
-        instanceBufferDesc.setByteSize(static_cast<u64>(sizeof(SceneSwBvhInstanceGpu) * capacity)).setStructStride(sizeof(SceneSwBvhInstanceGpu))
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameSceneBvhInstances)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-        auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
-        if(!instanceBufferResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene BVH instance buffer"));
+        BufferDesc instanceBufferDesc;
+        instanceBufferDesc.setByteSize(cast<u64>(size_of<SceneSwBvhInstanceGpu>() * capacity)).setStructStride(size_of<SceneSwBvhInstanceGpu>())
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameSceneBvhInstances)).enableAutomaticStateTracking(ResourceStates::Common);
+        auto instanceBufferResult = this.m_graphics.createBuffer(instanceBufferDesc);
+        if(!instanceBufferResult.has_value()){
+            error("RendererSystem: failed to create scene BVH instance buffer");
             return false;
         }
-        Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
-        if(!materials.replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_state.m_sceneInstanceHeapHandle))
+        BufferHandle instanceBuffer = instanceBufferResult.value();
+        if(!materials.replaceRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_state.m_sceneInstanceHeapHandle))
             return false;
-        m_state.m_sceneInstanceBuffer = Move(instanceBuffer);
-        m_state.m_sceneInstanceCapacity = capacity;
-        NWB_LOGGER_INFO(FOUNDATION_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)"), static_cast<u64>(capacity));
+        this.m_state.m_sceneInstanceBuffer = instanceBuffer;
+        this.m_state.m_sceneInstanceCapacity = capacity;
+        info("RendererSystem: created software scene BVH buffers (capacity {} instances)", cast<u64>(capacity));
     }
-    return materials.ensureRayTraceMaterialContextHeapHandle(*m_state.m_sceneBvhNodeBuffer.get(), m_state.m_sceneBvhNodeHeapHandle)
-        && materials.ensureRayTraceMaterialContextHeapHandle(*m_state.m_sceneInstanceBuffer.get(), m_state.m_sceneInstanceHeapHandle);
+    return materials.ensureRayTraceMaterialContextHeapHandle(this.m_state.m_sceneBvhNodeBuffer.deref(), this.m_state.m_sceneBvhNodeHeapHandle)
+        && materials.ensureRayTraceMaterialContextHeapHandle(this.m_state.m_sceneInstanceBuffer.deref(), this.m_state.m_sceneInstanceHeapHandle);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+[cpp_unwind]
+b8 SoftwareBvhBuilder::createMeshBvhStorage(in usize primitiveCount, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer, mut GpuDescriptorHandle nodeHeapHandle, mut GpuDescriptorHandle parentHeapHandle){
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
-    if(nodeBuffer && parentBuffer){
-        if(IsDescriptorClass(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && IsDescriptorClass(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer))
-            return true;
-
-        Core::GpuDescriptorHandle acquiredNode = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle acquiredParent = Core::GpuDescriptorHandle::Invalid();
-        const auto acquireDescriptors = [&]() -> Expected<void>{
-            if(!nodeHeapHandle.valid()){
-                const auto acquiredNodeResult = RegisterHeapBuffer(heap, *nodeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-                if(!acquiredNodeResult)
-                    return MakeUnexpected(Failure{});
-                acquiredNode = *acquiredNodeResult;
-            }
-            if(!parentHeapHandle.valid()){
-                const auto acquiredParentResult = RegisterHeapBuffer(heap, *parentBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-                if(!acquiredParentResult)
-                    return MakeUnexpected(Failure{});
-                acquiredParent = *acquiredParentResult;
-            }
-            return {};
-        };
-        if(!acquireDescriptors()){
-            RetireDescriptor(heap, acquiredNode);
-            RetireDescriptor(heap, acquiredParent);
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register existing per-mesh BVH storage in the descriptor heap"));
+    if(nodeBuffer.valid() && parentBuffer.valid()){
+        if(!EnsureBvhStorageDescriptors(heap, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle)){
+            error("RendererSystem: failed to register existing per-mesh BVH storage in the descriptor heap");
             return false;
         }
-        if(acquiredNode.valid())
-            nodeHeapHandle = acquiredNode;
-        if(acquiredParent.valid())
-            parentHeapHandle = acquiredParent;
-        return IsDescriptorClass(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && IsDescriptorClass(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
+        return true;
     }
-    if(nodeBuffer || parentBuffer){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: per-mesh BVH storage is partially allocated"));
+    if(nodeBuffer.valid() || parentBuffer.valid()){
+        error("RendererSystem: per-mesh BVH storage is partially allocated");
         return false;
     }
 
     // Per-mesh binary LBVH needs 2N-1 persistent nodes.
     const usize nodeCount = ComputeBinaryBvhNodeCount(primitiveCount);
 
-    Core::BufferDesc nodeBufferDesc;
-    nodeBufferDesc.setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * nodeCount)).setStructStride(sizeof(NwbBvhNodeGpu)).setCanHaveUAVs(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhMeshNodes)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    auto newNodeBufferResult = m_graphics.createBuffer(nodeBufferDesc);
-    if(!newNodeBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create per-mesh BVH node buffer"));
+    BufferDesc nodeBufferDesc;
+    nodeBufferDesc.setByteSize(cast<u64>(size_of<NwbBvhNodeGpu>() * nodeCount)).setStructStride(size_of<NwbBvhNodeGpu>()).setCanHaveUAVs(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhMeshNodes)).enableAutomaticStateTracking(ResourceStates::Common);
+    auto newNodeBufferResult = this.m_graphics.createBuffer(nodeBufferDesc);
+    if(!newNodeBufferResult.has_value()){
+        error("RendererSystem: failed to create per-mesh BVH node buffer");
         return false;
     }
-    Core::BufferHandle newNodeBuffer = Move(*newNodeBufferResult);
+    BufferHandle newNodeBuffer = newNodeBufferResult.value();
 
-    Core::BufferDesc parentBufferDesc;
-    parentBufferDesc.setByteSize(static_cast<u64>(sizeof(u32) * nodeCount)).setStructStride(sizeof(u32)).setCanHaveUAVs(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhMeshParent)).enableAutomaticStateTracking(Core::ResourceStates::Common);
-    auto newParentBufferResult = m_graphics.createBuffer(parentBufferDesc);
-    if(!newParentBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create per-mesh BVH parent buffer"));
+    BufferDesc parentBufferDesc;
+    parentBufferDesc.setByteSize(cast<u64>(size_of<u32>() * nodeCount)).setStructStride(size_of<u32>()).setCanHaveUAVs(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhMeshParent)).enableAutomaticStateTracking(ResourceStates::Common);
+    auto newParentBufferResult = this.m_graphics.createBuffer(parentBufferDesc);
+    if(!newParentBufferResult.has_value()){
+        error("RendererSystem: failed to create per-mesh BVH parent buffer");
         return false;
     }
-    Core::BufferHandle newParentBuffer = Move(*newParentBufferResult);
+    BufferHandle newParentBuffer = newParentBufferResult.value();
 
-    Core::GpuDescriptorHandle newNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle newParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    const auto acquireDescriptors = [&]() -> Expected<void>{
-        const auto newNodeHeapHandleResult = RegisterHeapBuffer(heap, *newNodeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-        if(!newNodeHeapHandleResult)
-            return MakeUnexpected(Failure{});
-        newNodeHeapHandle = *newNodeHeapHandleResult;
-        const auto newParentHeapHandleResult = RegisterHeapBuffer(heap, *newParentBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
-        if(!newParentHeapHandleResult)
-            return MakeUnexpected(Failure{});
-        newParentHeapHandle = *newParentHeapHandleResult;
-        return {};
-    };
-    if(!acquireDescriptors()){
-        RetireDescriptor(heap, newNodeHeapHandle);
-        RetireDescriptor(heap, newParentHeapHandle);
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register per-mesh BVH storage in the descriptor heap"));
+    GpuDescriptorHandle newNodeHeapHandle = GpuDescriptorHandleInvalid();
+    GpuDescriptorHandle newParentHeapHandle = GpuDescriptorHandleInvalid();
+    if(!EnsureBvhStorageDescriptors(heap, newNodeBuffer, newParentBuffer, newNodeHeapHandle, newParentHeapHandle)){
+        error("RendererSystem: failed to register per-mesh BVH storage in the descriptor heap");
         return false;
     }
 
-    nodeBuffer = Move(newNodeBuffer);
-    parentBuffer = Move(newParentBuffer);
+    nodeBuffer = newNodeBuffer;
+    parentBuffer = newParentBuffer;
     nodeHeapHandle = newNodeHeapHandle;
     parentHeapHandle = newParentHeapHandle;
     return true;
 }
 
-b8 SoftwareBvhBuilder::ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
+[cpp_unwind]
+b8 SoftwareBvhBuilder::ensureMeshSwBvhResources(in u32 primitiveCount, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer, mut GpuDescriptorHandle nodeHeapHandle, mut GpuDescriptorHandle parentHeapHandle){
     if(!RayTracingBuildPolicy().validateMeshSwBvhPrimitiveCount(primitiveCount))
         return false;
 
-    if(!ensureBvhSortPipeline())
+    if(!this.ensureBvhSortPipeline())
         return false;
-    if(!ensureBvhBuildPipeline())
+    if(!this.ensureBvhBuildPipeline())
         return false;
     // Allocate shared sort/counter scratch at the maximum supported mesh size.
-    if(!ensureBvhSortBuffers(s_BvhMaxPrimitivesPerMesh))
+    if(!this.ensureBvhSortBuffers(s_BvhMaxPrimitivesPerMesh))
         return false;
-    if(!ensureBvhVisitCounterBuffer(s_BvhMaxPrimitivesPerMesh))
+    if(!this.ensureBvhVisitCounterBuffer(s_BvhMaxPrimitivesPerMesh))
         return false;
-    if(!createMeshBvhStorage(primitiveCount, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
+    if(!this.createMeshBvhStorage(primitiveCount, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
     return true;
 }
 
-b8 SoftwareBvhBuilder::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle)noexcept{
-    return
-        nodeBuffer
-        && parentBuffer
-        && IsDescriptorClass(nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(parentHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && m_state.m_bvhSortPipeline
-        && m_state.m_bvhSortKeysBuffer
-        && m_state.m_bvhSortPayloadBuffer
-        && IsDescriptorClass(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        && m_state.m_bvhMortonPipeline
-        && m_state.m_bvhTopologyPipeline
-        && m_state.m_bvhFitPipeline
-        && m_state.m_bvhVisitCounterBuffer
-        && IsDescriptorClass(m_state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-    ;
+b8 SoftwareBvhBuilder::meshSwBvhResourcesReady(in BufferHandle nodeBuffer, in BufferHandle parentBuffer, in GpuDescriptorHandle nodeHeapHandle, in GpuDescriptorHandle parentHeapHandle){
+    return MeshSwBvhResourcesReady(this.m_state, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle);
 }
 
-b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
-    const u32 positionHeapSlot,
-    const u32 triangleIndexHeapSlot,
-    u32 primitiveCount,
-    const Float3Int& aabbMin,
-    const Float3Int& aabbMax,
-    const Core::GpuDescriptorHandle nodeHeapHandle,
-    const Core::GpuDescriptorHandle parentHeapHandle,
-    Core::CommandList& commandList,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer
-){
-    if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
+[cpp_unwind]
+b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in VectorSingle aabbMin, in VectorSingle aabbMax, in GpuDescriptorHandle nodeHeapHandle,
+    in GpuDescriptorHandle parentHeapHandle, mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer){
+    if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !this.meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
     const BvhMeshBuildDispatchPlan dispatchPlan = ResolveBvhMeshBuildDispatchPlan(primitiveCount);
 
-    const NotNull<Core::Buffer*> keysBuffer(m_state.m_bvhSortKeysBuffer.get());
-    const NotNull<Core::Buffer*> payloadBuffer(m_state.m_bvhSortPayloadBuffer.get());
-    const NotNull<Core::Buffer*> visitCounterBuffer(m_state.m_bvhVisitCounterBuffer.get());
-    const NotNull<Core::Buffer*> meshNodeBuffer(nodeBuffer.get());
-    const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
+    mut Buffer keysBuffer = this.m_state.m_bvhSortKeysBuffer.deref();
+    mut Buffer payloadBuffer = this.m_state.m_bvhSortPayloadBuffer.deref();
+    mut Buffer visitCounterBuffer = this.m_state.m_bvhVisitCounterBuffer.deref();
+    mut Buffer meshNodeBuffer = nodeBuffer.deref();
+    mut Buffer meshParentBuffer = parentBuffer.deref();
 
     const BvhBuildPushConstants pushConstants = MakeBvhBuildPushConstants(
-        primitiveCount, positionHeapSlot, triangleIndexHeapSlot, m_state.m_bvhSortKeysHeapHandle.slot(), m_state.m_bvhSortPayloadHeapHandle.slot(),
-        nodeHeapHandle.slot(), parentHeapHandle.slot(), m_state.m_bvhVisitCounterHeapHandle.slot(), LoadFloatInt(aabbMin), LoadFloatInt(aabbMax)
+        primitiveCount, positionHeapSlot, triangleIndexHeapSlot, this.m_state.m_bvhSortKeysHeapHandle.slot(), this.m_state.m_bvhSortPayloadHeapHandle.slot(),
+        nodeHeapHandle.slot(), parentHeapHandle.slot(), this.m_state.m_bvhVisitCounterHeapHandle.slot(), aabbMin, aabbMax
     );
 
-    commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(meshParentBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
 
-    const auto bvhBuildBarrier = [&commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer](){
-        commandList.setBufferState(keysBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshNodeBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshParentBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(visitCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-    };
-
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const auto dispatchBuildKernel = [&commandList, &pushConstants, &heap](Core::ComputePipeline& pipeline, const u32 groupCount){
-        Core::ComputeState computeState;
-        computeState.setPipeline(&pipeline);
-        commandList.setComputeState(computeState);
-        heap.bindCompute(commandList, pipeline);
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(groupCount, 1u, 1u);
-    };
-
-    dispatchBuildKernel(*m_state.m_bvhMortonPipeline, dispatchPlan.mortonGroups);
-    bvhBuildBarrier();
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+    DispatchBvhBuildKernel(commandList, heap, pushConstants, this.m_state.m_bvhMortonPipeline.deref(), dispatchPlan.mortonGroups);
+    CommitBvhBuildBarrier(commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer);
 
     // Attribute sorting to the mesh rebuild at its call site.
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSwBvhSort, m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSwBvhSort, this.m_graphics.getDevice(), commandList);
 
-        if(!bvhBitonicSort(commandList, primitiveCount, dispatchPlan.paddedCount))
+        if(!this.bvhBitonicSort(commandList, primitiveCount, dispatchPlan.paddedCount))
             return false;
     }
-    bvhBuildBarrier();
+    CommitBvhBuildBarrier(commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer);
 
     if(dispatchPlan.hasTopologyDispatch()){
-        dispatchBuildKernel(*m_state.m_bvhTopologyPipeline, dispatchPlan.topologyGroups);
-        bvhBuildBarrier();
+        DispatchBvhBuildKernel(commandList, heap, pushConstants, this.m_state.m_bvhTopologyPipeline.deref(), dispatchPlan.topologyGroups);
+        CommitBvhBuildBarrier(commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer);
     }
 
-    dispatchBuildKernel(*m_state.m_bvhFitPipeline, dispatchPlan.fitGroups);
+    DispatchBvhBuildKernel(commandList, heap, pushConstants, this.m_state.m_bvhFitPipeline.deref(), dispatchPlan.fitGroups);
     return true;
 }
 
-b8 SoftwareBvhBuilder::refitMeshSwBvhPrepared(const u32 positionHeapSlot, const u32 triangleIndexHeapSlot, u32 primitiveCount, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle, Core::CommandList& commandList, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer){
-    if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
+[cpp_unwind]
+b8 SoftwareBvhBuilder::refitMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in GpuDescriptorHandle nodeHeapHandle, in GpuDescriptorHandle parentHeapHandle,
+    mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer){
+    if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !this.meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
-    const NotNull<Core::Buffer*> keysBuffer(m_state.m_bvhSortKeysBuffer.get());
-    const NotNull<Core::Buffer*> payloadBuffer(m_state.m_bvhSortPayloadBuffer.get());
-    const NotNull<Core::Buffer*> meshNodeBuffer(nodeBuffer.get());
-    const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
-    const NotNull<Core::Buffer*> visitCounterBuffer(m_state.m_bvhVisitCounterBuffer.get());
+    mut Buffer keysBuffer = this.m_state.m_bvhSortKeysBuffer.deref();
+    mut Buffer payloadBuffer = this.m_state.m_bvhSortPayloadBuffer.deref();
+    mut Buffer meshNodeBuffer = nodeBuffer.deref();
+    mut Buffer meshParentBuffer = parentBuffer.deref();
+    mut Buffer visitCounterBuffer = this.m_state.m_bvhVisitCounterBuffer.deref();
 
     const BvhBuildPushConstants pushConstants = MakeBvhRefitPushConstants(
-        primitiveCount, positionHeapSlot, triangleIndexHeapSlot, m_state.m_bvhSortKeysHeapHandle.slot(), m_state.m_bvhSortPayloadHeapHandle.slot(),
-        nodeHeapHandle.slot(), parentHeapHandle.slot(), m_state.m_bvhVisitCounterHeapHandle.slot()
+        primitiveCount, positionHeapSlot, triangleIndexHeapSlot, this.m_state.m_bvhSortKeysHeapHandle.slot(), this.m_state.m_bvhSortPayloadHeapHandle.slot(),
+        nodeHeapHandle.slot(), parentHeapHandle.slot(), this.m_state.m_bvhVisitCounterHeapHandle.slot()
     );
 
-    commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(meshParentBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer.get(), true);
-    Core::ComputeState computeState;
-    computeState.setPipeline(m_state.m_bvhFitPipeline.get());
+    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+    ComputeState computeState;
+    computeState.setPipeline(this.m_state.m_bvhFitPipeline.deref());
     commandList.setComputeState(computeState);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_state.m_bvhFitPipeline.get());
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, this.m_state.m_bvhFitPipeline.deref());
+    commandList.setPushConstants(pushConstants);
     commandList.dispatch(ResolveBvhMeshRefitGroups(primitiveCount), 1u, 1u);
 
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

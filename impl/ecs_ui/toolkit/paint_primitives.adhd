@@ -2,13 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/validation.adhd>
+#include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/toolkit/global.adhd>
 #include <impl/ecs_ui/toolkit/images/image_source.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+type PaintVector<T> = Vector<T>;
 
 // Share of free space placed before an item to center it, or the midpoint of an extent.
 const f32 s_RectCenterFraction = 0.5f;
@@ -105,6 +107,8 @@ class SkinBindingRecord<TUiSkin, TTexture>{
     public u32 atlasHeight = 0u;
     public f32 referenceDensity = 1.0f;
 }
+
+type SkinBinding = SkinBindingRecord<UiSkin, Texture>;
 
 class PaintOverlayFrame{
     public usize clipDepth = 0u;

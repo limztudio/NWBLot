@@ -2,7 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/avboit_frame_targets.adhd>
+#include <impl/ecs_render/avboit/avboit_system.adhd>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.adhd>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd>
+#include <impl/ecs_render/shared/task_graph_draw_snapshots.adhd>
 #include <impl/ecs_render/material/pipeline_types.adhd>
 
 
@@ -41,247 +46,14 @@ FramebufferHandle SelectAvboitTargetFramebuffer(in AvboitFrameTargets targets, i
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_scheduling.adhd.h>
-#include <impl/ecs_render/material/generated_geometry_validation.adhd.h>
-#include <impl/ecs_render/material/renderer_pipeline_types.adhd.h>
-#include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/avboit/avboit_frame_targets.adhd.h>
-#include <impl/ecs_render/shared/task_graph_draw_snapshots.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_desc.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererAvboitSystem;
-class RendererMaterialSystem;
-class DeferredFrameTargets;
-class AvboitComputeEmulationRecordTrait;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// All bindings required: compute emulation always generates against this frame's bindings.
-struct AvboitComputeEmulationTaskPayload{
-    Core::GraphicsRuntime& graphics;
-    RendererMaterialSystem& materialSystem;
-    MeshFrameBindingSnapshot frameBindings;
-    CsgGraphResourceSnapshot csgResources;
-    DeferredFrameTargets& targets;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& timing;
-    ECSRenderDetail::AliasFreeComputeEmulationGraphPlan plan;
-    ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
-    usize instanceCount = 0u;
-    usize materialTypedByteCount = 0u;
-    b8 materialDrawBuffersUploaded = false;
-    b8 csgFrameBuffersUploaded = false;
-    b8 materialFrameStatesGraphOwned = false;
-    b8 materialGeometryStatesGraphOwned = false;
-    b8 conservativeGeometryScissor = false;
-
-
-public:
-    explicit AvboitComputeEmulationTaskPayload(
-        Core::Alloc::GlobalArena& arena,
-        Core::GraphicsRuntime& graphicsIn,
-        RendererMaterialSystem& materialSystemIn,
-        DeferredFrameTargets& targetsIn,
-        Core::GpuTimingSubmissionTicket& timingTicketIn,
-        Optional<Core::GpuTimingMeasure>& timingIn
-    )noexcept
-        : graphics(graphicsIn)
-        , materialSystem(materialSystemIn)
-        , targets(targetsIn)
-        , timingTicket(timingTicketIn)
-        , timing(timingIn)
-        , plan(arena)
-        , csgPlan(arena)
-    {}
-};
-
-// All bindings required: shared emulation always generates against this frame's bindings.
-struct AvboitSharedComputeEmulationTaskPayload{
-    Core::GraphicsRuntime& graphics;
-    RendererMaterialSystem& materialSystem;
-    DeferredFrameTargets& targets;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& timing;
-    MeshFrameBindingSnapshot frameBindings;
-    RegularSharedComputeEmulationGraphPlan plan;
-    usize drawIndex = 0u;
-    usize instanceCount = 0u;
-    usize materialTypedByteCount = 0u;
-    b8 materialDrawBuffersUploaded = false;
-    b8 materialFrameStatesGraphOwned = false;
-    b8 materialGeometryStatesGraphOwned = false;
-    b8 beginTiming = false;
-    b8 finishTiming = false;
-    SharedComputeEmulationPhase::Enum phase = SharedComputeEmulationPhase::Generate;
-};
-
-// The avboit system, the frame targets, and the timing ticket are required: raster passes always record against this frame's bindings.
-struct AvboitRasterPassTaskPayload{
-    RendererAvboitSystem& avboitSystem;
-    DeferredFrameTargets& targets;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    MeshFrameBindingSnapshot frameBindings;
-    ECSRenderDetail::TransparentMaterialPassGraphSnapshot snapshot;
-    CsgGraphResourceSnapshot csgResources;
-    Optional<Core::GpuTimingMeasure>* computeEmulationTiming = nullptr;
-    b8 phasePrepared = false;
-    b8 streamsUploaded = false;
-    b8 materialFrameStatesGraphOwned = false;
-    b8 materialGeometryStatesGraphOwned = false;
-    b8 computeEmulationOutputStatesGraphOwned = false;
-    b8 csgComputeEmulationOutputStatesGraphOwned = false;
-    b8 generatedGeometryReused = false;
-    b8 hasTransparentRenderers = false;
-
-
-public:
-    explicit AvboitRasterPassTaskPayload(
-        Core::Alloc::GlobalArena& arena,
-        RendererAvboitSystem& avboitSystemIn,
-        DeferredFrameTargets& targetsIn,
-        Core::GpuTimingSubmissionTicket& timingTicketIn
-    )noexcept
-        : avboitSystem(avboitSystemIn)
-        , targets(targetsIn)
-        , timingTicket(timingTicketIn)
-        , snapshot(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct AvboitComputeEmulationGraphTaskBase{
-    using Payload = AvboitComputeEmulationTaskPayload;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.timing);
-    }
-};
-
-struct AvboitSharedComputeEmulationGraphTaskBase : RendererTaskGraphDetail::SharedComputeEmulationPhaseTaskCommandRequirementsBase<AvboitSharedComputeEmulationTaskPayload>{
-    using Payload = AvboitSharedComputeEmulationTaskPayload;
-
-
-public:
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.timing);
-    }
-};
-
-struct AvboitRasterPassGraphTaskBase{
-    using Payload = AvboitRasterPassTaskPayload;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
-
-
-public:
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(payload.computeEmulationTiming);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 RecordAvboitComputeEmulation(const AvboitComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
-[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
-
-template<typename RenderPassMethod>
-[[nodiscard]] FOUNDATION_INLINE b8 RecordAvboitRasterPassFromPayload(
-    const AvboitRasterPassTaskPayload& payload,
-    Core::CommandList& commandList,
-    const RenderPassMethod renderPass
-){
-    if((payload.computeEmulationOutputStatesGraphOwned || payload.csgComputeEmulationOutputStatesGraphOwned) && !payload.generatedGeometryReused && !payload.computeEmulationTiming)
-        return false;
-
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    MaterialPassDrawItemPartitionsView drawItems{};
-    CsgFrameGpuDataView csgFrameData{};
-    usize preparedInstanceCount = 0u;
-    usize preparedMaterialTypedByteCount = 0u;
-    if(payload.hasTransparentRenderers && (!payload.phasePrepared || !payload.snapshot.captured))
-        return false;
-    if(payload.phasePrepared && payload.snapshot.captured){
-        drawItems = payload.snapshot.drawItemsView();
-        csgFrameData = payload.snapshot.csgFrameDataView();
-        preparedInstanceCount = payload.snapshot.instanceCount;
-        preparedMaterialTypedByteCount = payload.snapshot.materialTypedByteCount;
-    }
-    if(payload.hasTransparentRenderers){
-        renderPass(
-            payload.avboitSystem,
-            commandList,
-            payload.targets,
-            drawItems,
-            csgFrameData,
-            payload.csgResources,
-            payload.frameBindings,
-            preparedInstanceCount,
-            preparedMaterialTypedByteCount,
-            payload.materialFrameStatesGraphOwned,
-            payload.materialGeometryStatesGraphOwned,
-            payload.computeEmulationOutputStatesGraphOwned,
-            payload.csgComputeEmulationOutputStatesGraphOwned,
-            payload.generatedGeometryReused,
-            payload.computeEmulationTiming
-        );
-    }
-    return true;
+AvboitComputeEmulationRecordTrait GetAvboitComputeEmulationRecordTrait(in MaterialPipelinePass pass){
+    if(pass == MaterialPipelinePass::AvboitAccumulate)
+        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitAccumulate, pass, AvboitTargetFramebufferKind::Accumulation);
+    if(pass == MaterialPipelinePass::AvboitExtinction)
+        return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitExtinction, pass, AvboitTargetFramebufferKind::Low);
+    assert(pass == MaterialPipelinePass::AvboitOccupancy);
+    return AvboitComputeEmulationRecordTrait(s_TimingScopeAvboitOccupancy, pass, AvboitTargetFramebufferKind::Low);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 HasValidAvboitComputeEmulationRecordInputs(in b8 hasFramebufferMember, in b8 regularCaptured, in b8 csgCaptured){
     return hasFramebufferMember && regularCaptured != csgCaptured;
@@ -289,6 +61,143 @@ b8 HasValidAvboitComputeEmulationRecordInputs(in b8 hasFramebufferMember, in b8 
 
 b8 HasValidAvboitSharedComputeEmulationRecordInputs(in b8 hasFramebuffer, in b8 planCaptured, in usize drawIndex, in usize drawCount){
     return hasFramebuffer && planCaptured && drawIndex < drawCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[modular]
+class AvboitComputeEmulationTaskPayload{
+    public mut GraphicsRuntime graphics;
+    public mut RendererMaterialSystem materialSystem;
+    public mut DeferredFrameTargets targets;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public mut Optional<GpuTimingMeasure> timing;
+    public MaterialPipelinePass pass;
+    public MeshFrameBindingSnapshot frameBindings;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 materialDrawBuffersUploaded = false;
+    public b8 materialFrameStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned = false;
+    public CsgGraphResourceSnapshot csgResources;
+    public AliasFreeComputeEmulationGraphPlan plan;
+    public OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
+    public b8 csgFrameBuffersUploaded = false;
+    public b8 conservativeGeometryScissor = false;
+
+    public AvboitComputeEmulationTaskPayload(
+        mut GraphicsRuntime graphics,
+        mut RendererMaterialSystem materialSystem,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> timing,
+        in MaterialPipelinePass pass
+    ){
+        this.graphics = graphics;
+        this.materialSystem = materialSystem;
+        this.targets = targets;
+        this.timingTicket = timingTicket;
+        this.timing = timing;
+        this.pass = pass;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{
+        return SharedComputeEmulationCommandRequirements(true);
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.timing);
+    }
+}
+
+
+[modular]
+class AvboitSharedComputeEmulationTaskPayload{
+    public mut GraphicsRuntime graphics;
+    public mut RendererMaterialSystem materialSystem;
+    public mut DeferredFrameTargets targets;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public mut Optional<GpuTimingMeasure> timing;
+    public MaterialPipelinePass pass;
+    public MeshFrameBindingSnapshot frameBindings;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 materialDrawBuffersUploaded = false;
+    public b8 materialFrameStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned = false;
+    public RegularSharedComputeEmulationGraphPlan plan;
+    public usize drawIndex = 0u;
+    public b8 beginTiming = false;
+    public b8 finishTiming = false;
+    public SharedComputeEmulationPhase phase = SharedComputeEmulationPhase::Generate;
+
+    public AvboitSharedComputeEmulationTaskPayload(
+        mut GraphicsRuntime graphics,
+        mut RendererMaterialSystem materialSystem,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> timing,
+        in MaterialPipelinePass pass
+    ){
+        this.graphics = graphics;
+        this.materialSystem = materialSystem;
+        this.targets = targets;
+        this.timingTicket = timingTicket;
+        this.timing = timing;
+        this.pass = pass;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{
+        return SharedComputeEmulationCommandRequirements(this.phase == SharedComputeEmulationPhase::Generate);
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.timing);
+    }
+}
+
+
+[modular]
+class AvboitRasterPassTaskPayload{
+    public mut RendererAvboitSystem avboitSystem;
+    public mut DeferredFrameTargets targets;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public MaterialPipelinePass pass;
+    public MeshFrameBindingSnapshot frameBindings;
+    public TransparentMaterialPassGraphSnapshot snapshot;
+    public CsgGraphResourceSnapshot csgResources;
+    public Optional<mut Optional<GpuTimingMeasure>> computeEmulationTiming;
+    public b8 phasePrepared = false;
+    public b8 streamsUploaded = false;
+    public b8 materialFrameStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned = false;
+    public b8 computeEmulationOutputStatesGraphOwned = false;
+    public b8 csgComputeEmulationOutputStatesGraphOwned = false;
+    public b8 generatedGeometryReused = false;
+    public b8 hasTransparentRenderers = false;
+
+    public AvboitRasterPassTaskPayload(
+        mut RendererAvboitSystem avboitSystem,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        in MaterialPipelinePass pass
+    ){
+        this.avboitSystem = avboitSystem;
+        this.targets = targets;
+        this.timingTicket = timingTicket;
+        this.pass = pass;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{
+        return GpuTaskCommandRequirements(GpuQueueCapability::Graphics | GpuQueueCapability::Compute);
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
+    public void discarded(){
+        if(this.computeEmulationTiming.has_value())
+            DiscardGpuTimingMeasure(this.computeEmulationTiming.value());
+    }
 }
 
 

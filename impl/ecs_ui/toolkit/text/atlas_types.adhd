@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/asset.adhd>
 #include <impl/assets_font_atlas/types.adhd>
 #include <impl/ecs_ui/toolkit/global.adhd>
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
@@ -20,7 +21,6 @@ const u32 s_GlyphAtlasNoPage = 0xffffffffu;
 const f32 s_BakedFontAtlasMinScale = 0.75f;
 const f32 s_BakedFontAtlasMaxScale = 1.5f;
 const StringView s_TextFontLifecycleCategory = "ui_font_lifecycle";
-const Name s_TextPaintCandidatesArena = "impl/ecs_ui/toolkit/text/paint_candidates";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,6 +88,9 @@ class SdfAtlasPageBindingRecord<TFont>{
     public u32 spreadPixels = 0u;
     public u32 distanceEncoding = s_FontAtlasDistanceEncoding;
 }
+
+type GlyphPageBinding = GlyphPageBindingRecord<Font>;
+type SdfAtlasPageBinding = SdfAtlasPageBindingRecord<Font>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,153 +2,116 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/assets_mesh/skin_asset.adhd>
+#include <impl/ecs_mesh/components.adhd>
+#include <impl/ecs_mesh/skinning/runtime_instance.adhd>
+#include <impl/ecs_mesh/skinning/runtime_cache_validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/runtime_instance.adhd.h>
+[move_only]
+class MeshSkinningSource{
+    public UniquePtr<Mesh> meshAsset;
+    public UniquePtr<Skin> skinAsset;
+    public u32 referenceCount = 0u;
+}
 
-#include <impl/ecs_mesh/components.adhd.h>
+type SkinningSourceMap = HashMap<Name, MeshSkinningSource>;
+type SkinningInstanceMap = HashMap<EntityID, MeshSkinningRuntimeInstance>;
 
-#include <core/alloc/scratch.h>
-#include <core/assets/module.h>
+class PendingSkinningInstance : NoCopy{
+    private mut SkinningInstanceMap m_instances;
+    private mut SkinningSourceMap m_sources;
+    private EntityID m_entity;
+    private Name m_name;
+    public b8 inserted = false;
+    public b8 published = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class AssetManager;
+    public PendingSkinningInstance(mut SkinningInstanceMap instances, mut SkinningSourceMap sources, in EntityID entity, in Name name){
+        this.m_instances = instances;
+        this.m_sources = sources;
+        this.m_entity = entity;
+        this.m_name = name;
+    }
+    public ~PendingSkinningInstance(){
+        if(!this.published){
+            if(this.inserted)
+                this.m_instances.erase(this.m_entity);
+            const auto source = this.m_sources.find(this.m_name);
+            if(source != this.m_sources.end() && source.value().referenceCount == 0u)
+                this.m_sources.erase(this.m_name);
+        }
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+[modular]
+class MeshSkinningRuntimeCache : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private in AssetManager m_assets;
+    private SkinningSourceMap m_sources;
+    private SkinningInstanceMap m_instances;
+    private HashMap<u64, EntityID> m_handleToEntity;
+    private u64 m_nextHandleValue = 1u;
 
+    public MeshSkinningRuntimeCache(mut GraphicsRuntime graphics, in AssetManager assets){
+        this.m_graphics = graphics;
+        this.m_assets = assets;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public void prepareResources(mut World world);
+    public void clear(){
+        this.m_handleToEntity.clear();
+        this.m_instances.clear();
+        this.m_sources.clear();
+    }
 
+    public Optional<mut MeshSkinningRuntimeInstance> editInstance(in RuntimeMeshHandle handle){
+        const auto entity = TryFindRuntimeMeshEntityByHandle(this.m_handleToEntity, handle.value);
+        if(entity.has_value() && this.m_instances.contains(entity.value())){
+            mut MeshSkinningRuntimeInstance instance = this.m_instances.at(entity.value());
+            return Optional<mut MeshSkinningRuntimeInstance>(instance);
+        }
+        return Optional<mut MeshSkinningRuntimeInstance>();
+    }
+    public Optional<in MeshSkinningRuntimeInstance> findInstance(in RuntimeMeshHandle handle)const{
+        const auto entity = TryFindRuntimeMeshEntityByHandle(this.m_handleToEntity, handle.value);
+        if(entity.has_value() && this.m_instances.contains(entity.value())){
+            in MeshSkinningRuntimeInstance instance = this.m_instances.at(entity.value());
+            return Optional<in MeshSkinningRuntimeInstance>(instance);
+        }
+        return Optional<in MeshSkinningRuntimeInstance>();
+    }
 
-NWB_ECS_BEGIN
+    [cpp_unwind]
+    private b8 ensureRuntimeMesh(in EntityID entity, mut SkinnedMeshBindingComponent component);
+    [cpp_unwind]
+    private b8 ensureSourceLoaded(in AssetRef<Skin> ref);
+    [cpp_unwind]
+    private b8 uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeInstance instance);
+    [owner_result]
+    private MeshSkinningRuntimeInstance emptyInstance()const{ return MeshSkinningRuntimeInstance(); }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class World;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshSkinningRuntimeCache final : NoCopy{
-private:
-    using InstanceMap = HashMap<Core::ECS::EntityID, MeshSkinningRuntimeInstance, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>>;
-
-
-private:
-    struct MeshSkinningSource{
-        UniquePtr<Core::Assets::IAsset> meshAsset;
-        UniquePtr<Core::Assets::IAsset> skinAsset;
-        u32 referenceCount = 0;
-
-
-    public:
-        [[nodiscard]] const Mesh& mesh()const noexcept;
-        [[nodiscard]] const Skin& skin()const noexcept;
-    };
-
-
-public:
-    MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager)
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_assetManager(assetManager)
-        , m_sources(0, Hasher<Name>(), EqualTo<Name>(), arena)
-        , m_instances(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
-        , m_handleToEntity(0, Hasher<u64>(), EqualTo<u64>(), arena)
-    {}
-
-
-public:
-    void prepareResources(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
-    void clear()noexcept;
-
-    [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(const RuntimeMeshHandle handle)noexcept;
-    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstance(const RuntimeMeshHandle handle)const noexcept;
-
-
-private:
-    [[nodiscard]] b8 ensureRuntimeMesh(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena, SkinnedMeshBindingComponent& component);
-    [[nodiscard]] Expected<NotNull<MeshSkinningSource*>> ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset);
-    [[nodiscard]] b8 uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<RuntimeMeshHandle> allocateHandle();
-    void releaseRuntimeMesh(Core::ECS::EntityID entity)noexcept;
-    InstanceMap::iterator eraseInstance(InstanceMap::iterator it)noexcept;
-    void releaseSource(const Name& sourceName)noexcept;
-    void eraseUnusedSource(const Name& sourceName)noexcept;
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    Core::Assets::AssetManager& m_assetManager;
-
-    HashMap<Name, MeshSkinningSource, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_sources;
-    InstanceMap m_instances;
-    HashMap<u64, Core::ECS::EntityID, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_handleToEntity;
-    u64 m_nextHandleValue = 1u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private void releaseRuntimeMesh(in EntityID entity){
+        const auto found = this.m_instances.find(entity);
+        if(found == this.m_instances.end())
+            return;
+        const Name sourceName = found.value().sourceName;
+        this.m_handleToEntity.erase(found.value().handle.value);
+        this.m_instances.erase(entity);
+        const auto source = this.m_sources.find(sourceName);
+        if(source != this.m_sources.end() && source.value().referenceCount > 0u)
+            --source.value().referenceCount;
+        if(source != this.m_sources.end() && source.value().referenceCount == 0u)
+            this.m_sources.erase(sourceName);
+    }
 }
 
 

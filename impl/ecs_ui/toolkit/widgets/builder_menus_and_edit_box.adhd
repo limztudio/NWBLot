@@ -2,6 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_input.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_layout_preparer.adhd>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/edit/types.adhd>
 #include <impl/ecs_ui/toolkit/widgets/popup_style.adhd>
 
 
@@ -44,142 +54,138 @@ f32 ResolveSinglePixelCaretWidth(in DisplayMetrics display){
     return 1.0f / display.pixelScaleX;
 }
 
-b8 IsValidVirtualListWheelRows(in f32 wheelRows){
-    return IsFinite(wheelRows) && wheelRows > 0.0f;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SnapshotNumericFrame(in Optional<mut BuilderIntegerEditFrame> loan, in EditModel model, in b8 focused){
+    if(!loan.has_value())
+        return true;
+    mut BuilderIntegerEditFrame frame = loan.value();
+    if(!frame.model.has_value() || frame.model.value().revision() != frame.revision)
+        return false;
+    frame.draftStamp = model.stamp();
+    frame.focused = focused;
+    return true;
+}
+
+b8 SnapshotNumericFrame(in Optional<mut BuilderFloatEditFrame> loan, in EditModel model, in b8 focused){
+    if(!loan.has_value())
+        return true;
+    mut BuilderFloatEditFrame frame = loan.value();
+    if(!frame.model.has_value() || frame.model.value().revision() != frame.revision)
+        return false;
+    frame.draftStamp = model.stamp();
+    frame.focused = focused;
+    return true;
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list_input.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list_layout_preparer.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
-
-#include <global/scope_exit.h>
-#include <global/simd/vector_arithmetic.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placement, const b8 interactive){
-    if(!sliderMatches(frame))
+b8 Builder::applySliderInput(mut SliderFrame frame, in SliderPlacement placement, in b8 interactive){
+    if(!this.sliderMatches(frame))
         return false;
     if(!interactive || placement.centerTravel.width <= 0.0f)
         return true;
     const auto track = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
-    if(!track)
+    if(!track.has_value())
         return false;
     const auto thumb = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb);
-    if(!thumb)
+    if(!thumb.has_value())
         return false;
-    auto control = m_context.takeControlAction(frame.m_widget, true, frame.m_token);
+    auto control = this.m_context.takeControlAction(frame.m_widget, true, frame.m_token);
     b8 hasControl = control.has_value();
-    auto trackGesture = m_context.takePartPointerGesture(frame.m_widget, *track, true);
+    auto trackGesture = this.m_context.takePartPointerGesture(frame.m_widget, track.value(), true);
     b8 hasTrack = trackGesture.has_value();
-    auto thumbGesture = m_context.takePartPointerGesture(frame.m_widget, *thumb, true);
+    auto thumbGesture = this.m_context.takePartPointerGesture(frame.m_widget, thumb.value(), true);
     b8 hasThumb = thumbGesture.has_value();
     while(hasControl || hasTrack || hasThumb){
-        if(!sliderMatches(frame))
+        if(!this.sliderMatches(frame))
             return false;
+        u64 controlSequence = 0u;
+        u64 trackSequence = 0u;
+        u64 thumbSequence = 0u;
+        if(hasControl)
+            controlSequence = control.value().id.sequence;
+        if(hasTrack)
+            trackSequence = trackGesture.value().updateSequence;
+        if(hasThumb)
+            thumbSequence = thumbGesture.value().updateSequence;
         const u8 stream = SelectNextSliderInputStream(
             hasControl,
-            hasControl ? control->id.sequence : 0u,
+            controlSequence,
             hasTrack,
-            hasTrack ? trackGesture->updateSequence : 0u,
+            trackSequence,
             hasThumb,
-            hasThumb ? thumbGesture->updateSequence : 0u
+            thumbSequence
         );
         if(stream == 0u){
-            if(control->control != frame.m_token || !SliderBehavior::Apply(frame.m_options, *control, frame.m_state, frame.m_result))
+            if(control.value().control != frame.m_token || !ApplySliderControlAction(frame.m_options, control.value(), frame.m_state, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
-            control = m_context.takeControlAction(frame.m_widget, true, frame.m_token);
+            control = this.m_context.takeControlAction(frame.m_widget, true, frame.m_token);
             hasControl = control.has_value();
         }
         else if(stream == 1u){
-            if(trackGesture->control != frame.m_token || !SliderBehavior::Seek(frame.m_options, *trackGesture, frame.m_state, frame.m_result))
+            if(trackGesture.value().control != frame.m_token || !SeekSliderPointerGesture(frame.m_options, trackGesture.value(), frame.m_state, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
-            trackGesture = m_context.takePartPointerGesture(frame.m_widget, *track, true);
+            trackGesture = this.m_context.takePartPointerGesture(frame.m_widget, track.value(), true);
             hasTrack = trackGesture.has_value();
         }
         else{
-            if(thumbGesture->control != frame.m_token || !SliderBehavior::Drag(frame.m_options, *thumbGesture, frame.m_state, frame.m_result))
+            if(thumbGesture.value().control != frame.m_token || !DragSliderPointerGesture(frame.m_options, thumbGesture.value(), frame.m_state, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
-            thumbGesture = m_context.takePartPointerGesture(frame.m_widget, *thumb, true);
+            thumbGesture = this.m_context.takePartPointerGesture(frame.m_widget, thumb.value(), true);
             hasThumb = thumbGesture.has_value();
         }
     }
-    return sliderMatches(frame);
+    return this.sliderMatches(frame);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ContextMenuResult ContextMenuCoordinator::declareMenu(const AStringView stableKey, const AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options){
+ContextMenuResult Builder::contextMenu(in StringView stableKey, in StringView anchorKey, in borrow IListDataSource source, mut ContextMenuState state, in ContextMenuOptions options){
     ContextMenuResult result;
-    Item* anchor = m_builder.annotationAnchor(anchorKey);
-    if(m_builder.panelDeclarationBlocked() || !anchor || !IsValidContextMenuDeclarationOptions(options, m_builder.m_scope->m_contextMenus.size(), s_InputMaxPopups)){
-        m_builder.m_context.fail();
+    const auto anchorIndex = this.annotationAnchorIndex(anchorKey);
+    if(this.panelDeclarationBlocked() || !anchorIndex.has_value() || !IsValidContextMenuDeclarationOptions(options, this.m_scope.value().m_contextMenus.size(), s_InputMaxPopups)){
+        this.m_context.fail();
         return result;
     }
-    if(!m_builder.synchronizePopup()){
+    mut BuilderItem anchor = this.m_scope.value().m_items[anchorIndex.value()];
+    if(!this.synchronizePopup()){
         result.valid = true;
         return result;
     }
-    for(const auto& previous : m_builder.m_scope->m_contextMenus){
-        if(previous.anchor.id == anchor->state.id){
-            m_builder.m_context.fail();
+    for(in auto previous : this.m_scope.value().m_contextMenus){
+        if(previous.anchor.id == anchor.state.id){
+            this.m_context.fail();
             return result;
         }
     }
-    m_builder.m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_builder.m_declaring = false; });
-    const auto widget = m_builder.m_context.declare(stableKey, WidgetKind::ContextMenu);
-    if(!widget || !m_builder.m_context.claimState(**widget, state.instanceGeneration()))
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::ContextMenu);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
         return result;
-    ContextMenuFrame frame;
-    frame.parentToken = m_builder.m_context.popupToken();
-    frame.widget = **widget;
-    frame.anchor = anchor->state;
-    frame.anchorIndex = static_cast<u32>(anchor - m_builder.m_scope->m_items.data());
-    frame.source = &source;
-    frame.state = &state;
-    frame.popupStyle = m_builder.m_popupStyle;
+    BuilderContextMenuFrame frame;
+    frame.parentToken = this.m_context.popupToken();
+    frame.widget = widget.value();
+    frame.anchor = anchor.state;
+    frame.anchorIndex = cast<u32>(anchorIndex.value());
+    frame.source = Optional<in IListDataSource>(source);
+    frame.state = Optional<mut ContextMenuState>(state);
+    frame.popupStyle = this.m_popupStyle;
     frame.options = options;
-    frame.options.enabled = options.enabled && anchor->enabled;
+    frame.options.enabled = options.enabled && anchor.enabled;
     const b8 previouslyOpen = state.isOpen();
     if(DidContextMenuBindingChange(
-        (*widget)->id,
-        (*widget)->declarationGeneration,
-        anchor->state.id,
-        anchor->state.declarationGeneration,
+        widget.value().id,
+        widget.value().declarationGeneration,
+        anchor.state.id,
+        anchor.state.declarationGeneration,
         state.m_owner,
         state.m_ownerDeclaration,
         state.m_anchorWidget,
@@ -187,38 +193,43 @@ ContextMenuResult ContextMenuCoordinator::declareMenu(const AStringView stableKe
     )){
         if(state.m_owner.valid())
             state.close();
-        state.m_owner = (*widget)->id;
-        state.m_ownerDeclaration = (*widget)->declarationGeneration;
-        state.m_anchorWidget = anchor->state.id;
-        state.m_anchorDeclaration = anchor->state.declarationGeneration;
+        state.m_owner = widget.value().id;
+        state.m_ownerDeclaration = widget.value().declarationGeneration;
+        state.m_anchorWidget = anchor.state.id;
+        state.m_anchorDeclaration = anchor.state.declarationGeneration;
         AdvanceNonWrappingRevision(state.m_revision);
     }
     const b8 boundOpen = state.isOpen();
     state.m_popup.bindParent(frame.parentToken);
     if(boundOpen && !state.isOpen())
         state.close();
-    const auto popup = m_builder.m_context.declarePart(frame.widget, s_WidgetPartPopup, WidgetKind::Popup);
-    if(!popup)
+    const auto popup = this.m_context.declarePart(frame.widget, s_WidgetPartPopup, WidgetKind::Popup);
+    if(!popup.has_value())
         return result;
-    frame.popup = **popup;
-    const auto rows = m_builder.m_context.declarePart(frame.widget, s_WidgetPartRows, WidgetKind::VirtualList);
-    if(!rows)
+    frame.popup = popup.value();
+    const auto rows = this.m_context.declarePart(frame.widget, s_WidgetPartRows, WidgetKind::VirtualList);
+    if(!rows.has_value())
         return result;
-    frame.rows = **rows;
-    const b8 previouslyListFocused = m_builder.m_context.input().focus() == frame.rows.id;
-    frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration, state.instanceGeneration(), state.m_popup.openGeneration() };
+    frame.rows = rows.value();
+    const b8 previouslyListFocused = this.m_context.input().focus() == frame.rows.id;
+    frame.popupToken.widget = frame.popup.id;
+    frame.popupToken.declarationGeneration = frame.popup.declarationGeneration;
+    frame.popupToken.instanceGeneration = state.instanceGeneration();
+    frame.popupToken.openGeneration = state.m_popup.openGeneration();
     frame.revision = state.revision();
     frame.open = state.isOpen();
-    frame.listToken = { state.m_list.inputGeneration(), source.instanceGeneration(), source.revision() };
+    frame.listToken.instanceGeneration = state.m_list.inputGeneration();
+    frame.listToken.contentGeneration = source.instanceGeneration();
+    frame.listToken.contentRevision = source.revision();
     frame.rowCount = source.rowCount();
-    if(!m_builder.contextMenuMatches(frame)){
-        m_builder.m_context.fail();
+    if(!this.contextMenuMatches(frame)){
+        this.m_context.fail();
         return result;
     }
     const u64 previousGeneration = state.m_list.m_sourceGeneration;
     const u64 previousRevision = state.m_list.m_sourceRevision;
-    if(!ListBehavior::Reconcile(state.m_list, source) || !m_builder.contextMenuMatches(frame)){
-        m_builder.m_context.fail();
+    if(!ReconcileListState(state.m_list, source) || !this.contextMenuMatches(frame)){
+        this.m_context.fail();
         return result;
     }
     switch(ClassifyContextMenuSourceChange(previousGeneration, frame.listToken.contentGeneration, previousRevision, frame.listToken.contentRevision)){
@@ -228,7 +239,7 @@ ContextMenuResult ContextMenuCoordinator::declareMenu(const AStringView stableKe
     case ContextMenuReconcileSourceAction::ResetSelectionAndScroll:
         state.m_list.select(0u);
         if(!state.m_list.scrollTo(0.0)){
-            m_builder.m_context.fail();
+            this.m_context.fail();
             return result;
         }
         break;
@@ -236,57 +247,60 @@ ContextMenuResult ContextMenuCoordinator::declareMenu(const AStringView stableKe
     default:
         break;
     }
-    snapshotContextMenu(frame);
-    if(!prepareContextMenu(frame, result)){
-        m_builder.m_context.fail();
+    this.snapshotContextMenu(frame);
+    if(!this.prepareContextMenu(frame, result)){
+        this.m_context.fail();
         return result;
     }
     ListOptions listOptions;
     listOptions.wheelRows = options.wheelRows;
     listOptions.enabled = frame.options.enabled;
     listOptions.selectOnNavigate = false;
-    const b8 focusOnCommit = frame.open && frame.options.enabled && previouslyListFocused && m_builder.m_context.input().focus() != frame.rows.id;
-    ListFrame list(m_builder.m_arena);
-    if(!m_builder.prepareListFrame(source, state.m_list, listOptions, frame.listToken, frame.rowCount, focusOnCommit, {}, list) || !m_builder.contextMenuMatches(frame)){
-        m_builder.m_context.fail();
+    const b8 focusOnCommit = frame.open && frame.options.enabled && previouslyListFocused && this.m_context.input().focus() != frame.rows.id;
+    auto list = this.makeListFrame();
+    if(!this.prepareListFrame(source, state.m_list, listOptions, frame.listToken, frame.rowCount, focusOnCommit, WidgetId(), list).has_value() || !this.contextMenuMatches(frame)){
+        this.m_context.fail();
         return result;
     }
-    frame.list = static_cast<u32>(m_builder.m_scope->m_lists.size());
+    frame.list = cast<u32>(this.m_scope.value().m_lists.size());
     state.m_popup.bindParent(frame.parentToken);
-    if(frame.open && !m_builder.reserveCompoundPopup(frame.popup, frame.popupToken)){
-        m_builder.m_context.fail();
-        return {};
+    if(frame.open && !this.reserveCompoundPopup(frame.popup, frame.popupToken)){
+        this.m_context.fail();
+        return ContextMenuResult();
     }
-    m_builder.m_scope->m_lists.push_back(Move(list));
-    anchor->contextMenu = frame.options.enabled;
-    anchor->annotated = true;
+    AppendOwned<BuilderListFrame>(this.m_scope.value().m_lists, list);
+    anchor.contextMenu = frame.options.enabled;
+    anchor.annotated = true;
     result.valid = true;
     result.opened = !previouslyOpen && state.isOpen();
     result.closed = previouslyOpen && !state.isOpen();
-    m_builder.m_scope->m_contextMenus.push_back(frame);
+    this.m_scope.value().m_contextMenus.push_back(frame);
     return result;
 }
 
-b8 ContextMenuCoordinator::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result){
-    InputRouter& input = m_builder.m_context.input();
-    ContextMenuState& state = *frame.state;
+b8 Builder::prepareContextMenu(mut BuilderContextMenuFrame frame, mut ContextMenuResult result){
+    mut InputRouter input = this.m_context.input();
+    mut ContextMenuState state = frame.state.value();
     input.fencePopup(frame.popupToken);
     if(input.consumePopupDismissal(frame.popupToken))
         state.close();
-    while(auto trigger = input.consumeContextMenu(frame.anchor.id, frame.anchor.declarationGeneration)){
-        if(frame.options.enabled && trigger->popup == m_builder.m_context.popupToken() && !state.open(BuildContextMenuTriggerAnchorRect(trigger->position)))
+    while(true){
+        const auto trigger = input.consumeContextMenu(frame.anchor.id, frame.anchor.declarationGeneration);
+        if(!trigger.has_value())
+            break;
+        if(frame.options.enabled && trigger.value().popup == this.m_context.popupToken() && !state.open(BuildContextMenuTriggerAnchorRect(trigger.value().position)))
             return false;
     }
     if(!frame.options.enabled)
         state.close();
-    snapshotContextMenu(frame);
+    this.snapshotContextMenu(frame);
     input.fencePopup(frame.popupToken);
     input.fenceControl(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
     if(!frame.open){
         input.closePopup(frame.popupToken);
-        return m_builder.contextMenuMatches(frame);
+        return this.contextMenuMatches(frame);
     }
-    if(!ListBehavior::Reconcile(state.m_list, *frame.source) || !m_builder.contextMenuMatches(frame))
+    if(!ReconcileListState(state.m_list, frame.source.value()) || !this.contextMenuMatches(frame))
         return false;
     if(state.m_list.cursorKey() == 0u){
         ControlAction first;
@@ -296,381 +310,271 @@ b8 ContextMenuCoordinator::prepareContextMenu(ContextMenuFrame& frame, ContextMe
         options.wheelRows = frame.options.wheelRows;
         options.selectOnNavigate = false;
         ListResult preview;
-        if(!ListBehavior::Apply(*frame.source, options, first, state.m_list, preview) || !m_builder.contextMenuMatches(frame))
+        if(!ApplyListControlAction(frame.source.value(), options, first, state.m_list, preview) || !this.contextMenuMatches(frame))
             return false;
     }
-    return applyContextMenuInput(frame, result);
+    return this.applyContextMenuInput(frame, result);
 }
 
-b8 ContextMenuCoordinator::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
+b8 Builder::applyContextMenuInput(mut BuilderContextMenuFrame frame, mut ContextMenuResult result){
     ListOptions options;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
-    return ListInput(m_builder.m_context).consume(
+    ListInput inputs(this.m_context);
+    const ListInputMatches matches = lambda[in this, mut frame]() -> b8{ return this.contextMenuMatches(frame); };
+    const ListInputApplyAction apply = lambda[mut this, mut frame, in options, mut result](in ControlAction action) -> ListActionOutcome{
+        ListResult preview;
+        if(!ApplyListControlAction(frame.source.value(), options, action, frame.state.value().m_list, preview) || !this.contextMenuMatches(frame))
+            return ListActionOutcome::Failed;
+        if(!preview.activated)
+            return ListActionOutcome::Continue;
+        result.activated = true;
+        result.key = frame.state.value().m_list.selectedKey();
+        frame.state.value().close();
+        this.m_context.input().closePopup(frame.popupToken);
+        this.snapshotContextMenu(frame);
+        return ListActionOutcome::Stop;
+    };
+    return inputs.consume(
         frame.rows,
         frame.listToken,
         true,
-        &frame.popupToken,
-        frame.state->m_list,
-        [&](){ return m_builder.contextMenuMatches(frame); },
-        [&](const ControlAction& action){
-            ListResult preview;
-            if(!ListBehavior::Apply(*frame.source, options, action, frame.state->m_list, preview) || !m_builder.contextMenuMatches(frame))
-                return ListActionOutcome::Failed;
-            if(!preview.activated)
-                return ListActionOutcome::Continue;
-            result.activated = true;
-            result.key = frame.state->m_list.selectedKey();
-            frame.state->close();
-            m_builder.m_context.input().closePopup(frame.popupToken);
-            snapshotContextMenu(frame);
-            return ListActionOutcome::Stop;
-        });
+        frame.popupToken,
+        frame.state.value().m_list,
+        matches,
+        apply
+    );
 }
 
-void ContextMenuCoordinator::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
-    frame.revision = frame.state->revision();
-    frame.open = frame.state->isOpen();
-    frame.popupToken.openGeneration = frame.state->m_popup.openGeneration();
-    frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
-    if(frame.list < m_builder.m_scope->m_lists.size())
-        m_builder.m_scope->m_lists[frame.list].token = frame.listToken;
+void Builder::snapshotContextMenu(mut BuilderContextMenuFrame frame){
+    frame.revision = frame.state.value().revision();
+    frame.open = frame.state.value().isOpen();
+    frame.popupToken.openGeneration = frame.state.value().m_popup.openGeneration();
+    frame.listToken.instanceGeneration = frame.state.value().m_list.inputGeneration();
+    if(frame.list < this.m_scope.value().m_lists.size())
+        this.m_scope.value().m_lists[frame.list].token = frame.listToken;
 }
 
-b8 ContextMenuCoordinator::paintMenus(){
-    for(auto& frame : m_builder.m_scope->m_contextMenus){
-        if(!m_builder.contextMenuMatches(frame) || frame.list >= m_builder.m_scope->m_lists.size() || frame.anchorIndex >= m_builder.m_scope->m_items.size())
+b8 Builder::paintContextMenus(){
+    for(mut auto frame : this.m_scope.value().m_contextMenus){
+        if(!this.contextMenuMatches(frame) || frame.list >= this.m_scope.value().m_lists.size() || frame.anchorIndex >= this.m_scope.value().m_items.size())
             return false;
-        if(frame.open && frame.options.enabled && !paintContextMenuPopup(frame))
+        if(frame.open && frame.options.enabled && !this.paintContextMenuPopup(frame))
             return false;
     }
     return true;
 }
 
-b8 ContextMenuCoordinator::paintContextMenuPopup(ContextMenuFrame& frame){
-    const Item& anchor = m_builder.m_scope->m_items[frame.anchorIndex];
-    const Optional<LayoutBox> anchorBox = m_builder.m_scope->m_layout.box(anchor.node);
-    const UiSkinRegion* background = m_builder.region(frame.popupStyle.background, frame.popupStyle.fallback);
-    if(!anchorBox || !background || !m_builder.contextMenuMatches(frame))
+b8 Builder::paintContextMenuPopup(mut BuilderContextMenuFrame frame){
+    in BuilderItem anchor = this.m_scope.value().m_items[frame.anchorIndex];
+    const Optional<LayoutBox> anchorBox = this.m_scope.value().m_layout.box(anchor.node);
+    const auto background = this.region(frame.popupStyle.background, frame.popupStyle.fallback);
+    if(!anchorBox.has_value() || !background.has_value() || !this.contextMenuMatches(frame))
         return false;
-    const Rect clip = m_builder.visibleClip(anchorBox->clip);
-    if(!IsContextMenuAnchorVisible(anchorBox->rectangle, clip, anchor.enabled)){
-        frame.state->close();
-        m_builder.m_context.discardPopupScope(frame.popupToken);
-        snapshotContextMenu(frame);
+    const Rect clip = this.visibleClip(anchorBox.value().clip);
+    if(!IsContextMenuAnchorVisible(anchorBox.value().rectangle, clip, anchor.enabled)){
+        frame.state.value().close();
+        this.m_context.discardPopupScope(frame.popupToken);
+        this.snapshotContextMenu(frame);
         return true;
     }
-    const PopupOptions options = BuildContextMenuPopupOptions(frame.state->m_anchor, frame.options.size);
-    const auto placement = PlacePopup(options, m_builder.m_paint.displayMetrics());
-    if(!placement)
+    const PopupOptions options = BuildContextMenuPopupOptions(frame.state.value().m_anchor, frame.options.size);
+    const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
+    if(!placement.has_value())
         return false;
-    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(frame.popupToken, frame.parentToken, *placement);
-    if(!m_builder.m_context.updatePopupScope(frame.popupToken, scope) || !m_builder.m_context.activatePopupScope(frame.popupToken))
+    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(frame.popupToken, frame.parentToken, placement.value());
+    if(!this.m_context.updatePopupScope(frame.popupToken, scope) || !this.m_context.activatePopupScope(frame.popupToken))
         return false;
-    if(!m_builder.m_paint.beginOverlay(m_builder.m_context.popupLayer())){
-        const b8 ended = m_builder.m_context.endPopupScope(false);
+    if(!this.m_paint.beginOverlay(this.m_context.popupLayer())){
+        const b8 ended = this.m_context.endPopupScope(false);
         if(!ended)
-            m_builder.m_context.fail();
+            this.m_context.fail();
         return false;
     }
-    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background->padding);
-    m_builder.m_paint.pushClip(placement->bounds);
-    const b8 backgroundPainted = m_builder.m_paint.drawRegion(background->name, placement->bounds);
-    const b8 popped = m_builder.m_paint.popClip();
-    const HitTarget barrier = HitTargetFactory().makeBarrierHitTarget(placement->bounds, placement->viewport);
-    b8 painted = backgroundPainted && popped && m_builder.m_context.addTarget(frame.popup, barrier);
+    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background.value().padding);
+    this.m_paint.pushClip(placement.value().bounds);
+    const b8 backgroundPainted = this.m_paint.drawRegion(background.value().name, placement.value().bounds);
+    const b8 popped = this.m_paint.popClip();
+    HitTargetFactory targets;
+    const HitTarget barrier = targets.makeBarrierHitTarget(placement.value().bounds, placement.value().viewport);
+    b8 painted = backgroundPainted && popped && this.m_context.addTarget(frame.popup, barrier);
     if(painted){
-        Item item(m_builder.m_arena);
+        auto item = this.makeItem();
         item.state = frame.rows;
         item.list = frame.list;
         LayoutBox box;
-        box.rectangle = InsetUiRectBounds(placement->bounds, padding);
-        box.clip = placement->bounds;
-        painted = m_builder.paintList(item, box) && m_builder.contextMenuMatches(frame);
+        box.rectangle = InsetUiRectBounds(placement.value().bounds, padding);
+        box.clip = placement.value().bounds;
+        painted = this.paintList(item, box) && this.contextMenuMatches(frame);
     }
-    const b8 overlayEnded = m_builder.m_paint.endOverlay();
-    const b8 scopeEnded = m_builder.m_context.endPopupScope(painted);
+    const b8 overlayEnded = this.m_paint.endOverlay();
+    const b8 scopeEnded = this.m_context.endPopupScope(painted);
     if(painted)
-        frame.state->m_popup.m_placement = *placement;
+        frame.state.value().m_popup.m_placement = placement.value();
     return painted && overlayEnded && scopeEnded;
 }
 
-ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options){
-    return ContextMenuCoordinator(*this).declareMenu(stableKey, anchorKey, source, state, options);
-}
 
-b8 Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept{
-    if(!frame.state)
+b8 Builder::contextMenuStateMatches(in BuilderContextMenuFrame frame)const{
+    if(!frame.state.has_value())
         return false;
     return MatchesContextMenuFrameStateValues(
-        popupAncestorsVisible(),
-        frame.state->revision(),
+        this.popupAncestorsVisible(),
+        frame.state.value().revision(),
         frame.revision,
-        frame.state->isOpen(),
+        frame.state.value().isOpen(),
         frame.open,
-        frame.state->m_popup.instanceGeneration(),
+        frame.state.value().m_popup.instanceGeneration(),
         frame.popupToken.instanceGeneration,
-        frame.state->m_popup.openGeneration(),
+        frame.state.value().m_popup.openGeneration(),
         frame.popupToken.openGeneration,
-        frame.state->m_popup.m_parent,
+        frame.state.value().m_popup.m_parent,
         frame.parentToken,
-        frame.state->m_list.inputGeneration(),
+        frame.state.value().m_list.inputGeneration(),
         frame.listToken.instanceGeneration,
-        frame.state->m_owner,
+        frame.state.value().m_owner,
         frame.widget.id,
-        frame.state->m_ownerDeclaration,
+        frame.state.value().m_ownerDeclaration,
         frame.widget.declarationGeneration,
-        frame.state->m_anchorWidget,
+        frame.state.value().m_anchorWidget,
         frame.anchor.id,
-        frame.state->m_anchorDeclaration,
+        frame.state.value().m_anchorDeclaration,
         frame.anchor.declarationGeneration
     );
 }
 
-b8 Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
+b8 Builder::contextMenuMatches(in BuilderContextMenuFrame frame)const{
     return
-        frame.source && contextMenuStateMatches(frame)
-        && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u && frame.source->instanceGeneration() == frame.listToken.contentGeneration && contextMenuStateMatches(frame)
-        && frame.source->revision() == frame.listToken.contentRevision && contextMenuStateMatches(frame)
-        && frame.source->rowCount() == frame.rowCount && contextMenuStateMatches(frame)
+        frame.source.has_value() && this.contextMenuStateMatches(frame)
+        && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u && frame.source.value().instanceGeneration() == frame.listToken.contentGeneration && this.contextMenuStateMatches(frame)
+        && frame.source.value().revision() == frame.listToken.contentRevision && this.contextMenuStateMatches(frame)
+        && frame.source.value().rowCount() == frame.rowCount && this.contextMenuStateMatches(frame)
     ;
-}
-
-b8 Builder::paintContextMenus(){
-    return ContextMenuCoordinator(*this).paintMenus();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditBoxResult EditBoxCoordinator::declareEditBox(const AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
-    if(m_builder.itemDeclarationBlocked() || model.textMode() != EditTextMode::SingleLine){
-        m_builder.m_context.fail();
-        return {};
+EditBoxResult Builder::declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions,
+    in Optional<mut BuilderIntegerEditFrame> integerFrame, in Optional<mut BuilderFloatEditFrame> floatFrame){
+    if(this.itemDeclarationBlocked() || model.textMode() != EditTextMode::SingleLine){
+        this.m_context.fail();
+        return EditBoxResult();
     }
-    if(!m_builder.synchronizePopup()){
+    if(!this.synchronizePopup()){
         EditBoxResult result;
         result.valid = true;
         return result;
     }
-    m_builder.m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_builder.m_declaring = false; });
-    const auto widget = m_builder.m_context.declare(stableKey, WidgetKind::EditBox);
-    if(!widget)
-        return {};
-    if((integerFrame || floatFrame) && (!m_builder.numericStateAvailable(state) || !m_builder.m_context.claimState(**widget, model.instanceGeneration()))){
-        m_builder.m_context.fail();
-        return {};
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::EditBox);
+    if(!widget.has_value())
+        return EditBoxResult();
+    if((integerFrame.has_value() || floatFrame.has_value()) && (!this.numericStateAvailable(state) || !this.m_context.claimState(widget.value(), model.instanceGeneration()))){
+        this.m_context.fail();
+        return EditBoxResult();
     }
     if(!options.enabled)
-        m_builder.m_context.input().invalidateTarget((*widget)->id);
+        this.m_context.input().invalidateTarget(widget.value().id);
     EditBoxResult result;
     result.valid = true;
-    result.focused = options.enabled && m_builder.m_context.input().focus() == (*widget)->id;
-    if(m_builder.m_editHost){
-        result = actions ? m_builder.m_editHost->editActions(**widget, options, m_builder.m_context.popupToken(), model, *actions) : m_builder.m_editHost->edit(**widget, options, model);
+    result.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
+    if(this.m_editHost.has_value()){
+        if(actions.has_value())
+            result = this.m_editHost.value().editActions(widget.value(), options, this.m_context.popupToken(), model, actions.value());
+        else
+            result = this.m_editHost.value().edit(widget.value(), options, model);
     }
-    if(!result.valid || m_builder.m_context.failed()){
+    if(!result.valid || this.m_context.failed()){
         result.valid = false;
-        m_builder.m_context.fail();
+        this.m_context.fail();
         return result;
     }
-    const auto snapshotNumericFrame = [&](auto* const frame)noexcept{
-        if(!frame)
-            return true;
-        if(!frame->model || frame->model->revision() != frame->revision)
-            return false;
-        frame->draftStamp = model.stamp();
-        frame->focused = result.focused;
-        return true;
-    };
-    if(!snapshotNumericFrame(integerFrame) || !snapshotNumericFrame(floatFrame)){
-        m_builder.m_context.fail();
+    if(!SnapshotNumericFrame(integerFrame, model, result.focused) || !SnapshotNumericFrame(floatFrame, model, result.focused)){
+        this.m_context.fail();
         result.valid = false;
         return result;
     }
-    Item item(m_builder.m_arena);
-    item.style = m_builder.m_style;
-    item.editStyle = m_builder.m_editStyle;
-    item.state = **widget;
+    auto item = this.makeItem();
+    item.style = this.m_style;
+    item.editStyle = this.m_editStyle;
+    item.state = widget.value();
     item.editOptions = options;
-    if(!prepareEditBox(result, model, state, item)){
+    if(!this.prepareEditBox(result, model, state, item)){
         result.valid = false;
         return result;
     }
-    if((integerFrame && !m_builder.numericEditFrameMatches(*integerFrame)) || (floatFrame && !m_builder.numericEditFrameMatches(*floatFrame))){
-        m_builder.m_context.fail();
+    if((integerFrame.has_value() && !this.numericEditFrameMatches(integerFrame.value())) || (floatFrame.has_value() && !this.numericEditFrameMatches(floatFrame.value()))){
+        this.m_context.fail();
         result.valid = false;
         return result;
     }
-    if(integerFrame)
-        item.integerEdit = static_cast<u32>(m_builder.m_scope->m_integerEdits.size());
-    if(floatFrame)
-        item.floatEdit = static_cast<u32>(m_builder.m_scope->m_floatEdits.size());
+    if(integerFrame.has_value())
+        item.integerEdit = cast<u32>(this.m_scope.value().m_integerEdits.size());
+    if(floatFrame.has_value())
+        item.floatEdit = cast<u32>(this.m_scope.value().m_floatEdits.size());
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = ResolveEditIntrinsicSize(m_builder.loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
-    if(!m_builder.addItemNode(description, item)){
+    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
+    if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
     }
-    m_builder.m_scope->m_items.push_back(Move(item));
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return result;
 }
 
-b8 EditBoxCoordinator::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){
-    state.updateFromModel(model.stamp(), result.focused, m_builder.m_deltaSeconds);
+b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item){
+    state.updateFromModel(model.stamp(), result.focused, this.m_deltaSeconds);
 
-    item.editFlags = { item.editOptions.enabled, m_builder.m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly, state.caretElapsed < s_CaretVisiblePhaseEnd };
+    item.editFlags.enabled = item.editOptions.enabled;
+    item.editFlags.hovered = this.m_context.input().hover() == item.state.id;
+    item.editFlags.focused = result.focused;
+    item.editFlags.readOnly = item.editOptions.readOnly;
+    item.editFlags.caretVisible = state.caretElapsed < s_CaretVisiblePhaseEnd;
     item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
-    if(!item.editView.snapshot(model) || item.editView.shape(m_builder.m_text, m_builder.textShapeRequest({}, m_builder.m_style.fontSize)) != TextLayoutStatus::Success || !item.editView.measure(m_builder.m_text, m_builder.m_paint.displayMetrics())){
-        m_builder.m_context.fail();
+    if(!item.editView.snapshot(model) || item.editView.shape(this.m_text, this.textShapeRequest("", this.m_style.fontSize)) != TextLayoutStatus::Success || !item.editView.measure(this.m_text, this.m_paint.displayMetrics())){
+        this.m_context.fail();
         return false;
     }
-    item.editState = &state;
-    item.padding = m_builder.m_skin ? ControlStyleMetrics().editPadding(*m_builder.m_skin, item.editStyle) : item.editStyle.padding;
+    item.editState = Optional<mut EditBoxState>(state);
+    item.padding = item.editStyle.padding;
+    if(this.m_skin.has_value())
+        item.padding = ControlStyleMetrics().editPadding(this.m_skin.value(), item.editStyle);
     return true;
 }
 
-b8 EditBoxCoordinator::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
-    if(!m_builder.numericEditMatches(item))
+b8 Builder::paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in HitTarget> navigation){
+    if(!this.numericEditMatches(item))
         return false;
-    const f32 caretWidth = ResolveSinglePixelCaretWidth(m_builder.m_paint.displayMetrics());
-    const auto arranged = item.editView.arrange(box.rectangle, item.padding, m_builder.visibleClip(box.clip), { item.editState->scroll, 0.0f }, caretWidth);
-    if(!arranged)
+    const f32 caretWidth = ResolveSinglePixelCaretWidth(this.m_paint.displayMetrics());
+    const auto arranged = item.editView.arrange(box.rectangle, item.padding, this.visibleClip(box.clip), Point(item.editState.value().scroll, 0.0f), caretWidth);
+    if(!arranged.has_value())
         return false;
-    const EditBoxPlacement& placement = *arranged;
-    if(!item.editView.paint(m_builder.m_text, m_builder.m_paint, *m_builder.m_skin, placement, item.editStyle, item.editFlags))
+    in EditBoxPlacement placement = arranged.value();
+    if(!item.editView.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, item.editStyle, item.editFlags))
         return false;
-    item.editState->placement = placement;
-    item.editState->scroll = placement.scroll;
-    const HitTarget target = HitTargetFactory().makeEditBoxHitTarget(navigation ? *navigation : HitTarget{}, box.rectangle, m_builder.visibleClip(box.clip), item.editOptions.enabled, item.contextMenu);
-    if(!m_builder.m_context.addTarget(item.state, target))
+    item.editState.value().placement = placement;
+    item.editState.value().scroll = placement.scroll;
+    HitTarget navigationTarget;
+    if(navigation.has_value())
+        navigationTarget = navigation.value();
+    HitTargetFactory targets;
+    const HitTarget target = targets.makeEditBoxHitTarget(navigationTarget, box.rectangle, this.visibleClip(box.clip), item.editOptions.enabled, item.contextMenu);
+    if(!this.m_context.addTarget(item.state, target))
         return false;
-    const b8 published = !m_builder.m_editHost || m_builder.m_editHost->publish(item.state, item.editView, placement, item.editOptions);
-    return published && m_builder.numericEditMatches(item);
-}
-
-EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
-    return EditBoxCoordinator(*this).declareEditBox(stableKey, options, model, state, actions, integerFrame, floatFrame);
-}
-
-Point Builder::loadEditMinimumSize()const noexcept{
-    if(!m_skin)
-        return Point{ s_StyleMinimumFieldWidth, 0.0f };
-    return ControlStyleMetrics().editMinimumSize(*m_skin, m_editStyle);
-}
-
-b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){
-    return EditBoxCoordinator(*this).prepareEditBox(result, model, state, item);
-}
-
-b8 Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
-    return EditBoxCoordinator(*this).paintEditBox(item, box, navigation);
+    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, item.editView, placement, item.editOptions);
+    return published && this.numericEditMatches(item);
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ListResult ListCoordinator::virtualList(const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
-    ListResult result;
-    if(m_builder.itemDeclarationBlocked() || !IsValidVirtualListWheelRows(options.wheelRows)){
-        m_builder.m_context.fail();
-        return result;
-    }
-    // A body callback may have closed or reopened its popup; no model loan is allowed past that boundary.
-    if(!m_builder.synchronizePopup()){
-        result.valid = true;
-        return result;
-    }
-    m_builder.m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_builder.m_declaring = false; });
-    const auto widget = m_builder.m_context.declare(stableKey, WidgetKind::VirtualList);
-    if(!widget)
-        return result;
-    const b8 previouslyFocused = m_builder.m_context.input().focus() == (*widget)->id;
-    const u64 previousSelection = state.selectedKey();
-    if(!ListBehavior::Reconcile(state, source)){
-        m_builder.m_context.fail();
-        return result;
-    }
-    const ControlToken token{ state.inputGeneration(), source.instanceGeneration(), source.revision() };
-    m_builder.m_context.input().fenceControl((*widget)->id, (*widget)->declarationGeneration, token);
-    if(!options.enabled)
-        m_builder.m_context.input().invalidateTarget((*widget)->id);
-    result.valid = true;
-    result.selectionChanged = previousSelection != state.selectedKey();
-    result.focused = options.enabled && m_builder.m_context.input().focus() == (*widget)->id;
-    if(!ListInput(m_builder.m_context).consume(
-        **widget,
-        token,
-        options.enabled,
-        nullptr,
-        state,
-        []()noexcept{ return true; },
-        [&](const ControlAction& action){
-            return ListBehavior::Apply(source, options, action, state, result) ? ListActionOutcome::Continue : ListActionOutcome::Failed;
-        }
-    )){
-        m_builder.m_context.fail();
-        result.valid = false;
-        return result;
-    }
-    ListFrame frame(m_builder.m_arena);
-    const UiSkinRegion* background = prepareListFrame(source, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !result.focused, {}, frame);
-    if(!background){
-        m_builder.m_context.fail();
-        result.valid = false;
-        return result;
-    }
-    // A fractional offset or a skin minimum can expose more than one row in a natural viewport.
-    // Finish that bounded measurement before its intrinsic height enters the parent layout.
-    if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
-        for(;;){
-            LayoutBox provisional;
-            provisional.rectangle = ResolveListProbeRect(*background, frame.padding, frame.style.scrollbarWidth, frame.rowHeight);
-            provisional.clip = provisional.rectangle;
-            const auto placement = ListLayoutPreparer(m_builder).measureListPlacement(frame, provisional, provisional.clip);
-            if(!placement){
-                m_builder.m_context.fail();
-                result.valid = false;
-                return result;
-            }
-            const f32 height = ResolveListIntrinsicSize(*background, frame.padding, frame.rowHeight).y;
-            if(height == placement->bounds.height)
-                break;
-        }
-    }
-    Item item(m_builder.m_arena);
-    item.state = **widget;
-    item.enabled = options.enabled;
-    item.list = static_cast<u32>(m_builder.m_scope->m_lists.size());
-    LayoutNodeDesc description;
-    description.width = options.width;
-    description.height = options.height;
-    description.intrinsicSize = ResolveListIntrinsicSize(*background, frame.padding, frame.rowHeight);
-    if(!m_builder.addItemNode(description, item)){
-        result.valid = false;
-        return result;
-    }
-    m_builder.m_scope->m_lists.push_back(Move(frame));
-    m_builder.m_scope->m_items.push_back(Move(item));
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Point Builder::loadEditMinimumSize()const{
+    if(!this.m_skin.has_value())
+        return Point(s_StyleMinimumFieldWidth, 0.0f);
+    return ControlStyleMetrics().editMinimumSize(this.m_skin.value(), this.m_editStyle);
 }
 
 

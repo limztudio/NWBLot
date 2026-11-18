@@ -2,146 +2,95 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_csg/deform_cap_builder.adhd>
+#include <impl/ecs_csg/deform_rebuild.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_csg/shape_registry.adhd.h>
-
-#include <global/algorithm.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-using CsgDeformVertexVector = Vector<CsgDeformVertex, ArenaT>;
-template<typename ArenaT>
-using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Preview and commit share split-at-zero rebuilds, unwelded seams, epsilon, edge-cache and cap rules.
-
-// Preview rebuild into scratch storage. Same code path as commit.
-[[nodiscard]] FOUNDATION_INLINE Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Span<const CsgDeformVertex> inputVertices,
-    const Span<const CsgDeformTriangle> inputTriangles,
-    const Span<const CsgDeformCutDesc> cuts,
-    const CsgDeformBuildOptions& options,
-    const CsgShapeRegistry* shapeRegistry,
-    CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
+Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    mut Vector<CsgDeformVertex> outVertices,
+    mut Vector<CsgDeformTriangle> outTriangles
 ){
-    using CallbackType = Optional<InplaceFunction<0u, Expected<f32>(const SIMDVectorSingle, const CsgShapeInlineParameters&)>>;
-    Vector<u32, Core::Alloc::ScratchArena> cutParameterByteSizes(scratchArena);
-    Vector<CallbackType, Core::Alloc::ScratchArena> cutCallbacks(scratchArena);
-    if(shapeRegistry && !cuts.empty()){
-        cutParameterByteSizes.resize(cuts.size(), 0u);
-        cutCallbacks.resize(cuts.size());
-        for(usize cutIndex = 0u; cutIndex < cuts.size(); ++cutIndex){
-            if(!cuts[cutIndex].active)
-                continue;
-            const auto shapeType = shapeRegistry->findShapeType(cuts[cutIndex].shape.shapeType);
-            if(shapeType && shapeType->desc.signedDistanceCallback){
-                cutParameterByteSizes[cutIndex] = shapeType->desc.parameterByteSize;
-                cutCallbacks[cutIndex] = shapeType->desc.signedDistanceCallback;
-            }
-        }
-    }
-
-    static Core::Alloc::GlobalArena s_PreviewWorkArena(Name("ExecuteCsgDeformPreviewWork"));
-    Vector<CsgDeformVertex, ::ArenaBase> workVertices(s_PreviewWorkArena);
-    Vector<CsgDeformTriangle, ::ArenaBase> workTriangles(s_PreviewWorkArena);
-    const auto result = ExecuteCsgDeformPreview(
-        inputVertices,
-        inputTriangles,
-        cuts,
-        options,
-        cutParameterByteSizes,
-        cutCallbacks,
-        workVertices,
-        workTriangles
-    );
-    outVertices.clear();
-    outTriangles.clear();
-    if(!result)
-        return MakeUnexpected(result.error());
-    AssignVector(outVertices, workVertices);
-    AssignVector(outTriangles, workTriangles);
-    return *result;
+    CsgDeformRebuild rebuild = CsgDeformRebuild();
+    return rebuild.build(inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
 }
 
-// Shared viability classifier used by both preview and commit.
-[[nodiscard]] FOUNDATION_INLINE CsgDeformViability CheckCsgDeformCutsViability(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Span<const CsgDeformVertex> inputVertices,
-    const Span<const CsgDeformTriangle> inputTriangles,
-    const Span<const CsgDeformCutDesc> cuts,
-    const CsgDeformBuildOptions& options,
-    const CsgShapeRegistry* shapeRegistry = nullptr
+Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    in CsgShapeRegistry registry,
+    mut Vector<CsgDeformVertex> outVertices,
+    mut Vector<CsgDeformTriangle> outTriangles
 ){
-    CsgDeformVertexVector<Core::Alloc::ScratchArena> vertices(scratchArena);
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena> triangles(scratchArena);
-    const auto result = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, shapeRegistry, vertices, triangles);
-    return result ? MakeCsgDeformViability(true, CsgDeformViabilityReason::Ok) : MakeCsgDeformViability(false, result.error().reason);
-}
-
-// Rebuild in scratch, then copy into the commit arena; viability matches preview.
-[[nodiscard]] FOUNDATION_INLINE Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
-    Core::Alloc::ScratchArena& scratchArena,
-    Core::Alloc::GlobalArena& commitArena,
-    const Span<const CsgDeformVertex> inputVertices,
-    const Span<const CsgDeformTriangle> inputTriangles,
-    const Span<const CsgDeformCutDesc> cuts,
-    const CsgDeformBuildOptions& options,
-    const CsgShapeRegistry* shapeRegistry,
-    CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
-){
-    if(outVertices.get_allocator().arenaPtr() != &commitArena || outTriangles.get_allocator().arenaPtr() != &commitArena)
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidOutputArena, {}));
-    outVertices.clear();
-    outTriangles.clear();
-    // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
-    CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
-    const auto preview = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, shapeRegistry, previewVertices, previewTriangles);
-    if(!preview)
-        return MakeUnexpected(preview.error());
-    AssignVector(outVertices, previewVertices);
-    AssignVector(outTriangles, previewTriangles);
-    return *preview;
+    CsgDeformRebuild rebuild = CsgDeformRebuild();
+    rebuild.bindRegistry(registry, cuts);
+    return rebuild.build(inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+CsgDeformViability CheckCsgDeformCutsViability(
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options
+){
+    CsgDeformRebuild rebuild = CsgDeformRebuild();
+    return rebuild.viability(inputVertices, inputTriangles, cuts, options);
+}
+
+CsgDeformViability CheckCsgDeformCutsViability(
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    in CsgShapeRegistry registry
+){
+    CsgDeformRebuild rebuild = CsgDeformRebuild();
+    rebuild.bindRegistry(registry, cuts);
+    return rebuild.viability(inputVertices, inputTriangles, cuts, options);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
+    in AllocationIdentity destination,
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    mut Vector<CsgDeformVertex> outVertices,
+    mut Vector<CsgDeformTriangle> outTriangles
+){
+    if(!destination.owns(outVertices) || !destination.owns(outTriangles))
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidOutputArena, CsgDeformStats()));
+    return PreviewCsgDeformCuts(inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
+}
+
+Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
+    in AllocationIdentity destination,
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    in CsgShapeRegistry registry,
+    mut Vector<CsgDeformVertex> outVertices,
+    mut Vector<CsgDeformTriangle> outTriangles
+){
+    if(!destination.owns(outVertices) || !destination.owns(outTriangles))
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidOutputArena, CsgDeformStats()));
+    return PreviewCsgDeformCuts(inputVertices, inputTriangles, cuts, options, registry, outVertices, outTriangles);
 }
 
 

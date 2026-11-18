@@ -2,12 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/gpu/renderer.adhd>
-#include <impl/ecs_ui/toolkit/gpu/push_constants.adhd>
+#include <impl/ecs_ui/toolkit/gpu/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const usize s_GpuRasterResourceCapacity = s_PaintMaxImages + s_GpuRasterFixedResourceUses;
+type GpuRasterResourceUses = FixedVector<GpuTaskResourceUse, s_GpuRasterResourceCapacity>;
+type GpuSampledGraphResources = FixedVector<GpuGraphResourceId, s_PaintMaxImages>;
 
 class GpuSampledTextureImportDesc{
     public Name readyPrefix;
@@ -81,14 +84,37 @@ class GpuPageTextureUploadDesc{
     }
 };
 
-[modular]
 class GpuSampledTextures{
     public b8 createAndUploadPage(
         mut GraphicsRuntime graphics,
         in GpuPageTextureUploadDesc desc,
         mut TextureHandle outTexture,
         mut QueueSubmissionToken outReadinessToken
-    );
+    ){
+        TextureDesc description;
+        description.setName(desc.name);
+        description.setWidth(desc.width);
+        description.setHeight(desc.height);
+        description.setFormat(desc.format);
+        description.setInitialState(ResourceStates::ShaderResource);
+        description.setKeepInitialState(true);
+        description.setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
+
+        const Expected<TextureHandle> created = graphics.getDevice().createTexture(description);
+        if(!created.has_value()){
+            outTexture.reset();
+            return false;
+        }
+        outTexture = created.value();
+
+        Array<StandaloneTextureUploadRegion, 1u> regions;
+        regions[0u].setBytes(desc.pixels);
+        regions[0u].rowPitch = desc.rowPitch;
+        regions[0u].depthPitch = desc.pixels.size();
+        if(!graphics.standaloneGraph().uploadTextureBatch(outTexture, Span<StandaloneTextureUploadRegion>(regions), ResourceStates::ShaderResource, ResourceStates::Unknown, outReadinessToken))
+            return false;
+        return IsValidGpuUploadedReadinessToken(outReadinessToken.valid(), outReadinessToken.hasPhysicalQueueIdentity());
+    }
 };
 
 
@@ -126,7 +152,7 @@ b8 PrepareGpuSampledTextureDescriptor(
 Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTexture(
     in GpuSampledTextureImportDesc desc,
     mut GpuTaskGraph graph,
-    mut FixedVector<GpuTaskResourceUse, 68> uses
+    mut GpuRasterResourceUses uses
 ){
     CompactString suffix = CompactString("");
     AppendUnsignedU64Text(suffix, cast<u64>(desc.index));
@@ -166,74 +192,6 @@ Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTextu
     use.access = GpuTaskResourceAccess::Read;
     uses.push_back(use);
     return textureResult.value();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/graphics/backend_selection.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 GpuSampledTextures::createAndUploadPage(
-    Core::GraphicsRuntime& graphics,
-    const GpuPageTextureUploadDesc& desc,
-    Core::TextureHandle& outTexture,
-    Core::QueueSubmissionToken& outReadinessToken
-)noexcept{
-    Core::TextureDesc description;
-    description
-        .setName(desc.name).setWidth(desc.width).setHeight(desc.height)
-        .setFormat(desc.format).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-    ;
-    auto textureResult = graphics.getDevice().createTexture(description);
-    if(textureResult)
-        outTexture = Move(*textureResult);
-    else{
-        outTexture.reset();
-        return false;
-    }
-    const Core::GraphicsStandaloneService::TextureUploadRegion region{ .data = desc.pixels.data(), .dataSize = desc.pixels.size(), .rowPitch = desc.rowPitch, .depthPitch = desc.pixels.size() };
-    if(!graphics.standaloneGraph().uploadTextureBatch(Core::GraphicsStandaloneService::TextureUploadBatchDesc{
-        .destination = outTexture,
-        .regions = &region,
-        .regionCount = 1u,
-        .acceptedToken = &outReadinessToken,
-        .finalState = Core::ResourceStates::ShaderResource,
-        .physicalInitialState = Core::ResourceStates::Unknown,
-        .hasPhysicalInitialState = true,
-    }))
-        return false;
-    return IsValidGpuUploadedReadinessToken(outReadinessToken.valid(), outReadinessToken.hasPhysicalQueueIdentity());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

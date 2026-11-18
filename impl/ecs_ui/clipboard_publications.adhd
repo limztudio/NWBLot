@@ -53,10 +53,13 @@ void RecordUiClipboardDrainOutcome(in UiClipboardPublicationStatus status, mut U
 [modular]
 class UiClipboardPublications : NoCopy{
     private mut IClipboardService m_service;
-    private ClipboardCompletion m_completion;
+    private ClipboardCompletion m_completion = ClipboardCompletion();
     private Vector<UiClipboardPublicationRecord> m_requests;
 
-    public UiClipboardPublications(mut IClipboardService service);
+    public UiClipboardPublications(mut IClipboardService service){
+        this.m_service = service;
+        this.m_requests.reserve(s_UiClipboardMaxPublications);
+    }
 
     public ~UiClipboardPublications(){
         if(!this.cancel())
@@ -135,43 +138,6 @@ class UiClipboardPublications : NoCopy{
     public usize pending()const{
         return this.m_requests.size();
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiClipboardPublications::UiClipboardPublications(::ArenaBase& __adhd_mother_arena, Core::IClipboardService& service)noexcept
-    : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
-    , m_completion(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_service(::MakeNotNull(&service))
-{
-    m_requests.reserve(s_UiClipboardMaxPublications);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

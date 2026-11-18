@@ -2,146 +2,59 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shader/shader_system.adhd>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd>
+#include <impl/ecs_render/raytrace/prepared_builds.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/shadow/rt_shadow_state.adhd>
 #include <impl/ecs_render/raytrace/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[modular]
+class SoftwareBvhBuilder : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererShaderSystem m_shaderSystem;
+    private mut RtSceneBvhState m_state;
 
+    public SoftwareBvhBuilder(mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut RtSceneBvhState state){
+        this.m_graphics = graphics;
+        this.m_shaderSystem = shaderSystem;
+        this.m_state = state;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_builds.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-
-#include <core/graphics/rhi/device.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-
-#include <global/simdmath.h>
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererShaderSystem;
-class RayTraceMaterialResources;
-
-class MeshRayTracingResourceSnapshot;
-
-namespace ECSRenderDetail{
-    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SoftwareBvhBuilder final : NoCopy{
-public:
-    SoftwareBvhBuilder(Core::Alloc::GlobalArena&, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtSceneBvhState& state)noexcept
-        : m_graphics(graphics)
-        , m_shaderSystem(shaderSystem)
-        , m_state(state)
-    {}
-
-
-public:
-    void releaseSwBvhScratchHeapHandles();
-    [[nodiscard]] b8 ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterialResources& materials);
-    [[nodiscard]] b8 ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] b8 meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
-    [[nodiscard]] b8 buildMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        const Float3Int& aabbMin,
-        const Float3Int& aabbMax,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
-    [[nodiscard]] b8 refitMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
-
-
-private:
-    [[nodiscard]] b8 ensureBvhSortPipeline();
-    [[nodiscard]] b8 ensureBvhSortBuffers(usize paddedCount);
-    [[nodiscard]] b8 bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
-    [[nodiscard]] b8 ensureBvhBuildPipeline();
-    [[nodiscard]] b8 ensureBvhVisitCounterBuffer(usize primitiveCount);
-    [[nodiscard]] b8 createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-
-
-private:
-    Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaderSystem;
-    RtSceneBvhState& m_state;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TlasStaticSceneIdentity final{
-public:
-    [[nodiscard]] static u64 Compute(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
-
-private:
-    static void Append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class PreparedMeshBlasBuilder final{
-public:
-    [[nodiscard]] static Expected<PreparedMeshBlasBuild> Resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept;
-    [[nodiscard]] static b8 Matches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept;
-    [[nodiscard]] static b8 Record(const PreparedMeshBlasBuild& build, b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public void releaseSwBvhScratchHeapHandles();
+    [cpp_unwind]
+    public b8 ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceMaterialResources materials);
+    [cpp_unwind]
+    public b8 ensureMeshSwBvhResources(in u32 primitiveCount, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer, mut GpuDescriptorHandle nodeHeapHandle, mut GpuDescriptorHandle parentHeapHandle);
+    public b8 meshSwBvhResourcesReady(in BufferHandle nodeBuffer, in BufferHandle parentBuffer, in GpuDescriptorHandle nodeHeapHandle, in GpuDescriptorHandle parentHeapHandle);
+    [cpp_unwind]
+    public b8 buildMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in VectorSingle aabbMin, in VectorSingle aabbMax, in GpuDescriptorHandle nodeHeapHandle,
+        in GpuDescriptorHandle parentHeapHandle, mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer);
+    [cpp_unwind]
+    public b8 refitMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in GpuDescriptorHandle nodeHeapHandle, in GpuDescriptorHandle parentHeapHandle,
+        mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer);
+    [cpp_unwind]
+    private b8 ensureBvhSortPipeline();
+    [cpp_unwind]
+    private b8 ensureBvhSortBuffers(in usize paddedCount);
+    [cpp_unwind]
+    private b8 bvhBitonicSort(mut CommandList commandList, in u32 elementCount, in u32 paddedCount);
+    [cpp_unwind]
+    private b8 ensureBvhBuildPipeline();
+    [cpp_unwind]
+    private b8 ensureBvhVisitCounterBuffer(in usize primitiveCount);
+    [cpp_unwind]
+    private b8 createMeshBvhStorage(in usize primitiveCount, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer, mut GpuDescriptorHandle nodeHeapHandle, mut GpuDescriptorHandle parentHeapHandle);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RtMeshHeapHandleCache"), cpp_header("<impl/ecs_render/shadow/rt_shadow_state.adhd.h>")]
-extern class RtMeshHeapHandleCache;
 
 
 [modular]
@@ -163,16 +76,37 @@ class MeshHeapHandleGather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize ComputeBinaryBvhNodeCount(in usize leafCount){
-    return leafCount * 2u - 1u;
-}
-
 b8 HasValidMeshTriangleIndexCount(in u32 primitiveIndexCount){
     return primitiveIndexCount != 0u && (primitiveIndexCount % s_RayTracingTriangleIndexCount) == 0u;
 }
 
 u32 ComputeMeshTrianglePrimitiveCount(in u32 primitiveIndexCount){
     return primitiveIndexCount / s_RayTracingTriangleIndexCount;
+}
+
+b8 MeshSwBvhResourcesReady(
+    in RtSceneBvhState state,
+    in BufferHandle nodeBuffer,
+    in BufferHandle parentBuffer,
+    in GpuDescriptorHandle nodeHeapHandle,
+    in GpuDescriptorHandle parentHeapHandle
+){
+    return
+        nodeBuffer.valid()
+        && parentBuffer.valid()
+        && IsDescriptorClass(nodeHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(parentHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && state.m_bvhSortPipeline
+        && state.m_bvhSortKeysBuffer
+        && state.m_bvhSortPayloadBuffer
+        && IsDescriptorClass(state.m_bvhSortKeysHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.m_bvhSortPayloadHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && state.m_bvhMortonPipeline
+        && state.m_bvhTopologyPipeline
+        && state.m_bvhFitPipeline
+        && state.m_bvhVisitCounterBuffer
+        && IsDescriptorClass(state.m_bvhVisitCounterHeapHandle, GpuDescriptorClass::StorageBuffer)
+    ;
 }
 
 u32 AdvanceAccelerationRefitCount(in b8 performRefit, in u32 refitsSinceRebuild){

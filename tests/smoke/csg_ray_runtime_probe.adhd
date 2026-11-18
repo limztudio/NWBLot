@@ -140,7 +140,7 @@ Expected<void> RunCsgRayRuntimeProbe(ProjectRuntimeContext& context){
     auto& device = graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     Core::ShaderHandle shader;
-    if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(Name("project/shaders/csg_ray_probe_cs"), Core::ShaderArchive::s_DefaultVariant, Name("tests/csg_ray/shader"), FOUNDATION_TEXT("CsgRayProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader))
+    if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(Name("project/shaders/csg_ray_probe_cs"), Core::ShaderArchive::s_DefaultVariant, Name("tests/csg_ray/shader"), "CsgRayProbe", graphics, context.assetManager, context.shaderPathResolver, {}, shader))
         return MakeUnexpected(Failure{});
     Core::BindingLayoutDesc layoutDescription(context.objectArena);
     layoutDescription.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(u32)));

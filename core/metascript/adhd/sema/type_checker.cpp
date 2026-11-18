@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/adhd/ast/contract_semantics.h>
 #include <core/metascript/adhd/ast/keyword_semantics.h>
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
@@ -9,6 +10,7 @@
 #include "type_checker.h"
 #include "constructor_argument_checker.h"
 
+#include "asset_type_analyzer.h"
 #include "borrow_lifetime_analyzer.h"
 #include "callable_declaration_linker.h"
 #include "type_layout_analyzer.h"
@@ -128,7 +130,7 @@ namespace __hidden_adhd_type_checker{
 }
 
 [[nodiscard]] b8 ComputeCallableInjectsCallerArena(const MethodDecl& fn, const SymbolTable& symbols)noexcept{
-    if(fn.isConstructor || fn.isDestructor || !fn.returnType)
+    if(fn.isConstructor || fn.isDestructor || fn.returnsFromOwnerArena || !fn.returnType)
         return false;
     if(symbols.resolveRefMode(fn.returnType) != ParamPassingMode::None)
         return false;
@@ -282,6 +284,16 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
 
     {
         const TypeLayoutAnalyzer preLayoutAnalyzer(m_symbols);
+        for(ClassDecl* cls : unit.classes){
+            if(!cls || cls->isExtern || !cls->canBorrowMotherArena())
+                continue;
+            for(const MethodDecl* method : cls->methods){
+                if(method && method->returnsFromOwnerArena){
+                    cls->needsClassArena = true;
+                    break;
+                }
+            }
+        }
         const usize maxArenaPasses = unit.classes.size() + 1u;
         for(usize pass = 0u; pass < maxArenaPasses; ++pass){
             b8 changed = false;
@@ -315,6 +327,8 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                     continue;
                 m->injectsCallerArena = __hidden_adhd_type_checker::ComputeCallableInjectsCallerArena(*m, m_symbols);
                 m->hasSynthesizedArenaParams = __hidden_adhd_type_checker::ComputeCallableHasSynthesizedArenaParams(*m, m_symbols);
+                if(m->isConstructor && !ConstructorArgumentChecker(*this).markRetainedParameters(*cls, *m, m->body, errors))
+                    ok = false;
             }
         }
         for(MethodDecl* fn : unit.freeFunctions){
@@ -427,9 +441,62 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         fn->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
     }
 
+    m_recordGlobalHeaders = true;
+    for(const AssetRegistration& registration : unit.assetRegistrations){
+        const ClassDecl* cls = m_symbols.findClass(registration.className);
+        const InterfaceDecl* iface = m_symbols.findInterface(registration.className);
+        const b8 concrete = cls && !cls->isExtern && cls->templateParams.empty() && (!cls->subsystemTypeName.empty() || !cls->assetTypeName.empty());
+        if(!concrete && !(iface && !iface->isExtern && !iface->assetTypeName.empty())){
+            reportError(errors, registration.span, "register_asset requires an asset or a subsystem");
+            ok = false;
+        }
+        if(!checkTypeRef(*registration.registrar, nullptr, nullptr, errors)){
+            ok = false;
+            continue;
+        }
+        const TypeRef* registrar = m_symbols.unwrapTypeAlias(registration.registrar);
+        const b8 familyCodec = registrar && registrar->name == ContractSemantics::s_CodecRegistrationType && registrar->templateArgs.size() == 1u;
+        const b8 typedRegistrar = registrar && ((registrar->name == ContractSemantics::s_AssetRegistrationType && registrar->templateArgs.size() == 3u)
+            || (registrar->name == ContractSemantics::s_FamilyCookRegistrationType && registrar->templateArgs.size() == 4u));
+        const b8 familyMember = typedRegistrar
+            && m_symbols.resolveBaseTypeName(registrar->templateArgs[1].constantOrTypeName()) == registration.className;
+        const b8 assetKind = registrar && (registrar->name == ContractSemantics::s_CompositeRootRegistrationType || registrar->name == ContractSemantics::s_NonStandaloneAssetRegistrationType) && registrar->templateArgs.size() == 1u
+            && m_symbols.resolveBaseTypeName(registrar->templateArgs[0].constantOrTypeName()) == registration.className;
+        if(!familyCodec && !familyMember && !assetKind){
+            reportError(errors, registration.span, "register_asset requires a codec registrar or a typed registrar for the named asset");
+            ok = false;
+        }
+    }
+    for(const StaticAssertion& assertion : unit.staticAssertions){
+        MethodDecl fileScope(m_arena);
+        if(!checkExpr(nullptr, {}, false, fileScope, *assertion.condition, errors))
+            ok = false;
+    }
+
     m_recordGlobalHeaders = false;
     if(!m_layoutOptimizer.optimizeTranslationUnit(unit, errors))
         ok = false;
+
+    // A specialization emitted here owns a copy of the imported template's method bodies.
+    // Resolve member access, borrow conversions and backend calls before the header emitter uses them.
+    m_recordGlobalHeaders = true;
+    for(ClassDecl* owner : unit.classes){
+        if(!owner->isImported || owner->isExtern || owner->templateParams.empty())
+            continue;
+        b8 emitsMethods = false;
+        for(const ClassTemplateInstantiation* inst : unit.templateInstantiations){
+            if(inst && !inst->isImported && inst->templateDecl == owner){
+                emitsMethods = true;
+                break;
+            }
+        }
+        if(!emitsMethods)
+            continue;
+        for(MethodDecl* method : owner->methods){
+            if(method->hasBody && !method->isExtern && !checkMethodBody(owner, *method, errors))
+                ok = false;
+        }
+    }
 
     m_activeUnit = nullptr;
     return ok;
@@ -492,6 +559,36 @@ b8 TypeChecker::isOwnedStackLocalVar(const ScopedVarInfo& local)const noexcept{
         && local.mode == ParamPassingMode::None
         && m_symbols.resolveRefMode(local.type) == ParamPassingMode::None
         && !IsBorrowViewType(resolveScopedVarBaseType(local));
+}
+
+const TypeRef* TypeChecker::wrappedReferenceType(const TypeRef* wrapper)const noexcept{
+    const TypeRef* const type = m_symbols.unwrapTypeAlias(wrapper);
+    if(!type || !IsOptionalOrExpectedGenericType(type->name) || m_symbols.hasTypeSymbol(type->name) || type->templateArgs.empty())
+        return nullptr;
+    const TypeRef* const value = type->templateArgs[0].type;
+    return m_symbols.resolveRefMode(value) != ParamPassingMode::None ? value : nullptr;
+}
+
+b8 TypeChecker::checkWrappedReferenceArgument(const ClassDecl* ownerClass, const MethodDecl& method, const TypeRef& target, Expr& argument, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors)const{
+    const TypeRef* const value = wrappedReferenceType(&target);
+    const TypeRef* const source = m_symbols.unwrapTypeAlias(inferExprTypeRef(ownerClass, &method, argument, scope));
+    if(!value || (source && source->name == m_symbols.resolveBaseTypeName(target.name) && source->name != m_symbols.resolveBaseTypeName(value->name) && wrappedReferenceType(source)))
+        return true;
+    if(argument.kind == ExprKind::Call && argument.isBuiltinCall && argument.lhs && argument.lhs->kind == ExprKind::Identifier){
+        if(const BuiltinFunctionInfo* fn = FindBuiltinFunction(argument.lhs->text); fn && fn->returnRule == BuiltinFunctionReturnRule::Unexpected)
+            return true;
+    }
+    if(BorrowLifetimeAnalyzer(*this).isTemporaryOwnerExpr(ownerClass, &method, argument, scope, true)){
+        reportError(errors, argument.span, "a stored reference requires an lvalue with an enclosing lifetime");
+        return false;
+    }
+    if(m_symbols.resolveRefMode(value) == ParamPassingMode::Mut && !isPotentiallyMutableLvalueExpr(ownerClass, method, argument, scope)){
+        reportError(errors, argument.span, "a stored mutable reference requires a mutable lvalue");
+        return false;
+    }
+    PromoteStringByteReadToConstRef(argument);
+    argument.wrapInNotNull = true;
+    return true;
 }
 
 b8 TypeChecker::isTaskLocalIdentifierExpr(const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
@@ -710,7 +807,7 @@ const MethodDecl* TypeChecker::resolveCustomOperator(
     if(const ClassDecl* cls = m_symbols.findClass(lhsBaseType)){
         if(outDeclaringClass)
             *outDeclaringClass = cls;
-        return m_symbols.findClassOperator(*cls, opSym, &arity, recvIsConst, ownerClass != cls);
+        return m_symbols.findClassOperator(*cls, opSym, &arity, recvIsConst, !m_symbols.canAccessPrivateMembers(*cls, ownerClass));
     }
     if(lhsTypeRef && m_symbols.findInterface(lhsBaseType))
         return m_symbols.findInterfaceMethod(*lhsTypeRef, opSym, &arity);

@@ -71,6 +71,7 @@ NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("u64x4u", "UInt64x4U", 4u, 0u, 32u, 8u, "u
 
 NWB_ADHD_EXPORT_OBJECT_TYPE("String",                   "AString",                    32u,   8u, true,  true,  false, false, false, false, false, true,  true,  true,  true,  false, false, true,  true,  false, false, 1u, "")
 NWB_ADHD_EXPORT_OBJECT_TYPE("StringView",               "AStringView",                16u,   8u, false, false, true,  true,  false, true,  true,  true,  true,  false, false, false, false, true,  true,  false, false, 0u, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("PlatformStringView",       "::TStringView",              16u,   8u, false, false, true,  true,  false, false, true,  false, false, false, false, false, false, true,  true,  false, false, 0u, "<global/basic_string.h>")
 NWB_ADHD_EXPORT_OBJECT_TYPE("CompactString",            "ACompactString",             256u,  1u, false, true,  false, false, true,  false, false, true,  true,  false, true,  false, false, true,  true,  false, false, 1u, "")
 NWB_ADHD_EXPORT_OBJECT_TYPE("Name",                     "",                           8u,    8u, false, true,  true,  false, true,  true,  false, false, true,  false, true,  false, false, true,  true,  false, false, 3u, "")
 NWB_ADHD_EXPORT_OBJECT_TYPE("Path",                     "::Path",                     32u,   8u, true,  true,  false, false, false, true,  false, false, true,  true,  true,  false, true,  true,  true,  false, false, 2u, "")
@@ -85,7 +86,7 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("Set",                "",                          
 NWB_ADHD_EXPORT_GENERIC_TYPE("HashSet",            "",                              SingleType,   None,        32u, 8u, true,  true,  false, false, false, false, false, true,  true,  false, Set,         false, false, true,  false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelHashSet",    "",                              SingleType,   None,        32u, 8u, true,  true,  false, false, false, false, false, false, true,  false, Set,         false, false, true,  false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("Map",                "",                              TwoType,      None,        32u, 8u, true,  true,  false, false, false, false, false, true,  true,  false, None,        true,  false, true,  false, false, "")
-NWB_ADHD_EXPORT_GENERIC_TYPE("HashMap",            "",                              TwoType,      None,        32u, 8u, true,  true,  false, false, false, false, false, true,  true,  false, None,        true,  false, true,  false, false, "")
+NWB_ADHD_EXPORT_GENERIC_TYPE("HashMap",            "::AdhdHashMap",                              TwoType,      None,        32u, 8u, true,  true,  false, false, false, false, false, true,  true,  false, None,        true,  false, true,  false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelHashMap",    "",                              TwoType,      None,        32u, 8u, true,  true,  false, false, false, false, false, false, true,  false, None,        true,  false, true,  false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("Queue",              "",                              SingleType,   None,        32u, 8u, true,  true,  false, false, false, false, false, true,  true,  false, None,        false, false, true,  false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelQueue",      "",                              SingleType,   None,        32u, 8u, true,  true,  false, false, false, false, false, false, true,  false, None,        false, false, false, false, false, "")
@@ -96,6 +97,7 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("Span",               "",                          
 NWB_ADHD_EXPORT_GENERIC_TYPE("Optional",           "",                              SingleType,   Optional,    0u,  0u, false, true,  false, false, true,  true,  false, false, false, false, None,        false, false, true,  false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("Atomic",             "",                              SingleType,   Atomic,      0u,  0u, false, false, false, false, false, false, false, false, false, false, None,        false, false, false, false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("Expected",           "",                              OneOrTwoType, Expected,    0u,  0u, false, false, false, false, true,  false, false, false, false, false, None,        false, false, true,  false, false, "")
+NWB_ADHD_EXPORT_GENERIC_TYPE("PlanReservation", "::PlanReservationBase", TwoType, None, 0u, 0u, false, true, false, false, false, false, false, false, false, false, None, false, false, true, false, false, "<global/plan_reservation.h>")
 NWB_ADHD_EXPORT_GENERIC_TYPE("CompressedPair", "::CompressedPair", TwoType, None, 0u, 0u, false, true, false, false, false, false, false, false, false, false, None, false, false, true, false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("FixedIndexMap", "::FixedIndexMap", SingleType, None, 40u, 8u, true, false, false, false, false, false, false, true, true, false, None, false, false, false, false, true, "<global/fixed_index_map.h>")
 NWB_ADHD_EXPORT_GENERIC_TYPE("RefCountPtr", "::RefCountPtr", SingleType, None, 8u, 8u, false, true, true, false, false, false, false, false, false, false, None, false, false, true, false, false, "")
@@ -104,6 +106,7 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("NotNullUniquePtr", "::NotNullUniquePtr", SingleTyp
 
 NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("NoCopy", "::NoCopy")
 
+NWB_ADHD_EXPORT_MOVE_ONLY_TYPE("PlanReservation")
 NWB_ADHD_EXPORT_MOVE_ONLY_TYPE("UniquePtr")
 NWB_ADHD_EXPORT_MOVE_ONLY_TYPE("NotNullUniquePtr")
 NWB_ADHD_EXPORT_MOVE_ONLY_TYPE("MoveOnlyFunction")

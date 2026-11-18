@@ -80,6 +80,14 @@ public:
 
     [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return m_states.valid() ? &m_states : nullptr; }
 
+    [[nodiscard]] Optional<NotNull<const CommandListResourceStateHandoff*>> borrowSource()const noexcept{
+        if(valid())
+            return MakeNotNull(&m_states);
+        return {};
+    }
+
+    [[nodiscard]] b8 replaceBufferSubset(const CommandListResourceStateHandoff& source, Span<const BufferHandle> buffers);
+
     // Replaces the cache with `source` filtered to live imports, for pruning a removed runtime generation.
     [[nodiscard]] b8 replaceResourceSubset(const CommandListResourceStateHandoff& source, Span<const TextureHandle> textures, Span<const BufferHandle> buffers, Alloc::ScratchArena& scratchArena);
 
@@ -97,6 +105,9 @@ public:
         Candidate& outCandidate
     )const;
 
+    [[nodiscard]] b8 buildFilteredResourceSubset(const CommandListResourceStateHandoff& source, Span<const TextureHandle> textures, Span<const BufferHandle> buffers, Candidate& candidate)const;
+    [[nodiscard]] b8 buildMergedResourceSubset(const CommandListResourceStateHandoff& source, Span<const TextureHandle> textures, Span<const BufferHandle> buffers, Candidate& candidate)const;
+
     [[nodiscard]] b8 commit(Candidate& candidate)noexcept;
 
     [[nodiscard]] b8 replaceBufferSubset(const CommandListResourceStateHandoff& source, const Span<const BufferHandle> buffers, Alloc::ScratchArena& scratchArena){
@@ -106,6 +117,8 @@ public:
     [[nodiscard]] b8 buildMergedBufferSubset(const CommandListResourceStateHandoff& source, const Span<const BufferHandle> buffers, Alloc::ScratchArena& scratchArena, Candidate& outCandidate)const{
         return buildMergedResourceSubset(source, {}, buffers, scratchArena, outCandidate);
     }
+
+    [[nodiscard]] b8 buildMergedBufferSubset(const CommandListResourceStateHandoff& source, Span<const BufferHandle> buffers, Candidate& candidate)const;
 
     [[nodiscard]] b8 buildFilteredBufferSubset(const CommandListResourceStateHandoff& source, const Span<const BufferHandle> buffers, Alloc::ScratchArena& scratchArena, Candidate& outCandidate)const{
         return buildFilteredResourceSubset(source, {}, buffers, scratchArena, outCandidate);

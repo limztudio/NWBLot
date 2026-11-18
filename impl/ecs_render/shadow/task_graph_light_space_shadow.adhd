@@ -2,75 +2,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/shadow/light_space_shadow.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
+class LightSpaceShadowGraphInputs{
+    public mut GraphicsRuntime graphics;
+    public in b8 shadowPrepared;
+    public in LightSpaceShadowSnapshot snapshot;
+    public GpuTaskId dependency;
+    public Span<GpuTaskResourceUse> sceneReads;
+    public Span<GpuTaskResourceSetUse> sceneReadSets;
+    public Span<GpuTaskExternalStateSource> stateSources;
 
-#include <impl/ecs_render/shadow/types.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct LightSpaceShadowGraphInputs{
-    Core::GraphicsRuntime& graphics;
-    Core::Alloc::GlobalArena& arena;
-    Core::Alloc::ScratchArena& scratchArena;
-    const b8& shadowPrepared;
-    const LightSpaceShadowSnapshot& snapshot;
-    Core::GpuTaskId dependency;
-    Span<const Core::GpuTaskResourceUse> sceneReads{};
-    Span<const Core::GpuTaskResourceSetUse> sceneReadSets{};
-    Span<const Core::GpuTaskExternalStateSource> stateSources{};
-};
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceShadowGraphInputs& inputs, Core::GpuGraphResourceId context, Core::GpuTaskGraph& graph);
-
-// Capture and reuse import the same map generation; accepted state sources and frame ordering preserve availability.
-[[nodiscard]] Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShadowGraphInputs& inputs, Core::GpuTaskGraph& graph);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public LightSpaceShadowGraphInputs(
+        mut GraphicsRuntime graphics, in borrow b8 shadowPrepared, in LightSpaceShadowSnapshot snapshot, in GpuTaskId dependency,
+        in Span<GpuTaskResourceUse> sceneReads, in Span<GpuTaskResourceSetUse> sceneReadSets, in Span<GpuTaskExternalStateSource> stateSources
+    ){
+        this.graphics = graphics;
+        this.shadowPrepared = shadowPrepared;
+        this.snapshot = snapshot;
+        this.dependency = dependency;
+        this.sceneReads = sceneReads;
+        this.sceneReadSets = sceneReadSets;
+        this.stateSources = stateSources;
+    }
 }
 
 

@@ -2,25 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_state.adhd>
 #include <impl/ecs_render/shadow/prepared_shadow_material_context.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void EvaluateShadowOccluderMaterialCompleteness(
-    in b8 hasMaterialInfo,
-    in b8 transparent,
-    in u32 surfaceDispatchId,
-    mut b8 inOutContentComplete,
-    mut b8 outMarkOpticalSceneIncomplete
-){
-    if(!hasMaterialInfo || surfaceDispatchId == u32.max)
-        inOutContentComplete = false;
-    outMarkOpticalSceneIncomplete = !hasMaterialInfo || (transparent && surfaceDispatchId == u32.max);
-}
 
 b8 CanCapturePreparedShadowMaterialContext(
     in PreparedShadowMaterialContextRoute route,
@@ -99,8 +88,8 @@ b8 PreparedShadowMaterialContext::captureCacheReuse(
         instanceMaterialCount,
         instanceCount,
         materialTypedByteCount,
-        state.m_swShadowMaterialContextHashValid,
-        state.m_swShadowMaterialContextHash,
+        state.shadow.m_swShadowMaterialContextHashValid,
+        state.shadow.m_swShadowMaterialContextHash,
         hash,
         validStorage
     ))
@@ -115,236 +104,46 @@ b8 PreparedShadowMaterialContext::captureCacheReuse(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-b8 RayTraceMaterialResources::ensureShadowInstanceMaterialBuffer(usize instanceCount)noexcept{
-    // CPU-uploaded material context is shared by the exclusive HW/SW backends.
-    if(m_shadow->m_shadowInstanceMaterialBuffer && m_shadow->m_shadowInstanceMaterialCapacity >= instanceCount)
-        return ensureRayTraceMaterialContextHeapHandle(*m_shadow->m_shadowInstanceMaterialBuffer.get(), m_shadow->m_shadowInstanceMaterialHeapHandle);
-
-    const usize capacity = ::NextGrowingCapacity(m_shadow->m_shadowInstanceMaterialCapacity, instanceCount, s_ShadowInstanceMaterialInitialCapacity);
-
-    Core::BufferDesc materialBufferDesc;
-    materialBufferDesc
-        .setByteSize(static_cast<u64>(sizeof(NwbRtInstanceMaterialGpu) * capacity))
-        .setStructStride(sizeof(NwbRtInstanceMaterialGpu))
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name(s_ShadowResourceInstanceMaterial))
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    auto materialBufferResult = m_graphics->createBuffer(materialBufferDesc);
-    if(!materialBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow instance material buffer"));
-        return false;
-    }
-    Core::BufferHandle materialBuffer = Move(*materialBufferResult);
-    if(!replaceRayTraceMaterialContextHeapHandle(*materialBuffer.get(), m_shadow->m_shadowInstanceMaterialHeapHandle))
-        return false;
-    m_shadow->m_shadowInstanceMaterialBuffer = Move(materialBuffer);
-    m_shadow->m_shadowInstanceMaterialCapacity = capacity;
-    return true;
-}
-
-b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(usize instanceCount)noexcept{
-    // Shadow tracing needs an instance record for every gathered occluder.
-    if(instanceCount == 0u)
-        return !m_shadow->m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(*m_shadow->m_shadowInstanceBuffer.get(), m_shadow->m_shadowInstanceHeapHandle);
-    if(m_shadow->m_shadowInstanceBuffer && m_shadow->m_shadowInstanceCapacity >= instanceCount)
-        return ensureRayTraceMaterialContextHeapHandle(*m_shadow->m_shadowInstanceBuffer.get(), m_shadow->m_shadowInstanceHeapHandle);
-
-    const usize capacity = ::NextGrowingCapacity(m_shadow->m_shadowInstanceCapacity, instanceCount);
-    Core::BufferDesc instanceBufferDesc;
-    instanceBufferDesc
-        .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
-        .setStructStride(sizeof(InstanceGpuData))
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name(s_ShadowResourceInstanceContext))
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    auto instanceBufferResult = m_graphics->createBuffer(instanceBufferDesc);
-    if(!instanceBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow instance context buffer"));
-        return false;
-    }
-    Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
-    if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_shadow->m_shadowInstanceHeapHandle))
-        return false;
-    m_shadow->m_shadowInstanceBuffer = Move(instanceBuffer);
-    m_shadow->m_shadowInstanceCapacity = capacity;
-    return true;
-}
-
-b8 RayTraceMaterialResources::ensureShadowMaterialTypedBuffer(usize byteCount)noexcept{
-    // Keep one word so the heap binding remains valid with no transparent occluders.
-    const usize requiredByteCount = ResolveMaterialTypedBufferByteCount(byteCount, sizeof(u32));
-    if(m_shadow->m_shadowMaterialTypedBuffer && m_shadow->m_shadowMaterialTypedCapacity >= requiredByteCount)
-        return ensureRayTraceMaterialContextHeapHandle(*m_shadow->m_shadowMaterialTypedBuffer.get(), m_shadow->m_shadowMaterialTypedHeapHandle);
-
-    const usize capacity = ::NextGrowingCapacity(m_shadow->m_shadowMaterialTypedCapacity, requiredByteCount);
-    Core::BufferDesc materialTypedBufferDesc;
-    materialTypedBufferDesc
-        .setByteSize(static_cast<u64>(capacity))
-        .setStructStride(sizeof(u32))
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name(s_ShadowResourceMaterialTyped))
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    auto materialTypedBufferResult = m_graphics->createBuffer(materialTypedBufferDesc);
-    if(!materialTypedBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow material typed buffer"));
-        return false;
-    }
-    Core::BufferHandle materialTypedBuffer = Move(*materialTypedBufferResult);
-    if(!replaceRayTraceMaterialContextHeapHandle(*materialTypedBuffer.get(), m_shadow->m_shadowMaterialTypedHeapHandle))
-        return false;
-    m_shadow->m_shadowMaterialTypedBuffer = Move(materialTypedBuffer);
-    m_shadow->m_shadowMaterialTypedCapacity = capacity;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noexcept{
-    if(m_preparedShadowMaterialContext.publishAcceptedUpload(m_rayTracingState))
-        clearPreparedShadowMaterialContext();
-}
-
-// The frozen software traversal indexes this context, so a new context always drops it.
-b8 RendererRayTracingSystem::capturePreparedShadowMaterialContext(
-    const PreparedShadowMaterialContextRoute::Enum route,
-    const b8 staticScene,
-    const u64 hash,
-    const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
-    const Span<const InstanceGpuData> instances,
-    const Span<const u8> materialTypedBytes
-){
-    if(!m_preparedShadowMaterialContext.capture(m_rayTracingState, route, staticScene, hash, instanceMaterials, instances, materialTypedBytes))
-        return false;
-    m_preparedSceneSwBvhTraversal.clear();
-    return true;
-}
-
-b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
-    m_preparedSceneSwBvhTraversal.clear();
-    return m_preparedShadowMaterialContext.captureCacheReuse(m_rayTracingState, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
-}
-
-void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
-    m_preparedShadowMaterialContext.clear();
-    m_preparedSceneSwBvhTraversal.clear();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ShadowOccluderMaterialGather::resolve(const Core::ECS::EntityID entity, const Core::Assets::AssetRef<Material>& material, const Scene::TransformComponent* const transform, const u32 meshInstanceIndex, NwbRtInstanceMaterialGpu& outInstanceMaterial, InstanceGpuData& outShadowInstance, b8* const outSceneHasTransparentOccluder){
-    outInstanceMaterial = {};
-    outShadowInstance = {};
-    MaterialSurfaceInfo* materialInfo = nullptr;
-    if(const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(material); materialInfoResult){
-        materialInfo = materialInfoResult->get();
-        if(materialInfo->transparent && outSceneHasTransparentOccluder)
-            *outSceneHasTransparentOccluder = true;
-        // Trace dispatcher reads Texture2D fields via non-uniform slots. Retain resolved handles in preflight.
-        const b8 sampledTexturesReady = materialInfo->surfaceDispatchId == Limit<u32>::s_Max || m_sampledTextureCollector.collect(
-            *materialInfo,
-            [this](const MaterialSurfaceInfo& surface, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
-                return AppendPreparedMaterialSurfaceSampledTextures(surface, m_materialSystem.materialState().m_resourceState, pending);
-            }
-        );
-        if(!sampledTexturesReady)
-            return false;
-        const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, transform, m_shadowMaterialTypedBytes, m_shadowConstantTypedRanges, m_shadowMutableTypedRanges);
-        if(!materialContext)
-            return false;
-        outShadowInstance = materialContext->instance;
-        outInstanceMaterial = ResolveInstanceShadowMaterialData(
-            materialInfo->surfaceDispatchId,
-            materialInfo->shadingModelId,
-            materialInfo->transparent,
-            materialInfo->refractive,
-            materialContext->constantByteOffset,
-            meshInstanceIndex
-        );
-    }
-    b8 markOpticalSceneIncomplete = false;
-    EvaluateShadowOccluderMaterialCompleteness(
-        materialInfo != nullptr,
-        materialInfo ? materialInfo->transparent : false,
-        materialInfo ? materialInfo->surfaceDispatchId : Limit<u32>::s_Max,
-        m_contentComplete,
-        markOpticalSceneIncomplete
-    );
-    // An unavailable hook need not hide a boundary. Unknown/untransparent surfaces cannot use the outside shortcut.
-    if(markOpticalSceneIncomplete)
-        m_opticalScene.markIncomplete();
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(InstanceGpuData) == s_InstanceGpuDataByteSize, "Shadow instance payload size must match the mesh GPU layout");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const noexcept{
+Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::retainUploads(in RendererRayTracingState state, mut GpuTaskGraph graph)const{
     PreparedShadowMaterialContextUploads result;
-    if(!m_ready)
+    if(!this.m_ready)
         return result;
 
     if(!ShadowMaterialContextPolicy().validateRetainState(
-        m_route,
-        m_instanceMaterialCount,
-        m_instanceCount,
-        m_materialTypedUploadBytes,
-        storageMatches(state),
-        state.m_shadowInstanceMaterialCapacity,
-        m_instanceMaterialCapacity,
-        state.m_shadowInstanceCapacity,
-        m_instanceCapacity,
-        state.m_shadowMaterialTypedCapacity,
-        m_materialTypedCapacity,
-        IsPreparedShadowMaterialStorageReady(state, m_instanceMaterialCount, m_instanceCount, m_materialTypedUploadBytes),
-        m_uploadRequired,
-        m_static,
-        state.m_swShadowMaterialContextHashValid,
-        state.m_swShadowMaterialContextHash,
-        m_hash,
-        state.m_sceneBvhInstanceCount,
-        m_instanceMaterialBytes.size(),
-        m_instanceBytes.size(),
-        m_materialTypedBytes.size()
+        this.m_route,
+        this.m_instanceMaterialCount,
+        this.m_instanceCount,
+        this.m_materialTypedUploadBytes,
+        this.storageMatches(state),
+        state.shadow.m_shadowInstanceMaterialCapacity,
+        this.m_instanceMaterialCapacity,
+        state.shadow.m_shadowInstanceCapacity,
+        this.m_instanceCapacity,
+        state.shadow.m_shadowMaterialTypedCapacity,
+        this.m_materialTypedCapacity,
+        IsPreparedShadowMaterialStorageReady(state, this.m_instanceMaterialCount, this.m_instanceCount, this.m_materialTypedUploadBytes),
+        this.m_uploadRequired,
+        this.m_static,
+        state.shadow.m_swShadowMaterialContextHashValid,
+        state.shadow.m_swShadowMaterialContextHash,
+        this.m_hash,
+        state.sceneBvh.m_sceneBvhInstanceCount,
+        this.m_instanceMaterialBytes.size(),
+        this.m_instanceBytes.size(),
+        this.m_materialTypedBytes.size()
     ))
-        return MakeUnexpected(Failure{});
-    if(!m_uploadRequired)
+        return MakeUnexpected(Failure());
+    if(!this.m_uploadRequired)
         return result;
 
-    const auto instanceMaterialResult = graph.copyUploadData(m_instanceMaterialBytes.data(), m_instanceMaterialBytes.size(), alignof(NwbRtInstanceMaterialGpu));
-    const auto instanceResult = graph.copyUploadData(m_instanceBytes.data(), m_instanceBytes.size(), alignof(InstanceGpuData));
-    const auto materialTypedResult = graph.copyUploadData(m_materialTypedBytes.data(), m_materialTypedBytes.size(), alignof(u32));
-    if(!(instanceMaterialResult && instanceResult && materialTypedResult))
-        return MakeUnexpected(Failure{});
-    result.instanceMaterial = *instanceMaterialResult;
-    result.instance = *instanceResult;
-    result.materialTyped = *materialTypedResult;
+    const Expected<GpuUploadBlobId> instanceMaterialResult = graph.copyUploadBytes<NwbRtInstanceMaterialGpu>(Span<u8>(this.m_instanceMaterialBytes));
+    const Expected<GpuUploadBlobId> instanceResult = graph.copyUploadBytes<InstanceGpuData>(Span<u8>(this.m_instanceBytes));
+    const Expected<GpuUploadBlobId> materialTypedResult = graph.copyUploadBytes<u32>(Span<u8>(this.m_materialTypedBytes));
+    if(!(instanceMaterialResult.has_value() && instanceResult.has_value() && materialTypedResult.has_value()))
+        return MakeUnexpected(Failure());
+    result.instanceMaterial = instanceMaterialResult.value();
+    result.instance = instanceResult.value();
+    result.materialTyped = materialTypedResult.value();
     return result;
 }
 
@@ -352,23 +151,130 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MergePreparedShadowMaterialSampledTextures(const Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
-    for(const Core::TextureHandle& texture : sampledTextures){
-        if(!texture || !texture->getCreationDescription().name)
-            return false;
-        collector.append(texture);
+b8 RayTraceMaterialResources::ensureShadowInstanceMaterialBuffer(in usize instanceCount){
+    // CPU-uploaded material context is shared by the exclusive HW/SW backends.
+    if(this.m_shadow.m_shadowInstanceMaterialBuffer.valid() && this.m_shadow.m_shadowInstanceMaterialCapacity >= instanceCount)
+        return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceMaterialBuffer.deref(), this.m_shadow.m_shadowInstanceMaterialHeapHandle);
+
+    const usize capacity = NextGrowingCapacity(this.m_shadow.m_shadowInstanceMaterialCapacity, instanceCount, s_ShadowInstanceMaterialInitialCapacity);
+
+    BufferDesc materialBufferDesc;
+    materialBufferDesc
+        .setByteSize(cast<u64>(sizeof(NwbRtInstanceMaterialGpu) * capacity))
+        .setStructStride(sizeof(NwbRtInstanceMaterialGpu))
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(s_ShadowResourceInstanceMaterial)
+        .enableAutomaticStateTracking(ResourceStates::Common)
+    ;
+    const Expected<BufferHandle> materialBufferResult = this.m_graphics.createBuffer(materialBufferDesc);
+    if(!materialBufferResult.has_value()){
+        error("RendererSystem: failed to create shadow instance material buffer");
+        return false;
     }
+    BufferHandle materialBuffer = materialBufferResult.value();
+    if(!this.replaceRayTraceMaterialContextHeapHandle(materialBuffer.deref(), this.m_shadow.m_shadowInstanceMaterialHeapHandle))
+        return false;
+    this.m_shadow.m_shadowInstanceMaterialBuffer = materialBuffer;
+    this.m_shadow.m_shadowInstanceMaterialCapacity = capacity;
     return true;
 }
 
+b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(in usize instanceCount){
+    // Shadow tracing needs an instance record for every gathered occluder.
+    if(instanceCount == 0u)
+        return !this.m_shadow.m_shadowInstanceBuffer.valid() || this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle);
+    if(this.m_shadow.m_shadowInstanceBuffer.valid() && this.m_shadow.m_shadowInstanceCapacity >= instanceCount)
+        return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle);
 
-NWB_IMPL_END
+    const usize capacity = NextGrowingCapacity(this.m_shadow.m_shadowInstanceCapacity, instanceCount);
+    BufferDesc instanceBufferDesc;
+    instanceBufferDesc
+        .setByteSize(cast<u64>(capacity * sizeof(InstanceGpuData)))
+        .setStructStride(sizeof(InstanceGpuData))
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(s_ShadowResourceInstanceContext)
+        .enableAutomaticStateTracking(ResourceStates::Common)
+    ;
+    const Expected<BufferHandle> instanceBufferResult = this.m_graphics.createBuffer(instanceBufferDesc);
+    if(!instanceBufferResult.has_value()){
+        error("RendererSystem: failed to create shadow instance context buffer");
+        return false;
+    }
+    BufferHandle instanceBuffer = instanceBufferResult.value();
+    if(!this.replaceRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle))
+        return false;
+    this.m_shadow.m_shadowInstanceBuffer = instanceBuffer;
+    this.m_shadow.m_shadowInstanceCapacity = capacity;
+    return true;
+}
+
+b8 RayTraceMaterialResources::ensureShadowMaterialTypedBuffer(in usize byteCount){
+    // Keep one word so the heap binding remains valid with no transparent occluders.
+    const usize requiredByteCount = ResolveMaterialTypedBufferByteCount(byteCount, sizeof(u32));
+    if(this.m_shadow.m_shadowMaterialTypedBuffer.valid() && this.m_shadow.m_shadowMaterialTypedCapacity >= requiredByteCount)
+        return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowMaterialTypedBuffer.deref(), this.m_shadow.m_shadowMaterialTypedHeapHandle);
+
+    const usize capacity = NextGrowingCapacity(this.m_shadow.m_shadowMaterialTypedCapacity, requiredByteCount);
+    BufferDesc materialTypedBufferDesc;
+    materialTypedBufferDesc
+        .setByteSize(cast<u64>(capacity))
+        .setStructStride(sizeof(u32))
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(s_ShadowResourceMaterialTyped)
+        .enableAutomaticStateTracking(ResourceStates::Common)
+    ;
+    const Expected<BufferHandle> materialTypedBufferResult = this.m_graphics.createBuffer(materialTypedBufferDesc);
+    if(!materialTypedBufferResult.has_value()){
+        error("RendererSystem: failed to create shadow material typed buffer");
+        return false;
+    }
+    BufferHandle materialTypedBuffer = materialTypedBufferResult.value();
+    if(!this.replaceRayTraceMaterialContextHeapHandle(materialTypedBuffer.deref(), this.m_shadow.m_shadowMaterialTypedHeapHandle))
+        return false;
+    this.m_shadow.m_shadowMaterialTypedBuffer = materialTypedBuffer;
+    this.m_shadow.m_shadowMaterialTypedCapacity = capacity;
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads(){
+    if(this.m_preparedShadowMaterialContext.publishAcceptedUpload(this.m_rayTracingState))
+        this.clearPreparedShadowMaterialContext();
 }
+
+// The frozen software traversal indexes this context, so a new context always drops it.
+b8 RendererRayTracingSystem::capturePreparedShadowMaterialContext(
+    in PreparedShadowMaterialContextRoute route,
+    in b8 staticScene,
+    in u64 hash,
+    in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+    in Span<InstanceGpuData> instances,
+    in Span<u8> materialTypedBytes
+){
+    if(!this.m_preparedShadowMaterialContext.capture(this.m_rayTracingState, route, staticScene, hash, instanceMaterials, instances, materialTypedBytes))
+        return false;
+    this.m_preparedSceneSwBvhTraversal.clear();
+    return true;
+}
+
+b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount){
+    this.m_preparedSceneSwBvhTraversal.clear();
+    return this.m_preparedShadowMaterialContext.captureCacheReuse(this.m_rayTracingState, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
+}
+
+void RendererRayTracingSystem::clearPreparedShadowMaterialContext(){
+    this.m_preparedShadowMaterialContext.clear();
+    this.m_preparedSceneSwBvhTraversal.clear();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(size_of<InstanceGpuData>() == s_InstanceGpuDataByteSize);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

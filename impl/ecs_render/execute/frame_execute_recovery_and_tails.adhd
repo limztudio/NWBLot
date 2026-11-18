@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/execute/frame_execute_present_tails.adhd>
 #include <impl/ecs_render/execute/types.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,52 +29,21 @@ b8 IsDeferredTransferTailAvailable(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_present_tails.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_recovery.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/graphics/gpu_timing_types.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/scheduler.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void FrameExecuteCpuRestore::RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem)noexcept{
+void RestorePrefixCpuState(mut RendererMeshSystem meshSystem, mut RendererDeferredSystem deferredSystem){
     // Rejected recording invalidates upload mirrors.
     meshSystem.invalidateMeshViewBufferUploadMirror();
     deferredSystem.invalidateSceneLightingUploadMirrors();
 }
 
-void FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(
-    const Snapshot& snapshot,
-    const b8 restoreBindlessSlots,
-    RendererMeshSystem& meshSystem,
-    RendererDeferredSystem& deferredSystem,
-    RendererRayTracingState& rayTracingState,
-    RendererAvboitSystem& avboitSystem,
-    DeferredFrameTargets& targets
-)noexcept{
+void RestorePostGbufferPacketCpuState(
+    in FrameExecuteCpuSnapshot snapshot,
+    in b8 restoreBindlessSlots,
+    mut RendererMeshSystem meshSystem,
+    mut RendererDeferredSystem deferredSystem,
+    mut RendererRayTracingState rayTracingState,
+    mut RendererAvboitSystem avboitSystem,
+    mut DeferredFrameTargets targets
+){
     if(restoreBindlessSlots)
         targets.bindless.slotsUploaded = snapshot.deferredBindlessSlotsUploaded;
     RestorePrefixCpuState(meshSystem, deferredSystem);
@@ -86,189 +57,181 @@ void FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 FrameExecuteRecovery::discardUnacceptedGraphPackets()noexcept{
-    RendererFramePipeline& renderer = *m_renderer;
+b8 FrameExecuteRecovery::discardUnacceptedGraphPackets(){
+    mut RendererFramePipeline renderer = this.m_renderer;
     return renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration());
 }
 
-b8 FrameExecuteRecovery::executeFrameRecoveryTask()noexcept{
-    RendererFramePipeline& renderer = *m_renderer;
+b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
+    mut RendererFramePipeline renderer = this.m_renderer;
 
     // Retire the scope after rejection; Graphics order needs no extra wait.
     if(renderer.m_graphics.getDevice().requiresRecreation()){
-        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
+        [essential] warning("RendererSystem: frame recovery packet skipped because the graphics device requires recreation");
         renderer.m_deferredFrameRecoveryArmed = false;
         renderer.m_deferredFrameRecoveryRetiresTiming = false;
-        m_frameTimingTransaction->discard();
+        this.m_frameTimingTransaction.discard();
         return false;
     }
-    if(!renderer.m_deferredLightingTaskGraphScheduled || !renderer.m_deferredFrameRecoveryTask.valid() || !m_compiledPlan->findTask(renderer.m_deferredFrameRecoveryTask).valid()){
-        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
+    if(!renderer.m_deferredLightingTaskGraphScheduled || !renderer.m_deferredFrameRecoveryTask.valid() || !this.m_compiledPlan.findTask(renderer.m_deferredFrameRecoveryTask).valid()){
+        [essential] warning("RendererSystem: deferred frame recovery task was unavailable");
         renderer.m_deferredFrameRecoveryArmed = false;
         renderer.m_deferredFrameRecoveryRetiresTiming = false;
-        m_frameTimingTransaction->discard();
+        this.m_frameTimingTransaction.discard();
         return false;
     }
-    b8 retireTiming = m_frameTimingTransaction->needsRetirement();
-    if(retireTiming && !m_frameTimingTransaction->prepareForRecovery()){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery"));
-        m_frameTimingTransaction->discard();
+    b8 retireTiming = this.m_frameTimingTransaction.needsRetirement();
+    if(retireTiming && !this.m_frameTimingTransaction.prepareForRecovery()){
+        warning("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery");
+        this.m_frameTimingTransaction.discard();
         retireTiming = false;
     }
     renderer.m_deferredFrameRecoveryArmed = true;
     renderer.m_deferredFrameRecoveryRetiresTiming = retireTiming;
-    Core::Alloc::ScratchArena scratchArena;
-    const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
+    in GpuTaskScheduler scheduler = renderer.m_graphics.gpuTasks();
     const b8 recoveryAccepted = scheduler.executeAcceptedFrontierTask(
         renderer.m_deferredLightingCompiledGraph,
         renderer.m_deferredFrameRecoveryTask,
-        scratchArena,
         renderer.m_deferredLightingTaskGraph,
         renderer.m_deferredLightingRecordedGraph,
         renderer.m_deferredLightingSubmissionTransaction,
-        &renderer.m_graphics.gpuTiming()
+        renderer.m_graphics.gpuTiming()
     );
     if(!recoveryAccepted){
-        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: deferred frame recovery record/submission was rejected"));
+        [essential] warning("RendererSystem: deferred frame recovery record/submission was rejected");
         return false;
     }
     return true;
 }
 
-b8 FrameExecuteRecovery::recoverPendingFrameSubmission()noexcept{
-    return ShouldExecuteFrameRecoveryTask(m_renderer->m_deferredLightingSubmissionTransaction.hasAcceptedPackets(), m_frameTimingTransaction->needsRetirement()) ? executeFrameRecoveryTask() : true;
+b8 FrameExecuteRecovery::recoverPendingFrameSubmission(){
+    if(ShouldExecuteFrameRecoveryTask(this.m_renderer.m_deferredLightingSubmissionTransaction.hasAcceptedPackets(), this.m_frameTimingTransaction.needsRetirement()))
+        return this.executeFrameRecoveryTask();
+    return true;
 }
 
-b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted()noexcept{
-    const b8 recovered = recoverPendingFrameSubmission();
+b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
+    const b8 recovered = this.recoverPendingFrameSubmission();
     // Record/submit while Declared; then reject remaining normal packets.
-    return discardUnacceptedGraphPackets() && recovered;
+    return this.discardUnacceptedGraphPackets() && recovered;
 }
 
-void FrameExecuteRecovery::failFrameRenderRecovery()noexcept{
-    RendererFramePipeline& renderer = *m_renderer;
+void FrameExecuteRecovery::failFrameRenderRecovery(){
+    mut RendererFramePipeline renderer = this.m_renderer;
     if(renderer.m_frameRenderRecoveryFailed)
         return;
     renderer.m_frameRenderRecoveryFailed = true;
-    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation"));
+    [essential] warning("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation");
     // Defer recreation until accepted work is safe.
     renderer.m_graphics.requestDeviceRecreation();
 }
 
+class FrameHistoryCopyAcceptance{
+    public mut GpuPersistentResourceStateCache shadowVisibilityReturnState;
+    public mut GpuPersistentResourceStateCache causticIrradianceReturnState;
+    public mut GpuPersistentResourceStateCache surfelIrradianceReturnState;
+    public mut DeferredFrameTargets targets;
+    public mut GpuPersistentStateCandidate shadowStateCandidate;
+    public mut GpuPersistentStateCandidate causticStateCandidate;
+    public mut GpuPersistentStateCandidate surfelStateCandidate;
+    public b8 finalStateReady = false;
+    public b8 acceptedStateReady = false;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public FrameHistoryCopyAcceptance(
+        mut GpuPersistentResourceStateCache shadowVisibilityReturnState,
+        mut GpuPersistentResourceStateCache causticIrradianceReturnState,
+        mut GpuPersistentResourceStateCache surfelIrradianceReturnState,
+        mut DeferredFrameTargets targets,
+        mut GpuPersistentStateCandidate shadowStateCandidate,
+        mut GpuPersistentStateCandidate causticStateCandidate,
+        mut GpuPersistentStateCandidate surfelStateCandidate
+    ){
+        this.shadowVisibilityReturnState = shadowVisibilityReturnState;
+        this.causticIrradianceReturnState = causticIrradianceReturnState;
+        this.surfelIrradianceReturnState = surfelIrradianceReturnState;
+        this.targets = targets;
+        this.shadowStateCandidate = shadowStateCandidate;
+        this.causticStateCandidate = causticStateCandidate;
+        this.surfelStateCandidate = surfelStateCandidate;
+    }
 
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(!finalState.has_value())
+            return false;
 
-// Lagged-lighting history-copy tail acceptance (shadow/caustic/surfel returns).
-// Context and recorded/accepted callbacks filter the three return states and commit them together on acceptance.
-namespace FrameExecuteHistoryCopy{
+        const Array<TextureHandle, 1u> shadowVisibilityTextures(this.targets.shadowVisibility);
+        const Array<TextureHandle, 1u> causticIrradianceTextures(this.targets.causticIrradiance);
+        const Array<TextureHandle, 1u> surfelIrradianceTextures(this.targets.surfelIrradiance);
+        const b8 shadowStateReady = this.shadowVisibilityReturnState.buildFilteredResourceSubset(finalState.value(), Span<TextureHandle>(shadowVisibilityTextures), Span<BufferHandle>(), this.shadowStateCandidate);
+        const b8 causticStateReady = this.causticIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), Span<TextureHandle>(causticIrradianceTextures), Span<BufferHandle>(), this.causticStateCandidate);
+        const b8 surfelStateReady = this.surfelIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), Span<TextureHandle>(surfelIrradianceTextures), Span<BufferHandle>(), this.surfelStateCandidate);
+        this.finalStateReady = shadowStateReady && causticStateReady && surfelStateReady;
+        return this.finalStateReady;
+    }
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.finalStateReady)
+            return false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct Context{
-    Core::Alloc::ScratchArena& scratchArena;
-    Core::GpuPersistentResourceStateCache& shadowVisibilityReturnState;
-    Core::GpuPersistentResourceStateCache& causticIrradianceReturnState;
-    Core::GpuPersistentResourceStateCache& surfelIrradianceReturnState;
-    NotNull<DeferredFrameTargets*> targets;
-    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> shadowStateCandidate;
-    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> causticStateCandidate;
-    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> surfelStateCandidate;
-    b8 finalStateReady = false;
-    b8 acceptedStateReady = false;
-};
-
-[[nodiscard]] FOUNDATION_INLINE b8 PrepareHistoryCopyFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-    FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || !finalState)
-        return false;
-
-    const b8 shadowStateReady = context->shadowVisibilityReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->shadowVisibility, 1u), {}, context->scratchArena, *context->shadowStateCandidate);
-    const b8 causticStateReady = context->causticIrradianceReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->causticIrradiance, 1u), {}, context->scratchArena, *context->causticStateCandidate);
-    const b8 surfelStateReady = context->surfelIrradianceReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->surfelIrradiance, 1u), {}, context->scratchArena, *context->surfelStateCandidate);
-    context->finalStateReady = shadowStateReady && causticStateReady && surfelStateReady;
-    return context->finalStateReady;
+        const b8 shadowStateReady = this.shadowVisibilityReturnState.commit(this.shadowStateCandidate);
+        const b8 causticStateReady = this.causticIrradianceReturnState.commit(this.causticStateCandidate);
+        const b8 surfelStateReady = this.surfelIrradianceReturnState.commit(this.surfelStateCandidate);
+        this.acceptedStateReady = shadowStateReady && causticStateReady && surfelStateReady;
+        return this.acceptedStateReady;
+    }
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 AcceptHistoryCopyFinalState(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-    FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || !context->finalStateReady)
-        return false;
+class SurfelCounterReadbackAcceptance{
+    public mut GpuPersistentResourceStateCache surfelGiCounterPersistentState;
+    public mut RendererRayTracingSystem raytracingSystem;
+    public mut GpuPersistentStateCandidate candidate;
+    public Span<BufferHandle> buffers;
+    public b8 finalStateReady = false;
+    public b8 acceptedStateReady = false;
 
-    const b8 shadowStateReady = context->shadowVisibilityReturnState.commit(*context->shadowStateCandidate);
-    const b8 causticStateReady = context->causticIrradianceReturnState.commit(*context->causticStateCandidate);
-    const b8 surfelStateReady = context->surfelIrradianceReturnState.commit(*context->surfelStateCandidate);
-    context->acceptedStateReady = shadowStateReady && causticStateReady && surfelStateReady;
-    return context->acceptedStateReady;
+    public SurfelCounterReadbackAcceptance(
+        mut GpuPersistentResourceStateCache surfelGiCounterPersistentState,
+        mut RendererRayTracingSystem raytracingSystem,
+        mut GpuPersistentStateCandidate candidate,
+        in Span<BufferHandle> buffers
+    ){
+        this.surfelGiCounterPersistentState = surfelGiCounterPersistentState;
+        this.raytracingSystem = raytracingSystem;
+        this.candidate = candidate;
+        this.buffers = buffers;
+    }
+
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(this.buffers.empty())
+            return false;
+        this.finalStateReady = finalState.has_value() && this.surfelGiCounterPersistentState.buildFilteredResourceSubset(finalState.value(), Span<TextureHandle>(), this.buffers, this.candidate);
+        return this.finalStateReady;
+    }
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.finalStateReady)
+            return false;
+        this.acceptedStateReady = this.surfelGiCounterPersistentState.commit(this.candidate);
+        if(this.acceptedStateReady)
+            this.raytracingSystem.confirmSurfelCountReadbackSubmission(token);
+        return this.acceptedStateReady;
+    }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-// Surfel-counter readback tail acceptance (Transfer queue).
-// Context and recorded/accepted callbacks hold the counter candidate until Transfer accepts, then publish the token.
-namespace FrameExecuteSurfelReadback{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct Context{
-    Core::Alloc::ScratchArena& scratchArena;
-    Core::GpuPersistentResourceStateCache& surfelGiCounterPersistentState;
-    RendererRayTracingSystem& raytracingSystem;
-    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> candidate;
-    Span<const Core::BufferHandle> buffers{};
-    b8 finalStateReady = false;
-    b8 acceptedStateReady = false;
-};
-
-[[nodiscard]] FOUNDATION_INLINE b8 PrepareReadbackFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-    FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || context->buffers.empty())
-        return false;
-    context->finalStateReady = finalState && context->surfelGiCounterPersistentState.buildFilteredBufferSubset(*finalState, context->buffers, context->scratchArena, *context->candidate);
-    return context->finalStateReady;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
-    FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || !context->finalStateReady)
-        return false;
-    context->acceptedStateReady = context->surfelGiCounterPersistentState.commit(*context->candidate);
-    if(context->acceptedStateReady)
-        context->raytracingSystem.confirmSurfelCountReadbackSubmission(token);
-    return context->acceptedStateReady;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* const readbackQueue, const Span<const Core::BufferHandle> counterBuffers){
-    RendererFramePipeline& renderer = m_renderer;
+[cpp_unwind]
+b8 FrameExecutePresentTails::executeSurfelCounterReadback(in Optional<GpuPhysicalQueueInfo> readbackQueue, in Span<BufferHandle> counterBuffers){
+    mut RendererFramePipeline renderer = this.m_renderer;
     if(!renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask.valid())
         return true;
 
     // No normal-frame consumer; record only after Present.
     const b8 readbackTailAvailable = IsDeferredTransferTailAvailable(
-        m_finalPresentationSubmissionToken.valid(),
+        this.m_finalPresentationSubmissionToken.valid(),
         renderer.m_deferredLightingTaskGraphScheduled,
         true,
-        m_compiledPlan.findTask(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask).valid(),
-        readbackQueue != nullptr,
-        readbackQueue && (static_cast<u8>(readbackQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
+        this.m_compiledPlan.findTask(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask).valid(),
+        readbackQueue.has_value(),
+        readbackQueue.has_value() && (cast<u8>(readbackQueue.value().capabilities) & cast<u8>(GpuQueueCapability::Transfer)) != 0u
     );
     if(!readbackTailAvailable){
         renderer.m_deferredLightingSubmissionTransaction.rejectTask(
@@ -277,136 +240,109 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
             renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask,
             renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()
         );
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
+        warning("RendererSystem: deferred surfel counter-readback tail was unavailable");
     }
     else{
-        Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(renderer.m_surfelGiCounterPersistentState);
+        GpuPersistentStateCandidate readbackCounterStateCandidate(renderer.m_surfelGiCounterPersistentState);
         // Keep the candidate private until Transfer accepts.
-        FrameExecuteSurfelReadback::Context readbackContext{
-            .scratchArena = m_scratchArena,
-            .surfelGiCounterPersistentState = renderer.m_surfelGiCounterPersistentState,
-            .raytracingSystem = renderer.m_raytracingSystem,
-            .candidate = MakeNotNull(&readbackCounterStateCandidate),
-            .buffers = counterBuffers,
-        };
-        const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::PrepareReadbackFinalState, };
-        const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::AcceptReadbackFinalState, };
-        const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
+        SurfelCounterReadbackAcceptance readbackContext(renderer.m_surfelGiCounterPersistentState, renderer.m_raytracingSystem, readbackCounterStateCandidate, counterBuffers);
+        const GpuTaskGraphTaskRecordedCallback readbackRecordedCallback = MakeGpuTaskRecordedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, readbackContext);
+        const GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback = MakeGpuTaskAcceptedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, readbackContext);
+        in GpuTaskScheduler scheduler = renderer.m_graphics.gpuTasks();
         const b8 readbackAccepted = scheduler.executeTask(
             renderer.m_deferredLightingCompiledGraph,
             renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask,
-            &readbackRecordedCallback,
-            &readbackAcceptedCallback,
-            m_scratchArena,
+            readbackRecordedCallback,
+            readbackAcceptedCallback,
+
             renderer.m_deferredLightingTaskGraph,
             renderer.m_deferredLightingRecordedGraph,
             renderer.m_deferredLightingSubmissionTransaction,
-            &renderer.m_graphics.gpuTiming(),
-            nullptr
+            renderer.m_graphics.gpuTiming()
         );
-        const Core::QueueSubmissionToken readbackSubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask);
+        const QueueSubmissionToken readbackSubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(this.m_compiledPlan, renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask);
         if(!readbackSubmissionToken.valid())
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
+            warning("RendererSystem: deferred surfel counter-readback record/submission was rejected");
         else if(!readbackAccepted || !readbackContext.acceptedStateReady){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
-            m_recovery.failFrameRenderRecovery();
+            error("RendererSystem: accepted surfel counter-readback tail lost its retained state");
+            this.m_recovery.failFrameRenderRecovery();
             return false;
         }
         else{
             // Publish only after retained state commits.
-            FOUNDATION_ASSERT(renderer.m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
+            assert(renderer.m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
         }
     }
     return true;
 }
 
-void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrameTargets& targets, const Core::GpuPhysicalQueueInfo* const historyQueue, const b8 requestsCapture, const b8 captureDeclared, const b8 laggedAsyncLightingSchedule){
-    RendererFramePipeline& renderer = m_renderer;
+[cpp_unwind]
+void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(mut DeferredFrameTargets targets, in Optional<GpuPhysicalQueueInfo> historyQueue, in b8 requestsCapture, in b8 captureDeclared, in b8 laggedAsyncLightingSchedule){
+    mut RendererFramePipeline renderer = this.m_renderer;
     if(requestsCapture && !captureDeclared){
         // Present already completed; force next frame through bootstrap.
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
+        warning("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting");
         renderer.invalidateLaggedLightingHistorySubmission();
     }
     else if(captureDeclared){
         // The history copy depends on Present; publication needs accepted presentation.
         if(!IsDeferredTransferTailAvailable(
-            m_finalPresentationSubmissionToken.valid(),
+            this.m_finalPresentationSubmissionToken.valid(),
             renderer.m_deferredLightingTaskGraphScheduled,
             renderer.m_deferredLaggedLightingHistoryTask.valid(),
-            m_compiledPlan.findTask(renderer.m_deferredLaggedLightingHistoryTask).valid(),
-            historyQueue != nullptr,
-            historyQueue && (static_cast<u8>(historyQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
+            this.m_compiledPlan.findTask(renderer.m_deferredLaggedLightingHistoryTask).valid(),
+            historyQueue.has_value(),
+            historyQueue.has_value() && (cast<u8>(historyQueue.value().capabilities) & cast<u8>(GpuQueueCapability::Transfer)) != 0u
         )){
             if(renderer.m_deferredLightingTaskGraphScheduled){
                 if(!renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
                     renderer.m_graphics.requestDeviceRecreation();
             }
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
+            warning("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting");
             renderer.invalidateLaggedLightingHistorySubmission();
         }
         else{
-            Core::GpuPersistentResourceStateCache::Candidate shadowHistoryReturnStateCandidate(renderer.m_shadowVisibilityReturnState);
-            Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(renderer.m_causticIrradianceReturnState);
-            Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(renderer.m_surfelIrradianceReturnState);
-            FrameExecuteHistoryCopy::Context historyCopyAcceptance{
-                .scratchArena = m_scratchArena,
-                .shadowVisibilityReturnState = renderer.m_shadowVisibilityReturnState,
-                .causticIrradianceReturnState = renderer.m_causticIrradianceReturnState,
-                .surfelIrradianceReturnState = renderer.m_surfelIrradianceReturnState,
-                .targets = MakeNotNull(&targets),
-                .shadowStateCandidate = MakeNotNull(&shadowHistoryReturnStateCandidate),
-                .causticStateCandidate = MakeNotNull(&causticHistoryReturnStateCandidate),
-                .surfelStateCandidate = MakeNotNull(&surfelHistoryReturnStateCandidate),
-            };
-            const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{ .task = renderer.m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = FrameExecuteHistoryCopy::PrepareHistoryCopyFinalState, };
-            const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{ .task = renderer.m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState, };
-            const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
+            GpuPersistentStateCandidate shadowHistoryReturnStateCandidate(renderer.m_shadowVisibilityReturnState);
+            GpuPersistentStateCandidate causticHistoryReturnStateCandidate(renderer.m_causticIrradianceReturnState);
+            GpuPersistentStateCandidate surfelHistoryReturnStateCandidate(renderer.m_surfelIrradianceReturnState);
+            FrameHistoryCopyAcceptance historyCopyAcceptance(renderer.m_shadowVisibilityReturnState, renderer.m_causticIrradianceReturnState, renderer.m_surfelIrradianceReturnState, targets,
+                shadowHistoryReturnStateCandidate, causticHistoryReturnStateCandidate, surfelHistoryReturnStateCandidate);
+            const GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback = MakeGpuTaskRecordedCallback(renderer.m_deferredLaggedLightingHistoryTask, historyCopyAcceptance);
+            const GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback = MakeGpuTaskAcceptedCallback(renderer.m_deferredLaggedLightingHistoryTask, historyCopyAcceptance);
+            in GpuTaskScheduler scheduler = renderer.m_graphics.gpuTasks();
             const b8 historyCopyAccepted = scheduler.executeTask(
                 renderer.m_deferredLightingCompiledGraph,
                 renderer.m_deferredLaggedLightingHistoryTask,
-                &historyCopyRecordedCallback,
-                &historyCopyAcceptedCallback,
-                m_scratchArena,
+                historyCopyRecordedCallback,
+                historyCopyAcceptedCallback,
+
                 renderer.m_deferredLightingTaskGraph,
                 renderer.m_deferredLightingRecordedGraph,
                 renderer.m_deferredLightingSubmissionTransaction,
-                &renderer.m_graphics.gpuTiming(),
-                nullptr
+                renderer.m_graphics.gpuTiming()
             );
-            const Core::QueueSubmissionToken historyCopySubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_deferredLaggedLightingHistoryTask);
+            const QueueSubmissionToken historyCopySubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(this.m_compiledPlan, renderer.m_deferredLaggedLightingHistoryTask);
             if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){
-                if(!m_recovery.executeFrameRecoveryTask())
-                    m_recovery.failFrameRenderRecovery();
+                if(!this.m_recovery.executeFrameRecoveryTask())
+                    this.m_recovery.failFrameRenderRecovery();
                 // The accepted copy cannot be replayed.
-                m_recovery.failFrameRenderRecovery();
+                this.m_recovery.failFrameRenderRecovery();
                 return;
             }
             if(!historyCopyAccepted || !historyCopySubmissionToken.valid()){
                 if(!renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
                     renderer.m_graphics.requestDeviceRecreation();
-                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting"));
+                warning("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting");
                 renderer.invalidateLaggedLightingHistorySubmission();
             }
             else{
                 // The accepted hook publishes this token; keep the assertion here.
-                FOUNDATION_ASSERT(renderer.m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && renderer.m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
+                assert(renderer.m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && renderer.m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
                 if(!laggedAsyncLightingSchedule)
                     renderer.reportLaggedLightingTransition(LaggedLightingReport::BootstrapAccepted, targets.laggedLightingHistory.generation);
             }
         }
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

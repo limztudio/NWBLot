@@ -290,8 +290,7 @@ FOUNDATION_INLINE void ExpectUiListBuilderRect(const Rect& actual, const Rect& e
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiListInstallLatinFont(::NWB::Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
-    ::NWB::Core::Alloc::ScratchArena scratchArena(::NWB::UiWidgetTests::s_FontScratchArenaName);
-    return ::NWB::UiWidgetTests::InstallLatinFixtureFont(scratchArena, arena, font, text);
+    return ::NWB::UiWidgetTests::InstallLatinFixtureFont(arena, font, text);
 }
 
 FOUNDATION_INLINE void CopyUiListBuilderStyles(Builder& source, Builder& destination)noexcept{
@@ -304,11 +303,11 @@ FOUNDATION_INLINE void SetUiListBuilderRowStyle(Builder& builder, const Selectab
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiListReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ListBehavior::Reconcile(state, source);
+    return ::NWB::Impl::Ui::ReconcileListState(state, source);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiListReconcileApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
-    return ::NWB::Impl::Ui::ListBehavior::Apply(source, options, action, state, result);
+    return ::NWB::Impl::Ui::ApplyListControlAction(source, options, action, state, result);
 }
 
 [[nodiscard]] FOUNDATION_INLINE ControlAction MakeUiListReconcileAction(const ListState& state, const UiListReconcileRangeSource& source, const ControlActionKindEnum kind)noexcept{
@@ -1880,8 +1879,6 @@ NWB_ADHD_GTEST_F(MultilineModelTests, AcceptedNoopSelectionAndMovementAdvanceThe
 NWB_ADHD_GTEST_F(MultilineModelTests, SelectionAwayAndBackCannotReviveAnOldLoanEpoch, VerifyMultilineModelTests_SelectionAwayAndBackCannotReviveAnOldLoanEpoch)
 NWB_ADHD_GTEST_F(MultilineModelTests, AliasedSameTextAndEmptyReplacementRetireSelectionButZeroErasePreservesIt, VerifyMultilineModelTests_AliasedSameTextAndEmptyReplacementRetireSelectionButZeroErasePreservesIt)
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

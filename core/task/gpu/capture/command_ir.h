@@ -532,6 +532,7 @@ public:
 class GpuCommandIrCapture final : NoCopy{
 public:
     explicit GpuCommandIrCapture(GraphicsArena& arena);
+    explicit GpuCommandIrCapture(GraphicsAllocator& allocator) : GpuCommandIrCapture(allocator.getObjectArena()){}
     ~GpuCommandIrCapture()noexcept;
 
 
@@ -549,6 +550,8 @@ public:
     [[nodiscard]] b8 beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const;
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;
+    [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned()const{ return exportOwned(m_arena); }
+    [[nodiscard]] GraphicsArena& ownerArena()const noexcept{ return m_arena; }
     [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
     [[nodiscard]] b8 rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept;
     [[nodiscard]] b8 captureSetGraphicsState(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state);
@@ -564,7 +567,23 @@ public:
         const GraphicsPipelineHandle& pipelineOwner,
         const GpuCommandIrOwnerAnchor& descriptorOwner
     );
+    [[nodiscard]] b8 captureBindGraphicsHeap(
+        GpuDescriptorHeap& heap,
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        GpuGraphPipelineId pipeline,
+        const GraphicsPipelineHandle& pipelineOwner,
+        const GpuCommandIrOwnerAnchor& descriptorOwner
+    ){
+        return captureBindGraphicsHeap(heap, m_arena, task, packet, queue, pipeline, pipelineOwner, descriptorOwner);
+    }
     [[nodiscard]] b8 capturePushConstants(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView bytes);
+    template<typename T>
+        requires IsTriviallyCopyable_V<T>
+    [[nodiscard]] b8 capturePushValue(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const T& value){
+        return capturePushConstants(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(AddressOf(value)), sizeof(T) });
+    }
     [[nodiscard]] b8 captureDraw(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const DrawArguments& arguments, b8 indexed);
     [[nodiscard]] b8 captureEndRenderPass(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue);
     // Packet recording checkpoints before invoking task payloads and rolls back an incomplete task-recording attempt.

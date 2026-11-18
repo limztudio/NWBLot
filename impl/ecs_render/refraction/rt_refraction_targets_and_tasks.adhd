@@ -8,6 +8,7 @@
 #include <impl/ecs_render/refraction/refraction_target_builder.adhd>
 #include <impl/ecs_render/refraction/task_graph_refraction_resolve.adhd>
 #include <impl/ecs_render/refraction/types.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,209 +146,129 @@ RayTracingRefractionGraphResources ResolveRefractionGraphTaskResources(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/refraction/refraction_renderer.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/refraction/refraction_target_builder.adhd.h>
-#include <impl/ecs_render/avboit/avboit_target_factory.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/refraction/types.adhd.h>
-#include <core/common/log.h>
-#include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
-#include <impl/assets/graphics/refraction/diagnostics_layout.h>
-#include <impl/assets/graphics/refraction/push_constants.h>
-#include <impl/ecs_render/refraction/task_graph_refraction_resolve.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RefractionClearTileArgumentsGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
+[cpp_unwind]
+b8 RefractionStatisticsReadbackGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
+    if(!CanRecordRefractionStatisticsReadback(this.source.valid(), this.destination.valid(), this.reservation.valid()))
         return false;
-    commandList.endRenderPass();
-    Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), s_TimingScopeRefractionClearTileArguments, payload.graphics.getDevice(), commandList);
-
-    commandList.clearBufferUInt(*payload.destination, 0u);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RefractionClearStatisticsGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    if(!payload.destination)
+    const GpuGraphResourceId source = this.sourceResource;
+    const GpuGraphResourceId destination = this.destinationResource;
+    if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in source, in destination](mut GpuCommandIrCapture capture) -> b8{
+        return capture.captureCopyBuffer(context.task, context.packet, context.queue, source, 0u, destination, 0u, s_RefractionReadbackCounterBytes);
+    }))
         return false;
-    if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
-        return false;
-    commandList.endRenderPass();
-    commandList.clearBufferUInt(*payload.destination, 0u);
-    return !commandList.commandRecordingFailed();
+    commands.endRenderPass();
+    commands.copyBuffer(this.destination.deref(), 0u, this.source.deref(), 0u, s_RefractionReadbackCounterBytes);
+    return !commands.commandRecordingFailed();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RefractionStatisticsReadbackGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    if(!CanRecordRefractionStatisticsReadback(payload.source != nullptr, payload.destination != nullptr, payload.reservation.valid()))
-        return false;
-    if(context.commandIrCapture && !context.commandIrCapture->captureCopyBuffer(context.task, context.packet, context.queue, payload.sourceResource, 0u, payload.destinationResource, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE))
-        return false;
-    commandList.endRenderPass();
-    commandList.copyBuffer(*payload.destination, 0u, *payload.source, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE);
-    return !commandList.commandRecordingFailed();
+[cpp_unwind]
+b8 RefractionResolveGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
+    const auto resources = ResolveRefractionGraphTaskResources(this.resources, true, this.hardwareReady);
+    return this.system.refraction().recordRefractionResolve(commands, this.targets, resources);
 }
 
-void RefractionStatisticsReadbackGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-    const b8 hardwareReady = IsRefractionHardwareDispatchReady(payload.hardwareEnabled, payload.hardwarePreparationReady != nullptr, payload.hardwarePreparationReady ? *payload.hardwarePreparationReady : false);
-    payload.reservation.acceptReservation(token, hardwareReady);
+[cpp_unwind]
+void RefractionResolveGraphTask::accepted(in QueueSubmissionToken token){
+    const b8 usedHardware = this.resources.usesHardwareTrace && this.hardwareReady;
+    if(usedHardware){
+        this.system.confirmRayTraceContextReadSubmission(token);
+        LogAcceptedRefractionResolveIfNeeded(true, this.hardwareLogged);
+    }
+    else
+        LogAcceptedRefractionResolveIfNeeded(false, this.screenLogged);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RefractionResolveGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    // A nonfatal TLAS miss still accepts. Use the screen pipeline (its inputs subset this task's) instead of a stale TLAS.
-    const RayTracingRefractionGraphResources resources = ResolveRefractionGraphTaskResources(payload.resources, payload.hardwarePreparationReady != nullptr, payload.hardwarePreparationReady ? *payload.hardwarePreparationReady : false);
-    return payload.system.refraction().recordRefractionResolve(commandList, payload.targets, resources);
-}
-
-void RefractionResolveGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-    // Only an accepted packet publishes diagnostics. Rejected retries leave the latch; selection/recording stays stateless.
-    const b8 usedHardware = IsRefractionHardwareDispatchReady(payload.resources.usesHardwareTrace, payload.hardwarePreparationReady != nullptr, payload.hardwarePreparationReady ? *payload.hardwarePreparationReady : false);
-    if(usedHardware)
-        payload.system.confirmRayTraceContextReadSubmission(token);
-    b8* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
-    if(dispatchLogged)
-        LogAcceptedRefractionResolveIfNeeded(usedHardware, *dispatchLogged);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphRefractionResolveInputs& inputs, Core::Alloc::ScratchArena& scratchArena, RayTracingSceneGraphReads& sceneReads){
-    using namespace RendererTaskGraphDetail;
-    DeferredFrameTargets& deferredTargets = inputs.targets;
-    const RayTracingSceneGraphResources& sceneResources = inputs.sceneResources;
-    const RayTracingRefractionGraphResources& refractionResources = inputs.refractionResources;
+[cpp_unwind]
+Expected<GpuTaskId> FrameGraphRefractionResolve::declare(in FrameGraphRefractionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads){
+    mut DeferredFrameTargets deferredTargets = inputs.targets;
+    in RayTracingSceneGraphResources sceneResources = inputs.sceneResources;
+    in RayTracingRefractionGraphResources refractionResources = inputs.refractionResources;
     const b8 refractionActive = inputs.refractionActive;
-    const Core::GpuGraphResourceId depth = inputs.depth;
-    const Core::GpuGraphResourceId worldPosition = inputs.worldPosition;
-    const Core::GpuGraphResourceId refractionDepth = inputs.refractionDepth;
-    const Core::GpuGraphResourceId refractionNormalIor = inputs.refractionNormalIor;
-    const Core::GpuGraphResourceId refractionTintCoverage = inputs.refractionTintCoverage;
-    const Core::GpuGraphResourceId refractionInstance = inputs.refractionInstance;
-    const Core::GpuGraphResourceId refractionResolve = inputs.refractionResolve;
-    const Core::GpuGraphResourceId opaqueColor = inputs.opaqueColor;
-    const Core::GpuGraphResourceId opaqueReflectionRadiance = inputs.opaqueReflectionRadiance;
-    const Core::GpuGraphResourceId meshView = inputs.meshView;
-    const Core::GpuGraphResourceId currentBindlessSlots = inputs.currentBindlessSlots;
-    const Core::GpuGraphResourceId sceneShading = inputs.sceneShading;
-    const Core::GpuGraphResourceId lights = inputs.lights;
-    const Core::GpuGraphResourceId avboitAccumColor = inputs.avboitAccumColor;
-    const Core::GpuGraphResourceId avboitAccumExtinction = inputs.avboitAccumExtinction;
-    const Core::GpuGraphResourceId avboitForegroundColor = inputs.avboitForegroundColor;
-    const Core::GpuGraphResourceId avboitForegroundExtinction = inputs.avboitForegroundExtinction;
-    const Core::GpuGraphResourceSetId hardwareTraceGeometrySet = inputs.hardwareTraceGeometrySet;
-    const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet = inputs.traceMaterialSampledTextureSet;
+    const GpuGraphResourceId depth = inputs.depth;
+    const GpuGraphResourceId worldPosition = inputs.worldPosition;
+    const GpuGraphResourceId refractionDepth = inputs.refractionDepth;
+    const GpuGraphResourceId refractionNormalIor = inputs.refractionNormalIor;
+    const GpuGraphResourceId refractionTintCoverage = inputs.refractionTintCoverage;
+    const GpuGraphResourceId refractionInstance = inputs.refractionInstance;
+    const GpuGraphResourceId refractionResolve = inputs.refractionResolve;
+    const GpuGraphResourceId opaqueColor = inputs.opaqueColor;
+    const GpuGraphResourceId opaqueReflectionRadiance = inputs.opaqueReflectionRadiance;
+    const GpuGraphResourceId meshView = inputs.meshView;
+    const GpuGraphResourceId currentBindlessSlots = inputs.currentBindlessSlots;
+    const GpuGraphResourceId sceneShading = inputs.sceneShading;
+    const GpuGraphResourceId lights = inputs.lights;
+    const GpuGraphResourceId avboitAccumColor = inputs.avboitAccumColor;
+    const GpuGraphResourceId avboitAccumExtinction = inputs.avboitAccumExtinction;
+    const GpuGraphResourceId avboitForegroundColor = inputs.avboitForegroundColor;
+    const GpuGraphResourceId avboitForegroundExtinction = inputs.avboitForegroundExtinction;
+    const GpuGraphResourceSetId hardwareTraceGeometrySet = inputs.hardwareTraceGeometrySet;
+    const GpuGraphResourceSetId traceMaterialSampledTextureSet = inputs.traceMaterialSampledTextureSet;
 
     if(!refractionActive || !refractionResources.valid()){
-        Core::GpuTaskDesc clearDesc;
-        clearDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolveClear).setMarkerLabel(s_RefractionResolveClearLabel).setDependencies({ &inputs.avboitFinalTask, 1u });
-        Core::GpuClearTextureTaskDesc clear;
+        GpuTaskDesc clearDesc;
+        clearDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolveClear).setMarkerLabel(s_RefractionResolveClearLabel).setDependency(inputs.avboitFinalTask);
+        GpuClearTextureTaskDesc clear;
         clear.destination = refractionResolve;
         clear.subresources = s_FramebufferSubresources;
-        clear.valueType = Core::GpuClearTextureTaskValueType::Float;
-        clear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
-        return m_graph.addClearTextureTask(clearDesc, clear);
+        clear.valueType = GpuClearTextureTaskValueType::Float;
+        clear.floatValue = Color(0.f, 0.f, 0.f, 0.f);
+        return this.m_graph.addClearTextureTask(clearDesc, clear);
     }
 
     if(RequiresRefractionSceneReadsImport(sceneReads.valid(), refractionResources.usesHardwareTrace)){
-        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), inputs.traceContextUploadTask, m_graph, scratchArena);
-        if(!sceneReadsResult){
-            sceneReads = RayTracingSceneGraphReads(scratchArena);
-            return MakeUnexpected(Failure{});
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, this.m_raytracingSystem.sceneTlasBackingInitialState(), inputs.traceContextUploadTask, this.m_graph);
+        if(!sceneReadsResult.has_value()){
+            sceneReads = RayTracingSceneGraphReads();
+            return MakeUnexpected(Failure());
         }
-        sceneReads = Move(*sceneReadsResult);
+        sceneReads = sceneReadsResult.value();
     }
 
-    const auto tileListResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileList, BufferResourceDesc(s_RenderNameRenderRefractionTileList, s_RefractionTileListLabel));
-    const auto tileArgumentsResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileArguments, BufferResourceDesc(s_RenderNameRenderRefractionTileArguments, s_RefractionTileArgumentsLabel));
-    if(!tileListResult || !tileArgumentsResult)
-        return MakeUnexpected(Failure{});
-    const Core::GpuGraphResourceId tileList = *tileListResult;
-    const Core::GpuGraphResourceId tileArguments = *tileArgumentsResult;
-    const Core::GpuTaskResourceUse tileClearUse = WriteUse(tileArguments, Core::ResourceStates::CopyDest);
-    Core::GpuTaskDesc tileClearDesc;
-    tileClearDesc.setIdentity(s_RenderNameRenderAvboitRefractionTileArgumentsClear).setMarkerLabel(s_RefractionTileArgumentsClearLabel).setDependencies({ &inputs.avboitFinalTask, 1u }).setResourceUses({ &tileClearUse, 1u });
-    const auto tileClearTask = m_graph.addTask<RefractionClearTileArgumentsGraphTask>(tileClearDesc, RefractionClearTileArgumentsGraphTask::Payload{ m_graphics, deferredTargets.avboit.refractionTileArguments, tileArguments });
-    if(!tileClearTask)
-        return MakeUnexpected(Failure{});
-    const Array<Core::GpuTaskResourceUse, 4> tileUses = {
+    const auto tileListResult = this.m_graph.importBuffer(deferredTargets.avboit.refractionTileList, BufferResourceDesc(s_RenderNameRenderRefractionTileList, s_RefractionTileListLabel));
+    const auto tileArgumentsResult = this.m_graph.importBuffer(deferredTargets.avboit.refractionTileArguments, BufferResourceDesc(s_RenderNameRenderRefractionTileArguments, s_RefractionTileArgumentsLabel));
+    if(!tileListResult.has_value() || !tileArgumentsResult.has_value())
+        return MakeUnexpected(Failure());
+    const GpuGraphResourceId tileList = tileListResult.value();
+    const GpuGraphResourceId tileArguments = tileArgumentsResult.value();
+    const Array<GpuTaskResourceUse, 1u> tileClearUse(WriteUse(tileArguments, ResourceStates::CopyDest));
+    GpuTaskDesc tileClearDesc;
+    tileClearDesc.setIdentity(s_RenderNameRenderAvboitRefractionTileArgumentsClear).setMarkerLabel(s_RefractionTileArgumentsClearLabel).setDependency(inputs.avboitFinalTask).setResourceUses(tileClearUse);
+    const auto tileClearTask = this.m_graph.addPayloadTask(tileClearDesc, RefractionClearTileArgumentsGraphTask(this.m_graphics, deferredTargets.avboit.refractionTileArguments, tileArguments));
+    if(!tileClearTask.has_value())
+        return MakeUnexpected(Failure());
+    const Array<GpuTaskResourceUse, 4u> tileUses(
         ReadUse(refractionDepth),
-        ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
-        WriteUse(tileList, Core::ResourceStates::UnorderedAccess),
-        ReadWriteUse(tileArguments, Core::ResourceStates::UnorderedAccess),
-    };
-    Core::GpuTaskSchedulingHint refractionTileScheduling;
+        ReadUse(currentBindlessSlots, ResourceStates::ConstantBuffer),
+        WriteUse(tileList, ResourceStates::UnorderedAccess),
+        ReadWriteUse(tileArguments, ResourceStates::UnorderedAccess)
+    );
+    GpuTaskSchedulingHint refractionTileScheduling;
     refractionTileScheduling.mergeWithPrevious = true;
     refractionTileScheduling.allowMergeAcrossConsumerFrontier = true;
-    Core::GpuTaskDesc tileDesc;
-    tileDesc.setIdentity(s_RenderNameRenderAvboitRefractionClassifyTiles).setMarkerLabel(s_RefractionClassifyTilesLabel).setScheduling(refractionTileScheduling).setDependencies({ &*tileClearTask, 1u }).setResourceUses(tileUses);
-    const auto tileTask = m_graph.addTask<RefractionClassifyTilesGraphTask>(tileDesc, RefractionClassifyTilesGraphTask::Payload{ m_raytracingSystem, deferredTargets, refractionResources });
-    if(!tileTask)
-        return MakeUnexpected(Failure{});
-    Core::GpuGraphResourceId refractionCounters;
-    Core::GpuTaskId refractionDiagnosticClear;
-    if(refractionResources.statistics.control){
-        const auto counters = m_graph.importBuffer(refractionResources.statistics.counters, BufferResourceDesc(s_RefractionCounters, s_RefractionDiagnosticsCountersLabel).setExternalFinalState(Core::ResourceStates::UnorderedAccess));
-        if(!counters)
-            return MakeUnexpected(Failure{});
-        refractionCounters = *counters;
-        const Core::GpuTaskResourceUse clearUse = WriteUse(refractionCounters, Core::ResourceStates::CopyDest);
-        Core::GpuTaskDesc clearDesc;
-        clearDesc.setIdentity(s_RenderNameRenderRefractionDiagnosticsClear).setMarkerLabel(s_RefractionDiagnosticsClearLabel).setScheduling(refractionTileScheduling).setDependencies({ &*tileTask, 1u }).setResourceUses({ &clearUse, 1u });
-        const auto clearTask = m_graph.addTask<RefractionClearStatisticsGraphTask>(clearDesc, RefractionClearStatisticsGraphTask::Payload{ refractionResources.statistics.counters, refractionCounters });
-        if(!clearTask)
-            return MakeUnexpected(Failure{});
-        refractionDiagnosticClear = *clearTask;
+    GpuTaskDesc tileDesc;
+    tileDesc.setIdentity(s_RenderNameRenderAvboitRefractionClassifyTiles).setMarkerLabel(s_RefractionClassifyTilesLabel).setScheduling(refractionTileScheduling).setDependency(tileClearTask.value()).setResourceUses(tileUses);
+    const auto tileTask = this.m_graph.addPayloadTask(tileDesc, RefractionClassifyTilesGraphTask(this.m_raytracingSystem.refraction(), deferredTargets, refractionResources));
+    if(!tileTask.has_value())
+        return MakeUnexpected(Failure());
+    GpuGraphResourceId refractionCounters;
+    GpuTaskId refractionDiagnosticClear;
+    if(refractionResources.statistics.control.valid()){
+        GpuGraphResourceDesc counterDesc = BufferResourceDesc(s_RefractionCounters, s_RefractionDiagnosticsCountersLabel);
+        counterDesc.setExternalFinalState(ResourceStates::UnorderedAccess);
+        const auto counters = this.m_graph.importBuffer(refractionResources.statistics.counters, counterDesc);
+        if(!counters.has_value())
+            return MakeUnexpected(Failure());
+        refractionCounters = counters.value();
+        const Array<GpuTaskResourceUse, 1u> clearUse(WriteUse(refractionCounters, ResourceStates::CopyDest));
+        GpuTaskDesc clearDesc;
+        clearDesc.setIdentity(s_RenderNameRenderRefractionDiagnosticsClear).setMarkerLabel(s_RefractionDiagnosticsClearLabel).setScheduling(refractionTileScheduling).setDependency(tileTask.value()).setResourceUses(clearUse);
+        const auto clearTask = this.m_graph.addPayloadTask(clearDesc, RefractionClearStatisticsGraphTask(refractionResources.statistics.counters, refractionCounters));
+        if(!clearTask.has_value())
+            return MakeUnexpected(Failure());
+        refractionDiagnosticClear = clearTask.value();
     }
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{scratchArena};
-    const Array<Core::GpuGraphResourceId, 12> refractionInputs = {
+    Vector<GpuTaskResourceUse> refractionUses;
+    const Array<GpuGraphResourceId, 12u> refractionInputs(
         refractionDepth,
         refractionNormalIor,
         refractionTintCoverage,
@@ -359,94 +280,70 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
         avboitAccumColor,
         avboitAccumExtinction,
         avboitForegroundColor,
-        avboitForegroundExtinction,
-    };
+        avboitForegroundExtinction
+    );
     // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
     refractionUses.reserve(ComputeRefractionResolveResourceUseCapacity(refractionInputs.size(), sceneReads.uses.size(), sceneReads.csgUses.size()));
-    for(const auto input : refractionInputs)
+    for(in GpuGraphResourceId input : refractionInputs)
         refractionUses.push_back(ReadUse(input));
-    refractionUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
-    refractionUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    refractionUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+    refractionUses.push_back(ReadUse(meshView, ResourceStates::ConstantBuffer));
+    refractionUses.push_back(ReadUse(currentBindlessSlots, ResourceStates::ConstantBuffer));
+    refractionUses.push_back(ReadUse(sceneShading, ResourceStates::ConstantBuffer));
     refractionUses.push_back(ReadUse(lights));
-    refractionUses.push_back(WriteUse(refractionResolve, Core::ResourceStates::UnorderedAccess));
+    refractionUses.push_back(WriteUse(refractionResolve, ResourceStates::UnorderedAccess));
     refractionUses.push_back(ReadUse(tileList));
-    refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
+    refractionUses.push_back(ReadUse(tileArguments, ResourceStates::ShaderResource | ResourceStates::IndirectArgument));
     if(refractionCounters.valid())
-        refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
-    TraceResourceSetUses refractionSets{};
+        refractionUses.push_back(ReadWriteUse(refractionCounters, ResourceStates::UnorderedAccess));
+    TraceResourceSetUses refractionSets;
     if(refractionResources.usesHardwareTrace){
-        for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
+        for(in GpuTaskResourceUse read : sceneReads.uses)
             refractionUses.push_back(read);
-        for(const Core::GpuTaskResourceUse& read : sceneReads.csgUses)
+        for(in GpuTaskResourceUse read : sceneReads.csgUses)
             refractionUses.push_back(read);
         refractionSets = MakeTraceResourceSetUses(hardwareTraceGeometrySet, traceMaterialSampledTextureSet);
     }
-    const Array<Core::GpuTaskId, 3> refractionDependencies = { inputs.reflectionCompletionTask, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : *tileTask, inputs.surfelGiTask };
-    Core::GpuTaskDesc refractionDesc;
+    GpuTaskId dependency = tileTask.value();
+    if(refractionDiagnosticClear.valid())
+        dependency = refractionDiagnosticClear;
+    const Array<GpuTaskId, 3u> refractionDependencies(inputs.reflectionCompletionTask, dependency, inputs.surfelGiTask);
+    GpuTaskDesc refractionDesc;
     refractionDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolve)
         .setMarkerLabel(s_RefractionResolveLabel)
         .setScheduling(refractionTileScheduling)
         .setDependencies(refractionDependencies)
         .setResourceUses(refractionUses)
-        .setResourceSetUses({ refractionSets.uses.data(), refractionSets.useCount })
+        .setResourceSetUses(Span<GpuTaskResourceSetUse>(refractionSets.uses).first(refractionSets.useCount))
     ;
-    RefractionResolveGraphTask::Payload resolvePayload{
-        .system = m_raytracingSystem,
-        .targets = deferredTargets,
-        .resources = refractionResources,
-        .hardwarePreparationReady = &inputs.hardwarePreparationReady,
-        .dispatchLogged = refractionResources.usesHardwareTrace ? &inputs.refractionHardwareLogged : &inputs.refractionScreenLogged,
-        .screenFallbackDispatchLogged = &inputs.refractionScreenLogged,
-    };
-    Expected<Core::GpuTaskId> refractionResolveTask = refractionCounters.valid()
-        ? m_graph.addTask<RefractionDiagnosticResolveGraphTask>(refractionDesc, Move(resolvePayload))
-        : m_graph.addTask<RefractionResolveGraphTask>(refractionDesc, Move(resolvePayload))
-    ;
-    if(!refractionResolveTask)
-        return MakeUnexpected(Failure{});
+    auto refractionResolveTask = this.m_graph.addPayloadTask(refractionDesc, RefractionResolveGraphTask(this.m_raytracingSystem, deferredTargets, refractionResources,
+        inputs.hardwarePreparationReady, inputs.refractionHardwareLogged, inputs.refractionScreenLogged, refractionCounters.valid()));
+    if(!refractionResolveTask.has_value())
+        return MakeUnexpected(Failure());
     if(refractionCounters.valid()){
-        RefractionStatisticsReservation reservation(refractionResources.statistics.control, refractionResources.statistics.metadata);
+        RefractionStatisticsReadbackGraphTask payload(refractionResources.statistics, inputs.hardwarePreparationReady, refractionResources.usesHardwareTrace);
         // All slots may still be in flight; diagnostic collection is lossy rather than blocking rendering.
-        if(reservation.valid()){
-            const Core::BufferHandle& readback = refractionResources.statistics.buffers[reservation.slotIndex()];
-            if(!readback)
-                return MakeUnexpected(Failure{});
-            const auto readbackResource = m_graph.importBuffer(readback, BufferResourceDesc(readback->getCreationDescription().debugName, s_RefractionStatisticsReadbackLabel).setExternalFinalState(Core::ResourceStates::CopyDest));
-            if(!readbackResource)
-                return MakeUnexpected(Failure{});
-            const Array<Core::GpuTaskResourceUse, 2> copyUses = {
-                ReadUse(refractionCounters, Core::ResourceStates::CopySource),
-                WriteUse(*readbackResource, Core::ResourceStates::CopyDest),
-            };
-            Core::GpuTaskDesc copyDesc;
-            copyDesc.setIdentity(s_RenderNameRenderRefractionStatistics).setMarkerLabel(s_RefractionStatisticsReadbackLabel).setScheduling(refractionTileScheduling).setDependencies({ &*refractionResolveTask, 1u }).setResourceUses(copyUses);
-            refractionResolveTask = m_graph.addTask<RefractionStatisticsReadbackGraphTask>(
-                copyDesc,
-                RefractionStatisticsReadbackGraphTask::Payload{
-                    refractionResources.statistics.counters,
-                    readback,
-                    refractionCounters,
-                    *readbackResource,
-                    Move(reservation),
-                    &inputs.hardwarePreparationReady,
-                    refractionResources.usesHardwareTrace,
-                });
+        if(payload.reservation.valid()){
+            in BufferHandle readback = refractionResources.statistics.buffers[payload.reservation.slotIndex()];
+            if(!readback.valid())
+                return MakeUnexpected(Failure());
+            GpuGraphResourceDesc readbackDesc = BufferResourceDesc(readback.deref().getCreationDescription().debugName, s_RefractionStatisticsReadbackLabel);
+            readbackDesc.setExternalFinalState(ResourceStates::CopyDest);
+            const auto readbackResource = this.m_graph.importBuffer(readback, readbackDesc);
+            if(!readbackResource.has_value())
+                return MakeUnexpected(Failure());
+            const Array<GpuTaskResourceUse, 2u> copyUses(
+                ReadUse(refractionCounters, ResourceStates::CopySource),
+                WriteUse(readbackResource.value(), ResourceStates::CopyDest)
+            );
+            GpuTaskDesc copyDesc;
+            copyDesc.setIdentity(s_RenderNameRenderRefractionStatistics).setMarkerLabel(s_RefractionStatisticsReadbackLabel).setScheduling(refractionTileScheduling).setDependency(refractionResolveTask.value()).setResourceUses(copyUses);
+            payload.destination = readback;
+            payload.sourceResource = refractionCounters;
+            payload.destinationResource = readbackResource.value();
+            refractionResolveTask = this.m_graph.addPreparedPayloadTask(copyDesc, payload);
         }
     }
     return refractionResolveTask;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

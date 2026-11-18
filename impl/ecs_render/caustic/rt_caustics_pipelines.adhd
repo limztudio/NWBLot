@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd>
 #include <impl/assets_graphics/refractive_subsystem.adhd>
 #include <impl/ecs_render/caustic/caustic_activity_resources.adhd>
 #include <impl/ecs_render/caustic/caustic_emission_target_buffer.adhd>
@@ -14,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_CausticHwMaxPayloadBytes = 8u;
 const Name s_CausticSwPhotonShaderDebugName = "ECSRender_SwCausticPhotons";
 const Name s_CausticResolveShaderDebugName = "ECSRender_CausticResolve";
 const Name s_CausticGeometryDownsampleShaderDebugName = "ECSRender_CausticGeometryDownsample";
@@ -360,220 +361,199 @@ void CausticActivityResources::releaseCausticResolveActivity(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_PASS_COUNT")]
+extern const u32 s_ShaderCausticResolvePassCount;
+[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_GROUP_SIZE")]
+extern const u32 s_ShaderCausticResolveGroupSize;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/assets_graphics/refractive_subsystem.adhd.h>
-#include <impl/ecs_render/caustic/caustic_activity_resources.adhd.h>
-#include <impl/ecs_render/caustic/caustic_emission_target_buffer.adhd.h>
-#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
-#include <impl/ecs_render/caustic/graph_types.adhd.h>
-#include <impl/ecs_render/caustic/rt_caustics_internal.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(s_CausticHwMaxPayloadBytes == NWB_CAUSTIC_HW_MAX_PAYLOAD_BYTES);
-static_assert(s_CausticResolvePassCount == NWB_CAUSTIC_RESOLVE_PASS_COUNT);
-static_assert(s_CausticResolveGroupThreadCount == NWB_CAUSTIC_RESOLVE_GROUP_SIZE);
+static_assert(s_CausticResolvePassCount == s_ShaderCausticResolvePassCount);
+static_assert(s_CausticResolveGroupThreadCount == s_ShaderCausticResolveGroupSize);
 static_assert(s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount == s_CausticResolveGroupLaneCount);
 
+[cpp_unwind]
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
-    m_rayTracingState.m_causticEmissionTargets.releaseDescriptor(m_graphics);
+    this.m_rayTracingState.caustics.m_causticEmissionTargets.releaseDescriptor(this.m_graphics);
 }
 
-b8 RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
+[cpp_unwind]
+b8 RendererRayTracingSystem::createCausticTargets(mut DeferredFrameTargets targets){
     // Full-res additive targets with half-res temporal resolve ping-pong.
-    targets.causticIrradianceFormat = Core::Format::RGBA16_FLOAT;
-    targets.causticAccumulatorFormat = Core::Format::R32_UINT;
-    targets.causticHistoryFormat = Core::Format::RGBA16_FLOAT;
+    targets.causticIrradianceFormat = Format::RGBA16_FLOAT;
+    targets.causticAccumulatorFormat = Format::R32_UINT;
+    targets.causticHistoryFormat = Format::RGBA16_FLOAT;
 
     // Fresh accumulators reseed the temporal EMA.
-    m_rayTracingState.m_causticAccumulatorInitialized = false;
+    this.m_rayTracingState.caustics.m_causticAccumulatorInitialized = false;
 
     const u32 halfWidth = ComputeCausticHalfTargetExtent(targets.width);
     const u32 halfHeight = ComputeCausticHalfTargetExtent(targets.height);
 
-    Core::TextureDesc irradianceDesc;
+    TextureDesc irradianceDesc = TextureDesc();
     // Graphics/async production and the graph-owned lagged-history transfer copy share this target concurrently.
-    irradianceDesc.setWidth(targets.width).setHeight(targets.height).setFormat(targets.causticIrradianceFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/caustic/irradiance");
-    auto causticIrradianceResult = m_graphics.createTexture(irradianceDesc);
-    if(causticIrradianceResult)
-        targets.causticIrradiance = Move(*causticIrradianceResult);
+    irradianceDesc.setWidth(targets.width).setHeight(targets.height).setFormat(targets.causticIrradianceFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName(Name("engine/caustic/irradiance"));
+    auto causticIrradianceResult = this.m_graphics.createTexture(irradianceDesc);
+    if(causticIrradianceResult.has_value())
+        targets.causticIrradiance = causticIrradianceResult.value();
     else
         targets.causticIrradiance.reset();
-    if(!causticIrradianceResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create caustic irradiance target"));
+    if(!causticIrradianceResult.has_value()){
+        error("RendererSystem: failed to create caustic irradiance target");
         return false;
     }
 
-    Core::TextureDesc accumulatorDesc;
-    accumulatorDesc.setWidth(targets.width).setHeight(targets.height).setArraySize(s_CausticAccumulatorChannelCount).setDimension(Core::TextureDimension::Texture2DArray).setFormat(targets.causticAccumulatorFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/accumulator");
-    auto causticAccumulatorResult = m_graphics.createTexture(accumulatorDesc);
-    if(causticAccumulatorResult)
-        targets.causticAccumulator = Move(*causticAccumulatorResult);
+    TextureDesc accumulatorDesc = TextureDesc();
+    accumulatorDesc.setWidth(targets.width).setHeight(targets.height).setArraySize(s_CausticAccumulatorChannelCount).setDimension(TextureDimension::Texture2DArray).setFormat(targets.causticAccumulatorFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name("engine/caustic/accumulator"));
+    auto causticAccumulatorResult = this.m_graphics.createTexture(accumulatorDesc);
+    if(causticAccumulatorResult.has_value())
+        targets.causticAccumulator = causticAccumulatorResult.value();
     else
         targets.causticAccumulator.reset();
-    if(!causticAccumulatorResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create caustic accumulator target"));
+    if(!causticAccumulatorResult.has_value()){
+        error("RendererSystem: failed to create caustic accumulator target");
         return false;
     }
 
-    Core::TextureDesc historyDesc;
-    historyDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_a");
-    auto causticHistoryResult = m_graphics.createTexture(historyDesc);
-    if(causticHistoryResult)
-        targets.causticHistory = Move(*causticHistoryResult);
+    TextureDesc historyDesc = TextureDesc();
+    historyDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name("engine/caustic/atrous_half_a"));
+    auto causticHistoryResult = this.m_graphics.createTexture(historyDesc);
+    if(causticHistoryResult.has_value())
+        targets.causticHistory = causticHistoryResult.value();
     else
         targets.causticHistory.reset();
-    if(!causticHistoryResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create caustic a-trous half-A target"));
+    if(!causticHistoryResult.has_value()){
+        error("RendererSystem: failed to create caustic a-trous half-A target");
         return false;
     }
 
-    Core::TextureDesc halfBDesc;
-    halfBDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_b");
-    auto causticResolveHalfResult = m_graphics.createTexture(halfBDesc);
-    if(causticResolveHalfResult)
-        targets.causticResolveHalf = Move(*causticResolveHalfResult);
+    TextureDesc halfBDesc = TextureDesc();
+    halfBDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name("engine/caustic/atrous_half_b"));
+    auto causticResolveHalfResult = this.m_graphics.createTexture(halfBDesc);
+    if(causticResolveHalfResult.has_value())
+        targets.causticResolveHalf = causticResolveHalfResult.value();
     else
         targets.causticResolveHalf.reset();
-    if(!causticResolveHalfResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create caustic a-trous half-B target"));
+    if(!causticResolveHalfResult.has_value()){
+        error("RendererSystem: failed to create caustic a-trous half-B target");
         return false;
     }
 
     // Half-resolution geometry cache for edge-aware resolve.
-    Core::TextureDesc geometryDesc;
-    geometryDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/resolve_geometry");
-    auto causticResolveGeometryResult = m_graphics.createTexture(geometryDesc);
-    if(causticResolveGeometryResult)
-        targets.causticResolveGeometry = Move(*causticResolveGeometryResult);
+    TextureDesc geometryDesc = TextureDesc();
+    geometryDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name("engine/caustic/resolve_geometry"));
+    auto causticResolveGeometryResult = this.m_graphics.createTexture(geometryDesc);
+    if(causticResolveGeometryResult.has_value())
+        targets.causticResolveGeometry = causticResolveGeometryResult.value();
     else
         targets.causticResolveGeometry.reset();
-    if(!causticResolveGeometryResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));
+    if(!causticResolveGeometryResult.has_value()){
+        error("RendererSystem: failed to create caustic resolve geometry cache target");
         return false;
     }
-    CausticActivityResources activity(m_graphics, m_rayTracingState.m_causticResolve.m_activity);
+    CausticActivityResources activity(this.m_graphics, this.m_rayTracingState.caustics.m_causticResolve.m_activity);
     if(!activity.prepareCausticResolveActivity(halfWidth, halfHeight))
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: caustic activity buffers unavailable; retaining full wavelet filtering"));
+        warning("RendererSystem: caustic activity buffers unavailable; retaining full wavelet filtering");
     return true;
 }
 
-b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
+[cpp_unwind]
+b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(mut DeferredFrameTargets targets){
     // Prepare heap-only software pipelines once geometry and emission targets exist.
-    if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery))
+    if(this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) && this.m_graphics.queryFeatureSupport(Feature::RayQuery))
         return true;
-    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || m_rayTracingState.m_sceneBvhInstanceCount == 0u || m_rayTracingState.m_swShadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargets.buffer)
+    if(this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount == 0u || this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount == 0u || this.m_rayTracingState.shadow.m_swShadowMeshCount == 0u
+        || !this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.valid())
         return true;
-    const MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return prepareCausticResources(meshView, false, targets);
+    const MeshViewBufferSnapshot meshView = this.m_meshSystem.meshViewBufferSnapshot();
+    return this.prepareCausticResources(meshView, false, targets);
 }
 
-b8 RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& targets){
+[cpp_unwind]
+b8 RendererRayTracingSystem::prepareHwCausticResources(mut DeferredFrameTargets targets){
     // Prepare hardware resources once geometry and emission targets exist.
-    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
         return true;
-    if(m_rayTracingState.m_causticRefractiveInstanceCount == 0u || !m_rayTracingState.m_tlas || m_rayTracingState.m_shadowMeshCount == 0u || !m_rayTracingState.m_causticEmissionTargets.buffer)
+    if(this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount == 0u || !this.m_rayTracingState.sceneBvh.m_tlas.valid() || this.m_rayTracingState.shadow.m_shadowMeshCount == 0u
+        || !this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.valid())
         return true;
-    const MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return prepareCausticResources(meshView, true, targets);
+    const MeshViewBufferSnapshot meshView = this.m_meshSystem.meshViewBufferSnapshot();
+    return this.prepareCausticResources(meshView, true, targets);
 }
 
-CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const noexcept{
-    const auto& activity = m_rayTracingState.m_causticResolve.m_activity;
+CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(in DeferredFrameTargets targets)const{
+    in CausticResolveActivitySnapshot activity = this.m_rayTracingState.caustics.m_causticResolve.m_activity;
     if(!activity.valid() || !MatchesCausticResolveActivityExtent(activity.halfWidth, activity.halfHeight, targets.width, targets.height))
-        return {};
+        return CausticResolveActivitySnapshot();
     return activity;
 }
 
-b8 RendererRayTracingSystem::hasHwCausticWork()const noexcept{
-    const MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return hasHwCausticWork(meshView);
+b8 RendererRayTracingSystem::hasHwCausticWork()const{
+    const MeshViewBufferSnapshot meshView = this.m_meshSystem.meshViewBufferSnapshot();
+    return this.hasHwCausticWork(meshView);
 }
 
-b8 RendererRayTracingSystem::hasHwCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasHwCausticWork(in MeshViewBufferSnapshot meshView)const{
     // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
+    in RtCausticState caustics = this.m_rayTracingState.caustics;
+    b8 pipelineReady = caustics.m_hwCausticPipeline.valid() && caustics.m_hwCausticShaderTable.valid();
+    if(this.m_lightSpaceShadow.m_csg.snapshot.hasCsg)
+        pipelineReady = caustics.m_hwCausticCsgPipeline.valid() && caustics.m_hwCausticCsgShaderTable.valid();
     return
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline)
-        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable)
-        && m_rayTracingState.m_tlas
-        && m_rayTracingState.m_shadowMeshCount > 0u
-        && hasCommonCausticWork(meshView)
+        this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct)
+        && pipelineReady
+        && this.m_rayTracingState.sceneBvh.m_tlas.valid()
+        && this.m_rayTracingState.shadow.m_shadowMeshCount > 0u
+        && this.hasCommonCausticWork(meshView)
     ;
 }
 
-b8 RendererRayTracingSystem::prepareCausticResources(const MeshViewBufferSnapshot& meshView, const b8 hardware, DeferredFrameTargets& targets){
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !meshView.buffer || !meshView.heapHandle.valid() || !m_rayTracingState.m_causticEmissionTargets.heapHandle.valid())
+[cpp_unwind]
+b8 RendererRayTracingSystem::prepareCausticResources(in MeshViewBufferSnapshot meshView, in b8 hardware, mut DeferredFrameTargets targets){
+    if(!targets.causticAccumulator.valid() || !targets.causticIrradiance.valid() || !meshView.buffer.valid() || !meshView.heapHandle.valid() || !this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.valid())
         return true;
-    if(meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer || m_rayTracingState.m_causticEmissionTargets.heapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
+    if(meshView.heapHandle.descriptorClass() != GpuDescriptorClass::UniformBuffer || this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer){
+        error("RendererSystem: caustic photon heap input has an unexpected descriptor class");
         return false;
     }
     if(!targets.bindless.valid()){
         if(hardware)
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: hardware caustics require complete deferred bindless frame resources"));
+            error("RendererSystem: hardware caustics require complete deferred bindless frame resources");
         else
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software caustics require complete deferred bindless frame resources"));
+            error("RendererSystem: software caustics require complete deferred bindless frame resources");
         return false;
     }
 
-    CausticPipelineSet pipelines(m_graphics, m_shaderSystem, m_rayTracingState, m_lightSpaceShadow.m_csg.snapshot.hasCsg);
-    const b8 producerReady = RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? pipelines.ensureCausticRtPipeline() : pipelines.ensureSwCausticPipeline());
+    CausticPipelineSet pipelines(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.caustics, this.m_lightSpaceShadow.m_csg.snapshot.hasCsg);
+    RayTraceMaterialResources materialResources(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
+    b8 producerReady = materialResources.ensureRayTraceMaterialContextSlotsHeapHandle();
+    if(producerReady){
+        if(hardware)
+            producerReady = pipelines.ensureCausticRtPipeline();
+        else
+            producerReady = pipelines.ensureSwCausticPipeline();
+    }
     // Prepare shared resolve and temporal resources even when the producer is unavailable.
     const b8 resolveReady = pipelines.ensureCausticGeometryDownsamplePipeline() && pipelines.ensureCausticResolvePipeline();
     const b8 temporalReady = pipelines.ensureCausticAccumulatorDecayPipeline();
     return producerReady && resolveReady && temporalReady;
 }
 
-b8 RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets)const noexcept{
+b8 RendererRayTracingSystem::causticResolveResourcesReady(in DeferredFrameTargets targets)const{
     return
         AreAllCausticResolveStagePipelinesReady(
-            static_cast<b8>(m_rayTracingState.m_causticResolve.m_prepare.m_pipeline),
-            static_cast<b8>(m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline),
-            static_cast<b8>(m_rayTracingState.m_causticResolve.m_waveletStepOne.m_pipeline),
-            static_cast<b8>(m_rayTracingState.m_causticResolve.m_waveletStepTwo.m_pipeline),
-            static_cast<b8>(m_rayTracingState.m_causticResolve.m_waveletDirect.m_pipeline),
-            static_cast<b8>(m_rayTracingState.m_causticResolve.m_upsample.m_pipeline)
+            this.m_rayTracingState.caustics.m_causticResolve.m_prepare.m_pipeline.valid(),
+            this.m_rayTracingState.caustics.m_causticResolve.m_wavelet.m_pipeline.valid(),
+            this.m_rayTracingState.caustics.m_causticResolve.m_waveletStepOne.m_pipeline.valid(),
+            this.m_rayTracingState.caustics.m_causticResolve.m_waveletStepTwo.m_pipeline.valid(),
+            this.m_rayTracingState.caustics.m_causticResolve.m_waveletDirect.m_pipeline.valid(),
+            this.m_rayTracingState.caustics.m_causticResolve.m_upsample.m_pipeline.valid()
         )
-        && m_rayTracingState.m_causticGeometryDownsamplePipeline
-        && m_rayTracingState.m_causticAccumulatorDecayPipeline
-        && targets.causticAccumulator
-        && targets.causticIrradiance
-        && targets.causticHistory
-        && targets.causticResolveHalf
-        && targets.causticResolveGeometry
+        && this.m_rayTracingState.caustics.m_causticGeometryDownsamplePipeline.valid()
+        && this.m_rayTracingState.caustics.m_causticAccumulatorDecayPipeline.valid()
+        && targets.causticAccumulator.valid()
+        && targets.causticIrradiance.valid()
+        && targets.causticHistory.valid()
+        && targets.causticResolveHalf.valid()
+        && targets.causticResolveGeometry.valid()
         && targets.bindless.valid()
         && targets.bindless.causticIrradianceStorage.valid()
         && targets.bindless.causticAccumulatorStorage.valid()
@@ -583,34 +563,22 @@ b8 RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTar
     ;
 }
 
-b8 RendererRayTracingSystem::hasCommonCausticWork(const MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasCommonCausticWork(in MeshViewBufferSnapshot meshView)const{
     return
-        m_shadowVisibilityTraceResourcesPreflighted
-        && m_shadowVisibilityPreparedTargets
-        && causticResolveResourcesReady(*m_shadowVisibilityPreparedTargets)
-        && m_rayTracingState.m_causticLightCount > 0u
-        && m_unsupportedCausticVolumeCount == 0u
-        && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
-        && m_rayTracingState.m_causticEmissionTargets.buffer
-        && m_rayTracingState.m_causticEmissionTargets.heapHandle.valid()
-        && m_rayTracingState.m_causticEmissionTargets.heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        this.m_shadowVisibilityTraceResourcesPreflighted
+        && this.m_shadowVisibilityPreparedTargets.has_value()
+        && this.causticResolveResourcesReady(this.m_shadowVisibilityPreparedTargets.value())
+        && this.m_rayTracingState.caustics.m_causticLightCount > 0u
+        && this.m_unsupportedCausticVolumeCount == 0u
+        && this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount > 0u
+        && this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.valid()
+        && this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.valid()
+        && this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
+        && this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsBuffer.valid()
+        && this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.valid()
+        && this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == GpuDescriptorClass::UniformBuffer
         && meshView.bindingValid()
     ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

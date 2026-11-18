@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_csg/frame_state.adhd>
+#include <impl/ecs_csg/shape_registry.adhd>
+#include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd>
+#include <impl/ecs_scene/component_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<CsgFrameStateCacheSignature> BuildCsgFrameCacheSignature(mut World world, in CsgShapeRegistry registry, in MeshSystem meshSystem){
+    if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
+        return MakeUnexpected(Failure());
+
+    CsgFrameStateCacheSignature signature;
+    signature.shapeRegistryRevision = registry.revision();
+    u64 hash = s_Fnv64OffsetBasis;
+    CsgSnapshotIdentityBuilder builder;
+    for(in auto row : world.view<CsgCutterComponent>())
+        builder.updateCsgFrameStateCutterSignature(Get<0>(row), Get<1>(row), hash);
+
+    b8 cacheable = true;
+    for(in auto row : world.view<StaticCsgMeshComponent>()){
+        const EntityID entity = Get<0>(row);
+        const CsgReceiverComponent receiver = Get<1>(row).asReceiver();
+        const b8 hasRenderer = world.hasComponent<RendererComponent>(entity);
+        const b8 hasMesh = world.hasComponent<MeshComponent>(entity);
+        const b8 hasTransform = world.hasComponent<TransformComponent>(entity);
+        b8 visible = false;
+        Name material = s_NameNone;
+        Name mesh = s_NameNone;
+        VectorSingle position(0.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle rotation(0.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle scale(0.0f, 0.0f, 0.0f, 0.0f);
+        if(hasRenderer){
+            in RendererComponent renderer = world.getComponent<RendererComponent>(entity);
+            visible = renderer.visible;
+            material = renderer.material.name();
+        }
+        if(hasMesh)
+            mesh = world.getComponent<MeshComponent>(entity).mesh.name();
+        if(hasTransform){
+            in TransformComponent transform = world.getComponent<TransformComponent>(entity);
+            position = VectorSingle(transform.position);
+            rotation = VectorSingle(transform.rotation);
+            scale = VectorSingle(transform.scale);
+        }
+        const b8 runtime = receiver.enabled && visible && meshSystem.hasRuntimeMeshBinding(entity);
+        builder.updateCsgFrameStateReceiverSignature(entity, receiver, hasRenderer, visible, material, hasMesh, mesh, runtime, hasTransform, position, rotation, scale, hash, cacheable);
+    }
+    if(!cacheable)
+        return MakeUnexpected(Failure());
+    signature.contentHash = hash;
+    return signature;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

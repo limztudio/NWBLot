@@ -37,7 +37,7 @@ native{
 namespace NWB::Tests::Smoke{
 using Core::ECS::EntityID;
 using Core::ECS::s_InvalidEntityId;
-using Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity;
+using Impl::ReflectionCsgHardwareSliceIdentity;
 inline constexpr u32 s_ReflectionTraceSliceRays = NWB_REFLECTION_TRACE_SLICE_RAYS;
 };
 

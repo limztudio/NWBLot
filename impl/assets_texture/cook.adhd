@@ -2,110 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_texture/asset.adhd>
+#include <impl/assets_texture/cook_entry.adhd>
 #include <impl/assets_texture/texture_binary_codec.adhd>
 #include <impl/assets_texture/types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct TextureCookEntry{
-    Name virtualPath = s_NameNone;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 depth = 1u;
-    TextureDimension::Enum dimension = TextureDimension::Texture2D;
-    TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-    Core::Assets::AssetBytes payloadBytes;
-
-
-public:
-    explicit TextureCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : payloadBytes(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<TextureCookEntry> ParseTextureCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-template<typename FileArenaT>
-    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return ParseTextureCookMetadata(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
-}
-
-template<typename RootArenaT, typename FileArenaT>
-    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return ParseTextureCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
-}
-[[nodiscard]] Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TextureCookMetadataHeader{
-    public Name virtualPath = s_NameNone;
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 depth = 1u;
-    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
-    public TexturePayloadFormat payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    public TextureAlphaMode alphaMode = TextureAlphaMode::Opaque;
-    public u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -301,51 +200,6 @@ Expected<TextureResolution> ReadTextureResolution(in Path nwbFilePath, in Metasc
     return resolution;
 }
 
-Expected<TextureCookMetadataHeader> ParseTextureCookMetadataHeader(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
-    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_TextureDiagnosticPrefix))
-        return MakeUnexpected(Failure());
-
-    const Expected<TextureAlphaMode> alphaMode = ParseTextureAlphaModeField(nwbFilePath, asset);
-    if(!alphaMode.has_value())
-        return MakeUnexpected(Failure());
-
-    const b8 allowAlphaConstant = alphaMode.value() == TextureAlphaMode::ConstantUnorm8;
-    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_TextureDiagnosticPrefix, lambda[in allowAlphaConstant](in StringView fieldName) -> b8{
-        return IsAllowedTextureMetadataField(fieldName, allowAlphaConstant);
-    }))
-        return MakeUnexpected(Failure());
-
-    const Expected<TexturePayloadFormat> format = ParseTexturePayloadFormatField(nwbFilePath, asset);
-    const Expected<TexturePayloadDimension> dimension = ParseTextureDimensionField(nwbFilePath, asset);
-    if(!format.has_value() || !dimension.has_value())
-        return MakeUnexpected(Failure());
-
-    const Expected<TextureResolution> resolution = ReadTextureResolution(nwbFilePath, asset, dimension.value());
-    if(!resolution.has_value())
-        return MakeUnexpected(Failure());
-
-    const Expected<u32> completeMipCount = ComputeCompleteMipCount(dimension.value(), resolution.value().width, resolution.value().height, resolution.value().depth);
-    if(!ValidateTextureCompleteMipChain(nwbFilePath, completeMipCount.has_value()))
-        return MakeUnexpected(Failure());
-
-    TextureCookMetadataHeader header;
-    if(!AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_TextureDiagnosticPrefix, header))
-        return MakeUnexpected(Failure());
-    header.width = resolution.value().width;
-    header.height = resolution.value().height;
-    header.depth = resolution.value().depth;
-    header.dimension = dimension.value();
-    header.payloadFormat = format.value();
-    header.alphaMode = alphaMode.value();
-    if(header.alphaMode == TextureAlphaMode::ConstantUnorm8){
-        const Expected<u32> constant = ReadTextureUnsignedField(nwbFilePath, asset, s_TextureAlphaConstantField, 0u, s_MaxConstantAlphaUnorm8);
-        if(!constant.has_value())
-            return MakeUnexpected(Failure());
-        header.alphaConstantUnorm8 = cast<u8>(constant.value());
-    }
-    return header;
-}
-
 void LogTextureSidecarReadFailed(in Path nwbFilePath, in Path dataPath, in ErrorCode errorCode){
     const String errorMessage = StringFormat("{}", errorCode.message());
     error("{} '{}': failed to read raw texture sidecar '{}': {}", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), PathToString(dataPath), errorMessage);
@@ -357,6 +211,7 @@ Path BuildTextureDataSidecarPath(in Path nwbFilePath){
     return dataPath;
 }
 
+[asset_writer]
 b8 SerializeTextureAsset(in Texture texture, mut Vector<u8> outBinary){
     if(!texture.validatePayload())
         return false;
@@ -416,94 +271,88 @@ Expected<Texture> BuildTextureAssetFromCookData(
     return asset;
 }
 
+class TextureCookMetadataHeader{
+    public Name virtualPath = s_NameNone;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 depth = 1u;
+    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
+    public TexturePayloadFormat payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+    public TextureAlphaMode alphaMode = TextureAlphaMode::Opaque;
+    public u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+Expected<TextureCookMetadataHeader> ParseTextureCookMetadataHeader(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_TextureDiagnosticPrefix))
+        return MakeUnexpected(Failure());
 
+    const Expected<TextureAlphaMode> alphaMode = ParseTextureAlphaModeField(nwbFilePath, asset);
+    if(!alphaMode.has_value())
+        return MakeUnexpected(Failure());
 
-[source]
-native{
+    const b8 allowAlphaConstant = alphaMode.value() == TextureAlphaMode::ConstantUnorm8;
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_TextureDiagnosticPrefix, lambda[in allowAlphaConstant](in StringView fieldName) -> b8{
+        return IsAllowedTextureMetadataField(fieldName, allowAlphaConstant);
+    }))
+        return MakeUnexpected(Failure());
 
+    const Expected<TexturePayloadFormat> format = ParseTexturePayloadFormatField(nwbFilePath, asset);
+    const Expected<TexturePayloadDimension> dimension = ParseTextureDimensionField(nwbFilePath, asset);
+    if(!format.has_value() || !dimension.has_value())
+        return MakeUnexpected(Failure());
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    const Expected<TextureResolution> resolution = ReadTextureResolution(nwbFilePath, asset, dimension.value());
+    if(!resolution.has_value())
+        return MakeUnexpected(Failure());
 
+    const Expected<u32> completeMipCount = ComputeCompleteMipCount(dimension.value(), resolution.value().width, resolution.value().height, resolution.value().depth);
+    if(!ValidateTextureCompleteMipChain(nwbFilePath, completeMipCount.has_value()))
+        return MakeUnexpected(Failure());
 
-#if defined(NWB_COOK)
+    TextureCookMetadataHeader header;
+    if(!AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_TextureDiagnosticPrefix, header))
+        return MakeUnexpected(Failure());
+    header.width = resolution.value().width;
+    header.height = resolution.value().height;
+    header.depth = resolution.value().depth;
+    header.dimension = dimension.value();
+    header.payloadFormat = format.value();
+    header.alphaMode = alphaMode.value();
+    if(header.alphaMode == TextureAlphaMode::ConstantUnorm8){
+        const Expected<u32> constant = ReadTextureUnsignedField(nwbFilePath, asset, s_TextureAlphaConstantField, 0u, s_MaxConstantAlphaUnorm8);
+        if(!constant.has_value())
+            return MakeUnexpected(Failure());
+        header.alphaConstantUnorm8 = cast<u8>(constant.value());
+    }
+    return header;
+}
 
+[cook_sidecar(s_TextureDataExtension)]
+Expected<TextureCookEntry> ParseTextureCookMetadata(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    const auto header = ParseTextureCookMetadataHeader(virtualPath, nwbFilePath, asset);
+    if(!header.has_value())
+        return MakeUnexpected(Failure());
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_texture/texture_binary_codec.adhd.h>
-
-#include <core/assets/cook_metadata.h>
-
-#include <global/filesystem.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarRegistrar(Core::Assets::AssetPairedSidecarRule{
-    .sidecarExtension = TextureFormat::s_TextureDataExtension,
-});
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    const Expected<TextureCookMetadataHeader> header = ParseTextureCookMetadataHeader(virtualPath, nwbFilePath, asset);
-    if(!header)
-        return MakeUnexpected(Failure{});
-
-    TextureCookEntry entry(arena);
-    entry.virtualPath = header->virtualPath;
-    entry.width = header->width;
-    entry.height = header->height;
-    entry.depth = header->depth;
-    entry.dimension = header->dimension;
-    entry.payloadFormat = header->payloadFormat;
-    entry.alphaMode = header->alphaMode;
-    entry.alphaConstantUnorm8 = header->alphaConstantUnorm8;
-
-    const ::Path<::ArenaBase> dataPath = BuildTextureDataSidecarPath(scratchArena, nwbFilePath);
+    TextureCookEntry entry;
+    entry.virtualPath = header.value().virtualPath;
+    entry.width = header.value().width;
+    entry.height = header.value().height;
+    entry.depth = header.value().depth;
+    entry.dimension = header.value().dimension;
+    entry.payloadFormat = header.value().payloadFormat;
+    entry.alphaMode = header.value().alphaMode;
+    entry.alphaConstantUnorm8 = header.value().alphaConstantUnorm8;
+    const Path dataPath = BuildTextureDataSidecarPath(nwbFilePath);
     const Expected<void, ErrorCode> readResult = ReadBinaryFile(dataPath, entry.payloadBytes);
-    if(!readResult){
+    if(!readResult.has_value()){
         LogTextureSidecarReadFailed(nwbFilePath, dataPath, readResult.error());
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     }
     return entry;
 }
 
-Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<TextureCookEntry, &ParseTextureCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_TextureDiagnosticPrefix, arena, scratchArena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("TextureAssetCodec::serialize")))
-        return false;
-
-    const Texture& texture = static_cast<const Texture&>(asset);
-    return SerializeTextureAsset(texture, outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena){
+Expected<Texture> BuildTextureAsset(in TextureCookEntry textureEntry){
     return BuildTextureAssetFromCookData(
-        arena,
         textureEntry.virtualPath,
         textureEntry.dimension,
         textureEntry.width,
@@ -520,18 +369,10 @@ Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<TextureCookEntry> ParseTextureCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<TextureCookEntry>(root, virtualRoot, file, document, s_TextureDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<TextureCookEntry>{
+        return ParseTextureCookMetadata(path, file, value);
+    });
 }
 
 

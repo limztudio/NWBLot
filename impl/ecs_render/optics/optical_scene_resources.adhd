@@ -2,95 +2,183 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/optics/graph_types.adhd>
+#include <impl/ecs_render/optics/optical_scene_binary_codec.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
-#include <impl/ecs_render/optics/optical_bounds_finalize.adhd.h>
-
-#include <impl/ecs_render/optics/graph_types.adhd.h>
-
-#include <core/alloc/global.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/rhi/resource.h>
-
-#include <global/arena_object.h>
-#include <global/refcount_ptr.h>
+b8 CanPublishOpticalSceneSnapshot(in b8 prepared, in b8 runtimeBoundsRequired, in b8 hasRuntimeBoundsSnapshot){
+    return prepared && (!runtimeBoundsRequired || hasRuntimeBoundsSnapshot);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_BEGIN
+class RayTracingOpticalSceneResources : NoCopy{
+    private SharedPool m_versions = SharedPool();
+    private mut GraphicsRuntime m_graphics;
+    private Name m_identity;
+    private RayTracingOpticalSceneSnapshot m_resources;
+    private Vector<RayTracingOpticalSceneUploadHandle> m_uploads;
+    private RayTracingOpticalBoundsFinalizeResources m_runtimeBounds;
+    private RayTracingOpticalBoundsFinalizeHandle m_runtimeBoundsSnapshot;
+    private usize m_capacity = 0u;
+    private b8 m_prepared = false;
+    private b8 m_runtimeBoundsRequired = false;
 
+    public RayTracingOpticalSceneResources(mut GraphicsRuntime graphics, in Name identity){
+        this.m_graphics = graphics;
+        this.m_identity = identity;
+        this.m_runtimeBounds = RayTracingOpticalBoundsFinalizeResources(graphics);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void resetPrepared(){
+        this.m_prepared = false;
+    }
 
+    public void invalidate(){
+        this.m_runtimeBoundsSnapshot.reset();
+        this.m_runtimeBounds.invalidate();
+        if(this.m_resources.uploadState.valid())
+            this.m_resources.uploadState.deref().invalidate();
+        mut Device device = this.m_graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        if(heap.isInitialized() && this.m_resources.descriptor.valid() && this.m_resources.buffer.valid() && this.m_resources.buffer.deref().getDeviceGeneration() == device.getDeviceGeneration())
+            heap.free(this.m_resources.descriptor);
+        this.m_resources = RayTracingOpticalSceneSnapshot();
+        this.m_uploads.clear();
+        this.m_capacity = 0u;
+        this.m_prepared = false;
+        this.m_runtimeBoundsRequired = false;
+    }
 
-class GraphicsRuntime;
+    public b8 prepare(in RayTracingOpticalSceneGather gather){
+        this.m_prepared = false;
+        this.m_runtimeBoundsRequired = !gather.runtimeBounds.empty();
+        this.m_runtimeBoundsSnapshot.reset();
+        usize instanceBytes = 0u;
+        usize byteCount = 0u;
+        if(!OpticalSceneBinaryCodec().computeByteSize(gather.instances.size(), instanceBytes, byteCount))
+            return false;
+        mut Device device = this.m_graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        if(!heap.isInitialized()){
+            error("Ray optical scene: descriptor heap is unavailable during preflight");
+            return false;
+        }
+        if(this.m_resources.buffer.valid() && this.m_resources.buffer.deref().getDeviceGeneration() != device.getDeviceGeneration()){
+            error("Ray optical scene: stale device resources require owner invalidation");
+            return false;
+        }
+        if(!this.m_resources.buffer.valid() || !this.m_resources.uploadState.valid() || this.m_capacity < byteCount){
+            BufferDesc desc;
+            desc.setByteSize(byteCount).setCanHaveRawViews(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(this.m_identity).enableAutomaticStateTracking(ResourceStates::Common);
+            auto bufferResult = this.m_graphics.createBuffer(desc);
+            if(!bufferResult.has_value()){
+                error("Ray optical scene: failed to create {}-byte metadata buffer", byteCount);
+                return false;
+            }
+            BufferHandle buffer = bufferResult.value();
+            const Expected<GpuDescriptorHandle> descriptorResult = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, buffer.deref()));
+            if(!descriptorResult.has_value()){
+                error("Ray optical scene: failed to register metadata buffer");
+                return false;
+            }
+            const GpuDescriptorHandle descriptor = descriptorResult.value();
+            auto uploadStateResult = CreateRayTracingOpticalUploadControl(this.m_versions, buffer, device.getPrimaryPhysicalQueue(CommandQueue::Graphics));
+            if(!uploadStateResult.has_value()){
+                heap.free(descriptor);
+                error("Ray optical scene: failed to create accepted upload control");
+                return false;
+            }
+            if(this.m_resources.uploadState.valid())
+                this.m_resources.uploadState.deref().invalidate();
+            if(this.m_resources.descriptor.valid())
+                heap.free(this.m_resources.descriptor);
+            this.m_resources.buffer = buffer;
+            this.m_resources.uploadState = uploadStateResult.value();
+            this.m_resources.descriptor = descriptor;
+            this.m_capacity = byteCount;
+        }
+        b8 samePayload = false;
+        if(this.m_resources.upload.valid()){
+            const Span<u8> bytes = Span<u8>(this.m_resources.upload.deref().bytes);
+            if(bytes.size() == byteCount){
+                samePayload = BytesMatch(bytes.first(s_RayTracingOpticalSceneHeaderBytes), PodBytes(gather.header))
+                    && BytesMatch(bytes.subspan(s_RayTracingOpticalSceneHeaderBytes), PodArrayBytes<RayTracingOpticalInstanceGpu>(Span<RayTracingOpticalInstanceGpu>(gather.instances)));
+            }
+        }
+        if(!samePayload){
+            RayTracingOpticalSceneUploadHandle upload;
+            for(in RayTracingOpticalSceneUploadHandle cached : this.m_uploads){
+                if(cached.referenceCount() == 1u){
+                    AtomicThreadFence(MemoryOrder::acquire);
+                    upload = cached;
+                    break;
+                }
+            }
+            if(!upload.valid()){
+                auto created = this.m_versions.make<RayTracingOpticalSceneUpload>(gather);
+                if(!created.has_value())
+                    return false;
+                upload = created.value();
+                this.m_uploads.push_back(upload);
+            }
+            else{
+                OpticalSceneBinaryCodec().serialize(
+                    gather.header,
+                    Span<RayTracingOpticalInstanceGpu>(gather.instances),
+                    upload.deref().bytes,
+                    upload.deref().instanceCount
+                );
+            }
+            this.m_resources.upload = upload;
+        }
+        this.m_resources.transparentCount = gather.header.transparentCount;
+        this.m_resources.unspecifiedBoundariesOnly = gather.unspecifiedBoundariesOnly;
+        this.m_resources.boundsComplete = (gather.header.flags & s_RtOpticalSceneFlagBoundsValid) != 0u;
+        this.m_prepared = this.m_resources.valid();
+        return this.m_prepared;
+    }
 
+    public b8 prepareRuntimeBounds(in RayTracingOpticalSceneGather gather, mut RendererShaderSystem shaderSystem){
+        if(!this.m_prepared)
+            return false;
+        this.m_runtimeBoundsSnapshot.reset();
+        if(this.m_runtimeBoundsRequired != !gather.runtimeBounds.empty()){
+            this.m_prepared = false;
+            return false;
+        }
+        if(gather.runtimeBounds.empty())
+            return true;
+        auto prepared = this.m_runtimeBounds.prepare(gather, this.m_resources.descriptor, shaderSystem);
+        if(!prepared.has_value()){
+            this.m_prepared = false;
+            return false;
+        }
+        this.m_runtimeBoundsSnapshot = prepared.value();
+        this.m_prepared = this.m_runtimeBoundsSnapshot.valid();
+        return this.m_prepared;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RayTracingOpticalSceneResources final : NoCopy{
-public:
-    RayTracingOpticalSceneResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Name identity)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_identity(identity)
-        , m_uploads(arena)
-        , m_runtimeBounds(arena, graphics)
-    {}
-
-
-public:
-    void invalidate();
-    void resetPrepared()noexcept{ m_prepared = false; }
-    [[nodiscard]] b8 prepare(const RayTracingOpticalSceneGather& gather);
-    [[nodiscard]] b8 prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem);
-    [[nodiscard]] RayTracingOpticalSceneSnapshot snapshot()const noexcept;
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    Name m_identity;
-    RayTracingOpticalSceneSnapshot m_resources;
-    Vector<RayTracingOpticalSceneUploadHandle, Core::Alloc::GlobalArena> m_uploads;
-    RayTracingOpticalBoundsFinalizeResources m_runtimeBounds;
-    RayTracingOpticalBoundsFinalizeHandle m_runtimeBoundsSnapshot;
-    usize m_capacity = 0u;
-    b8 m_prepared = false;
-    b8 m_runtimeBoundsRequired = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public RayTracingOpticalSceneSnapshot snapshot()const{
+        if(!CanPublishOpticalSceneSnapshot(this.m_prepared, this.m_runtimeBoundsRequired, this.m_runtimeBoundsSnapshot.valid()))
+            return RayTracingOpticalSceneSnapshot();
+        RayTracingOpticalSceneSnapshot result = this.m_resources;
+        if(this.m_runtimeBoundsSnapshot.valid()){
+            result.uploadBuffer = result.buffer;
+            result.finalize = this.m_runtimeBoundsSnapshot;
+            result.buffer = this.m_runtimeBoundsSnapshot.deref().outputBuffer;
+            result.descriptor = this.m_runtimeBoundsSnapshot.deref().outputDescriptor;
+            // CPU readiness is distinct from the validity computed from the accepted GPU position stream.
+            result.boundsComplete = false;
+        }
+        return result;
+    }
 }
 
 

@@ -22,7 +22,7 @@ native{
 #include <core/task/gpu/task_graph.h>
 
 namespace NWB::Tests::EcsGraphicsCases{
-using MeshRayTracingResourceSnapshot = NWB::Impl::ECSRenderDetail::MeshRayTracingResourceSnapshot;
+using MeshRayTracingResourceSnapshot = NWB::Impl::MeshRayTracingResourceSnapshot;
 using ReflectionStatistics = NWB::Impl::ReflectionStatistics;
 constexpr NWB::Impl::ReflectionTraceMode::Enum s_HybridReflectionTraceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
 using RefractionStatistics = NWB::Impl::RefractionStatistics;
@@ -54,7 +54,6 @@ const Name s_EcsCaseTestsCoincidentOpticalVolumesTie = "tests/coincident_optical
 const Name s_EcsCaseTestsCoincidentOpticalVolumesThird = "tests/coincident_optical_volumes/third";
 const Name s_EcsCaseTestsCoincidentOpticalVolumesTranslation = "tests/coincident_optical_volumes/translation";
 const Name s_EcsCaseTestsCoincidentOpticalVolumesTransforms = "tests/coincident_optical_volumes/transforms";
-const Name s_EcsCaseTestsComputeOutputSetEmpty = "tests/compute_output_set/empty";
 const Name s_EcsCaseTestsCsgShadowScratch = "tests/csg_shadow/scratch";
 const Name s_EcsCaseTestsCsgShadowEvaluator = "tests/csg_shadow/evaluator";
 const Name s_EcsCaseTestsCsgShadowReplacementMesh = "tests/csg_shadow/replacement_mesh";

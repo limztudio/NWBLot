@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/family_cook_registration.h>"), cpp_name("::NWB::Core::Assets::PreparedAssetCookEntry")]
+extern class PreparedAssetCookEntry<Asset>{
+    Name virtualPath;
+    Asset asset;
+};
+
+[cpp_header("<core/assets/family_cook_registration.h>"), cpp_name("::NWB::Core::Assets::FamilyCookRegistration")]
+extern class FamilyCookRegistration<Family, Asset, Codec, Policy>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

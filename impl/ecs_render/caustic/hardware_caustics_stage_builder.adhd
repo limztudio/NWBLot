@@ -2,91 +2,71 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/caustic/caustic_resolve_state.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class HardwareCausticsStageInputs{
+    public mut DeferredFrameTargets targets;
+    public in DeferredLightingGraphResources lightingResources;
+    public in MeshViewBufferSnapshot meshViewSnapshot;
+    public in RayTracingDeferredGraphResourceSnapshot rayTracingResources;
+    public in RendererFrameGraphFeatures features;
+    public GpuGraphResourceId worldPosition;
+    public GpuGraphResourceId depth;
+    public GpuGraphResourceId currentCausticIrradiance;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuGraphResourceId sceneShading;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId materialContextSlots;
+    public GpuGraphResourceId opticalScene;
+    public GpuGraphResourceSetId hardwareTraceGeometrySet;
+    public Span<GpuGraphResourceId> hardwareTraceGeometryResources;
+    public GpuGraphResourceSetId traceMaterialSampledTextureSet;
+    public GpuTaskId graphicsPrefixTask;
+    public in b8 shadowPreparationReady;
+    public in GpuExternalCompletionId historyWriterDrainCompletion;
+    public mut GpuPersistentResourceStateCache accumulatorPersistentState;
+    public b8 declaresHardwareCaustics = false;
+    public mut b8 producerDispatched;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public mut Optional<GpuTimingMeasure> photonTiming;
+    public mut Optional<GpuTimingMeasure> resolveTiming;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/persistent_state.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-class DeferredFrameTargets;
-class DeferredLightingGraphResources;
-
-// Hardware caustics stage owns photon plus geometry plus resolve-wavelet declaration.
-struct HardwareCausticsStageInputs{
-    DeferredFrameTargets& targets;
-    const DeferredLightingGraphResources& lightingResources;
-    const MeshViewBufferSnapshot& meshViewSnapshot;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
-    const RendererFrameGraphFeatures& features;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId currentCausticIrradiance;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId materialContextSlots;
-    Core::GpuGraphResourceId opticalScene;
-    Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
-    Span<const Core::GpuGraphResourceId> hardwareTraceGeometryResources{};
-    Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
-    Core::GpuTaskId graphicsPrefixTask;
-    const b8& shadowPreparationReady;
-    const Core::GpuExternalCompletionId& historyWriterDrainCompletion;
-    Core::GpuPersistentResourceStateCache& accumulatorPersistentState;
-    b8 declaresHardwareCaustics = false;
-    b8& producerDispatched;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& photonTiming;
-    Optional<Core::GpuTimingMeasure>& resolveTiming;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public HardwareCausticsStageInputs(
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources lightingResources,
+        in MeshViewBufferSnapshot meshViewSnapshot,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in RendererFrameGraphFeatures features,
+        in borrow b8 shadowPreparationReady,
+        in GpuExternalCompletionId historyWriterDrainCompletion,
+        mut GpuPersistentResourceStateCache accumulatorPersistentState,
+        mut b8 producerDispatched,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> photonTiming,
+        mut Optional<GpuTimingMeasure> resolveTiming
+    ){
+        this.targets = targets;
+        this.lightingResources = lightingResources;
+        this.meshViewSnapshot = meshViewSnapshot;
+        this.rayTracingResources = rayTracingResources;
+        this.features = features;
+        this.shadowPreparationReady = shadowPreparationReady;
+        this.historyWriterDrainCompletion = historyWriterDrainCompletion;
+        this.accumulatorPersistentState = accumulatorPersistentState;
+        this.producerDispatched = producerDispatched;
+        this.timingTicket = timingTicket;
+        this.photonTiming = photonTiming;
+        this.resolveTiming = resolveTiming;
+    }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
-extern class RendererRayTracingSystem : NoCopy;
-[cpp_name("::NWB::Impl::HardwareCausticsStageInputs")]
-extern class HardwareCausticsStageInputs : NoCopy;
 
 class HardwareCausticsStageResult{
     public GpuTaskId hardwareCausticsTask;

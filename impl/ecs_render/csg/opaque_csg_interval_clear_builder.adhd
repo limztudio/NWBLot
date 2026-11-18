@@ -2,99 +2,122 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/csg/graph_types.adhd>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/csg/graph_types.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_clear_timing.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+class OpaqueCsgIntervalClearInputs{
+    public CsgFrameWorkRegion workRegion;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public GpuGraphResourceId csgIntervalId;
+    public GpuGraphResourceId csgReceiverEventCount;
+    public TextureSubresourceSet csgPeelSubresources;
+    public TextureSubresourceSet csgReceiverEventCountSubresources;
+    public GpuTaskId dependencyTask;
+    public b8 hasOpaqueCsgFrameWork = false;
+}
 
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredFrameTargets;
-
-
-// Opaque CSG interval clears own the interval-id plus receiver-event-count clears.
-struct OpaqueCsgIntervalClearInputs{
-    DeferredFrameTargets& targets;
-    CsgFrameGpuDataView csgFrameData{};
-    Core::GpuGraphResourceId csgIntervalId;
-    Core::GpuGraphResourceId csgReceiverEventCount;
-    Core::TextureSubresourceSet csgPeelSubresources{};
-    Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
-    Core::GpuTaskId dependencyTask;
-    b8 hasOpaqueCsgFrameWork = false;
-};
+class CsgIntervalRectClearDesc{
+    public Name intervalClearIdentity = s_NameNone;
+    public StringView intervalClearMarkerLabel = "";
+    public StringView intervalClearWarningMessage = "";
+    public Name receiverEventClearIdentity = s_NameNone;
+    public StringView receiverEventClearMarkerLabel = "";
+    public StringView receiverEventClearWarningMessage = "";
+    public GpuGraphResourceId csgIntervalId;
+    public GpuGraphResourceId csgReceiverEventCount;
+    public TextureSubresourceSet csgPeelSubresources;
+    public TextureSubresourceSet csgReceiverEventCountSubresources;
+    public Rect clearRect;
+    public GpuTaskId dependencyTask;
+}
 
 
-struct CsgIntervalRectClearDesc{
-    Name intervalClearIdentity = s_NameNone;
-    AStringView intervalClearMarkerLabel;
-    const tchar* intervalClearWarningMessage = nullptr;
-    Name receiverEventClearIdentity = s_NameNone;
-    AStringView receiverEventClearMarkerLabel;
-    const tchar* receiverEventClearWarningMessage = nullptr;
-    Core::GpuGraphResourceId csgIntervalId;
-    Core::GpuGraphResourceId csgReceiverEventCount;
-    Core::TextureSubresourceSet csgPeelSubresources{};
-    Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
-    Core::Rect clearRect{};
-    Core::GpuTaskId dependencyTask;
-};
+[cpp_unwind]
+b8 DeclareCsgIntervalRectClearTasks(
+    in CsgIntervalRectClearDesc desc,
+    mut GpuTaskGraph graph,
+    mut GraphClearTimingRecordState clearTimingState,
+    mut GpuTaskId outFirstTask,
+    mut GpuTaskId outTailTask
+){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    GpuTaskDesc firstDesc;
+    firstDesc.setIdentity(desc.intervalClearIdentity).setMarkerLabel(desc.intervalClearMarkerLabel).setScheduling(scheduling);
+    firstDesc.setDependency(desc.dependencyTask);
+    GpuClearTextureRectUIntTaskDesc clear;
+    clear.destination = desc.csgIntervalId;
+    clear.subresources = desc.csgPeelSubresources;
+    clear.rect = desc.clearRect;
+    clear.uintValue = UIntColor(0u);
+    clear.recordHooks = clearTimingState.hooks(true, false);
+    const auto firstTask = graph.addClearTextureRectUIntTask(firstDesc, clear);
+    if(!firstTask.has_value()){
+        outFirstTask = GpuTaskId();
+        warning("{}", desc.intervalClearWarningMessage);
+        return false;
+    }
+    outFirstTask = firstTask.value();
 
-[[nodiscard]] b8 DeclareCsgIntervalRectClearTasks(
-    const CsgIntervalRectClearDesc& desc,
-    Core::GpuTaskGraph& graph,
-    GraphClearTimingRecordState& clearTimingState,
-    Core::GpuTaskId& outFirstTask,
-    Core::GpuTaskId& outTailTask
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class OpaqueCsgIntervalClearBuilder final : NoCopy{
-public:
-    OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph)noexcept
-        : m_graph(graph)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<OpaqueCsgIntervalClearResult> declare(const OpaqueCsgIntervalClearInputs& inputs, GraphClearTimingRecordState& clearTimingState);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Keep the endpoint in the first clear's graphics packet across queue consumers.
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    GpuTaskDesc tailDesc;
+    tailDesc.setIdentity(desc.receiverEventClearIdentity).setMarkerLabel(desc.receiverEventClearMarkerLabel).setScheduling(scheduling);
+    tailDesc.setDependency(outFirstTask);
+    clear.destination = desc.csgReceiverEventCount;
+    clear.subresources = desc.csgReceiverEventCountSubresources;
+    clear.recordHooks = clearTimingState.hooks(false, true);
+    const auto tailTask = graph.addClearTextureRectUIntTask(tailDesc, clear);
+    if(!tailTask.has_value()){
+        outTailTask = GpuTaskId();
+        warning("{}", desc.receiverEventClearWarningMessage);
+        return false;
+    }
+    outTailTask = tailTask.value();
+    return true;
+}
 
 
+class OpaqueCsgIntervalClearBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+
+    public OpaqueCsgIntervalClearBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
+
+    [cpp_unwind]
+    public Expected<OpaqueCsgIntervalClearResult> declare(in OpaqueCsgIntervalClearInputs inputs, mut GraphClearTimingRecordState clearTimingState){
+        OpaqueCsgIntervalClearResult result;
+        if(!inputs.dependencyTask.valid())
+            return MakeUnexpected(Failure());
+        if(!inputs.hasOpaqueCsgFrameWork)
+            return result;
+        if(!inputs.csgIntervalId.valid() || !inputs.csgReceiverEventCount.valid())
+            return MakeUnexpected(Failure());
+        CsgIntervalRectClearDesc desc;
+        desc.intervalClearIdentity = s_RenderNameRenderGraphicsPrefixCsgIntervalClear;
+        desc.intervalClearMarkerLabel = "CSG Interval Id Clear";
+        desc.intervalClearWarningMessage = "RendererSystem: could not declare graph-owned opaque CSG interval-id clear";
+        desc.receiverEventClearIdentity = s_RenderNameRenderGraphicsPrefixCsgReceiverEventCountClear;
+        desc.receiverEventClearMarkerLabel = "CSG Receiver Event Count Clear";
+        desc.receiverEventClearWarningMessage = "RendererSystem: could not declare graph-owned opaque CSG receiver-event clear";
+        desc.csgIntervalId = inputs.csgIntervalId;
+        desc.csgReceiverEventCount = inputs.csgReceiverEventCount;
+        desc.csgPeelSubresources = inputs.csgPeelSubresources;
+        desc.csgReceiverEventCountSubresources = inputs.csgReceiverEventCountSubresources;
+        desc.clearRect = ToCoreRect(inputs.workRegion.resolveRect(inputs.width, inputs.height));
+        desc.dependencyTask = inputs.dependencyTask;
+        if(!DeclareCsgIntervalRectClearTasks(desc, this.m_graph, clearTimingState, result.clearFirstTask, result.clearTask))
+            return MakeUnexpected(Failure());
+        return result;
+    }
 }
 
 

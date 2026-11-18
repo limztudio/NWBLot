@@ -40,14 +40,16 @@ const StringView s_SkinNumericListValueKind = "numeric";
 enum<u8> MetadataF32ValueFailure{
     NotNumeric,
     NonFinite,
-    OutOfRange
+    OutOfRange,
+    WrongComponentCount
 }
 
 [reflect]
 enum<u8> MetadataU32ValueFailure{
     NotNumeric,
     NonIntegerOrNegative,
-    OutOfRange
+    OutOfRange,
+    WrongComponentCount
 }
 
 [reflect]

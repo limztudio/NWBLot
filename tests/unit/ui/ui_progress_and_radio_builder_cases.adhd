@@ -288,7 +288,7 @@ private:
             break;
         case CallbackMutation::Reconcile:{
             RadioGroupResult nestedResult;
-            nestedSucceeded = RadioGroupBehavior::Reconcile(*this, nullptr, *state, nestedResult).has_value();
+            nestedSucceeded = ReconcileRadioGroup(*this, *state, nestedResult).has_value();
             break;
         }
         case CallbackMutation::Apply:{
@@ -297,7 +297,7 @@ private:
             action.control = { snapshot.inputGeneration, snapshot.sourceGeneration, snapshot.sourceRevision };
             action.kind = ControlActionKind::Down;
             RadioGroupResult nestedResult;
-            nestedSucceeded = RadioGroupBehavior::Apply(borrowedChoices, {}, action, *state, nestedResult);
+            nestedSucceeded = ApplyRadioGroupControlAction(borrowedChoices, {}, action, *state, nestedResult);
             break;
         }
         default:
@@ -329,15 +329,15 @@ public:
 };
 
 [[nodiscard]] FOUNDATION_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoices(const IListDataSource& source, RadioGroupState& state, RadioGroupResult& result){
-    return RadioGroupBehavior::Reconcile(source, nullptr, state, result);
+    return ReconcileRadioGroup(source, state, result);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoicesGuarded(const IListDataSource& source, const IRadioGroupReconcileGuard& guard, RadioGroupState& state, RadioGroupResult& result){
-    return RadioGroupBehavior::Reconcile(source, &guard, state, result);
+    return ReconcileRadioGroup(source, guard, state, result);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 ApplyUiRadioGroupAction(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result){
-    return RadioGroupBehavior::Apply(choices, options, action, state, result);
+    return ApplyRadioGroupControlAction(choices, options, action, state, result);
 }
 
 

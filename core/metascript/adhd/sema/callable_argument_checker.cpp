@@ -3,8 +3,10 @@
 
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
+#include "type_layout_analyzer.h"
 
 #include "callable_argument_checker.h"
+#include "borrow_lifetime_analyzer.h"
 #include "concrete_type_analyzer.h"
 #include "const_eval.h"
 #include "lambda_capture_analyzer.h"
@@ -19,6 +21,34 @@ NWB_ADHD_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CallableArgumentChecker::requiresRetainedClassTemporary(const TypeRef& expected, const TypeRef& actual)const noexcept{
+    const SymbolTable& symbols = m_checker.m_symbols;
+    const TypeRef* target = symbols.unwrapTypeAlias(&expected);
+    const TypeRef* source = symbols.unwrapTypeAlias(&actual);
+    if(!target || !source)
+        return false;
+    const ClassDecl* targetClass = symbols.findClass(target->name);
+    if(!targetClass || targetClass->isExtern)
+        return false;
+    const TypeComparator types(symbols);
+    if(target->name == source->name && types.areTemplateArgListsEqual(target->templateArgs, source->templateArgs))
+        return false;
+    const ClassDecl* sourceClass = symbols.findClass(source->name);
+    if(sourceClass && m_checker.classImplementsInterface(*sourceClass, source, *target))
+        return false;
+    for(const MethodDecl* ctor : targetClass->methods){
+        if(!ctor->isConstructor || ctor->params.size() != 1u || !ctor->params.front().type)
+            continue;
+        const TypeRef* input = symbols.substituteTypeParams(ctor->params.front().type, targetClass->templateParams, target);
+        input = symbols.unwrapTypeAlias(input);
+        if(input && ((input->name == source->name && types.areTemplateArgListsEqual(input->templateArgs, source->templateArgs))
+            || (sourceClass && m_checker.classImplementsInterface(*sourceClass, source, *input))))
+            return true;
+    }
+    return false;
+}
 
 
 b8 CallableArgumentChecker::checkBuiltinVisitor(
@@ -139,8 +169,26 @@ b8 CallableArgumentChecker::check(
         const BuiltinFunctionArgRuleInfo* builtinArgRule = (builtinReceiverSignature && i < builtinReceiverSignature->argRules.size())
             ? FindBuiltinFunctionArgRule(builtinReceiverSignature->argRules[i])
             : ((builtinFnInfo && i < builtinFnInfo->argRules.size()) ? FindBuiltinFunctionArgRule(builtinFnInfo->argRules[i]) : nullptr);
+        const b8 retainsBorrow = targetCallable ? (i < targetCallable->params.size() && targetCallable->params[i].retainsBorrow)
+            : builtinReceiverSignature ? (i < builtinReceiverSignature->arity && (builtinReceiverSignature->retainedArgMask & (1u << i)) != 0u)
+            : builtinFnInfo && i < builtinFnInfo->arity && (builtinFnInfo->retainedArgMask & (1u << i)) != 0u;
+        if(retainsBorrow){
+            arg->isRetainedArg = true;
+            const BorrowLifetimeAnalyzer lifetimes(m_checker);
+            if(lifetimes.isTemporaryOwnerExpr(ownerClass, &method, *arg, scope, true)){
+                m_checker.reportError(errors, arg->span, "retained reference requires a stable lvalue");
+                ok = false;
+            }
+            const ScopedVarInfo* owner = lifetimes.localReferenceOwner(ownerClass, method, *arg, scope, true);
+            if(owner && owner->isParam && owner->type && m_checker.m_symbols.isSmallValueType(owner->type->name)){
+                m_checker.reportError(errors, arg->span, "a retained reference cannot bind to a copied parameter; declare the parameter as 'in borrow'");
+                ok = false;
+            }
+        }
         if(targetCallable && i < targetCallable->params.size()){
-            paramIsMut = (targetCallable->params[i].mode == ParamPassingMode::Mut);
+            const ParamDecl& param = targetCallable->params[i];
+            const b8 forwardedTemporary = param.forwardsArgument && m_checker.isRvalueTemporaryExpr(ownerClass, &method, *arg, scope);
+            paramIsMut = param.mode == ParamPassingMode::Mut && !param.copiesArgument && !forwardedTemporary;
             if(targetCallable->params[i].type){
                 TypeRef* subParamType = targetCallable->params[i].type;
                 if(targetOwnerCls)
@@ -217,6 +265,34 @@ b8 CallableArgumentChecker::check(
         else if(builtinArgRule){
             expectedParamType = builtinArgRule->expectedParamType;
             paramIsMut = builtinArgRule->isMut;
+            if(builtinFnInfo && i < builtinFnInfo->arity && (builtinFnInfo->explicitTypeParamMask & (1u << i)) && callTemplateArgs.size() == 1u && callTemplateArgs[0].type){
+                expectedParamTypeRef = callTemplateArgs[0].type;
+                expectedParamType = m_checker.m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+                const TypeRef* actualRef = nullptr;
+                const MStringView actualBase = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope, &actualRef);
+                const TypeRef* expected = m_checker.m_symbols.unwrapTypeAlias(expectedParamTypeRef);
+                const TypeRef* actual = m_checker.m_symbols.unwrapTypeAlias(actualRef);
+                const TypeComparator types(m_checker.m_symbols);
+                const b8 callableTypes = actual && expected && (actual->isFuncType || expected->isFuncType);
+                const b8 mismatched = callableTypes ? !types.areEquivalent(actual, expected)
+                    : ((!actualBase.empty() && actualBase != expectedParamType) || (actual && expected && !types.areTemplateArgListsEqual(actual->templateArgs, expected->templateArgs)));
+                if(mismatched){
+                    m_checker.reportError(errors, arg->span, "argument type does not match the explicit type parameter");
+                    ok = false;
+                }
+                if(paramIsMut && !m_checker.isPotentiallyMutableLvalueExpr(ownerClass, method, *arg, scope)){
+                    m_checker.reportError(errors, arg->span, "a mutable type parameter requires a mutable lvalue");
+                    ok = false;
+                }
+            }
+        }
+        if(retainsBorrow && expectedParamTypeRef){
+            const TypeRef* actual = nullptr;
+            (void)m_checker.inferExprBaseType(ownerClass, &method, *arg, scope, &actual);
+            if(actual && requiresRetainedClassTemporary(*expectedParamTypeRef, *actual)){
+                m_checker.reportError(errors, arg->span, "a retained reference cannot bind to a temporary created by an implicit class conversion");
+                ok = false;
+            }
         }
         if(!calleeSignatureKnown && m_checker.isPotentiallyMutableLvalueExpr(ownerClass, method, *arg, scope))
             paramIsMut = true;
@@ -226,6 +302,15 @@ b8 CallableArgumentChecker::check(
             && expectedParamTypeRef
             && m_checker.m_symbols.resolveRefMode(expectedParamTypeRef) != ParamPassingMode::None;
         arg->isMutArg = paramIsMut || IsBorrowViewType(expectedParamType);
+        if(i == 0u && ((builtinFnInfo && builtinFnInfo->callLowering == BuiltinCallLowering::PlatformLiteralArg0)
+            || (targetCallable && targetCallable->isExtern && targetCallable->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::PlatformLiteralArg0)))){
+            if(arg->kind != ExprKind::StringLiteral){
+                m_checker.reportError(errors, arg->span, "platform text requires a string literal");
+                ok = false;
+            }
+            else
+                arg->adaptToTChar = true;
+        }
         if(RequiresTCharAdaptation(expectedParamType))
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         if(!m_checker.checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
@@ -251,7 +336,16 @@ b8 CallableArgumentChecker::check(
             const MStringView actualArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope, &actualRef);
             const b8 isKnownAdhdType = !actualArgType.empty()
                 && (BuiltinTypeSemantics::IsBuiltinTypeName(actualArgType) || m_checker.m_symbols.hasTypeSymbol(actualArgType));
-            b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && isKnownAdhdType && actualArgType != builtinArgRule->requiredExactType)
+            b8 exactTypeMismatch = !builtinArgRule->requiredExactType.empty() && isKnownAdhdType && actualArgType != builtinArgRule->requiredExactType;
+            if(exactTypeMismatch && m_checker.m_symbols.isPolymorphicBaseBuiltinType(builtinArgRule->requiredExactType)){
+                TypeRef required(m_checker.m_arena);
+                required.name = builtinArgRule->requiredExactType;
+                if(const ClassDecl* cls = m_checker.m_symbols.findClass(actualArgType))
+                    exactTypeMismatch = !m_checker.classImplementsInterface(*cls, actualRef, required);
+                else if(actualRef)
+                    exactTypeMismatch = !m_checker.interfaceInheritsFrom(*actualRef, required);
+            }
+            b8 typeMismatch = exactTypeMismatch
                 || (builtinArgRule->requiresStringLike && isKnownAdhdType && !(builtinArgRule->isMut ? IsOwningStringType(actualArgType) : IsStringLikeType(actualArgType)))
                 || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType))
                 || (IsNumericScalarArgRule(builtinArgRule->rule) && isKnownAdhdType && !BuiltinTypeSemantics::IsNumericScalarType(actualArgType));
@@ -265,7 +359,10 @@ b8 CallableArgumentChecker::check(
                     const b8 isContiguous = actualArgType == builtinArgRule->expectedParamType || DoesImplicitConversionPropagateFirstTypeArg(actualArgType, builtinArgRule->expectedParamType);
                     const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
                     const TypeRef* elementType = containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
-                    typeMismatch = !isContiguous || !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != constraint->elementTypeName;
+                    const b8 lowersByteView = builtinFnInfo && ((i == 0u && builtinFnInfo->callLowering == BuiltinCallLowering::BinaryByteViewArg0)
+                        || (i == 1u && builtinFnInfo->callLowering == BuiltinCallLowering::BinaryByteViewArg1));
+                    const b8 alreadyByteView = lowersByteView && actualArgType == "BinaryByteView" && !m_checker.m_symbols.hasTypeSymbol(actualArgType);
+                    typeMismatch = !alreadyByteView && (!isContiguous || !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != constraint->elementTypeName);
                 }
                 else if(isKnownAdhdType && !constraint->countText.empty()){
                     const TypeRef* arrayType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;

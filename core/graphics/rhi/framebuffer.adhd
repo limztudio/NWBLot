@@ -12,6 +12,7 @@ extern class FramebufferAttachment{
     FramebufferAttachment setIsReadOnly(...);
     FramebufferAttachment setMipLevel(...);
     FramebufferAttachment setSubresources(...);
+    b8 hasTexture(in RhiTexture value)const;
     b8 valid(...)const;
     FramebufferAttachment setTexture(...);
 };
@@ -27,6 +28,7 @@ extern class FramebufferDesc{
 
 [cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
 extern class FramebufferHandle{
+    FramebufferPtr get()const;
     b8 valid(...)const;
     u32 reset(...);
     mut Framebuffer deref(...)const;

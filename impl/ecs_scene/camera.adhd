@@ -8,118 +8,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class SceneCameraComponents{
+    public mut TransformComponent transform;
+    public mut CameraComponent camera;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_scene/camera_types.adhd.h>
-#include <impl/ecs_scene/components.adhd.h>
-
-#include <core/ecs/module.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_SCENE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(IsStandardLayout_V<ActiveCameraComponent>, "ActiveCameraComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ActiveCameraComponent>, "ActiveCameraComponent must stay cheap to move in dense ECS storage");
-static_assert(sizeof(ActiveCameraComponent) == sizeof(Core::ECS::EntityID), "ActiveCameraComponent must only contain the active camera entity reference");
-
-static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<CameraComponent>, "CameraComponent must stay cheap to move in dense ECS storage");
-static_assert(alignof(CameraComponent) >= alignof(Float4), "CameraComponent must stay aligned for SIMD component loads");
-static_assert(sizeof(CameraComponent) == sizeof(Float4), "CameraComponent must stay one aligned vector wide");
-static_assert((sizeof(CameraComponent) % alignof(CameraComponent)) == 0u, "CameraComponent array stride must keep every element SIMD-aligned");
-static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == 0u, "CameraComponent::projection must stay aligned");
-
-static_assert(IsStandardLayout_V<TransformComponent>, "TransformComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<TransformComponent>, "TransformComponent must stay cheap to move in dense ECS storage");
-static_assert(alignof(TransformComponent) >= alignof(Float4), "TransformComponent must stay aligned for SIMD component loads");
-static_assert(sizeof(TransformComponent) == sizeof(Float4) + sizeof(Float4) + sizeof(Float4), "TransformComponent must only contain aligned decomposed transform state");
-static_assert((sizeof(TransformComponent) % alignof(TransformComponent)) == 0u, "TransformComponent array stride must keep every element SIMD-aligned");
-static_assert((offsetof(TransformComponent, position) % alignof(Float4)) == 0u, "TransformComponent::position must stay aligned");
-static_assert((offsetof(TransformComponent, rotation) % alignof(Float4)) == 0u, "TransformComponent::rotation must stay aligned");
-static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0u, "TransformComponent::scale must stay aligned");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(IsStandardLayout_V<CameraProjection>, "CameraProjection must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<CameraProjection>, "CameraProjection must stay cheap to pass by value");
-static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection must keep storage vectors aligned");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SceneCameraView{
-    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
-    TransformComponent* transform = nullptr;
-    CameraComponent* camera = nullptr;
-    CameraProjection projection;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return IsValidSceneCameraViewProjection(entity, transform != nullptr, camera != nullptr, projection);
+    public SceneCameraComponents(mut TransformComponent transform, mut CameraComponent camera){
+        this.transform = transform;
+        this.camera = camera;
     }
-};
+}
 
-[[nodiscard]] FOUNDATION_INLINE SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
-    const auto tryBuildSceneCameraView = [fallbackAspectRatio](const Core::ECS::EntityID entity, TransformComponent& transform, CameraComponent& camera)noexcept -> Expected<SceneCameraView>{
-        const auto projection = TryResolveCameraComponentProjection(transform, camera, fallbackAspectRatio);
-        if(!projection)
-            return MakeUnexpected(Failure{});
-        return SceneCameraView{ entity, &transform, &camera, *projection };
-    };
+class SceneCameraView{
+    public EntityID entity;
+    public Optional<SceneCameraComponents> components;
+    public CameraProjection projection;
 
-    Core::ECS::EntityID activeCamera = Core::ECS::s_InvalidEntityId;
-    const auto activeCameraView = world.view<ActiveCameraComponent>();
-    for(auto it = activeCameraView.begin(); it != activeCameraView.end(); ++it){
-        [[maybe_unused]] auto&& [entity, activeCameraComp] = *it;
-        activeCamera = activeCameraComp.camera;
+    public SceneCameraView(){
+        this.entity = s_InvalidEntityId;
+    }
+
+    public SceneCameraView(in EntityID entity, mut TransformComponent transform, mut CameraComponent camera, in CameraProjection projection){
+        this.entity = entity;
+        this.components = SceneCameraComponents(transform, camera);
+        this.projection = projection;
+    }
+
+    public b8 valid()const{
+        return IsValidSceneCameraViewProjection(this.entity, this.components.has_value(), this.projection);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(is_standard_layout<ActiveCameraComponent>(), "ActiveCameraComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<ActiveCameraComponent>(), "ActiveCameraComponent must stay cheap to move in dense ECS storage");
+static_assert(size_of<ActiveCameraComponent>() == size_of<EntityID>(), "ActiveCameraComponent must only contain the active camera entity reference");
+static_assert(is_standard_layout<CameraComponent>(), "CameraComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<CameraComponent>(), "CameraComponent must stay cheap to move in dense ECS storage");
+static_assert(align_of<CameraComponent>() >= align_of<f32x4>(), "CameraComponent must stay aligned for SIMD component loads");
+static_assert(size_of<CameraComponent>() == size_of<f32x4>(), "CameraComponent must stay one aligned vector wide");
+static_assert((size_of<CameraComponent>() % align_of<CameraComponent>()) == 0u, "CameraComponent array stride must keep every element SIMD-aligned");
+static_assert((offset_of<CameraComponent>(projection) % align_of<f32x4>()) == 0u, "CameraComponent::projection must stay aligned");
+static_assert(is_standard_layout<TransformComponent>(), "TransformComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<TransformComponent>(), "TransformComponent must stay cheap to move in dense ECS storage");
+static_assert(align_of<TransformComponent>() >= align_of<f32x4>(), "TransformComponent must stay aligned for SIMD component loads");
+static_assert(size_of<TransformComponent>() == size_of<f32x4>() + size_of<f32x4>() + size_of<f32x4>(), "TransformComponent must only contain aligned decomposed transform state");
+static_assert((size_of<TransformComponent>() % align_of<TransformComponent>()) == 0u, "TransformComponent array stride must keep every element SIMD-aligned");
+static_assert((offset_of<TransformComponent>(position) % align_of<f32x4>()) == 0u, "TransformComponent::position must stay aligned");
+static_assert((offset_of<TransformComponent>(rotation) % align_of<f32x4>()) == 0u, "TransformComponent::rotation must stay aligned");
+static_assert((offset_of<TransformComponent>(scale) % align_of<f32x4>()) == 0u, "TransformComponent::scale must stay aligned");
+static_assert(is_standard_layout<CameraProjection>(), "CameraProjection must stay layout-stable");
+static_assert(is_trivially_copyable<CameraProjection>(), "CameraProjection must stay cheap to pass by value");
+static_assert(align_of<CameraProjection>() >= align_of<f32x4>(), "CameraProjection must keep storage vectors aligned");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SceneCameraView ResolveSceneCameraView(mut World world, in f32 fallbackAspectRatio){
+    EntityID activeCamera = s_InvalidEntityId;
+    for(in auto row : world.view<ActiveCameraComponent>()){
+        activeCamera = Get<1>(row).camera;
         break;
     }
 
-    if(const auto requestedProjection = TryResolveEntityCameraProjection(world, activeCamera, fallbackAspectRatio))
-        return SceneCameraView{ activeCamera, world.tryGetComponent<TransformComponent>(activeCamera), world.tryGetComponent<CameraComponent>(activeCamera), *requestedProjection };
+    const Expected<CameraProjection> requested = TryResolveEntityCameraProjection(world, activeCamera, fallbackAspectRatio);
+    if(requested.has_value())
+        return SceneCameraView(activeCamera, world.getComponent<TransformComponent>(activeCamera), world.getComponent<CameraComponent>(activeCamera), requested.value());
 
-    const auto cameraView = world.view<TransformComponent, CameraComponent>();
-    for(auto it = cameraView.begin(); it != cameraView.end(); ++it){
-        auto&& [entity, transform, camera] = *it;
-        const auto resolvedCamera = tryBuildSceneCameraView(entity, transform, camera);
-        if(resolvedCamera)
-            return *resolvedCamera;
+    for(in auto row : world.view<TransformComponent, CameraComponent>()){
+        const Expected<CameraProjection> projection = TryResolveCameraComponentProjection(Get<1>(row), Get<2>(row), fallbackAspectRatio);
+        if(projection.has_value()){
+            auto components = row;
+            return SceneCameraView(Get<0>(components), Get<1>(components), Get<2>(components), projection.value());
+        }
     }
-
-    return {};
+    return SceneCameraView();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_SCENE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+SceneCameraView ResolveSceneCameraView(mut World world){
+    return ResolveSceneCameraView(world, s_CameraFallbackAspectRatio);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 EntityID CreateSceneCameraEntity(mut World world, in VectorSingle position){
     Entity cameraEntity = world.createEntity();

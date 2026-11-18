@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/frame_graph_runtime_statistics.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_graphics/suite.adhd>
 
@@ -25,7 +26,6 @@ native{
 #include <impl/ecs_render/avboit/avboit.adhd.h>
 #include <impl/ecs_render/avboit/graph_types.adhd.h>
 #include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/kernel/frame_graph_runtime_statistics.adhd.h>
 #include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 #include <impl/ecs_render/material/material_instance_mutable_cache.adhd.h>
 #include <impl/ecs_render/material/material_instance_override_applier.adhd.h>
@@ -321,12 +321,12 @@ public:
 };
 
 struct MaterialPipelineCacheContext{
-    using PipelineMap = HashMap<MaterialPipelineKey, u32, Core::Alloc::GlobalArena, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo>;
+    using PipelineMap = HashMap<MaterialPipelineKey, u32, Core::Alloc::GlobalArena>;
 
     Tests::TestArena<EcsGraphicsSuiteDetail::ComputeEmulationOutputTag> testArena;
     CsgShapeRegistry registry{ testArena.arena };
     PipelineMap pipelines{ 0u, PipelineMap::hasher(), PipelineMap::key_equal(), testArena.arena };
-    Optional<AString<Core::Alloc::GlobalArena>> lastInclude;
+    Optional<AString<ArenaBase>> lastInclude;
 
 
 public:
@@ -342,7 +342,7 @@ public:
     }
 
     [[nodiscard]] Optional<AStringView> findShaderModuleIncludeView(const Name variant){
-        auto include = registry.findShaderModuleInclude(variant, testArena.arena);
+        auto include = registry.findShaderModuleInclude(testArena.arena, variant);
         if(!include)
             return Optional<AStringView>{};
         lastInclude.emplace(::Move(*include));
@@ -373,14 +373,14 @@ public:
         outsidePalette.skeletonJointCount = 2u;
         outsidePalette.inverseBindMatrices.clear();
         joints.joints.resize(1u, ::MatrixIdentity<Float34>());
-        return MeshSkinningPayload::BuildSkinJointPalette(outsidePalette, joints.joints, joints.skinningMode, jointMatrices);
+        return BuildMeshSkinningJointPalette(outsidePalette, joints.joints, joints.skinningMode, jointMatrices);
     }
 
     [[nodiscard]] b8 buildNonAffineJoint(){
         MeshSkinningRuntimeInstance nonAffineJoint = instance;
         joints.joints[0u] = MakeIdentityJointMatrix();
         joints.joints[0u].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-        return MeshSkinningPayload::BuildSkinJointPalette(nonAffineJoint, joints.joints, joints.skinningMode, jointMatrices);
+        return BuildMeshSkinningJointPalette(nonAffineJoint, joints.joints, joints.skinningMode, jointMatrices);
     }
 
     [[nodiscard]] b8 buildScaledDualQuaternionJoint(){
@@ -388,7 +388,7 @@ public:
         scaledDualQuaternionJoint.inverseBindMatrices.clear();
         joints.skinningMode = SkeletonSkinningMode::DualQuaternion;
         joints.joints[0u] = MakeNonUniformScaleJointMatrix();
-        return MeshSkinningPayload::BuildSkinJointPalette(scaledDualQuaternionJoint, joints.joints, joints.skinningMode, jointMatrices);
+        return BuildMeshSkinningJointPalette(scaledDualQuaternionJoint, joints.joints, joints.skinningMode, jointMatrices);
     }
 };
 
@@ -454,7 +454,7 @@ public:
     const MaterialSurfaceInfo& surface,
     const MaterialInstanceComponent& instance
 )noexcept{
-    return cache.find(entity, surface, &instance);
+    return cache.find(entity, surface, MakeNotNull(&instance));
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<Span<const u8>> FindMutableCacheWithoutInstance(
@@ -462,7 +462,7 @@ public:
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& surface
 )noexcept{
-    return cache.find(entity, surface, nullptr);
+    return cache.find(entity, surface, {});
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<Span<const u8>> PrepareMutableCacheWithInstance(
@@ -472,7 +472,7 @@ public:
     const MaterialSurfaceInfo& surface,
     const MaterialInstanceComponent& instance
 ){
-    return cache.prepare(context.world, entity, surface, &instance);
+    return cache.prepare(context.world, entity, surface, MakeNotNull(&instance));
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 ApplyMaterialInstanceOverridesToPrefix(
@@ -493,7 +493,7 @@ public:
 }
 
 struct MaterialConstantRangeTestContext{
-    using RangeMap = ECSRenderDetail::MaterialTypedConstantRangeMap;
+    using RangeMap = MaterialTypedConstantRangeMap;
 
     Core::Alloc::ScratchArena scratchArena{ s_ScratchArena };
     ::Vector<u8, Core::Alloc::ScratchArena> uploadBytes{ scratchArena };
@@ -508,7 +508,7 @@ public:
 
 public:
     [[nodiscard]] Expected<MaterialTypedByteRange> findOrAppend(const Name material, const u64 layoutHash, const Span<const u8> constants){
-        return ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, layoutHash, constants, uploadBytes, ranges);
+        return FindOrAppendMaterialConstantTypedByteRange(material, layoutHash, constants, uploadBytes, ranges);
     }
 
     [[nodiscard]] usize uploadSize()const noexcept{ return uploadBytes.size(); }
@@ -525,14 +525,13 @@ public:
 };
 
 struct MaterialTypedByteRangeTestContext{
-    using ByteKey = ECSRenderDetail::MaterialTypedByteContentKey;
     using ByteLookup = MaterialTypedByteContentLookup;
     using ByteRange = MaterialTypedByteRange;
-    using RangeMap = ECSRenderDetail::MaterialTypedByteContentRangeMap;
+    using RangeMap = MaterialTypedByteContentRangeMap;
 
     Core::Alloc::ScratchArena scratchArena{ s_ScratchArena };
     ::Vector<u8, Core::Alloc::ScratchArena> uploadBytes{ scratchArena };
-    RangeMap ranges{ 0u, RangeMap::hasher(), RangeMap::key_equal(), scratchArena };
+    RangeMap ranges{ scratchArena };
 
 
 public:
@@ -542,12 +541,12 @@ public:
     }
 
     [[nodiscard]] Expected<ByteRange> findOrAppend(const Span<const u8> bytes){
-        return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(bytes, uploadBytes, ranges);
+        return ranges.findOrAppend(bytes, uploadBytes);
     }
 
     [[nodiscard]] Expected<ByteRange> appendSelfAliasedUploadBytes(){
         const Span<const u8> aliasedBytes(uploadBytes.data(), uploadBytes.size());
-        return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(aliasedBytes, uploadBytes, ranges);
+        return ranges.findOrAppend(aliasedBytes, uploadBytes);
     }
 
     [[nodiscard]] ArenaMemoryStats memoryStats()const noexcept{ return scratchArena.memoryStats(); }
@@ -560,15 +559,12 @@ public:
         range.byteOffset = byteOffset;
         range.byteCount = byteCount;
         const ByteLookup lookup(hash, bytes);
-        return ranges.emplace(ByteKey(scratchArena, lookup), range).second;
+        return ranges.insert(lookup, range);
     }
 
     [[nodiscard]] Optional<ByteRange> findByLookup(const u64 hash, const Span<const u8> bytes)const{
         const ByteLookup lookup(hash, bytes);
-        const auto found = ranges.find(lookup);
-        if(found == ranges.end())
-            return Optional<ByteRange>{};
-        return found.value();
+        return ranges.find(lookup);
     }
 
     void fillUploadPattern(const usize expectedSize, Array<u8, 32>& outExpected){
@@ -626,8 +622,6 @@ namespace GpuDescriptorClass = Core::GpuDescriptorClass;
 using GpuDescriptorHandle = Core::GpuDescriptorHandle;
 using MaterialPipelineResources = Impl::MaterialPipelineResources;
 using MaterialPipelineKey = Impl::MaterialPipelineKey;
-using MaterialPipelineKeyEqualTo = Impl::MaterialPipelineKeyEqualTo;
-using MaterialPipelineKeyHasher = Impl::MaterialPipelineKeyHasher;
 namespace RenderPath = Impl::RenderPath;
 using RenderPathEnum = Impl::RenderPath::Enum;
 namespace Format = Core::Format;
@@ -659,9 +653,9 @@ namespace CommandQueue = Core::CommandQueue;
 using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics;
 using Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics;
 using Core::Telemetry::IsValidFrameGraphRuntimeStatistics;
-using Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics;
-using Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics;
-using Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics;
+using Impl::BuildFrameGraphPhysicalQueueRuntimeStatistics;
+using Impl::BuildFrameGraphPacketSubmissionStatistics;
+using Impl::BuildFrameGraphRuntimeStatistics;
 using EcsGraphicsLightMaterialDetail::MakeValidPhysicalQueueRuntimeSnapshots;
 using EcsGraphicsLightMaterialDetail::MakeValidRuntimeStatistics;
 using EcsGraphicsLightMaterialDetail::MakeValidPacketSubmissionStatistics;
@@ -820,8 +814,8 @@ void VerifyEcsGraphics_MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPr
         hasRefractionFramebuffer,
         targets.deferredSlotsBufferDescriptor.slot()
     );
-    EXPECT_FLOAT_EQ(sdr.params.raw[s_AvboitPushParamsRefractionCapture], s_AvboitRefractionDisabled);
-    EXPECT_FLOAT_EQ(hdr10.params.raw[s_AvboitPushParamsRefractionCapture], s_AvboitRefractionDisabled);
+    EXPECT_FLOAT_EQ(VectorGetByIndex(LoadFloat(sdr.params), s_AvboitPushParamsRefractionCapture), s_AvboitRefractionDisabled);
+    EXPECT_FLOAT_EQ(VectorGetByIndex(LoadFloat(hdr10.params), s_AvboitPushParamsRefractionCapture), s_AvboitRefractionDisabled);
 }
 
 void VerifyEcsGraphics_MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending(){
@@ -913,15 +907,13 @@ void VerifyEcsGraphics_MaterialPipelineReadinessRejectsUnknownPathsAndMissingHan
 void VerifyEcsGraphics_MaterialPipelineKeyDistinguishesFramebufferFormatsAndSamples(){
     MaterialPipelineKey first = MaterialPipelineKey();
     MaterialPipelineKey second = MaterialPipelineKey();
-    const MaterialPipelineKeyEqualTo equal = MaterialPipelineKeyEqualTo();
-    const MaterialPipelineKeyHasher hash = MaterialPipelineKeyHasher();
-    ASSERT_TRUE(equal(first, second));
-    EXPECT_EQ(hash(first), hash(second));
+    ASSERT_TRUE(first == second);
+    EXPECT_EQ(first.hash(), second.hash());
     second.framebufferInfo.sampleCount = 4u;
-    EXPECT_FALSE(equal(first, second));
+    EXPECT_FALSE(first == second);
     second = first;
     second.framebufferInfo.addColorFormat(Format::RGBA8_UNORM);
-    EXPECT_FALSE(equal(first, second));
+    EXPECT_FALSE(first == second);
 }
 
 void VerifyEcsGraphics_MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude(){
@@ -956,8 +948,7 @@ void VerifyEcsGraphics_MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude()
     EXPECT_NE(original.csgShapeRegistryRevision, updated.csgShapeRegistryRevision);
     EXPECT_EQ(original.material, updated.material);
     EXPECT_EQ(original.csgEvaluatorVariant, updated.csgEvaluatorVariant);
-    const MaterialPipelineKeyEqualTo keyEqual = MaterialPipelineKeyEqualTo();
-    EXPECT_FALSE(keyEqual(original, updated));
+    EXPECT_FALSE(original == updated);
     EXPECT_FALSE(context.find(updated).has_value());
     const Optional<u32> retained = context.find(original);
     ASSERT_TRUE(retained.has_value());

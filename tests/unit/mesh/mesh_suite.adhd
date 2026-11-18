@@ -18,6 +18,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/task/gpu/packet_runtime.h>
 #include <impl/ecs_mesh/skinning/deformation_state.adhd.h>
 #include <impl/ecs_mesh/skinning/graph_resource_uses.adhd.h>
 #include <impl/ecs_mesh/skinning/skin_payload.adhd.h>
@@ -72,7 +73,7 @@ using SkinningStateHandoff = Impl::SkinningStateHandoff;
 using SkeletonJointMatrix = Impl::SkeletonJointMatrix;
 using SkinInfluence4 = Impl::SkinInfluence4;
 using MeshSkinningInfluenceGpu = Impl::MeshSkinningInfluenceGpu;
-using MeshSkinningInfluenceGpuScratchVector = Vector<Impl::MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>;
+using MeshSkinningInfluenceGpuScratchVector = Vector<Impl::MeshSkinningInfluenceGpu, ::ArenaBase>;
 using ConstSkeletonJointMatrixSpan = Span<const Impl::SkeletonJointMatrix>;
 using MeshSkinningRuntimeInstance = Impl::MeshSkinningRuntimeInstance;
 using SkeletonJointPaletteComponent = Impl::SkeletonJointPaletteComponent;
@@ -88,10 +89,11 @@ using Core::Mesh::RebuildTangentFrames;
 
 using Impl::BuildMeshSkinningGraphResourceUses;
 using Impl::s_SkeletonInvalidJointIndex;
-using Impl::MeshSkinningPayload::BuildRuntimeSkinPayload;
-using Impl::MeshSkinningPayload::BuildSkinInfluences;
-using Impl::MeshSkinningPayload::BuildSkinJointPalette;
-using Impl::MeshSkinningPayload::ResolveGpuJointPalette;
+using Impl::BuildRuntimeSkinPayload;
+using Impl::SkinningComponentView;
+using Impl::BuildSkinInfluences;
+using Impl::BuildMeshSkinningJointPalette;
+using Impl::ResolveMeshSkinningGpuJointPalette;
 
 inline constexpr u32 s_SkinnedMeshSkinJointMask = NWB_SKINNED_MESH_SKIN_JOINT_MASK;
 inline constexpr f32 s_QuietNaNF32 = Limit<f32>::s_QuietNaN;
@@ -104,25 +106,14 @@ inline constexpr f32 s_QuietNaNF32 = Limit<f32>::s_QuietNaN;
     return Span<const MeshSkinningGraphDispatchPlan>(plans.data(), 1u);
 }
 
-template<typename ScratchT>
-[[nodiscard]] FOUNDATION_INLINE SkinningStateHandoff CreateEmptySkinningStateHandoff(GpuPersistentResourceStateCache& cache, ScratchT&& scratch){
-    return SkinningStateHandoff(cache, scratch, {});
+[[nodiscard]] inline b8 PrepareSkinningStateHandoff(SkinningStateHandoff& handoff, const b8 hasObserver){
+    const auto callback = Core::MakeGpuTaskRecordedCallback({}, handoff);
+    return callback.invoke(hasObserver ? callback.context : nullptr, nullptr);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 PrepareNullSkinningStateHandoff(){
-    return SkinningStateHandoff::Prepare(nullptr, nullptr);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 PrepareSkinningStateHandoffWithoutState(SkinningStateHandoff& handoff){
-    return SkinningStateHandoff::Prepare(&handoff, nullptr);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 AcceptNullSkinningStateHandoff()noexcept{
-    return SkinningStateHandoff::Accept(nullptr, {});
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 AcceptSkinningStateHandoff(SkinningStateHandoff& handoff)noexcept{
-    return SkinningStateHandoff::Accept(&handoff, {});
+[[nodiscard]] inline b8 AcceptSkinningStateHandoff(SkinningStateHandoff& handoff, const b8 hasObserver){
+    const auto callback = Core::MakeGpuTaskAcceptedCallback({}, handoff);
+    return callback.invoke(hasObserver ? callback.context : nullptr, {});
 }
 
 [[nodiscard]] FOUNDATION_INLINE MeshSkinningRuntimeInstance MakeRuntimeInstance(){
@@ -130,7 +121,7 @@ template<typename ScratchT>
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromNone(const MeshSkinningRuntimeInstance& instance, RuntimeSkinPayloadScratch& payload){
-    return BuildRuntimeSkinPayload(instance, nullptr, nullptr, payload);
+    return BuildRuntimeSkinPayload(instance, {}, {}, payload);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromPalette(
@@ -138,7 +129,7 @@ template<typename ScratchT>
     const SkeletonJointPaletteComponent& palette,
     RuntimeSkinPayloadScratch& payload
 ){
-    return BuildRuntimeSkinPayload(instance, &palette, nullptr, payload);
+    return BuildRuntimeSkinPayload(instance, SkinningComponentView<SkeletonJointPaletteComponent>(palette), {}, payload);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromPose(
@@ -147,7 +138,7 @@ template<typename ScratchT>
     const SkeletonPoseComponent& pose,
     RuntimeSkinPayloadScratch& payload
 ){
-    return BuildRuntimeSkinPayload(instance, &palette, &pose, payload);
+    return BuildRuntimeSkinPayload(instance, SkinningComponentView<SkeletonJointPaletteComponent>(palette), SkinningComponentView<SkeletonPoseComponent>(pose), payload);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 SharesJointMatrixStorage(const Span<const SkeletonJointMatrix> upload, const RuntimeSkinPayloadScratch& payload)noexcept{
@@ -174,11 +165,11 @@ template<typename ScratchT, typename VertexVectorT>
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<MeshSkinningGraphResourceUses> BuildGraphResourceUses(const Span<const MeshSkinningGraphDispatchPlan> plans, ScratchArena& scratch){
-    return BuildMeshSkinningGraphResourceUses(plans, scratch);
+    return BuildMeshSkinningGraphResourceUses(scratch, plans);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<MeshSkinningInfluenceGpuScratchVector> EncodeSkinInfluences(const MeshSkinningRuntimeInstance& instance, ScratchArena& scratchArena){
-    return BuildSkinInfluences(instance, scratchArena);
+    return BuildSkinInfluences(scratchArena, instance);
 }
 
 
@@ -460,19 +451,19 @@ void VerifySkinningGraphResourceUses_RepeatedPlansUseTheSameScratchCapacityAsOne
 
 void VerifySkinningStateHandoff_RejectsUnpreparedAcceptanceAndMissingRecordedState(){
     SkinningGlobalTestArena arena(s_TestArena);
-    SkinningScratchTestArena scratch(s_SkinningCaseSkinningHandoffRejected);
     GpuPersistentResourceStateCache cache(arena.arena);
 
-    SkinningStateHandoff handoff = CreateEmptySkinningStateHandoff(cache, scratch.scratch);
-    EXPECT_FALSE(PrepareNullSkinningStateHandoff());
-    EXPECT_FALSE(AcceptNullSkinningStateHandoff());
-    EXPECT_FALSE(AcceptSkinningStateHandoff(handoff));
+    GpuPersistentStateCandidate candidate(cache);
+    SkinningStateHandoff handoff(cache, candidate, Span<BufferHandle>());
+    EXPECT_FALSE(PrepareSkinningStateHandoff(handoff, false));
+    EXPECT_FALSE(AcceptSkinningStateHandoff(handoff, false));
+    EXPECT_FALSE(AcceptSkinningStateHandoff(handoff, true));
     EXPECT_FALSE(handoff.preparationInvoked());
-    EXPECT_FALSE(PrepareSkinningStateHandoffWithoutState(handoff));
+    EXPECT_FALSE(PrepareSkinningStateHandoff(handoff, true));
     EXPECT_TRUE(handoff.preparationInvoked());
     EXPECT_FALSE(handoff.statePrepared());
     EXPECT_FALSE(handoff.stateAccepted());
-    EXPECT_FALSE(AcceptSkinningStateHandoff(handoff));
+    EXPECT_FALSE(AcceptSkinningStateHandoff(handoff, true));
 
     EXPECT_FALSE(cache.valid());
 }
@@ -552,11 +543,11 @@ void VerifySkinningPayload_GpuJointUploadBoundsFollowSkinWhileSourceTailStillVal
     instance.skin.assign(3u, MakeSkinInfluence(1u));
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
     ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
-    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
+    EXPECT_FALSE(ResolveMeshSkinningGpuJointPalette(instance, payload).has_value());
 
     palette.joints.assign(3u, MakeTranslationJoint(7.0f, 0.0f, 0.0f));
     ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
-    const Expected<ConstSkeletonJointMatrixSpan> upload = ResolveGpuJointPalette(instance, payload);
+    const Expected<ConstSkeletonJointMatrixSpan> upload = ResolveMeshSkinningGpuJointPalette(instance, payload);
     ASSERT_TRUE(upload.has_value());
     EXPECT_EQ(upload.value().size(), 2u);
     EXPECT_TRUE(SharesJointMatrixStorage(upload.value(), payload));
@@ -564,15 +555,15 @@ void VerifySkinningPayload_GpuJointUploadBoundsFollowSkinWhileSourceTailStillVal
     EXPECT_FLOAT_EQ(upload.value()[1u]._14, 7.0f);
 
     ++payload.skinInfluenceCount;
-    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
+    EXPECT_FALSE(ResolveMeshSkinningGpuJointPalette(instance, payload).has_value());
     --payload.skinInfluenceCount;
     while(payload.jointMatrices.size() > 1u)
         payload.jointMatrices.pop_back();
-    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
+    EXPECT_FALSE(ResolveMeshSkinningGpuJointPalette(instance, payload).has_value());
 
     ZeroJointMatrixRow0(palette.joints[2u]);
     EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
-    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
+    EXPECT_FALSE(ResolveMeshSkinningGpuJointPalette(instance, payload).has_value());
 
     EXPECT_EQ(logger.errorCount(), 1u);
 }
@@ -796,7 +787,7 @@ void VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePaylo
     ExpectEmptyRuntimePayload(payload);
 
     payload.jointMatrices.assign(1u, MatrixIdentity<f32x3x4>());
-    EXPECT_FALSE(BuildSkinJointPalette(instance, palette.joints, palette.skinningMode, payload.jointMatrices));
+    EXPECT_FALSE(BuildMeshSkinningJointPalette(instance, palette.joints, palette.skinningMode, payload.jointMatrices));
     EXPECT_TRUE(payload.jointMatrices.empty());
 
     palette.joints.pop_back();

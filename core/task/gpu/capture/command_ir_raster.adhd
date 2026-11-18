@@ -39,6 +39,9 @@ extern class GpuCommandIrOwnerAnchor{
     b8 valid(...)const;
 };
 
+[cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::RetainGpuCommandIrOwner")]
+extern Expected<GpuCommandIrOwnerAnchor> RetainGpuCommandIrOwner<T>(mut GpuCommandIrCapture capture, in T owner);
+
 [cpp_header("<core/task/gpu/capture/command_ir_raster.h>"), cpp_name("::NWB::Core::GpuCommandIrRasterHeapOwner"), cpp_flags(self_defaulted, brace_init)]
 extern class GpuCommandIrRasterHeapOwner{
     GraphicsPipelineHandle pipeline;
@@ -62,6 +65,7 @@ extern class GpuCommandIrRasterStateDesc{
     Viewport viewport;
     Rect scissor;
     Color blendConstantColor;
+    FixedVector<GpuCommandIrRasterVertexOwner, s_MaxVertexAttributes> vertexBuffers;
     GpuGraphResourceId indexResource;
     BufferHandle indexBuffer;
     u32 indexOffset;

@@ -53,7 +53,7 @@ b8 SourceEmitter::tryEmitScalarFloatCall(MString& out, const Expr& expr)const{
         const b8 floatDifference = !promotedDiff.empty();
         const MStringView differencePrefix = CodegenSymbols::SimdPrefix(doubleDifference);
         const MStringView differenceScalar = CodegenSymbols::SimdScalarCppType(doubleDifference);
-        out.append("([](const auto __a, const auto __b, const auto __t)noexcept{ const auto __difference = ");
+        out.append("([](const auto __a, const auto __b, const auto __t)").append(lambdaExceptionSpec()).append("{ const auto __difference = ");
         if(floatDifference){
             append(differencePrefix);
             out.append("Subtract(");
@@ -102,7 +102,7 @@ b8 SourceEmitter::tryEmitScalarFloatCall(MString& out, const Expr& expr)const{
     else{
         out.append("([](const ");
         append(scalar);
-        out.append(" __a)noexcept{ return ");
+        out.append(" __a)").append(lambdaExceptionSpec()).append("{ return ");
         append(prefix);
         out.append("GetX(");
         append(prefix);

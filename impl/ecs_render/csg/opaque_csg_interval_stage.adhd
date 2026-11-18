@@ -2,133 +2,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/csg/graph_types.adhd>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd>
+#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/csg/graph_types.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd.h>
-#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.adhd.h>
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+class OpaqueCsgIntervalStageInputs{
+    public in DeferredGraphResourceImportResult resources;
+    public in MeshFrameBindingSnapshot frameBindings;
+    public in CsgGraphResourceSnapshot csgResources;
+    public MaterialPassDrawItemPartitionsView opaqueDrawItems;
+    public CsgFrameGpuDataView csgFrameData;
+    public Optional<in GraphicsPrefixTimingTicket> intervalSampleTimingTicket;
+    public BufferRange materialInstanceRange;
+    public BufferRange materialTypedRange;
+    public BufferRange csgReceiverRange;
+    public BufferRange csgCutterRange;
+    public GpuTaskId dependencyTask;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 hasOpaqueDrawItems = false;
+    public b8 hasCsgFrameGpuWork = false;
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+    public OpaqueCsgIntervalStageInputs(in DeferredGraphResourceImportResult resources, in MeshFrameBindingSnapshot frameBindings,
+        in CsgGraphResourceSnapshot csgResources, in MaterialPassDrawItemPartitionsView opaqueDrawItems, in CsgFrameGpuDataView csgFrameData){
+        this.resources = resources;
+        this.frameBindings = frameBindings;
+        this.csgResources = csgResources;
+        this.opaqueDrawItems = opaqueDrawItems;
+        this.csgFrameData = csgFrameData;
+    }
+}
 
+// Freeze draw state before the G-buffer uploads, then move each payload into the graph.
+[modular]
+class OpaqueCsgIntervalStage : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererMaterialSystem m_materialSystem;
+    private mut Optional<GpuTimingMeasure> m_intervalSampleComputeEmulationTiming;
+    private OpaqueCsgComputeIntervalGraphTask m_receiverSpanPayload;
+    private OpaqueCsgComputeIntervalGraphTask m_intervalCombinePayload;
+    private OpaqueCsgIntervalSampleGraphTask m_intervalSamplePayload;
+    private OpaqueCsgIntervalSampleComputeEmulationGraphTask m_intervalSampleComputeEmulationPayload;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public OpaqueCsgIntervalStage(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererMaterialSystem materials,
+        mut RendererCsgSystem csg, mut DeferredFrameTargets targets, in borrow GraphicsPrefixTimingTicket receiverSpanTicket,
+        in borrow GraphicsPrefixTimingTicket intervalCombineTicket, in borrow GraphicsPrefixTimingTicket intervalSampleTicket,
+        in borrow b8 meshReady, in borrow b8 shadingReady, mut Optional<GpuTimingMeasure> computeTiming){
+        this.m_graph = graph;
+        this.m_materialSystem = materials;
+        this.m_intervalSampleComputeEmulationTiming = computeTiming;
+        this.m_receiverSpanPayload = OpaqueCsgComputeIntervalGraphTask(materials, csg, targets, receiverSpanTicket, meshReady, shadingReady, OpaqueCsgComputeIntervalPass::ReceiverSpan);
+        this.m_intervalCombinePayload = OpaqueCsgComputeIntervalGraphTask(materials, csg, targets, intervalCombineTicket, meshReady, shadingReady, OpaqueCsgComputeIntervalPass::Combine);
+        this.m_intervalSamplePayload = OpaqueCsgIntervalSampleGraphTask(graphics, materials, csg, targets, intervalSampleTicket, meshReady, shadingReady);
+        this.m_intervalSampleComputeEmulationPayload = OpaqueCsgIntervalSampleComputeEmulationGraphTask(graphics, materials, targets, intervalSampleTicket, meshReady, shadingReady, computeTiming);
+    }
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ObjectGeometryCacheGraph;
-class RendererCsgSystem;
-class RendererMaterialSystem;
-class DeferredGraphResourceImportResult;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct OpaqueCsgIntervalStageInputs{
-    DeferredFrameTargets& targets;
-    const DeferredGraphResourceImportResult& resources;
-    const MeshFrameBindingSnapshot& frameBindings;
-    const CsgGraphResourceSnapshot& csgResources;
-    MaterialPassDrawItemPartitionsView opaqueDrawItems{};
-    CsgFrameGpuDataView csgFrameData{};
-    Core::GpuTimingSubmissionTicket** intervalSampleTimingTicket = nullptr;
-    Core::TextureSubresourceSet removedIntervalSubresources{};
-    Core::TextureSubresourceSet removedIntervalCountSubresources{};
-    Core::BufferRange materialInstanceRange{};
-    Core::BufferRange materialTypedRange{};
-    Core::BufferRange csgReceiverRange{};
-    Core::BufferRange csgCutterRange{};
-    Core::GpuTaskId dependencyTask;
-    usize instanceCount = 0u;
-    usize materialTypedByteCount = 0u;
-    b8 hasOpaqueDrawItems = false;
-    b8 hasCsgFrameGpuWork = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Opaque CSG work after the G-buffer: receiver spans, interval combine, the optional interval-sample compute producer, and interval sample.
-// The payloads are built before the G-buffer task freezes its upload state, then move into the graph in declare().
-class OpaqueCsgIntervalStage final : NoCopy{
-public:
-    OpaqueCsgIntervalStage(
-        Core::GpuTaskGraph& graph,
-        Core::Alloc::GlobalArena& arena,
-        Core::GraphicsRuntime& graphics,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket*& receiverSpanTimingTicket,
-        Core::GpuTimingSubmissionTicket*& intervalCombineTimingTicket,
-        Core::GpuTimingSubmissionTicket*& intervalSampleTimingTicket,
-        const b8& meshViewSetupReady,
-        const b8& sceneShadingSetupReady,
-        Optional<Core::GpuTimingMeasure>& intervalSampleComputeEmulationTiming
-    )noexcept
-        : m_graph(graph)
-        , m_materialSystem(materialSystem)
-        , m_intervalSampleComputeEmulationTiming(intervalSampleComputeEmulationTiming)
-        , m_receiverSpanPayload{ arena, materialSystem, csgSystem, targets, receiverSpanTimingTicket, meshViewSetupReady, sceneShadingSetupReady, }
-        , m_intervalCombinePayload{ arena, materialSystem, csgSystem, targets, intervalCombineTimingTicket, meshViewSetupReady, sceneShadingSetupReady, }
-        , m_intervalSamplePayload{ arena, graphics, materialSystem, csgSystem, targets, intervalSampleTimingTicket, meshViewSetupReady, sceneShadingSetupReady, }
-        , m_intervalSampleComputeEmulationPayload{ arena, graphics, materialSystem, targets, intervalSampleTimingTicket, meshViewSetupReady, sceneShadingSetupReady, intervalSampleComputeEmulationTiming, }
-    {}
-
-
-public:
-    // Copies the frozen opaque draw stream and the G-buffer upload state into the CSG payloads.
-    void capturePayloads(
-        const MeshFrameBindingSnapshot& frameBindings,
-        const CsgGraphResourceSnapshot& csgResources,
-        const MaterialPassDrawItemPartitionsView& opaqueDrawItems,
-        const CsgFrameGpuDataView& csgFrameData,
-        usize instanceCount,
-        usize materialTypedByteCount,
-        b8 materialDrawBuffersUploaded,
-        b8 csgFrameBuffersUploaded,
-        b8 hasOpaqueDrawItems,
-        b8 hasOpaqueCsgFrameWork
-    );
-    [[nodiscard]] Expected<OpaqueCsgIntervalStageTasks> declare(const OpaqueCsgIntervalStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ObjectGeometryCacheGraph& objectGeometry);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererMaterialSystem& m_materialSystem;
-    Optional<Core::GpuTimingMeasure>& m_intervalSampleComputeEmulationTiming;
-    ECSRenderDetail::CsgReceiverSpanBuildGraphTask::Payload m_receiverSpanPayload;
-    ECSRenderDetail::CsgIntervalCombineGraphTask::Payload m_intervalCombinePayload;
-    ECSRenderDetail::CsgIntervalSampleGraphTask::Payload m_intervalSamplePayload;
-    ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload m_intervalSampleComputeEmulationPayload;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public void capturePayloads(in MeshFrameBindingSnapshot frameBindings, in CsgGraphResourceSnapshot csgResources,
+        in MaterialPassDrawItemPartitionsView opaqueDrawItems, in CsgFrameGpuDataView csgFrameData, in usize instanceCount,
+        in usize materialTypedByteCount, in b8 materialDrawBuffersUploaded, in b8 csgFrameBuffersUploaded, in b8 hasOpaqueDrawItems, in b8 hasOpaqueCsgFrameWork);
+    [cpp_unwind]
+    public Expected<OpaqueCsgIntervalStageTasks> declare(in OpaqueCsgIntervalStageInputs inputs, mut ObjectGeometryCacheGraph objectGeometry);
 }
 
 

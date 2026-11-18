@@ -110,9 +110,9 @@ public:
         return result;
     }
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)override;
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)noexcept override;
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
         ++publishes;
         displayed.assign(view.displayText().data(), view.displayText().size());
         if(onPublishInteger)
@@ -167,7 +167,7 @@ public:
     [[nodiscard]] b8 acceptNumeric(){
         return finishPanel() && m_context.commitFrame(m_context.readyGeneration());
     }
-    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
+    void useHost()noexcept{ m_builder.setEditHost(m_host); }
 
 
 public:
@@ -368,7 +368,7 @@ b8 OpenPopupToolsBySecondary(PopupToolsFixture& self, u64 generation)noexcept;
 
 NWB_BEGIN
 namespace UiNumericEditTests{
-FOUNDATION_INLINE EditBoxResult NumericHost::editActions(const WidgetState&, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink){
+FOUNDATION_INLINE EditBoxResult NumericHost::editActions(const WidgetState&, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)noexcept{
     ++loans;
     lastPopup = popup;
     EditBoxResult result;

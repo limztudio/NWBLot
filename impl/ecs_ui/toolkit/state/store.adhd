@@ -2,113 +2,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/state/widget_state_index_policy.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <impl/ecs_ui/toolkit/state/widget_state_index_policy.adhd.h>
+class WidgetStateStore : NoCopy{
+    private Vector<WidgetState> m_entries;
+    private HashMap<u64, usize> m_index;
+    private b8 m_indexDirty = false;
+    private u64 m_nextDeclarationGeneration = 1u;
 
-#include <impl/ecs_ui/toolkit/id.adhd.h>
-
-#include <global/containers.h>
-#include <global/termination.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Retain identity and typed lifetime; application values stay in the host model and are never copied into draw snapshots.
-class WidgetStateStore final : NoCopy{
-private:
-    using StateIndex = HashMap<u64, usize, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
-
-
-public:
-    explicit WidgetStateStore(Core::Alloc::GlobalArena& arena)
-        : m_entries(arena)
-        , m_index(arena)
-    {
-        // Keep both the prior frame and candidate declarations stable until frame retirement.
-        m_entries.reserve(s_WidgetStateRetainedCapacity);
-        m_index.reserve(s_WidgetStateRetainedCapacity);
+    [cpp_unwind]
+    public WidgetStateStore(){
+        // Keep declarations at stable addresses until the frame retires.
+        this.m_entries.reserve(s_WidgetStateRetainedCapacity);
+        this.m_index.reserve(s_WidgetStateRetainedCapacity);
     }
-
-
-public:
-    [[nodiscard]] Expected<NotNull<WidgetState*>> touch(const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
+    [cpp_unwind]
+    public Expected<mut WidgetState> touch(in WidgetId id, in WidgetRoot root, in WidgetKind kind, in u64 frameGeneration){
         b8 invariantFailed = false;
         const Expected<usize> index = WidgetStateIndexPolicy().touch(
-            id,
-            root,
-            kind,
-            frameGeneration,
-            m_entries,
-            m_index,
-            m_nextDeclarationGeneration,
-            m_indexDirty,
-            invariantFailed
+            id, root, kind, frameGeneration, this.m_entries, this.m_index, this.m_nextDeclarationGeneration, this.m_indexDirty, invariantFailed
         );
         if(invariantFailed)
             TerminateInvariant();
-        if(!index)
-            return MakeUnexpected(Failure{});
-        return MakeNotNull(&m_entries[*index]);
+        if(!index.has_value())
+            return MakeUnexpected(Failure());
+        return Expected<mut WidgetState>(this.m_entries[index.value()]);
     }
-
-    [[nodiscard]] WidgetState* find(const WidgetId id)noexcept{
-        const usize index = findIndex(id);
-        return index == m_entries.size() ? nullptr : &m_entries[index];
+    public Optional<mut WidgetState> find(in WidgetId id){
+        this.finishRetirement();
+        const Expected<usize> index = WidgetStateIndexPolicy().lookup(this.m_entries, id, this.m_index);
+        if(!index.has_value())
+            return Optional<mut WidgetState>();
+        return Optional<mut WidgetState>(this.m_entries[index.value()]);
     }
-
-    [[nodiscard]] const WidgetState* find(const WidgetId id)const noexcept{
-        const usize index = findIndex(id);
-        return index == m_entries.size() ? nullptr : &m_entries[index];
+    public Optional<in WidgetState> find(in WidgetId id)const{
+        if(this.m_indexDirty){
+            for(usize i = 0u; i < this.m_entries.size(); ++i){
+                if(this.m_entries[i].id == id)
+                    return Optional<in WidgetState>(this.m_entries[i]);
+            }
+            return Optional<in WidgetState>();
+        }
+        const Expected<usize> index = WidgetStateIndexPolicy().lookup(this.m_entries, id, this.m_index);
+        if(!index.has_value())
+            return Optional<in WidgetState>();
+        return Optional<in WidgetState>(this.m_entries[index.value()]);
     }
-
-    [[nodiscard]] const PaintVector<WidgetState>& entries()const noexcept{ return m_entries; }
-
-    void erase(const usize index)noexcept{
-        WidgetStateIndexPolicy().eraseAt(index, m_entries, m_indexDirty);
-    }
-
-
-private:
-    [[nodiscard]] usize findIndex(const WidgetId id)const noexcept{
-        b8 invariantFailed = false;
-        const Expected<usize> index = WidgetStateIndexPolicy().findIndex(m_entries, id, m_index, m_indexDirty, invariantFailed);
-        if(invariantFailed)
+    public in Vector<WidgetState> entries()const{ return this.m_entries; }
+    public void finishRetirement(){
+        if(!WidgetStateIndexPolicy().refreshIndex(this.m_entries, this.m_index, this.m_indexDirty))
             TerminateInvariant();
-        return index.value_or(m_entries.size());
     }
-
-
-private:
-    PaintVector<WidgetState> m_entries;
-    mutable StateIndex m_index;
-    u64 m_nextDeclarationGeneration = 1u;
-    mutable b8 m_indexDirty = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void erase(in usize index){ WidgetStateIndexPolicy().eraseAt(index, this.m_entries, this.m_indexDirty); }
 }
 
 

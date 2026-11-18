@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_graph_barrier_task.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
 
 
@@ -81,34 +82,171 @@ b8 HasAccelStructBuildStatesGraphOwned(in b8 sceneTlasBuildGraphOwned, in b8 mes
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+class ShadowPrepareGraphTask{
+    private mut RendererRayTracingSystem raytracingSystem;
+    private mut ShadowPreparationOutcome outcome;
+    private mut DeferredFrameTargets targets;
+    private mut GpuTimingSubmissionTicket timingTicket;
+    private b8 deferredBindlessSlotsWereUploaded;
+    private b8 currentBindlessSlotsGraphOwned;
+    private b8 shadowMaterialContextBatchGraphOwned;
+    private b8 sceneBvhBatchGraphOwned;
+    private b8 sceneTlasBuildGraphOwned;
+    private b8 meshBlasBuildsGraphOwned;
+    private b8 meshBlasGeometryBuildInputStatesGraphOwned;
+    private b8 meshSwBvhBuildsGraphOwned;
+    private b8 preparedMeshSwBvhBuildsRecordedByGraph;
+
+    public ShadowPrepareGraphTask(
+        mut RendererRayTracingSystem raytracingSystem,
+        mut ShadowPreparationOutcome outcome,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        in b8 deferredBindlessSlotsWereUploaded,
+        in b8 currentBindlessSlotsGraphOwned,
+        in b8 shadowMaterialContextBatchGraphOwned,
+        in b8 sceneBvhBatchGraphOwned,
+        in b8 sceneTlasBuildGraphOwned,
+        in b8 meshBlasBuildsGraphOwned,
+        in b8 meshBlasGeometryBuildInputStatesGraphOwned,
+        in b8 meshSwBvhBuildsGraphOwned,
+        in b8 preparedMeshSwBvhBuildsRecordedByGraph
+    ){
+        this.raytracingSystem = raytracingSystem;
+        this.outcome = outcome;
+        this.targets = targets;
+        this.timingTicket = timingTicket;
+        this.deferredBindlessSlotsWereUploaded = deferredBindlessSlotsWereUploaded;
+        this.currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned;
+        this.shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned;
+        this.sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned;
+        this.sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned;
+        this.meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned;
+        this.meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned;
+        this.meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned;
+        this.preparedMeshSwBvhBuildsRecordedByGraph = preparedMeshSwBvhBuildsRecordedByGraph;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Transfer;
+        commands.requiresPrimaryGraphicsQueue = true;
+        return commands;
+    }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        this.outcome.ready = false;
+        // The graph establishes the selector ConstantBuffer state before recording.
+        if(!this.targets.bindless.valid())
+            return false;
+        const auto shadowResourcesPrepared = this.raytracingSystem.recordPreflightShadowVisibilityResources(
+            commandList,
+            this.targets,
+            this.sceneTlasBuildGraphOwned,
+            this.meshBlasBuildsGraphOwned,
+            this.meshBlasGeometryBuildInputStatesGraphOwned,
+            this.meshSwBvhBuildsGraphOwned,
+            this.preparedMeshSwBvhBuildsRecordedByGraph
+        );
+
+        // Selector upload precedes this task; compiler establishes ConstantBuffer state first.
+        if(!shadowResourcesPrepared.has_value())
+            return false;
+        this.outcome.ready = shadowResourcesPrepared.value();
+
+        // These declarations export BLAS/SW-BVH boundary states before the Prefix packet seeds.
+        return true;
+    }
+
+    public void accepted(in QueueSubmissionToken token){
+        if(this.currentBindlessSlotsGraphOwned)
+            this.targets.bindless.slotsUploaded = true;
+        this.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
+        if(this.shadowMaterialContextBatchGraphOwned)
+            this.raytracingSystem.confirmPreparedShadowMaterialContextUploads();
+        if(this.sceneBvhBatchGraphOwned)
+            this.raytracingSystem.confirmPreparedSceneBvhUploads();
+    }
+
+    public void discarded(){
+        this.timingTicket.discard();
+
+        // Failed preparation keeps storage but invalidates the frame plan and caches.
+        this.outcome.ready = false;
+        this.outcome.resourcesValid = false;
+        this.targets.bindless.slotsUploaded = this.deferredBindlessSlotsWereUploaded;
+        this.raytracingSystem.discardPreflightShadowVisibilityResources();
+    }
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class ShadowPrepareSoftwareBvhBuildGraphTask{
+    private mut RendererRayTracingSystem raytracingSystem;
+    private mut GpuTimingSubmissionTicket timingTicket;
+    private PreparedMeshSwBvhBuild build;
+
+    public ShadowPrepareSoftwareBvhBuildGraphTask(
+        mut RendererRayTracingSystem raytracingSystem,
+        mut GpuTimingSubmissionTicket timingTicket,
+        in PreparedMeshSwBvhBuild build
+    ){
+        this.raytracingSystem = raytracingSystem;
+        this.timingTicket = timingTicket;
+        this.build = build;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        return commands;
+    }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        return this.raytracingSystem.recordPreparedMeshSwBvhBuildAfterGraphClears(commandList, this.build);
+    }
+}
 
 
-NWB_IMPL_BEGIN
+[cpp_unwind]
+b8 AppendShadowSoftwareBvhClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint scheduling, mut GpuTaskId firstTask, mut GpuTaskId dependency, in Expected<Name> identity, in StringView label, in GpuGraphResourceId destination, in u32 clearValue){
+    if(!identity.has_value())
+        return false;
+    GpuTaskDesc desc;
+    desc.setIdentity(identity.value()).setMarkerLabel(label).setScheduling(scheduling).setDependency(dependency);
+    GpuClearBufferTaskDesc clear;
+    clear.destination = destination;
+    clear.clearValue = clearValue;
+    const auto task = graph.addClearBufferTask(desc, clear);
+    if(!task.has_value())
+        return false;
+    if(!firstTask.valid())
+        firstTask = task.value();
+    dependency = task.value();
+    return true;
+}
 
 
+[cpp_unwind]
 b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
-    const ShadowPrepareGraphContext& context,
-    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
-    const Core::GpuGraphResourceId currentBindlessSlots,
-    const Core::GpuGraphResourceId materialContextSlots,
-    const Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
-    const Span<const Core::GpuGraphResourceId> softwareBvhBuildStateResources,
-    const b8 softwareTraceResourcesPrepared,
-    Core::Alloc::ScratchArena& scratchArena,
-    DeferredFrameTargets& deferredTargets,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    in ShadowPrepareGraphContext context,
+    in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
+    in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+    in GpuGraphResourceId currentBindlessSlots,
+    in GpuGraphResourceId materialContextSlots,
+    in Span<GpuGraphResourceId> shadowTraceGeometryResources,
+    in Span<GpuGraphResourceId> softwareBvhBuildStateResources,
+    in b8 softwareTraceResourcesPrepared,
+    mut DeferredFrameTargets deferredTargets,
+    mut GpuTimingSubmissionTicket timingTicket
 ){
-    using namespace RendererTaskGraphDetail;
 
-    m_deferredShadowPrepareSceneRefitTask = {};
-    m_sceneBvhRefitInputsUploadTask = {};
-    resetShadowPrepareTaskState();
+    this.m_deferredShadowPrepareSceneRefitTask = GpuTaskId();
+    this.m_sceneBvhRefitInputsUploadTask = GpuTaskId();
+    this.resetShadowPrepareTaskState();
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -121,38 +259,37 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     ShadowPrepareUploadChain uploads;
     ShadowPrepareUploadChainBuilder uploadChainBuilder(context.graph, context.graphics, context.rayTracing);
     const b8 uploadsDeclared = uploadChainBuilder.declare(
-        ShadowPrepareUploadInputs{
-            .targets = deferredTargets,
-            .rayTracingResources = rayTracingResources,
-            .currentBindlessSlots = currentBindlessSlots,
-            .materialContextSlots = materialContextSlots,
-        },
-        scratchArena,
+        ShadowPrepareUploadInputs(
+            deferredTargets,
+            rayTracingResources,
+            currentBindlessSlots,
+            materialContextSlots
+        ),
         uploads
     );
-    m_deferredBindlessSlotsUploadTask = uploads.tasks.bindlessSlots;
-    m_rayTraceMaterialContextSlotsUploadTask = uploads.tasks.rayTraceMaterialContextSlots;
-    m_csgTraceContextUploadTask = uploads.tasks.csgTraceContext;
-    m_causticEmissionTargetsUploadTask = uploads.tasks.causticEmissionTargets;
-    m_surfelFrameConstantsUploadTask = uploads.tasks.surfelFrameConstants;
-    m_shadowInstanceMaterialUploadTask = uploads.tasks.shadowInstanceMaterial;
-    m_shadowInstanceUploadTask = uploads.tasks.shadowInstance;
-    m_shadowMaterialTypedUploadTask = uploads.tasks.shadowMaterialTyped;
-    m_sceneBvhNodesUploadTask = uploads.tasks.sceneBvhNodes;
-    m_sceneBvhInstancesUploadTask = uploads.tasks.sceneBvhInstances;
+    this.m_deferredBindlessSlotsUploadTask = uploads.tasks.bindlessSlots;
+    this.m_rayTraceMaterialContextSlotsUploadTask = uploads.tasks.rayTraceMaterialContextSlots;
+    this.m_csgTraceContextUploadTask = uploads.tasks.csgTraceContext;
+    this.m_causticEmissionTargetsUploadTask = uploads.tasks.causticEmissionTargets;
+    this.m_surfelFrameConstantsUploadTask = uploads.tasks.surfelFrameConstants;
+    this.m_shadowInstanceMaterialUploadTask = uploads.tasks.shadowInstanceMaterial;
+    this.m_shadowInstanceUploadTask = uploads.tasks.shadowInstance;
+    this.m_shadowMaterialTypedUploadTask = uploads.tasks.shadowMaterialTyped;
+    this.m_sceneBvhNodesUploadTask = uploads.tasks.sceneBvhNodes;
+    this.m_sceneBvhInstancesUploadTask = uploads.tasks.sceneBvhInstances;
     if(!uploadsDeclared)
         return false;
-    Core::GpuTaskId shadowPrepareDependency = uploads.completionTask;
+    GpuTaskId shadowPrepareDependency = uploads.completionTask;
 
     // Hardware TLAS builds retain their preflight instance stream; the first Graphics packet owns the native build.
     const b8 sceneTlasBuildGraphOwned = context.rayTracing.preparedSceneTlasBuildReady();
     const b8 meshBlasBuildsGraphOwned = context.rayTracing.preparedMeshBlasBuildsReady();
-    const Span<const PreparedMeshBlasBuild> preparedMeshBlasBuilds = context.rayTracing.preparedMeshBlasBuilds();
+    const Span<PreparedMeshBlasBuild> preparedMeshBlasBuilds = context.rayTracing.preparedMeshBlasBuilds();
     const b8 meshSwBvhBuildsGraphOwned = context.rayTracing.preparedMeshSwBvhBuildsReady();
-    const Span<const PreparedMeshSwBvhBuild> preparedMeshSwBvhBuilds = context.rayTracing.preparedMeshSwBvhBuilds();
+    const Span<PreparedMeshSwBvhBuild> preparedMeshSwBvhBuilds = context.rayTracing.preparedMeshSwBvhBuilds();
     if(!ValidateShadowPreparePlanOwnership(
         sceneTlasBuildGraphOwned,
-        static_cast<b8>(rayTracingShadowResources.sceneTlas),
+        rayTracingShadowResources.sceneTlas.valid(),
         meshBlasBuildsGraphOwned,
         preparedMeshBlasBuilds.size(),
         meshSwBvhBuildsGraphOwned,
@@ -163,208 +300,183 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     // Software preparation uses typed sentinel clears before each mesh build.
     const b8 pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate = meshSwBvhBuildsGraphOwned && !context.rayTracing.shadowVisibilityHardwareSupported();
 
-    PreparedMeshSwBvhGraphResourceVector pureSoftwareMeshSwBvhGraphResources{ scratchArena };
-    ShadowPrepareResourcePlan shadowResourcePlan(scratchArena);
-    const ShadowPrepareResourceInputs shadowResourceInputs{
+    PreparedMeshSwBvhGraphResourceVector pureSoftwareMeshSwBvhGraphResources;
+    ShadowPrepareResourcePlan shadowResourcePlan;
+    const ShadowPrepareResourceInputs shadowResourceInputs(
         rayTracingShadowResources, uploads, currentBindlessSlots, materialContextSlots,
         shadowTraceGeometryResources, softwareBvhBuildStateResources, preparedMeshBlasBuilds,
         sceneTlasBuildGraphOwned, meshBlasBuildsGraphOwned, meshBlasGeometryBuildInputStatesGraphOwned
-    };
+    );
     ShadowPrepareResourcePlanner shadowResourcePlanner(context.graph, context.rayTracing, context.mesh);
-    if(!shadowResourcePlanner.prepare(shadowResourceInputs, scratchArena, shadowResourcePlan))
+    if(!shadowResourcePlanner.prepare(shadowResourceInputs, shadowResourcePlan))
         return false;
-    const auto& resourceUses = shadowResourcePlan.resourceUses;
-    const auto& resourceSetUses = shadowResourcePlan.resourceSetUses;
-    const auto& resourceSetUseCount = shadowResourcePlan.resourceSetUseCount;
-    const auto& accelStructFinalizeResourceUses = shadowResourcePlan.accelStructFinalizeResourceUses;
-    const auto& sceneTlas = shadowResourcePlan.sceneTlas;
-
     const b8 pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
-        auto resources = ResolvePreparedSoftwareBvhGraphResources(scratchArena, context.graph, preparedMeshSwBvhBuilds);
-        if(!resources){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
+        auto resources = ResolvePreparedSoftwareBvhGraphResources(context.graph, preparedMeshSwBvhBuilds);
+        if(!resources.has_value()){
+            warning("RendererSystem: frozen software BVH build is missing graph resources");
             return false;
         }
-        pureSoftwareMeshSwBvhGraphResources = Move(*resources);
+        pureSoftwareMeshSwBvhGraphResources = resources.value();
     }
 
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
         ShadowSoftwareBvhBuildChain buildChain(context.graph, context.rayTracing);
-        if(!buildChain.declare(pureSoftwareMeshSwBvhGraphResources, timingTicket, shadowPrepareDependency, m_deferredShadowPrepareSoftwareBvhBuildFirstTask, m_deferredShadowPrepareSoftwareBvhBuildLastTask))
+        if(!buildChain.declare(pureSoftwareMeshSwBvhGraphResources, timingTicket, shadowPrepareDependency, this.m_deferredShadowPrepareSoftwareBvhBuildFirstTask, this.m_deferredShadowPrepareSoftwareBvhBuildLastTask))
             return false;
     }
 
-    if(const auto& sceneRefit = context.rayTracing.preparedSceneSwBvhRefit(); sceneRefit){
+    if(context.rayTracing.preparedSceneSwBvhRefit().valid()){
         // A scene refit requires every frozen mesh build to be declared before it.
         if(!CanDeclareShadowPrepareSceneSwBvhRefit(context.rayTracing.preparedMeshSwBvhBuildPlanFrozen(), preparedMeshSwBvhBuilds.size(), pureSoftwareMeshSwBvhBuildsGraphOwned))
             return false;
-        const auto refitTasks = DeclareSoftwareSceneRefit(sceneRefit, uploads.sceneBvhNodes, shadowPrepareDependency, context.graph, scratchArena);
-        if(!refitTasks){
-            m_deferredShadowPrepareSceneRefitTask = {};
-            m_sceneBvhRefitInputsUploadTask = {};
+        const auto refitTasks = DeclareSoftwareSceneRefit(context.rayTracing.preparedSceneSwBvhRefit(), uploads.sceneBvhNodes, shadowPrepareDependency, context.graph);
+        if(!refitTasks.has_value()){
+            this.m_deferredShadowPrepareSceneRefitTask = GpuTaskId();
+            this.m_sceneBvhRefitInputsUploadTask = GpuTaskId();
             return false;
         }
-        m_deferredShadowPrepareSceneRefitTask = refitTasks->refit;
-        m_sceneBvhRefitInputsUploadTask = refitTasks->inputUpload;
-        if(!m_deferredShadowPrepareSceneRefitTask.valid() || !m_sceneBvhRefitInputsUploadTask.valid())
+        this.m_deferredShadowPrepareSceneRefitTask = refitTasks.value().refit;
+        this.m_sceneBvhRefitInputsUploadTask = refitTasks.value().inputUpload;
+        if(!this.m_deferredShadowPrepareSceneRefitTask.valid() || !this.m_sceneBvhRefitInputsUploadTask.valid())
             return false;
-        shadowPrepareDependency = m_deferredShadowPrepareSceneRefitTask;
+        shadowPrepareDependency = this.m_deferredShadowPrepareSceneRefitTask;
     }
 
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Large;
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
     // Software per-mesh chains precede this endpoint. Keep the whole packet even when later consumers form a frontier.
-    scheduling.allowMergeAcrossConsumerFrontier = ShouldMergeShadowPrepareAcrossConsumerFrontier(pureSoftwareMeshSwBvhBuildsGraphOwned, m_deferredShadowPrepareSceneRefitTask.valid());
-    const Core::GpuTaskExternalStateSource shadowPrepareStateSource{ .states = context.persistentState.source() };
-    Core::GpuTaskDesc desc;
+    scheduling.allowMergeAcrossConsumerFrontier = ShouldMergeShadowPrepareAcrossConsumerFrontier(pureSoftwareMeshSwBvhBuildsGraphOwned, this.m_deferredShadowPrepareSceneRefitTask.valid());
+    GpuTaskExternalStateSource shadowPrepareStateSource;
+    const auto persistent = context.persistentState.borrowSource();
+    if(persistent.has_value())
+        shadowPrepareStateSource.setState(persistent.value());
+    const Array<GpuTaskExternalStateSource, 1u> stateSources(shadowPrepareStateSource);
+    GpuTaskDesc desc;
     desc
         .setIdentity(Name(s_ShadowPreparePass))
         .setMarkerLabel("Shadow Preparation")
         .setScheduling(scheduling)
-        .setDependencies({ &shadowPrepareDependency, s_ShadowPrepareSingleDependencyCount })
-        .setExternalStateSources({ shadowPrepareStateSource.states ? &shadowPrepareStateSource : nullptr, shadowPrepareStateSource.states ? 1u : 0u })
-        .setResourceUses(resourceUses)
-        .setResourceSetUses({ resourceSetUses.data(), resourceSetUseCount })
+        .setDependency(shadowPrepareDependency)
+        .setExternalStateSources(Span<GpuTaskExternalStateSource>(stateSources).first(cast<usize>(shadowPrepareStateSource.hasState())))
+        .setResourceUses(shadowResourcePlan.resourceUses)
+        .setResourceSetUses(Span<GpuTaskResourceSetUse>(shadowResourcePlan.resourceSetUses).first(shadowResourcePlan.resourceSetUseCount))
     ;
-    const auto deferredShadowPrepareTaskResult = context.graph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
-        desc,
-        ECSRenderDetail::ShadowPrepareGraphTask::Payload{
-            .raytracingSystem = context.rayTracing,
-            .outcome = m_shadowPreparationOutcome,
-            .targets = deferredTargets,
-            .timingTicket = timingTicket,
-            .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
-            .currentBindlessSlotsGraphOwned = uploads.currentBindlessSlotsGraphOwned,
-            .shadowMaterialContextBatchGraphOwned = uploads.shadowMaterialContextBatchGraphOwned,
-            .sceneBvhBatchGraphOwned = uploads.sceneBvhBatchGraphOwned,
-            .sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned,
-            .meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned,
-            .meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned,
-            .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
-            .preparedMeshSwBvhBuildsRecordedByGraph = pureSoftwareMeshSwBvhBuildsGraphOwned,
-        });
-    if(!deferredShadowPrepareTaskResult){
-        m_deferredShadowPrepareTask = {};
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
+    const auto deferredShadowPrepareTaskResult = context.graph.addPayloadTask(desc, ShadowPrepareGraphTask(
+        context.rayTracing,
+        this.m_shadowPreparationOutcome,
+        deferredTargets,
+        timingTicket,
+        deferredTargets.bindless.slotsUploaded,
+        uploads.currentBindlessSlotsGraphOwned,
+        uploads.shadowMaterialContextBatchGraphOwned,
+        uploads.sceneBvhBatchGraphOwned,
+        sceneTlasBuildGraphOwned,
+        meshBlasBuildsGraphOwned,
+        meshBlasGeometryBuildInputStatesGraphOwned,
+        meshSwBvhBuildsGraphOwned,
+        pureSoftwareMeshSwBvhBuildsGraphOwned
+    ));
+    if(!deferredShadowPrepareTaskResult.has_value()){
+        this.m_deferredShadowPrepareTask = GpuTaskId();
+        warning("RendererSystem: could not declare shared shadow-preparation task");
         return false;
     }
-    m_deferredShadowPrepareTask = *deferredShadowPrepareTaskResult;
+    this.m_deferredShadowPrepareTask = deferredShadowPrepareTaskResult.value();
     if(HasAccelStructBuildStatesGraphOwned(sceneTlasBuildGraphOwned, meshBlasBuildsGraphOwned)){
         ShadowAccelerationFinalizeBuilder finalizeBuilder(context.graph);
-        if(!finalizeBuilder.declare(scratchArena, sceneTlasBuildGraphOwned, sceneTlas, preparedMeshBlasBuilds.size(), accelStructFinalizeResourceUses, m_deferredShadowPrepareTask, m_deferredShadowPrepareAccelStructFinalizeTask))
+        if(!finalizeBuilder.declare(sceneTlasBuildGraphOwned, shadowResourcePlan.sceneTlas, preparedMeshBlasBuilds.size(), shadowResourcePlan.accelStructFinalizeResourceUses, this.m_deferredShadowPrepareTask,
+            this.m_deferredShadowPrepareAccelStructFinalizeTask))
             return false;
     }
     return true;
 }
 
-void ShadowPrepareGraphCoordinator::resetShadowPrepareUploadTaskState()noexcept{
-    m_deferredBindlessSlotsUploadTask = {};
-    m_rayTraceMaterialContextSlotsUploadTask = {};
-    m_csgTraceContextUploadTask = {};
-    m_causticEmissionTargetsUploadTask = {};
-    m_surfelFrameConstantsUploadTask = {};
-    m_shadowInstanceMaterialUploadTask = {};
-    m_shadowInstanceUploadTask = {};
-    m_shadowMaterialTypedUploadTask = {};
-    m_sceneBvhNodesUploadTask = {};
-    m_sceneBvhInstancesUploadTask = {};
+void ShadowPrepareGraphCoordinator::resetShadowPrepareUploadTaskState(){
+    this.m_deferredBindlessSlotsUploadTask = GpuTaskId();
+    this.m_rayTraceMaterialContextSlotsUploadTask = GpuTaskId();
+    this.m_csgTraceContextUploadTask = GpuTaskId();
+    this.m_causticEmissionTargetsUploadTask = GpuTaskId();
+    this.m_surfelFrameConstantsUploadTask = GpuTaskId();
+    this.m_shadowInstanceMaterialUploadTask = GpuTaskId();
+    this.m_shadowInstanceUploadTask = GpuTaskId();
+    this.m_shadowMaterialTypedUploadTask = GpuTaskId();
+    this.m_sceneBvhNodesUploadTask = GpuTaskId();
+    this.m_sceneBvhInstancesUploadTask = GpuTaskId();
 }
 
-void ShadowPrepareGraphCoordinator::resetShadowPrepareTaskState()noexcept{
-    m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareAccelStructFinalizeTask = {};
-    resetShadowPrepareUploadTaskState();
+void ShadowPrepareGraphCoordinator::resetShadowPrepareTaskState(){
+    this.m_deferredShadowPrepareTask = GpuTaskId();
+    this.m_deferredShadowPrepareSoftwareBvhBuildFirstTask = GpuTaskId();
+    this.m_deferredShadowPrepareSoftwareBvhBuildLastTask = GpuTaskId();
+    this.m_deferredShadowPrepareAccelStructFinalizeTask = GpuTaskId();
+    this.resetShadowPrepareUploadTaskState();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-struct ShadowPrepareAccelStructFinalizeGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
-
-
-public:
-    struct Payload{};
-
-
-public:
-    [[nodiscard]] static b8 Record([[maybe_unused]] const Payload& payload, [[maybe_unused]] Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context)noexcept{
-        return true;
-    }
-};
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
 b8 ShadowAccelerationFinalizeBuilder::declare(
-    Core::Alloc::ScratchArena& scratchArena,
-    const b8 sceneTlasBuildGraphOwned,
-    const Core::GpuGraphResourceId sceneTlas,
-    const usize preparedMeshBlasBuildCount,
-    const Span<const Core::GpuTaskResourceUse> accelStructFinalizeResourceUses,
-    const Core::GpuTaskId& prepareTask,
-    Core::GpuTaskId& outTask
+    in b8 sceneTlasBuildGraphOwned,
+    in GpuGraphResourceId sceneTlas,
+    in usize preparedMeshBlasBuildCount,
+    in Span<GpuTaskResourceUse> accelStructFinalizeResourceUses,
+    in borrow GpuTaskId prepareTask,
+    mut GpuTaskId outTask
 ){
     if(!ValidateAccelStructFinalizeResourceUses(sceneTlasBuildGraphOwned, sceneTlas.valid(), preparedMeshBlasBuildCount, accelStructFinalizeResourceUses.size()))
         return false;
-    Core::GpuGraphResourceSetId accelStructFinalizeSet;
+    GpuGraphResourceSetId accelStructFinalizeSet;
     if(!accelStructFinalizeResourceUses.empty()){
-        Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> accelStructFinalizeResources{ scratchArena };
+        Vector<GpuGraphResourceId> accelStructFinalizeResources;
         accelStructFinalizeResources.reserve(accelStructFinalizeResourceUses.size());
-        for(const Core::GpuTaskResourceUse& use : accelStructFinalizeResourceUses)
+        for(in GpuTaskResourceUse use : accelStructFinalizeResourceUses)
             accelStructFinalizeResources.push_back(use.resource);
-        const auto accelStructFinalizeSetResult = m_graph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name(s_ShadowPrepareAccelStructFinalizeResources))
+        GpuGraphResourceSetDesc setDesc;
+        setDesc.setIdentity(Name(s_ShadowPrepareAccelStructFinalizeResources))
                 .setMarkerLabel("Shadow Prepare Accel-Struct Finalize Resources")
-                .setMembers(accelStructFinalizeResources)
-        );
-        if(accelStructFinalizeSetResult)
-            accelStructFinalizeSet = *accelStructFinalizeSetResult;
+                .setMembers(accelStructFinalizeResources);
+        const auto accelStructFinalizeSetResult = this.m_graph.importResourceSet(setDesc);
+        if(accelStructFinalizeSetResult.has_value())
+            accelStructFinalizeSet = accelStructFinalizeSetResult.value();
     }
     const b8 accelStructFinalizeSetGraphOwned = accelStructFinalizeSet.valid();
-    const Core::GpuTaskResourceSetUse accelStructFinalizeSetUse{ .resourceSet = accelStructFinalizeSet, .range = {}, .requiredState = Core::ResourceStates::AccelStructRead, .access = Core::GpuTaskResourceAccess::Read };
-    Core::GpuTaskSchedulingHint accelStructFinalizeScheduling;
-    accelStructFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    GpuTaskResourceSetUse accelStructFinalizeSetUse;
+    accelStructFinalizeSetUse.resourceSet = accelStructFinalizeSet;
+    accelStructFinalizeSetUse.requiredState = ResourceStates::AccelStructRead;
+    accelStructFinalizeSetUse.access = GpuTaskResourceAccess::Read;
+    GpuTaskSchedulingHint accelStructFinalizeScheduling;
+    accelStructFinalizeScheduling.cost = GpuTaskCostHint::Tiny;
     accelStructFinalizeScheduling.forceSubmissionBoundary = false;
     accelStructFinalizeScheduling.allowPacketMerge = true;
     accelStructFinalizeScheduling.mergeWithPrevious = true;
     // Compute consumers follow Shadow Preparation. Keep Read finalizers in the same packet so they wait on every build.
     accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
-    Core::GpuTaskDesc accelStructFinalizeDesc;
+    GpuTaskDesc accelStructFinalizeDesc;
     accelStructFinalizeDesc
         .setIdentity(Name(s_ShadowPrepareAccelStructFinalize))
         .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
         .setScheduling(accelStructFinalizeScheduling)
-        .setDependencies({ &prepareTask, 1u })
+        .setDependency(prepareTask)
         // The typed final-state collection expands to the same inputs. Keep individuals when members form no unique set.
-        .setResourceUses({ accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(), accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size() })
-        .setResourceSetUses({ accelStructFinalizeSetGraphOwned ? &accelStructFinalizeSetUse : nullptr, accelStructFinalizeSetGraphOwned ? 1u : 0u })
     ;
-    const auto deferredShadowPrepareAccelStructFinalizeTaskResult = m_graph.addTask<ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask>(
-        accelStructFinalizeDesc,
-        ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{}
-    );
-    if(!deferredShadowPrepareAccelStructFinalizeTaskResult){
-        outTask = {};
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
+    const Array<GpuTaskResourceSetUse, 1u> finalizeSets(accelStructFinalizeSetUse);
+    if(accelStructFinalizeSetGraphOwned)
+        accelStructFinalizeDesc.setResourceSetUses(finalizeSets);
+    else
+        accelStructFinalizeDesc.setResourceUses(accelStructFinalizeResourceUses);
+    const auto deferredShadowPrepareAccelStructFinalizeTaskResult = this.m_graph.addPayloadTask(accelStructFinalizeDesc, BarrierOnlyGraphTask());
+    if(!deferredShadowPrepareAccelStructFinalizeTaskResult.has_value()){
+        outTask = GpuTaskId();
+        warning("RendererSystem: could not declare acceleration-structure final-state task");
         return false;
     }
-    outTask = *deferredShadowPrepareAccelStructFinalizeTaskResult;
+    outTask = deferredShadowPrepareAccelStructFinalizeTaskResult.value();
     return true;
 }
 
@@ -372,18 +484,15 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ShadowPreparePacketValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, ShadowPreparePacketValidationResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = *m_pipeline;
+void ShadowPreparePacketValidator::validate(in GpuCompiledGraphReadView compiledPlan, mut ShadowPreparePacketValidationResult outResult)const{
+    in RendererFramePipeline pipeline = this.m_pipeline;
     // Software clears belong to the Shadow Preparation packet; a split would omit them.
-    outResult.softwareBvhBuildsMerged =
-        !pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()
-            ? !pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
-            : (
-                pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
-                && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask)
-                && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask)
-            )
-    ;
+    if(!pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid())
+        outResult.softwareBvhBuildsMerged = !pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid();
+    else
+        outResult.softwareBvhBuildsMerged = pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
+            && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask)
+            && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask);
     // The endpoint must never accept uploaded scene topology without its current-pose refit.
     outResult.softwareSceneRefitMerged =
         pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask.valid() == pipeline.m_shadowPrepareGraph.m_sceneBvhRefitInputsUploadTask.valid()
@@ -421,174 +530,71 @@ void ShadowPreparePacketValidator::validate(const Core::GpuCompiledGraph::ReadVi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 b8 ShadowSoftwareBvhBuildChain::declare(
-    const Span<const PreparedMeshSwBvhGraphResources> pureSoftwareMeshSwBvhGraphResources,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Core::GpuTaskId& shadowPrepareDependency,
-    Core::GpuTaskId& firstTask,
-    Core::GpuTaskId& lastTask
+    in Span<PreparedMeshSwBvhGraphResources> pureSoftwareMeshSwBvhGraphResources,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut GpuTaskId shadowPrepareDependency,
+    mut GpuTaskId firstTask,
+    mut GpuTaskId lastTask
 ){
-    using namespace RendererTaskGraphDetail;
 
     // Operations share scratch; keep clears adjacent in the accepting packet.
-    Core::GpuTaskSchedulingHint clearScheduling;
-    clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
     clearScheduling.forceSubmissionBoundary = false;
     clearScheduling.allowPacketMerge = true;
     clearScheduling.mergeWithPrevious = true;
     clearScheduling.allowMergeAcrossConsumerFrontier = true;
-    Core::GpuTaskSchedulingHint buildScheduling = clearScheduling;
-    buildScheduling.cost = Core::GpuTaskCostHint::Large;
+    GpuTaskSchedulingHint buildScheduling = clearScheduling;
+    buildScheduling.cost = GpuTaskCostHint::Large;
 
-    Core::GpuTaskId buildDependency = shadowPrepareDependency;
-    const auto addPureSoftwareBvhClear = [&](const Expected<Name>& identity, const AStringView label, const Core::GpuGraphResourceId destination, const u32 clearValue)->Expected<Core::GpuTaskId>{
-        if(!identity)
-            return MakeUnexpected(Failure{});
-        Core::GpuTaskDesc clearDesc;
-        clearDesc.setIdentity(*identity).setMarkerLabel(label).setScheduling(clearScheduling).setDependencies({ &buildDependency, 1u });
-        return m_graph.addClearBufferTask(clearDesc, Core::GpuClearBufferTaskDesc{ .destination = destination, .clearValue = clearValue });
-    };
-    const auto appendPureSoftwareBvhClear = [&](const Expected<Core::GpuTaskId>& clearTaskResult)noexcept{
-        if(!clearTaskResult)
-            return false;
-        const Core::GpuTaskId clearTask = *clearTaskResult;
-        if(!firstTask.valid())
-            firstTask = clearTask;
-        buildDependency = clearTask;
-        return true;
-    };
-
-    for(const PreparedMeshSwBvhGraphResources& resources : pureSoftwareMeshSwBvhGraphResources){
-        const PreparedMeshSwBvhBuild& build = resources.build;
+    GpuTaskId buildDependency = shadowPrepareDependency;
+    for(in PreparedMeshSwBvhGraphResources resources : pureSoftwareMeshSwBvhGraphResources){
+        in PreparedMeshSwBvhBuild build = resources.build;
         if(!build.performRefit){
-            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhKeysClearIdentity(build.meshName), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid))
-                || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhParentClearIdentity(build.meshName), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid))
+            if(!AppendShadowSoftwareBvhClear(this.m_graph, clearScheduling, firstTask, buildDependency, DeriveShadowPrepareSwBvhKeysClearIdentity(build.meshName), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid)
+                || !AppendShadowSoftwareBvhClear(this.m_graph, clearScheduling, firstTask, buildDependency, DeriveShadowPrepareSwBvhParentClearIdentity(build.meshName), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid)
             ){
-                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
+                warning("RendererSystem: could not declare pure software BVH sentinel clears");
                 return false;
             }
         }
-        if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhCounterClearIdentity(build.meshName), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u))){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
+        if(!AppendShadowSoftwareBvhClear(this.m_graph, clearScheduling, firstTask, buildDependency, DeriveShadowPrepareSwBvhCounterClearIdentity(build.meshName), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u)){
+            warning("RendererSystem: could not declare pure software BVH counter clear");
             return false;
         }
 
-        const Array<Core::GpuTaskResourceUse, s_ShadowPrepareSwBvhBuildResourceUseCount> buildResourceUses{
-            ReadUse(resources.position, Core::ResourceStates::ShaderResource),
-            ReadUse(resources.triangleIndex, Core::ResourceStates::ShaderResource),
-            ReadWriteUse(resources.node, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(resources.parent, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(resources.sortKeys, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(resources.sortPayload, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(resources.visitCounter, Core::ResourceStates::UnorderedAccess),
-        };
+        const Array<GpuTaskResourceUse, s_ShadowPrepareSwBvhBuildResourceUseCount> buildResourceUses(ReadUse(resources.position, ResourceStates::ShaderResource),
+            ReadUse(resources.triangleIndex, ResourceStates::ShaderResource),
+            ReadWriteUse(resources.node, ResourceStates::UnorderedAccess),
+            ReadWriteUse(resources.parent, ResourceStates::UnorderedAccess),
+            ReadWriteUse(resources.sortKeys, ResourceStates::UnorderedAccess),
+            ReadWriteUse(resources.sortPayload, ResourceStates::UnorderedAccess),
+            ReadWriteUse(resources.visitCounter, ResourceStates::UnorderedAccess));
         const auto buildIdentity = DeriveShadowPrepareSwBvhBuildIdentity(build.meshName);
-        if(!buildIdentity){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH build callback"));
+        if(!buildIdentity.has_value()){
+            warning("RendererSystem: could not declare pure software BVH build callback");
             return false;
         }
-        Core::GpuTaskDesc buildDesc;
-        buildDesc.setIdentity(*buildIdentity).setMarkerLabel("Shadow Prepare SW-BVH Build").setScheduling(buildScheduling).setDependencies({ &buildDependency, 1u }).setResourceUses(buildResourceUses);
-        const auto buildTaskResult = m_graph.addTask<ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask>(
-            buildDesc,
-            ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{ .raytracingSystem = m_raytracingSystem, .timingTicket = timingTicket, .build = build }
-        );
-        if(!buildTaskResult){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH build callback"));
+        GpuTaskDesc buildDesc;
+        buildDesc.setIdentity(buildIdentity.value()).setMarkerLabel("Shadow Prepare SW-BVH Build").setScheduling(buildScheduling).setDependency(buildDependency).setResourceUses(buildResourceUses);
+        const auto buildTaskResult = this.m_graph.addPayloadTask(buildDesc, ShadowPrepareSoftwareBvhBuildGraphTask(this.m_raytracingSystem, timingTicket, build));
+        if(!buildTaskResult.has_value()){
+            warning("RendererSystem: could not declare pure software BVH build callback");
             return false;
         }
-        const Core::GpuTaskId buildTask = *buildTaskResult;
+        const GpuTaskId buildTask = buildTaskResult.value();
         buildDependency = buildTask;
         lastTask = buildTask;
     }
     if(!firstTask.valid() || !lastTask.valid()){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: pure software BVH graph chain has no task bounds"));
+        warning("RendererSystem: pure software BVH graph chain has no task bounds");
         return false;
     }
     shadowPrepareDependency = buildDependency;
 
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ShadowPrepareGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    payload.outcome.ready = false;
-    // The graph establishes the selector ConstantBuffer state before recording.
-    if(!payload.targets.bindless.valid())
-        return false;
-    const auto shadowResourcesPrepared = payload.raytracingSystem.recordPreflightShadowVisibilityResources(
-        commandList,
-        payload.targets,
-        payload.sceneTlasBuildGraphOwned,
-        payload.meshBlasBuildsGraphOwned,
-        payload.meshBlasGeometryBuildInputStatesGraphOwned,
-        payload.meshSwBvhBuildsGraphOwned,
-        payload.preparedMeshSwBvhBuildsRecordedByGraph
-    );
-
-    // Selector upload precedes this task; compiler establishes ConstantBuffer state first.
-    if(!shadowResourcesPrepared)
-        return false;
-    payload.outcome.ready = *shadowResourcesPrepared;
-
-    // These declarations export BLAS/SW-BVH boundary states before the Prefix packet seeds.
-    return true;
-}
-
-
-void ShadowPrepareGraphTask::Accepted(Payload& payload, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-    if(payload.currentBindlessSlotsGraphOwned)
-        payload.targets.bindless.slotsUploaded = true;
-    payload.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
-    if(payload.shadowMaterialContextBatchGraphOwned)
-        payload.raytracingSystem.confirmPreparedShadowMaterialContextUploads();
-    if(payload.sceneBvhBatchGraphOwned)
-        payload.raytracingSystem.confirmPreparedSceneBvhUploads();
-}
-
-
-void ShadowPrepareGraphTask::Discarded(Payload& payload)noexcept{
-    payload.timingTicket.discard();
-
-    // Failed preparation keeps storage but invalidates the frame plan and caches.
-    payload.outcome.ready = false;
-    payload.outcome.resourcesValid = false;
-    payload.targets.bindless.slotsUploaded = payload.deferredBindlessSlotsWereUploaded;
-    payload.raytracingSystem.discardPreflightShadowVisibilityResources();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ShadowPrepareSoftwareBvhBuildGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    return payload.raytracingSystem.recordPreparedMeshSwBvhBuildAfterGraphClears(commandList, payload.build);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

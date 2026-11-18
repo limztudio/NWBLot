@@ -17,6 +17,8 @@ extern enum GpuTaskQueueAssignmentAcceptance : u8{
 
 [cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentTelemetryTracker"), cpp_flags(no_copy, no_assign)]
 extern class GpuTaskGraphQueueAssignmentTelemetryTracker{
+    b8 update(in GpuTaskGraphDeclarationReadView declarations, in GpuTaskGraphQueueAssignments assignments, in GpuCompiledGraphReadView compiledPlan, in GpuGraphSubmissionTransaction transaction, in Name allocationLog);
+    b8 updateForFrameGraph(in GpuTaskGraphDeclarationReadView declarations, in GpuTaskGraphQueueAssignments assignments, in GpuCompiledGraphReadView compiledPlan, in GpuGraphSubmissionTransaction transaction, mut FrameGraphBuilder builder);
     void reset(...);
 };
 

@@ -2,90 +2,395 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/text/baked_atlas.adhd>
+#include <impl/ecs_ui/toolkit/text/shaper_types.adhd>
 #include <impl/ecs_ui/toolkit/text/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class FontSource{
+    public AssetRef<Font> identity;
+    public in Font font;
+    public u64 generation;
+    public Optional<in FontAtlas> atlas;
+
+    public FontSource(in AssetRef<Font> identity, in Font font, in u64 generation){
+        this.identity = identity;
+        this.font = font;
+        this.generation = generation;
+    }
+    public FontSource(in AssetRef<Font> identity, in Font font, in u64 generation, in borrow FontAtlas atlas){
+        this.identity = identity;
+        this.font = font;
+        this.generation = generation;
+        this.atlas = Optional<in FontAtlas>(atlas);
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/text/baked_atlas.adhd.h>
+b8 IsValidTextRasterPixelSize(in u32 pixelSize){
+    return pixelSize != 0u && pixelSize <= s_TextMaxRasterPpem;
+}
 
-#include <impl/ecs_ui/toolkit/global.adhd.h>
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <impl/assets_font/asset.adhd.h>
+b8 FitsCoverageAtlasGlyphBitmap(in u32 width, in u32 height){
+    const u32 maxExtent = s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter;
+    return width <= maxExtent && height <= maxExtent;
+}
 
-#include <core/alloc/scratch.h>
+u32 ResolveRasterBitmapSourceRow(in i32 pitch, in u32 rows, in u32 row){
+    if(pitch >= 0)
+        return row;
+    return rows - row - 1u;
+}
+
+b8 MatchesBakedAtlasShapingMetrics(
+    in u32 payloadFaceIndex,
+    in u32 fontFaceIndex,
+    in u32 payloadUnitsPerEm,
+    in u32 hbUnitsPerEm,
+    in u32 payloadSourceGlyphCount,
+    in u32 hbGlyphCount
+){
+    return payloadFaceIndex == fontFaceIndex && payloadUnitsPerEm == hbUnitsPerEm && payloadSourceGlyphCount == hbGlyphCount;
+}
+
+b8 IsValidFontFaceShapeByteRange(in u32 byteBegin, in u32 byteEnd, in usize textSize, in f32 fontSize){
+    return byteBegin <= byteEnd && cast<usize>(byteEnd) <= textSize && textSize <= s_TextMaxBytes && IsValidTextFontSize(fontSize);
+}
+
+u32 ResolveShapedClusterByteEnd(
+    in TextDirection direction,
+    in u32 endIndex,
+    in u32 glyphCount,
+    in u32 nextClusterByteBegin,
+    in u32 byteEnd,
+    in u32 previousBegin
+){
+    if(direction == TextDirection::LeftToRight){
+        if(endIndex < glyphCount)
+            return nextClusterByteBegin;
+        return byteEnd;
+    }
+    return previousBegin;
+}
+
+[cpp_unwind]
+GlyphCoverageBounds MeasureFontOutlineCoverage(mut FreeTypeFaceView face, in b8 allowOutlineBounds, in b8 coverageInkReliable, in u32 glyph, in f32 fontSize){
+    if(!allowOutlineBounds || coverageInkReliable)
+        return GlyphCoverageBounds();
+    if(face.loadGlyph(glyph, s_FreeTypeLoadNoScale | s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap | s_FreeTypeLoadNoAutohint) != 0){
+        warning("UI glyph outline bounds unavailable; retaining conservative coverage candidate");
+        return GlyphCoverageBounds();
+    }
+    if(!face.hasOutline())
+        return GlyphCoverageBounds();
+    if(face.outlinePointCount() == 0)
+        return GlyphCoverageBounds(Rect(), true);
+    const FreeTypeOutlineBox box = face.outlineControlBox();
+    return ComputeOutlineCoverageBounds(box.xMin, box.yMin, box.xMax, box.yMax, fontSize, face.unitsPerEm());
+}
+
+b8 LoadRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize){
+    return face.setPixelSizes(0u, pixelSize) == 0 && face.loadGlyph(glyph, s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap) == 0;
+}
+
+[cpp_unwind]
+Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize){
+    if(!IsValidTextRasterPixelSize(pixelSize))
+        return MakeUnexpected(Failure());
+    if(!LoadRasterFontGlyph(face, glyph, pixelSize)){
+        error("UI glyph raster measurement failed");
+        return MakeUnexpected(Failure());
+    }
+    const FreeTypeBitmapView bitmap = face.bitmap();
+    if(!face.hasOutline() || (!bitmap.grayscale && bitmap.width != 0u && bitmap.rows != 0u)){
+        error("UI glyph measurement requires a grayscale outline");
+        return MakeUnexpected(Failure());
+    }
+    return MakeRasterGlyphBoundsRect(bitmap.left, bitmap.top, bitmap.width, bitmap.rows);
+}
+
+[cpp_unwind]
+b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut GlyphBitmap output){
+    if(!IsValidTextRasterPixelSize(pixelSize))
+        return false;
+    if(!LoadRasterFontGlyph(face, glyph, pixelSize) || face.renderNormal() != 0){
+        error("UI glyph rasterization failed");
+        return false;
+    }
+    const FreeTypeBitmapView bitmap = face.bitmap();
+    if(!bitmap.grayscale && bitmap.width != 0u && bitmap.rows != 0u){
+        error("UI glyph rasterizer requires grayscale coverage");
+        return false;
+    }
+    output.width = bitmap.width;
+    output.height = bitmap.rows;
+    output.bearingX = bitmap.left;
+    output.bearingY = bitmap.top;
+    if(!FitsCoverageAtlasGlyphBitmap(bitmap.width, bitmap.rows))
+        return false;
+    const usize pitch = cast<usize>(Abs(cast<i64>(bitmap.pitch)));
+    if(bitmap.width != 0u && bitmap.rows != 0u && (pitch < bitmap.width || pitch > bitmap.pixels.size() / bitmap.rows))
+        return false;
+    output.pixels.clear();
+    output.pixels.reserve(cast<usize>(bitmap.width) * bitmap.rows);
+    if(bitmap.width != 0u){
+        for(u32 row = 0u; row < bitmap.rows; ++row){
+            const usize sourceRow = ResolveRasterBitmapSourceRow(bitmap.pitch, bitmap.rows, row);
+            AppendTriviallyCopyableVector(output.pixels, bitmap.pixels.subspan(sourceRow * pitch, bitmap.width));
+        }
+    }
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_UI_BEGIN
+[cpp_unwind]
+b8 OpenUiFontFace(mut FreeTypeFace face, in FontFileBytes bytes, in u32 index){
+    if(face.createLibrary() != 0){
+        error("UI FreeType initialization failed");
+        return false;
+    }
+    face.addDefaultModules();
+    if(face.open(bytes, cast<i64>(index)) != 0){
+        error("UI font face initialization failed");
+        return false;
+    }
+    if(!face.view().isScalable() || face.view().unitsPerEm() == 0u){
+        error("UI font must have scalable horizontal metrics");
+        return false;
+    }
+    return true;
+}
+
+b8 HasReliableFontCoverage(in HarfBuzzFont font, in b8 allowOutlineBounds){
+    return allowOutlineBounds
+        && font.tableLength(HarfBuzzTag("glyf")) != 0u
+        && font.tableLength(HarfBuzzTag("CFF ")) == 0u
+        && font.tableLength(HarfBuzzTag("sbix")) == 0u
+        && font.tableLength(HarfBuzzTag("CBDT")) == 0u
+        && font.tableLength(HarfBuzzTag("COLR")) == 0u;
+}
+
+Expected<FontMetrics> MeasureShapingFont(mut HarfBuzzFont font, in f32 fontSize){
+    if(!IsValidTextFontSize(fontSize))
+        return MakeUnexpected(Failure());
+    const i32 scale = ComputeTextFixedPointScale(fontSize);
+    font.setScale(scale, scale);
+    HarfBuzzFontExtents extents;
+    if(!font.horizontalExtents(extents))
+        return MakeUnexpected(Failure());
+    return TryResolveFontExtentsMetrics(extents.ascender, extents.descender, extents.line_gap);
+}
+
+[cpp_unwind]
+b8 ShapeFontGlyphRun(
+    mut HarfBuzzFont font,
+    mut HarfBuzzBuffer buffer,
+    in ShapeRequest request,
+    in u32 byteBegin,
+    in u32 byteEnd,
+    mut FreeTypeFaceView outlineFace,
+    in b8 allowOutlineBounds,
+    in b8 coverageInkReliable,
+    mut Vector<RawShapedGlyph> output
+){
+    if(!IsValidFontFaceShapeByteRange(byteBegin, byteEnd, request.text.size(), request.fontSize))
+        return false;
+    const i32 scale = ComputeTextFixedPointScale(request.fontSize);
+    font.setScale(scale, scale);
+    const HarfBuzzScript script = HarfBuzzScriptFromTag(request.scriptTag);
+    if(script == s_HarfBuzzInvalidScript)
+        return false;
+    if(byteBegin == byteEnd){
+        output.clear();
+        return true;
+    }
+
+    buffer.clear();
+    if(request.direction == TextDirection::LeftToRight)
+        buffer.setDirection(s_HarfBuzzLeftToRight);
+    else
+        buffer.setDirection(s_HarfBuzzRightToLeft);
+    buffer.setScript(script);
+    if(!buffer.setLanguage(request.language))
+        return false;
+    buffer.setClusterLevel(s_HarfBuzzMonotoneGraphemes);
+    if(!buffer.addUtf8(request.text, byteBegin, byteEnd - byteBegin))
+        return false;
+    buffer.shape(font);
+    if(!buffer.valid()){
+        error("UI HarfBuzz run allocation failed");
+        return false;
+    }
+
+    const Span<HarfBuzzGlyphInfo> infos = buffer.glyphInfos();
+    const Span<HarfBuzzGlyphPosition> positions = buffer.glyphPositions();
+    if(infos.size() != positions.size())
+        return false;
+    const u32 count = cast<u32>(infos.size());
+    for(u32 index = 0u; index < count; ++index){
+        u32 previousCluster = 0u;
+        if(index != 0u)
+            previousCluster = infos[index - 1u].cluster;
+        if(!IsValidHbShapedGlyphClusterStep(infos[index].cluster, previousCluster, byteBegin, byteEnd, positions[index].x_advance, index, request.direction))
+            return false;
+    }
+    output.clear();
+    output.reserve(count);
+    u32 first = 0u;
+    u32 previousBegin = byteEnd;
+    while(first < count){
+        u32 end = first + 1u;
+        while(end < count && infos[end].cluster == infos[first].cluster)
+            ++end;
+        const u32 clusterBegin = infos[first].cluster;
+        u32 nextCluster = byteEnd;
+        if(end < count)
+            nextCluster = infos[end].cluster;
+        const u32 clusterEnd = ResolveShapedClusterByteEnd(request.direction, end, count, nextCluster, byteEnd, previousBegin);
+        for(u32 index = first; index < end; ++index){
+            const u32 glyph = infos[index].codepoint;
+            HarfBuzzGlyphExtents extents;
+            Rect ink;
+            if(font.glyphExtents(glyph, extents))
+                ink = ResolveHbGlyphExtentsInk(extents.x_bearing, extents.y_bearing, extents.width, extents.height);
+            Point offset;
+            Point advance;
+            ResolveHbGlyphPlacement(positions[index].x_offset, positions[index].y_offset, positions[index].x_advance, positions[index].y_advance, offset, advance);
+            const GlyphCoverageBounds coverage = MeasureFontOutlineCoverage(outlineFace, allowOutlineBounds, coverageInkReliable, glyph, request.fontSize);
+            output.push_back(RawShapedGlyph(glyph, clusterBegin, clusterEnd, offset, advance, ink, coverage));
+        }
+        previousBegin = clusterBegin;
+        first = end;
+    }
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct FontSource{
-    Core::Assets::AssetRef<Font> identity;
-    const Font& font;
-    u64 generation = 0u;
-    const FontAtlas* atlas = nullptr;
-};
-
-class FontFaceState;
+void ReportUiFontCloseError(in StringView message){
+    DiagnosticEventRecord record;
+    record.event = s_DiagnosticEventError;
+    record.category = s_TextFontLifecycleCategory;
+    record.message = message;
+    CaptureDiagnosticEventAtCallSite(record);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Native faces borrow copied immutable bytes. Native outline/raster calls belong to this version's owning UI thread.
+type SharedFontFace = Shared<FontFace>;
+type PlacedGlyph = PlacedGlyphRecord<SharedFontFace>;
+
+// Shaping and rasterization mutate the native font handles on their owning UI thread.
 class FontFace : NoCopy{
-public:
-    FontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source);
-    ~FontFace()noexcept;
+    private AssetRef<Font> m_identity = AssetRef<Font>();
+    private u64 m_generation = 0u;
+    private FreeTypeFace m_freeType = FreeTypeFace();
+    private HarfBuzzFont m_hbFont = HarfBuzzFont();
+    private HarfBuzzBuffer m_shapeBuffer = HarfBuzzBuffer();
+    private SharedBakedFontAtlas m_bakedAtlas = SharedBakedFontAtlas();
+    private u32 m_unitsPerEm = 0u;
+    private b8 m_started = false;
+    private b8 m_ready = false;
+    private b8 m_allowOutlineBounds = false;
+    private b8 m_coverageInkReliable = false;
 
+    [cpp_unwind]
+    public void initialize(in SharedPool pool, in FontSource source){
+        if(this.m_started)
+            return;
+        this.m_started = true;
+        this.m_identity = source.identity;
+        this.m_generation = source.generation;
+        const FontFileBytes bytes(pool, Span<u8>(source.font.fontBytes()));
+        const u32 index = source.font.faceIndex();
+        if(!OpenUiFontFace(this.m_freeType, bytes, index))
+            return;
+        const b8 hbReady = this.m_hbFont.open(bytes, index);
+        this.m_unitsPerEm = this.m_hbFont.unitsPerEm();
+        this.m_ready = this.m_hbFont.glyphCount() != 0u && this.m_unitsPerEm != 0u && hbReady && this.m_shapeBuffer.valid();
+        if(!this.m_ready){
+            error("UI HarfBuzz font face initialization failed");
+            return;
+        }
+        this.m_hbFont.setOpenTypeFunctions();
+        this.m_allowOutlineBounds = !this.m_freeType.view().isTricky();
+        this.m_coverageInkReliable = HasReliableFontCoverage(this.m_hbFont, this.m_allowOutlineBounds);
+        if(source.atlas.has_value())
+            this.installBakedAtlas(pool, source.font, source.atlas.value());
+    }
 
-public:
-    [[nodiscard]] b8 valid()const noexcept;
-    [[nodiscard]] const Core::Assets::AssetRef<Font>& identity()const noexcept;
-    [[nodiscard]] u64 generation()const noexcept;
-    [[nodiscard]] u32 unitsPerEm()const noexcept;
-    [[nodiscard]] b8 coverageInkReliable()const noexcept;
-    [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const noexcept;
-    [[nodiscard]] Expected<FontMetrics> metrics(f32 fontSize)const;
-    [[nodiscard]] b8 shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const;
-    // The unrendered native slot presets the same pixel rectangle used by grayscale rasterization.
-    [[nodiscard]] Expected<Rect> rasterBounds(u32 glyphId, u32 pixelSize);
-    [[nodiscard]] b8 rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output);
+    [cpp_unwind]
+    private void installBakedAtlas(in SharedPool pool, in Font font, in FontAtlas atlas){
+        in FontAtlasPayload payload = atlas.payload();
+        if(!atlas.validatePayload() || payload.font != this.m_identity || !ValidateFontAtlasSourceMatch(payload, font)
+            || !MatchesBakedAtlasShapingMetrics(payload.faceIndex, font.faceIndex(), payload.unitsPerEm, this.m_unitsPerEm, payload.sourceGlyphCount, this.m_hbFont.glyphCount())){
+            warning("UI baked font atlas does not match the shaping font; using native coverage");
+            return;
+        }
+        Expected<SharedBakedFontAtlas> baked = CreateBakedFontAtlas(pool, atlas, this.m_generation);
+        if(baked.has_value())
+            this.m_bakedAtlas = baked.value();
+        else
+            warning("UI baked font atlas could not be installed; using native coverage");
+    }
 
+    public ~FontFace(){
+        if(this.m_freeType.closeFace() != 0)
+            ReportUiFontCloseError("UI FreeType face destruction failed");
+        if(this.m_freeType.closeLibrary() != 0)
+            ReportUiFontCloseError("UI FreeType library destruction failed");
+    }
 
-private:
-    NotNullUniquePtr<FontFaceState, ArenaDeleter<FontFaceState, Core::Alloc::GlobalArena>> m_state;
-};
+    public b8 valid()const{ return this.m_ready; }
+    public in AssetRef<Font> identity()const{ return this.m_identity; }
+    public u64 generation()const{ return this.m_generation; }
+    public u32 unitsPerEm()const{ return this.m_unitsPerEm; }
+    public b8 coverageInkReliable()const{ return this.m_coverageInkReliable; }
+    public in SharedBakedFontAtlas bakedAtlas()const{ return this.m_bakedAtlas; }
 
-using SharedFontFace = RefCountPtr<RefCounter<FontFace>, ArenaRefDeleter<RefCounter<FontFace>, Core::Alloc::GlobalArena>>;
+    public Expected<FontMetrics> metrics(in f32 fontSize){
+        if(!this.m_ready)
+            return MakeUnexpected(Failure());
+        return MeasureShapingFont(this.m_hbFont, fontSize);
+    }
+    [cpp_unwind]
+    public b8 shape(in ShapeRequest request, in u32 byteBegin, in u32 byteEnd, mut Vector<RawShapedGlyph> output){
+        if(!this.m_ready)
+            return false;
+        return ShapeFontGlyphRun(this.m_hbFont, this.m_shapeBuffer, request, byteBegin, byteEnd, this.m_freeType.view(), this.m_allowOutlineBounds, this.m_coverageInkReliable, output);
+    }
+    [cpp_unwind]
+    public Expected<Rect> rasterBounds(in u32 glyphId, in u32 pixelSize){
+        if(!this.m_ready)
+            return MakeUnexpected(Failure());
+        return MeasureRasterFontGlyph(this.m_freeType.view(), glyphId, pixelSize);
+    }
+    [cpp_unwind]
+    public b8 rasterize(in u32 glyphId, in u32 pixelSize, mut GlyphBitmap output){
+        return this.m_ready && RasterizeFontGlyph(this.m_freeType.view(), glyphId, pixelSize, output);
+    }
+}
 
-// Fails only when the face cannot be allocated. A face whose native setup failed is still returned and is not valid().
-[[nodiscard]] Expected<SharedFontFace> MakeFontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+// Allocation failure is separate from a face rejected by the font SDK.
+[cpp_unwind]
+Expected<SharedFontFace> MakeFontFace(in SharedPool pool, in FontSource source){
+    Expected<SharedFontFace> face = pool.make<FontFace>();
+    if(face.has_value())
+        face.value().deref().initialize(pool, source);
+    return face;
 }
 
 

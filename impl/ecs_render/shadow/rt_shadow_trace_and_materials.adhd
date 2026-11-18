@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/shadow/slot_selection.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/shadow/rt_shadow_visibility_targets_and_recorders.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_state.adhd>
 
 
@@ -111,151 +114,128 @@ void PopulateSwShadowSoftOpaquePush(in u32 width, in u32 height, in u32 frameInd
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(const b8 hardwareShadowSupported)const noexcept{
-    const auto& state = m_rayTracingState;
-    const b8 hardwareTransparentTrace = hardwareShadowSupported && state.m_softTransparentReady && hardwareTransparentShadowReady();
-    const b8 transparentSceneReady = hardwareTransparentTrace ? state.m_tlas && state.m_tlasHeapHandle.valid() : state.m_sceneBvhNodeBuffer && state.m_sceneInstanceBuffer;
+RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(in b8 hardwareShadowSupported)const{
+    in RendererRayTracingState state = this.m_rayTracingState;
+    const b8 hardwareTransparentTrace = hardwareShadowSupported && state.softShadow.m_softTransparentReady && this.hardwareTransparentShadowReady();
+    b8 transparentSceneReady = state.sceneBvh.m_sceneBvhNodeBuffer.valid() && state.sceneBvh.m_sceneInstanceBuffer.valid();
+    if(hardwareTransparentTrace)
+        transparentSceneReady = state.sceneBvh.m_tlas.valid() && state.sceneBvh.m_tlasHeapHandle.valid();
     const b8 softTransparentFoldReady = CanPrepareSoftTransparentShadowFold(
-        state.m_softShadowReady,
-        state.m_softShadowSlotMask,
-        softTransparentShadowReady(),
+        state.softShadow.m_softShadowReady,
+        state.softShadow.m_softShadowSlotMask,
+        this.softTransparentShadowReady(),
         transparentSceneReady,
-        static_cast<b8>(state.m_shadowInstanceMaterialBuffer),
-        static_cast<b8>(state.m_shadowMaterialTypedBuffer),
-        static_cast<b8>(state.m_shadowInstanceBuffer)
+        state.shadow.m_shadowInstanceMaterialBuffer.valid(),
+        state.shadow.m_shadowMaterialTypedBuffer.valid(),
+        state.shadow.m_shadowInstanceBuffer.valid()
     );
     const GraphOwnedAdaptiveShadowPlan adaptivePlan = ResolveGraphOwnedAdaptiveShadowPlan(
-        softTransparentShadowReady(),
+        this.softTransparentShadowReady(),
         hardwareShadowSupported,
-        shadowVisibilitySoftwareResourcesPreflighted(),
-        static_cast<b8>(state.m_swShadowEdgeCounterBuffer)
+        this.shadowVisibilitySoftwareResourcesPreflighted(),
+        state.shadow.m_swShadowEdgeCounterBuffer.valid()
     );
 
     RayTracingShadowVisibilityGraphPlanSnapshot snapshot;
-    snapshot.lightSpace = lightSpaceShadowSnapshot();
+    snapshot.lightSpace = this.lightSpaceShadowSnapshot();
     snapshot.adaptivePlan = adaptivePlan;
     snapshot.hardwareTransparentTrace = hardwareTransparentTrace;
     snapshot.softTransparentFoldReady = softTransparentFoldReady;
     snapshot.combinedSoftUpsample = CanUseCombinedSoftShadowUpsample(
         softTransparentFoldReady,
-        static_cast<b8>(state.m_softShadowResolve.m_combinedUpsample.m_pipeline),
-        NWB_SHADOW_RESOLVE_PASS_COUNT,
-        NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
+        state.shadow.m_softShadowResolve.m_combinedUpsample.m_pipeline.valid(),
+        s_ShadowWaveletResolvePassCount,
+        s_ShadowWaveletTransparentResolvePassCount
     );
-    snapshot.combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline
-        && state.m_softShadowTemporalReady && state.m_softTransparentTemporalReady;
-    snapshot.combinedSoftTemporalReady = static_cast<b8>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline);
+    snapshot.combinedSoftWaveletReady = state.shadow.m_softShadowResolve.m_combinedWavelet.m_pipeline.valid()
+        && state.softShadow.m_softShadowTemporalReady && state.softShadow.m_softTransparentTemporalReady;
+    snapshot.combinedSoftTemporalReady = state.shadow.m_softShadowResolve.m_combinedTemporal.m_pipeline.valid();
     snapshot.softShadowHistoryReadable = SoftShadowTemporalHistoryUsable(
-        state.m_softShadowTemporalReady,
-        state.m_prevWorldToClipValid,
-        state.m_softShadowTemporalSeeded
+        state.softShadow.m_softShadowTemporalReady,
+        state.softShadow.m_prevWorldToClipValid,
+        state.softShadow.m_softShadowTemporalSeeded
     );
-    snapshot.opaqueTemporalMergeReady = state.m_softShadowTemporalReady;
-    snapshot.transparentTemporalMergeReady = state.m_softTransparentTemporalReady;
-    snapshot.historyFrontIsA = state.m_softShadowHistoryFrontIsA != 0u;
+    snapshot.opaqueTemporalMergeReady = state.softShadow.m_softShadowTemporalReady;
+    snapshot.transparentTemporalMergeReady = state.softShadow.m_softTransparentTemporalReady;
+    snapshot.historyFrontIsA = state.softShadow.m_softShadowHistoryFrontIsA != 0u;
     return snapshot;
 }
 
-b8 RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
+b8 RendererRayTracingSystem::setShadowQualitySettings(in ShadowQualitySettings settings){
     if(!ValidateShadowQualitySettings(settings))
         return false;
-    if(SameShadowQualitySettings(m_shadowQualitySettings, settings))
+    if(SameShadowQualitySettings(this.m_shadowQualitySettings, settings))
         return true;
     ApplyShadowQualitySettingsChange(
         settings,
-        m_shadowQualitySettings,
-        m_temporalOneShadowSamplingLogged,
-        m_rayTracingState.m_transparentShadowSamplingHistory,
-        m_rayTracingState.m_softShadowTemporalSeeded,
-        m_rayTracingState.m_softShadowTemporalHistoryAdvancePending
+        this.m_shadowQualitySettings,
+        this.m_temporalOneShadowSamplingLogged,
+        this.m_rayTracingState.softShadow.m_transparentShadowSamplingHistory,
+        this.m_rayTracingState.softShadow.m_softShadowTemporalSeeded,
+        this.m_rayTracingState.softShadow.m_softShadowTemporalHistoryAdvancePending
     );
-    m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
+    this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.discard();
     return true;
 }
 
-void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    if(!targets.shadowVisibility)
+void RendererRayTracingSystem::clearShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets){
+    if(!targets.shadowVisibility.valid())
         return;
 
     // White transmittance is the all-lit fallback.
-    commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.clearTextureFloat(*targets.shadowVisibility, s_ShadowVisibilitySubresources, Core::Color(s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel));
+    commandList.clearTextureFloat(targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, Color(s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel));
 }
 
 Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const b8 splitSoftTransparentFold,
-    const b8 graphOwnsOpaqueTemporalMergeEntryStates,
-    const b8 splitOpaqueSoftResolve,
-    const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan,
-    const LightSpaceShadowSnapshot* const lightSpace
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in b8 splitSoftTransparentFold,
+    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    in b8 splitOpaqueSoftResolve,
+    in Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan,
+    in Optional<in LightSpaceShadowSnapshot> lightSpace
 ){
     u32 producedFrameIndex = 0u;
-    FOUNDATION_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
-    if(!targets.shadowVisibility)
-        return MakeUnexpected(Failure{});
-    FOUNDATION_ASSERT(targets.bindless.valid());
-    FOUNDATION_ASSERT(deferredLightingResources.valid());
-    if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhInstanceCount == 0u)
-        return MakeUnexpected(Failure{});
-    if(!m_rayTracingState.m_swShadowOpaquePrepassPipeline || m_rayTracingState.m_swShadowMeshCount == 0u)
-        return MakeUnexpected(Failure{});
+    assert(!splitOpaqueSoftResolve || splitSoftTransparentFold);
+    if(!targets.shadowVisibility.valid())
+        return MakeUnexpected(Failure());
+    assert(targets.bindless.valid());
+    assert(deferredLightingResources.valid());
+    if(!this.m_rayTracingState.sceneBvh.m_sceneBvhNodeBuffer.valid() || this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount == 0u)
+        return MakeUnexpected(Failure());
+    if(!this.m_rayTracingState.shadow.m_swShadowOpaquePrepassPipeline.valid() || this.m_rayTracingState.shadow.m_swShadowMeshCount == 0u)
+        return MakeUnexpected(Failure());
 
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(
         !heap.isInitialized()
         || !targets.bindless.valid()
-        || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !IsDescriptorClass(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !IsDescriptorClass(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
-        || !IsDescriptorClass(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
-        || !IsDescriptorClass(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !IsDescriptorClass(m_rayTracingState.m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle, GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(targets.bindless.shadowVisibilityStorage, GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.shadowCoarseTransmittanceStorage, GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.shadowSoftHalfAStorage, GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.transparentSoftHalfStorage, GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(this.m_rayTracingState.shadow.m_swShadowEdgeCounterHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.shadow.m_swShadowEdgeListHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.shadow.m_swShadowIndirectArgsHeapHandle, GpuDescriptorClass::StorageBuffer)
     ){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
-        return MakeUnexpected(Failure{});
+        error("RendererSystem: software-shadow heap resources are incomplete");
+        return MakeUnexpected(Failure());
     }
 
-    Optional<Core::GpuTimingMeasure> timing;
+    Optional<GpuTimingMeasure> timing;
     if(!splitSoftTransparentFold)
-        timing.emplace(m_graphics.gpuTiming(), s_TimingScopeShadowVisibility, m_graphics.getDevice(), commandList);
+        timing.emplace(this.m_graphics.gpuTiming(), s_TimingScopeShadowVisibility, this.m_graphics.getDevice(), commandList);
 
     // Subsequent visibility passes read/write this UAV in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
 
-    const auto makePush = [&]()noexcept{
-        return MakeSwShadowHeapPushConstants(
-            m_rayTracingState.m_sceneBvhInstanceCount,
-            targets.bindless.slotsBufferDescriptor.slot(),
-            m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
-            targets.bindless.shadowVisibilityStorage.slot(),
-            targets.bindless.shadowCoarseTransmittanceStorage.slot(),
-            targets.bindless.shadowSoftHalfAStorage.slot(),
-            targets.bindless.transparentSoftHalfStorage.slot(),
-            m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot(),
-            m_rayTracingState.m_swShadowEdgeListHeapHandle.slot(),
-            m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot(),
-            targets.shadowReceiverFactor
-        );
-    };
 
-    const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
+    const u32 groupSize = cast<u32>(s_ShaderSwShadowGroupSize);
     const ShadowDispatchGrid2D fullGrid = ResolveFullShadowDispatchGrid(targets.width, targets.height, groupSize);
     const u32 fullGroupsX = fullGrid.groupsX;
     const u32 fullGroupsY = fullGrid.groupsY;
@@ -264,21 +244,21 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     b8 softTransparentRan = false;
 
     // Soft upsample overwrites the opaque prepass.
-    const b8 softWillRun = IsSoftShadowActive(m_rayTracingState.m_softShadowReady, m_rayTracingState.m_softShadowSlotMask);
+    const b8 softWillRun = IsSoftShadowActive(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask);
     if(!softWillRun){
-        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
-        SwShadowHeapPushConstants opaquePush = makePush();
+        SwShadowHeapPushConstants opaquePush = MakeSoftwareShadowFramePush(this.m_rayTracingState, targets);
         opaquePush.width = targets.width;
         opaquePush.height = targets.height;
-        commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowOpaquePrepassPipeline));
-        heap.bindCompute(commandList, *m_rayTracingState.m_swShadowOpaquePrepassPipeline.get());
-        commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
+        commandList.setComputeState(MakeComputePassState(this.m_rayTracingState.shadow.m_swShadowOpaquePrepassPipeline));
+        heap.bindCompute(commandList, this.m_rayTracingState.shadow.m_swShadowOpaquePrepassPipeline.deref());
+        commandList.setPushConstants(opaquePush);
         commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
     }
 
     // The transparent pass reads and multiplies the opaque mask in place.
-    commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
     // Soft opaque resolve replaces the full-resolution mask.
@@ -288,89 +268,90 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         const u32 softGroupsY = softGrid.groupsY;
 
         // Advance the primary producer's jitter sequence once.
-        const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
+        const u32 frameIndex = this.m_rayTracingState.softShadow.m_softShadowFrameIndex++;
         producedFrameIndex = frameIndex;
 
         // Resolve reads the soft trace and geometry scratch in place.
-        enableSoftShadowResolveBarriers(commandList, targets);
+        this.enableSoftShadowResolveBarriers(commandList, targets);
 
-        commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         {
-            Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTrace, m_graphics.getDevice(), commandList);
+            GpuTimingMeasure opaqueTraceTiming(this.m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTrace, this.m_graphics.getDevice(), commandList);
 
-            SwShadowHeapPushConstants softTracePush = makePush();
+            SwShadowHeapPushConstants softTracePush = MakeSoftwareShadowFramePush(this.m_rayTracingState, targets);
             PopulateSwShadowSoftOpaquePush(
                 targets.width,
                 targets.height,
                 frameIndex,
-                SelectSoftShadowOpaqueSampleCount(softShadowTemporalHistoryUsable(), NWB_SW_SHADOW_SOFT_TEMPORAL_SPP, NWB_SW_SHADOW_SOFT_SPP),
+                SelectSoftShadowOpaqueSampleCount(this.softShadowTemporalHistoryUsable(), s_ShaderSwShadowSoftTemporalSpp, s_ShaderSwShadowSoftSpp),
                 softTracePush
             );
-            if(lightSpace && lightSpace->ready){
-                FOUNDATION_ASSERT(splitSoftTransparentFold);
-                if(!RecordLightSpaceResolve(*lightSpace, frameIndex, softTracePush.softSampleCount, targets.bindless.shadowSoftHalfAStorage.slot(), false, commandList, heap, m_graphics.gpuTiming(), *targets.shadowSoftHalfA))
-                    return MakeUnexpected(Failure{});
-                LightSpaceShadowLogReporter{}.reportCsgDispatch(
-                    (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u,
+            if(lightSpace.has_value() && lightSpace.value().ready){
+                assert(splitSoftTransparentFold);
+                if(!LightSpaceShadowRecorder().resolve(lightSpace.value(), frameIndex, softTracePush.softSampleCount, targets.bindless.shadowSoftHalfAStorage.slot(), false, commandList, heap, this.m_graphics.gpuTiming(), targets.shadowSoftHalfA.deref()))
+                    return MakeUnexpected(Failure());
+                LightSpaceShadowLogReporter().reportCsgDispatch(
+                    (lightSpace.value().push.csgFlags & s_CsgShadowFlagEnabled) != 0u,
                     false,
-                    lightSpace->push.instanceCount,
-                    m_lightSpaceShadow.m_csgDispatchLogged
+                    lightSpace.value().push.instanceCount,
+                    this.m_lightSpaceShadow.m_csgDispatchLogged
                 );
-                LightSpaceShadowLogReporter{}.reportShadowMapDispatch(m_lightSpaceShadow.m_dispatchLogged);
+                LightSpaceShadowLogReporter().reportShadowMapDispatch(this.m_lightSpaceShadow.m_dispatchLogged);
             }
             else{
-                commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowSoftOpaquePipeline));
-                heap.bindCompute(commandList, *m_rayTracingState.m_swShadowSoftOpaquePipeline.get());
-                commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
+                commandList.setComputeState(MakeComputePassState(this.m_rayTracingState.shadow.m_swShadowSoftOpaquePipeline));
+                heap.bindCompute(commandList, this.m_rayTracingState.shadow.m_swShadowSoftOpaquePipeline.deref());
+                commandList.setPushConstants(softTracePush);
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }
         }
 
         // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
         // Unsplit soft resolve phases retain their internal UAV fence.
-        dispatchPrimarySoftShadowResolve(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, splitOpaqueSoftResolve, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates);
+        this.dispatchPrimarySoftShadowResolve(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, splitOpaqueSoftResolve, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates);
         if(splitSoftTransparentFold){
             // The transparent tail records later, so preserve the normal route's one-shot traversal diagnostic first.
-            reportSoftwareShadowTraversal(targets);
+            this.reportSoftwareShadowTraversal(targets);
             return producedFrameIndex;
         }
-        softTransparentRan = m_rayTracingState.m_softTransparentReady;
+        softTransparentRan = this.m_rayTracingState.softShadow.m_softTransparentReady;
     }
 
     if(!softTransparentRan)
-        SoftwareAdaptiveShadowRecorder::Record(graphOwnedAdaptivePlan, m_rayTracingState, commandList, targets, heap);
+        RecordSoftwareAdaptiveShadow(graphOwnedAdaptivePlan, this.m_rayTracingState, commandList, targets, heap);
 
-    reportSoftwareShadowTraversal(targets);
+    this.reportSoftwareShadowTraversal(targets);
     return producedFrameIndex;
 }
 
 Expected<u32> RendererRayTracingSystem::renderShadowVisibilityOpaque(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const b8 graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    in Optional<in LightSpaceShadowSnapshot> lightSpace
 ){
-    if(!CanRenderSplitSoftOpaqueShadow(m_rayTracingState.m_softShadowReady, m_rayTracingState.m_softTransparentReady, m_rayTracingState.m_softShadowSlotMask))
-        return MakeUnexpected(Failure{});
-    return renderShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, lightSpace);
+    if(!CanRenderSplitSoftOpaqueShadow(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask))
+        return MakeUnexpected(Failure());
+    return this.renderShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, lightSpace);
 }
 
 b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex,
-    const b8 hardwareShadowSupported,
-    const b8 graphOwnsOpaqueTemporalMergeEntryStates,
-    const SoftShadowOpaqueResolvePhase::Enum phase
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in u32 frameIndex,
+    in b8 hardwareShadowSupported,
+    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    in SoftShadowOpaqueResolvePhase phase
 ){
-    if(!CanRenderSoftOpaqueShadowResolvePhase(m_rayTracingState.m_softShadowReady, m_rayTracingState.m_softTransparentReady, m_rayTracingState.m_softShadowSlotMask, m_rayTracingState.m_softShadowTemporalReady, phase))
+    if(!CanRenderSoftOpaqueShadowResolvePhase(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask,
+        this.m_rayTracingState.softShadow.m_softShadowTemporalReady, phase))
         return false;
-    const u32 groupSize = SelectShadowTraceGroupSize(hardwareShadowSupported, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE), static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    const u32 groupSize = SelectShadowTraceGroupSize(hardwareShadowSupported, cast<u32>(s_ShadowRtGroupSize), cast<u32>(s_ShaderSwShadowGroupSize));
     const ShadowDispatchGrid2D softGrid = ResolveSoftShadowDispatchGrid(targets.width, targets.height, targets.shadowReceiverFactor, groupSize);
-    dispatchSoftShadowDenoiseAndTransparentFold(
+    this.dispatchSoftShadowDenoiseAndTransparentFold(
         commandList, targets, deferredLightingResources, frameIndex, softGrid.groupsX, softGrid.groupsY,
         false, true, false, false, true, false, false, graphOwnsOpaqueTemporalMergeEntryStates,
         false, false, true, false, false, false, phase
@@ -378,33 +359,33 @@ b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
     return true;
 }
 
-b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const u32 frameIndex, const b8 hardwareShadowSupported){
-    if(!CanRenderSplitSoftOpaqueShadow(m_rayTracingState.m_softShadowReady, m_rayTracingState.m_softTransparentReady, m_rayTracingState.m_softShadowSlotMask))
+b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 hardwareShadowSupported){
+    if(!CanRenderSplitSoftOpaqueShadow(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask))
         return false;
-    const u32 groupSize = SelectShadowTraceGroupSize(hardwareShadowSupported, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE), static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    const u32 groupSize = SelectShadowTraceGroupSize(hardwareShadowSupported, cast<u32>(s_ShadowRtGroupSize), cast<u32>(s_ShaderSwShadowGroupSize));
     const ShadowDispatchGrid2D softGrid = ResolveSoftShadowDispatchGrid(targets.width, targets.height, targets.shadowReceiverFactor, groupSize);
-    dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGrid.groupsX, softGrid.groupsY, false, false, false, false, true, false, false, false, false, true, false);
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGrid.groupsX, softGrid.groupsY, false, false, false, false, true, false, false, false, false, true, false);
     return true;
 }
 
 Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const b8 graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    in Optional<in LightSpaceShadowSnapshot> lightSpace
 ){
-    if(!CanRenderSplitSoftOpaqueShadow(m_rayTracingState.m_softShadowReady, m_rayTracingState.m_softTransparentReady, m_rayTracingState.m_softShadowSlotMask))
-        return MakeUnexpected(Failure{});
-    return renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, nullptr, lightSpace);
+    if(!CanRenderSplitSoftOpaqueShadow(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask))
+        return MakeUnexpected(Failure());
+    return this.renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, Optional<in GraphOwnedAdaptiveShadowPlan>(), lightSpace);
 }
 
-void RendererRayTracingSystem::enableSoftShadowResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets){
+void RendererRayTracingSystem::enableSoftShadowResolveBarriers(mut CommandList commandList, mut DeferredFrameTargets targets){
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
     // Temporal merge writes history before later reads.
-    if(m_rayTracingState.m_softShadowTemporalReady){
+    if(this.m_rayTracingState.softShadow.m_softShadowTemporalReady){
         commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
@@ -413,44 +394,36 @@ void RendererRayTracingSystem::enableSoftShadowResolveBarriers(Core::CommandList
 }
 
 void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex,
-    const u32 softGroupsX,
-    const u32 softGroupsY,
-    const b8 splitOpaqueSoftResolve,
-    const b8 splitSoftTransparentFold,
-    const b8 graphOwnsOpaqueTemporalMergeEntryStates
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in u32 frameIndex,
+    in u32 softGroupsX,
+    in u32 softGroupsY,
+    in b8 splitOpaqueSoftResolve,
+    in b8 splitSoftTransparentFold,
+    in b8 graphOwnsOpaqueTemporalMergeEntryStates
 ){
     // Split resolve declares the trace fence; the direct route retains its UAV fence.
     if(!splitOpaqueSoftResolve){
-        commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
     }
-    dispatchSoftShadowDenoiseAndTransparentFold(
+    this.dispatchSoftShadowDenoiseAndTransparentFold(
         commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY,
         true, !splitOpaqueSoftResolve, !splitSoftTransparentFold, !splitSoftTransparentFold,
         false, false, false, graphOwnsOpaqueTemporalMergeEntryStates, false, !splitOpaqueSoftResolve, false
     );
 }
 
-u32 RendererRayTracingSystem::transparentShadowSampleCount()const noexcept{
-    const b8 historyUsable = m_rayTracingState.m_softTransparentTemporalReady && softShadowTemporalHistoryUsable() && m_rayTracingState.m_transparentShadowSamplingHistory.covers(m_rayTracingState.m_softShadowSlotMask);
-    return ResolveTransparentShadowSampleCount(m_shadowQualitySettings, historyUsable);
+u32 RendererRayTracingSystem::transparentShadowSampleCount()const{
+    const b8 historyUsable = this.m_rayTracingState.softShadow.m_softTransparentTemporalReady && this.softShadowTemporalHistoryUsable()
+        && this.m_rayTracingState.softShadow.m_transparentShadowSamplingHistory.covers(this.m_rayTracingState.softShadow.m_softShadowSlotMask);
+    return ResolveTransparentShadowSampleCount(this.m_shadowQualitySettings, historyUsable);
 }
 
-void RendererRayTracingSystem::reportTransparentShadowSampling(const u32 sampleCount){
-    LogTransparentShadowSamplingIfNeeded(sampleCount, hardwareTransparentShadowReady(), m_temporalOneShadowSamplingLogged);
-}
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void RendererRayTracingSystem::reportTransparentShadowSampling(in u32 sampleCount){
+    LogTransparentShadowSamplingIfNeeded(sampleCount, this.hardwareTransparentShadowReady(), this.m_temporalOneShadowSamplingLogged);
 }
 
 

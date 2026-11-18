@@ -171,6 +171,10 @@ void InflateSwShadowSceneBounds(mut VectorSingle inOutBoundsMin, mut VectorSingl
     inOutBoundsMax = inOutBoundsMax + paddingVector;
 }
 
+usize ComputeBinaryBvhNodeCount(in usize leafCount){
+    return leafCount * 2u - 1u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

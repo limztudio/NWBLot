@@ -158,7 +158,7 @@ Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> asset
     return MakeUnexpected(Failure{});
 }
 
-Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena){
+Expected<::Path<Alloc::ScratchArena>> FindPairedSourcePath(const ::Path<Alloc::ScratchArena>& nwbFilePath, Alloc::ScratchArena& scratchArena){
     const ::Path<Alloc::ScratchArena> parentDirectory(scratchArena, nwbFilePath.parentPathView());
     if(parentDirectory.empty()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty"), PathToString<tchar>(nwbFilePath));
@@ -208,8 +208,14 @@ Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePat
         return MakeUnexpected(Failure{});
     }
 
-    const ::Path<Alloc::ScratchArena> normalizedSourcePath = MakeNotNull(matchedSourcePath)->lexicallyNormal();
-    return PathToString(arena, normalizedSourcePath);
+    return MakeNotNull(matchedSourcePath)->lexicallyNormal();
+}
+
+Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& file, AssetArena& arena, Alloc::ScratchArena& scratch){
+    const auto source = FindPairedSourcePath(::Path<Alloc::ScratchArena>(scratch, file), scratch);
+    if(!source)
+        return MakeUnexpected(Failure{});
+    return PathToString(arena, *source);
 }
 
 

@@ -1,0 +1,69 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[move_only, friend(CountPublisher)]
+class OwnedCounts{
+    private u32 nextCount(in u32 value)const{ return value + 1u; }
+    public Vector<u32> values;
+    public void replaceWith(mut OwnedCounts source){ MoveInto<OwnedCounts>(this, source); }
+}
+
+interface ICountSnapshotObserver{
+    b8 inspect(in OwnedCounts counts);
+}
+
+class CountPublisher{
+    private in u32 m_value;
+
+    public CountPublisher(in u32 value){
+        this.m_value = value;
+    }
+
+    public void replace(mut OwnedCounts destination)const{
+        OwnedCounts candidate;
+        candidate.values.push_back(this.m_value);
+        for(usize i = 0u; i < candidate.values.size(); ++i){
+            mut u32 item = candidate.values[i];
+            item = candidate.nextCount(item);
+        }
+        destination = candidate;
+    }
+
+    [owner_result]
+    public OwnedCounts snapshot()const{
+        OwnedCounts result;
+        result.values.push_back(this.m_value);
+        return result;
+    }
+
+    public b8 inspectLocal(mut ICountSnapshotObserver observer)const{
+        OwnedCounts result = this.snapshot();
+        return observer.inspect(result);
+    }
+}
+
+
+class CountPublication{
+    private CountPublisher m_publisher;
+    public CountPublication(in borrow u32 value){ this.m_publisher = CountPublisher(value); }
+
+    public b8 inspect(mut ICountSnapshotObserver observer)const{
+        OwnedCounts result = this.m_publisher.snapshot();
+        return observer.inspect(result);
+    }
+}
+
+class CachedCountResult{
+    public Expected<Vector<u32>, u8> counts = MakeUnexpected(cast<u8>(1u));
+    public Expected<u64, Vector<u8>> issue = 0u;
+
+    public void update(in Expected<Vector<u32>, u8> counts, in Expected<u64, Vector<u8>> issue){
+        this.counts = counts;
+        this.issue = issue;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

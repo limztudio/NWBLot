@@ -2,93 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/gpu/types.adhd>
+#include <impl/ecs_ui/toolkit/gpu/renderer_internal.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_ui_skin/types.adhd.h>
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-
-#include <core/assets/manager.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/output_layer_contributor.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuRendererState;
-
-// Main-thread owner. Resource invalidation follows the caller's joined GPU/graph teardown boundary.
-class GpuRenderer final : public Core::IGpuTaskGraphOutputLayerContributor, NoCopy{
-public:
-    using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
-
-
-public:
-    GpuRenderer(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver);
-    virtual ~GpuRenderer()noexcept override;
-
-
-public:
-    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
-    [[nodiscard]] b8 validateResources(u32 width, u32 height);
-    void invalidateResources()noexcept;
-    [[nodiscard]] b8 setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, u64 skinGeneration);
-    // Rejection leaves the caller's snapshot unmoved. One immutable pending generation is admitted at a time.
-    [[nodiscard]] b8 submit(DrawSnapshot&& snapshot)noexcept;
-    void setCommandRecordingMode(GpuCommandRecordingMode::Enum mode)noexcept;
-    [[nodiscard]] b8 hasPendingFrame()const noexcept;
-    [[nodiscard]] u64 lastAcceptedGeneration()const noexcept;
-    [[nodiscard]] Core::PresentationReceiptStatus::Enum lastAcceptedPresentationStatus()const noexcept;
-    [[nodiscard]] b8 renderStandalone(const Core::AcquiredPresentationFrame& frame);
-
-
-public:
-    [[nodiscard]] virtual b8 prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame)override;
-    [[nodiscard]] virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph)override;
-    virtual void acceptTaskGraphOutputLayer(u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken)noexcept override;
-
-
-private:
-    NotNullUniquePtr<GpuRendererState, ArenaDeleter<GpuRendererState, Core::Alloc::GlobalArena>> m_state;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 IsValidGpuSubmissionReadinessToken(in b8 tokenValid, in b8 hasPhysicalQueueIdentity){
-    return tokenValid && hasPhysicalQueueIdentity;
-}
 
 b8 MatchesValidatedGpuRendererExtent(
     in u32 currentWidth,
@@ -121,538 +39,175 @@ b8 ShouldResetStaleRecycledGpuFrame(in b8 alreadyAssignedPending, in u64 frameGe
     return alreadyAssignedPending && frameGeneration != 0u;
 }
 
-b8 MatchesPendingGpuFrameGeneration(in b8 hasPending, in u64 pendingGeneration, in u64 acceptedGeneration){
-    return hasPending && pendingGeneration == acceptedGeneration;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+// The caller joins GPU and graph work before invalidating the renderer.
+[cpp_type_alias(ShaderPathResolveCallback, ShaderArchivePathResolver)]
+class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
+    private ArenaObjectSlot<GpuRendererState> m_state = ArenaObjectSlot<GpuRendererState>();
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/gpu/renderer_internal.adhd.h>
-#include <impl/ecs_ui/toolkit/gpu/image_resources.adhd.h>
-#include <impl/ecs_ui/toolkit/global.adhd.h>
-#include <impl/assets_shader/loader.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/rhi/format.h>
-#include <core/graphics/shader_archive.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/termination.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_gpu_target{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct TargetReadyTask{
-    struct Payload{
-        GpuVersion<GpuTargetVersion> target;
-        Core::GpuGraphResourceId color;
-    };
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Graphics, true };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context)noexcept{
-        return context.declarations.textureForResource(payload.color) == payload.target->m_color.get() && !commands.commandRecordingFailed();
+    [cpp_unwind]
+    public GpuRenderer(mut GraphicsRuntime graphics, mut AssetManager assetManager, in ShaderArchivePathResolver shaderPathResolver){
+        if(!this.m_state.tryEmplace(graphics, assetManager, shaderPathResolver))
+            TerminateInvariant();
     }
-};
+    public ~GpuRenderer(){ this.invalidateResources(); }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> DeclareTargetInitialization(void* const rawTarget, Core::GpuTaskGraph& graph){
-    const auto& target = *MakeNotNull(static_cast<GpuVersion<GpuTargetVersion>*>(rawTarget));
-    const auto colorResult = graph.importTexture(
-        target->m_color,
-        Core::GpuGraphResourceDesc().setIdentity(s_GpuTargetInitTextureName).setMarkerLabel(s_GpuTargetInitMarkerLabel)
-            .setType(Core::GpuGraphResourceType::Texture).setInitialState(Core::ResourceStates::Unknown)
-            .setExternalFinalState(Core::ResourceStates::ShaderResource)
-    );
-    if(!colorResult)
-        return MakeUnexpected(Failure{});
-    const Core::GpuGraphResourceId color = *colorResult;
-    const auto clearResult = graph.addClearTextureTask(
-        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitClearTaskName).setMarkerLabel(s_GpuTargetInitClearMarkerLabel),
-        Core::GpuClearTextureTaskDesc{ .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), });
-    if(!clearResult)
-        return MakeUnexpected(Failure{});
-    const Core::GpuTaskId clear = *clearResult;
-    const Core::GpuTaskResourceUse use{ color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read };
-    const auto readyResult = graph.addTask<TargetReadyTask>(
-        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitReadyTaskName).setMarkerLabel(s_GpuTargetInitReadyMarkerLabel).setDependencies({ &clear, 1u }).setResourceUses({ &use, 1u }),
-        TargetReadyTask::Payload{ target, color });
-    if(!readyResult)
-        return MakeUnexpected(Failure{});
-    const Core::GpuTaskId ready = *readyResult;
-    return ready;
-}
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){ this.m_state.value().m_activeSceneSubsystems = subsystems; }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuTargetFactory final{
-public:
-    [[nodiscard]] Expected<GpuVersion<GpuTargetVersion>> create(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const u32 width, const u32 height)const{
-        auto targetResult = MakeGpuVersion<GpuTargetVersion>(arena, graphics);
-        if(!targetResult)
-            return MakeUnexpected(targetResult.error());
-        GpuVersion<GpuTargetVersion> target = Move(*targetResult);
-        Core::TextureDesc description;
-        description
-            .setName(s_GpuLayerTextureName)
-            .setWidth(width).setHeight(height)
-            .setFormat(Core::Format::RGBA16_FLOAT)
-            .setIsRenderTarget(true)
-            .setInitialState(Core::ResourceStates::ShaderResource)
-            .setKeepInitialState(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        ;
-        Core::Device& device = graphics.getDevice();
-        auto colorResult = device.createTexture(description);
-        if(colorResult)
-            target->m_color = Move(*colorResult);
-        else
-            target->m_color.reset();
-        if(!colorResult)
-            return MakeUnexpected(Failure{});
-        auto framebufferResult = device.createFramebuffer(Core::FramebufferDesc().addColorAttachment(target->m_color.get()));
-        if(framebufferResult)
-            target->m_framebuffer = Move(*framebufferResult);
-        else
-            target->m_framebuffer.reset();
-        if(!framebufferResult)
-            return MakeUnexpected(Failure{});
-        const Core::GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-        // A creation descriptor does not transition a fresh native image. Initialize before publishing its bindless view.
-        if(!queue.valid())
-            return MakeUnexpected(Failure{});
-        const auto submission = graphics.standaloneGraph().submitStandaloneTaskGraph(&target, __hidden_ui_gpu_target::DeclareTargetInitialization, queue);
-        if(!submission)
-            return MakeUnexpected(submission.error());
-        target->m_readinessToken = *submission;
-        if(!IsValidGpuSubmissionReadinessToken(target->m_readinessToken.valid(), target->m_readinessToken.hasPhysicalQueueIdentity()))
-            return MakeUnexpected(Failure{});
-        if(!PrepareGpuSampledTextureDescriptor(graphics, target->m_color, Core::Format::RGBA16_FLOAT, target->m_sampledImage))
-            return MakeUnexpected(Failure{});
-        return Move(target);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_gpu_shared{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Core::GpuTimingScopeDefinition s_FrameTimingScope("render.frame");
-
-[[nodiscard]] FOUNDATION_INLINE Core::RenderState PaintRenderState()noexcept{
-    Core::RenderState state;
-    state.depthStencilState.disableDepthTest().disableDepthWrite();
-    state.rasterState.enableDepthClip().setCullNone();
-    state.blendState.targets[NWB_UI_COLOR_TARGET_LOCATION]
-        .enableBlend()
-        .setSrcBlend(Core::BlendFactor::One)
-        .setDestBlend(Core::BlendFactor::InvSrcAlpha)
-        .setBlendOp(Core::BlendOp::Add)
-        .setSrcBlendAlpha(Core::BlendFactor::One)
-        .setDestBlendAlpha(Core::BlendFactor::InvSrcAlpha)
-        .setBlendOpAlpha(Core::BlendOp::Add)
-    ;
-    return state;
-}
-
-template<typename TShader>
-[[nodiscard]] FOUNDATION_INLINE b8 LoadShader(
-    const Core::Assets::AssetRef<TShader> UiSubsystem::* const member,
-    const Name& identity,
-    GpuRendererState& state,
-    Core::ShaderHandle& outShader
-){
-    if(!state.m_activeSceneSubsystems)
-        return false;
-    const UiSubsystem* const uiSubsystem = state.m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
-    if(!uiSubsystem)
-        return false;
-    const Core::Assets::AssetRef<TShader>& resolved = uiSubsystem->*member;
-    if(!resolved.valid())
-        return false;
-    return ShaderAssetLoader::Load<TShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, identity, s_GpuRendererContext, state.m_graphics, state.m_assets, state.m_resolver, nullptr, outShader);
-}
-
-[[nodiscard]] static Core::GlobalUniquePtr<GpuRendererState> CreateState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver){
-    Core::GlobalUniquePtr<GpuRendererState> state = Core::MakeGlobalUnique<GpuRendererState>(arena, arena, graphics, assets, Move(resolver));
-    if(!state)
-        TerminateInvariant();
-    return state;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuSharedResourcesFactory final{
-public:
-    [[nodiscard]] b8 create(GpuRendererState& state)const{
-        if(state.m_resources)
+    [cpp_unwind]
+    public b8 validateResources(in u32 width, in u32 height){
+        mut GpuRendererState state = this.m_state.value();
+        if(!IsValidGpuRendererExtent(width, height))
+            return false;
+        state.m_frameTimingScopePrepared = state.m_graphics.gpuTiming().prepareScopeQueries(s_UiFrameTimingScope.identity, state.m_graphics.getDevice(), s_GpuFrameTimingQueryCount);
+        if(!state.m_frameTimingScopePrepared)
+            warning("GpuRenderer: could not prepare standalone frame timing scope");
+        if(MatchesValidatedGpuRendererExtent(state.m_width, state.m_height, width, height, state.m_resources.valid()))
             return true;
-        Core::Device& device = state.m_graphics.getDevice();
-        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-        if(!heap.isInitialized())
+        if(state.m_pending.valid())
             return false;
-        auto resourcesResult = MakeGpuVersion<GpuSharedResources>(state.m_arena, state.m_graphics);
-        if(!resourcesResult)
+        if(!state.createResources())
             return false;
-        GpuVersion<GpuSharedResources> resources = Move(*resourcesResult);
-        if(
-            !__hidden_ui_gpu_shared::LoadShader<VertexShader>(&UiSubsystem::vs, s_GpuVertexShaderName, state, resources->m_vertexShader)
-            || !__hidden_ui_gpu_shared::LoadShader<PixelShader>(&UiSubsystem::ps, s_GpuPixelShaderName, state, resources->m_pixelShader)
-            || !__hidden_ui_gpu_shared::LoadShader<VertexShader>(&UiSubsystem::outputVs, s_GpuOutputVertexShaderName, state, resources->m_outputVertexShader)
-            || !__hidden_ui_gpu_shared::LoadShader<PixelShader>(&UiSubsystem::outputPs, s_GpuOutputPixelShaderName, state, resources->m_outputPixelShader)
-        )
+        const FramebufferPtr framebuffer = state.m_graphics.getFramebuffer(0u);
+        if(!IsValidFramebufferPtr(framebuffer) || !state.prepareOutputPipeline(DerefFramebufferPtr(framebuffer).getFramebufferInfo()))
             return false;
-        Array<Core::VertexAttributeDesc, NWB_UI_VERTEX_ATTRIBUTE_COUNT> attributes{};
-        attributes[NWB_UI_VERTEX_POSITION_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_POSITION_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(s_GpuVertexPositionSemantic);
-        attributes[NWB_UI_VERTEX_UV_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_UV_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(s_GpuVertexTexCoordSemantic);
-        attributes[NWB_UI_VERTEX_COLOR_LOCATION].setFormat(Core::Format::RGBA32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_COLOR_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(s_GpuVertexColorSemantic);
-        auto inputLayoutResult = device.createInputLayout(attributes.data(), NWB_UI_VERTEX_ATTRIBUTE_COUNT, resources->m_vertexShader.get());
-        if(inputLayoutResult)
-            resources->m_inputLayout = Move(*inputLayoutResult);
-        else
-            resources->m_inputLayout.reset();
-        if(!inputLayoutResult)
-            return false;
-        Core::BindingLayoutDesc paintLayout(state.m_arena);
-        paintLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(GpuPaintPushConstants)));
-        auto layoutResult = device.createBindingLayout(paintLayout);
-        if(layoutResult)
-            resources->m_layout = Move(*layoutResult);
-        else
-            resources->m_layout.reset();
-        Core::BindingLayoutDesc outputLayout(state.m_arena);
-        outputLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(GpuOutputPushConstants)));
-        auto outputLayoutResult = device.createBindingLayout(outputLayout);
-        if(outputLayoutResult)
-            resources->m_outputLayout = Move(*outputLayoutResult);
-        else
-            resources->m_outputLayout.reset();
-        Core::SamplerDesc sampler;
-        sampler.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
-        auto samplerResult = device.createSampler(sampler);
-        if(samplerResult)
-            resources->m_sampler = Move(*samplerResult);
-        else
-            resources->m_sampler.reset();
-        if(!layoutResult || !outputLayoutResult || !samplerResult)
-            return false;
-        const Expected<Core::GpuDescriptorHandle> samplerDescriptor = heap.allocate(Core::GpuDescriptorClass::Sampler);
-        if(!samplerDescriptor)
-            return false;
-        resources->m_samplerDescriptor = *samplerDescriptor;
-        if(!heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::Sampler(0u, resources->m_sampler.get())))
-            return false;
-        Core::GraphicsPipelineDesc pipeline;
-        pipeline
-            .setInputLayout(resources->m_inputLayout)
-            .setVertexShader(resources->m_vertexShader)
-            .setPixelShader(resources->m_pixelShader)
-            .setRenderState(__hidden_ui_gpu_shared::PaintRenderState())
-            .addBindingLayout(resources->m_layout)
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-        auto pipelineResult = device.createGraphicsPipeline(pipeline, Core::FramebufferInfo().addColorFormat(Core::Format::RGBA16_FLOAT));
-        if(pipelineResult)
-            resources->m_pipeline = Move(*pipelineResult);
-        else
-            resources->m_pipeline.reset();
-        if(!pipelineResult)
-            return false;
-        state.m_resources = Move(resources);
-        return true;
-    }
-
-    [[nodiscard]] b8 prepareOutputPipeline(GpuRendererState& state, const Core::FramebufferInfo& info)const{
-        if(state.m_resources->m_outputPipeline && state.m_resources->m_outputPipeline->getFramebufferInfo() == info)
-            return true;
-        Core::Device& device = state.m_graphics.getDevice();
-        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-        Core::RenderState renderState;
-        renderState.depthStencilState.disableDepthTest().disableDepthWrite();
-        renderState.rasterState.setCullNone();
-        Core::GraphicsPipelineDesc description;
-        description
-            .setVertexShader(state.m_resources->m_outputVertexShader)
-            .setPixelShader(state.m_resources->m_outputPixelShader)
-            .setRenderState(renderState)
-            .addBindingLayout(state.m_resources->m_outputLayout)
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-        auto outputPipelineResult = device.createGraphicsPipeline(description, info);
-        if(outputPipelineResult)
-            state.m_resources->m_outputPipeline = Move(*outputPipelineResult);
-        else
-            state.m_resources->m_outputPipeline.reset();
-        return static_cast<b8>(outputPipelineResult);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuRendererState::GpuRendererState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver)
-    : m_arena(arena)
-    , m_graphics(graphics)
-    , m_assets(assets)
-    , m_resolver(Move(resolver))
-    , m_imageCache(arena)
-{
-    m_imageCache.reserve();
-}
-
-b8 GpuRendererState::createResources(){
-    return GpuSharedResourcesFactory{}.create(*this);
-}
-
-Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 width, const u32 height){
-    return GpuTargetFactory{}.create(m_arena, m_graphics, width, height);
-}
-
-b8 GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){
-    return GpuSharedResourcesFactory{}.prepareOutputPipeline(*this, info);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuRenderer::GpuRenderer(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver)
-    : m_state(MakeNotNullUnique(__hidden_ui_gpu_shared::CreateState(arena, graphics, assetManager, Move(shaderPathResolver))))
-{}
-
-GpuRenderer::~GpuRenderer()noexcept{
-    invalidateResources();
-}
-
-void GpuRenderer::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{
-    m_state->m_activeSceneSubsystems = subsystems;
-}
-
-b8 GpuRenderer::validateResources(const u32 width, const u32 height){
-    if(!IsValidGpuRendererExtent(width, height))
-        return false;
-    m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(__hidden_ui_gpu_shared::s_FrameTimingScope.identity, m_state->m_graphics.getDevice(), s_GpuFrameTimingQueryCount);
-    if(!m_state->m_frameTimingScopePrepared)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
-    if(MatchesValidatedGpuRendererExtent(m_state->m_width, m_state->m_height, width, height, static_cast<b8>(m_state->m_resources)))
-        return true;
-    if(m_state->m_pending)
-        return false;
-    if(!m_state->createResources())
-        return false;
-    Core::Framebuffer* const framebuffer = m_state->m_graphics.getFramebuffer(0u);
-    if(!framebuffer || !m_state->prepareOutputPipeline(framebuffer->getFramebufferInfo()))
-        return false;
-    Array<GpuFrame, s_GpuFrameCount> frames;
-    for(auto& frame : frames){
-        auto created = MakeGpuVersion<GpuFrameData>(m_state->m_arena, m_state->m_arena);
-        if(!created)
-            return false;
-        frame = Move(*created);
-    }
-    Array<GpuVersion<GpuTargetVersion>, s_GpuTargetSlotCount> targets;
-    for(auto& target : targets){
-        auto created = m_state->createTarget(width, height);
-        if(!created)
-            return false;
-        target = Move(*created);
-    }
-    for(usize i = 0u; i < targets.size(); ++i){
-        m_state->m_slots[i] = {};
-        m_state->m_slots[i].target = Move(targets[i]);
-    }
-    m_state->m_frames = Move(frames);
-    m_state->m_width = width;
-    m_state->m_height = height;
-    return true;
-}
-
-void GpuRenderer::invalidateResources()noexcept{
-    m_state->m_pending.reset();
-    for(auto& slot : m_state->m_slots)
-        slot = {};
-    for(auto& frame : m_state->m_frames)
-        frame.reset();
-    m_state->m_skin.reset();
-    m_state->m_imageCache.clear();
-    m_state->m_resources.reset();
-    m_state->m_width = 0u;
-    m_state->m_height = 0u;
-    m_state->m_frameTimingScopePrepared = false;
-    m_state->m_claimed = false;
-    m_state->m_declaredGraph = nullptr;
-    m_state->m_graphGeneration = 0u;
-    m_state->m_declaredLayer = {};
-    m_state->m_readyToDeclare = false;
-    m_state->m_lastAcceptedAcquired = {};
-    m_state->m_lastAcceptedGeneration = 0u;
-    m_state->m_presentationContributor = nullptr;
-}
-
-b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, const u64 skinGeneration){
-    if(!CanAcceptGpuSkinInput(identity.valid(), skinGeneration, static_cast<b8>(m_state->m_resources)) || !skin.validatePayload())
-        return false;
-    const SkinBinding binding{ identity, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
-    if(m_state->m_skin){
-        const SkinBinding& existing = m_state->m_skin->m_binding;
-        if(SameSkinBindingKey(existing, binding))
-            return SameSkinBinding(existing, binding);
-    }
-    auto loadedAsset = m_state->m_assets.loadTypedSync<Texture>(binding.texture.name(), s_GpuRendererContext);
-    const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
-    if(!texture || !skin.validateTexture(*texture))
-        return false;
-    auto versionResult = MakeGpuVersion<GpuSkinVersion>(m_state->m_arena, m_state->m_graphics);
-    if(!versionResult)
-        return false;
-    GpuVersion<GpuSkinVersion> version = Move(*versionResult);
-    version->m_binding = binding;
-    if(!CreateTextureGpuResource(*texture, s_GpuAtlasTextureName, s_GpuRendererContext, m_state->m_graphics, version->m_texture))
-        return false;
-    if(!IsValidGpuSubmissionReadinessToken(version->m_texture.readinessToken.valid(), version->m_texture.readinessToken.hasPhysicalQueueIdentity()))
-        return false;
-    m_state->m_skin = Move(version);
-    return true;
-}
-
-b8 GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
-    if(!CanSubmitGpuSnapshotState(static_cast<b8>(m_state->m_pending), static_cast<b8>(m_state->m_resources), static_cast<b8>(m_state->m_skin), snapshot.generation()))
-        return false;
-    if(!SameSkinBinding(snapshot.skinBinding(), m_state->m_skin->m_binding))
-        return false;
-    if(!IsValidDisplayMetricsForGpuSubmit(snapshot.displayMetrics()))
-        return false;
-    if(!GpuImageResources::ValidateGlyphPages(snapshot) || !GpuImageResources::ValidateSdfPages(snapshot) || !GpuImageResources::ValidateTextureImages(snapshot))
-        return false;
-    Core::Device& device = m_state->m_graphics.getDevice();
-    for(auto& slot : m_state->m_slots){
-        if(slot.inFlight && slot.inFlight->complete(device))
-            slot.inFlight.reset();
-    }
-    for(auto& frame : m_state->m_frames){
-        // Completed GPU work can still have graph payload owners; mutate only an exclusively retained frame.
-        if(!IsExclusivelyRetainedGpuFrame(static_cast<b8>(frame), frame ? frame->getReferenceCount() : 0u))
-            continue;
-        AtomicThreadFence(MemoryOrder::acquire);
-        if(!frame->recyclable(device))
-            continue;
-        if(m_state->m_pending){
-            if(ShouldResetStaleRecycledGpuFrame(true, frame->m_snapshot.generation()))
-                frame->reset(DrawSnapshot(m_state->m_arena), {});
-            continue;
+        Array<GpuFrame, s_GpuFrameCount> frames;
+        for(mut auto frame : frames){
+            auto created = state.makeFrame();
+            if(!created.has_value())
+                return false;
+            frame = created.value();
         }
-        frame->reset(Move(snapshot), m_state->m_skin);
-        m_state->m_pending = frame;
+        Array<GpuVersion<GpuTargetVersion>, s_GpuTargetSlotCount> targets;
+        for(mut auto target : targets){
+            auto created = CreateGpuTarget(state.m_versions, state.m_graphics, width, height);
+            if(!created.has_value())
+                return false;
+            target = created.value();
+        }
+        for(usize i = 0u; i < targets.size(); ++i){
+            state.m_slots[i] = GpuFrameSlot();
+            state.m_slots[i].target = targets[i];
+        }
+        state.m_frames = frames;
+        state.m_width = width;
+        state.m_height = height;
+        return true;
     }
-    if(!m_state->m_pending){
-        m_state->m_claimed = false;
-        return false;
+
+    public void invalidateResources(){
+        mut GpuRendererState state = this.m_state.value();
+        state.m_pending.reset();
+        for(mut auto slot : state.m_slots)
+            slot = GpuFrameSlot();
+        for(mut auto frame : state.m_frames)
+            frame.reset();
+        state.m_skin.reset();
+        state.m_imageCache.clear();
+        state.m_resources.reset();
+        state.m_width = 0u;
+        state.m_height = 0u;
+        state.m_frameTimingScopePrepared = false;
+        state.m_claimed = false;
+        state.m_declaredGraph.reset();
+        state.m_graphGeneration = 0u;
+        state.m_declaredLayer = GpuTaskGraphOutputLayer();
+        state.m_readyToDeclare = false;
+        state.m_lastAcceptedAcquired = AcquiredPresentationFrame();
+        state.m_lastAcceptedGeneration = 0u;
+        state.m_presentationContributor.reset();
     }
-    m_state->m_pending->m_recordingMode = m_state->m_recordingMode;
-    m_state->m_claimed = false;
-    return true;
-}
 
-void GpuRenderer::setCommandRecordingMode(const GpuCommandRecordingMode::Enum mode)noexcept{
-    m_state->m_recordingMode = mode;
-}
+    [cpp_unwind]
+    public b8 setSkin(in AssetRef<UiSkin> identity, in UiSkin skin, in u64 skinGeneration){
+        mut GpuRendererState state = this.m_state.value();
+        if(!CanAcceptGpuSkinInput(identity.valid(), skinGeneration, state.m_resources.valid()) || !skin.validatePayload())
+            return false;
+        const SkinBinding binding = MakePaintSkinBinding<UiSkin, Texture>(identity, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity());
+        if(state.m_skin.valid()){
+            in SkinBinding existing = state.m_skin.deref().m_binding;
+            if(SameSkinBindingKey(existing, binding))
+                return SameSkinBinding(existing, binding);
+        }
+        auto loadedAsset = LoadTypedAssetSync<Texture>(state.m_assets, binding.texture.name(), s_GpuRendererContext);
+        if(!loadedAsset.has_value() || !skin.validateTexture(loadedAsset.value().deref()))
+            return false;
+        auto versionResult = state.m_versions.make<GpuSkinVersion>(state.m_graphics);
+        if(!versionResult.has_value())
+            return false;
+        GpuVersion<GpuSkinVersion> version = versionResult.value();
+        version.deref().m_binding = binding;
+        if(!CreateTextureGpuResource(loadedAsset.value().deref(), s_GpuAtlasTextureName, s_GpuRendererContext, state.m_graphics, version.deref().m_texture))
+            return false;
+        if(!IsValidGpuSubmissionReadinessToken(version.deref().m_texture.readinessToken.valid(), version.deref().m_texture.readinessToken.hasPhysicalQueueIdentity()))
+            return false;
+        state.m_skin = version;
+        return true;
+    }
 
-b8 GpuRenderer::hasPendingFrame()const noexcept{
-    return m_state->m_pending != nullptr;
-}
+    // Rejection leaves the caller's snapshot intact.
+    [cpp_rvalue_overload]
+    public b8 submit(mut DrawSnapshot snapshot){
+        mut GpuRendererState state = this.m_state.value();
+        if(!CanSubmitGpuSnapshotState(state.m_pending.valid(), state.m_resources.valid(), state.m_skin.valid(), snapshot.generation()))
+            return false;
+        if(!SameSkinBinding(snapshot.skinBinding(), state.m_skin.deref().m_binding))
+            return false;
+        if(!IsValidDisplayMetricsForGpuSubmit(snapshot.displayMetrics()))
+            return false;
+        if(!ValidateGpuGlyphPages(snapshot) || !ValidateGpuSdfPages(snapshot) || !ValidateGpuTextureImages(snapshot))
+            return false;
+        mut Device device = state.m_graphics.getDevice();
+        for(mut auto slot : state.m_slots){
+            if(slot.inFlight.valid() && slot.inFlight.deref().complete(device))
+                slot.inFlight.reset();
+        }
+        for(mut auto frame : state.m_frames){
+            // Completed GPU work can still have graph payload owners; mutate only an exclusively retained frame.
+            if(!IsExclusivelyRetainedGpuFrame(frame.valid(), frame.referenceCount()))
+                continue;
+            AtomicThreadFence(MemoryOrder::acquire);
+            if(!frame.deref().recyclable(device))
+                continue;
+            if(state.m_pending.valid()){
+                if(ShouldResetStaleRecycledGpuFrame(true, frame.deref().m_snapshot.generation())){
+                    DrawSnapshot empty;
+                    frame.deref().reset(empty, GpuVersion<GpuSkinVersion>());
+                }
+                continue;
+            }
+            frame.deref().reset(snapshot, state.m_skin);
+            state.m_pending = frame;
+        }
+        if(!state.m_pending.valid()){
+            state.m_claimed = false;
+            return false;
+        }
+        state.m_pending.deref().m_recordingMode = state.m_recordingMode;
+        state.m_claimed = false;
+        return true;
+    }
 
-u64 GpuRenderer::lastAcceptedGeneration()const noexcept{
-    return m_state->m_lastAcceptedGeneration;
-}
+    public void setCommandRecordingMode(in GpuCommandRecordingMode mode){ this.m_state.value().m_recordingMode = mode; }
+    public b8 hasPendingFrame()const{ return this.m_state.read().m_pending.valid(); }
+    public u64 lastAcceptedGeneration()const{ return this.m_state.read().m_lastAcceptedGeneration; }
+    public PresentationReceiptStatus lastAcceptedPresentationStatus()const{
+        in GpuRendererState state = this.m_state.read();
+        return state.m_graphics.lastPresentationReceipt().status(state.m_lastAcceptedAcquired.backBuffer);
+    }
 
-Core::PresentationReceiptStatus::Enum GpuRenderer::lastAcceptedPresentationStatus()const noexcept{
-    return m_state->m_graphics.lastPresentationReceipt().status(m_state->m_lastAcceptedAcquired.backBuffer);
-}
-
-b8 GpuRenderer::prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame){
-    return m_state->prepare(frame);
-}
-
-Expected<Core::GpuTaskGraphOutputLayer> GpuRenderer::declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph){
-    return m_state->declare(graph, true);
-}
-
-void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken)noexcept{
-    if(!MatchesPendingGpuFrameGeneration(static_cast<b8>(m_state->m_pending), m_state->m_pending ? m_state->m_pending->m_snapshot.generation() : 0u, frameGeneration))
-        return;
-    FOUNDATION_FATAL_ASSERT(IsValidGpuSubmissionReadinessToken(submissionToken.valid(), submissionToken.hasPhysicalQueueIdentity()));
-    m_state->m_pending->m_finalConsumer = submissionToken;
-    m_state->m_lastAcceptedAcquired = m_state->m_pending->m_acquired;
-    m_state->m_lastAcceptedGeneration = frameGeneration;
-    m_state->m_pending.reset();
-    m_state->m_claimed = false;
-    m_state->m_declaredGraph = nullptr;
-    m_state->m_graphGeneration = 0u;
-    m_state->m_declaredLayer = {};
-    m_state->m_readyToDeclare = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public b8 renderStandalone(in AcquiredPresentationFrame frame){ return this.m_state.value().renderStandalone(frame); }
+    [cpp_unwind]
+    public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame)override{ return this.m_state.value().prepare(frame); }
+    [cpp_unwind]
+    public Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(mut GpuTaskGraph graph)override{ return this.m_state.value().declare(graph, true); }
+    public void acceptTaskGraphOutputLayer(in u64 frameGeneration, in QueueSubmissionToken submissionToken)override{
+        this.m_state.value().acceptOutputLayer(frameGeneration, submissionToken);
+    }
 }
 
 

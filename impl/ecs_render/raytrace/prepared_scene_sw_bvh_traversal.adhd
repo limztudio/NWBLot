@@ -8,44 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
-extern class RendererRayTracingSystem;
-
-
 [modular]
 class PreparedSceneSwBvhTraversal : NoCopy{
-    private mut RendererRayTracingSystem m_owner;
     private Vector<PreparedSceneSwBvhMesh> m_preparedSceneSwBvhMeshes;
     private u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
     private u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
@@ -53,12 +17,10 @@ class PreparedSceneSwBvhTraversal : NoCopy{
     private u32 m_preparedSceneSwBvhInstanceCount = 0u;
     private b8 m_preparedSceneSwBvhReady = false;
 
-    public PreparedSceneSwBvhTraversal(mut RendererRayTracingSystem owner){
-        this.m_owner = owner;
-    }
-
-    public b8 capture(in Span<PreparedSceneSwBvhMesh> meshes, in u32 instanceCount);
-    public b8 record();
+    public b8 capture(in Span<PreparedSceneSwBvhMesh> meshes, in u32 instanceCount, in b8 storageReady, in World world);
+    public b8 matchesWorld(in World world)const;
+    public Span<PreparedSceneSwBvhMesh> meshes()const{ return Span<PreparedSceneSwBvhMesh>(this.m_preparedSceneSwBvhMeshes); }
+    public u32 instanceCount()const{ return this.m_preparedSceneSwBvhInstanceCount; }
     public void clear(){
         this.m_preparedSceneSwBvhMeshes.clear();
         this.m_preparedSceneSwBvhInstanceCount = 0u;

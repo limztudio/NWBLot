@@ -87,20 +87,20 @@ Expected<NWB::Impl::MaterialBindEntry> MaterialBindFixture::ParseMaterialBindFro
     if(!WriteTextFile(bindPath, bindText))
         return MakeUnexpected(Failure{});
 
-    return NWB::Impl::ParseMaterialBindSource(bindPath, testArena.arena, scratchArena);
+    return NWB::Impl::ParseMaterialBindSource(testArena.arena, bindPath);
 }
 
 Expected<Path> MaterialBindFixture::EmitDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase){
     const Path firstAssetRoot = cookCase.root / "first" / s_AssetsDirectory;
     const Path secondAssetRoot = cookCase.root / "second" / s_AssetsDirectory;
     NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
-    NWB::Impl::MaterialCookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
+    Vector<NWB::Impl::MaterialBindEntry, ::ArenaBase> bindEntries(testArena.arena);
     for(const Path& assetRoot : InitializerList<Path>{ firstAssetRoot, secondAssetRoot }){
         const Path bindPath = assetRoot / s_MaterialInterfacesDirectory / s_SurfaceBindFilename;
         if(!WriteTextFile(bindPath, s_MinimalMaterialBindSource))
             return MakeUnexpected(Failure{});
 
-        auto bindEntry = NWB::Impl::ParseMaterialBindSource(bindPath, testArena.arena, scratchArena);
+        auto bindEntry = NWB::Impl::ParseMaterialBindSource(testArena.arena, bindPath);
         if(!bindEntry)
             return MakeUnexpected(bindEntry.error());
         auto virtualPath = NWB::Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, NWB::Core::Assets::s_ProjectVirtualRoot, bindPath, testArena.arena, scratchArena);
@@ -110,7 +110,10 @@ Expected<Path> MaterialBindFixture::EmitDuplicateGeneratedMaterialBindIncludePat
         bindEntries.push_back(Move(*bindEntry));
     }
 
-    return NWB::Impl::EmitMaterialBindIncludes(cookCase.root / s_CacheDirectory, s_TestsConfiguration, bindEntries, testArena.arena, scratchArena);
+    const auto emitted = NWB::Impl::EmitMaterialBindIncludes(testArena.arena, cookCase.root / s_CacheDirectory, s_TestsConfiguration, bindEntries);
+    if(!emitted)
+        return MakeUnexpected(Failure{});
+    return Path(testArena.arena, *emitted);
 }
 
 b8 MaterialBindFixture::WriteMaterialBindShaderProbeSource(
@@ -122,7 +125,7 @@ b8 MaterialBindFixture::WriteMaterialBindShaderProbeSource(
     const AStringView sourceText
 ){
     const Path engineGraphicsIncludeRoot = AssetsGraphicsTestRepoRoot(testArena) / s_EngineDirectory / s_AssetsDirectory / s_GraphicsDirectory;
-    NWB::Impl::ShaderCook::CookString shaderMeta(testArena.arena);
+    NWB::Core::Assets::CookString shaderMeta(testArena.arena);
     shaderMeta += shaderAssetType;
     shaderMeta += " asset;\n\n" "asset.entry_point = \"main\";\n" "asset.include_roots = [\"";
 #if defined(FOUNDATION_UNICODE)
@@ -226,5 +229,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

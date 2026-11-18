@@ -1240,6 +1240,44 @@ void VerifyAllocatorUsageBoundaries_ZeroSizeReallocationReleasesChargedBytes(){
     EXPECT_EQ(OwnerStats(s_AllocationOwnersObjectAndZero).usedBytes, 0u);
 }
 
+class SharedArenaPayload{
+    public Vector<u32> values;
+}
+
+Expected<Shared<SharedArenaPayload>> MakeEscapingSharedArenaPayload(){
+    SharedPool pool();
+    Expected<Shared<SharedArenaPayload>> result = pool.make<SharedArenaPayload>();
+    if(result.has_value())
+        result.value().deref().values.push_back(s_AllocCaseScratchReuseFirstSentinel);
+    return result;
+}
+
+void VerifySharedPoolPayloadSurvivesScratchAndLastPeer(){
+    Expected<Shared<SharedArenaPayload>> result = MakeEscapingSharedArenaPayload();
+    ASSERT_TRUE(result.has_value());
+    Shared<SharedArenaPayload> peer = result.value();
+    result.value().reset();
+    ASSERT_TRUE(peer.valid());
+    peer.deref().values.push_back(s_AllocCaseScratchReuseSentinelByte);
+    ASSERT_EQ(peer.deref().values.size(), 2u);
+    EXPECT_EQ(peer.deref().values[0u], s_AllocCaseScratchReuseFirstSentinel);
+    EXPECT_EQ(peer.deref().values[1u], s_AllocCaseScratchReuseSentinelByte);
+}
+
+NWB_ADHD_GTEST(SharedPoolTests, PayloadSurvivesScratchAndLastPeer, VerifySharedPoolPayloadSurvivesScratchAndLastPeer)
+
+void VerifySharedPoolKeepsPreparedPayloadStorage(){
+    SharedPool pool();
+    SharedArenaPayload prepared;
+    prepared.values.push_back(s_AllocCaseScratchReuseFirstSentinel);
+    in u32 original = prepared.values[0u];
+    auto shared = pool.makePrepared<SharedArenaPayload>(prepared);
+    ASSERT_TRUE(shared.has_value());
+    ASSERT_EQ(shared.value().deref().values.size(), 1u);
+    EXPECT_TRUE(SameAddress(shared.value().deref().values[0u], original));
+}
+
+NWB_ADHD_GTEST(SharedPoolTests, KeepsPreparedPayloadStorage, VerifySharedPoolKeepsPreparedPayloadStorage)
 NWB_ADHD_GTEST(ArenaAlignedReallocation, GlobalArenaReallocationPreservesAlignment, VerifyArenaAlignedReallocation_GlobalArenaReallocationPreservesAlignment)
 NWB_ADHD_GTEST(ArenaAlignedReallocation, PersistentArenaReallocationPreservesAlignment, VerifyArenaAlignedReallocation_PersistentArenaReallocationPreservesAlignment)
 NWB_ADHD_GTEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting, VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccounting)

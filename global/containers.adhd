@@ -11,3 +11,15 @@ extern void AssignTriviallyCopyableVector(mut auto a0, in auto a1);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_header("<global/containers.h>"), cpp_name("::AllocationIdentity"), cpp_flags(small_value)]
+extern class AllocationIdentity{
+    b8 owns<T>(in Vector<T> storage)const;
+}
+
+[cpp_header("<global/containers.h>"), cpp_name("::AllocationIdentityOf")]
+extern AllocationIdentity AllocationIdentityOf<T>(in Vector<T> storage);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,100 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/reflection/types.adhd>
+#include <impl/ecs_render/reflection/feedback.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/reflection/types.adhd.h>
-#include <impl/ecs_render/reflection/feedback.adhd.h>
+class ReflectionFeedbackSnapshot{
+    public ReflectionFeedbackControlHandle control;
+    public ReflectionFeedbackPlan plan;
+    public ReflectionFeedbackExtent extent;
+    public ReflectionFeedbackBinding current;
+    public ReflectionFeedbackBinding previous;
 
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/rhi/resource.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ReflectionFeedbackSnapshot{
-    ReflectionFeedbackControlHandle control;
-    ReflectionFeedbackPlan plan;
-    ReflectionFeedbackExtent extent;
-    ReflectionFeedbackBinding current;
-    ReflectionFeedbackBinding previous;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return control && (!plan.eligible || (extent.valid() && current.valid() && previous.valid()));
+    public b8 valid()const{
+        return this.control.valid() && (!this.plan.eligible || (this.extent.valid() && this.current.valid() && this.previous.valid()));
     }
-};
+}
 
-// Creation belongs to preflight; frozen snapshots retain buffers.
-class RendererReflectionFeedback final : NoCopy{
-public:
-    RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-    {}
+[modular]
+class RendererReflectionFeedback : NoCopy{
+    private SharedPool m_versions = SharedPool();
+    private mut GraphicsRuntime m_graphics;
+    private ReflectionFeedbackControlHandle m_control;
+    private Array<ReflectionFeedbackBinding, s_ReflectionFeedbackBankCount> m_banks;
+    private ReflectionFeedbackExtent m_extent;
+    private u16 m_deviceGeneration = 0u;
 
-
-public:
-    void invalidateResources();
-    [[nodiscard]] b8 prepareResources(u32 width, u32 height, const ReflectionSettings& settings, b8 enabled);
-    [[nodiscard]] ReflectionFeedbackSnapshot snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, b8 enabled, u64 graphicsFrameIndex)const noexcept;
-
-
-private:
-    void releaseBuffers();
-    [[nodiscard]] Expected<ReflectionFeedbackBinding> prepareBank(u32 byteCount, Name name);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    ReflectionFeedbackControlHandle m_control;
-    Array<ReflectionFeedbackBinding, s_ReflectionFeedbackBankCount> m_banks{};
-    ReflectionFeedbackExtent m_extent;
-    u16 m_deviceGeneration = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public RendererReflectionFeedback(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
+    [cpp_unwind]
+    public void invalidateResources();
+    [cpp_unwind]
+    public b8 prepareResources(in u32 width, in u32 height, in ReflectionSettings settings, in b8 enabled);
+    public ReflectionFeedbackSnapshot snapshot(in ReflectionSceneContentStamp stamp, in ReflectionSettings settings, in b8 enabled, in u64 graphicsFrameIndex)const;
+    [cpp_unwind]
+    private void releaseBuffers();
+    [cpp_unwind]
+    private Expected<ReflectionFeedbackBinding> prepareBank(in u32 byteCount, in Name name);
 }
 
 

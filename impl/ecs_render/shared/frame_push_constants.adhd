@@ -9,6 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT")]
+extern const u32 s_ShaderSceneLightRecordFloatCount;
+
 const u32 s_RtInvalidSlot = 0xffffffffu;
 const usize s_SmallInlineIndexCapacity = 32u;
 const usize s_PromotedInlineIndexCapacity = s_SmallInlineIndexCapacity * 4u;

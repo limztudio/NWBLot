@@ -2,116 +2,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
+
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/mesh/mesh_view_private.adhd.h>
+[modular]
+class MeshViewSetupGraphTask{
+    private mut GraphicsRuntime m_graphics;
+    private mut Optional<GpuTimingMeasure> m_asyncPrefixTiming;
+    private in GraphicsPrefixTimingTicket m_timingTicket;
+    private in b8 m_asyncPrefixTimingSpansOnePacket;
+    private in GpuTaskId m_shadowVisibilityTask;
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+    public MeshViewSetupGraphTask(mut GraphicsRuntime graphics, mut Optional<GpuTimingMeasure> asyncPrefixTiming, in GraphicsPrefixTimingTicket timingTicket, in b8 asyncPrefixTimingSpansOnePacket, in GpuTaskId shadowVisibilityTask){
+        this.m_graphics = graphics;
+        this.m_asyncPrefixTiming = asyncPrefixTiming;
+        this.m_timingTicket = timingTicket;
+        this.m_asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket;
+        this.m_shadowVisibilityTask = shadowVisibilityTask;
+    }
 
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const;
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// The CPU mirror is published on acceptance so a rejected recording still retries.
+class MeshViewUploadCommitGraphTask{
+    private mut RendererMeshSystem m_meshSystem;
+    private MeshViewGpuData m_viewState;
+    private b8 m_uploadRequired;
+    private mut b8 m_ready;
 
+    public MeshViewUploadCommitGraphTask(mut RendererMeshSystem meshSystem, in MeshViewGpuData viewState, in b8 uploadRequired, mut b8 ready){
+        this.m_meshSystem = meshSystem;
+        this.m_viewState = viewState;
+        this.m_uploadRequired = uploadRequired;
+        this.m_ready = ready;
+    }
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMeshSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MeshViewSetupGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
-
-
-public:
-    // All bindings required: mesh-view setup always records the prefix timing for this frame.
-    struct Payload{
-        Core::GraphicsRuntime& graphics;
-        Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
-        Core::GpuTimingSubmissionTicket*& timingTicket;
-        const b8& asyncPrefixTimingSpansOnePacket;
-        const Core::GpuTaskId& shadowVisibilityTask;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-};
-
-
-// Update the CPU mirror after packet accepts so rejected recordings still retry.
-struct MeshViewUploadCommitGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
-
-
-public:
-    // The mesh system and the ready flag are required: the commit always publishes mesh-view readiness for this frame.
-    struct Payload{
-        RendererMeshSystem& meshSystem;
-        MeshViewGpuData viewState;
-        b8 uploadRequired = false;
-        b8& ready;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-    static void Discarded(Payload& payload)noexcept{ payload.ready = false; }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(); }
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        this.m_ready = true;
+        return true;
+    }
+    public void accepted(in QueueSubmissionToken token){
+        if(this.m_uploadRequired)
+            this.m_meshSystem.confirmMeshViewBufferUpload(this.m_viewState);
+    }
+    public void discarded(){ this.m_ready = false; }
 }
 
 

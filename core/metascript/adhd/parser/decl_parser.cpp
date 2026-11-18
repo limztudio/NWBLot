@@ -107,6 +107,93 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
     const b8 isExtern = m_cursor.matchIdentifier(KeywordSemantics::s_Extern);
 
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_RegisterAsset)){
+        if(isExtern || !attributes.empty()){
+            m_cursor.error(span.line, span.column, "register_asset does not accept attributes or extern");
+            return false;
+        }
+        if(!m_cursor.check(TokenType::Identifier)){
+            m_cursor.error("expected a concrete asset type after register_asset");
+            return false;
+        }
+        const MStringView name = m_cursor.current().text;
+        m_cursor.advance();
+        if(!m_cursor.matchIdentifier(KeywordSemantics::s_RegistrationUsing)){
+            m_cursor.error("expected 'using' and a registrar type after the asset type");
+            return false;
+        }
+        TypeRef* registrar = m_typeParser.parseType();
+        if(!registrar)
+            return false;
+        if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after register_asset"))
+            return false;
+        if(!isImported){
+            for(const AssetRegistration& registration : outUnit.assetRegistrations){
+                if(registration.className == name){
+                    m_cursor.error(span.line, span.column, "duplicate asset registration in this module");
+                    return false;
+                }
+            }
+            outUnit.assetRegistrations.push_back(AssetRegistration{ name, registrar, span });
+        }
+        return true;
+    }
+
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_StaticAssert)){
+        if(isExtern || !attributes.empty()){
+            m_cursor.error(span.line, span.column, "static_assert does not accept attributes or extern");
+            return false;
+        }
+        if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after static_assert"))
+            return false;
+        Expr* condition = m_exprParser.parseExpression();
+        if(!condition)
+            return false;
+        Expr* message = nullptr;
+        if(m_cursor.match(TokenType::Comma)){
+            if(!m_cursor.check(TokenType::StringLiteral)){
+                m_cursor.error("static_assert message must be a string literal");
+                return false;
+            }
+            message = m_exprParser.parseExpression();
+            if(!message)
+                return false;
+            if(message->kind != ExprKind::StringLiteral){
+                m_cursor.error(span.line, span.column, "static_assert message must be a string literal");
+                return false;
+            }
+        }
+        if(!m_cursor.expect(TokenType::RightParen, "expected ')' after static_assert") || !m_cursor.expect(TokenType::Semicolon, "expected ';' after static_assert"))
+            return false;
+        if(!isImported)
+            outUnit.staticAssertions.push_back(StaticAssertion{ condition, message });
+        return true;
+    }
+
+    if(m_cursor.matchIdentifier(KeywordSemantics::s_NamespaceWrapper)){
+        if(isExtern || !attributes.empty()){
+            m_cursor.error(span.line, span.column, "namespace_wrapper does not accept attributes or extern");
+            return false;
+        }
+        if(!m_cursor.check(TokenType::Identifier) || !IsAsciiIdentifier(m_cursor.current().text)){
+            m_cursor.error("expected a macro prefix after namespace_wrapper");
+            return false;
+        }
+        if(m_cursor.current().text == ContractSemantics::s_DefaultRootNamespace){
+            m_cursor.error("namespace_wrapper prefix is reserved for the engine namespace");
+            return false;
+        }
+        if(!isImported){
+            if(!outUnit.namespaceWrapper.empty()){
+                m_cursor.error(span.line, span.column, "only one namespace_wrapper is allowed per file");
+                return false;
+            }
+            outUnit.namespaceWrapper = m_cursor.current().text;
+        }
+        m_cursor.advance();
+        return m_cursor.expect(TokenType::Semicolon, "expected ';' after namespace_wrapper");
+    }
+
     if(isExtern && m_cursor.check(TokenType::StringLiteral)){
         if(!attributes.empty()){
             m_cursor.error(span.line, span.column, "attributes are not permitted on 'extern \"<header>\"' import directives");

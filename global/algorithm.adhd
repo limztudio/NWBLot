@@ -2,6 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_name("::SortUniqueSequence")]
+extern void SortUniqueSequence<T>(mut Vector<T> values);
+
+[cpp_name("::LowerBoundValueIndex")]
+extern usize LowerBoundValueIndex<T>(in Vector<T> values, in T value);
+
+[cpp_name("::SequenceSize")]
+extern usize SequenceSize(in auto values);
+
+[cpp_name("::AppendArenaElement")]
+extern void AppendArenaElement<T>(mut Vector<T> values);
+
+[cpp_name("::SortSequence")]
+extern void SortSequence<T>(mut Vector<T> values, in auto compare);
+
 [cpp_name("::AlignU32PowerOfTwoChecked")]
 extern Expected<u32> AlignU32PowerOfTwoChecked(in isize a0, in isize a1);
 

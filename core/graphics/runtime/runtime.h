@@ -92,6 +92,7 @@ public:
 
 
 public:
+    [[nodiscard]] GraphicsAllocator& allocator()const noexcept{ return m_allocator; }
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
     [[nodiscard]] GpuTaskScheduler& gpuTasks()const noexcept{ return m_gpuTasks; }
     [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
@@ -121,6 +122,11 @@ public:
 
     void clearTaskGraphPresentationContributor(const IGpuTaskGraphPresentationContributor& contributor)noexcept;
 
+    [[nodiscard]] Optional<NotNull<IGpuTaskGraphPresentationContributor*>> borrowTaskGraphPresentationContributor()const noexcept{
+        if(m_taskGraphPresentationContributor)
+            return MakeNotNull(m_taskGraphPresentationContributor);
+        return {};
+    }
     [[nodiscard]] IGpuTaskGraphPresentationContributor* taskGraphPresentationContributor()const noexcept{
         return m_taskGraphPresentationContributor;
     }
@@ -135,6 +141,11 @@ public:
 
     void clearTaskGraphOutputLayerContributor(const IGpuTaskGraphOutputLayerContributor& contributor)noexcept;
 
+    [[nodiscard]] Optional<NotNull<IGpuTaskGraphOutputLayerContributor*>> borrowTaskGraphOutputLayerContributor()const noexcept{
+        if(m_taskGraphOutputLayerContributor)
+            return MakeNotNull(m_taskGraphOutputLayerContributor);
+        return {};
+    }
     [[nodiscard]] IGpuTaskGraphOutputLayerContributor* taskGraphOutputLayerContributor()const noexcept{
         return m_taskGraphOutputLayerContributor;
     }

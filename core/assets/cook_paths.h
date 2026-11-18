@@ -67,6 +67,15 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename ArenaT>
+[[nodiscard]] inline Expected<::Path<ArenaT>> ResolveCookVirtualAssetPath(ArenaT& arena, const ResolvedCookPaths& paths, const AStringView name){
+    ScratchArena scratch(Name("ResolveCookVirtualAssetPath"));
+    const auto path = ResolveVirtualAssetPath(paths.assetRoots, name, paths.repoRoot.arena(), scratch);
+    if(!path)
+        return MakeUnexpected(Failure{});
+    return ::Path<ArenaT>(arena, *path);
+}
+
 // Retains first-occurrence order and original path spelling; callers select their duplicate identity contract.
 [[nodiscard]] Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(const Path& repoRoot, Span<const CookString> sources, b8 inferFromInputs, AssetRootDuplicatePolicy::Enum duplicatePolicy, ScratchArena& scratchArena);
 

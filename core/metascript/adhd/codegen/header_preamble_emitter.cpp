@@ -34,6 +34,8 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
     out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#pragma once\r\n\r\n\r\n");
+    if(!unit.namespaceWrapper.empty())
+        appendInclude(ContractSemantics::s_EngineNamespaceHeader);
     if(IsNameLiteralOnlyUnit(unit)){
         emitPreambleGroup(PreambleHeaderGroup::NameLiteralOnly);
     }
@@ -139,6 +141,32 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append(incView.data(), incView.size());
         out.append(ContractSemantics::s_GeneratedHeaderSuffix.data(), ContractSemantics::s_GeneratedHeaderSuffix.size());
         out.append("\"\r\n");
+    }
+
+    if(!unit.namespaceWrapper.empty()){
+        const MStringView prefix = unit.namespaceWrapper;
+        const MStringView root = ContractSemantics::s_DefaultRootNamespace;
+        const b8 nestedInEngine = namespacePath.starts_with(root) && namespacePath.substr(root.size()).starts_with("::");
+        const b8 engineNamespace = namespacePath == root || nestedInEngine;
+        const MStringView relative = nestedInEngine ? namespacePath.substr(root.size() + 2u) : (engineNamespace ? MStringView{} : namespacePath);
+        out.append("\r\n#define ");
+        out.append(prefix.data(), prefix.size());
+        out.append("_BEGIN");
+        if(engineNamespace)
+            out.append(" NWB_BEGIN");
+        if(!relative.empty()){
+            out.append(" namespace ");
+            out.append(relative.data(), relative.size());
+            out.push_back('{');
+        }
+        out.append("\r\n#define ");
+        out.append(prefix.data(), prefix.size());
+        out.append("_END");
+        if(!relative.empty())
+            out.append(" };");
+        if(engineNamespace)
+            out.append(" NWB_END");
+        out.append("\r\n");
     }
 
     if(!unit.topLevelNativeBlocks.empty()){

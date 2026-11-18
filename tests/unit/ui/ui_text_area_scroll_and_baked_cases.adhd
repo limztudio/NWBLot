@@ -158,7 +158,6 @@ public:
     TextBakedTests()
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
         , m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextBaked))
-        , m_scratchArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextBakedScratch))
         , m_font(m_arena, Name(s_TestLatinFontPath))
         , m_atlas(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontsLatinAtlas))
         , m_text(m_arena)
@@ -172,7 +171,7 @@ public:
     virtual void SetUp()override{
         ASSERT_TRUE(Tests::LoadBundledFont(m_font, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u };
-        ASSERT_TRUE(m_text.setFonts(m_scratchArena, Span(&source, 1u)));
+        ASSERT_TRUE(m_text.setFonts(Span(&source, 1u)));
         {
             auto layoutResult = m_text.layout({ .text = "A ", .fontSize = 24.f });
             ASSERT_TRUE(layoutResult);
@@ -218,8 +217,8 @@ public:
     }
 
     [[nodiscard]] b8 installAtlas(){
-        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u, &m_atlas };
-        return m_text.setFonts(m_scratchArena, Span(&source, 1u));
+        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u, m_atlas };
+        return m_text.setFonts(Span(&source, 1u));
     }
 
     [[nodiscard]] b8 applyLayout(const ShapeRequest& request){
@@ -256,7 +255,7 @@ public:
 
     [[nodiscard]] b8 replaceWithUnbakedFontAndClearAtlas(){
         const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 2u };
-        if(!m_text.setFonts(m_scratchArena, Span(&source, 1u)))
+        if(!m_text.setFonts(Span(&source, 1u)))
             return false;
         m_atlas.setPayload(FontAtlasPayload(m_arena));
         return true;
@@ -273,7 +272,6 @@ public:
     Tests::CapturingLogger m_logger;
     Core::Common::LoggerRegistrationGuard m_loggerGuard;
     Core::Alloc::GlobalArena m_arena;
-    Core::Alloc::ScratchArena m_scratchArena;
     Font m_font;
     FontAtlas m_atlas;
     TextService m_text;
@@ -1620,6 +1618,7 @@ NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, AuxiliaryTokenRestorationPreservesM
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

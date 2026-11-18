@@ -246,6 +246,10 @@ inline void AppendTextDiscardCrAndExpandLf(StringT& out, const AStringView text)
     return value ? AStringView("yes") : AStringView("no");
 }
 
+[[nodiscard]] inline AStringView ErrorCodeCategoryName(const ErrorCode& error)noexcept{
+    return error.category().name();
+}
+
 template<typename ArenaT>
 [[nodiscard]] inline AString<ArenaT> ErrorCodeMessage(ArenaT& arena, const ErrorCode& error){
     const auto text = error.message();
@@ -535,6 +539,11 @@ template<typename EnumT, typename ViewT = AStringView>
             return item.value;
     }
     return MakeUnexpected(Failure{});
+}
+
+
+[[nodiscard]] inline usize TextSubviewOffset(const AStringView text, const AStringView part)noexcept{
+    return static_cast<usize>(part.data() - text.data());
 }
 
 

@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/type_properties.h>"), cpp_name("::ObjectAddressKey")]
+extern usize ObjectAddressKey(in auto value);
+
 [cpp_name("::AddressOf")]
 extern usize AddressOf(in auto a0);
 

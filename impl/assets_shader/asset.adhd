@@ -173,169 +173,17 @@ class CallableShader : IShader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class ShaderAssetPolicy{
+    public StringView memberSerializeContext()const{ return "ShaderAssetCodec::serialize"; }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-
-#include <impl/assets_shader/types.adhd.h>
-
-#include <core/assets/module.h>
-#include <core/graphics/rhi/shader.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetPayloadDecodeFailure = ShaderBinaryPayload::AssetPayloadDecodeFailure;
-using ShaderBinaryPayload::AssetPayloadView;
-using ShaderBinaryPayload::DecodeAssetPayload;
-using ShaderBinaryPayload::ReportShaderAssetPayloadDecodeFailure;
-using ShaderBinaryPayload::ShaderEntryPointView;
-
-class IShader;
-
-#define NWB_SHADER_ASSET_TYPE_ENTRIES(Entry) \
-    Entry(VertexShader) \
-    Entry(HullShader) \
-    Entry(DomainShader) \
-    Entry(GeometryShader) \
-    Entry(PixelShader) \
-    Entry(ComputeShader) \
-    Entry(AmplificationShader) \
-    Entry(MeshShader) \
-    Entry(RayGenerationShader) \
-    Entry(AnyHitShader) \
-    Entry(ClosestHitShader) \
-    Entry(MissShader) \
-    Entry(IntersectionShader) \
-    Entry(CallableShader)
-
-#define NWB_SHADER_ASSET_STAGE_ENTRIES(Entry) \
-    Entry(VertexShader, Core::ShaderType::VertexStage) \
-    Entry(HullShader, Core::ShaderType::HullStage) \
-    Entry(DomainShader, Core::ShaderType::DomainStage) \
-    Entry(GeometryShader, Core::ShaderType::GeometryStage) \
-    Entry(PixelShader, Core::ShaderType::PixelStage) \
-    Entry(ComputeShader, Core::ShaderType::ComputeStage) \
-    Entry(AmplificationShader, Core::ShaderType::AmplificationStage) \
-    Entry(MeshShader, Core::ShaderType::MeshStage) \
-    Entry(RayGenerationShader, Core::ShaderType::RayGenerationStage) \
-    Entry(AnyHitShader, Core::ShaderType::AnyHitStage) \
-    Entry(ClosestHitShader, Core::ShaderType::ClosestHitStage) \
-    Entry(MissShader, Core::ShaderType::MissStage) \
-    Entry(IntersectionShader, Core::ShaderType::IntersectionStage) \
-    Entry(CallableShader, Core::ShaderType::CallableStage)
-
-#define NWB_FORWARD_DECLARE_SHADER_ASSET_TYPE(Type) class Type;
-NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_FORWARD_DECLARE_SHADER_ASSET_TYPE)
-#undef NWB_FORWARD_DECLARE_SHADER_ASSET_TYPE
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ShaderAssetSerialization{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ShaderT>
-class ShaderAssetCodec final : public Core::Assets::AssetCodec<ShaderT>{
-public:
-    ShaderAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ShaderT::AssetTypeName()))) = default;
-
-
-#if defined(NWB_COOK)
-public:
-    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
-        if(!this->checkSerializeAssetType(asset, FOUNDATION_TEXT("ShaderAssetCodec::serialize")))
-            return false;
-
-        return ShaderAssetSerialization::Serialize(*MakeNotNull(checked_cast<const ShaderT*>(&asset)), outBinary);
+    public b8 write(in IShader shader, mut Vector<u8> output)const{
+        return SerializeShaderAssetPayload(shader.entryPoint(), shader.bytecode(), output);
     }
-#endif
-};
-
-using PixelShaderAssetCodec = ShaderAssetCodec<PixelShader>;
-using ComputeShaderAssetCodec = ShaderAssetCodec<ComputeShader>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ShaderAssetTypes{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ShaderT>
-inline constexpr Core::ShaderType::Enum s_StageForShader = Core::ShaderType::Invalid;
-
-#define NWB_DEFINE_SHADER_STAGE_TRAIT(Type, Stage) \
-    template<> inline constexpr Core::ShaderType::Enum s_StageForShader<Type> = Stage;
-NWB_SHADER_ASSET_STAGE_ENTRIES(NWB_DEFINE_SHADER_STAGE_TRAIT)
-#undef NWB_DEFINE_SHADER_STAGE_TRAIT
-
-[[nodiscard]] Core::ShaderType::Enum ShaderTypeFromAssetType(const Name& assetType)noexcept;
-[[nodiscard]] Core::ShaderType::Enum ShaderTypeFromAssetTypeText(AStringView assetType)noexcept;
-[[nodiscard]] const Name& AssetTypeNameFromShaderType(Core::ShaderType::Enum shaderType)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
+
+type ShaderAssetCodec<T> = FamilyMemberAssetCodec<IShader, T, ShaderAssetPolicy>;
+type PixelShaderAssetCodec = ShaderAssetCodec<PixelShader>;
+type ComputeShaderAssetCodec = ShaderAssetCodec<ComputeShader>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

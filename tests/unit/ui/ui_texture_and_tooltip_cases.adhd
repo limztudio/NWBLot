@@ -116,7 +116,7 @@ using PopupState = ::NWB::Impl::Ui::PopupState;
 using PopupToken = ::NWB::Impl::Ui::PopupToken;
 using TooltipState = ::NWB::Impl::Ui::TooltipState;
 using TooltipOptions = ::NWB::Impl::Ui::TooltipOptions;
-using TooltipBehavior = ::NWB::Impl::Ui::TooltipBehavior;
+using ::NWB::Impl::Ui::UpdateTooltipState;
 using Color = ::NWB::Impl::Ui::Color;
 using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
 using InputEvent = ::NWB::Impl::Ui::InputEvent;
@@ -749,12 +749,12 @@ void VerifyUiTooltipBehaviorTests_NewHoverDoesNotCountTimeFromBeforeTheBindingWa
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
     const u64 revision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), revision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -762,12 +762,12 @@ void VerifyUiTooltipBehaviorTests_ContiguousHoverAppearsAtTheExactDelayBoundary(
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     for(u32 frame = 0u; frame < 3u; ++frame){
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
         EXPECT_FALSE(state.visible());
     }
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -775,18 +775,18 @@ void VerifyUiTooltipBehaviorTests_ChangedHoverActivityRestartsDelayWithoutAnObse
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
     const u64 previousRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), previousRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
     const u64 visibleRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 9u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 9u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), visibleRevision);
 }
@@ -795,12 +795,12 @@ void VerifyUiTooltipBehaviorTests_UnchangedHoverActivityPreservesAccumulatedDela
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
     const u64 waitingRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
     EXPECT_EQ(state.revision(), waitingRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -809,14 +809,14 @@ void VerifyUiTooltipBehaviorTests_ZeroDelayAppearsOnTheFirstEnabledAcceptedHover
     TooltipOptions options = TooltipOptions();
     options.delaySeconds = 0.0f;
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     EXPECT_TRUE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
     EXPECT_FALSE(state.visible());
     options.enabled = false;
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 10.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 10.0f, options));
     EXPECT_FALSE(state.visible());
 }
 
@@ -825,15 +825,15 @@ void VerifyUiTooltipBehaviorTests_ZeroDeltaAndSaturatedHoverDoNotInventTimeOrRev
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
     const f32 maxF32 = bit_cast<f32>(s_UiTextureMaxF32Bits);
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     const u64 waitingRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_EQ(state.revision(), waitingRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
     EXPECT_TRUE(state.visible());
     const u64 visibleRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
     EXPECT_TRUE(state.visible());
     EXPECT_EQ(state.revision(), visibleRevision);
 }
@@ -842,18 +842,18 @@ void VerifyUiTooltipBehaviorTests_LeavingAVisibleAnchorRequiresACompleteNewHover
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
     const u64 visibleRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), visibleRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -861,13 +861,13 @@ void VerifyUiTooltipBehaviorTests_LeavingBeforeTheDelayAlsoDiscardsAccumulatedTi
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -875,16 +875,16 @@ void VerifyUiTooltipBehaviorTests_DisablingAndReenablingDoesNotCarryOldHoverTime
     TooltipState state = TooltipState();
     TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
     options.enabled = false;
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     options.enabled = true;
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -892,14 +892,14 @@ void VerifyUiTooltipBehaviorTests_ReplacingTheAnchorRetiresAVisibleTooltip(){
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     const u64 visibleRevision = state.revision();
     const WidgetId replacement = WidgetId(202u);
-    ASSERT_TRUE(TooltipBehavior::Update(state, replacement, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, replacement, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), visibleRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, replacement, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, replacement, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -907,13 +907,13 @@ void VerifyUiTooltipBehaviorTests_RenewedDeclarationRestartsTheDelayEvenWithTheS
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -934,16 +934,16 @@ void VerifyUiTooltipBehaviorTests_EveryPopupLifetimeFieldParticipatesInTheHoverB
     for(usize index = 0u; index < replacements.size(); ++index){
         const PopupToken replacement = replacements[index];
         TooltipState state = TooltipState();
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 0.5f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 0.5f, options));
         ASSERT_TRUE(state.visible());
         const u64 revision = state.revision();
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, replacement, 0u, 0u, true, 100.0f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, replacement, 0u, 0u, true, 100.0f, options));
         EXPECT_FALSE(state.visible());
         EXPECT_GT(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, replacement, 0u, 0u, true, 0.5f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, replacement, 0u, 0u, true, 0.5f, options));
         EXPECT_TRUE(state.visible());
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 100.0f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 100.0f, options));
         EXPECT_FALSE(state.visible());
     }
 }
@@ -952,12 +952,12 @@ void VerifyUiTooltipBehaviorTests_FocusLossRetiresHoverEvenWhenPointerAndFocusRe
     TooltipState state = TooltipState();
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 1u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 1u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 1u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 1u, 0u, true, 0.5f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -965,12 +965,12 @@ void VerifyUiTooltipBehaviorTests_ChangingDelayCannotMakePreviousElapsedTimeQual
     TooltipState state = TooltipState();
     TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     options.delaySeconds = 0.125f;
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -984,12 +984,12 @@ void VerifyUiTooltipBehaviorTests_ChangingWidthGapOrSideAlsoStartsANewHoverLifet
     for(usize index = 0u; index < replacements.size(); ++index){
         const TooltipOptions replacement = replacements[index];
         TooltipState state = TooltipState();
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
         ASSERT_TRUE(state.visible());
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, replacement));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, replacement));
         EXPECT_FALSE(state.visible());
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, replacement));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, replacement));
         EXPECT_TRUE(state.visible());
     }
 }
@@ -1003,13 +1003,13 @@ void VerifyUiTooltipBehaviorTests_FiniteMaximumLimitsAndMaximumDelayAreAcceptedW
     extreme.maximumWidth = maxF32;
     extreme.gap = maxF32;
     extreme.side = PopupPlacementSide::Right;
-    ASSERT_TRUE(TooltipBehavior::Update(zeroDelay, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, extreme));
+    ASSERT_TRUE(UpdateTooltipState(zeroDelay, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, extreme));
     EXPECT_TRUE(zeroDelay.visible());
     TooltipState state = TooltipState();
     TooltipOptions options = TooltipOptions();
     options.delaySeconds = maxF32;
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -1025,13 +1025,13 @@ void VerifyUiTooltipBehaviorTests_InvalidTimingPreservesTheOldBindingAndItsAccum
     for(usize index = 0u; index < invalidDeltas.size(); ++index){
         const f32 delta = invalidDeltas[index];
         TooltipState state = TooltipState();
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         const u64 revision = state.revision();
-        EXPECT_FALSE(TooltipBehavior::Update(state, WidgetId(202u), s_UiTooltipDeclaration + 1u, popup, 1u, 0u, false, delta, options));
+        EXPECT_FALSE(UpdateTooltipState(state, WidgetId(202u), s_UiTooltipDeclaration + 1u, popup, 1u, 0u, false, delta, options));
         EXPECT_FALSE(state.visible());
         EXPECT_EQ(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         EXPECT_TRUE(state.visible());
     }
 }
@@ -1057,13 +1057,13 @@ void VerifyUiTooltipBehaviorTests_InvalidOptionsAreRejectedBeforeAnyBindingOrDel
     for(usize index = 0u; index < invalid.size(); ++index){
         const TooltipOptions rejected = invalid[index];
         TooltipState state = TooltipState();
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         const u64 revision = state.revision();
-        EXPECT_FALSE(TooltipBehavior::Update(state, WidgetId(202u), s_UiTooltipDeclaration + 1u, popup, 1u, 0u, false, 0.5f, rejected));
+        EXPECT_FALSE(UpdateTooltipState(state, WidgetId(202u), s_UiTooltipDeclaration + 1u, popup, 1u, 0u, false, 0.5f, rejected));
         EXPECT_FALSE(state.visible());
         EXPECT_EQ(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         EXPECT_TRUE(state.visible());
     }
 }
@@ -1083,13 +1083,13 @@ void VerifyUiTooltipBehaviorTests_InvalidAnchorsDeclarationsAndPartialPopupToken
     for(usize index = 0u; index < invalid.size(); ++index){
         const UiTooltipTestBinding rejected = invalid[index];
         TooltipState state = TooltipState();
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         const u64 revision = state.revision();
-        EXPECT_FALSE(TooltipBehavior::Update(state, rejected.anchor, rejected.declaration, rejected.popup, 1u, 0u, false, 0.5f, options));
+        EXPECT_FALSE(UpdateTooltipState(state, rejected.anchor, rejected.declaration, rejected.popup, 1u, 0u, false, 0.5f, options));
         EXPECT_FALSE(state.visible());
         EXPECT_EQ(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         EXPECT_TRUE(state.visible());
     }
 }
@@ -1099,12 +1099,12 @@ void VerifyUiTooltipBehaviorTests_InvalidUpdatesCannotHideAnAlreadyVisibleToolti
     TooltipOptions options = TooltipOptions();
     options.delaySeconds = 0.0f;
     const WidgetId anchor = MakeUiTooltipAnchor();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     ASSERT_TRUE(state.visible());
     const u64 revision = state.revision();
     options.enabled = false;
     options.maximumWidth = 0.0f;
-    EXPECT_FALSE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
+    EXPECT_FALSE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
     EXPECT_TRUE(state.visible());
     EXPECT_EQ(state.revision(), revision);
 }
@@ -1128,19 +1128,19 @@ void VerifyUiTooltipBehaviorTests_ExplicitResetRetiresVisibleStateAndAllAccumula
     const TooltipOptions options = TooltipOptions();
     const WidgetId anchor = MakeUiTooltipAnchor();
     const PopupToken popup = MakeUiTooltipPopup();
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
     const u64 revision = state.revision();
     state.reset();
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), revision);
     EXPECT_FLOAT_EQ(state.placement().bounds.width, 0.0f);
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(UpdateTooltipState(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 

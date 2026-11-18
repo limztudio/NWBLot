@@ -96,7 +96,9 @@ struct TextInputSessionDesc{
 };
 
 struct TextInputEvent{
-    AString<Alloc::GlobalArena> text;
+    using uses_leading_arena_t = ::ArenaBase;
+
+    AString<::ArenaBase> text;
     TextInputSessionToken token;
     u64 sequence = 0u;
     u64 surroundingRevision = 0u;
@@ -111,9 +113,35 @@ struct TextInputEvent{
 
 
 public:
-    explicit TextInputEvent(Alloc::GlobalArena& arena)noexcept(noexcept(AString<Alloc::GlobalArena>(arena)))
+    explicit TextInputEvent(::ArenaBase& arena)noexcept(noexcept(AString<::ArenaBase>(arena)))
         : text(arena)
     {}
+    TextInputEvent(const TextInputEvent&) = default;
+    TextInputEvent(TextInputEvent&&)noexcept = default;
+    TextInputEvent& operator=(const TextInputEvent&) = default;
+    TextInputEvent(::ArenaBase& arena, const TextInputEvent& source) : TextInputEvent(arena){ *this = source; }
+    TextInputEvent(::ArenaBase& arena, TextInputEvent&& source) : TextInputEvent(arena){ *this = Move(source); }
+
+    TextInputEvent& operator=(TextInputEvent&& source){
+        if(this != &source){
+            if(text.get_allocator() == source.text.get_allocator())
+                text = Move(source.text);
+            else
+                text.assign(source.text.data(), source.text.size());
+            token = source.token;
+            sequence = source.sequence;
+            surroundingRevision = source.surroundingRevision;
+            anchorByte = source.anchorByte;
+            caretByte = source.caretByte;
+            deleteBeforeBytes = source.deleteBeforeBytes;
+            deleteAfterBytes = source.deleteAfterBytes;
+            kind = source.kind;
+            caretVisible = source.caretVisible;
+            cancelReason = source.cancelReason;
+            deletionBasis = source.deletionBasis;
+        }
+        return *this;
+    }
 };
 
 

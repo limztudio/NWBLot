@@ -67,12 +67,12 @@ template<typename CodecT>
 
 template<typename SubsystemT>
 [[nodiscard]] FOUNDATION_INLINE b8 HasActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
-    return active.findSubsystem<SubsystemT>() != nullptr;
+    return active.hasSubsystem<SubsystemT>();
 }
 
 template<typename SubsystemT>
 [[nodiscard]] FOUNDATION_INLINE const SubsystemT& RequireActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
-    return *MakeNotNull(active.findSubsystem<SubsystemT>());
+    return *active.findSubsystem<SubsystemT>().value();
 }
 
 template<typename ComponentT, typename PayloadT>
@@ -97,14 +97,14 @@ FOUNDATION_INLINE void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
             if(subsystem.fieldValueCount(i) == 0u)
                 subsystem.appendFieldValue(i, Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset);
         }
-        else if(!subsystem.fieldValue(i))
+        else if(!subsystem.fieldValue(i, 0u))
             subsystem.appendFieldValue(i, Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset);
     }
 }
 
 template<typename SubsystemT>
 [[nodiscard]] FOUNDATION_INLINE AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
-    const usize subsystemCount = subsystem.subsystems.size();
+    const usize subsystemCount = subsystem.parentRefs().size();
     const usize fieldCount = subsystem.fieldCount();
     u64 totalAssetCount = 0u;
     for(usize i = 0u; i < fieldCount; ++i)
@@ -119,7 +119,7 @@ template<typename SubsystemT>
     AssetBytes binary(arena);
     binary.reserve(sizeof(header) + subsystemCount * sizeof(NameHash) + fieldCount * sizeof(u64) + static_cast<usize>(totalAssetCount) * sizeof(NameHash));
     AppendPOD(binary, header);
-    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems)
+    for(const auto& ref : subsystem.parentRefs())
         AppendPOD(binary, ref.name().hash());
     for(usize i = 0u; i < fieldCount; ++i){
         const u64 valueCount = static_cast<u64>(subsystem.fieldValueCount(i));
@@ -701,4 +701,7 @@ NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsMismatchedSubsystemTypeTrailingBytes
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems, VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsystems)
 NWB_ADHD_GTEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure, VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure)
 NWB_ADHD_GTEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission, VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

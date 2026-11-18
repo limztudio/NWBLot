@@ -162,7 +162,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             const ClassDecl* accessedCls = nullptr;
             const FieldDecl* accessedField = nullptr;
             const MStringView resolvedEnumName = resolveScopeAccessEnumTypeName(ownerClass, &method, expr, scope, &accessedCls, &accessedField);
-            if(accessedCls && accessedField && ownerClass != accessedCls && accessedField->access != AccessSpecifier::Public){
+            if(accessedCls && accessedField && !m_symbols.canAccessPrivateMembers(*accessedCls, ownerClass) && accessedField->access != AccessSpecifier::Public){
                 reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                 ok = false;
             }
@@ -267,7 +267,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 recordRequiredHeader(staticCls->requiredHeader);
                 expr.resolvedCppNamespace = staticCls->cppNamespace;
                 if(const FieldDecl* staticField = SymbolTable::FindClassField(*staticCls, expr.scopeChain[1]); staticField && staticField->isStatic){
-                    if(ownerClass != staticCls && staticField->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessPrivateMembers(*staticCls, ownerClass) && staticField->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                         ok = false;
                     }
@@ -315,7 +315,10 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 break;
             }
         }
-        if(expr.lhs && !checkExpr(ownerClass, scope, isMutationTarget, method, *expr.lhs, errors))
+        // Writing through a mutable reference field leaves the containing object unchanged.
+        const b8 writesThroughBorrow = isMutationTarget
+            && m_symbols.resolveRefMode(inferExprTypeRef(ownerClass, &method, expr, scope)) == ParamPassingMode::Mut;
+        if(expr.lhs && !checkExpr(ownerClass, scope, isMutationTarget && !writesThroughBorrow, method, *expr.lhs, errors))
             ok = false;
 
         if(expr.lhs){
@@ -367,7 +370,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     ok = false;
                 }
                 else if(field && !memberMethod){
-                    if(ownerClass != targetCls && field->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessPrivateMembers(*targetCls, ownerClass) && field->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                         ok = false;
                     }
@@ -448,7 +451,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             }
         }
         else if(customOpIdx){
-            if(opDeclCls && ownerClass != opDeclCls && customOpIdx->access != AccessSpecifier::Public){
+            if(opDeclCls && !m_symbols.canAccessPrivateMembers(*opDeclCls, ownerClass) && customOpIdx->access != AccessSpecifier::Public){
                 reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
                 ok = false;
             }
@@ -548,7 +551,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 }
             }
             else if(opMethod){
-                if(opDeclCls && ownerClass != opDeclCls && opMethod->access != AccessSpecifier::Public){
+                if(opDeclCls && !m_symbols.canAccessPrivateMembers(*opDeclCls, ownerClass) && opMethod->access != AccessSpecifier::Public){
                     reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
                     ok = false;
                 }
@@ -574,6 +577,25 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         if(!BinaryExpressionChecker(*this).check(ownerClass, scope, method, expr, errors))
             ok = false;
         break;
+    case ExprKind::LayoutQuery:{
+        if(isMutationTarget){
+            reportError(errors, expr.span, "a layout query cannot be a mutable target");
+            ok = false;
+        }
+        if(!checkTypeRef(*expr.targetType, ownerClass, &method, errors))
+            ok = false;
+        if(expr.layoutQuery == LayoutQueryKind::Offset){
+            const ClassDecl* cls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.targetType->name));
+            if(cls && !cls->isExtern){
+                const FieldDecl* field = SymbolTable::FindClassField(*cls, expr.text);
+                if(!field || field->isStatic || (!m_symbols.canAccessPrivateMembers(*cls, ownerClass) && field->access != AccessSpecifier::Public)){
+                    reportError(errors, expr.span, "offset_of requires an accessible instance field");
+                    ok = false;
+                }
+            }
+        }
+        break;
+    }
     case ExprKind::Cast:
     case ExprKind::BitCast:{
         if(isMutationTarget){
@@ -807,6 +829,8 @@ b8 TypeChecker::isPotentiallyMutableLvalueExpr(const ClassDecl* ownerClass, cons
             const MStringView objType = inferExprBaseType(ownerClass, &method, *expr.lhs->lhs, scope);
             if(!m_symbols.hasTypeSymbol(objType)){
                 const b8 mutLhs = !isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope) && isPotentiallyMutableLvalueExpr(ownerClass, method, *expr.lhs->lhs, scope);
+                if(FindSpecialMethodSemantics(expr.lhs->text) == SpecialMethodKind::UnwrapValue && IsOptionalOrExpectedGenericType(objType))
+                    return mutLhs;
                 if(const BuiltinReceiverMethodInfo* recvInfo = FindBuiltinReceiverMethod(objType, expr.lhs->text); recvInfo && recvInfo->returnsReference)
                     return recvInfo->isMutating && mutLhs;
                 if(FindSpecialMethodSemantics(expr.lhs->text) == SpecialMethodKind::Deref && IsSmartPointerDerefType(objType))

@@ -205,6 +205,23 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
+[[nodiscard]] inline Expected<AString<ArenaT>> BuildDerivedAssetVirtualPathText(ArenaT& arena, const ::Path<RootArenaT>& root, const AStringView virtualRoot, const ::Path<SourceArenaT>& source){
+    Alloc::ScratchArena scratch;
+    return AssetPathsDetail::BuildDerivedAssetVirtualPathText(root, virtualRoot, source, arena, scratch);
+}
+
+[[nodiscard]] inline Expected<ACompactString> ExtractAssetVirtualRoot(const AStringView path){
+    Alloc::ScratchArena scratch;
+    return AssetPathsDetail::ExtractAssetVirtualRoot(path, scratch);
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline b8 AssetPathHasExtension(const ::Path<ArenaT>& path, const AStringView extension){
+    Alloc::ScratchArena scratch;
+    return AssetPathsDetail::CanonicalNativeTextEquals(path.extensionView(), extension, scratch);
+}
+
 template<typename RootArenaT, typename SourceArenaT>
 [[nodiscard]] inline Expected<Name> BuildDerivedAssetVirtualPath(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
     const auto virtualPathText = AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, scratchArena, scratchArena);
@@ -227,6 +244,17 @@ template<typename RootArenaT, typename SourceArenaT>
 [[nodiscard]] b8 HasReservedAssetVirtualRoot(AStringView virtualPath, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 HasReservedAssetVirtualRoot(AStringView virtualPath);
 [[nodiscard]] Expected<Path> ResolveVirtualAssetPath(Span<const ResolvedAssetRoot> assetRoots, AStringView virtualPath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<::Path<Alloc::ScratchArena>> FindPairedSourcePath(const ::Path<Alloc::ScratchArena>& file, Alloc::ScratchArena& scratch);
+
+template<typename ArenaT, typename PathArenaT>
+[[nodiscard]] inline Expected<AString<ArenaT>> ReadPairedMetadataSource(ArenaT& arena, const ::Path<PathArenaT>& file){
+    Alloc::ScratchArena scratch;
+    const auto source = FindPairedSourcePath(::Path<Alloc::ScratchArena>(scratch, file), scratch);
+    if(!source)
+        return MakeUnexpected(Failure{});
+    return PathToString(arena, *source);
+}
+
 [[nodiscard]] Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
 
 

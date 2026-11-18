@@ -61,7 +61,7 @@ public:
 
     [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
 
-    [[nodiscard]] virtual u64 rowCount()const override{
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{
         if(changeQueryOnCount){
             changeQueryOnCount = false;
             if(!m_state.query().setText(s_CallbackQuery))
@@ -115,7 +115,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{
         if(changeQueryOnGeneration){
             changeQueryOnGeneration = false;
             if(!m_state.query().setText(s_CallbackQuery))
@@ -152,7 +152,7 @@ public:
 
     [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count; }
 
-    [[nodiscard]] virtual b8 filter(const AStringView query)override{
+    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{
         ++filterCalls;
         if(failFilter)
             return false;
@@ -218,7 +218,7 @@ private:
             m_state.combo().close();
             break;
         case Mutation::PreviewScroll:
-            if(!ComboBehavior::Preview(m_state.combo()).scrollTo(64.0))
+            if(!m_state.combo().listState().scrollTo(64.0))
                 ADD_FAILURE() << "preview callback failed";
             break;
         case Mutation::CompositionBegin:
@@ -377,28 +377,28 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ return m_source.instanceGeneration(); }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_source.instanceGeneration(); }
 
-    [[nodiscard]] virtual u64 revision()const override{ return m_source.revision(); }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return m_source.revision(); }
 
-    [[nodiscard]] virtual u64 rowCount()const override{ return m_source.rowCount(); }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_source.rowCount(); }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ return m_source.key(index); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_source.key(index); }
 
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return m_source.indexOf(key); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_source.indexOf(key); }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         return m_source.findEnabled(start, reverse);
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         ++m_textCalls;
         if(!m_probe.apply())
             ADD_FAILURE() << "row callback selection change failed";
         return m_source.text(index);
     }
 
-    [[nodiscard]] virtual b8 enabled(const u64 index)const override{ return m_source.enabled(index); }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_source.enabled(index); }
 
     void arm(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
 
@@ -439,9 +439,9 @@ public:
 
     [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return m_source.text(index); }
 
-    [[nodiscard]] virtual b8 enabled(const u64 index)const override{ return m_source.enabled(index); }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_source.enabled(index); }
 
-    [[nodiscard]] virtual b8 filter(const AStringView query)override{
+    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{
         return m_probe.apply() && m_source.filter(query);
     }
 
@@ -545,23 +545,23 @@ namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
 namespace UiSearchComboKey = ::NWB::Core::Key;
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboReconcileCombo(::NWB::Impl::Ui::ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ComboBehavior::Reconcile(state, source);
+    return ::NWB::Impl::Ui::ReconcileComboState(state, source);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboFilterState(::NWB::Impl::Ui::SearchComboState& state, ::NWB::Impl::Ui::ISearchableListDataSource& source){
-    return ::NWB::Impl::Ui::SearchComboBehavior::Filter(state, source);
+    return ::NWB::Impl::Ui::FilterSearchCombo(state, source);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboReconcilePreview(::NWB::Impl::Ui::SearchComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ListBehavior::Reconcile(::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()), source);
+    return ::NWB::Impl::Ui::ReconcileListState(state.combo().listState(), source);
 }
 
 FOUNDATION_INLINE void UiSearchComboSelectPreview(::NWB::Impl::Ui::SearchComboState& state, const u64 keyValue)noexcept{
-    ::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()).select(keyValue);
+    state.combo().listState().select(keyValue);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboScrollPreview(::NWB::Impl::Ui::SearchComboState& state, const f64 offset)noexcept{
-    return ::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()).scrollTo(offset);
+    return state.combo().listState().scrollTo(offset);
 }
 
 [[nodiscard]] FOUNDATION_INLINE SearchComboOptions UiSearchComboFixtureOptions()noexcept{
@@ -1597,5 +1597,4 @@ NWB_ADHD_GTEST_F(UiSeparatorTests, DuplicateKeyAndUnbalancedScopeRejectDeclarati
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

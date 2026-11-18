@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_render/deferred/deferred_internal.adhd>
+#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
 
 
@@ -160,290 +162,114 @@ void DeferredCsgTextureImports::capture(mut GpuTaskGraph graph, in DeferredFrame
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/deferred/deferred_internal.adhd.h>
-#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
-#include <impl/ecs_render/deferred/import_types.adhd.h>
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::declare(const DeferredGraphResourceImportInputs& inputs)const{
-    DeferredGraphResourceImportResult result{};
-
-    DeferredFrameTargets& deferredTargets = inputs.targets;
-    const DeferredLightingGraphResources& deferredLightingResources = inputs.lightingResources;
-    const MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
-    const MeshViewBufferSnapshot& meshViewBufferSnapshot = inputs.meshViewSnapshot;
-    const CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources = inputs.rayTracingResources;
-    const DeferredLaggedLightingHistoryResources* const history = inputs.history;
-    const DeferredLaggedLightingHistoryResources* const captureHistory = inputs.captureHistory;
-    const b8 clearAvboitTargets = inputs.clearAvboitTargets;
-    const b8 capturesLaggedLightingHistory = inputs.capturesLaggedLightingHistory;
-    const b8 hasCsgFrameWork = inputs.hasCsgFrameWork;
-
-    // Outputs begin with a graph-owned write; fresh resources start Undefined.
-    const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return RendererTaskGraphDetail::ImportExternalTexture(m_graph, texture, identity, label, Core::ResourceStates::Unknown);
-    };
-    const auto importCurrentBindlessSlots = [&](const Name& identity, const AStringView label){
-        return RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredTargets.bindless.slotsBuffer, identity, label);
-    };
-
-    Expected<Core::GpuGraphResourceId> albedoResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> normalResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> worldPositionResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> specularRoughnessResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> depthResult = MakeUnexpected(Failure{});
-    DeferredCsgTextureImports csgTextureImports;
-    DeferredAvboitResourceImports avboitImports;
-    Expected<Core::GpuGraphResourceId> shadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> causticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> surfelIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentShadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentCausticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentSurfelIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> opaqueColorResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> sceneShadingResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> lightsResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> meshViewResult = MakeUnexpected(Failure{});
-    Expected<Optional<Core::GpuGraphResourceId>> materialInstancesResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> materialTypedResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgReceiverRangesResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgCuttersResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgClipContextSlotsResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Optional<Core::GpuGraphResourceId>> csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Core::GpuGraphResourceId> bindlessSlotsResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> currentBindlessSlotsResult = MakeUnexpected(Failure{});
-    Expected<Optional<Core::GpuGraphResourceId>> materialContextSlotsResult = Optional<Core::GpuGraphResourceId>{};
-    Expected<Core::GpuGraphResourceId> historyCopyShadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyCausticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopySurfelIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyDestinationShadowVisibilityResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyDestinationCausticIrradianceResult = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> historyCopyDestinationSurfelIrradianceResult = MakeUnexpected(Failure{});
-
-    albedoResult = importFirstWriteTexture(deferredTargets.albedo, Name(s_DeferredImportNameRenderDeferredLightingAlbedo), "G-Buffer Albedo");
-    normalResult = importFirstWriteTexture(deferredTargets.normal, Name(s_DeferredImportNameRenderDeferredLightingNormal), "G-Buffer Normal");
-    worldPositionResult = importFirstWriteTexture(deferredTargets.worldPosition, Name(s_DeferredImportNameRenderDeferredLightingWorldPosition), "G-Buffer World Position");
-    specularRoughnessResult = importFirstWriteTexture(deferredTargets.specularRoughness, Name(s_DeferredImportNameRenderDeferredLightingSpecularRoughness), "G-Buffer Specular Roughness");
-    depthResult = importFirstWriteTexture(deferredTargets.depth, Name(s_DeferredImportNameRenderDeferredLightingDepth), "G-Buffer Depth");
-
-    // CSG working set is declared only for frames with CSG work; wider target lifecycle stays in native producers.
-    if(hasCsgFrameWork)
-        csgTextureImports.capture(m_graph, deferredTargets);
-    shadowVisibilityResult = RendererTaskGraphDetail::ImportExternalTexture(
-        m_graph, history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name(s_DeferredImportNameRenderDeferredLightingShadowVisibility), history ? "Lagged Shadow Visibility" : s_ShadowVisibilityLabel
-    );
-    causticIrradianceResult = RendererTaskGraphDetail::ImportExternalTexture(
-        m_graph, history ? history->causticIrradiance : deferredTargets.causticIrradiance, Name(s_DeferredImportNameRenderDeferredLightingCausticIrradiance), history ? "Lagged Caustic Irradiance" : s_CausticIrradianceLabel
-    );
-    surfelIrradianceResult = RendererTaskGraphDetail::ImportExternalTexture(
-        m_graph, history ? history->surfelIrradiance : deferredTargets.surfelIrradiance, Name(s_DeferredImportNameRenderDeferredLightingSurfelIrradiance), history ? "Lagged Surfel Irradiance" : s_SurfelIrradianceLabel
-    );
-    currentShadowVisibilityResult = !history
-        ? shadowVisibilityResult
-        : RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.shadowVisibility, Name(s_DeferredImportNameRenderDeferredShadowVisibilityCurrentOutput), s_ShadowVisibilityLabel);
-    currentCausticIrradianceResult = !history ? causticIrradianceResult : RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.causticIrradiance, Name(s_DeferredImportNameRenderDeferredEffectsCurrentCausticIrradiance), s_CausticIrradianceLabel);
-    currentSurfelIrradianceResult = !history ? surfelIrradianceResult : RendererTaskGraphDetail::ImportExternalTexture(m_graph, deferredTargets.surfelIrradiance, Name(s_DeferredImportNameRenderDeferredSurfelGiCurrentIrradiance), s_SurfelIrradianceLabel);
-    opaqueColorResult = importFirstWriteTexture(deferredTargets.opaqueColor, Name(s_DeferredImportNameRenderDeferredLightingOpaqueColor), "Opaque Color");
-    sceneShadingResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredLightingResources.sceneShadingBuffer, Name(s_DeferredImportNameRenderDeferredLightingSceneShading), "Scene Shading");
-    lightsResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, deferredLightingResources.lightBuffer, Name(s_DeferredImportNameRenderDeferredLightingLights), "Lights");
-    meshViewResult = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, meshViewBufferSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel);
-    if(frameBindings.instanceBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, frameBindings.instanceBuffer, Name(s_DeferredImportNameRenderDeferredMaterialInstances), "Material Instances");
-        if(!importedResource)
-            materialInstancesResult = MakeUnexpected(importedResource.error());
-        else
-            materialInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(frameBindings.materialTypedBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, frameBindings.materialTypedBuffer, Name(s_DeferredImportNameRenderDeferredMaterialTyped), "Material Typed Data");
-        if(!importedResource)
-            materialTypedResult = MakeUnexpected(importedResource.error());
-        else
-            materialTypedResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.receiverRanges){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.receiverRanges, Name(s_DeferredImportNameRenderDeferredCsgReceiverRanges), "CSG Receiver Ranges");
-        if(!importedResource)
-            csgReceiverRangesResult = MakeUnexpected(importedResource.error());
-        else
-            csgReceiverRangesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.cutters){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.cutters, Name(s_DeferredImportNameRenderDeferredCsgCutters), "CSG Cutters");
-        if(!importedResource)
-            csgCuttersResult = MakeUnexpected(importedResource.error());
-        else
-            csgCuttersResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.clipContextSlots){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.clipContextSlots, Name(s_DeferredImportNameRenderDeferredCsgClipContextSlots), "CSG Clip Context Slots");
-        if(!importedResource)
-            csgClipContextSlotsResult = MakeUnexpected(importedResource.error());
-        else
-            csgClipContextSlotsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(csgResources.intervalSampleState){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, csgResources.intervalSampleState, Name(s_DeferredImportNameRenderDeferredCsgIntervalSampleState), "CSG Interval Sample State");
-        if(!importedResource)
-            csgIntervalSampleStateResult = MakeUnexpected(importedResource.error());
-        else
-            csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    bindlessSlotsResult = history
-        ? RendererTaskGraphDetail::ImportExternalBuffer(m_graph, history->slotsBuffer, s_LightingBindlessSlotsName, "Lagged Deferred Bindless Slots")
-        : importCurrentBindlessSlots(s_LightingBindlessSlotsName, s_DeferredBindlessSlotsLabel);
-    currentBindlessSlotsResult = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? bindlessSlotsResult : importCurrentBindlessSlots(Name(s_DeferredImportNameRenderDeferredCompositeBindlessSlots), s_DeferredBindlessSlotsLabel);
-    if(rayTracingGraphResources.materialContextSlotsBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, rayTracingGraphResources.materialContextSlotsBuffer, Name(s_DeferredImportNameRenderDeferredMaterialContextSlots), "Ray Trace Material Context Slots");
-        if(!importedResource)
-            materialContextSlotsResult = MakeUnexpected(importedResource.error());
-        else
-            materialContextSlotsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-
-    // History copy declared after Present; reuse active-lighting identities for copy destinations.
-    if(capturesLaggedLightingHistory){
-        historyCopyShadowVisibilityResult = currentShadowVisibilityResult;
-        historyCopyCausticIrradianceResult = currentCausticIrradianceResult;
-        historyCopySurfelIrradianceResult = history ? currentSurfelIrradianceResult : surfelIrradianceResult;
-        historyCopyDestinationShadowVisibilityResult = history ? shadowVisibilityResult : importFirstWriteTexture(captureHistory->shadowVisibility, Name(s_DeferredImportNameRenderLaggedHistoryCopyHistoryShadowVisibility), "History Shadow Visibility");
-        historyCopyDestinationCausticIrradianceResult = history ? causticIrradianceResult : importFirstWriteTexture(captureHistory->causticIrradiance, Name(s_DeferredImportNameRenderLaggedHistoryCopyHistoryCausticIrradiance), "History Caustic Irradiance");
-        historyCopyDestinationSurfelIrradianceResult = history ? surfelIrradianceResult : importFirstWriteTexture(captureHistory->surfelIrradiance, Name(s_DeferredImportNameRenderLaggedHistoryCopyHistorySurfelIrradiance), "History Surfel Irradiance");
-    }
-
-    // AVBOIT shares deferred G-buffer and imports; compiler owns state seeds through Lighting/Composite.
-    avboitImports.capture(m_graph, deferredTargets, clearAvboitTargets);
-    if(
-        !csgIntervalSampleStateResult
-        || !materialInstancesResult
-        || !materialTypedResult
-        || !csgReceiverRangesResult
-        || !csgCuttersResult
-        || !csgClipContextSlotsResult
-        || !avboitImports.validRefractionInputs()
-        || !albedoResult
-        || !normalResult
-        || !worldPositionResult
-        || !specularRoughnessResult
-        || !avboitImports.validRefractionSpecular()
-        || !depthResult
-        || !shadowVisibilityResult
-        || !causticIrradianceResult
-        || !surfelIrradianceResult
-        || !currentShadowVisibilityResult
-        || !currentCausticIrradianceResult
-        || !currentSurfelIrradianceResult
-        || !opaqueColorResult
-        || !sceneShadingResult
-        || !lightsResult
-        || !meshViewResult
-        || !bindlessSlotsResult
-        || !currentBindlessSlotsResult
-        || !ValidDeferredOptionalGraphImports(
-            hasCsgFrameWork,
-            csgTextureImports.valid(),
-            static_cast<b8>(rayTracingGraphResources.materialContextSlotsBuffer),
-            materialContextSlotsResult.has_value(),
-            capturesLaggedLightingHistory,
-            historyCopyShadowVisibilityResult.has_value()
-                && historyCopyCausticIrradianceResult.has_value()
-                && historyCopySurfelIrradianceResult.has_value()
-                && historyCopyDestinationShadowVisibilityResult.has_value()
-                && historyCopyDestinationCausticIrradianceResult.has_value()
-                && historyCopyDestinationSurfelIrradianceResult.has_value()
-        )
-        || !avboitImports.validAvboitInputs()
-    )
-        return MakeUnexpected(Failure{});
-
-    result.albedo = *albedoResult;
-    result.normal = *normalResult;
-    result.worldPosition = *worldPositionResult;
-    result.specularRoughness = *specularRoughnessResult;
-    result.depth = *depthResult;
-    if(hasCsgFrameWork)
-        csgTextureImports.publish(result);
-    result.shadowVisibility = *shadowVisibilityResult;
-    result.causticIrradiance = *causticIrradianceResult;
-    result.surfelIrradiance = *surfelIrradianceResult;
-    result.currentShadowVisibility = *currentShadowVisibilityResult;
-    result.currentCausticIrradiance = *currentCausticIrradianceResult;
-    result.currentSurfelIrradiance = *currentSurfelIrradianceResult;
-    result.opaqueColor = *opaqueColorResult;
-    result.sceneShading = *sceneShadingResult;
-    result.lights = *lightsResult;
-    result.meshView = *meshViewResult;
-    if(*materialInstancesResult)
-        result.materialInstances = **materialInstancesResult;
-    if(*materialTypedResult)
-        result.materialTyped = **materialTypedResult;
-    if(*csgReceiverRangesResult)
-        result.csgReceiverRanges = **csgReceiverRangesResult;
-    if(*csgCuttersResult)
-        result.csgCutters = **csgCuttersResult;
-    if(*csgClipContextSlotsResult)
-        result.csgClipContextSlots = **csgClipContextSlotsResult;
-    if(*csgIntervalSampleStateResult)
-        result.csgIntervalSampleState = **csgIntervalSampleStateResult;
-    result.bindlessSlots = *bindlessSlotsResult;
-    result.currentBindlessSlots = *currentBindlessSlotsResult;
-    if(*materialContextSlotsResult)
-        result.materialContextSlots = **materialContextSlotsResult;
-    if(capturesLaggedLightingHistory){
-        result.historyCopyShadowVisibility = *historyCopyShadowVisibilityResult;
-        result.historyCopyCausticIrradiance = *historyCopyCausticIrradianceResult;
-        result.historyCopySurfelIrradiance = *historyCopySurfelIrradianceResult;
-        result.historyCopyDestinationShadowVisibility = *historyCopyDestinationShadowVisibilityResult;
-        result.historyCopyDestinationCausticIrradiance = *historyCopyDestinationCausticIrradianceResult;
-        result.historyCopyDestinationSurfelIrradiance = *historyCopyDestinationSurfelIrradianceResult;
-    }
-    avboitImports.publish(result);
-    result.csgPeelSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgPeelLayerCount);
-    result.csgReceiverEventDataSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgReceiverEventLayerCount);
-    result.csgReceiverEventCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
-    result.csgReceiverSpanDataSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgReceiverSpanLayerCount);
-    result.csgReceiverSpanCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
-    result.csgRemovedIntervalSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, deferredTargets.csgRemovedIntervalLayerCount);
-    result.csgRemovedIntervalCountSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
-    return result;
+void CollectDeferredResource(in Expected<GpuGraphResourceId> imported, mut GpuGraphResourceId id, mut b8 complete){
+    if(imported.has_value())
+        id = imported.value();
+    else
+        complete = false;
 }
 
+Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::declare(in DeferredGraphResourceImportInputs inputs)const{
+    DeferredGraphResourceImportResult result;
+    in DeferredFrameTargets targets = inputs.targets;
+    b8 complete = true;
+    DeferredCsgTextureImports csg;
+    DeferredAvboitResourceImports avboit;
+    CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.albedo, s_DeferredImportNameRenderDeferredLightingAlbedo, "G-Buffer Albedo", ResourceStates::Unknown), result.albedo, complete);
+    CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.normal, s_DeferredImportNameRenderDeferredLightingNormal, "G-Buffer Normal", ResourceStates::Unknown), result.normal, complete);
+    CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.worldPosition, s_DeferredImportNameRenderDeferredLightingWorldPosition, "G-Buffer World Position", ResourceStates::Unknown), result.worldPosition, complete);
+    CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.specularRoughness, s_DeferredImportNameRenderDeferredLightingSpecularRoughness, "G-Buffer Specular Roughness", ResourceStates::Unknown), result.specularRoughness, complete);
+    CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.depth, s_DeferredImportNameRenderDeferredLightingDepth, "G-Buffer Depth", ResourceStates::Unknown), result.depth, complete);
+    if(inputs.hasCsgFrameWork)
+        csg.capture(this.m_graph, targets);
+    if(inputs.history.has_value()){
+        in DeferredLaggedLightingHistoryResources history = inputs.history.value();
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, history.shadowVisibility, s_DeferredImportNameRenderDeferredLightingShadowVisibility, "Lagged Shadow Visibility"), result.shadowVisibility, complete);
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, history.causticIrradiance, s_DeferredImportNameRenderDeferredLightingCausticIrradiance, "Lagged Caustic Irradiance"), result.causticIrradiance, complete);
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, history.surfelIrradiance, s_DeferredImportNameRenderDeferredLightingSurfelIrradiance, "Lagged Surfel Irradiance"), result.surfelIrradiance, complete);
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.shadowVisibility, s_DeferredImportNameRenderDeferredShadowVisibilityCurrentOutput, s_ShadowVisibilityLabel), result.currentShadowVisibility, complete);
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.causticIrradiance, s_DeferredImportNameRenderDeferredEffectsCurrentCausticIrradiance, s_CausticIrradianceLabel), result.currentCausticIrradiance, complete);
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.surfelIrradiance, s_DeferredImportNameRenderDeferredSurfelGiCurrentIrradiance, s_SurfelIrradianceLabel), result.currentSurfelIrradiance, complete);
+    }
+    else{
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.shadowVisibility, s_DeferredImportNameRenderDeferredLightingShadowVisibility, s_ShadowVisibilityLabel), result.shadowVisibility, complete);
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.causticIrradiance, s_DeferredImportNameRenderDeferredLightingCausticIrradiance, s_CausticIrradianceLabel), result.causticIrradiance, complete);
+        CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.surfelIrradiance, s_DeferredImportNameRenderDeferredLightingSurfelIrradiance, s_SurfelIrradianceLabel), result.surfelIrradiance, complete);
+        result.currentShadowVisibility = result.shadowVisibility;
+        result.currentCausticIrradiance = result.causticIrradiance;
+        result.currentSurfelIrradiance = result.surfelIrradiance;
+    }
+    CollectDeferredResource(ImportExternalTexture(this.m_graph, targets.opaqueColor, s_DeferredImportNameRenderDeferredLightingOpaqueColor, "Opaque Color", ResourceStates::Unknown), result.opaqueColor, complete);
+    CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.lightingResources.sceneShadingBuffer, s_DeferredImportNameRenderDeferredLightingSceneShading, "Scene Shading"), result.sceneShading, complete);
+    CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.lightingResources.lightBuffer, s_DeferredImportNameRenderDeferredLightingLights, "Lights"), result.lights, complete);
+    CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.meshViewSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel), result.meshView, complete);
+    if(inputs.frameBindings.instanceBuffer.valid())
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.frameBindings.instanceBuffer, s_DeferredImportNameRenderDeferredMaterialInstances, "Material Instances"), result.materialInstances, complete);
+    if(inputs.frameBindings.materialTypedBuffer.valid())
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.frameBindings.materialTypedBuffer, s_DeferredImportNameRenderDeferredMaterialTyped, "Material Typed Data"), result.materialTyped, complete);
+    if(inputs.csgResources.receiverRanges.valid())
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.csgResources.receiverRanges, s_DeferredImportNameRenderDeferredCsgReceiverRanges, "CSG Receiver Ranges"), result.csgReceiverRanges, complete);
+    if(inputs.csgResources.cutters.valid())
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.csgResources.cutters, s_DeferredImportNameRenderDeferredCsgCutters, "CSG Cutters"), result.csgCutters, complete);
+    if(inputs.csgResources.clipContextSlots.valid())
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.csgResources.clipContextSlots, s_DeferredImportNameRenderDeferredCsgClipContextSlots, "CSG Clip Context Slots"), result.csgClipContextSlots, complete);
+    if(inputs.csgResources.intervalSampleState.valid())
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, inputs.csgResources.intervalSampleState, s_DeferredImportNameRenderDeferredCsgIntervalSampleState, "CSG Interval Sample State"), result.csgIntervalSampleState, complete);
+    if(inputs.history.has_value()){
+        in BufferHandle slots = inputs.history.value().slotsBuffer;
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, slots, s_LightingBindlessSlotsName, "Lagged Deferred Bindless Slots"), result.bindlessSlots, complete);
+        if(targets.bindless.slotsBuffer == slots)
+            result.currentBindlessSlots = result.bindlessSlots;
+        else
+            CollectDeferredResource(ImportExternalBuffer(this.m_graph, targets.bindless.slotsBuffer, s_DeferredImportNameRenderDeferredCompositeBindlessSlots, s_DeferredBindlessSlotsLabel), result.currentBindlessSlots, complete);
+    }
+    else{
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, targets.bindless.slotsBuffer, s_LightingBindlessSlotsName, s_DeferredBindlessSlotsLabel), result.bindlessSlots, complete);
+        result.currentBindlessSlots = result.bindlessSlots;
+    }
+    in BufferHandle materialContext = inputs.rayTracingResources.materialContextSlotsBuffer;
+    if(materialContext.valid())
+        CollectDeferredResource(ImportExternalBuffer(this.m_graph, materialContext, s_DeferredImportNameRenderDeferredMaterialContextSlots, "Ray Trace Material Context Slots"), result.materialContextSlots, complete);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    if(inputs.capturesLaggedLightingHistory){
+        result.historyCopyShadowVisibility = result.currentShadowVisibility;
+        result.historyCopyCausticIrradiance = result.currentCausticIrradiance;
+        result.historyCopySurfelIrradiance = result.currentSurfelIrradiance;
+        if(inputs.history.has_value()){
+            result.historyCopyDestinationShadowVisibility = result.shadowVisibility;
+            result.historyCopyDestinationCausticIrradiance = result.causticIrradiance;
+            result.historyCopyDestinationSurfelIrradiance = result.surfelIrradiance;
+        }
+        else if(inputs.captureHistory.has_value()){
+            in DeferredLaggedLightingHistoryResources capture = inputs.captureHistory.value();
+            CollectDeferredResource(ImportExternalTexture(this.m_graph, capture.shadowVisibility, s_DeferredImportNameRenderLaggedHistoryCopyHistoryShadowVisibility, "History Shadow Visibility", ResourceStates::Unknown),
+                result.historyCopyDestinationShadowVisibility, complete);
+            CollectDeferredResource(ImportExternalTexture(this.m_graph, capture.causticIrradiance, s_DeferredImportNameRenderLaggedHistoryCopyHistoryCausticIrradiance, "History Caustic Irradiance",
+                ResourceStates::Unknown), result.historyCopyDestinationCausticIrradiance, complete);
+            CollectDeferredResource(ImportExternalTexture(this.m_graph, capture.surfelIrradiance, s_DeferredImportNameRenderLaggedHistoryCopyHistorySurfelIrradiance, "History Surfel Irradiance", ResourceStates::Unknown),
+                result.historyCopyDestinationSurfelIrradiance, complete);
+        }
+    }
 
+    avboit.capture(this.m_graph, targets, inputs.clearAvboitTargets);
+    if(!complete || !avboit.validRefractionInputs() || !avboit.validRefractionSpecular() || !avboit.validAvboitInputs()
+        || !ValidDeferredOptionalGraphImports(inputs.hasCsgFrameWork, csg.valid(), materialContext.valid(), result.materialContextSlots.valid(),
+            inputs.capturesLaggedLightingHistory, result.historyCopyShadowVisibility.valid() && result.historyCopyCausticIrradiance.valid()
+                && result.historyCopySurfelIrradiance.valid() && result.historyCopyDestinationShadowVisibility.valid()
+                && result.historyCopyDestinationCausticIrradiance.valid() && result.historyCopyDestinationSurfelIrradiance.valid()))
+        return MakeUnexpected(Failure());
 
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    if(inputs.hasCsgFrameWork)
+        csg.publish(result);
+    avboit.publish(result);
+    result.csgPeelSubresources = TextureSubresourceSet(0u, 1u, 0u, targets.csgPeelLayerCount);
+    result.csgReceiverEventDataSubresources = TextureSubresourceSet(0u, 1u, 0u, targets.csgReceiverEventLayerCount);
+    result.csgReceiverEventCountSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    result.csgReceiverSpanDataSubresources = TextureSubresourceSet(0u, 1u, 0u, targets.csgReceiverSpanLayerCount);
+    result.csgReceiverSpanCountSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    result.csgRemovedIntervalSubresources = TextureSubresourceSet(0u, 1u, 0u, targets.csgRemovedIntervalLayerCount);
+    result.csgRemovedIntervalCountSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    return result;
 }
 
 

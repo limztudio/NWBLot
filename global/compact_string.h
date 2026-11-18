@@ -8,6 +8,7 @@
 #include "assert.h"
 #include "basic_string.h"
 #include "limit.h"
+#include "numeric_text.h"
 #include "text_utils.h"
 
 #include <functional>
@@ -302,6 +303,30 @@ using WCompactString = BasicCompactString<wchar>;
 
 static_assert(sizeof(ACompactString) == ACompactString::s_StorageBytes, "ACompactString must stay 256 bytes");
 static_assert(sizeof(WCompactString) == WCompactString::s_StorageBytes, "WCompactString must stay 256 bytes");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline Expected<void, ErrorCode> FormatI64Into(const i64 value, ACompactString& output)noexcept{
+    Array<char, s_DecimalTextBufferBytes> buffer;
+    const auto formatted = FormatI64(value, buffer);
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    if(!output.assign(*formatted))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
+    return {};
+}
+
+[[nodiscard]] inline Expected<void, ErrorCode> FormatF64Into(const f64 value, ACompactString& output)noexcept{
+    Array<char, s_DecimalTextBufferBytes> buffer;
+    const auto formatted = FormatF64(value, buffer);
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    if(!output.assign(*formatted))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
+    return {};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

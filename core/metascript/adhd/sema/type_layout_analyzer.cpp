@@ -5,6 +5,7 @@
 #include <core/metascript/adhd/ast/operator_semantics.h>
 
 #include "type_layout_analyzer.h"
+#include "type_comparator.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,6 +63,13 @@ b8 TypeLayoutAnalyzer::requiresMotherArena(const TypeRef& type, const u32 depth)
     return false;
 }
 
+b8 TypeLayoutAnalyzer::isArenaBackedValueWrapper(const TypeRef& type)const noexcept{
+    const TypeRef* raw = m_symbols.unwrapTypeAlias(&type);
+    if(!raw || m_symbols.resolveRefMode(&type) != ParamPassingMode::None || m_symbols.hasTypeSymbol(raw->name))
+        return false;
+    return IsOptionalOrExpectedGenericType(raw->name) && requiresMotherArena(*raw);
+}
+
 b8 TypeLayoutAnalyzer::isFixedArrayNeedingArenaDefaultInit(const TypeRef& type)const noexcept{
     if(m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
         return false;
@@ -93,148 +101,99 @@ b8 TypeLayoutAnalyzer::interfaceInheritsNoCopy(const TypeRef& ifaceRef, const u3
     return false;
 }
 
-b8 TypeLayoutAnalyzer::isTypeConstructible(const TypeRef& type, const b8 requireCopy, const u32 depth)const noexcept{
-    if(depth >= 8u || m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
+b8 TypeLayoutAnalyzer::supportsTypeOperation(const TypeRef& type, const b8 requireCopy, const b8 assign, const ValueTypeVisit* const active)const noexcept{
+    if(m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
         return true;
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
         return true;
     const MStringView name = unwrapped->name;
-    if(const ClassDecl* cls = m_symbols.findClass(name)){
-        if(!cls->subsystemTypeName.empty() || !cls->systemTypeName.empty() || cls->isAbstract)
-            return false;
-        if(cls->isExtern){
-            for(const TypeRef* implIface : cls->implementedInterfaces){
-                if(implIface && interfaceInheritsNoCopy(*implIface))
-                    return false;
-            }
-            if(!(requireCopy ? cls->isCopyConstructible : cls->isMoveConstructible))
-                return false;
-        }
-        if(!cls->templateParams.empty() && !unwrapped->templateArgs.empty()){
-            for(const TypeRef* implIface : cls->implementedInterfaces){
-                if(implIface && interfaceInheritsNoCopy(*implIface))
-                    return false;
-            }
-            for(const MethodDecl* m : cls->methods){
-                if(m && m->isDestructor)
-                    return false;
-            }
-            for(const FieldDecl* f : cls->fields){
-                if(!f || !f->type)
-                    continue;
-                const TypeRef* subType = m_symbols.substituteTypeParams(f->type, cls->templateParams, unwrapped);
-                if(subType && !isTypeConstructible(*subType, requireCopy, depth + 1u))
-                    return false;
-            }
-            return true;
-        }
-        return isClassConstructible(*cls, cls->fields, requireCopy, depth + 1u);
-    }
+    if(const ClassDecl* cls = m_symbols.findClass(name))
+        return supportsClassOperation(*cls, cls->fields, unwrapped, requireCopy, assign, active);
     if(m_symbols.hasTypeSymbol(name))
         return true;
     if(IsMoveOnlyTypeName(name))
         return !requireCopy;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && !objInfo->isCopyMoveConstructible)
+    if(IsSmartPointerDerefType(name))
+        return true;
+    if(const BuiltinObjectTypeInfo* obj = FindBuiltinObjectType(name); obj && (!obj->isCopyMoveConstructible || (assign && !obj->isAssignable)))
         return false;
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name)){
-        if(!genericInfo->isCopyMoveConstructible)
+    if(const BuiltinGenericTypeInfo* generic = FindBuiltinGenericType(name)){
+        if(!generic->isCopyMoveConstructible)
             return false;
-        for(const TypeArg& targ : unwrapped->templateArgs){
-            if(targ.type && !isTypeConstructible(*targ.type, requireCopy, depth + 1u))
+        for(const TypeArg& arg : unwrapped->templateArgs){
+            if(arg.type && !supportsTypeOperation(*arg.type, requireCopy, assign, active))
                 return false;
         }
-        return true;
     }
     return true;
 }
 
-b8 TypeLayoutAnalyzer::isTypeAssignable(const TypeRef& type, const b8 requireCopy, const u32 depth)const noexcept{
-    if(!isTypeConstructible(type, requireCopy, depth))
+b8 TypeLayoutAnalyzer::supportsClassOperation(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const TypeRef* const instance, const b8 requireCopy, const b8 assign, const ValueTypeVisit* const active)const noexcept{
+    if((requireCopy && decl.isMoveOnly) || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty() || decl.isAbstract)
         return false;
-    if(depth >= 8u || m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
-        return true;
-    const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
-    if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
-        return true;
-    const MStringView name = unwrapped->name;
-    if(const ClassDecl* cls = m_symbols.findClass(name)){
-        if(!cls->templateParams.empty() && !unwrapped->templateArgs.empty()){
-            for(const FieldDecl* f : cls->fields){
-                if(!f || !f->type)
-                    continue;
-                const TypeRef* subType = m_symbols.substituteTypeParams(f->type, cls->templateParams, unwrapped);
-                if(subType && !isTypeAssignable(*subType, requireCopy, depth + 1u))
-                    return false;
-            }
+    for(const TypeRef* iface : decl.implementedInterfaces){
+        if(iface && interfaceInheritsNoCopy(*iface) && (requireCopy || assign || !decl.isMoveOnly || !IsNonCopyableBaseInterfaceName(iface->name)))
+            return false;
+    }
+    if(decl.isExtern){
+        if(requireCopy)
+            return decl.isCopyConstructible && (!assign || decl.isCopyAssignable);
+        return decl.isMoveConstructible && (!assign || decl.isMoveAssignable);
+    }
+    if(assign && SymbolTable::HasCustomAssignOperator(decl))
+        return false;
+    for(const MethodDecl* method : decl.methods){
+        if(method && method->isDestructor)
+            return false;
+    }
+
+    // Recursive containers can revisit their element class. Other fields still determine its operations.
+    usize repeatedSpecializations = 0u;
+    for(const ValueTypeVisit* visit = active; visit; visit = visit->parent){
+        if(&visit->decl != &decl)
+            continue;
+        if(decl.templateParams.empty() || TypeComparator(m_symbols).areEquivalent(visit->instance, instance))
             return true;
-        }
-        return isClassAssignableImpl(*cls, cls->fields, requireCopy, depth + 1u);
-    }
-    if(m_symbols.hasTypeSymbol(name))
-        return true;
-    if(IsMoveOnlyTypeName(name))
-        return !requireCopy;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && !objInfo->isAssignable)
-        return false;
-    if(FindBuiltinGenericType(name)){
-        for(const TypeArg& targ : unwrapped->templateArgs){
-            if(targ.type && !isTypeAssignable(*targ.type, requireCopy, depth + 1u))
-                return false;
-        }
-        return true;
-    }
-    return true;
-}
-
-b8 TypeLayoutAnalyzer::isClassConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 requireCopy, const u32 depth)const noexcept{
-    if(depth >= 8u || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty() || decl.isAbstract)
-        return false;
-    for(const TypeRef* implIface : decl.implementedInterfaces){
-        if(implIface && interfaceInheritsNoCopy(*implIface))
+        // An expanding recursive specialization may never revisit an identical type.
+        if(++repeatedSpecializations == 64u)
             return false;
     }
-    if(decl.isExtern)
-        return requireCopy ? decl.isCopyConstructible : decl.isMoveConstructible;
-    for(const MethodDecl* m : decl.methods){
-        if(m && m->isDestructor)
-            return false;
-    }
+    const ValueTypeVisit current{ decl, instance, active };
     for(const FieldDecl* field : fields){
-        if(field && !field->isStatic && field->type && !isTypeConstructible(*field->type, requireCopy, depth + 1u))
+        if(!field || field->isStatic || !field->type)
+            continue;
+        const TypeRef* type = instance && !decl.templateParams.empty() && !instance->templateArgs.empty()
+            ? m_symbols.substituteTypeParams(field->type, decl.templateParams, instance)
+            : field->type;
+        if(type && !supportsTypeOperation(*type, requireCopy, assign, &current))
             return false;
     }
     return true;
 }
 
-b8 TypeLayoutAnalyzer::isClassAssignableImpl(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 requireCopy, const u32 depth)const noexcept{
-    if(!isClassConstructible(decl, fields, requireCopy, depth))
-        return false;
-    if(decl.isExtern)
-        return requireCopy ? decl.isCopyAssignable : decl.isMoveAssignable;
-    if(SymbolTable::HasCustomAssignOperator(decl))
-        return false;
-    for(const FieldDecl* field : fields){
-        if(field && !field->isStatic && field->type && !isTypeAssignable(*field->type, requireCopy, depth + 1u))
-            return false;
-    }
-    return true;
+b8 TypeLayoutAnalyzer::isTypeConstructible(const TypeRef& type, const b8 requireCopy)const noexcept{
+    return supportsTypeOperation(type, requireCopy, false, nullptr);
 }
 
-b8 TypeLayoutAnalyzer::isClassCopyConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const u32 depth)const noexcept{
-    return isClassConstructible(decl, fields, true, depth);
+b8 TypeLayoutAnalyzer::isTypeAssignable(const TypeRef& type, const b8 requireCopy)const noexcept{
+    return supportsTypeOperation(type, requireCopy, true, nullptr);
 }
 
-b8 TypeLayoutAnalyzer::isClassMoveConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const u32 depth)const noexcept{
-    return isClassConstructible(decl, fields, false, depth);
+b8 TypeLayoutAnalyzer::isClassCopyConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields)const noexcept{
+    return supportsClassOperation(decl, fields, nullptr, true, false, nullptr);
 }
 
-b8 TypeLayoutAnalyzer::isClassCopyAssignable(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const u32 depth)const noexcept{
-    return isClassAssignableImpl(decl, fields, true, depth);
+b8 TypeLayoutAnalyzer::isClassMoveConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields)const noexcept{
+    return supportsClassOperation(decl, fields, nullptr, false, false, nullptr);
 }
 
-b8 TypeLayoutAnalyzer::isClassMoveAssignable(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const u32 depth)const noexcept{
-    return isClassAssignableImpl(decl, fields, false, depth);
+b8 TypeLayoutAnalyzer::isClassCopyAssignable(const ClassDecl& decl, const Span<const FieldDecl* const> fields)const noexcept{
+    return supportsClassOperation(decl, fields, nullptr, true, true, nullptr);
+}
+
+b8 TypeLayoutAnalyzer::isClassMoveAssignable(const ClassDecl& decl, const Span<const FieldDecl* const> fields)const noexcept{
+    return supportsClassOperation(decl, fields, nullptr, false, true, nullptr);
 }
 
 b8 TypeLayoutAnalyzer::containsSimdRegisterType(const TypeRef& type, const u32 depth)const noexcept{

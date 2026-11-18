@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/csg/clip_bounds.adhd>
 #include <impl/ecs_render/csg/csg_system.adhd>
+#include <impl/ecs_render/csg/frame_cache_signature.adhd>
+#include <impl/ecs_render/csg/types.adhd>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 
@@ -319,227 +321,101 @@ void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+static_assert(size_of<RendererCsgState>() == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_graphics/components.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd.h>
-#include <impl/ecs_render/csg/csg_system.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_state.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/csg/types.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/material/material_surface_lookup.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
-#include <impl/ecs_scene/components.adhd.h>
-
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/hash_utils.h>
-#include <global/limit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CsgFrameCacheDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<CsgFrameStateCacheSignature> BuildSignature(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry, const MeshSystem& meshSystem){
-    CsgFrameStateCacheSignature signature;
-    signature.shapeRegistryRevision = shapeRegistry.revision();
-
-    if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
-        return MakeUnexpected(Failure{});
-
-    u64 contentHash = s_Fnv64OffsetBasis;
-    auto cutterView = world.view<CsgCutterComponent>();
-    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
-        CsgSnapshotIdentityBuilder().updateCsgFrameStateCutterSignature(entity, cutter, contentHash);
-    });
-
-    auto receiverView = world.view<StaticCsgMeshComponent>();
-    b8 cacheable = true;
-    receiverView.each([&](const Core::ECS::EntityID entity, StaticCsgMeshComponent& typedReceiver){
-        const CsgReceiverComponent receiver = typedReceiver.asReceiver();
-        const RendererComponent* renderer = world.tryGetComponent<RendererComponent>(entity);
-        const MeshComponent* mesh = world.tryGetComponent<MeshComponent>(entity);
-        const Scene::TransformComponent* transform = world.tryGetComponent<Scene::TransformComponent>(entity);
-        const b8 hasRuntimeMeshBinding = receiver.enabled && renderer && renderer->visible && meshSystem.hasRuntimeMeshBinding(entity);
-        CsgSnapshotIdentityBuilder().updateCsgFrameStateReceiverSignature(
-            entity,
-            receiver,
-            renderer != nullptr,
-            renderer ? renderer->visible : false,
-            renderer ? renderer->material.name() : s_NameNone,
-            mesh != nullptr,
-            mesh ? mesh->mesh.name() : s_NameNone,
-            hasRuntimeMeshBinding,
-            transform != nullptr,
-            transform ? LoadFloat(transform->position) : VectorZero(),
-            transform ? LoadFloat(transform->rotation) : VectorZero(),
-            transform ? LoadFloat(transform->scale) : VectorZero(),
-            contentHash,
-            cacheable
-        );
-    });
-    if(!cacheable)
-        return MakeUnexpected(Failure{});
-
-    signature.contentHash = contentHash;
-    return signature;
+u32 CountFrameReceiverCutters(
+    in RendererCsgSystem system,
+    in CsgFrameReceiverLookup lookup,
+    in World world,
+    in EntityID entity,
+    in CsgResolvedReceiver resolved,
+    in b8 transparent,
+    in CsgReceiverCpuBounds bounds,
+    in CsgReceiverPass pass
+){
+    if(!ShouldEvaluateCsgPassCutters(transparent, resolved.receiver.affectOpaquePass, resolved.receiver.affectTransparentPass, pass))
+        return 0u;
+    const auto draw = lookup.resolveReceiverDrawState(entity, pass);
+    if(!draw.has_value() || draw.value().receiverKind != resolved.receiverKind)
+        return 0u;
+    Expected<CsgReceiverClipDrawInfo> clip = MakeUnexpected(Failure());
+    if(world.hasComponent<TransformComponent>(entity))
+        clip = system.resolveCsgReceiverClipDrawInfo(lookup, draw.value(), bounds, world.getComponent<TransformComponent>(entity));
+    else
+        clip = system.resolveCsgReceiverClipDrawInfo(lookup, draw.value(), bounds);
+    if(!clip.has_value())
+        return 0u;
+    return clip.value().cutterCount;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-CsgFrameState RendererCsgSystem::buildFrameState(IMaterialSurfaceLookup& materialSurfaceLookup)noexcept{
-    auto* ecsMeshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
-    Expected<CsgFrameStateCacheSignature> signature = MakeUnexpected(Failure{});
-    if(ecsMeshSystemPtr)
-        signature = CsgFrameCacheDetail::BuildSignature(*m_world, *m_csgShapeRegistry, *ecsMeshSystemPtr);
-    const b8 cacheable = signature.has_value();
-    if(cacheable && m_csgState->m_frameStateCacheValid && m_csgState->m_frameStateCacheSignature == *signature)
-        return m_csgState->m_frameStateCache;
-
-    b8 frameStateCacheable = cacheable;
-    CsgFrameState state;
-    auto finishFrameState = [&](const CsgFrameState& frameState)noexcept -> CsgFrameState{
-        if(frameStateCacheable){
-            m_csgState->m_frameStateCacheSignature = *signature;
-            m_csgState->m_frameStateCache = frameState;
-            m_csgState->m_frameStateCacheValid = true;
-        }
-        else
-            m_csgState->m_frameStateCacheValid = false;
-        return frameState;
-    };
-
-    Core::Alloc::ScratchArena scratchArena;
-    CsgFrameReceiverLookup receiverLookup(*m_world, scratchArena);
-    if(receiverLookup.empty())
-        return finishFrameState(state);
-
-    if(!ecsMeshSystemPtr){
-        frameStateCacheable = false;
-        return finishFrameState(state);
+void CacheCsgFrameState(
+    mut RendererCsgState cache,
+    in Expected<CsgFrameStateCacheSignature> signature,
+    in CsgFrameState state,
+    in b8 cacheable
+){
+    cache.m_frameStateCacheValid = cacheable;
+    if(cacheable){
+        cache.m_frameStateCacheSignature = signature.value();
+        cache.m_frameStateCache = state;
     }
-    NWB::Impl::MeshSystem& ecsMeshSystem = *ecsMeshSystemPtr;
+}
 
-    auto rendererView = m_world->view<RendererComponent>();
-    for(auto&& [entity, renderer] : rendererView){
+CsgFrameState RendererCsgSystem::buildFrameState(mut IMaterialSurfaceLookup materialSurfaceLookup){
+    const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
+    Expected<CsgFrameStateCacheSignature> signature = MakeUnexpected(Failure());
+    if(meshSystem.has_value())
+        signature = BuildCsgFrameCacheSignature(this.m_world, this.m_csgShapeRegistry, meshSystem.value());
+    b8 cacheable = signature.has_value();
+    if(cacheable && this.m_csgState.m_frameStateCacheValid && this.m_csgState.m_frameStateCacheSignature == signature.value())
+        return this.m_csgState.m_frameStateCache;
+
+    CsgFrameState state;
+    CsgFrameReceiverLookup lookup(this.m_world);
+    if(lookup.empty() || !meshSystem.has_value()){
+        CacheCsgFrameState(this.m_csgState, signature, state, cacheable);
+        return state;
+    }
+    for(in auto row : this.m_world.view<RendererComponent>()){
+        const EntityID entity = Get<0>(row);
+        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
         if(!renderer.visible)
             continue;
-
-        const auto resolvedReceiver = ResolveCsgReceiverComponent(*m_world, entity);
-        if(!resolvedReceiver || !resolvedReceiver->receiver.enabled)
+        const auto receiver = ResolveCsgReceiverComponent(this.m_world, entity);
+        if(!receiver.has_value() || !receiver.value().receiver.enabled)
             continue;
-        const CsgReceiverComponent& receiver = resolvedReceiver->receiver;
-        const CsgReceiverKind::Enum receiverKind = resolvedReceiver->receiverKind;
 
-        const auto resolvedMeshResult = ecsMeshSystem.resolveRenderableMeshStatus(entity);
-        if(!resolvedMeshResult){
-            frameStateCacheable = false;
+        const auto resolved = meshSystem.value().resolveRenderableMeshStatus(entity);
+        if(!resolved.has_value()){
+            cacheable = false;
             continue;
         }
-        const auto& resolvedMesh = *resolvedMeshResult;
-
-        if(resolvedMesh.runtime)
-            frameStateCacheable = false;
-        const auto meshResult = resolvedMesh.runtime ? m_meshSystem->createRuntimeMeshResources(resolvedMesh.runtimeMesh) : m_meshSystem->createMeshResources(resolvedMesh.mesh, scratchArena);
-        if(!meshResult){
-            frameStateCacheable = false;
+        Expected<mut MeshResources> mesh = MakeUnexpected(Failure());
+        if(resolved.value().runtime){
+            cacheable = false;
+            mesh = this.m_meshSystem.createRuntimeMeshResources(resolved.value().runtimeMesh);
+        }
+        else
+            mesh = this.m_meshSystem.createMeshResources(resolved.value().mesh);
+        if(!mesh.has_value()){
+            cacheable = false;
             continue;
         }
-        const NotNull<MeshResources*> mesh = *meshResult;
-
-        const auto materialInfoResult = materialSurfaceLookup.findMaterialSurfaceInfo(renderer.material);
-        if(!materialInfoResult){
-            frameStateCacheable = false;
+        const auto material = materialSurfaceLookup.findMaterialSurfaceInfo(renderer.material);
+        if(!material.has_value()){
+            cacheable = false;
             continue;
         }
-        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
-
-        const Scene::TransformComponent* transform = m_world->tryGetComponent<Scene::TransformComponent>(entity);
-
-        auto countPassCutters = [&](const CsgReceiverPass::Enum pass) -> u32{
-            if(!ShouldEvaluateCsgPassCutters(materialInfo->transparent, receiver.affectOpaquePass, receiver.affectTransparentPass, pass))
-                return 0u;
-            const auto drawState = receiverLookup.resolveReceiverDrawState(entity, pass);
-            if(!drawState || drawState->receiverKind != receiverKind)
-                return 0u;
-
-            const auto clipInfo = transform
-                ? resolveCsgReceiverClipDrawInfo(receiverLookup, *drawState, mesh->csgLocalBounds, *transform)
-                : resolveCsgReceiverClipDrawInfo(receiverLookup, *drawState, mesh->csgLocalBounds);
-            if(!clipInfo)
-                return 0u;
-            return clipInfo->cutterCount;
-        };
-
-        const CsgReceiverPassWorkSummary workSummary = SummarizeCsgReceiverPassWork(
-            countPassCutters(CsgReceiverPass::Opaque),
-            countPassCutters(CsgReceiverPass::Transparent)
+        const CsgReceiverPassWorkSummary work = SummarizeCsgReceiverPassWork(
+            CountFrameReceiverCutters(this, lookup, this.m_world, entity, receiver.value(), material.value().transparent, mesh.value().csgLocalBounds, CsgReceiverPass::Opaque),
+            CountFrameReceiverCutters(this, lookup, this.m_world, entity, receiver.value(), material.value().transparent, mesh.value().csgLocalBounds, CsgReceiverPass::Transparent)
         );
-        if(!workSummary.anyWork())
-            continue;
-
-        AddCsgFrameReceiverWork(receiverKind, workSummary.opaqueWork, workSummary.transparentWork, workSummary.maxCutterCount, state);
+        if(work.anyWork())
+            AddCsgFrameReceiverWork(receiver.value().receiverKind, work.opaqueWork, work.transparentWork, work.maxCutterCount, state);
     }
-
     FinalizeCsgFrameState(state);
-    return finishFrameState(state);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    CacheCsgFrameState(this.m_csgState, signature, state, cacheable);
+    return state;
 }
 
 

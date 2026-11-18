@@ -65,14 +65,14 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override{ callback(RadioCallbackSite::Instance); return m_generation; }
-    [[nodiscard]] virtual u64 revision()const override{ callback(RadioCallbackSite::Revision); return m_contentRevision; }
-    [[nodiscard]] virtual u64 rowCount()const override{ callback(RadioCallbackSite::Count); return rawCount(); }
-    [[nodiscard]] virtual u64 key(const u64 index)const override{ callback(RadioCallbackSite::Key); return rawKey(index); }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ callback(RadioCallbackSite::Instance); return m_generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ callback(RadioCallbackSite::Revision); return m_contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ callback(RadioCallbackSite::Count); return rawCount(); }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ callback(RadioCallbackSite::Key); return rawKey(index); }
     [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
     [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
-    [[nodiscard]] virtual StringView text(u64 index)const override;
-    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         callback(RadioCallbackSite::Enabled);
         return index < rawCount() && !m_allDisabled && rawKey(index) != m_disabled;
     }
@@ -223,10 +223,10 @@ public:
     [[nodiscard]] virtual u64 rowCount()const noexcept override;
     [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
     [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         return UiWidgetTests::FindSingleDisabledFixtureRowByKey(rowCount(), start, reverse, key(start), full->disabled);
     }
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         if(textMutation){
             EditModel& query = *MakeNotNull(Exchange(textMutation, nullptr));
             if(!query.setText(s_CallbackQuery))
@@ -234,7 +234,7 @@ public:
         }
         return full->text(key(index) - 1u);
     }
-    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         if(enabledMutation){
             EditModel& query = *MakeNotNull(Exchange(enabledMutation, nullptr));
             if(!query.setText(s_EmptyResultQuery))
@@ -273,7 +273,7 @@ public:
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return full.findEnabled(start, reverse); }
     [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
-    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         if(fullMutation){
             EditModel& query = *MakeNotNull(Exchange(fullMutation, nullptr));
             if(!query.setText(s_EmptyResultQuery))
@@ -281,7 +281,7 @@ public:
         }
         return full.enabled(index);
     }
-    [[nodiscard]] virtual b8 filter(AStringView query)override;
+    [[nodiscard]] virtual b8 filter(AStringView query)noexcept override;
     [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return alternateView ? alternate : view; }
     void armFilterMutation(EditModel& model)noexcept{ filterMutation = &model; }
     void armFullMutation(EditModel& model)noexcept{ fullMutation = &model; }
@@ -311,10 +311,10 @@ public:
         ++contextScopedLoans;
         return {};
     }
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model)override;
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model)noexcept override;
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
         ++publications;
         publishContextPopup = m_context.popupToken();
         publishedComposing = view.composing();
@@ -419,7 +419,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
     void arm(const SliderCallbackMutation::Enum mutation, SliderState* state = nullptr, Builder* builder = nullptr, PopupState* popup = nullptr)noexcept{
         m_mutation = mutation;
         m_state = state;
@@ -615,8 +615,8 @@ public:
         EditNavigationState& navigation,
         IEditNavigationResolver& resolver,
         IEditActionSink& sink
-    )override;
-    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions&)override{
+    )noexcept override;
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions&)noexcept override{
         ++publishes;
         publications.emplace_back(m_arena);
         AreaPublication& record = publications.back();
@@ -681,7 +681,7 @@ public:
     }
     [[nodiscard]] b8 acceptArea(){ return finishPanel() && m_context.commitFrame(m_context.readyGeneration()); }
     [[nodiscard]] b8 frameArea(u64 generation, const TextAreaOptions& options = {}, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f });
-    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
+    void useHost()noexcept{ m_builder.setEditHost(m_host); }
 
 
 public:
@@ -811,7 +811,7 @@ FOUNDATION_INLINE Expected<u64> RadioSource::findEnabled(const u64 start, const 
     callback(RadioCallbackSite::None);
     return ::__hidden_ui_glyph_sdf_tests::FindRadioFixtureEnabledIndex(m_count, m_removed, m_reverse, m_duplicate, m_allDisabled, m_disabled, start, reverse);
 }
-FOUNDATION_INLINE StringView RadioSource::text(const u64 index)const{
+FOUNDATION_INLINE StringView RadioSource::text(const u64 index)const noexcept{
     callback(RadioCallbackSite::Text);
     return ::__hidden_ui_glyph_sdf_tests::FormatRadioSourceLabel(const_cast<RadioSource&>(*this), index);
 }
@@ -869,7 +869,7 @@ namespace UiSearchComboTests{
 FOUNDATION_INLINE u64 FilterView::rowCount()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowCount(mode, full->count); }
 FOUNDATION_INLINE u64 FilterView::key(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowKey(mode, index); }
 FOUNDATION_INLINE Expected<u64> FilterView::indexOf(const u64 value)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FindSearchFilterRowIndex(mode, full->count, value); }
-FOUNDATION_INLINE b8 SearchSource::filter(const AStringView query){
+FOUNDATION_INLINE b8 SearchSource::filter(const AStringView query)noexcept{
     ++filterCalls;
     if(filterMutation){
         EditModel& model = *MakeNotNull(Exchange(filterMutation, nullptr));
@@ -884,7 +884,7 @@ FOUNDATION_INLINE b8 SearchSource::filter(const AStringView query){
     view.mode = ::__hidden_ui_glyph_sdf_tests::ResolveSearchFilterMode(query, s_SecondHalfQuery, s_EmptyResultQuery);
     return true;
 }
-FOUNDATION_INLINE EditBoxResult SearchEditHost::editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model){
+FOUNDATION_INLINE EditBoxResult SearchEditHost::editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::EditSearchHostInPopup(*this, widget, options, popup, model);
 }
 FOUNDATION_INLINE void SearchEditHost::text(const AStringView value)noexcept{ ::__hidden_ui_glyph_sdf_tests::SetSearchHostNextText(*this, value); }
@@ -894,7 +894,7 @@ FOUNDATION_INLINE b8 SearchFixture::declareSearch(const u64 generation){ return 
 FOUNDATION_INLINE b8 SearchFixture::openSearch(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenSearchFixture(*this, generation); }
 };
 namespace UiSliderTests{
-FOUNDATION_INLINE StringView SliderCallbackSource::text(const u64)const{
+FOUNDATION_INLINE StringView SliderCallbackSource::text(const u64)const noexcept{
     ++m_calls;
     if(m_mutation == SliderCallbackMutation::None)
         return s_LaterCallbackText;
@@ -940,7 +940,7 @@ FOUNDATION_INLINE EditBoxResult TextAreaHost::editNavigated(
     EditNavigationState& navigation,
     IEditNavigationResolver& resolver,
     IEditActionSink& sink
-){
+)noexcept{
     ++loans;
     lastPopup = popup;
     EditBoxResult result;

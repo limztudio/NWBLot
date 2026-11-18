@@ -10,51 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Impl{
-using Ui::DisplayMetrics;
-namespace EditAction = Ui::EditAction;
-namespace EditClipboardAction = Ui::EditClipboardAction;
-using Ui::EditBoxCaretStop;
-using Ui::EditBoxOptions;
-using Ui::EditBoxPlacement;
-using Ui::EditBoxResult;
-using Ui::EditCaretLine;
-using Ui::EditCompositionView;
-using Ui::EditLimits;
-using Ui::EditModel;
-using Ui::EditModelSnapshot;
-namespace EditNavigationDirection = Ui::EditNavigationDirection;
-namespace EditTextMode = Ui::EditTextMode;
-namespace EditTextStatus = Ui::EditTextStatus;
-using Ui::EditWordRange;
-using Ui::HitEditCaretGeometry;
-using Ui::NormalizeMultilineTextInto;
-using Ui::NormalizeSingleLineTextInto;
-using Ui::Point;
-using Ui::PopupToken;
-using Ui::Rect;
-using Ui::TextAreaModelStamp;
-using Ui::TryHitEditWordCaretGeometry;
-using Ui::WidgetId;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const usize s_UiEditBoxMaxEntries = 256u;
 const u64 s_UiDoubleClickMaxIntervalMs = 500u;
 const f64 s_UiDoubleClickMaxDistanceSquared = 16.0;

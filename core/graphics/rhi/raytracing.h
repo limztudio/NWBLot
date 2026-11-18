@@ -352,6 +352,8 @@ public:
 
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value)noexcept{ flags = value; return *this; }
 
+    [[nodiscard]] usize bottomLevelIdentity()const noexcept{ return reinterpret_cast<usize>(bottomLevelAS); }
+
     constexpr RayTracingInstanceDesc& setBottomLevelAS(RayTracingAccelStruct* value)noexcept{ bottomLevelAS = value; return *this; }
     constexpr RayTracingInstanceDesc& setBottomLevelAS(RayTracingAccelStruct& value)noexcept{ bottomLevelAS = &value; return *this; }
 };

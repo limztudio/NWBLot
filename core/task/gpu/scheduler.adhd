@@ -6,6 +6,10 @@
 extern class GpuTaskScheduler{
     b8 isInitialized(...)const;
     b8 scheduleGraph(...)const;
+    b8 executeGraph(in GpuTaskGraphNormalExecutionDesc desc, mut GpuTaskGraph graph, mut GpuCompiledGraph compiled, mut GpuRecordedGraph recorded, mut GpuGraphSubmissionTransaction transaction)const;
+    b8 executeGraphWithTiming(in GpuTaskGraphNormalExecutionDesc desc, mut GpuTaskGraph graph, mut GpuCompiledGraph compiled, mut GpuRecordedGraph recorded, mut GpuGraphSubmissionTransaction transaction, mut GpuTimingRecorder timing)const;
+    b8 executeAcceptedFrontierTask(in GpuCompiledGraph compiled, in GpuTaskId task, mut GpuTaskGraph graph, mut GpuRecordedGraph recorded, mut GpuGraphSubmissionTransaction transaction, mut GpuTimingRecorder timing)const;
+    b8 executeTask(in GpuCompiledGraph compiled, in GpuTaskId task, in GpuTaskGraphTaskRecordedCallback onRecorded, in GpuTaskGraphTaskAcceptedCallback onAccepted, mut GpuTaskGraph graph, mut GpuRecordedGraph recorded, mut GpuGraphSubmissionTransaction transaction, mut GpuTimingRecorder timing)const;
     b8 wait(...)const;
 };
 

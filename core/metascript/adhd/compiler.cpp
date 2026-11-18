@@ -8,6 +8,7 @@
 #include "codegen/header_emitter.h"
 #include "parser/decl_parser.h"
 #include "sema/type_checker.h"
+#include "sema/type_utils.h"
 
 #include <core/metascript/arena_names.h>
 #include <core/metascript/preprocessor_semantics.h>
@@ -23,6 +24,12 @@ NWB_ADHD_BEGIN
 
 
 b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileResult& outResult){
+    const MStringView preludeError = BuiltinPreludeLoadError();
+    if(!preludeError.empty()){
+        outResult.errors.push_back(ParseError{1u, 1u, MString(preludeError.data(), preludeError.size(), arena)});
+        return false;
+    }
+
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
     Preprocessor preprocessor(arena, scratchArena, outResult.errors, options.includeResolver, false);
@@ -91,12 +98,14 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
     if(options.outEmittedCppExterns)
         *options.outEmittedCppExterns = CppHeaderImporter::FormatExternAdhd(outResult.unit, arena);
 
+    const MString derivedNamespace = options.customNamespace.empty() ? DeriveNamespaceFromPath(options.virtualFilePath, arena) : MString(arena);
+    const MStringView namespacePath = options.customNamespace.empty() ? MStringView(derivedNamespace.data(), derivedNamespace.size()) : options.customNamespace;
+    outResult.unit.cppNamespace = InternArenaString(arena, namespacePath);
+
     TypeChecker typeChecker(arena, outResult.symbols);
     if(!typeChecker.checkTranslationUnit(outResult.unit, outResult.errors))
         return false;
 
-    const MString derivedNamespace = options.customNamespace.empty() ? DeriveNamespaceFromPath(options.virtualFilePath, arena) : MString(arena);
-    const MStringView namespacePath = options.customNamespace.empty() ? MStringView(derivedNamespace.data(), derivedNamespace.size()) : options.customNamespace;
     const MString headerFilename = DeriveHeaderFilename(options.virtualFilePath, arena);
 
     HeaderEmitter headerEmitter(arena, outResult.symbols);

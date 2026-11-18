@@ -34,23 +34,19 @@ b8 PopulateFixtureShapedRun(const ShapeRequest& request, ShapedRun& run)noexcept
 
 class FixtureShaper final : public Impl::Ui::ITextShaper{
 public:
-    explicit FixtureShaper(Core::Alloc::GlobalArena& arena)noexcept : m_arena(arena){}
+    explicit FixtureShaper(Core::Alloc::GlobalArena&)noexcept{}
     virtual ~FixtureShaper()noexcept override = default;
 
 
 public:
-    [[nodiscard]] virtual Expected<Impl::Ui::ShapedRun, Impl::Ui::TextLayoutStatus::Enum> shape(const Impl::Ui::ShapeRequest& request)override{
+    [[nodiscard]] virtual Expected<Impl::Ui::ShapedRun, Impl::Ui::TextLayoutStatus::Enum> shape(::ArenaBase& resultArena, const Impl::Ui::ShapeRequest& request)override{
         if(request.text == "FAIL")
             return MakeUnexpected(Impl::Ui::TextLayoutStatus::MissingGlyph);
-        Impl::Ui::ShapedRun run(m_arena);
+        Impl::Ui::ShapedRun run(resultArena);
         if(!PopulateFixtureShapedRun(request, run))
             return MakeUnexpected(Impl::Ui::TextLayoutStatus::MissingGlyph);
         return run;
     }
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
 };
 
 };

@@ -2,126 +2,220 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/optics/optical_scene.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/assets_graphics/transparent_subsystem.adhd>
+#include <impl/ecs_mesh/skinning/local_bounds.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/optics/optical_scene.adhd.h>
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_RUNTIME_INPUT_BYTES")]
+extern const u32 s_ShaderOpticalBoundsRuntimeInputBytes;
 
-#include <impl/ecs_render/optics/types.adhd.h>
-#include <impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET")]
+extern const u32 s_ShaderOpticalBoundsRuntimeSlotOffset;
 
-#include <core/alloc/global.h>
-#include <core/graphics/rhi/command.h>
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_RUNTIME_INSTANCE_OFFSET")]
+extern const u32 s_ShaderOpticalBoundsRuntimeInstanceOffset;
+static_assert(align_of<RayTracingOpticalRuntimeInputGpu>() >= 16u);
+static_assert(size_of<RayTracingOpticalRuntimeInputGpu>() == s_ShaderOpticalBoundsRuntimeInputBytes);
+static_assert(offset_of<RayTracingOpticalRuntimeInputGpu>(localBoundsSlot) == s_ShaderOpticalBoundsRuntimeSlotOffset);
+static_assert(offset_of<RayTracingOpticalRuntimeInputGpu>(instanceIndex) == s_ShaderOpticalBoundsRuntimeInstanceOffset);
 
-#include <global/arena_object.h>
-#include <global/refcount_ptr.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
+const Name s_RenderNameRaytraceOpticalRuntimeInputs = "raytrace_optical_runtime_inputs";
+const Name s_RenderNameRaytraceOpticalResolvedScene = "raytrace_optical_resolved_scene";
+const Name s_RenderNameRayOpticalBoundsFinalize = "RayOpticalBoundsFinalize";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_END
+class RayTracingOpticalBoundsFinalizeSnapshot{
+    public BufferHandle inputBuffer;
+    public BufferHandle outputBuffer;
+    public ComputePipelineHandle pipeline;
+    public Vector<RayTracingOpticalRuntimeInputGpu> inputs;
+    public Vector<BufferHandle> boundsBuffers;
+    public mut GraphicsRuntime graphics;
+    public GpuDescriptorHandle inputDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle outputDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle sourceDescriptor = GpuDescriptorHandleInvalid();
+    public GpuPhysicalQueueId queue;
+    public u32 instanceCount = 0u;
+    public b8 staticBoundsComplete = false;
 
+    public RayTracingOpticalBoundsFinalizeSnapshot(mut GraphicsRuntime graphics){
+        this.graphics = graphics;
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+type RayTracingOpticalBoundsFinalizeHandle = Shared<RayTracingOpticalBoundsFinalizeSnapshot>;
 
+class RayTracingOpticalBoundsFinalizeResources : NoCopy{
+    private SharedPool m_versions = SharedPool();
+    private mut GraphicsRuntime m_graphics;
+    private Vector<RayTracingOpticalBoundsFinalizeHandle> m_snapshots;
+    private BufferHandle m_inputBuffer;
+    private BufferHandle m_outputBuffer;
+    private GpuDescriptorHandle m_inputDescriptor = GpuDescriptorHandleInvalid();
+    private GpuDescriptorHandle m_outputDescriptor = GpuDescriptorHandleInvalid();
+    private BindingLayoutHandle m_bindingLayout;
+    private ShaderHandle m_shader;
+    private ComputePipelineHandle m_pipeline;
 
-NWB_IMPL_BEGIN
+    public RayTracingOpticalBoundsFinalizeResources(mut GraphicsRuntime graphics){
+        this.m_graphics = graphics;
+    }
 
+    public void invalidate(){
+        this.m_snapshots.clear();
+        this.retire(this.m_inputBuffer, this.m_inputDescriptor);
+        this.retire(this.m_outputBuffer, this.m_outputDescriptor);
+        this.m_inputBuffer.reset();
+        this.m_outputBuffer.reset();
+        this.m_inputDescriptor = GpuDescriptorHandleInvalid();
+        this.m_outputDescriptor = GpuDescriptorHandleInvalid();
+        this.m_pipeline.reset();
+        this.m_shader.reset();
+        this.m_bindingLayout.reset();
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private void retire(in BufferHandle buffer, in GpuDescriptorHandle descriptor){
+        mut Device device = this.m_graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        if(heap.isInitialized() && buffer.valid() && descriptor.valid() && buffer.deref().getDeviceGeneration() == device.getDeviceGeneration())
+            heap.free(descriptor);
+    }
 
+    private b8 ensureBuffer(mut BufferHandle buffer, mut GpuDescriptorHandle descriptor, in usize byteSize, in Name identity, in b8 output){
+        mut Device device = this.m_graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        if(buffer.valid() && buffer.deref().getDeviceGeneration() != device.getDeviceGeneration())
+            return false;
+        if(buffer.valid() && buffer.deref().getCreationDescription().byteSize >= byteSize && descriptor.valid())
+            return true;
+        BufferDesc desc;
+        desc.setByteSize(byteSize).setCanHaveRawViews(true).setCanHaveUAVs(output).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(identity).enableAutomaticStateTracking(ResourceStates::Common);
+        auto replacementResult = this.m_graphics.createBuffer(desc);
+        if(!replacementResult.has_value())
+            return false;
+        BufferHandle replacement = replacementResult.value();
+        DescriptorWriteItem write = DescriptorWriteItemRawBufferSrv(0u, replacement.deref());
+        if(output)
+            write = DescriptorWriteItemRawBufferUav(0u, replacement.deref());
+        const Expected<GpuDescriptorHandle> slotResult = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, write);
+        if(!slotResult.has_value())
+            return false;
+        const GpuDescriptorHandle slot = slotResult.value();
+        if(descriptor.valid())
+            heap.free(descriptor);
+        buffer = replacement;
+        descriptor = slot;
+        return true;
+    }
 
-class RendererShaderSystem;
+    public Expected<RayTracingOpticalBoundsFinalizeHandle> prepare(in RayTracingOpticalSceneGather gather, in GpuDescriptorHandle sourceDescriptor, mut RendererShaderSystem shaderSystem){
+        if(
+            gather.runtimeBounds.empty() || !sourceDescriptor.valid()
+            || !OpticalRuntimeInputCountFits(gather.runtimeBounds.size(), size_of<RayTracingOpticalRuntimeInputGpu>())
+            || !OpticalSceneInstanceCountFits(gather.instances.size())
+            || !this.ensurePipeline(shaderSystem)
+        )
+            return MakeUnexpected(Failure());
+        mut Device device = this.m_graphics.getDevice();
+        const usize inputBytes = ComputeOpticalRuntimeInputsByteSize(gather.runtimeBounds.size(), size_of<RayTracingOpticalRuntimeInputGpu>());
+        const usize outputBytes = ComputeOpticalResolvedSceneByteSize(s_RayTracingOpticalSceneHeaderBytes, gather.instances.size(), s_RayTracingOpticalInstanceBytes);
+        const b8 inputReady = this.ensureBuffer(this.m_inputBuffer, this.m_inputDescriptor, inputBytes, Name(s_RenderNameRaytraceOpticalRuntimeInputs), false);
+        const b8 outputReady = inputReady && this.ensureBuffer(this.m_outputBuffer, this.m_outputDescriptor, outputBytes, Name(s_RenderNameRaytraceOpticalResolvedScene), true);
+        if(!outputReady){
+            error("Ray optical bounds: failed to create finalize buffers");
+            return MakeUnexpected(Failure());
+        }
+        RayTracingOpticalBoundsFinalizeHandle snapshot;
+        for(in RayTracingOpticalBoundsFinalizeHandle cached : this.m_snapshots){
+            if(cached.referenceCount() == 1u){
+                AtomicThreadFence(MemoryOrder::acquire);
+                snapshot = cached;
+                break;
+            }
+        }
+        if(!snapshot.valid()){
+            const auto created = this.m_versions.make<RayTracingOpticalBoundsFinalizeSnapshot>(this.m_graphics);
+            if(!created.has_value())
+                return MakeUnexpected(Failure());
+            snapshot = created.value();
+            this.m_snapshots.push_back(snapshot);
+        }
+        snapshot.deref().inputs.clear();
+        snapshot.deref().boundsBuffers.clear();
+        snapshot.deref().inputBuffer = this.m_inputBuffer;
+        snapshot.deref().outputBuffer = this.m_outputBuffer;
+        snapshot.deref().pipeline = this.m_pipeline;
+        snapshot.deref().inputDescriptor = this.m_inputDescriptor;
+        snapshot.deref().outputDescriptor = this.m_outputDescriptor;
+        snapshot.deref().sourceDescriptor = sourceDescriptor;
+        snapshot.deref().queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        snapshot.deref().instanceCount = cast<u32>(gather.instances.size());
+        snapshot.deref().staticBoundsComplete = gather.boundsCompleteExceptRuntime;
+        snapshot.deref().inputs.reserve(gather.runtimeBounds.size());
+        snapshot.deref().boundsBuffers.reserve(gather.runtimeBounds.size());
+        u32 previousIndex = 0u;
+        for(in RayTracingOpticalRuntimeBounds bounds : gather.runtimeBounds){
+            const b8 hasBuffer = bounds.buffer.valid();
+            u64 bufferDeviceGen = 0u;
+            u64 bufferByteSize = 0u;
+            if(hasBuffer){
+                bufferDeviceGen = bounds.buffer.deref().getDeviceGeneration();
+                bufferByteSize = bounds.buffer.deref().getCreationDescription().byteSize;
+            }
+            u32 instanceFlags = 0u;
+            if(bounds.instanceIndex < snapshot.deref().instanceCount)
+                instanceFlags = gather.instances[bounds.instanceIndex].flags;
+            if(!ValidateRayTracingOpticalRuntimeBoundsBinding(
+                hasBuffer,
+                bounds.descriptor.valid(),
+                bounds.instanceIndex,
+                snapshot.deref().instanceCount,
+                bounds.descriptor.descriptorClass() == GpuDescriptorClass::StorageBuffer,
+                !snapshot.deref().inputs.empty(),
+                previousIndex,
+                bufferDeviceGen,
+                device.getDeviceGeneration(),
+                bufferByteSize,
+                s_RuntimeMeshBoundsByteSize,
+                instanceFlags
+            ))
+                return MakeUnexpected(Failure());
+            previousIndex = bounds.instanceIndex;
+            snapshot.deref().inputs.push_back(MakeRayTracingOpticalRuntimeInputGpu(MatrixSingle(bounds.objectToWorld), bounds.descriptor.slot(), bounds.instanceIndex));
+            snapshot.deref().boundsBuffers.push_back(bounds.buffer);
+        }
+        return snapshot;
+    }
 
-static_assert(alignof(RayTracingOpticalRuntimeInputGpu) >= 16u);
-static_assert(sizeof(RayTracingOpticalRuntimeInputGpu) == NWB_OPTICAL_BOUNDS_RUNTIME_INPUT_BYTES);
-static_assert(offsetof(RayTracingOpticalRuntimeInputGpu, localBoundsSlot) == NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET);
-static_assert(offsetof(RayTracingOpticalRuntimeInputGpu, instanceIndex) == NWB_OPTICAL_BOUNDS_RUNTIME_INSTANCE_OFFSET);
-
-// Immutable frame inputs retain the same accepted bounds and transforms as the emitted scene instance order.
-struct RayTracingOpticalBoundsFinalizeSnapshot{
-    Core::BufferHandle inputBuffer;
-    Core::BufferHandle outputBuffer;
-    Core::ComputePipelineHandle pipeline;
-    Vector<RayTracingOpticalRuntimeInputGpu, Core::Alloc::GlobalArena> inputs;
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> boundsBuffers;
-    Core::GraphicsRuntime& graphics;
-    Core::GpuDescriptorHandle inputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle outputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle sourceDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuPhysicalQueueId queue;
-    u32 instanceCount = 0u;
-    b8 staticBoundsComplete = false;
-
-
-public:
-    RayTracingOpticalBoundsFinalizeSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphicsIn)noexcept
-        : inputs(arena)
-        , boundsBuffers(arena)
-        , graphics(graphicsIn)
-    {}
-};
-using RayTracingOpticalBoundsFinalizeControl = RefCounter<RayTracingOpticalBoundsFinalizeSnapshot>;
-using RayTracingOpticalBoundsFinalizeHandle = RefCountPtr<RayTracingOpticalBoundsFinalizeControl, ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>>;
-
-class RayTracingOpticalBoundsFinalizeResources final : NoCopy{
-public:
-    RayTracingOpticalBoundsFinalizeResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_snapshots(arena)
-    {}
-
-
-public:
-    void invalidate();
-    [[nodiscard]] Expected<RayTracingOpticalBoundsFinalizeHandle> prepare(const RayTracingOpticalSceneGather& gather, Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem);
-
-
-private:
-    [[nodiscard]] b8 ensurePipeline(RendererShaderSystem& shaderSystem);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    Vector<RayTracingOpticalBoundsFinalizeHandle, Core::Alloc::GlobalArena> m_snapshots;
-    Core::BufferHandle m_inputBuffer;
-    Core::BufferHandle m_outputBuffer;
-    Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_outputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::BindingLayoutHandle m_bindingLayout;
-    Core::ShaderHandle m_shader;
-    Core::ComputePipelineHandle m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private b8 ensurePipeline(mut RendererShaderSystem shaderSystem){
+        if(this.m_pipeline.valid())
+            return true;
+        if(!EnsurePushConstantComputePipeline<TransparentSubsystem>(
+            this.m_graphics.getDevice(),
+            shaderSystem,
+            lambda[](in TransparentSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.opticalBoundsFinalizeCs; },
+            s_DefaultVariant,
+            Name(s_RenderNameRayOpticalBoundsFinalize),
+            size_of<OpticalBoundsFinalizePushConstants>(),
+            false,
+            this.m_bindingLayout,
+            this.m_shader,
+            this.m_pipeline
+        )){
+            error("Ray optical bounds: failed to create finalize pipeline");
+            return false;
+        }
+        return true;
+    }
 }
 
 

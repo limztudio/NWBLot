@@ -1066,7 +1066,6 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
     cases.push_back(ObjectGeometryCase("pixel_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false));
     cases.push_back(ObjectGeometryCase("mesh_shader", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false));
 
-    ShaderCook shaderCook(testArena.arena);
     for(in ObjectGeometryCase testCase : cases){
         const ScopedTestTrace traceType(testCase.m_shaderType);
         const ScopedTestTrace traceFields(testCase.m_fields);
@@ -1076,7 +1075,7 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
         metadata.append(testCase.m_fields);
         ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
         const u32 priorErrors = logger.errorCount();
-        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook), testCase.m_accepted);
+        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch), testCase.m_accepted);
         if(testCase.m_accepted)
             EXPECT_EQ(logger.errorCount(), priorErrors);
         else

@@ -3,145 +3,15 @@
 
 
 #include <impl/assets_scene/asset.adhd>
+#include <impl/assets_graphics/deferred_subsystem.adhd>
+#include <impl/assets_graphics/components.adhd>
+#include <impl/assets_shader/loader.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_graphics/deferred_subsystem.adhd.h>
-#include <impl/assets_graphics/components.adhd.h>
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_shader/loader.adhd.h>
-
-#include <core/assets/global.h>
-#include <core/graphics/rhi/shader.h>
-#include <core/graphics/shader_archive.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class AssetManager;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_RendererAssetOwnerName = "RendererSystem";
-
-using RendererShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE ActiveSceneSubsystemsConstPtr NullActiveSceneSubsystems()noexcept{
-    return nullptr;
-}
-
-template<typename SubsystemT, typename TAsset, typename SelectorF>
-[[nodiscard]] FOUNDATION_INLINE Name ResolveActiveSubsystemAsset(const ActiveSceneSubsystemsConstPtr subsystems, const SelectorF& selector)noexcept{
-    const SubsystemT* const subsystem = subsystems ? subsystems->findSubsystem<SubsystemT>() : nullptr;
-    if(!subsystem)
-        return s_NameNone;
-    const Core::Assets::AssetRef<TAsset>& ref = selector(*subsystem);
-    return ref.valid() ? ref.name() : s_NameNone;
-}
-
-template<typename TShader>
-    requires(IsBaseOf_V<IShader, TShader> && Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>))
-[[nodiscard]] FOUNDATION_INLINE b8 LoadRendererShader(
-    const Name& shaderAssetName,
-    const AStringView variantName,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    RendererShaderPathResolveCallback& shaderPathResolver,
-    Core::ShaderHandle& outShader
-){
-    static_assert(Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>));
-    return ShaderAssetLoader::Load<TShader>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, graphics, assetManager, shaderPathResolver, nullptr, outShader);
-}
-
-template<typename TShader>
-    requires(IsBaseOf_V<IShader, TShader> && Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>))
-[[nodiscard]] FOUNDATION_INLINE b8 LoadRendererShaderWithStage(
-    const Name& shaderAssetName,
-    const AStringView variantName,
-    const Name& debugName,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    RendererShaderPathResolveCallback& shaderPathResolver,
-    const Name& archiveStageName,
-    Core::ShaderHandle& outShader
-){
-    static_assert(Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>));
-    return ShaderAssetLoader::Load<TShader>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, graphics, assetManager, shaderPathResolver, &archiveStageName, outShader);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 HasRendererShaderArchiveStage(
-    RendererShaderPathResolveCallback& shaderPathResolver,
-    const Name& shaderAssetName,
-    const AStringView variantName,
-    const Name& stageName
-){
-    return shaderPathResolver(shaderAssetName, variantName, stageName).has_value();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+const StringView s_RendererAssetOwnerName = "RendererSystem";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -149,14 +19,19 @@ NWB_IMPL_END
 
 const StringView s_ShaderArchiveDefaultVariant = "default";
 
+type RendererShaderPathResolveCallback = ShaderArchivePathResolver;
 type SubsystemAssetSelector<SubsystemT, TAsset> = Func<64u, AssetRef<TAsset>(in SubsystemT)>;
 
+
+b8 HasRendererShaderArchiveStage<Resolver>(mut Resolver resolver, in Name shaderName, in StringView variant, in Name stage){
+    return resolver(shaderName, variant, stage).has_value();
+}
 
 class RendererShaderSystem : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private mut AssetManager m_assetManager;
     private mut RendererShaderPathResolveCallback m_shaderPathResolver;
-    private ActiveSceneSubsystemsConstPtr m_activeSceneSubsystems = NullActiveSceneSubsystems();
+    private ActiveSceneSubsystemsRef m_activeSceneSubsystems;
     private ShaderHandle m_deferredCompositeVertexShader;
 
     public RendererShaderSystem(mut GraphicsRuntime graphics, mut AssetManager assetManager, mut RendererShaderPathResolveCallback shaderPathResolver){
@@ -165,19 +40,27 @@ class RendererShaderSystem : NoCopy{
         this.m_shaderPathResolver = shaderPathResolver;
     }
 
-    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsConstPtr subsystems){
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
         this.m_activeSceneSubsystems = subsystems;
     }
 
     public Name resolveSubsystemAsset<SubsystemT, TAsset>(in SubsystemAssetSelector<SubsystemT, TAsset> selector)const{
-        return ResolveActiveSubsystemAsset<SubsystemT, TAsset>(this.m_activeSceneSubsystems, selector);
+        if(!this.m_activeSceneSubsystems.has_value())
+            return s_NameNone;
+        const auto subsystem = this.m_activeSceneSubsystems.value().findSubsystem<SubsystemT>();
+        if(!subsystem.has_value())
+            return s_NameNone;
+        const AssetRef<TAsset> ref = selector(subsystem.value());
+        if(!ref.valid())
+            return s_NameNone;
+        return ref.name();
     }
 
     public void invalidateResources(){
         this.m_deferredCompositeVertexShader.reset();
     }
 
-    public b8 loadShader<TShader, SubsystemT>(
+    public b8 loadShader<TShader : IShader, SubsystemT>(
         in SubsystemAssetSelector<SubsystemT, TShader> selector,
         in StringView variantName,
         in Name debugName,
@@ -189,7 +72,7 @@ class RendererShaderSystem : NoCopy{
         return this.loadShader<TShader>(resolvedShaderName, variantName, debugName, outShader);
     }
 
-    public b8 loadShader<TShader, SubsystemT>(
+    public b8 loadShader<TShader : IShader, SubsystemT>(
         in SubsystemAssetSelector<SubsystemT, TShader> selector,
         in StringView variantName,
         in Name debugName,
@@ -202,27 +85,27 @@ class RendererShaderSystem : NoCopy{
         return this.loadShader<TShader>(resolvedShaderName, variantName, debugName, archiveStageName, outShader);
     }
 
-    public b8 loadShader<TShader>(
+    public b8 loadShader<TShader : IShader>(
         in Name shaderAssetName,
         in StringView variantName,
         in Name debugName,
         mut ShaderHandle outShader
     ){
-        return LoadRendererShader<TShader>(shaderAssetName, variantName, debugName, this.m_graphics, this.m_assetManager, this.m_shaderPathResolver, outShader);
+        return Load<TShader, ShaderArchivePathResolver>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, this.m_graphics, this.m_assetManager, this.m_shaderPathResolver, Optional<Name>(), outShader);
     }
 
-    public b8 loadShader<TShader>(
+    public b8 loadShader<TShader : IShader>(
         in Name shaderAssetName,
         in StringView variantName,
         in Name debugName,
         in Name archiveStageName,
         mut ShaderHandle outShader
     ){
-        return LoadRendererShaderWithStage<TShader>(shaderAssetName, variantName, debugName, this.m_graphics, this.m_assetManager, this.m_shaderPathResolver, archiveStageName, outShader);
+        return Load<TShader, ShaderArchivePathResolver>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, this.m_graphics, this.m_assetManager, this.m_shaderPathResolver, Optional<Name>(archiveStageName), outShader);
     }
 
     public b8 hasShaderArchiveStage(in Name shaderAssetName, in StringView variantName, in Name stageName)const{
-        return HasRendererShaderArchiveStage(this.m_shaderPathResolver, shaderAssetName, variantName, stageName);
+        return HasRendererShaderArchiveStage<ShaderArchivePathResolver>(this.m_shaderPathResolver, shaderAssetName, variantName, stageName);
     }
 
     public b8 loadDeferredCompositeVertexShader(){

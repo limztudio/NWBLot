@@ -56,7 +56,7 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
-    [[nodiscard]] virtual u64 revision()const override{ observeCallback(); return contentRevision; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ observeCallback(); return contentRevision; }
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ observeCallback(); ++keyCalls; return rawKey(index); }
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
@@ -69,7 +69,7 @@ public:
         ++searchCalls;
         return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
     }
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         observeCallback();
         ++textCalls;
         return index % 2u == 0u ? "First" : "Second";

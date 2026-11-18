@@ -2,119 +2,200 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
+#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <impl/ecs_render/material/compute_emulation_output_index.adhd.h>
-#include <impl/ecs_render/material/generated_geometry_validation.adhd.h>
-#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd.h>
+b8 ValidateOpaqueCsgReceiverPlanArraySizes(
+    in b8 captured,
+    in usize drawItemCount,
+    in usize outputBufferCount,
+    in usize outputLayoutCount,
+    in usize regularDrawItemCount,
+    in usize regularOutputBufferCount,
+    in usize regularOutputLayoutCount
+){
+    return captured
+        && outputBufferCount == drawItemCount
+        && outputLayoutCount == drawItemCount
+        && regularOutputBufferCount == regularDrawItemCount
+        && regularOutputLayoutCount == regularDrawItemCount
+    ;
+}
 
+class OpaqueCsgReceiverComputeEmulationGraphPlan{
+    public Vector<MaterialPassDrawItem> meshDrawItems;
+    public Vector<MaterialPassDrawItem> indexedDrawItems;
+    public Vector<MaterialPassDrawItem> drawItems;
+    public Vector<MaterialPassDrawItem> regularDrawItems;
+    public Vector<BufferHandle> outputBuffers;
+    public Vector<GeneratedGeometryOutputLayout> outputLayouts;
+    public Vector<BufferHandle> regularOutputBuffers;
+    public Vector<GeneratedGeometryOutputLayout> regularOutputLayouts;
+    public Vector<CsgReceiverRangeGpuData> receiverRanges;
+    public Vector<CsgCutterGpuData> cutters;
+    public CsgFrameWorkRegion workRegion;
+    public b8 captured = false;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct OpaqueCsgReceiverComputeEmulationGraphPlan{
-    DrawItemVector meshDrawItems;
-    DrawItemVector indexedDrawItems;
-    DrawItemVector drawItems;
-    DrawItemVector regularDrawItems;
-    BufferVector outputBuffers;
-    OutputLayoutVector outputLayouts;
-    BufferVector regularOutputBuffers;
-    OutputLayoutVector regularOutputLayouts;
-    ReceiverRangeVector receiverRanges;
-    CutterVector cutters;
-    CsgFrameWorkRegion workRegion;
-    b8 captured = false;
-
-
-public:
-    explicit OpaqueCsgReceiverComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
-        : meshDrawItems(arena)
-        , indexedDrawItems(arena)
-        , drawItems(arena)
-        , regularDrawItems(arena)
-        , outputBuffers(arena)
-        , outputLayouts(arena)
-        , regularOutputBuffers(arena)
-        , regularOutputLayouts(arena)
-        , receiverRanges(arena)
-        , cutters(arena)
-    {}
-
-
-public:
-    void reset()noexcept;
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const MaterialPassDrawItemsView& sourceRegularDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] b8 matches(Core::Alloc::ScratchArena& scratchArena)const;
-
-    [[nodiscard]] MaterialPassDrawItemsView drawItemsView()const noexcept{
-        return { meshDrawItems, indexedDrawItems, drawItems };
+    public MaterialPassDrawItemsView drawItemsView()const{
+        return MaterialPassDrawItemsView(this.meshDrawItems, this.indexedDrawItems, this.drawItems);
+    }
+    public CsgFrameGpuDataView csgFrameDataView()const{
+        return CsgFrameGpuDataView(this.receiverRanges, this.cutters, this.workRegion);
     }
 
-    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
-        return { receiverRanges, cutters, workRegion };
+    public void reset(){
+        this.meshDrawItems.clear();
+        this.indexedDrawItems.clear();
+        this.drawItems.clear();
+        this.regularDrawItems.clear();
+        this.outputBuffers.clear();
+        this.outputLayouts.clear();
+        this.regularOutputBuffers.clear();
+        this.regularOutputLayouts.clear();
+        this.receiverRanges.clear();
+        this.cutters.clear();
+        this.workRegion = CsgFrameWorkRegion();
+        this.captured = false;
     }
-};
 
+    [cpp_unwind]
+    public b8 capture(in MaterialPassDrawItemsView receiverSurfaceDrawItems, in MaterialPassDrawItemsView sourceRegularDrawItems, in CsgFrameGpuDataView csgFrameData){
+        this.reset();
+        if(receiverSurfaceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
+            return false;
 
-struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan : OpaqueRegularComputeEmulationGraphPlan{
-    ReceiverRangeVector receiverRanges;
-    CutterVector cutters;
-    CsgFrameWorkRegion workRegion;
-
-
-public:
-    explicit OpaqueCsgIntervalSampleComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
-        : OpaqueRegularComputeEmulationGraphPlan(arena)
-        , receiverRanges(arena)
-        , cutters(arena)
-    {}
-
-
-public:
-    void reset()noexcept;
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena);
-
-    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
-        return { receiverRanges, cutters, workRegion };
+        this.meshDrawItems.reserve(receiverSurfaceDrawItems.meshDrawItems.size());
+        this.meshDrawItems.assign(receiverSurfaceDrawItems.meshDrawItems.begin(), receiverSurfaceDrawItems.meshDrawItems.end());
+        this.indexedDrawItems.reserve(receiverSurfaceDrawItems.indexedDrawItems.size());
+        this.indexedDrawItems.assign(receiverSurfaceDrawItems.indexedDrawItems.begin(), receiverSurfaceDrawItems.indexedDrawItems.end());
+        this.regularDrawItems.reserve(sourceRegularDrawItems.computeDrawItems.size());
+        this.regularDrawItems.assign(sourceRegularDrawItems.computeDrawItems.begin(), sourceRegularDrawItems.computeDrawItems.end());
+        this.drawItems.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
+        this.outputBuffers.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
+        this.outputLayouts.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
+        this.regularOutputBuffers.reserve(this.regularDrawItems.size());
+        this.regularOutputLayouts.reserve(this.regularDrawItems.size());
+        MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> outputs;
+        for(in MaterialPassDrawItem regularDrawItem : this.regularDrawItems){
+            in MaterialPassMeshResourceSnapshot regularMesh = regularDrawItem.meshResources;
+            if(!regularMesh.emulationVertexBuffer.valid() || !regularMesh.emulationVertexHeapHandle.valid()){
+                this.reset();
+                return false;
+            }
+            this.regularOutputBuffers.push_back(regularMesh.emulationVertexBuffer);
+            this.regularOutputLayouts.push_back(MakeGeneratedGeometryOutputLayout(regularMesh.emulationIndexByteOffset, regularDrawItem.pipelineResources.indexedGeometryOutput));
+            outputs.insert(MaterialEmulationBufferIdentity(regularMesh.emulationVertexBuffer));
+        }
+        for(in MaterialPassDrawItem drawItem : receiverSurfaceDrawItems.computeDrawItems){
+            if(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None){
+                this.reset();
+                return false;
+            }
+            in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+            if(!mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid()){
+                this.reset();
+                return false;
+            }
+            // Earlier ownership and receiver outputs both exclude this receiver.
+            if(!outputs.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer))){
+                this.reset();
+                return false;
+            }
+            this.drawItems.push_back(drawItem);
+            this.outputBuffers.push_back(mesh.emulationVertexBuffer);
+            this.outputLayouts.push_back(MakeGeneratedGeometryOutputLayout(mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput));
+        }
+        this.receiverRanges.reserve(csgFrameData.receiverRanges.size());
+        this.receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
+        this.cutters.reserve(csgFrameData.cutters.size());
+        this.cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
+        this.workRegion = csgFrameData.workRegion;
+        this.captured = this.drawItems.size() == this.outputBuffers.size() && !this.drawItems.empty();
+        return this.captured;
     }
-};
+
+    [cpp_unwind]
+    public b8 matches()const{
+        if(!ValidateOpaqueCsgReceiverPlanArraySizes(
+            this.captured,
+            this.drawItems.size(),
+            this.outputBuffers.size(),
+            this.outputLayouts.size(),
+            this.regularDrawItems.size(),
+            this.regularOutputBuffers.size(),
+            this.regularOutputLayouts.size()
+        ))
+            return false;
+        MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> receiverOutputs;
+        for(usize drawIndex = 0u; drawIndex < this.drawItems.size(); ++drawIndex){
+            in MaterialPassMeshResourceSnapshot mesh = this.drawItems[drawIndex].meshResources;
+            if(
+                !mesh.emulationVertexBuffer.valid()
+                || !mesh.emulationVertexHeapHandle.valid()
+                || mesh.emulationVertexBuffer != this.outputBuffers[drawIndex]
+                || !this.outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, this.drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
+            )
+                return false;
+            receiverOutputs.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer));
+        }
+        for(usize drawIndex = 0u; drawIndex < this.regularDrawItems.size(); ++drawIndex){
+            in MaterialPassMeshResourceSnapshot mesh = this.regularDrawItems[drawIndex].meshResources;
+            if(
+                !mesh.emulationVertexBuffer.valid()
+                || !mesh.emulationVertexHeapHandle.valid()
+                || mesh.emulationVertexBuffer != this.regularOutputBuffers[drawIndex]
+                || !this.regularOutputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, this.regularDrawItems[drawIndex].pipelineResources.indexedGeometryOutput)
+            )
+                return false;
+            if(receiverOutputs.contains(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer)))
+                return false;
+        }
+        return true;
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+class OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
+    public OpaqueRegularComputeEmulationGraphPlan geometry;
+    public Vector<CsgReceiverRangeGpuData> receiverRanges;
+    public Vector<CsgCutterGpuData> cutters;
+    public CsgFrameWorkRegion workRegion;
 
+    public void reset(){
+        this.geometry.reset();
+        this.receiverRanges.clear();
+        this.cutters.clear();
+        this.workRegion = CsgFrameWorkRegion();
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public b8 capture(in MaterialPassDrawItemsView draws, in CsgFrameGpuDataView frame){
+        this.reset();
+        if(!frame.hasWork() || !this.geometry.capture(draws, true))
+            return false;
+        this.receiverRanges.reserve(frame.receiverRanges.size());
+        this.receiverRanges.assign(frame.receiverRanges.begin(), frame.receiverRanges.end());
+        this.cutters.reserve(frame.cutters.size());
+        this.cutters.assign(frame.cutters.begin(), frame.cutters.end());
+        this.workRegion = frame.workRegion;
+        return true;
+    }
 
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public CsgFrameGpuDataView csgFrameDataView()const{
+        return CsgFrameGpuDataView(this.receiverRanges, this.cutters, this.workRegion);
+    }
 }
 
 

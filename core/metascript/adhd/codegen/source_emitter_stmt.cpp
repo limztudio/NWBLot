@@ -61,7 +61,8 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 out.append("const ");
             out.append("auto ");
             out.append(stmt.name.data(), stmt.name.size());
-            out.append(stmt.varType->refMode == ParamPassingMode::In ? " = ([&]()noexcept{ const auto& __adhd_ref = (" : " = ([&]()noexcept{ auto& __adhd_ref = (");
+            out.append(" = ([&]()").append(lambdaExceptionSpec());
+            out.append(stmt.varType->refMode == ParamPassingMode::In ? "{ const auto& __adhd_ref = (" : "{ auto& __adhd_ref = (");
             emitExpr(out, *stmt.expr);
             out.append("); return ::MakeNotNull(&__adhd_ref); }());\r\n");
             break;
@@ -126,7 +127,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 varUsesScratch
                 && effectiveVarType
                 && !stmt.expr->wrapInSimdResult
-                && !(stmt.expr->kind == ExprKind::Call && (stmt.expr->injectScratchArena || stmt.expr->injectClassArena))
+                && !(stmt.expr->kind == ExprKind::Call && (stmt.expr->injectScratchArena || stmt.expr->injectClassArena || stmt.expr->returnsFromThisArena))
             ){
                 out.append(" = ::AdhdRebindConstruct<");
                 m_typeEmitter.emitTypeCpp(out, *effectiveVarType);

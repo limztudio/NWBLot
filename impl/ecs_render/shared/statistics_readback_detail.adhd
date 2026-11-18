@@ -2,133 +2,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/shared/statistics_readback_state.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/shared/statistics_readback_state.adhd.h>
+class StatisticsReadbackBuffers<StatisticsT, OutcomeT : IStatisticsOutcome<StatisticsT>, const usize CounterCount> : NoCopy{
+    private SharedPool m_versions = SharedPool();
+    public mut GraphicsRuntime graphics;
+    public Shared<StatisticsReadbackState<StatisticsT, OutcomeT>> control;
+    public Array<BufferHandle, s_StatisticsReadbackSlotCount> buffers;
 
-#include <core/common/log.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/runtime.h>
+    public StatisticsReadbackBuffers(mut GraphicsRuntime graphics){ this.graphics = graphics; }
 
-#include <global/array.h>
-#include <global/expected.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<usize SlotCount>
-[[nodiscard]] FOUNDATION_INLINE Expected<Array<Core::BufferHandle, SlotCount>> CreateStatisticsReadbackBuffers(
-    const usize counterByteSize,
-    const Array<Name, SlotCount>& names,
-    Core::GraphicsRuntime& graphics
-){
-    Array<Core::BufferHandle, SlotCount> buffers;
-    for(usize index = 0u; index < SlotCount; ++index){
-        auto bufferResult = CreateStatisticsReadbackBuffer(counterByteSize, names[index], graphics);
-        if(!bufferResult)
-            return MakeUnexpected(Failure{});
-        buffers[index] = Move(*bufferResult);
+    public void resetReadbackBuffers(){
+        if(this.control.valid())
+            this.control.deref().reset(0u);
+        for(u32 index = 0u; index < s_StatisticsReadbackSlotCount; ++index)
+            this.buffers[index].reset();
     }
-    return buffers;
-}
 
-template<usize CounterByteSize, usize SlotCount, typename ControlT>
-[[nodiscard]] FOUNDATION_INLINE b8 PrepareStatisticsReadbackControlAndBuffers(
-    const Array<Name, SlotCount>& names,
-    const TStringView controlErrorMessage,
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics,
-    RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>& inOutControl,
-    Array<Core::BufferHandle, SlotCount>& outBuffers
-){
-    const u16 deviceGeneration = graphics.getDevice().getDeviceGeneration();
-    if(!inOutControl){
-        auto controlResult = CreateStatisticsControl<ControlT>(arena, deviceGeneration);
-        if(!controlResult){
-            NWB_LOGGER_ERROR(controlErrorMessage);
-            return false;
+    public Expected<StatisticsT> latestStatistics()const{
+        if(!this.control.valid())
+            return MakeUnexpected(Failure());
+        return this.control.deref().tryGetLatestStatistics();
+    }
+
+    public void populateSnapshot<SnapshotT>(in StatisticsT metadata, mut SnapshotT snapshot)const{
+        snapshot.control = this.control;
+        snapshot.metadata = metadata;
+        snapshot.buffers = this.buffers;
+    }
+
+    [cpp_unwind]
+    public b8 prepare(in Array<Name, s_StatisticsReadbackSlotCount> names, in StringView errorMessage){
+        const u16 generation = this.graphics.getDevice().getDeviceGeneration();
+        if(!this.control.valid()){
+            const auto created = this.m_versions.make<StatisticsReadbackState<StatisticsT, OutcomeT>>(generation);
+            if(!created.has_value()){
+                error("{}", errorMessage);
+                return false;
+            }
+            this.control = created.value();
         }
-        inOutControl = Move(*controlResult);
-    }
-    auto buffers = CreateStatisticsReadbackBuffers(CounterByteSize, names, graphics);
-    if(!buffers)
-        return false;
-    inOutControl->reset(deviceGeneration);
-    for(usize index = 0u; index < SlotCount; ++index)
-        outBuffers[index] = Move((*buffers)[index]);
-    return true;
-}
-
-template<usize CounterByteSize, usize SlotCount, typename ControlHandleT>
-FOUNDATION_INLINE void PollCompletedStatisticsReadback(
-    const Array<Core::BufferHandle, SlotCount>& buffers,
-    const TStringView mapErrorMessage,
-    ControlHandleT& control,
-    Core::GraphicsRuntime& graphics
-){
-    if(!control)
-        return;
-    auto& device = graphics.getDevice();
-    for(u32 index = 0u; index < SlotCount; ++index){
-        if(!buffers[index])
-            continue;
-        const auto pending = control->pending(index);
-        if(!pending || pending->token.deviceGeneration != device.getDeviceGeneration())
-            continue;
-        const auto& key = pending->key;
-        const auto& token = pending->token;
-        const Core::GpuPhysicalQueueId physicalQueue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
-        const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
-        if(!completedValue || *completedValue < token.value)
-            continue;
-        const Expected<void*> counters = device.mapBuffer(*buffers[index], Core::CpuAccessMode::Read);
-        if(!counters){
-            NWB_LOGGER_ERROR(mapErrorMessage);
-            control->complete(key, token, {});
-            continue;
+        Array<BufferHandle, s_StatisticsReadbackSlotCount> buffers;
+        for(usize index = 0u; index < s_StatisticsReadbackSlotCount; ++index){
+            const auto buffer = CreateStatisticsReadbackBuffer(CounterCount * size_of<u32>(), names[index], this.graphics);
+            if(!buffer.has_value())
+                return false;
+            buffers[index] = buffer.value();
         }
-        Array<u32, CounterByteSize / sizeof(u32)> completedCounters{};
-        FOUNDATION_MEMCPY(completedCounters.data(), sizeof(completedCounters), *counters, sizeof(completedCounters));
-        device.unmapBuffer(*buffers[index]);
-        control->complete(key, token, completedCounters);
+        this.control.deref().reset(generation);
+        this.buffers = buffers;
+        return true;
     }
-}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public void pollCompleted(in StringView errorMessage){
+        if(!this.control.valid())
+            return;
+        mut Device device = this.graphics.getDevice();
+        for(u32 index = 0u; index < s_StatisticsReadbackSlotCount; ++index){
+            if(!this.buffers[index].valid())
+                continue;
+            const Expected<StatisticsPendingReadback> pending = this.control.deref().pending(index);
+            if(!pending.has_value() || pending.value().token.deviceGeneration != device.getDeviceGeneration())
+                continue;
+            const QueueSubmissionToken token = pending.value().token;
+            GpuPhysicalQueueId physicalQueue;
+            physicalQueue.index = token.physicalQueueIndex;
+            physicalQueue.deviceGeneration = token.deviceGeneration;
+            const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
+            if(!completedValue.has_value() || completedValue.value() < token.value)
+                continue;
+            Array<u32, CounterCount> counters;
+            if(!device.readMappedBuffer(this.buffers[index].deref(), counters)){
+                error("{}", errorMessage);
+                this.control.deref().complete(pending.value().key, token, Span<u32>());
+            }
+            else
+                this.control.deref().complete(pending.value().key, token, Span<u32>(counters));
+        }
+    }
 }
 
 

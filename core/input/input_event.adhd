@@ -184,6 +184,10 @@ extern class KeyboardInputResult{
 
 [cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputAction::s_InputActionReleaseBase")]
 extern const i32 s_InputActionReleaseBase;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputAction::Press")]
+extern const i32 s_InputActionPress;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::InputAction::Repeat")]
+extern const i32 s_InputActionRepeat;
 [cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyACode")]
 extern const i32 s_KeyACode;
 [cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::Key::s_KeyApostropheCode")]

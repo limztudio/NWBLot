@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/ecs_test_world.adhd>
 #include <tests/common/gtest_macros.adhd>
@@ -31,9 +32,10 @@ native{
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
+#include <impl/ecs_render/csg/frame_cache_signature.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/material/material_task_graph.adhd.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.adhd.h>
+#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.adhd.h>
 #include <impl/ecs_render/avboit/avboit_refraction_capture_tasks.adhd.h>
 #include <impl/ecs_render/shadow/rt_shadow_prepare_uploads_and_context.adhd.h>
 #include <impl/ecs_render/material/csg_shader_variant_builder.adhd.h>
@@ -77,15 +79,16 @@ template<u16 DefaultDeviceGeneration = 1u, u64 DefaultValue = 20u>
 
 template<typename ControlT, u16 DefaultDeviceGeneration = 1u>
 struct StatisticsContext{
-    using Handle = RefCountPtr<ControlT, ArenaRefDeleter<ControlT, NWB::Core::Alloc::GlobalArena>>;
+    using Handle = NWB::Core::Alloc::Shared<ControlT>;
 
     NWB::Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsStatistics) };
+    NWB::Core::Alloc::SharedPool versions{ arena };
     Handle control;
 
 
 public:
     StatisticsContext(){
-        auto created = NWB::Impl::CreateStatisticsControl<ControlT>(arena, DefaultDeviceGeneration);
+        auto created = versions.make<ControlT>(DefaultDeviceGeneration);
         if(!created){
             ADD_FAILURE() << "Failed to create statistics control";
             return;
@@ -171,24 +174,10 @@ public:
 struct ComputeEmulationOutputTag{};
 using ComputeOutputTestArena = Tests::TestArena<ComputeEmulationOutputTag>;
 
-inline constexpr Name s_ComputeOutputSetIdentity = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsComputeOutputSetResources;
-inline constexpr AStringView s_ComputeOutputSetLabel = "Compute Emulation Outputs";
-
 struct ComputeOutputContext{
     ComputeOutputTestArena testArena;
     Core::GpuTaskGraph graph{ testArena.arena };
-    ECSRenderDetail::OpaqueRegularComputeEmulationGraphPlan plan{ testArena.arena };
-    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsComputeOutputSetEmpty) };
-
-
-public:
-    [[nodiscard]] Expected<Core::GpuGraphResourceSetId> gatherOutputs(Core::Alloc::ScratchArena& scratchArena){
-        return RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(graph, plan, scratchArena, s_ComputeOutputSetIdentity, s_ComputeOutputSetLabel);
-    }
-
-    [[nodiscard]] Expected<Core::GpuGraphResourceSetId> gatherOutputs(){
-        return gatherOutputs(scratch);
-    }
+    OpaqueRegularComputeEmulationGraphPlan plan{ testArena.arena };
 };
 
 struct AvboitValidatorContext{
@@ -242,11 +231,11 @@ struct CsgShadowSnapshotContext{
 
 public:
     [[nodiscard]] b8 build(const Span<const CsgShadowReceiverInput> receivers){
-        return BuildCsgShadowSnapshot(registry, receivers, testWorld.world, scratch, snapshot);
+        return BuildCsgShadowSnapshot(registry, receivers, testWorld.world, snapshot);
     }
 
     [[nodiscard]] b8 buildEmpty(){
-        return BuildCsgShadowSnapshot(registry, Span<const CsgShadowReceiverInput>{}, testWorld.world, scratch, snapshot);
+        return BuildCsgShadowSnapshot(registry, Span<const CsgShadowReceiverInput>{}, testWorld.world, snapshot);
     }
 
     [[nodiscard]] Core::ECS::EntityID addReceiver(const Name group = s_CsgShadowReceiverGroup, const b8 skinned = false){
@@ -308,7 +297,7 @@ public:
 FOUNDATION_INLINE void AppendIdentityLightSpaceCsgReceiver(
     LightSpaceCsgState& state,
     const Core::ECS::EntityID receiver,
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+    const MeshRayTracingResourceSnapshot& mesh
 ){
     AppendLightSpaceCsgReceiver(
         state,
@@ -326,7 +315,7 @@ FOUNDATION_INLINE void AppendTranslatedXLightSpaceCsgReceiver(
     LightSpaceCsgState& state,
     const Core::ECS::EntityID receiver,
     const f32 x,
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+    const MeshRayTracingResourceSnapshot& mesh
 ){
     const SIMDMatrix inverseShift = MatrixTranslation(-x, 0.0f, 0.0f);
     AppendLightSpaceCsgReceiver(
@@ -511,7 +500,7 @@ using SuiteTaskGraphDeclarationReadView = Core::GpuTaskGraph::DeclarationReadVie
 using AvboitValidatorContext = EcsGraphicsSuiteDetail::AvboitValidatorContext;
 using SuiteOptionalPhysicalQueueInfo = Optional<Core::GpuPhysicalQueueInfo>;
 using SuiteSharedPhaseTaskArray = Array<Core::GpuTaskId, Impl::s_SharedComputeEmulationMaximumPhaseCount>;
-using MeshRayTracingResourceSnapshot = Impl::ECSRenderDetail::MeshRayTracingResourceSnapshot;
+using MeshRayTracingResourceSnapshot = Impl::MeshRayTracingResourceSnapshot;
 
 using EcsGraphicsSuiteDetail::MakeSuiteGraphicsPhysicalQueueInfo;
 using EcsGraphicsSuiteDetail::MakeSuiteGpuTaskId;
@@ -584,7 +573,7 @@ void SuiteResetOpticalVolumes(mut CoincidentSelectionContext context){
 }
 
 Expected<SuiteGpuGraphResourceSetId> SuiteGatherComputeOutputs(mut ComputeOutputContext context){
-    return context.gatherOutputs();
+    return GatherImportedOutputBufferResourceSet(context.graph, context.plan.generated.captured, context.plan.generated.outputBuffers, s_EcsGraphicsNameTestsComputeOutputSetResources, "Compute Emulation Outputs");
 }
 
 b8 SuiteBuildCsgSnapshot(mut CsgShadowSnapshotContext context, in Span<CsgShadowReceiverInput> receivers){
@@ -620,7 +609,7 @@ void SuiteAppendTranslatedXCsgReceiver(mut LightSpaceCsgState state, in EntityID
 }
 
 b8 SuiteFinishLightSpaceCsgGather(mut CsgShadowSnapshotContext context, mut LightSpaceCsgState state){
-    return FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch);
+    return FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world);
 }
 
 void SuiteUpdateInstancePitchAndX(in f32 x, mut InstanceGpuData instance){
@@ -1189,7 +1178,7 @@ void VerifyComputeEmulationLayoutTests_LastIndexWordMayEndAtTheUintAddressBounda
 void VerifyComputeEmulationOutputResourceSet_EmptyPlansFailWithoutImporting(){
     ComputeOutputContext context = ComputeOutputContext();
     EXPECT_FALSE(SuiteGatherComputeOutputs(context).has_value());
-    context.plan.captured = true;
+    context.plan.generated.captured = true;
     EXPECT_FALSE(SuiteGatherComputeOutputs(context).has_value());
     const SuiteTaskGraphDeclarationReadView view = SuiteTaskGraphDeclarationReadView(context.graph);
     ASSERT_TRUE(view.valid());
@@ -1750,7 +1739,7 @@ void VerifyCsgShadowSnapshot_FrameCacheRejectsPendingRuntimeAttachmentWithUnchan
         provider.receiver = entity.id();
         meshSystem.registerRuntimeMeshProvider(provider);
 
-        const auto original = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+        const auto original = BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem);
         ASSERT_TRUE(original.has_value());
         const auto staticMesh = meshSystem.resolveRenderableMeshStatus(entity.id());
         ASSERT_TRUE(staticMesh.has_value());
@@ -1758,9 +1747,9 @@ void VerifyCsgShadowSnapshot_FrameCacheRejectsPendingRuntimeAttachmentWithUnchan
 
         provider.attached = true;
         EXPECT_TRUE(meshSystem.hasRuntimeMeshBinding(entity.id()));
-        EXPECT_FALSE(CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem).has_value());
+        EXPECT_FALSE(BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem).has_value());
         provider.attached = false;
-        const auto restored = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
+        const auto restored = BuildCsgFrameCacheSignature(context.testWorld.world, context.registry, meshSystem);
         ASSERT_TRUE(restored.has_value());
         EXPECT_EQ(original.value(), restored.value());
 

@@ -58,12 +58,12 @@ namespace ShaperFault = ::__hidden_ui_glyph_sdf_tests::UiFixtureShaperFault;
 
 class CaretShaper final : public ITextShaper{
 public:
-    explicit CaretShaper(Core::Alloc::GlobalArena& arena)noexcept : m_arena(arena){}
+    explicit CaretShaper(Core::Alloc::GlobalArena&)noexcept{}
     virtual ~CaretShaper()noexcept override = default;
 
 
 public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(::ArenaBase& resultArena, const ShapeRequest& request)override;
 
 
 public:
@@ -71,10 +71,6 @@ public:
     ShaperFault::Enum fault = ShaperFault::None;
     b8 variedHeight = false;
     b8 zeroAdvance = false;
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
 };
 
 
@@ -110,7 +106,7 @@ public:
     }
     [[nodiscard]] b8 adopt(const StringView text, const usize committedBytes, const EditTextMode::Enum mode = EditTextMode::Multiline){
         auto candidate = layout(text);
-        return candidate && m_geometry.adoptLayout(Move(*candidate), text, m_mapping, committedBytes, mode);
+        return candidate && m_geometry.adoptLayout(*candidate, text, m_mapping, committedBytes, mode);
     }
     [[nodiscard]] b8 adoptText(const StringView text, const EditTextMode::Enum mode = EditTextMode::Multiline){
         return identityMapping(text) && adopt(text, text.size(), mode);
@@ -258,12 +254,11 @@ public:
         if(!m_view.snapshot(m_model))
             return false;
         auto layout = m_layoutBuilder.layout({ m_view.displayText() });
-        return layout && m_view.adoptLayout(Move(*layout));
+        return layout && m_view.adoptLayout(*layout);
     }
     [[nodiscard]] b8 place(f32 width = 100.0f, f32 height = 100.0f, Point previousScroll = {})noexcept;
     [[nodiscard]] b8 loadFont(){
-        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
-        return InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text);
+        return InstallLatinFixtureFont(m_arena, m_font, m_text);
     }
     [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags);
 
@@ -321,15 +316,16 @@ void FocusHorizontalNavigationTarget(HorizontalNavigationFixture& self, usize in
 b8 PublishHorizontalNavigationTargets(HorizontalNavigationFixture& self, usize count, Span<const PopupScope> popups)noexcept;
 Expected<ControlAction> TakeHorizontalNavigationAction(HorizontalNavigationFixture& self, usize index)noexcept;
 void BindHorizontalNavigationEditor(HorizontalNavigationFixture& self, usize hostIndex)noexcept;
-void CollectUiSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output)noexcept;
+template<typename TArena>
+void CollectUiSolidRects(const DrawSnapshot& snapshot, const Color& color, Vector<Rect, TArena>& output)noexcept;
 b8 PlaceMultilineViewFixture(MultilineViewFixture& self, f32 width, f32 height, const Point& previousScroll)noexcept;
 Expected<DrawSnapshot> PaintMultilineViewFixture(MultilineViewFixture& self, const EditBoxStyle& style, const EditBoxPaintFlags& flags)noexcept;
 };
 
 NWB_BEGIN
 namespace UiEditCaretTests{
-FOUNDATION_INLINE Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(const ShapeRequest& request){
-    ShapedRun run(m_arena);
+FOUNDATION_INLINE Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(::ArenaBase& resultArena, const ShapeRequest& request){
+    ShapedRun run(resultArena);
     ::__hidden_ui_glyph_sdf_tests::PopulateCaretShapedRun(*this, request, run);
     return run;
 }

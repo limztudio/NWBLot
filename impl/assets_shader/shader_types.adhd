@@ -7,3 +7,53 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const Array<AssetTypeDescriptor, 14> s_ShaderAssetTypes(
+    DescribeAssetType<VertexShader>(),
+    DescribeAssetType<HullShader>(),
+    DescribeAssetType<DomainShader>(),
+    DescribeAssetType<GeometryShader>(),
+    DescribeAssetType<PixelShader>(),
+    DescribeAssetType<ComputeShader>(),
+    DescribeAssetType<AmplificationShader>(),
+    DescribeAssetType<MeshShader>(),
+    DescribeAssetType<RayGenerationShader>(),
+    DescribeAssetType<AnyHitShader>(),
+    DescribeAssetType<ClosestHitShader>(),
+    DescribeAssetType<MissShader>(),
+    DescribeAssetType<IntersectionShader>(),
+    DescribeAssetType<CallableShader>()
+);
+
+static_assert(s_ShaderAssetTypes.size() == cast<usize>(ShaderType::Count), "Shader asset types must cover every physical stage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ShaderType ShaderTypeFromAssetTypeText(in StringView assetType){
+    for(usize i = 0u; i < s_ShaderAssetTypes.size(); ++i){
+        if(s_ShaderAssetTypes[i].text == assetType)
+            return cast<ShaderType>(i);
+    }
+    return ShaderType::Invalid;
+}
+
+Name AssetTypeNameFromShaderType(in ShaderType stage){
+    const usize index = cast<usize>(stage);
+    if(index >= s_ShaderAssetTypes.size())
+        return s_NameNone;
+    return s_ShaderAssetTypes[index].name;
+}
+
+ShaderType ShaderTypeFromAssetType(in Name assetType){
+    for(usize i = 0u; i < s_ShaderAssetTypes.size(); ++i){
+        if(s_ShaderAssetTypes[i].name == assetType)
+            return cast<ShaderType>(i);
+    }
+    return ShaderType::Invalid;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

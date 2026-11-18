@@ -2,80 +2,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_font/asset.adhd>
+#include <impl/ecs_ui/toolkit/text/atlas_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/global.adhd.h>
-#include <impl/ecs_ui/toolkit/text/atlas_types.adhd.h>
-#include <impl/assets_font/asset.adhd.h>
+type GlyphPagePixels = Vector<u8>;
+type SharedGlyphPage = Shared<GlyphPage>;
 
-#include <core/assets/ref.h>
-
-#include <global/expected.h>
-#include <global/refcount_ptr.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Coverage is linear R8.
-// Published pages are immutable; versions sharing an atlas/page identity only append glyphs.
-// Repacking or replacing existing texels requires a new atlas identity.
-// The caller's arena outlives all consumers.
+// Each published version holds an immutable linear R8 coverage image.
 class GlyphPage : NoCopy{
-public:
-    using Pixels = Vector<u8, Core::Alloc::GlobalArena>;
+    private GlyphPageBindingRecord<Font> m_binding;
+    private GlyphPagePixels m_pixels;
 
+    public GlyphPage(in GlyphPageBindingRecord<Font> binding, in Span<u8> pixels){
+        this.m_binding = binding;
+        AssignTriviallyCopyableVector(this.m_pixels, pixels);
+    }
 
-public:
-    GlyphPage(const GlyphPageBinding& binding, Pixels&& pixels)noexcept
-        : m_binding(binding)
-        , m_pixels(Move(pixels))
-    {}
-
-
-public:
-    [[nodiscard]] const GlyphPageBinding& binding()const noexcept{ return m_binding; }
-
-    [[nodiscard]] const Pixels& pixels()const noexcept{ return m_pixels; }
-
-
-private:
-    GlyphPageBinding m_binding;
-    Pixels m_pixels;
-};
-
-using SharedGlyphPage = RefCountPtr<RefCounter<GlyphPage>, ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>>;
-
-[[nodiscard]] FOUNDATION_INLINE Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels)noexcept{
-    if(!ValidGlyphPageBinding(binding, pixels.size()))
-        return MakeUnexpected(Failure{});
-    auto* const page = NewArenaObject<RefCounter<GlyphPage>>(arena, binding, Move(pixels));
-    if(!page)
-        return MakeUnexpected(Failure{});
-    return SharedGlyphPage(page, ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    public in GlyphPageBindingRecord<Font> binding()const{ return this.m_binding; }
+    public in GlyphPagePixels pixels()const{ return this.m_pixels; }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_UI_END
+Expected<SharedGlyphPage> CopyGlyphPage(in SharedPool pool, in GlyphPageBindingRecord<Font> binding, in Span<u8> pixels){
+    if(!ValidGlyphPageBinding<Font>(binding, pixels.size()))
+        return MakeUnexpected(Failure());
+    return pool.make<GlyphPage>(binding, pixels);
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<SharedGlyphPage> CreateGlyphPage(in SharedPool pool, in GlyphPageBindingRecord<Font> binding, mut Vector<u8> pixels){
+    Expected<SharedGlyphPage> page = CopyGlyphPage(pool, binding, Span<u8>(pixels));
+    if(page.has_value())
+        pixels.clear();
+    return page;
 }
 
 

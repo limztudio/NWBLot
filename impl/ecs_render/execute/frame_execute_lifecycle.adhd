@@ -3,140 +3,48 @@
 
 
 #include <impl/ecs_render/execute/types.adhd>
+#include <impl/ecs_render/renderer_frame_pipeline.adhd>
+#include <impl/ecs_render/shadow/light_space_shadow.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class ShadowPrepareStateLifecycleContext{
+    public mut RendererFramePipeline renderer;
+    private GpuPersistentStateCandidate stateCandidate;
+    public Span<BufferHandle> buffers;
+    public b8 stateCandidateRequired = false;
+    public b8 statePrepared = false;
+    public b8 stateReady = true;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-class DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class FrameExecuteLifecycle final{
-public:
-    struct ShadowPrepareStateLifecycleContext{
-        NotNull<RendererFramePipeline*> renderer;
-        Core::Alloc::ScratchArena& scratchArena;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> stateCandidate;
-        Span<const Core::BufferHandle> buffers{};
-        b8 stateCandidateRequired = false;
-        b8 statePrepared = false;
-        b8 stateReady = true;
-    };
-    struct ShadowVisibilityStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        NotNull<RendererFramePipeline*> renderer;
-        NotNull<DeferredFrameTargets*> targets;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> returnStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> scratchStateCandidate;
-        Span<const Core::TextureHandle> returnTextures{};
-        Span<const Core::TextureHandle> scratchTextures{};
-        Span<const Core::BufferHandle> scratchBuffers{};
-        const b8* lightSpacePrepared = nullptr;
-        LightSpaceCaptureTicket lightSpaceCaptureTicket;
-        b8 statePrepared = false;
-        b8 stateReady = false;
-    };
-    struct SoftwareCausticsStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        NotNull<RendererFramePipeline*> renderer;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> returnStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> scratchStateCandidate;
-        Span<const Core::TextureHandle> irradianceTextures{};
-        Span<const Core::TextureHandle> scratchTextures{};
-        b8 statePrepared = false;
-        b8 stateReady = false;
-    };
-    struct SurfelGiStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        NotNull<RendererFramePipeline*> renderer;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> returnStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> counterStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> computeStateCandidate;
-        Span<const Core::TextureHandle> returnTextures{};
-        Span<const Core::BufferHandle> counterBuffers{};
-        Span<const Core::TextureHandle> computeTextures{};
-        Span<const Core::BufferHandle> computeBuffers{};
-        b8 statePrepared = false;
-        b8 stateReady = false;
-    };
-    struct HardwareCausticsStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        NotNull<RendererFramePipeline*> renderer;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> accumulatorStateCandidate;
-        Span<const Core::TextureHandle> accumulatorTextures{};
-        b8 statePrepared = false;
-        b8 stateReady = false;
-    };
-    struct DeferredLightingStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        NotNull<RendererFramePipeline*> renderer;
-        NotNull<DeferredFrameTargets*> targets;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> shadowReturnStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> causticReturnStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> surfelReturnStateCandidate;
-        Span<const Core::TextureHandle> shadowReturnTextures{};
-        Span<const Core::TextureHandle> causticReturnTextures{};
-        Span<const Core::TextureHandle> surfelReturnTextures{};
-        b8 usesLaggedHistory = false;
-        b8 statePrepared = false;
-        b8 stateReady = false;
-    };
-
-
-public:
-    FrameExecuteLifecycle() = delete;
-
-
-public:
-    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareShadowPrepareTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        ShadowPrepareStateLifecycleContext* const context = static_cast<ShadowPrepareStateLifecycleContext*>(rawContext);
-        if(!context || !finalState)
-            return false;
-        const b8 candidateBuilt = context->renderer->m_shadowPreparePersistentState.buildMergedBufferSubset(*finalState, context->buffers, context->scratchArena, *context->stateCandidate);
-        context->statePrepared = IsShadowPrepareStateCandidatePrepared(candidateBuilt, context->stateCandidate->valid(), context->stateCandidate->empty(), context->stateCandidateRequired);
-        return context->statePrepared;
+    public ShadowPrepareStateLifecycleContext(mut RendererFramePipeline renderer){
+        this.renderer = renderer;
+        this.stateCandidate = GpuPersistentStateCandidate(renderer.m_shadowPreparePersistentState);
     }
 
-    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptShadowPrepareTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
-        ShadowPrepareStateLifecycleContext* const context = static_cast<ShadowPrepareStateLifecycleContext*>(rawContext);
-        if(!context || !context->statePrepared)
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(!finalState.has_value())
+            return false;
+        const b8 candidateBuilt = this.renderer.m_shadowPreparePersistentState.buildMergedBufferSubset(finalState.value(), this.buffers, this.stateCandidate);
+        this.statePrepared = IsShadowPrepareStateCandidatePrepared(candidateBuilt, this.stateCandidate.valid(), this.stateCandidate.empty(), this.stateCandidateRequired);
+        return this.statePrepared;
+    }
+    [cpp_unwind]
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.statePrepared)
             return false;
 
-        RendererFramePipeline& renderer = *context->renderer;
-        if(!CanCommitShadowPrepareStateCandidate(context->stateCandidate->valid(), context->stateCandidate->empty(), context->stateCandidateRequired)){
-            context->stateReady = false;
+        mut RendererFramePipeline renderer = this.renderer;
+        if(!CanCommitShadowPrepareStateCandidate(this.stateCandidate.valid(), this.stateCandidate.empty(), this.stateCandidateRequired)){
+            this.stateReady = false;
             renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
             return false;
         }
 
-        context->stateReady = renderer.m_shadowPreparePersistentState.commit(*context->stateCandidate);
-        if(!context->stateReady){
+        this.stateReady = renderer.m_shadowPreparePersistentState.commit(this.stateCandidate);
+        if(!this.stateReady){
             renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
             return false;
         }
@@ -145,166 +53,236 @@ public:
         renderer.m_raytracingSystem.confirmPreparedMeshSwBvhBuilds();
         return true;
     }
+}
 
-    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareShadowVisibilityTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        ShadowVisibilityStateLifecycleContext* const context = static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext);
-        if(!context || context->returnTextures.empty() || context->scratchTextures.empty() || context->scratchBuffers.empty() || !finalState)
+class ShadowVisibilityStateLifecycleContext{
+    public mut RendererFramePipeline renderer;
+    public mut DeferredFrameTargets targets;
+    private GpuPersistentStateCandidate returnStateCandidate;
+    private GpuPersistentStateCandidate scratchStateCandidate;
+    public Span<TextureHandle> returnTextures;
+    public Span<TextureHandle> scratchTextures;
+    public Span<BufferHandle> scratchBuffers;
+    public Optional<in b8> lightSpacePrepared;
+    public LightSpaceCaptureTicket lightSpaceCaptureTicket;
+    public b8 statePrepared = false;
+    public b8 stateReady = false;
+
+    public ShadowVisibilityStateLifecycleContext(mut RendererFramePipeline renderer, mut DeferredFrameTargets targets){
+        this.renderer = renderer;
+        this.targets = targets;
+        this.returnStateCandidate = GpuPersistentStateCandidate(renderer.m_shadowVisibilityReturnState);
+        this.scratchStateCandidate = GpuPersistentStateCandidate(renderer.m_shadowComputePersistentState);
+    }
+
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(this.returnTextures.empty() || this.scratchTextures.empty() || this.scratchBuffers.empty() || !finalState.has_value())
             return false;
 
         // An inactive route retains its live allocation and accepted native state until that route runs again.
-        const b8 scratchStateReady = context->renderer->m_shadowComputePersistentState.buildMergedResourceSubset(
-            *finalState,
-            context->scratchTextures,
-            context->scratchBuffers,
-            context->scratchArena,
-            *context->scratchStateCandidate
+        const b8 scratchStateReady = this.renderer.m_shadowComputePersistentState.buildMergedResourceSubset(
+            finalState.value(),
+            this.scratchTextures,
+            this.scratchBuffers,
+            this.scratchStateCandidate
         );
-        const b8 returnStateReady = context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(*finalState, context->returnTextures, {}, context->scratchArena, *context->returnStateCandidate);
-        context->statePrepared = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
-        return context->statePrepared;
+        const b8 returnStateReady = this.renderer.m_shadowVisibilityReturnState.buildFilteredResourceSubset(finalState.value(), this.returnTextures, Span<BufferHandle>(), this.returnStateCandidate);
+        this.statePrepared = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
+        return this.statePrepared;
     }
-
-    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptShadowVisibilityTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
-        ShadowVisibilityStateLifecycleContext* const context = static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext);
-        if(!context || !context->statePrepared)
+    [cpp_unwind]
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.statePrepared)
             return false;
 
-        const b8 returnStateReady = context->renderer->m_shadowVisibilityReturnState.commit(*context->returnStateCandidate);
-        const b8 scratchStateReady = context->renderer->m_shadowComputePersistentState.commit(*context->scratchStateCandidate);
-        context->stateReady = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
-        context->renderer->m_raytracingSystem.finalizeSoftShadowTemporalHistory(*context->targets);
-        if(ShouldAcceptLightSpaceShadowCaptureOnVisibility(context->stateReady, context->lightSpacePrepared != nullptr))
-            context->renderer->m_raytracingSystem.acceptLightSpaceShadowCapture(context->lightSpaceCaptureTicket, *context->lightSpacePrepared);
-        return context->stateReady;
+        const b8 returnStateReady = this.renderer.m_shadowVisibilityReturnState.commit(this.returnStateCandidate);
+        const b8 scratchStateReady = this.renderer.m_shadowComputePersistentState.commit(this.scratchStateCandidate);
+        this.stateReady = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
+        this.renderer.m_raytracingSystem.finalizeSoftShadowTemporalHistory(this.targets);
+        if(ShouldAcceptLightSpaceShadowCaptureOnVisibility(this.stateReady, this.lightSpacePrepared.has_value()))
+            this.renderer.m_raytracingSystem.acceptLightSpaceShadowCapture(this.lightSpaceCaptureTicket, this.lightSpacePrepared.value());
+        return this.stateReady;
+    }
+}
+
+class SoftwareCausticsStateLifecycleContext{
+    public mut RendererFramePipeline renderer;
+    private GpuPersistentStateCandidate returnStateCandidate;
+    private GpuPersistentStateCandidate scratchStateCandidate;
+    public Span<TextureHandle> irradianceTextures;
+    public Span<TextureHandle> scratchTextures;
+    public b8 statePrepared = false;
+    public b8 stateReady = false;
+
+    public SoftwareCausticsStateLifecycleContext(mut RendererFramePipeline renderer){
+        this.renderer = renderer;
+        this.returnStateCandidate = GpuPersistentStateCandidate(renderer.m_causticIrradianceReturnState);
+        this.scratchStateCandidate = GpuPersistentStateCandidate(renderer.m_causticsComputePersistentState);
     }
 
-    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareSoftwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        SoftwareCausticsStateLifecycleContext* const context = static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext);
-        if(!context || context->irradianceTextures.empty() || context->scratchTextures.empty() || !finalState)
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(this.irradianceTextures.empty() || this.scratchTextures.empty() || !finalState.has_value())
             return false;
 
-        const b8 returnStateReady = context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(*finalState, context->irradianceTextures, {}, context->scratchArena, *context->returnStateCandidate);
-        const b8 scratchStateReady = context->renderer->m_causticsComputePersistentState.buildFilteredResourceSubset(*finalState, context->scratchTextures, {}, context->scratchArena, *context->scratchStateCandidate);
-        context->statePrepared = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
-        return context->statePrepared;
+        const b8 returnStateReady = this.renderer.m_causticIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.irradianceTextures, Span<BufferHandle>(), this.returnStateCandidate);
+        const b8 scratchStateReady = this.renderer.m_causticsComputePersistentState.buildFilteredResourceSubset(finalState.value(), this.scratchTextures, Span<BufferHandle>(), this.scratchStateCandidate);
+        this.statePrepared = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
+        return this.statePrepared;
+    }
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.statePrepared)
+            return false;
+
+        const b8 returnStateReady = this.renderer.m_causticIrradianceReturnState.commit(this.returnStateCandidate);
+        const b8 scratchStateReady = this.renderer.m_causticsComputePersistentState.commit(this.scratchStateCandidate);
+        this.stateReady = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
+        return this.stateReady;
+    }
+}
+
+class SurfelGiStateLifecycleContext{
+    public mut RendererFramePipeline renderer;
+    private GpuPersistentStateCandidate returnStateCandidate;
+    private GpuPersistentStateCandidate counterStateCandidate;
+    private GpuPersistentStateCandidate computeStateCandidate;
+    public Span<TextureHandle> returnTextures;
+    public Span<BufferHandle> counterBuffers;
+    public Span<TextureHandle> computeTextures;
+    public Span<BufferHandle> computeBuffers;
+    public b8 statePrepared = false;
+    public b8 stateReady = false;
+
+    public SurfelGiStateLifecycleContext(mut RendererFramePipeline renderer){
+        this.renderer = renderer;
+        this.returnStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelIrradianceReturnState);
+        this.counterStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelGiCounterPersistentState);
+        this.computeStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelGiComputePersistentState);
     }
 
-    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptSoftwareCausticsTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-        SoftwareCausticsStateLifecycleContext* const context = static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext);
-        if(!context || !context->statePrepared)
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(this.returnTextures.empty() || this.counterBuffers.empty() || this.computeTextures.empty() || this.computeBuffers.empty() || !finalState.has_value())
             return false;
 
-        const b8 returnStateReady = context->renderer->m_causticIrradianceReturnState.commit(*context->returnStateCandidate);
-        const b8 scratchStateReady = context->renderer->m_causticsComputePersistentState.commit(*context->scratchStateCandidate);
-        context->stateReady = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
-        return context->stateReady;
-    }
-
-    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareSurfelGiTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
-        if(!context || context->returnTextures.empty() || context->counterBuffers.empty() || context->computeTextures.empty() || context->computeBuffers.empty() || !finalState)
-            return false;
-
-        const b8 returnStateReady = context->renderer->m_surfelIrradianceReturnState.buildFilteredResourceSubset(*finalState, context->returnTextures, {}, context->scratchArena, *context->returnStateCandidate);
-        const b8 counterStateReady = context->renderer->m_surfelGiCounterPersistentState.buildFilteredResourceSubset(*finalState, {}, context->counterBuffers, context->scratchArena, *context->counterStateCandidate);
-        const b8 computeStateReady = context->renderer->m_surfelGiComputePersistentState.buildFilteredResourceSubset(
-            *finalState,
-            context->computeTextures,
-            context->computeBuffers,
-            context->scratchArena,
-            *context->computeStateCandidate
+        const b8 returnStateReady = this.renderer.m_surfelIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.returnTextures, Span<BufferHandle>(), this.returnStateCandidate);
+        const b8 counterStateReady = this.renderer.m_surfelGiCounterPersistentState.buildFilteredResourceSubset(finalState.value(), Span<TextureHandle>(), this.counterBuffers, this.counterStateCandidate);
+        const b8 computeStateReady = this.renderer.m_surfelGiComputePersistentState.buildFilteredResourceSubset(
+            finalState.value(),
+            this.computeTextures,
+            this.computeBuffers,
+            this.computeStateCandidate
         );
-        context->statePrepared = AreTriplePersistentStateSubsetsReady(returnStateReady, counterStateReady, computeStateReady);
-        return context->statePrepared;
+        this.statePrepared = AreTriplePersistentStateSubsetsReady(returnStateReady, counterStateReady, computeStateReady);
+        return this.statePrepared;
     }
-
-    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptSurfelGiTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
-        SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
-        if(!context || !context->statePrepared)
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.statePrepared)
             return false;
 
-        RendererFramePipeline& renderer = *context->renderer;
-        const b8 returnStateReady = renderer.m_surfelIrradianceReturnState.commit(*context->returnStateCandidate);
-        const b8 counterStateReady = renderer.m_surfelGiCounterPersistentState.commit(*context->counterStateCandidate);
-        const b8 computeStateReady = renderer.m_surfelGiComputePersistentState.commit(*context->computeStateCandidate);
-        context->stateReady = AreTriplePersistentStateSubsetsReady(returnStateReady, counterStateReady, computeStateReady);
-        if(context->stateReady)
+        mut RendererFramePipeline renderer = this.renderer;
+        const b8 returnStateReady = renderer.m_surfelIrradianceReturnState.commit(this.returnStateCandidate);
+        const b8 counterStateReady = renderer.m_surfelGiCounterPersistentState.commit(this.counterStateCandidate);
+        const b8 computeStateReady = renderer.m_surfelGiComputePersistentState.commit(this.computeStateCandidate);
+        this.stateReady = AreTriplePersistentStateSubsetsReady(returnStateReady, counterStateReady, computeStateReady);
+        if(this.stateReady)
             renderer.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
-        return context->stateReady;
+        return this.stateReady;
+    }
+}
+
+class HardwareCausticsStateLifecycleContext{
+    public mut RendererFramePipeline renderer;
+    private GpuPersistentStateCandidate accumulatorStateCandidate;
+    public Span<TextureHandle> accumulatorTextures;
+    public b8 statePrepared = false;
+    public b8 stateReady = false;
+
+    public HardwareCausticsStateLifecycleContext(mut RendererFramePipeline renderer){
+        this.renderer = renderer;
+        this.accumulatorStateCandidate = GpuPersistentStateCandidate(renderer.m_hardwareCausticAccumulatorPersistentState);
     }
 
-    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareHardwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        HardwareCausticsStateLifecycleContext* const context = static_cast<HardwareCausticsStateLifecycleContext*>(rawContext);
-        if(!context || context->accumulatorTextures.empty() || !finalState)
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(this.accumulatorTextures.empty() || !finalState.has_value())
             return false;
 
-        const b8 accumulatorStateReady = context->renderer->m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset(*finalState, context->accumulatorTextures, {}, context->scratchArena, *context->accumulatorStateCandidate);
-        context->statePrepared = accumulatorStateReady;
-        return context->statePrepared;
+        const b8 accumulatorStateReady = this.renderer.m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset(finalState.value(), this.accumulatorTextures, Span<BufferHandle>(), this.accumulatorStateCandidate);
+        this.statePrepared = accumulatorStateReady;
+        return this.statePrepared;
     }
-
-    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptHardwareCausticsTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-        HardwareCausticsStateLifecycleContext* const context = static_cast<HardwareCausticsStateLifecycleContext*>(rawContext);
-        if(!context || !context->statePrepared)
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.statePrepared)
             return false;
 
-        const b8 accumulatorStateReady = context->renderer->m_hardwareCausticAccumulatorPersistentState.commit(*context->accumulatorStateCandidate);
-        context->stateReady = accumulatorStateReady;
-        return context->stateReady;
+        const b8 accumulatorStateReady = this.renderer.m_hardwareCausticAccumulatorPersistentState.commit(this.accumulatorStateCandidate);
+        this.stateReady = accumulatorStateReady;
+        return this.stateReady;
+    }
+}
+
+class DeferredLightingStateLifecycleContext{
+    public mut RendererFramePipeline renderer;
+    public mut DeferredFrameTargets targets;
+    private GpuPersistentStateCandidate shadowReturnStateCandidate;
+    private GpuPersistentStateCandidate causticReturnStateCandidate;
+    private GpuPersistentStateCandidate surfelReturnStateCandidate;
+    public Span<TextureHandle> shadowReturnTextures;
+    public Span<TextureHandle> causticReturnTextures;
+    public Span<TextureHandle> surfelReturnTextures;
+    public b8 usesLaggedHistory = false;
+    public b8 statePrepared = false;
+    public b8 stateReady = false;
+
+    public DeferredLightingStateLifecycleContext(mut RendererFramePipeline renderer, mut DeferredFrameTargets targets){
+        this.renderer = renderer;
+        this.targets = targets;
+        this.shadowReturnStateCandidate = GpuPersistentStateCandidate(renderer.m_shadowVisibilityReturnState);
+        this.causticReturnStateCandidate = GpuPersistentStateCandidate(renderer.m_causticIrradianceReturnState);
+        this.surfelReturnStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelIrradianceReturnState);
     }
 
-    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareDeferredLightingTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        DeferredLightingStateLifecycleContext* const context = static_cast<DeferredLightingStateLifecycleContext*>(rawContext);
-        if(!context || context->shadowReturnTextures.empty() || context->causticReturnTextures.empty() || context->surfelReturnTextures.empty() || !finalState)
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        if(this.shadowReturnTextures.empty() || this.causticReturnTextures.empty() || this.surfelReturnTextures.empty() || !finalState.has_value())
             return false;
 
         b8 shadowStateReady = true;
         b8 causticStateReady = true;
         b8 surfelStateReady = true;
-        if(ShouldBuildDirectDeferredLightingReturnStates(context->usesLaggedHistory)){
-            shadowStateReady = context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(*finalState, context->shadowReturnTextures, {}, context->scratchArena, *context->shadowReturnStateCandidate);
-            causticStateReady = context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(*finalState, context->causticReturnTextures, {}, context->scratchArena, *context->causticReturnStateCandidate);
-            surfelStateReady = context->renderer->m_surfelIrradianceReturnState.buildFilteredResourceSubset(*finalState, context->surfelReturnTextures, {}, context->scratchArena, *context->surfelReturnStateCandidate);
+        if(ShouldBuildDirectDeferredLightingReturnStates(this.usesLaggedHistory)){
+            shadowStateReady = this.renderer.m_shadowVisibilityReturnState.buildFilteredResourceSubset(finalState.value(), this.shadowReturnTextures, Span<BufferHandle>(), this.shadowReturnStateCandidate);
+            causticStateReady = this.renderer.m_causticIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.causticReturnTextures, Span<BufferHandle>(), this.causticReturnStateCandidate);
+            surfelStateReady = this.renderer.m_surfelIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.surfelReturnTextures, Span<BufferHandle>(), this.surfelReturnStateCandidate);
         }
-        context->statePrepared = AreTriplePersistentStateSubsetsReady(shadowStateReady, causticStateReady, surfelStateReady);
-        return context->statePrepared;
+        this.statePrepared = AreTriplePersistentStateSubsetsReady(shadowStateReady, causticStateReady, surfelStateReady);
+        return this.statePrepared;
     }
-
-    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptDeferredLightingTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
-        DeferredLightingStateLifecycleContext* const context = static_cast<DeferredLightingStateLifecycleContext*>(rawContext);
-        if(!context || !context->statePrepared)
+    [cpp_unwind]
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.statePrepared)
             return false;
 
-        RendererFramePipeline& renderer = *context->renderer;
-        if(context->usesLaggedHistory)
-            context->targets->laggedLightingHistory.slotsUploaded = true;
+        mut RendererFramePipeline renderer = this.renderer;
+        if(this.usesLaggedHistory)
+            this.targets.laggedLightingHistory.slotsUploaded = true;
         b8 shadowStateReady = true;
         b8 causticStateReady = true;
         b8 surfelStateReady = true;
-        if(ShouldBuildDirectDeferredLightingReturnStates(context->usesLaggedHistory)){
-            shadowStateReady = renderer.m_shadowVisibilityReturnState.commit(*context->shadowReturnStateCandidate);
-            causticStateReady = renderer.m_causticIrradianceReturnState.commit(*context->causticReturnStateCandidate);
-            surfelStateReady = renderer.m_surfelIrradianceReturnState.commit(*context->surfelReturnStateCandidate);
+        if(ShouldBuildDirectDeferredLightingReturnStates(this.usesLaggedHistory)){
+            shadowStateReady = renderer.m_shadowVisibilityReturnState.commit(this.shadowReturnStateCandidate);
+            causticStateReady = renderer.m_causticIrradianceReturnState.commit(this.causticReturnStateCandidate);
+            surfelStateReady = renderer.m_surfelIrradianceReturnState.commit(this.surfelReturnStateCandidate);
         }
-        context->stateReady = AreTriplePersistentStateSubsetsReady(shadowStateReady, causticStateReady, surfelStateReady);
-        if(!context->stateReady)
+        this.stateReady = AreTriplePersistentStateSubsetsReady(shadowStateReady, causticStateReady, surfelStateReady);
+        if(!this.stateReady)
             return false;
-        if(context->usesLaggedHistory)
-            renderer.reportLaggedLightingTransition(LaggedLightingReport::ActiveHistoryAccepted, context->targets->laggedLightingHistory.generation);
+        if(this.usesLaggedHistory)
+            renderer.reportLaggedLightingTransition(LaggedLightingReport::ActiveHistoryAccepted, this.targets.laggedLightingHistory.generation);
         return true;
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -3,171 +3,99 @@
 
 
 #include <impl/assets_shader/cook_internal.adhd>
+#include <impl/assets_shader/cook_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_shader/cook.adhd.h>
-#include <impl/assets_shader/cook_internal.adhd.h>
-
-#include <core/assets/paths.h>
-#include <core/common/log.h>
-
-#include <global/source_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ShaderSourceDependencies{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(
-    const AStringView includeName,
-    const ShaderBinaryPayload::IncludeKind::Enum kind,
-    const TStringView sourceDirectory,
-    const Span<const Path> includeDirectories,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(kind == ShaderBinaryPayload::IncludeKind::Relative){
-        ::Path<Core::Alloc::ScratchArena> localCandidate = (::Path<Core::Alloc::ScratchArena>(scratchArena, sourceDirectory) / includeName).lexicallyNormal();
-        const auto localCandidateQueryResult = IsRegularFile(localCandidate);
-        if(localCandidateQueryResult && *localCandidateQueryResult)
-            return localCandidate;
-        if(!localCandidateQueryResult && !IsMissingPathError(localCandidateQueryResult.error())){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(localCandidate), ConvertString(localCandidateQueryResult.error().message()));
-            return MakeUnexpected(Failure{});
-        }
-    }
-
-    for(const Path& includeDirectory : includeDirectories){
-        ::Path<Core::Alloc::ScratchArena> includeCandidate = (::Path<Core::Alloc::ScratchArena>(scratchArena, includeDirectory) / includeName).lexicallyNormal();
-        const auto includeCandidateQueryResult = IsRegularFile(includeCandidate);
-        if(includeCandidateQueryResult && *includeCandidateQueryResult)
-            return includeCandidate;
-        if(!includeCandidateQueryResult && !IsMissingPathError(includeCandidateQueryResult.error())){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(includeCandidate), ConvertString(includeCandidateQueryResult.error().message()));
-            return MakeUnexpected(Failure{});
-        }
-    }
-
-    return MakeUnexpected(Failure{});
+Expected<b8> CheckShaderIncludeCandidate(in Path candidate){
+    const Expected<b8, ErrorCode> exists = IsRegularFile(candidate);
+    if(exists.has_value())
+        return exists.value();
+    if(IsMissingPathError(exists.error()))
+        return false;
+    error("Failed to query include candidate '{}': {}", candidate, ErrorCodeMessage(exists.error()));
+    return MakeUnexpected(Failure());
 }
 
-template<typename SourceArenaT, typename DependencyVectorT>
-[[nodiscard]] b8 Gather(const ::Path<SourceArenaT>& sourcePath, Span<const Path> includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, Core::Alloc::ScratchArena& scratchArena, DependencyVectorT& outDependencies){
-    using ScratchArena = Core::Assets::ScratchArena;
-    using ScratchPath = ::Path<ScratchArena>;
-    using ScratchString = Core::Assets::ScratchString;
+Expected<Path> ResolveShaderIncludeFile<Directories>(
+    in StringView includeName, in IncludeKind kind, in Path sourceDirectory, in Directories directories
+){
+    if(kind == IncludeKind::Relative){
+        const Path localCandidate = (sourceDirectory / includeName).lexicallyNormal();
+        const Expected<b8> local = CheckShaderIncludeCandidate(localCandidate);
+        if(!local.has_value())
+            return MakeUnexpected(Failure());
+        if(local.value())
+            return localCandidate;
+    }
+    for(in auto directory : directories){
+        const Path base(directory);
+        const Path candidate = (base / includeName).lexicallyNormal();
+        const Expected<b8> found = CheckShaderIncludeCandidate(candidate);
+        if(!found.has_value())
+            return MakeUnexpected(Failure());
+        if(found.value())
+            return candidate;
+    }
+    return MakeUnexpected(Failure());
+}
 
-    outDependencies.clear();
-    HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>> visited{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
-    Deque<ScratchPath, ScratchArena> pending{scratchArena};
-    pending.emplace_back(scratchArena, sourcePath);
-    ScratchString sourceText{scratchArena};
-
+b8 GatherShaderSourceDependencies<Directories, Dependencies>(
+    in Path sourcePath, in Directories directories, in Span<StringView> plannedMacroIncludes, mut Vector<Dependencies> dependencies
+){
+    dependencies.clear();
+    HashSet<String> visited;
+    Vector<Path> pending;
+    AppendOwnedPath(pending, sourcePath);
+    String sourceText;
     while(!pending.empty()){
-        ScratchPath dependencyPath = Move(pending.back());
+        const Path dependency(pending.back());
         pending.pop_back();
-
-        const auto absolutePathResult = AbsolutePath(dependencyPath);
-        if(!absolutePathResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependencyPath), ConvertString(absolutePathResult.error().message()));
+        const Expected<Path, ErrorCode> absolute = AbsolutePath(dependency);
+        if(!absolute.has_value()){
+            error("Failed to resolve dependency path '{}' : {}", dependency, ErrorCodeMessage(absolute.error()));
             return false;
         }
-        const ScratchPath absolutePath = absolutePathResult->lexicallyNormal();
-
-        ScratchString canonicalPathKey = PathToString(scratchArena, absolutePath);
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        CanonicalizeTextInPlace(canonicalPathKey);
-#endif
-        if(!visited.insert(Move(canonicalPathKey)).second)
+        const Path path = absolute.value().lexicallyNormal();
+        if(!visited.insert(NativePathComparisonKey(path)).second)
             continue;
-
         sourceText.clear();
-        const auto sourceRead = ReadTextFile(absolutePath, sourceText);
-        if(!sourceRead){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to read dependency '{}': {}:{}"), PathToString<tchar>(absolutePath), ConvertString(sourceRead.error().category().name()), sourceRead.error().value());
+        const Expected<void, ErrorCode> read = ReadTextFile(path, sourceText);
+        if(!read.has_value()){
+            error("Failed to read dependency '{}': {}:{}", path, ErrorCodeCategoryName(read.error()), read.error().value());
             return false;
         }
         StripUtf8Bom(sourceText);
         SpliceSourceLines(sourceText);
         MaskCStyleSourceComments(sourceText);
+        AppendOwnedPath(dependencies, path);
 
-        outDependencies.emplace_back(outDependencies.get_allocator().arena(), absolutePath);
-
-        const AStringView sourceView(sourceText.data(), sourceText.size());
-        usize lineBegin = 0u;
-        AStringView line;
-        while(NextSourceDependencyLine(sourceView, lineBegin, line)){
-            if(const Expected<ShaderBinaryPayload::IncludeDirective> include = ShaderBinaryPayload::TryExtractIncludeDirective(line)){
-                const AStringView includeName = include->name;
-                const auto includeKind = include->kind;
-                if(includeKind == ShaderBinaryPayload::IncludeKind::Macro || includeKind == ShaderBinaryPayload::IncludeKind::Unsupported){
-                    if(includeKind == ShaderBinaryPayload::IncludeKind::Macro && IsExternallyPlannedMacroInclude(externallyPlannedMacroIncludes, includeName))
-                        continue;
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'"), ConvertString(TrimView(line)), PathToString<tchar>(absolutePath));
-                    return false;
-                }
-                auto includePath = ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPathView(), includeDirectories, scratchArena);
-                if(!includePath){
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Unable to resolve include '{}' from '{}'"), ConvertString(includeName), PathToString<tchar>(absolutePath));
-                    return false;
-                }
-
-                pending.push_back(Move(*includePath));
+        const StringView text = StringView(sourceText);
+        usize start = 0u;
+        StringView line = "";
+        while(NextSourceDependencyLine(text, start, line)){
+            const Expected<IncludeDirective> directive = TryExtractIncludeDirective(line);
+            if(!directive.has_value())
+                continue;
+            const StringView name = directive.value().name;
+            const IncludeKind kind = directive.value().kind;
+            if(kind == IncludeKind::Macro || kind == IncludeKind::Unsupported){
+                if(kind == IncludeKind::Macro && IsExternallyPlannedMacroInclude(plannedMacroIncludes, name))
+                    continue;
+                error("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'", TrimView(line), path);
+                return false;
             }
+            const Expected<Path> include = ResolveShaderIncludeFile(name, kind, path.parentPath(), directories);
+            if(!include.has_value()){
+                error("Unable to resolve include '{}' from '{}'", name, path);
+                return false;
+            }
+            pending.push_back(include.value());
         }
     }
-
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

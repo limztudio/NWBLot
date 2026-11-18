@@ -8,110 +8,80 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKIN_JOINT_WORD_COUNT")]
+extern const u32 s_ShaderSkinnedMeshSkinJointWordCount;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKIN_INFLUENCE_BYTE_SIZE")]
+extern const u32 s_ShaderSkinnedMeshSkinInfluenceByteSize;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKIN_INFLUENCE_ALIGNMENT")]
+extern const u32 s_ShaderSkinnedMeshSkinInfluenceAlignment;
+
+[cpp_header("<impl/assets/graphics/skinned_mesh/constants.h>"), cpp_name("NWB_SKINNED_MESH_SKIN_WEIGHT_BYTE_OFFSET")]
+extern const u32 s_ShaderSkinnedMeshSkinWeightByteOffset;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets/graphics/skinned_mesh/constants.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct alignas(NWB_SKINNED_MESH_SKIN_INFLUENCE_ALIGNMENT) MeshSkinningInfluenceGpu{
-    Array<u32, NWB_SKINNED_MESH_SKIN_JOINT_WORD_COUNT> packedJoint{};
-    Float4U weight{};
-};
-static_assert(sizeof(MeshSkinningInfluenceGpu) == NWB_SKINNED_MESH_SKIN_INFLUENCE_BYTE_SIZE, "MeshSkinning influence GPU layout drifted");
-static_assert(alignof(MeshSkinningInfluenceGpu) == NWB_SKINNED_MESH_SKIN_INFLUENCE_ALIGNMENT, "MeshSkinning influence GPU alignment must match the packed uint2");
-static_assert(offsetof(MeshSkinningInfluenceGpu, packedJoint) == 0u, "MeshSkinning packed joints must lead each GPU record");
-static_assert(offsetof(MeshSkinningInfluenceGpu, weight) == NWB_SKINNED_MESH_SKIN_WEIGHT_BYTE_OFFSET, "MeshSkinning FP32 weights must follow the packed joints");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshSkinningPayload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Encode mesh-owned data only when creating its GPU buffer.
-[[nodiscard]] FOUNDATION_INLINE Expected<Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>> BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& arena){
-    Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> influences(arena);
-    if(!ValidateMeshSkinningInfluenceStream(instance.handle.value, instance.skeletonJointCount, instance.skin))
-        return MakeUnexpected(Failure{});
-    if(instance.skin.empty())
-        return influences;
-
-    influences.reserve(instance.skin.size());
-    for(const SkinInfluence4& sourceSkin : instance.skin)
-        influences.push_back(MeshSkinningInfluenceGpu{ PackSkinInfluenceJoints(sourceSkin), sourceSkin.weight });
-    return influences;
+[layout(8)]
+class MeshSkinningInfluenceGpu{
+    public Array<u32, 2u> packedJoint;
+    public f32x4u weight;
 }
 
-// Source validation and deformation snapshots keep every row; GPU reads only joints referenced by this Skin.
-[[nodiscard]] FOUNDATION_INLINE Expected<Span<const SkeletonJointMatrix>> ResolveGpuJointPalette(const MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload)noexcept{
-    return ResolveMeshSkinningGpuJointPalette(instance, payload);
+static_assert(size_of<Array<u32, 2u>>() == size_of<u32>() * s_ShaderSkinnedMeshSkinJointWordCount);
+static_assert(size_of<MeshSkinningInfluenceGpu>() == s_ShaderSkinnedMeshSkinInfluenceByteSize, "MeshSkinning influence GPU layout drifted");
+static_assert(align_of<MeshSkinningInfluenceGpu>() == s_ShaderSkinnedMeshSkinInfluenceAlignment, "MeshSkinning influence GPU alignment must match the packed uint2");
+static_assert(offset_of<MeshSkinningInfluenceGpu>(packedJoint) == 0u, "MeshSkinning packed joints must lead each GPU record");
+static_assert(offset_of<MeshSkinningInfluenceGpu>(weight) == s_ShaderSkinnedMeshSkinWeightByteOffset, "MeshSkinning FP32 weights must follow the packed joints");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SkinningComponentView<T>{
+    public in T component;
+
+    public SkinningComponentView(in T value){
+        this.component = value;
+    }
 }
 
-template<typename VectorArenaT>
-[[nodiscard]] FOUNDATION_INLINE b8 BuildSkinJointPalette(
-    const MeshSkinningRuntimeInstance& instance,
-    const Span<const SkeletonJointMatrix> sourceJoints,
-    const u32 skinningMode,
-    Vector<SkeletonJointMatrix, VectorArenaT>& outJointPalette
+Optional<SkinningComponentView<T>> FindSkinningComponent<T>(in World world, in EntityID entity){
+    if(world.hasComponent<T>(entity))
+        return SkinningComponentView<T>(world.getComponent<T>(entity));
+    return Optional<SkinningComponentView<T>>();
+}
+
+b8 BuildRuntimeSkinPayload(
+    in MeshSkinningRuntimeInstance instance,
+    in Optional<SkinningComponentView<SkeletonJointPaletteComponent>> jointPalette,
+    in Optional<SkinningComponentView<SkeletonPoseComponent>> skeletonPose,
+    mut RuntimeSkinPayloadScratch payload
 ){
-    return BuildMeshSkinningJointPalette(instance, sourceJoints, skinningMode, outJointPalette);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload){
-    if(skeletonPose && HasSkeletonPoseData(*skeletonPose))
-        return PopulateRuntimeSkinPayloadFromPose(instance, *skeletonPose, payload);
-
-    if(jointPalette)
-        return PopulateRuntimeSkinPayloadFromPalette(instance, *jointPalette, payload);
-
-    payload.skinInfluenceCount = 0u;
-    payload.jointMatrices.clear();
-    payload.poseJoints.clear();
-    payload.resolvedSkinningMode = static_cast<u32>(SkeletonSkinningMode::LinearBlend);
+    if(skeletonPose.has_value() && HasSkeletonPoseData(skeletonPose.value().component))
+        return PopulateRuntimeSkinPayloadFromPose(instance, skeletonPose.value().component, payload);
+    if(jointPalette.has_value())
+        return PopulateRuntimeSkinPayloadFromPalette(instance, jointPalette.value().component, payload);
+    payload.reset(cast<u32>(SkeletonSkinningMode::LinearBlend));
     return true;
 }
 
+// Encode mesh-owned data only when creating its GPU buffer.
+Expected<Vector<MeshSkinningInfluenceGpu>> BuildSkinInfluences(in MeshSkinningRuntimeInstance instance){
+    if(!ValidateMeshSkinningInfluenceStream(instance.handle.value, instance.skeletonJointCount, instance.skin))
+        return MakeUnexpected(Failure());
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    Vector<MeshSkinningInfluenceGpu> influences = Vector<MeshSkinningInfluenceGpu>();
+    influences.reserve(instance.skin.size());
+    for(in SkinInfluence4 sourceSkin : instance.skin){
+        MeshSkinningInfluenceGpu influence = MeshSkinningInfluenceGpu();
+        influence.packedJoint = PackSkinInfluenceJoints(sourceSkin);
+        influence.weight = sourceSkin.weight;
+        influences.push_back(influence);
+    }
+    return influences;
 }
 
 

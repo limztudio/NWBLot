@@ -29,8 +29,11 @@ native{
 #include <tests/common/capturing_logger.adhd.h>
 #include <tests/common/floating_point_environment_guard.adhd.h>
 #include <tests/common/test_context.adhd.h>
+#include <tests/unit/metascript/generated/borrowed_value.adhd.h>
+#include <tests/unit/metascript/generated/owner_result.adhd.h>
 #include <tests/unit/metascript/generated/builtin_shadow_global.adhd.h>
 #include <tests/unit/metascript/generated/compact_string.adhd.h>
+#include <tests/unit/metascript/generated/cpp_unwind.adhd.h>
 #include <tests/unit/metascript/generated/reflection_container.adhd.h>
 
 
@@ -964,6 +967,104 @@ TEST(AdhdCompiler, DiagnosticPathsBorrowUntilFormattingAndCaptureUtf8){
 }
 
 TEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories){ VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories(); }
+TEST(AdhdCompiler, OptionalAndExpectedBorrowTheOriginalValue){
+    u32 original = 7u;
+    const ::NWB::Tests::BorrowedCount retained(original);
+    const auto fromSpan = ::NWB::Tests::BorrowFirstCount({ &original, 1u });
+    Optional<NotNull<const u32*>> read;
+    EXPECT_EQ(::NWB::Tests::ReadOptionalCount(read), 0u);
+    read = ::NWB::Tests::BorrowOptionalCount(original);
+    Expected<NotNull<u32*>> write = ::NWB::Tests::BorrowExpectedCount(original);
+    ::NWB::Tests::UpdateExpectedCount(write, 23u);
+    EXPECT_EQ(original, 23u);
+    EXPECT_EQ(retained.current(), 23u);
+    EXPECT_EQ(fromSpan.current(), 23u);
+    EXPECT_EQ(::NWB::Tests::ReadOptionalCount(read), 23u);
+}
+
+TEST(AdhdCompiler, CheckedMapLookupRetainsTheOriginalElement){
+    ::NWB::Core::Alloc::ScratchArena arena(Name("tests/metascript/borrowed_map_value"));
+    HashMap<u32, u32, ::ArenaBase> counts(arena);
+    counts[42u] = 11u;
+    const auto retained = ::NWB::Tests::BorrowMappedCount(counts, 42u);
+    counts.at(42u) = 23u;
+    EXPECT_EQ(retained.current(), 23u);
+}
+
+TEST(AdhdCompiler, ExpectedStateChangesRetainValueAndErrorInTheirDestinationArena){
+    using ::NWB::Tests::CachedCountResult;
+    ::NWB::Core::Alloc::GlobalArena destination(Name("tests/metascript/cached_result"));
+    CachedCountResult retained(destination);
+    {
+        ::NWB::Core::Alloc::ScratchArena source(Name("tests/metascript/transient_counts"));
+        Expected<Vector<u32, ::ArenaBase>, u8> counts(s_InPlace, source);
+        counts->push_back(17u);
+        Vector<u8, ::ArenaBase> message(source);
+        message.push_back(4u);
+        Expected<u64, Vector<u8, ::ArenaBase>> issue = MakeUnexpected(Move(message));
+        CachedCountResult local(source);
+        local.update(counts, issue);
+        retained = Move(local);
+        ASSERT_TRUE(retained.counts.has_value());
+        ASSERT_FALSE(retained.issue.has_value());
+        EXPECT_EQ(retained.counts->get_allocator().arenaPtr(), &destination);
+        EXPECT_EQ(retained.issue.error().get_allocator().arenaPtr(), &destination);
+    }
+    EXPECT_EQ(retained.counts->front(), 17u);
+    EXPECT_EQ(retained.issue.error().front(), 4u);
+}
+
+TEST(AdhdCompiler, BorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena){
+    using ::NWB::Tests::CountPublisher;
+    using ::NWB::Tests::OwnedCounts;
+    static_assert(!std::is_copy_constructible_v<OwnedCounts> && !std::is_copy_assignable_v<OwnedCounts>);
+    static_assert(std::is_move_constructible_v<OwnedCounts> && std::is_move_assignable_v<OwnedCounts>);
+    ::NWB::Core::Alloc::GlobalArena destination(Name("tests/metascript/owned_counts"));
+    OwnedCounts retained(destination);
+    {
+        ::NWB::Core::Alloc::ScratchArena owner(Name("tests/metascript/borrowed_publisher"));
+        u32 value = 13u;
+        CountPublisher publisher(owner, value);
+        struct Observer final : ::NWB::Tests::ICountSnapshotObserver{
+            explicit Observer(::ArenaBase& arena) : expected(arena){}
+            b8 inspect(const OwnedCounts& counts)noexcept override{ return counts.values.get_allocator().arenaPtr() == &expected; }
+            ::ArenaBase& expected;
+        } observer(owner);
+        EXPECT_TRUE(publisher.inspectLocal(observer));
+        ::NWB::Tests::CountPublication publication(owner, value);
+        EXPECT_TRUE(publication.inspect(observer));
+        auto published = publisher.snapshot();
+        EXPECT_EQ(&published.values.get_allocator().arena(), &owner);
+        value = 21u;
+        retained = Move(published);
+        EXPECT_EQ(retained.values[0], 13u);
+        publisher.replace(retained);
+        ASSERT_EQ(retained.values.size(), 1u);
+        EXPECT_EQ(retained.values[0], 22u);
+        published.values.clear();
+        published.values.push_back(5u);
+        auto sameArena = publisher.snapshot();
+        const u32* const storage = published.values.data();
+        sameArena.replaceWith(published);
+        EXPECT_EQ(sameArena.values.data(), storage);
+        retained.replaceWith(sameArena);
+        retained.replaceWith(retained);
+    }
+    EXPECT_EQ(&retained.values.get_allocator().arena(), &destination);
+    ASSERT_EQ(retained.values.size(), 1u);
+    EXPECT_EQ(retained.values[0], 5u);
+}
+
+TEST(AdhdCompiler, CppUnwindPreservesExceptionAcrossNestedLambdas){
+    const ::NWB::Tests::CppUnwindCallback probe;
+    InplaceFunction<0u, u32()> callback([]() -> u32{ throw UnexpectedReadFailure{}; });
+    static_assert(noexcept(probe.ready()));
+    static_assert(!noexcept(probe.record(callback)));
+    const ::NWB::Tests::IUnwindCallback& dispatch = probe;
+    static_assert(!noexcept(dispatch.record(callback)));
+    EXPECT_THROW((void)dispatch.record(callback), UnexpectedReadFailure);
+}
+
 TEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode){ VerifyAdhdCompiler_UserCallableShadowsBuiltinInGeneratedCode(); }
 TEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd){ VerifyAdhdCompiler_UserCallableShadowsBuiltinForSimd(); }
 TEST(AdhdCompiler, ResolvedBuiltinStillUsesSimdImplementation){ VerifyAdhdCompiler_ResolvedBuiltinStillUsesSimdImplementation(); }

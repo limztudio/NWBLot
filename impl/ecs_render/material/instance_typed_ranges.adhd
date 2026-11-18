@@ -174,6 +174,22 @@ Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(
     }
 }
 
+Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(in Span<u8> typedBytes, mut Vector<u8> materialTypedBytes){
+    const auto appendRange = TryBuildMaterialTypedByteAppendRange(materialTypedBytes.size(), typedBytes.size());
+    if(!appendRange.has_value())
+        return MakeUnexpected(Failure());
+    if(typedBytes.empty())
+        return appendRange.value().byteRange;
+
+    const usize requiredCapacity = appendRange.value().alignedByteEnd;
+    if(requiredCapacity > materialTypedBytes.capacity())
+        materialTypedBytes.reserve(NextGrowingCapacity(materialTypedBytes.capacity(), requiredCapacity));
+    materialTypedBytes.resize(appendRange.value().byteRange.byteOffset, 0u);
+    AppendTriviallyCopyableVector(materialTypedBytes, typedBytes);
+    materialTypedBytes.resize(requiredCapacity, 0u);
+    return appendRange.value().byteRange;
+}
+
 usize HashMaterialTypedByteContent(in u64 byteHash, in usize byteCount){
     usize seed = HashValue(byteHash);
     return HashCombineValue(seed, byteCount);

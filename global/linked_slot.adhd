@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<global/linked_slot.h>"), cpp_name("::LinkedSlot")]
+extern class LinkedSlot<T>{
+    void connect(mut LinkedSlot<T> other);
+    void disconnect();
+    b8 linked()const;
+    mut LinkedSlot<T> peer();
+    b8 hasValue()const;
+    mut T value();
+    void resetValue();
+    void takeFrom(mut LinkedSlot<T> other);
+};
+
+
+[cpp_header("<global/linked_slot.h>"), cpp_name("::TakeLinkedSlotValue")]
+extern void TakeLinkedSlotValue<T>(mut LinkedSlot<T> slot, mut T value);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

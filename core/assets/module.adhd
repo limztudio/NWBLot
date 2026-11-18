@@ -2,6 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::AssetTypeDescriptor")]
+extern class AssetTypeDescriptor{
+    StringView text;
+    Name name;
+};
+
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::DescribeAssetType")]
+extern AssetTypeDescriptor DescribeAssetType<T>();
+
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::FindAssetTypeIndex")]
+extern usize FindAssetTypeIndex<T>(in auto descriptors);
+
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::RequireAssetTypeIndex")]
+extern usize RequireAssetTypeIndex<T>(in auto descriptors);
+
+
 [cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::IAsset"), cpp_flags(polymorphic_base)]
 extern class IAsset{
     Name assetType(...)const;

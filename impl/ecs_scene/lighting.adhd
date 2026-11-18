@@ -8,91 +8,53 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+static_assert(size_of<LightType>() == size_of<u8>(), "LightType must stay compact for ECS storage");
+static_assert(is_standard_layout<LightComponent>(), "LightComponent must stay layout-stable for ECS storage");
+static_assert(is_trivially_copyable<LightComponent>(), "LightComponent must stay cheap to move in dense ECS storage");
+static_assert(align_of<LightComponent>() >= align_of<f32x4>(), "LightComponent must stay aligned for SIMD component loads");
+static_assert(size_of<LightComponent>() == (size_of<f32x4>() * 3), "LightComponent must stay three aligned vectors wide");
+static_assert((size_of<LightComponent>() % align_of<LightComponent>()) == 0u, "LightComponent array stride must keep every element SIMD-aligned");
+static_assert((offset_of<LightComponent>(colorIntensity) % align_of<f32x4>()) == 0u, "LightComponent::colorIntensity must stay aligned");
+static_assert((offset_of<LightComponent>(range) % align_of<f32>()) == 0u, "LightComponent::range must stay aligned");
+static_assert((offset_of<LightComponent>(innerConeCos) % align_of<f32>()) == 0u, "LightComponent::innerConeCos must stay aligned");
+static_assert((offset_of<LightComponent>(outerConeCos) % align_of<f32>()) == 0u, "LightComponent::outerConeCos must stay aligned");
+static_assert((offset_of<LightComponent>(type) % align_of<LightType>()) == 0u, "LightComponent::type must stay aligned");
+static_assert((offset_of<LightComponent>(enableCaustics) % align_of<b8>()) == 0u, "LightComponent::enableCaustics must stay aligned");
+static_assert((offset_of<LightComponent>(angularRadius) % align_of<f32>()) == 0u, "LightComponent::angularRadius must stay aligned");
+static_assert((offset_of<LightComponent>(sourceRadius) % align_of<f32>()) == 0u, "LightComponent::sourceRadius must stay aligned");
+static_assert(is_standard_layout<SceneLight>(), "SceneLight must stay layout-stable");
+static_assert(is_trivially_copyable<SceneLight>(), "SceneLight must stay cheap to pass through scene preparation");
+static_assert(align_of<SceneLight>() >= align_of<f32x4>(), "SceneLight must keep storage vectors aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_scene/components.adhd.h>
-#include <impl/ecs_scene/lighting_types.adhd.h>
-
-#include <core/ecs/module.h>
-
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_SCENE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(LightType::Enum) == sizeof(u8), "LightType must stay compact for ECS storage");
-static_assert(IsStandardLayout_V<LightComponent>, "LightComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<LightComponent>, "LightComponent must stay cheap to move in dense ECS storage");
-static_assert(alignof(LightComponent) >= alignof(Float4), "LightComponent must stay aligned for SIMD component loads");
-static_assert(sizeof(LightComponent) == (sizeof(Float4) * 3), "LightComponent must stay three aligned vectors wide");
-static_assert((sizeof(LightComponent) % alignof(LightComponent)) == 0u, "LightComponent array stride must keep every element SIMD-aligned");
-static_assert((offsetof(LightComponent, colorIntensity) % alignof(Float4)) == 0u, "LightComponent::colorIntensity must stay aligned");
-static_assert((offsetof(LightComponent, range) % alignof(f32)) == 0u, "LightComponent::range must stay aligned");
-static_assert((offsetof(LightComponent, innerConeCos) % alignof(f32)) == 0u, "LightComponent::innerConeCos must stay aligned");
-static_assert((offsetof(LightComponent, outerConeCos) % alignof(f32)) == 0u, "LightComponent::outerConeCos must stay aligned");
-static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0u, "LightComponent::type must stay aligned");
-static_assert((offsetof(LightComponent, enableCaustics) % alignof(b8)) == 0u, "LightComponent::enableCaustics must stay aligned");
-static_assert((offsetof(LightComponent, angularRadius) % alignof(f32)) == 0u, "LightComponent::angularRadius must stay aligned");
-static_assert((offsetof(LightComponent, sourceRadius) % alignof(f32)) == 0u, "LightComponent::sourceRadius must stay aligned");
-
-static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to pass through scene preparation");
-static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
-
-[[nodiscard]] FOUNDATION_INLINE usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, const Span<SceneLight> outLights)noexcept{
-    const usize maxLights = outLights.size();
-    if(maxLights == 0u)
+usize GatherSceneLights(mut World world, in VectorSingle defaultForward, in usize limit, mut Span<SceneLight> outLights){
+    const usize capacity = Min(limit, outLights.size());
+    if(capacity == 0u)
         return 0u;
 
     usize count = 0u;
-    const auto lightView = world.view<TransformComponent, LightComponent>();
-    for(auto it = lightView.begin(); it != lightView.end(); ++it){
-        if(count >= maxLights)
+    for(in auto row : world.view<TransformComponent, LightComponent>()){
+        if(count == capacity)
             break;
-
-        [[maybe_unused]] auto&& [entity, transform, light] = *it;
-
-        if(const Expected<SceneLight> resolvedLight = TryBuildSceneLight(transform, light)){
-            outLights[count] = *resolvedLight;
+        const Expected<SceneLight> resolved = TryBuildSceneLight(Get<1>(row), Get<2>(row));
+        if(resolved.has_value()){
+            outLights[count] = resolved.value();
             ++count;
         }
     }
-
     if(count == 0u){
         outLights[0] = MakeDefaultSceneLightFromForward(defaultForward);
-        count = 1u;
+        return 1u;
     }
-
     return count;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_SCENE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+usize GatherSceneLights(mut World world, in VectorSingle defaultForward, mut Span<SceneLight> outLights){
+    return GatherSceneLights(world, defaultForward, outLights.size(), outLights);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 EntityID CreateDirectionalLightEntity(mut World world, in f32 pitchRadians, in f32 yawRadians, in f32 rollRadians, in VectorSingle color, in f32 intensity){
     Entity lightEntity = world.createEntity();

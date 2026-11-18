@@ -199,6 +199,7 @@ public:
     [[nodiscard]] Expected<BindingLayoutHandle> createBindingLayout(const BindingLayoutDesc& desc);
     [[nodiscard]] Expected<BindingLayoutHandle> createBindlessLayout(const BindlessLayoutDesc& desc);
     [[nodiscard]] Expected<RayTracingOpacityMicromapHandle> createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc);
+    [[nodiscard]] RayTracingAccelStructDesc makeAccelStructDesc()const noexcept;
     [[nodiscard]] Expected<RayTracingAccelStructHandle> createAccelStruct(const RayTracingAccelStructDesc& desc);
     [[nodiscard]] Expected<MemoryRequirements> getAccelStructMemoryRequirements(RayTracingAccelStruct& accelerationStructure);
     [[nodiscard]] Expected<RayTracingClusterOperationSizeInfo> getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);

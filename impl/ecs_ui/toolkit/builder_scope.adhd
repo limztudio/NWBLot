@@ -2,362 +2,301 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/context.adhd>
+#include <impl/ecs_ui/toolkit/layout/tree.adhd>
+#include <impl/ecs_ui/toolkit/text/service.adhd>
+#include <impl/ecs_ui/toolkit/widgets/style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list.adhd>
+#include <impl/ecs_ui/toolkit/widgets/radio_group_frame.adhd>
+#include <impl/ecs_ui/toolkit/widgets/slider_frame.adhd>
+#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/combo.adhd>
+#include <impl/ecs_ui/toolkit/widgets/combo_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_paint.adhd>
+#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd>
+#include <impl/ecs_ui/toolkit/widgets/context_menu.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/layout/tree.adhd.h>
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/window_style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/radio_group_frame.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/slider_frame.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/combo_style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_visual_paint.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/context_menu.adhd.h>
+[move_only]
+class BuilderOperationEnd : NoCopy{
+    private mut b8 m_active;
+    public BuilderOperationEnd(mut b8 active){ this.m_active = active; }
+    public ~BuilderOperationEnd(){ this.m_active = false; }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_UI_BEGIN
+class BuilderItem{
+    public WidgetState state;
+    public WidgetStyle style;
+    public SelectableStyle selectableStyle;
+    public EditBoxStyle editStyle;
+    public ScrollbarStyle scrollbarStyle;
+    public TextLayout text;
+    public Rect textBounds;
+    public EditBoxView editView;
+    public Optional<mut EditBoxState> editState;
+    public EditBoxOptions editOptions;
+    public EditBoxPaintFlags editFlags;
+    public Insets padding;
+    public f32 checkboxExtent = 0.0f;
+    public u32 node = 0u;
+    public u32 list = s_LayoutNoParent;
+    public u32 radioGroup = s_LayoutNoParent;
+    public u32 slider = s_LayoutNoParent;
+    public u32 progress = s_LayoutNoParent;
+    public u32 image = s_LayoutNoParent;
+    public u32 combo = s_LayoutNoParent;
+    public u32 textArea = s_LayoutNoParent;
+    public u32 integerEdit = s_LayoutNoParent;
+    public u32 floatEdit = s_LayoutNoParent;
+    public b8 enabled = true;
+    public b8 checked = false;
+    public b8 contextMenu = false;
+    public b8 annotated = false;
+}
+
+class BuilderWindowFrame{
+    public Optional<mut WindowState> state;
+    public WidgetStyle style;
+    public WindowOptions options;
+    public WindowMetrics metrics;
+    public b8 firstUse = false;
+    public WidgetState titleState;
+    public WidgetState collapseState;
+    public WidgetState resizeState;
+    public TextLayout title;
+    public Rect titleBounds;
+}
+
+class BuilderTextAreaFrame{
+    public f32 wheelLines = s_StyleScrollWheelStep;
+    public Optional<in EditModel> model;
+    public Optional<mut TextAreaState> state;
+    public EditNavigationSnapshot navigation;
+    public TextAreaModelStamp modelStamp;
+    public u64 stateRevision = 0u;
+    public u32 item = s_LayoutNoParent;
+    public b8 focused = false;
+}
+
+class BuilderNumericEditFrame<Model>{
+    public Optional<mut EditBoxState> state;
+    public TextAreaModelStamp draftStamp;
+    public u64 revision = 0u;
+    public u32 item = s_LayoutNoParent;
+    public b8 focused = false;
+    public Optional<in Model> model;
+}
+
+type BuilderIntegerEditFrame = BuilderNumericEditFrame<IntegerEditModel>;
+type BuilderFloatEditFrame = BuilderNumericEditFrame<FloatEditModel>;
+
+class BuilderListRow{
+    public TextLayout text;
+    public Rect textBounds;
+    public u64 index = 0u;
+    public u64 key = 0u;
+    public b8 enabled = false;
+}
+
+class BuilderListFrame{
+    public Vector<BuilderListRow> rows;
+    public Optional<in IListDataSource> source;
+    public Optional<mut ListState> state;
+    public WidgetStyle widgetStyle;
+    public ListStyle style;
+    public ListOptions options;
+    public ListMeasureKey measureKey;
+    public f64 scrollOffset = 0.0;
+    public u64 cursorKey = 0u;
+    public f32 rowHeight = 0.0f;
+    public b8 revealCursor = false;
+    public b8 focusOnCommit = false;
+    public ControlToken token;
+    public Insets padding;
+    public u64 rowCount = 0u;
+    public WidgetId commandFocus;
+}
+
+class BuilderComboFrame{
+    public Optional<in IListDataSource> source;
+    public Optional<in IListDataSource> results;
+    public Optional<mut ISearchableListDataSource> searchSource;
+    public Optional<mut SearchComboState> search;
+    public Optional<mut ComboState> state;
+    public ComboStyle style;
+    public PopupStyle popupStyle;
+    public ComboOptions options;
+    public WidgetState popup;
+    public WidgetState rows;
+    public PopupToken popupToken;
+    public PopupToken parentToken;
+    public ControlToken token;
+    public ControlToken listToken;
+    public Rect visibleField;
+    public TextAreaModelStamp queryStamp;
+    public u64 rowCount = 0u;
+    public u64 resultCount = 0u;
+    public u32 editor = s_LayoutNoParent;
+    public u32 list = s_LayoutNoParent;
+    public f32 arrowExtent = 0.0f;
+    public f32 queryHeight = 0.0f;
+    public f32 queryGap = 0.0f;
+    public b8 open = false;
+    public b8 focusOnCommit = false;
+    public b8 listFocusOnCommit = false;
+    public b8 editorSubmitted = false;
+    public b8 queryChanged = false;
+}
+
+[move_only]
+class BuilderTooltipFrame{
+    public WidgetState widget;
+    public WidgetState anchor;
+    public Optional<mut TooltipState> state;
+    public TooltipStyle style;
+    public TooltipOptions options;
+    public TextLayout text;
+    public u64 revision = 0u;
+    public u32 anchorIndex = 0u;
+    public u32 layer = 1u;
+}
+
+class BuilderContextMenuFrame{
+    public WidgetState widget;
+    public WidgetState anchor;
+    public WidgetState popup;
+    public WidgetState rows;
+    public Optional<in IListDataSource> source;
+    public Optional<mut ContextMenuState> state;
+    public PopupStyle popupStyle;
+    public ContextMenuOptions options;
+    public PopupToken popupToken;
+    public PopupToken parentToken;
+    public ControlToken listToken;
+    public u64 rowCount = 0u;
+    public u64 revision = 0u;
+    public u32 anchorIndex = 0u;
+    public u32 list = s_LayoutNoParent;
+    public b8 open = false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Each declaration scope owns its transient layout and control loans in the caller's UI arena.
-class BuilderScopeFrame final : NoCopy{
-    friend class Builder;
-    friend class ComboCoordinator;
-    friend class EditBoxCoordinator;
-    friend class TextAreaCoordinator;
-    friend class NumericEditCoordinator;
-    friend class ListCoordinator;
-    friend class ContextMenuCoordinator;
-    friend class ListLayoutPreparer;
-    friend class TooltipCoordinator;
+[friend(Builder, ListLayoutPreparer)]
+class BuilderScopeFrame : NoCopy{
+    private Optional<mut BuilderScopeFrame> m_parent;
+    private Optional<mut PopupState> m_popupState;
+    private PopupToken m_popupToken;
+    private PopupOptions m_popupOptions;
+    private PopupPlacement m_popupPlacement;
+    private WidgetStyle m_panelStyle;
+    private PopupStyle m_popupPaintStyle;
+    private LayoutTree m_layout;
+    private Vector<BuilderItem> m_items;
+    private Vector<BuilderTextAreaFrame> m_textAreas;
+    private Vector<BuilderIntegerEditFrame> m_integerEdits;
+    private Vector<BuilderFloatEditFrame> m_floatEdits;
+    private Vector<BuilderListFrame> m_lists;
+    private Vector<RadioGroupFrame> m_radioGroups;
+    private Vector<SliderFrame> m_sliders;
+    private Vector<ProgressFrame> m_progress;
+    private Vector<ImageFrame> m_images;
+    private Vector<BuilderComboFrame> m_combos;
+    private Vector<BuilderItem> m_comboEditors;
+    private Vector<BuilderTooltipFrame> m_tooltips;
+    private Vector<BuilderContextMenuFrame> m_contextMenus;
+    private Vector<u32> m_stack;
+    private BuilderWindowFrame m_window;
+    private WidgetState m_panelState;
+    private Rect m_bounds;
+    private b8 m_popupVisible = false;
+    private b8 m_panelActive = false;
+    private b8 m_windowActive = false;
 
-
-private:
-    struct Item{
-        WidgetState state;
-        WidgetStyle style;
-        SelectableStyle selectableStyle;
-        EditBoxStyle editStyle;
-        ScrollbarStyle scrollbarStyle;
-        TextLayout text;
-        Rect textBounds;
-        EditBoxView editView;
-        EditBoxState* editState = nullptr;
-        EditBoxOptions editOptions;
-        EditBoxPaintFlags editFlags;
-        Insets padding;
-        f32 checkboxExtent = 0.0f;
-        u32 node = 0u;
-        u32 list = s_LayoutNoParent;
-        u32 radioGroup = s_LayoutNoParent;
-        u32 slider = s_LayoutNoParent;
-        u32 progress = s_LayoutNoParent;
-        u32 image = s_LayoutNoParent;
-        u32 combo = s_LayoutNoParent;
-        u32 textArea = s_LayoutNoParent;
-        u32 integerEdit = s_LayoutNoParent;
-        u32 floatEdit = s_LayoutNoParent;
-        b8 enabled = true;
-        b8 checked = false;
-        b8 contextMenu = false;
-        b8 annotated = false;
-
-
-    public:
-        explicit Item(Core::Alloc::GlobalArena& arena)noexcept
-            : text(arena)
-            , editView(arena)
-        {}
-        Item(Item&&)noexcept = default;
-        Item(const Item&) = delete;
-
-
-    public:
-        Item& operator=(Item&&)noexcept = default;
-
-        Item& operator=(const Item&) = delete;
-    };
-
-    struct WindowFrame{
-        WindowState* state = nullptr;
-        WidgetStyle style;
-        WindowOptions options;
-        WindowMetrics metrics;
-        b8 firstUse = false;
-        WidgetState titleState;
-        WidgetState collapseState;
-        WidgetState resizeState;
-        TextLayout title;
-        Rect titleBounds;
-
-
-    public:
-        explicit WindowFrame(Core::Alloc::GlobalArena& arena)noexcept
-            : title(arena)
-        {}
-    };
-
-    struct TextAreaFrame{
-        f32 wheelLines = s_StyleScrollWheelStep;
-        const EditModel* model = nullptr;
-        TextAreaState* state = nullptr;
-        EditNavigationSnapshot navigation;
-        TextAreaModelStamp modelStamp;
-        u64 stateRevision = 0u;
-        u32 item = s_LayoutNoParent;
-        b8 focused = false;
-    };
-
-    struct NumericEditFrame{
-        EditBoxState* state = nullptr;
-        TextAreaModelStamp draftStamp;
-        u64 revision = 0u;
-        u32 item = s_LayoutNoParent;
-        b8 focused = false;
-    };
-
-    struct IntegerEditFrame : NumericEditFrame{
-        const IntegerEditModel* model = nullptr;
-    };
-
-    struct FloatEditFrame : NumericEditFrame{
-        const FloatEditModel* model = nullptr;
-    };
-
-    struct ListRow{
-        TextLayout text;
-        Rect textBounds;
-        u64 index = 0u;
-        u64 key = 0u;
-        b8 enabled = false;
-
-
-    public:
-        explicit ListRow(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
-    };
-
-    struct ListFrame{
-        PaintVector<ListRow> rows;
-        const IListDataSource* source = nullptr;
-        ListState* state = nullptr;
-        WidgetStyle widgetStyle;
-        ListStyle style;
-        ListOptions options;
-        ListMeasureKey measureKey;
-        f64 scrollOffset = 0.0;
-        u64 cursorKey = 0u;
-        f32 rowHeight = 0.0f;
-        b8 revealCursor = false;
-        b8 focusOnCommit = false;
-        ControlToken token;
-        Insets padding;
-        u64 rowCount = 0u;
-        WidgetId commandFocus;
-
-
-    public:
-        explicit ListFrame(Core::Alloc::GlobalArena& arena)noexcept : rows(arena){}
-    };
-
-    struct ComboFrame{
-        const IListDataSource* source = nullptr;
-        const IListDataSource* results = nullptr;
-        ISearchableListDataSource* searchSource = nullptr;
-        SearchComboState* search = nullptr;
-        ComboState* state = nullptr;
-        ComboStyle style;
-        PopupStyle popupStyle;
-        ComboOptions options;
-        WidgetState popup;
-        WidgetState rows;
-        PopupToken popupToken;
-        PopupToken parentToken;
-        ControlToken token;
-        ControlToken listToken;
-        Rect visibleField;
-        TextAreaModelStamp queryStamp;
-        u64 rowCount = 0u;
-        u64 resultCount = 0u;
-        u32 editor = s_LayoutNoParent;
-        u32 list = s_LayoutNoParent;
-        f32 arrowExtent = 0.0f;
-        f32 queryHeight = 0.0f;
-        f32 queryGap = 0.0f;
-        b8 open = false;
-        b8 focusOnCommit = false;
-        b8 listFocusOnCommit = false;
-        b8 editorSubmitted = false;
-        b8 queryChanged = false;
-    };
-
-    struct TooltipFrame{
-        WidgetState widget;
-        WidgetState anchor;
-        TooltipState* state = nullptr;
-        TooltipStyle style;
-        TooltipOptions options;
-        TextLayout text;
-        u64 revision = 0u;
-        u32 anchorIndex = 0u;
-        u32 layer = 1u;
-
-
-    public:
-        explicit TooltipFrame(Core::Alloc::GlobalArena& arena)noexcept
-            : text(arena)
-        {}
-        TooltipFrame(TooltipFrame&&)noexcept = default;
-        TooltipFrame(const TooltipFrame&) = delete;
-
-
-    public:
-        TooltipFrame& operator=(TooltipFrame&&)noexcept = default;
-
-        TooltipFrame& operator=(const TooltipFrame&) = delete;
-    };
-
-    struct ContextMenuFrame{
-        WidgetState widget;
-        WidgetState anchor;
-        WidgetState popup;
-        WidgetState rows;
-        const IListDataSource* source = nullptr;
-        ContextMenuState* state = nullptr;
-        PopupStyle popupStyle;
-        ContextMenuOptions options;
-        PopupToken popupToken;
-        PopupToken parentToken;
-        ControlToken listToken;
-        u64 rowCount = 0u;
-        u64 revision = 0u;
-        u32 anchorIndex = 0u;
-        u32 list = s_LayoutNoParent;
-        b8 open = false;
-    };
-
-
-public:
-    explicit BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
-        : m_layout(arena)
-        , m_items(arena)
-        , m_textAreas(arena)
-        , m_integerEdits(arena)
-        , m_floatEdits(arena)
-        , m_lists(arena)
-        , m_radioGroups(arena)
-        , m_sliders(arena)
-        , m_progress(arena)
-        , m_images(arena)
-        , m_combos(arena)
-        , m_comboEditors(arena)
-        , m_tooltips(arena)
-        , m_contextMenus(arena)
-        , m_stack(arena)
-        , m_window(arena)
-    {
-        m_items.reserve(s_LayoutMaxNodes);
-        m_radioGroups.reserve(s_WidgetFrameReserve);
-        m_sliders.reserve(s_WidgetFrameReserve);
-        m_stack.reserve(s_ContextMaxScopeDepth);
-    }
-    BuilderScopeFrame(BuilderScopeFrame&&) = delete;
-
-
-public:
-    BuilderScopeFrame& operator=(BuilderScopeFrame&&) = delete;
-
-
-private:
-    void reset()noexcept{
-        m_panelActive = false;
-        m_windowActive = false;
-        m_window.state = nullptr;
-        m_parent = nullptr;
-        m_popupState = nullptr;
-        m_popupToken = {};
-        m_popupVisible = false;
-        m_items.clear();
-        m_textAreas.clear();
-        m_integerEdits.clear();
-        m_floatEdits.clear();
-        m_lists.clear();
-        m_radioGroups.clear();
-        m_sliders.clear();
-        m_progress.clear();
-        m_images.clear();
-        m_combos.clear();
-        m_comboEditors.clear();
-        m_tooltips.clear();
-        m_contextMenus.clear();
-        m_stack.clear();
-        m_layout.reset();
+    [cpp_unwind]
+    public BuilderScopeFrame(){
+        this.m_items.reserve(s_LayoutMaxNodes);
+        this.m_radioGroups.reserve(s_WidgetFrameReserve);
+        this.m_sliders.reserve(s_WidgetFrameReserve);
+        this.m_stack.reserve(s_ContextMaxScopeDepth);
     }
 
+    private b8 popupVisible()const{
+        return this.m_popupState.has_value() && this.m_popupState.value().isOpen()
+            && this.m_popupState.value().instanceGeneration() == this.m_popupToken.instanceGeneration
+            && this.m_popupState.value().openGeneration() == this.m_popupToken.openGeneration;
+    }
 
-private:
-    BuilderScopeFrame* m_parent = nullptr;
-    PopupState* m_popupState = nullptr;
-    PopupToken m_popupToken;
-    PopupOptions m_popupOptions;
-    PopupPlacement m_popupPlacement;
-    WidgetStyle m_panelStyle;
-    PopupStyle m_popupPaintStyle;
-    LayoutTree m_layout;
-    PaintVector<Item> m_items;
-    PaintVector<TextAreaFrame> m_textAreas;
-    PaintVector<IntegerEditFrame> m_integerEdits;
-    PaintVector<FloatEditFrame> m_floatEdits;
-    PaintVector<ListFrame> m_lists;
-    PaintVector<RadioGroupFrame> m_radioGroups;
-    PaintVector<SliderFrame> m_sliders;
-    PaintVector<ProgressFrame> m_progress;
-    PaintVector<ImageFrame> m_images;
-    PaintVector<ComboFrame> m_combos;
-    PaintVector<Item> m_comboEditors;
-    PaintVector<TooltipFrame> m_tooltips;
-    PaintVector<ContextMenuFrame> m_contextMenus;
-    PaintVector<u32> m_stack;
-    WindowFrame m_window;
-    WidgetState m_panelState;
-    Rect m_bounds;
-    b8 m_popupVisible = false;
-    b8 m_panelActive = false;
-    b8 m_windowActive = false;
-};
+    private b8 popupAncestorsVisible(in Context context)const{
+        if(context.failed())
+            return false;
+        if(this.m_popupState.has_value() && !this.popupVisible())
+            return false;
+        auto frame = this.m_parent;
+        while(frame.has_value()){
+            if(frame.value().m_popupState.has_value() && !frame.value().popupVisible())
+                return false;
+            frame = frame.value().m_parent;
+        }
+        return true;
+    }
 
+    private b8 listStateMatches(in Context context, in BuilderListFrame frame)const{
+        return this.popupAncestorsVisible(context) && frame.state.has_value()
+            && frame.state.value().inputGeneration() == frame.token.instanceGeneration;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    private b8 listMatches(in Context context, in BuilderListFrame frame)const{
+        return frame.source.has_value() && this.listStateMatches(context, frame)
+            && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.listStateMatches(context, frame)
+            && frame.source.value().revision() == frame.token.contentRevision && this.listStateMatches(context, frame)
+            && frame.source.value().rowCount() == frame.rowCount && this.listStateMatches(context, frame);
+    }
 
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private void reset(){
+        this.m_panelActive = false;
+        this.m_windowActive = false;
+        this.m_window.state.reset();
+        this.m_parent.reset();
+        this.m_popupState.reset();
+        this.m_popupToken = PopupToken();
+        this.m_popupVisible = false;
+        this.m_items.clear();
+        this.m_textAreas.clear();
+        this.m_integerEdits.clear();
+        this.m_floatEdits.clear();
+        this.m_lists.clear();
+        this.m_radioGroups.clear();
+        this.m_sliders.clear();
+        this.m_progress.clear();
+        this.m_images.clear();
+        this.m_combos.clear();
+        this.m_comboEditors.clear();
+        this.m_tooltips.clear();
+        this.m_contextMenus.clear();
+        this.m_stack.clear();
+        this.m_layout.reset();
+    }
 }
 
 

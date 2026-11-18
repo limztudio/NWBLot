@@ -2,75 +2,97 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/shared/statistics_readback_detail.adhd>
+#include <impl/ecs_render/reflection/types.adhd>
+#include <impl/ecs_render/reflection/history_planning.adhd>
+#include <impl/ecs_render/reflection/feedback_planning.adhd>
+#include <impl/ecs_render/reflection/push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/reflection/history.adhd.h>
+[cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_COUNTER_SIZE")]
+extern const usize s_ReflectionReadbackCounterBytes;
+const usize s_ReflectionReadbackCounterCount = s_ReflectionReadbackCounterBytes / size_of<u32>();
 
-#include <impl/ecs_render/shared/statistics_readback_state.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+b8 ResolveAcceptedReflectionOpticalTransport(in b8 metadataOpticalTransportEnabled, in b8 hardwareReady){
+    return metadataOpticalTransportEnabled && hardwareReady;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU lifecycle shared by owner and leases; completion follows GPU token completion.
-class ReflectionStatisticsState : public StatisticsReadbackStateBase<ReflectionStatistics>{
-public:
-    using StatisticsReadbackStateBase<ReflectionStatistics>::StatisticsReadbackStateBase;
+class ReflectionStatisticsOutcome : IStatisticsOutcome<ReflectionStatistics>{
+    public Optional<ReflectionHistoryOutcome> history;
+    public Optional<ReflectionFeedbackOutcome> feedback;
 
+    public ReflectionStatisticsOutcome(){}
+    public ReflectionStatisticsOutcome(in ReflectionHistoryOutcome history, in ReflectionFeedbackOutcome feedback){
+        this.history = history;
+        this.feedback = feedback;
+    }
 
-public:
-    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
-    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, Span<const u32> counters = {})noexcept;
-};
+    public usize counterCount()const override{ return s_ReflectionReadbackCounterCount; }
 
-using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;
-using ReflectionStatisticsControlHandle = StatisticsControlHandle<ReflectionStatisticsState>;
+    public void accept(mut ReflectionStatistics metadata)const override{
+        metadata.opticalTransportEnabled = ResolveAcceptedReflectionOpticalTransport(metadata.opticalTransportEnabled, metadata.hardwareReady);
+        if(this.history.has_value())
+            ApplyReflectionStatisticsHistoryOutcome(this.history.value(), metadata);
+        if(this.feedback.has_value())
+            ApplyReflectionStatisticsFeedbackOutcome(this.feedback.value(), metadata);
+    }
 
+    public void copyCounters(in Span<u32> counters, in ReflectionStatistics metadata, mut ReflectionStatistics latest)const override{
+        CopyReflectionDiagnosticCounters(counters, metadata, latest);
+    }
+}
 
-// Destruction releases only an unaccepted reservation.
-class ReflectionStatisticsReservation final : public StatisticsReservationBase<ReflectionStatisticsControlHandle, ReflectionStatistics>{
-public:
-    using StatisticsReservationBase<ReflectionStatisticsControlHandle, ReflectionStatistics>::StatisticsReservationBase;
-};
+type ReflectionStatisticsState = StatisticsReadbackState<ReflectionStatistics, ReflectionStatisticsOutcome>;
+type ReflectionStatisticsControlHandle = Shared<ReflectionStatisticsState>;
+type ReflectionStatisticsReservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>;
 
-struct ReflectionStatisticsReadbackSnapshot{
-    ReflectionStatisticsControlHandle control;
-    Array<Core::BufferHandle, s_StatisticsReadbackSlotCount> buffers{};
-    ReflectionStatistics metadata;
-};
+class ReflectionStatisticsReadbackSnapshot{
+    public ReflectionStatisticsControlHandle control;
+    public Array<BufferHandle, s_StatisticsReadbackSlotCount> buffers;
+    public ReflectionStatistics metadata;
+}
 
-class ReflectionStatisticsReadback final : public StatisticsReadbackBase<ReflectionStatisticsState, ReflectionStatistics>{
-public:
-    using StatisticsReadbackBase<ReflectionStatisticsState, ReflectionStatistics>::StatisticsReadbackBase;
+class ReflectionStatisticsReadback : NoCopy{
+    private StatisticsReadbackBuffers<ReflectionStatistics, ReflectionStatisticsOutcome, s_ReflectionReadbackCounterCount> m_readback;
 
+    public ReflectionStatisticsReadback(mut GraphicsRuntime graphics){
+        this.m_readback = StatisticsReadbackBuffers<ReflectionStatistics, ReflectionStatisticsOutcome, s_ReflectionReadbackCounterCount>(graphics);
+    }
 
-public:
-    [[nodiscard]] b8 prepareResources();
-    void pollCompleted();
-    [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const noexcept;
-};
+    public Expected<ReflectionStatistics> latestStatistics()const{ return this.m_readback.latestStatistics(); }
 
+    public void resetReadbackBuffers(){ this.m_readback.resetReadbackBuffers(); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public b8 prepareResources(){
+        if(this.m_readback.buffers[0u].valid())
+            return true;
+        Array<Name, s_StatisticsReadbackSlotCount> names;
+        names[0u] = s_ReflectionStatisticsReadback0Name;
+        names[1u] = s_ReflectionStatisticsReadback1Name;
+        names[2u] = s_ReflectionStatisticsReadback2Name;
+        return this.m_readback.prepare(names, "Reflection statistics: failed to allocate readback control");
+    }
 
+    [cpp_unwind]
+    public void pollCompleted(){
+        this.m_readback.pollCompleted("Reflection statistics: failed to map a completed readback");
+    }
 
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public ReflectionStatisticsReadbackSnapshot snapshot(in ReflectionStatistics metadata)const{
+        ReflectionStatisticsReadbackSnapshot result;
+        if(!this.m_readback.control.valid() || !this.m_readback.buffers[0u].valid())
+            return result;
+        this.m_readback.populateSnapshot<ReflectionStatisticsReadbackSnapshot>(metadata, result);
+        return result;
+    }
 }
 
 

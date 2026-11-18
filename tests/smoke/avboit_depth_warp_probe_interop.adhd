@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_scene/asset.adhd>
 #include "avboit_integration_and_refraction_tile_probes.adhd"
 #include "optical_bounds_runtime_probe.adhd"
 
@@ -186,19 +187,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ActiveSceneSubsystems"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class ActiveSceneSubsystems{
-    b8 loadProjectStartScene(...);
-    b8 loadScene(...);
-    b8 instantiateEntities(...)const;
-    b8 valid(...)const;
-    usize subsystemCount(...)const;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const u32 s_AvboitDepthWarpGuardWords = 4u;
 const u32 s_AvboitDepthWarpBatchSize = 64u;
 const u32 s_AvboitDepthWarpSentinel = 0xa5f07c39u;
@@ -296,19 +284,19 @@ b8 InitializeDepthWarpProbeProject(
         }
         if(!sceneSubsystems.loadProjectStartScene(context.assetManager))
             return false;
-        const Impl::TransparentSubsystem* const transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
-        const auto depthWarpShaderRef = transparentSubsystem ? transparentSubsystem->avboitDepthWarpCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+        const auto transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
+        const auto depthWarpShaderRef = transparentSubsystem ? (*transparentSubsystem)->avboitDepthWarpCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
         if(!depthWarpShaderRef.valid())
             return false;
         if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(
             depthWarpShaderRef.name(),
             Core::ShaderArchive::s_DefaultVariant,
             Name(s_SmokeNameAvboitDepthWarpProbe),
-            FOUNDATION_TEXT("AvboitDepthWarpProbe"),
+            "AvboitDepthWarpProbe",
             graphics,
             context.assetManager,
             context.shaderPathResolver,
-            nullptr,
+            {},
             outShader
         ))
             return false;

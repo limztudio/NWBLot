@@ -77,7 +77,8 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
         }
     }
 
-    out.push_back(useBracesForList ? '{' : '(');
+    const b8 aggregateList = useBracesForList || baseTypeName == "Array";
+    out.push_back(aggregateList ? '{' : '(');
     const b8 isScalarSplatCtor = !baseTypeName.empty()
         && (SymbolTable::IsSimdVectorType(baseTypeName, ctorVecLanes) || SymbolTable::IsUnalignedVectorType(baseTypeName, ctorVecLanes))
         && arguments.size() == 1u && arguments[0]
@@ -116,7 +117,7 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
             out.append(effArenaName.data(), effArenaName.size());
         }
     }
-    out.push_back(useBracesForList ? '}' : ')');
+    out.push_back(aggregateList ? '}' : ')');
 }
 
 

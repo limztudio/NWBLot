@@ -232,6 +232,10 @@ b8 TypeChecker::checkTemplateArgTypes(const Span<const TypeArg> templateArgs, co
     b8 ok = true;
     for(usize i = 0u; i < templateArgs.size(); ++i){
         const TypeArg& targ = templateArgs[i];
+        if(!targ.constantText.empty()){
+            if(const Stmt* constant = m_symbols.findGlobalConstant(TrimView(targ.constantText)))
+                recordRequiredHeader(constant->requiredHeader);
+        }
         if(targ.type){
             if(!checkTypeRef(*targ.type, enclosingClass, enclosingMethod, allowFirstVoidArg && i == 0u, errors))
                 ok = false;
@@ -356,6 +360,10 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
             break;
         }
         }
+    }
+    else if(const BuiltinObjectTypeInfo* obj = FindBuiltinObjectType(typeRef.name); obj && !obj->templateParams.empty()){
+        if(!checkTemplateArgBounds(obj->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+            ok = false;
     }
     else if(!typeRef.templateArgs.empty()){
         const b8 isKnownNonTemplated = m_symbols.findEnum(typeRef.name) != nullptr

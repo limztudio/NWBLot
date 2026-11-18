@@ -4,6 +4,7 @@
 
 #include <core/alloc/general.adhd>
 #include <core/alloc/scratch.adhd>
+#include <core/alloc/shared.adhd>
 
 #include <core/assets/arena_names.adhd>
 #include <core/assets/asset_file_discovery.adhd>
@@ -14,10 +15,13 @@
 #include <core/assets/cook_entry_registry.adhd>
 #include <core/assets/cook_metadata.adhd>
 #include <core/assets/cook_paths.adhd>
+#include <core/assets/volume/volume_prepare_registry.adhd>
 #include <core/assets/expanded_metadata.adhd>
+#include <core/assets/family_cook_registration.adhd>
 #include <core/assets/gather_merge_registry.adhd>
 #include <core/assets/input_list.adhd>
 #include <core/assets/manager.adhd>
+#include <core/assets/polymorphic_asset_codec.adhd>
 #include <core/assets/metadata_fields.adhd>
 #include <core/assets/module.adhd>
 #include <core/assets/paths.adhd>
@@ -55,9 +59,14 @@
 #include <core/filesystem/volume_staging.adhd>
 #include <core/filesystem/volume_types.adhd>
 
+#include <core/font/file_bytes.adhd>
+#include <core/font/freetype.adhd>
+#include <core/font/harfbuzz.adhd>
+
 #include <core/frame/arena_names.adhd>
 #include <core/frame/module.adhd>
 
+#include <core/graphics/basis_transcoder.adhd>
 #include <core/graphics/backend_selection/backend.adhd>
 #include <core/graphics/backend_selection/raster_types.adhd>
 #include <core/graphics/backend_selection/texture_contract_types.adhd>
@@ -101,6 +110,7 @@
 #include <core/graphics/runtime/standalone_service.adhd>
 #include <core/graphics/shader_archive.adhd>
 #include <core/graphics/shader_stage_names.adhd>
+#include <core/graphics/slang_toolchain.adhd>
 #include <core/graphics/spirv_entry_point.adhd>
 
 #include <core/input/arena_names.adhd>

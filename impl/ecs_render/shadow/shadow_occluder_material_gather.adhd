@@ -2,42 +2,75 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/optics/optical_scene.adhd>
+#include <impl/ecs_render/shadow/prepared_shadow_material_context.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/rt_swbvh_helpers.adhd.h>
+void EvaluateShadowOccluderMaterialCompleteness(
+    in b8 hasMaterialInfo,
+    in b8 transparent,
+    in u32 surfaceDispatchId,
+    mut b8 inOutContentComplete,
+    mut b8 outMarkOpticalSceneIncomplete
+){
+    if(!hasMaterialInfo || surfaceDispatchId == u32.max)
+        inOutContentComplete = false;
+    outMarkOpticalSceneIncomplete = !hasMaterialInfo || (transparent && surfaceDispatchId == u32.max);
+}
 
+class ShadowOccluderMaterialGather{
+    private mut RendererMaterialSystem m_materialSystem;
+    private mut ShadowMaterialSampledTextureCollector m_sampledTextureCollector;
+    private mut MaterialTypedByteDataVector m_shadowMaterialTypedBytes;
+    private mut MaterialTypedConstantRangeMap m_shadowConstantTypedRanges;
+    private mut MaterialTypedByteContentRangeMap m_shadowMutableTypedRanges;
+    private mut RayTracingOpticalSceneGather m_opticalScene;
+    private mut b8 m_contentComplete;
 
-NWB_IMPL_BEGIN
+    public ShadowOccluderMaterialGather(mut RendererMaterialSystem materialSystem, mut ShadowMaterialSampledTextureCollector textures, mut MaterialTypedByteDataVector bytes, mut MaterialTypedConstantRangeMap constants,
+        mut MaterialTypedByteContentRangeMap ranges, mut RayTracingOpticalSceneGather opticalScene, mut b8 contentComplete){
+        this.m_materialSystem = materialSystem;
+        this.m_sampledTextureCollector = textures;
+        this.m_shadowMaterialTypedBytes = bytes;
+        this.m_shadowConstantTypedRanges = constants;
+        this.m_shadowMutableTypedRanges = ranges;
+        this.m_opticalScene = opticalScene;
+        this.m_contentComplete = contentComplete;
+    }
 
-
-class ShadowOccluderMaterialGather final{
-public:
-    ShadowOccluderMaterialGather(RendererMaterialSystem& materialSystem, ShadowMaterialSampledTextureCollector& sampledTextureCollector, MaterialTypedByteDataVector& shadowMaterialTypedBytes, ECSRenderDetail::MaterialTypedConstantRangeMap& shadowConstantTypedRanges, ECSRenderDetail::MaterialTypedByteContentRangeMap& shadowMutableTypedRanges, RayTracingOpticalSceneGather& opticalScene, b8& contentComplete)noexcept
-        : m_materialSystem(materialSystem), m_sampledTextureCollector(sampledTextureCollector), m_shadowMaterialTypedBytes(shadowMaterialTypedBytes), m_shadowConstantTypedRanges(shadowConstantTypedRanges), m_shadowMutableTypedRanges(shadowMutableTypedRanges), m_opticalScene(opticalScene), m_contentComplete(contentComplete){}
-    [[nodiscard]] b8 resolve(Core::ECS::EntityID entity, const Core::Assets::AssetRef<Material>& material, const Scene::TransformComponent* transform, u32 meshInstanceIndex, NwbRtInstanceMaterialGpu& outInstanceMaterial, InstanceGpuData& outShadowInstance, b8* outSceneHasTransparentOccluder = nullptr);
-
-private:
-    RendererMaterialSystem& m_materialSystem;
-    ShadowMaterialSampledTextureCollector& m_sampledTextureCollector;
-    MaterialTypedByteDataVector& m_shadowMaterialTypedBytes;
-    ECSRenderDetail::MaterialTypedConstantRangeMap& m_shadowConstantTypedRanges;
-    ECSRenderDetail::MaterialTypedByteContentRangeMap& m_shadowMutableTypedRanges;
-    RayTracingOpticalSceneGather& m_opticalScene;
-    b8& m_contentComplete;
-};
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public b8 resolve(in EntityID entity, in AssetRef<Material> material, in Optional<in TransformComponent> transform, in u32 meshInstanceIndex, mut NwbRtInstanceMaterialGpu outMaterial, mut InstanceGpuData outInstance,
+        in Optional<mut b8> transparentOccluder){
+        outMaterial = NwbRtInstanceMaterialGpu();
+        outInstance = InstanceGpuData();
+        const Expected<mut MaterialSurfaceInfo> result = this.m_materialSystem.findMaterialSurfaceInfo(material);
+        b8 transparent = false;
+        u32 dispatchId = u32.max;
+        if(result.has_value()){
+            mut MaterialSurfaceInfo info = result.value();
+            transparent = info.transparent;
+            dispatchId = info.surfaceDispatchId;
+            if(transparent && transparentOccluder.has_value())
+                transparentOccluder.value() = true;
+            if(dispatchId != u32.max && !this.m_sampledTextureCollector.collect(info, this.m_materialSystem.materialState().m_resourceState))
+                return false;
+            const Expected<ShadowOccluderMaterialContext> context = this.m_materialSystem.appendShadowOccluderMaterialContext(entity, info, transform, this.m_shadowMaterialTypedBytes, this.m_shadowConstantTypedRanges, this.m_shadowMutableTypedRanges);
+            if(!context.has_value())
+                return false;
+            outInstance = context.value().instance;
+            outMaterial = ResolveInstanceShadowMaterialData(dispatchId, info.shadingModelId, transparent, info.refractive, context.value().constantByteOffset, meshInstanceIndex);
+        }
+        b8 incomplete = false;
+        EvaluateShadowOccluderMaterialCompleteness(result.has_value(), transparent, dispatchId, this.m_contentComplete, incomplete);
+        if(incomplete)
+            this.m_opticalScene.markIncomplete();
+        return true;
+    }
 }
 
 

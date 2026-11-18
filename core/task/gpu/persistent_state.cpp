@@ -4,6 +4,7 @@
 
 #include "persistent_state.h"
 
+#include <core/alloc/scratch.h>
 #include <core/graphics/rhi/resource_state_selection.h>
 
 
@@ -229,6 +230,36 @@ b8 GpuPersistentResourceStateCache::commit(Candidate& candidate)noexcept{
     m_buffers.swap(candidate.m_buffers);
     candidate.m_consumed = true;
     return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 GpuPersistentResourceStateCache::replaceBufferSubset(const CommandListResourceStateHandoff& source, const Span<const BufferHandle> buffers){
+    Alloc::ScratchArena scratch;
+    return replaceBufferSubset(source, buffers, scratch);
+}
+
+b8 GpuPersistentResourceStateCache::buildFilteredResourceSubset(
+    const CommandListResourceStateHandoff& source, const Span<const TextureHandle> textures, const Span<const BufferHandle> buffers,
+    Candidate& candidate
+)const{
+    Alloc::ScratchArena scratch;
+    return buildFilteredResourceSubset(source, textures, buffers, scratch, candidate);
+}
+
+b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
+    const CommandListResourceStateHandoff& source, const Span<const TextureHandle> textures, const Span<const BufferHandle> buffers,
+    Candidate& candidate
+)const{
+    Alloc::ScratchArena scratch;
+    return buildMergedResourceSubset(source, textures, buffers, scratch, candidate);
+}
+
+b8 GpuPersistentResourceStateCache::buildMergedBufferSubset(const CommandListResourceStateHandoff& source, const Span<const BufferHandle> buffers, Candidate& candidate)const{
+    Alloc::ScratchArena scratch;
+    return buildMergedBufferSubset(source, buffers, scratch, candidate);
 }
 
 

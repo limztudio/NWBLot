@@ -65,25 +65,17 @@ b8 AreAllAvboitClearResourcesValid(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+#include <impl/ecs_render/avboit/avboit_refraction_capture_tasks.adhd>
+#include <impl/ecs_render/avboit/avboit_stage_record_and_tasks.adhd>
 
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_OVERFLOW_INVALID")]
+extern const u32 s_AvboitOverflowInvalid;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInputs inputs, in FrameGraphAvboitStageTiming timing, mut ObjectGeometryCacheGraph objectGeometry){
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchArena& scratchArena, const FrameGraphAvboitStageInputs& inputs, const FrameGraphAvboitStageTiming& timing, ObjectGeometryCacheGraph& objectGeometry){
-    using namespace RendererTaskGraphDetail;
-
-    AvboitPreGraphTask::Payload avboitPrePayload{ m_arena, m_avboitSystem, inputs.targets, timing.preTimingTicket, timing.transparentCsgIntervalsTiming, };
-    ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload avboitCsgReceiverSpanPayload{ m_arena, m_materialSystem, m_csgSystem, inputs.targets, timing.preTimingTicket, timing.transparentCsgIntervalsTiming, };
-    ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload avboitCsgIntervalCombinePayload{ m_arena, m_materialSystem, m_csgSystem, inputs.targets, timing.preTimingTicket, timing.transparentCsgIntervalsTiming, };
+    AvboitPreGraphTaskPayload avboitPrePayload(this.m_avboitSystem, inputs.targets, timing.preTimingTicket, timing.transparentCsgIntervalsTiming);
+    TransparentCsgIntervalRecordInputs avboitCsgReceiverSpanPayload(TransparentCsgIntervalPass::ReceiverSpan, this.m_materialSystem.drawRecorder(), this.m_csgSystem, inputs.targets, timing.preTimingTicket, timing.transparentCsgIntervalsTiming);
+    TransparentCsgIntervalRecordInputs avboitCsgIntervalCombinePayload(TransparentCsgIntervalPass::Combine, this.m_materialSystem.drawRecorder(), this.m_csgSystem, inputs.targets, timing.preTimingTicket, timing.transparentCsgIntervalsTiming);
     avboitPrePayload.hasTransparentRenderers = inputs.hasTransparentRenderers;
     avboitPrePayload.frameBindings = inputs.frameBindings;
     avboitPrePayload.csgResources = inputs.csgResources;
@@ -93,142 +85,64 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     avboitCsgIntervalCombinePayload.csgResources = inputs.csgResources;
 
     // Freeze the transparent CSG interval producer before AVBOIT recording; snapshot covers receiver work only.
-    TransparentCsgIntervalBuilder transparentCsgIntervalBuilder(m_graph, m_materialSystem, m_csgSystem, m_avboitSystem);
+    TransparentCsgIntervalBuilder transparentCsgIntervalBuilder(this.m_graph, this.m_materialSystem, this.m_csgSystem, this.m_avboitSystem);
     const auto transparentCsgIntervalResult = transparentCsgIntervalBuilder.declare(
-        TransparentCsgIntervalProducerInputs{
-            .targets = inputs.targets,
-            .csgFrameState = inputs.csgFrameState,
-            .frameBindings = inputs.frameBindings,
-            .csgResources = inputs.csgResources,
-            .meshViewState = inputs.meshViewState,
-            .materialInstances = inputs.resources.materialInstances,
-            .materialTyped = inputs.resources.materialTyped,
-            .csgReceiverRanges = inputs.resources.csgReceiverRanges,
-            .csgCutters = inputs.resources.csgCutters,
-            .csgClipContextSlots = inputs.resources.csgClipContextSlots,
-            .csgIntervalSampleState = inputs.resources.csgIntervalSampleState,
-            .csgIntervalId = inputs.resources.csgIntervalId,
-            .csgReceiverEventCount = inputs.resources.csgReceiverEventCount,
-            .csgPeelSubresources = inputs.resources.csgPeelSubresources,
-            .csgReceiverEventCountSubresources = inputs.resources.csgReceiverEventCountSubresources,
-            .prefixTask = inputs.prefixTask,
-            .hasTransparentRenderers = inputs.hasTransparentRenderers,
-        },
+        TransparentCsgIntervalProducerInputs(inputs.targets, inputs.csgFrameState, inputs.frameBindings, inputs.csgResources, inputs.meshViewState, inputs.resources, inputs.prefixTask, inputs.hasTransparentRenderers),
         avboitPrePayload,
         avboitCsgReceiverSpanPayload,
         avboitCsgIntervalCombinePayload,
         timing.transparentCsgIntervalClearTimingState
     );
-    if(!transparentCsgIntervalResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare transparent CSG interval producer"));
-        return MakeUnexpected(Failure{});
+    if(!transparentCsgIntervalResult.has_value()){
+        warning("RendererSystem: could not declare transparent CSG interval producer");
+        return MakeUnexpected(Failure());
     }
-    FrameGraphTransparentCsgTasks transparentCsgTasks(m_graph, m_avboitSystem);
+    FrameGraphTransparentCsgTasks transparentCsgTasks(this.m_graph, this.m_avboitSystem);
     const auto transparentCsgTaskResult = transparentCsgTasks.declare(
-        FrameGraphTransparentCsgTaskInputs{
-            .albedo = inputs.resources.albedo,
-            .normal = inputs.resources.normal,
-            .worldPosition = inputs.resources.worldPosition,
-            .specularRoughness = inputs.resources.specularRoughness,
-            .depth = inputs.resources.depth,
-            .meshView = inputs.resources.meshView,
-            .materialInstances = inputs.resources.materialInstances,
-            .materialTyped = inputs.resources.materialTyped,
-            .csgReceiverRanges = inputs.resources.csgReceiverRanges,
-            .csgCutters = inputs.resources.csgCutters,
-            .csgClipContextSlots = inputs.resources.csgClipContextSlots,
-            .csgIntervalSampleState = inputs.resources.csgIntervalSampleState,
-            .csgCapBackNormal = inputs.resources.csgCapBackNormal,
-            .csgIntervalDepth = inputs.resources.csgIntervalDepth,
-            .csgIntervalId = inputs.resources.csgIntervalId,
-            .csgReceiverEventData = inputs.resources.csgReceiverEventData,
-            .csgReceiverEventCount = inputs.resources.csgReceiverEventCount,
-            .csgReceiverSpanData = inputs.resources.csgReceiverSpanData,
-            .csgReceiverSpanCount = inputs.resources.csgReceiverSpanCount,
-            .csgRemovedIntervalDepth = inputs.resources.csgRemovedIntervalDepth,
-            .csgRemovedIntervalCapNormal = inputs.resources.csgRemovedIntervalCapNormal,
-            .csgRemovedIntervalData = inputs.resources.csgRemovedIntervalData,
-            .csgRemovedIntervalCount = inputs.resources.csgRemovedIntervalCount,
-            .currentBindlessSlots = inputs.resources.currentBindlessSlots,
-            .avboitMaterialDomain = inputs.resources.avboitMaterialDomain,
-            .avboitCsgDomain = inputs.resources.avboitCsgDomain,
-            .csgPeelSubresources = inputs.resources.csgPeelSubresources,
-            .csgReceiverEventDataSubresources = inputs.resources.csgReceiverEventDataSubresources,
-            .csgReceiverEventCountSubresources = inputs.resources.csgReceiverEventCountSubresources,
-            .csgReceiverSpanDataSubresources = inputs.resources.csgReceiverSpanDataSubresources,
-            .csgReceiverSpanCountSubresources = inputs.resources.csgReceiverSpanCountSubresources,
-            .csgRemovedIntervalSubresources = inputs.resources.csgRemovedIntervalSubresources,
-            .csgRemovedIntervalCountSubresources = inputs.resources.csgRemovedIntervalCountSubresources,
-            .timingTicket = &timing.preTimingTicket,
-            .transparentCsgUploadTask = transparentCsgIntervalResult->uploadTask,
-            .transparentCsgMaterialGeometrySet = transparentCsgIntervalResult->materialGeometrySet,
-            .transparentCsgMaterialSampledTextureSet = transparentCsgIntervalResult->materialSampledTextureSet,
-        },
+        FrameGraphTransparentCsgTaskInputs(inputs.resources, GraphicsPrefixTimingTicket(timing.preTimingTicket), transparentCsgIntervalResult.value()),
         objectGeometry,
         avboitPrePayload,
         avboitCsgReceiverSpanPayload,
         avboitCsgIntervalCombinePayload
     );
-    if(!transparentCsgTaskResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare transparent CSG interval graph tasks"));
-        return MakeUnexpected(Failure{});
+    if(!transparentCsgTaskResult.has_value()){
+        warning("RendererSystem: could not declare transparent CSG interval graph tasks");
+        return MakeUnexpected(Failure());
     }
-    const Core::GpuTaskId avboitIntervalCompletionTask = transparentCsgTaskResult->intervalCompletionTask;
-    const b8 avboitIntervalOutputsGraphOwned = transparentCsgTaskResult->intervalOutputsGraphOwned;
-    AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena, m_avboitSystem, inputs.targets, timing.preTimingTicket };
-    AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, inputs.targets, timing.preTimingTicket, timing.occupancyComputeEmulationTiming };
+    const GpuTaskId avboitIntervalCompletionTask = transparentCsgTaskResult.value().intervalCompletionTask;
+    const b8 avboitIntervalOutputsGraphOwned = transparentCsgTaskResult.value().intervalOutputsGraphOwned;
+    AvboitRasterPassTaskPayload avboitOccupancyPayload(this.m_avboitSystem, inputs.targets, timing.preTimingTicket, MaterialPipelinePass::AvboitOccupancy);
+    AvboitComputeEmulationTaskPayload avboitOccupancyComputeEmulationPayload(this.m_graphics, this.m_materialSystem, inputs.targets, timing.preTimingTicket, timing.occupancyComputeEmulationTiming, MaterialPipelinePass::AvboitOccupancy);
     avboitOccupancyPayload.frameBindings = inputs.frameBindings;
     avboitOccupancyComputeEmulationPayload.frameBindings = inputs.frameBindings;
     avboitOccupancyPayload.hasTransparentRenderers = inputs.hasTransparentRenderers;
     avboitOccupancyPayload.csgResources = inputs.csgResources;
     avboitOccupancyComputeEmulationPayload.csgResources = inputs.csgResources;
 
-    AvboitGeneratedGeometryReuse generatedGeometry(scratchArena);
+    AvboitGeneratedGeometryReuse generatedGeometry;
     const auto refractionCaptureTaskResult = DeclareAvboitRefractionCapture(
-        scratchArena,
-        m_graph, m_arena, m_materialSystem, m_csgSystem,
+        this.m_graph, this.m_materialSystem, this.m_csgSystem,
         inputs.csgFrameState, inputs.csgResources, inputs.frameBindings, inputs.meshViewState, avboitIntervalCompletionTask,
         inputs.refractionCaptureEnabled,
         inputs.targets, objectGeometry, generatedGeometry
     );
-    if(!refractionCaptureTaskResult)
-        return MakeUnexpected(Failure{});
-    const Core::GpuTaskId refractionCaptureTask = *refractionCaptureTaskResult;
-    FrameGraphAvboitPassUploadChain occupancyUploadChain(m_graph, m_materialSystem, m_csgSystem);
+    if(!refractionCaptureTaskResult.has_value())
+        return MakeUnexpected(Failure());
+    const GpuTaskId refractionCaptureTask = refractionCaptureTaskResult.value();
+    FrameGraphAvboitPassUploadChain occupancyUploadChain(this.m_graph, this.m_materialSystem, this.m_csgSystem);
     const auto occupancyUploadChainResult = occupancyUploadChain.declare(
-        scratchArena,
-        FrameGraphAvboitPassPhaseDesc{
-            .framebuffer = *inputs.targets.avboit.lowFramebuffer,
-            .pass = MaterialPipelinePass::AvboitOccupancy,
-            .phase = AvboitGeometryPhase::Occupancy,
-        },
-        FrameGraphAvboitPassUploadInputs{
-            .targets = inputs.targets,
-            .csgFrameState = inputs.csgFrameState,
-            .frameBindings = inputs.frameBindings,
-            .csgResources = inputs.csgResources,
-            .meshViewState = inputs.meshViewState,
-            .materialInstances = inputs.resources.materialInstances,
-            .materialTyped = inputs.resources.materialTyped,
-            .csgReceiverRanges = inputs.resources.csgReceiverRanges,
-            .csgCutters = inputs.resources.csgCutters,
-            .csgClipContextSlots = inputs.resources.csgClipContextSlots,
-            .csgIntervalSampleState = Core::GpuGraphResourceId{},
-            .uploadTask = refractionCaptureTask,
-            .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
-            .hasTransparentRenderers = inputs.hasTransparentRenderers,
-        },
+        inputs,
+        inputs.targets.avboit.lowFramebuffer, MaterialPipelinePass::AvboitOccupancy, AvboitGeometryPhase::Occupancy, refractionCaptureTask, avboitIntervalOutputsGraphOwned, inputs.hasTransparentRenderers,
         avboitOccupancyPayload,
         avboitOccupancyComputeEmulationPayload,
         generatedGeometry
     );
-    if(!occupancyUploadChainResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT occupancy upload chain"));
-        return MakeUnexpected(Failure{});
+    if(!occupancyUploadChainResult.has_value()){
+        warning("RendererSystem: could not declare AVBOIT occupancy upload chain");
+        return MakeUnexpected(Failure());
     }
 
-    AvboitClearChainBuilder avboitClearChainBuilder(m_graph, m_avboitSystem);
-    const auto avboitClearChainResult = avboitClearChainBuilder.declare(
+    const auto avboitClearChainResult = DeclareAvboitClearChain(this.m_graph, this.m_avboitSystem,
         AvboitClearChainInputs(
             inputs.resources.avboitLowRaster,
             inputs.resources.avboitAccumColor,
@@ -241,227 +155,156 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
             inputs.resources.avboitControl,
             inputs.resources.avboitExtinction,
             inputs.resources.avboitExtinctionOverflow,
-            occupancyUploadChainResult->uploadTask,
+            occupancyUploadChainResult.value().uploadTask,
             inputs.clearTargets
         ),
         timing.clearTimingState
     );
-    if(!avboitClearChainResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned AVBOIT clear chain"));
-        return MakeUnexpected(Failure{});
+    if(!avboitClearChainResult.has_value()){
+        warning("RendererSystem: could not declare graph-owned AVBOIT clear chain");
+        return MakeUnexpected(Failure());
     }
 
-    AvboitOccupancyRecordInputs avboitOccupancyRecordInputs{ inputs.targets, timing.preTimingTicket, timing.occupancyComputeEmulationTiming };
-    avboitOccupancyRecordInputs.applyResources(inputs.resources, avboitIntervalOutputsGraphOwned);
-    avboitOccupancyRecordInputs.applyUploadResult(*occupancyUploadChainResult);
-    avboitOccupancyRecordInputs.avboitLowRaster = inputs.resources.avboitLowRaster;
-    avboitOccupancyRecordInputs.avboitCoverage = inputs.resources.avboitCoverage;
-    avboitOccupancyRecordInputs.clearTask = avboitClearChainResult->clearTask;
-    AvboitOccupancyRecordBuilder avboitOccupancyRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
-    if(!avboitOccupancyRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitOccupancyRecordInputs, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload)){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
-        return MakeUnexpected(Failure{});
+    AvboitRasterRecordInputs occupancyRecord(inputs.targets, inputs.resources, occupancyUploadChainResult.value(), timing.preTimingTicket, timing.occupancyComputeEmulationTiming, avboitClearChainResult.value().clearTask);
+    if(!DeclareAvboitOccupancyRecord(this.m_graph, this.m_graphics, this.m_materialSystem, this.m_avboitSystem, inputs.frameBindings, objectGeometry, occupancyRecord, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload)){
+        warning("RendererSystem: could not declare deferred AVBOIT occupancy graph task");
+        return MakeUnexpected(Failure());
     }
-    if(occupancyUploadChainResult->producesReusableGeometry){
-        const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
+    if(occupancyUploadChainResult.value().producesReusableGeometry){
+        const GpuTaskId producer = this.m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
         if(!producer.valid())
             generatedGeometry.reset();
         else if(!generatedGeometry.publishProducer(producer))
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
     }
 
-    AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder(m_graph, m_avboitSystem);
-    const auto avboitDepthWarpStageResult = avboitComputeEffectChainBuilder.declareDepthWarp(
-        AvboitDepthWarpStageInputs{
-            .targets = inputs.targets.avboit,
-            .coverage = inputs.resources.avboitCoverage,
-            .depthWarp = inputs.resources.avboitDepthWarp,
-            .control = inputs.resources.avboitControl,
-            .currentBindlessSlots = inputs.resources.currentBindlessSlots,
-            .occupancyTask = m_avboitSystem.taskGraphStage().m_occupancyTask,
-            .depthWarpTimingTicket = timing.depthWarpTimingTicket,
-            .timingFeedback = m_timingFeedback,
-            .hasTransparentRenderers = inputs.hasTransparentRenderers,
-        });
-    if(!avboitDepthWarpStageResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT inputs.resources.depth-warp graph task"));
-        return MakeUnexpected(Failure{});
+    AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder(this.m_graph, this.m_avboitSystem);
+    AvboitDepthWarpStageInputs depthWarpInputs(
+        inputs.targets.avboit,
+        inputs.resources.avboitCoverage,
+        inputs.resources.avboitDepthWarp,
+        inputs.resources.avboitControl,
+        inputs.resources.currentBindlessSlots,
+        this.m_avboitSystem.taskGraphStage().m_occupancyTask,
+        timing.depthWarpTimingTicket,
+        this.m_timingFeedback,
+        inputs.hasTransparentRenderers
+    );
+    const auto avboitDepthWarpStageResult = avboitComputeEffectChainBuilder.declareDepthWarp(depthWarpInputs);
+    if(!avboitDepthWarpStageResult.has_value()){
+        warning("RendererSystem: could not declare deferred AVBOIT depth-warp graph task");
+        return MakeUnexpected(Failure());
     }
-    const Core::GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult->completionTask;
+    const GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult.value().completionTask;
 
     if(inputs.hasTransparentRenderers){
-        if(!declareExtinction(scratchArena, inputs, timing, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, avboitComputeEffectChainBuilder))
-            return MakeUnexpected(Failure{});
-        if(!declareAccumulation(scratchArena, inputs, timing, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry))
-            return MakeUnexpected(Failure{});
-        return m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask;
+        if(!this.declareExtinction(inputs, timing, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, avboitComputeEffectChainBuilder))
+            return MakeUnexpected(Failure());
+        if(!this.declareAccumulation(inputs, timing, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry))
+            return MakeUnexpected(Failure());
+        return this.m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask;
     }
-    return m_avboitSystem.taskGraphStage().m_occupancyTask;
+    return this.m_avboitSystem.taskGraphStage().m_occupancyTask;
 }
 
 b8 FrameGraphAvboitStage::declareExtinction(
-    Core::Alloc::ScratchArena& scratchArena,
-    const FrameGraphAvboitStageInputs& inputs,
-    const FrameGraphAvboitStageTiming& timing,
-    const Core::GpuTaskId avboitDepthWarpCompletionTask,
-    const b8 avboitIntervalOutputsGraphOwned,
-    ObjectGeometryCacheGraph& objectGeometry,
-    AvboitGeneratedGeometryReuse& generatedGeometry,
-    AvboitComputeEffectChainBuilder& avboitComputeEffectChainBuilder
+    in FrameGraphAvboitStageInputs inputs,
+    in FrameGraphAvboitStageTiming timing,
+    in GpuTaskId avboitDepthWarpCompletionTask,
+    in b8 avboitIntervalOutputsGraphOwned,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    mut AvboitGeneratedGeometryReuse generatedGeometry,
+    mut AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder
 ){
-    using namespace RendererTaskGraphDetail;
 
-    AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena, m_avboitSystem, inputs.targets, timing.extinctionTimingTicket };
-    AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, inputs.targets, timing.extinctionTimingTicket, timing.extinctionComputeEmulationTiming };
+    AvboitRasterPassTaskPayload avboitExtinctionPayload(this.m_avboitSystem, inputs.targets, timing.extinctionTimingTicket, MaterialPipelinePass::AvboitExtinction);
+    AvboitComputeEmulationTaskPayload avboitExtinctionComputeEmulationPayload(this.m_graphics, this.m_materialSystem, inputs.targets, timing.extinctionTimingTicket, timing.extinctionComputeEmulationTiming, MaterialPipelinePass::AvboitExtinction);
     avboitExtinctionPayload.frameBindings = inputs.frameBindings;
     avboitExtinctionComputeEmulationPayload.frameBindings = inputs.frameBindings;
     avboitExtinctionPayload.hasTransparentRenderers = inputs.hasTransparentRenderers;
     avboitExtinctionPayload.csgResources = inputs.csgResources;
     avboitExtinctionComputeEmulationPayload.csgResources = inputs.csgResources;
 
-    FrameGraphAvboitPassUploadChain extinctionUploadChain(m_graph, m_materialSystem, m_csgSystem);
+    FrameGraphAvboitPassUploadChain extinctionUploadChain(this.m_graph, this.m_materialSystem, this.m_csgSystem);
     const auto extinctionUploadChainResult = extinctionUploadChain.declare(
-        scratchArena,
-        FrameGraphAvboitPassPhaseDesc{
-            .framebuffer = *inputs.targets.avboit.lowFramebuffer,
-            .pass = MaterialPipelinePass::AvboitExtinction,
-            .phase = AvboitGeometryPhase::Extinction,
-        },
-        FrameGraphAvboitPassUploadInputs{
-            .targets = inputs.targets,
-            .csgFrameState = inputs.csgFrameState,
-            .frameBindings = inputs.frameBindings,
-            .csgResources = inputs.csgResources,
-            .meshViewState = inputs.meshViewState,
-            .materialInstances = inputs.resources.materialInstances,
-            .materialTyped = inputs.resources.materialTyped,
-            .csgReceiverRanges = inputs.resources.csgReceiverRanges,
-            .csgCutters = inputs.resources.csgCutters,
-            .csgClipContextSlots = inputs.resources.csgClipContextSlots,
-            .csgIntervalSampleState = inputs.resources.csgIntervalSampleState,
-            .uploadTask = avboitDepthWarpCompletionTask,
-            .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
-            .hasTransparentRenderers = inputs.hasTransparentRenderers,
-        },
+        inputs,
+        inputs.targets.avboit.lowFramebuffer, MaterialPipelinePass::AvboitExtinction, AvboitGeometryPhase::Extinction, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, inputs.hasTransparentRenderers,
         avboitExtinctionPayload,
         avboitExtinctionComputeEmulationPayload,
         generatedGeometry
     );
-    if(!extinctionUploadChainResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT extinction upload chain"));
+    if(!extinctionUploadChainResult.has_value()){
+        warning("RendererSystem: could not declare AVBOIT extinction upload chain");
         return false;
     }
 
-    AvboitExtinctionRecordInputs avboitExtinctionRecordInputs{ inputs.targets, timing.extinctionTimingTicket, timing.extinctionComputeEmulationTiming };
-    avboitExtinctionRecordInputs.applyResources(inputs.resources, avboitIntervalOutputsGraphOwned);
-    avboitExtinctionRecordInputs.applyUploadResult(*extinctionUploadChainResult);
-    avboitExtinctionRecordInputs.avboitLowRaster = inputs.resources.avboitLowRaster;
-    avboitExtinctionRecordInputs.avboitDepthWarp = inputs.resources.avboitDepthWarp;
-    avboitExtinctionRecordInputs.avboitExtinction = inputs.resources.avboitExtinction;
-    avboitExtinctionRecordInputs.avboitControl = inputs.resources.avboitControl;
-    avboitExtinctionRecordInputs.avboitExtinctionOverflow = inputs.resources.avboitExtinctionOverflow;
-    avboitExtinctionRecordInputs.depthWarpCompletionTask = avboitDepthWarpCompletionTask;
-    AvboitExtinctionRecordBuilder avboitExtinctionRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
-    if(!avboitExtinctionRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitExtinctionRecordInputs, avboitExtinctionPayload, avboitExtinctionComputeEmulationPayload)){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
+    AvboitRasterRecordInputs extinctionRecord(inputs.targets, inputs.resources, extinctionUploadChainResult.value(), timing.extinctionTimingTicket, timing.extinctionComputeEmulationTiming, avboitDepthWarpCompletionTask);
+    if(!DeclareAvboitExtinctionRecord(this.m_graph, this.m_graphics, this.m_materialSystem, this.m_avboitSystem, inputs.frameBindings, objectGeometry, extinctionRecord, avboitExtinctionPayload, avboitExtinctionComputeEmulationPayload)){
+        warning("RendererSystem: could not declare deferred AVBOIT extinction graph task");
         return false;
     }
-    if(extinctionUploadChainResult->producesReusableGeometry){
-        const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
+    if(extinctionUploadChainResult.value().producesReusableGeometry){
+        const GpuTaskId producer = this.m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
         if(!producer.valid())
             generatedGeometry.reset();
         else if(!generatedGeometry.publishProducer(producer))
             return false;
     }
 
-    if(!avboitComputeEffectChainBuilder.declareIntegration(
-        AvboitIntegrationStageInputs{
-            .targets = inputs.targets.avboit,
-            .extinction = inputs.resources.avboitExtinction,
-            .control = inputs.resources.avboitControl,
-            .extinctionOverflow = inputs.resources.avboitExtinctionOverflow,
-            .transmittance = inputs.resources.avboitTransmittance,
-            .currentBindlessSlots = inputs.resources.currentBindlessSlots,
-            .extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask,
-            .integrationTimingTicket = timing.integrationTimingTicket,
-            .timingFeedback = m_timingFeedback,
-        })){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
+    AvboitIntegrationStageInputs integrationInputs(
+        inputs.targets.avboit,
+        inputs.resources.avboitExtinction,
+        inputs.resources.avboitControl,
+        inputs.resources.avboitExtinctionOverflow,
+        inputs.resources.avboitTransmittance,
+        inputs.resources.currentBindlessSlots,
+        this.m_avboitSystem.taskGraphStage().m_extinctionTask,
+        timing.integrationTimingTicket,
+        this.m_timingFeedback
+    );
+    if(!avboitComputeEffectChainBuilder.declareIntegration(integrationInputs)){
+        warning("RendererSystem: could not declare deferred AVBOIT integration graph task");
         return false;
     }
     return true;
 }
 
 b8 FrameGraphAvboitStage::declareAccumulation(
-    Core::Alloc::ScratchArena& scratchArena,
-    const FrameGraphAvboitStageInputs& inputs,
-    const FrameGraphAvboitStageTiming& timing,
-    const b8 avboitIntervalOutputsGraphOwned,
-    ObjectGeometryCacheGraph& objectGeometry,
-    AvboitGeneratedGeometryReuse& generatedGeometry
+    in FrameGraphAvboitStageInputs inputs,
+    in FrameGraphAvboitStageTiming timing,
+    in b8 avboitIntervalOutputsGraphOwned,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    mut AvboitGeneratedGeometryReuse generatedGeometry
 ){
-    using namespace RendererTaskGraphDetail;
 
-    AvboitAccumulationGraphTask::Payload avboitAccumulationPayload{ m_arena, m_avboitSystem, inputs.targets, timing.accumulationTimingTicket };
-    AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, inputs.targets, timing.accumulationTimingTicket, timing.accumulationComputeEmulationTiming };
+    AvboitRasterPassTaskPayload avboitAccumulationPayload(this.m_avboitSystem, inputs.targets, timing.accumulationTimingTicket, MaterialPipelinePass::AvboitAccumulate);
+    AvboitComputeEmulationTaskPayload avboitAccumulationComputeEmulationPayload(this.m_graphics, this.m_materialSystem, inputs.targets, timing.accumulationTimingTicket, timing.accumulationComputeEmulationTiming, MaterialPipelinePass::AvboitAccumulate);
     avboitAccumulationPayload.frameBindings = inputs.frameBindings;
     avboitAccumulationComputeEmulationPayload.frameBindings = inputs.frameBindings;
     avboitAccumulationPayload.hasTransparentRenderers = inputs.hasTransparentRenderers;
     avboitAccumulationPayload.csgResources = inputs.csgResources;
     avboitAccumulationComputeEmulationPayload.csgResources = inputs.csgResources;
 
-    FrameGraphAvboitPassUploadChain accumulationUploadChain(m_graph, m_materialSystem, m_csgSystem);
+    FrameGraphAvboitPassUploadChain accumulationUploadChain(this.m_graph, this.m_materialSystem, this.m_csgSystem);
     const auto accumulationUploadChainResult = accumulationUploadChain.declare(
-        scratchArena,
-        FrameGraphAvboitPassPhaseDesc{
-            .framebuffer = *inputs.targets.avboit.accumulationFramebuffer,
-            .pass = MaterialPipelinePass::AvboitAccumulate,
-            .phase = AvboitGeometryPhase::Accumulation,
-        },
-        FrameGraphAvboitPassUploadInputs{
-            .targets = inputs.targets,
-            .csgFrameState = inputs.csgFrameState,
-            .frameBindings = inputs.frameBindings,
-            .csgResources = inputs.csgResources,
-            .meshViewState = inputs.meshViewState,
-            .materialInstances = inputs.resources.materialInstances,
-            .materialTyped = inputs.resources.materialTyped,
-            .csgReceiverRanges = inputs.resources.csgReceiverRanges,
-            .csgCutters = inputs.resources.csgCutters,
-            .csgClipContextSlots = inputs.resources.csgClipContextSlots,
-            .csgIntervalSampleState = inputs.resources.csgIntervalSampleState,
-            .uploadTask = m_avboitSystem.taskGraphStage().m_integrationTask,
-            .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
-            .hasTransparentRenderers = true,
-        },
+        inputs,
+        inputs.targets.avboit.accumulationFramebuffer, MaterialPipelinePass::AvboitAccumulate, AvboitGeometryPhase::Accumulation, this.m_avboitSystem.taskGraphStage().m_integrationTask, avboitIntervalOutputsGraphOwned, true,
         avboitAccumulationPayload,
         avboitAccumulationComputeEmulationPayload,
         generatedGeometry
     );
-    if(!accumulationUploadChainResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT accumulation upload chain"));
+    if(!accumulationUploadChainResult.has_value()){
+        warning("RendererSystem: could not declare AVBOIT accumulation upload chain");
         return false;
     }
 
-    AvboitAccumulationRecordInputs avboitAccumulationRecordInputs{ inputs.targets, timing.accumulationTimingTicket, timing.accumulationComputeEmulationTiming };
-    avboitAccumulationRecordInputs.applyResources(inputs.resources, avboitIntervalOutputsGraphOwned);
-    avboitAccumulationRecordInputs.applyUploadResult(*accumulationUploadChainResult);
-    avboitAccumulationRecordInputs.refractionDepth = inputs.resources.refractionDepth;
-    avboitAccumulationRecordInputs.avboitDepthWarp = inputs.resources.avboitDepthWarp;
-    avboitAccumulationRecordInputs.avboitTransmittance = inputs.resources.avboitTransmittance;
-    avboitAccumulationRecordInputs.avboitControl = inputs.resources.avboitControl;
-    avboitAccumulationRecordInputs.avboitForegroundColor = inputs.resources.avboitForegroundColor;
-    avboitAccumulationRecordInputs.avboitForegroundExtinction = inputs.resources.avboitForegroundExtinction;
-    avboitAccumulationRecordInputs.avboitAccumColor = inputs.resources.avboitAccumColor;
-    avboitAccumulationRecordInputs.avboitAccumExtinction = inputs.resources.avboitAccumExtinction;
-    avboitAccumulationRecordInputs.integrationTask = m_avboitSystem.taskGraphStage().m_integrationTask;
-    AvboitAccumulationRecordBuilder avboitAccumulationRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
-    if(!avboitAccumulationRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitAccumulationRecordInputs, avboitAccumulationPayload, avboitAccumulationComputeEmulationPayload)){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
+    AvboitRasterRecordInputs accumulationRecord(inputs.targets, inputs.resources, accumulationUploadChainResult.value(), timing.accumulationTimingTicket, timing.accumulationComputeEmulationTiming, this.m_avboitSystem.taskGraphStage().m_integrationTask);
+    if(!DeclareAvboitAccumulationRecord(this.m_graph, this.m_graphics, this.m_materialSystem, this.m_avboitSystem, inputs.frameBindings, objectGeometry, accumulationRecord, avboitAccumulationPayload, avboitAccumulationComputeEmulationPayload)){
+        warning("RendererSystem: could not declare deferred AVBOIT accumulation graph task");
         return false;
     }
-    if(accumulationUploadChainResult->producesReusableGeometry){
-        const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask;
+    if(accumulationUploadChainResult.value().producesReusableGeometry){
+        const GpuTaskId producer = this.m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask;
         if(!producer.valid())
             generatedGeometry.reset();
         else if(!generatedGeometry.publishProducer(producer))
@@ -474,13 +317,20 @@ b8 FrameGraphAvboitStage::declareAccumulation(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitClearChainInputs& inputs, GraphClearTimingRecordState& clearTimingState){
-    AvboitClearChainResult result{};
-    if(!inputs.uploadTask.valid())
-        return MakeUnexpected(Failure{});
+GpuTaskDesc AvboitClearTaskDesc(in GpuTaskSchedulingHint scheduling, in Name identity, in StringView marker, in borrow GpuTaskId dependency){
+    GpuTaskDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(marker).setScheduling(scheduling).setDependency(dependency);
+    return desc;
+}
 
-    // Keep native order: uploads, serial target clears, then occupancy; graph owns all CopyDest ops.
-    Core::GpuTaskId avboitClearTask = inputs.uploadTask;
+[cpp_unwind]
+Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph, mut RendererAvboitSystem avboitSystem, in AvboitClearChainInputs inputs, mut GraphClearTimingRecordState clearTimingState){
+    AvboitClearChainResult result;
+    if(!inputs.uploadTask.valid())
+        return MakeUnexpected(Failure());
+
+    // Clear targets after uploads and before occupancy.
+    GpuTaskId avboitClearTask = inputs.uploadTask;
     if(inputs.clearTargets){
         if(!AreAllAvboitClearResourcesValid(
             inputs.lowRaster.valid(),
@@ -495,77 +345,76 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
             inputs.extinction.valid(),
             inputs.extinctionOverflow.valid()
         ))
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
 
-        const AvboitClearTargetIdentityPolicy identityPolicy;
-        Core::GpuTaskSchedulingHint avboitClearScheduling;
-        avboitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        const AvboitClearTargetIdentityPolicy identityPolicy();
+        GpuTaskSchedulingHint avboitClearScheduling;
+        avboitClearScheduling.cost = GpuTaskCostHint::Tiny;
         avboitClearScheduling.forceSubmissionBoundary = false;
         avboitClearScheduling.allowPacketMerge = true;
         avboitClearScheduling.mergeWithPrevious = true;
         // Clear chain and Occupancy share one AVBOIT Pre timing packet across consumer frontiers.
         avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
-        const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency)noexcept{
-            Core::GpuTaskDesc clearDesc;
-            clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(avboitClearScheduling).setDependencies({ &dependency, 1u });
-            return clearDesc;
-        };
-        const auto makeAvboitFloatClearDesc = [](const Core::GpuGraphResourceId destination, const Core::Color& value, const Core::GpuClearTextureTaskRecordHooks& recordHooks = {})noexcept{
-            Core::GpuClearTextureTaskDesc clearDesc;
+        auto makeAvboitFloatClearDesc = lambda[](in GpuGraphResourceId destination, in Color value, in GpuClearTextureTaskRecordHooks recordHooks) -> GpuClearTextureTaskDesc{
+            GpuClearTextureTaskDesc clearDesc;
             clearDesc.destination = destination;
             clearDesc.subresources = s_FramebufferSubresources;
-            clearDesc.valueType = Core::GpuClearTextureTaskValueType::Float;
+            clearDesc.valueType = GpuClearTextureTaskValueType::Float;
             clearDesc.floatValue = value;
             clearDesc.recordHooks = recordHooks;
             return clearDesc;
         };
-        const Core::GpuClearTextureTaskRecordHooks avboitClearBeginHooks{ .context = &clearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
-        const Core::GpuClearTextureTaskRecordHooks avboitClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
-        const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
-        const auto avboitClearTaskResult = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(s_AvboitClearLowRasterIdentity, s_AvboitClearLowRasterLabel, inputs.uploadTask),
+        const GpuClearTextureTaskRecordHooks avboitClearBeginHooks = clearTimingState.hooks(true, false);
+        const GpuClearTextureTaskRecordHooks avboitClearEndHooks = clearTimingState.hooks(false, true);
+        const Color transparentBlack(0.0f, 0.0f, 0.0f, 0.0f);
+        const auto avboitClearTaskResult = graph.addClearTextureTask(
+            AvboitClearTaskDesc(avboitClearScheduling, s_AvboitClearLowRasterIdentity, s_AvboitClearLowRasterLabel, inputs.uploadTask),
             makeAvboitFloatClearDesc(inputs.lowRaster, transparentBlack, avboitClearBeginHooks)
         );
-        if(!avboitClearTaskResult){
-            avboitClearTask = {};
-            return MakeUnexpected(Failure{});
+        if(!avboitClearTaskResult.has_value()){
+            avboitClearTask = GpuTaskId();
+            return MakeUnexpected(Failure());
         }
-        avboitClearTask = *avboitClearTaskResult;
-        m_avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
-        const auto avboitClearTaskResult2 = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(s_AvboitClearAccumColorIdentity, s_AvboitClearAccumColorLabel, avboitClearTask), makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack));
-        if(!avboitClearTaskResult2){
-            avboitClearTask = {};
-            return MakeUnexpected(Failure{});
+        avboitClearTask = avboitClearTaskResult.value();
+        avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
+        const auto avboitClearTaskResult2 = graph.addClearTextureTask(AvboitClearTaskDesc(avboitClearScheduling, s_AvboitClearAccumColorIdentity, s_AvboitClearAccumColorLabel, avboitClearTask),
+            makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack, GpuClearTextureTaskRecordHooks()));
+        if(!avboitClearTaskResult2.has_value()){
+            avboitClearTask = GpuTaskId();
+            return MakeUnexpected(Failure());
         }
-        avboitClearTask = *avboitClearTaskResult2;
-        const auto avboitClearTaskResult3 = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(s_AvboitClearAccumExtinctionIdentity, s_AvboitClearAccumExtinctionLabel, avboitClearTask),
-            makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack)
+        avboitClearTask = avboitClearTaskResult2.value();
+        const auto avboitClearTaskResult3 = graph.addClearTextureTask(
+            AvboitClearTaskDesc(avboitClearScheduling, s_AvboitClearAccumExtinctionIdentity, s_AvboitClearAccumExtinctionLabel, avboitClearTask),
+            makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack, GpuClearTextureTaskRecordHooks())
         );
-        if(!avboitClearTaskResult3){
-            avboitClearTask = {};
-            return MakeUnexpected(Failure{});
+        if(!avboitClearTaskResult3.has_value()){
+            avboitClearTask = GpuTaskId();
+            return MakeUnexpected(Failure());
         }
-        avboitClearTask = *avboitClearTaskResult3;
-        const Array<Core::GpuGraphResourceId, 2u> foregroundClearTargets = { inputs.foregroundColor, inputs.foregroundExtinction };
-        for(const auto target : foregroundClearTargets){
-            const auto avboitClearTaskResult4 = m_graph.addClearTextureTask(
-                makeAvboitClearTaskDesc(identityPolicy.selectForegroundClearIdentity(target == inputs.foregroundColor), s_AvboitClearForegroundLabel, avboitClearTask),
-                makeAvboitFloatClearDesc(target, transparentBlack)
+        avboitClearTask = avboitClearTaskResult3.value();
+        const Array<GpuGraphResourceId, 2u> foregroundClearTargets(inputs.foregroundColor, inputs.foregroundExtinction);
+        for(in GpuGraphResourceId target : foregroundClearTargets){
+            const auto avboitClearTaskResult4 = graph.addClearTextureTask(
+                AvboitClearTaskDesc(avboitClearScheduling, identityPolicy.selectForegroundClearIdentity(target == inputs.foregroundColor), s_AvboitClearForegroundLabel, avboitClearTask),
+                makeAvboitFloatClearDesc(target, transparentBlack, GpuClearTextureTaskRecordHooks())
             );
-            if(!avboitClearTaskResult4){
-                avboitClearTask = {};
-                return MakeUnexpected(Failure{});
+            if(!avboitClearTaskResult4.has_value()){
+                avboitClearTask = GpuTaskId();
+                return MakeUnexpected(Failure());
             }
-            avboitClearTask = *avboitClearTaskResult4;
+            avboitClearTask = avboitClearTaskResult4.value();
         }
-        const auto appendAvboitBufferClear = [&](const Name identity, const AStringView markerLabel, const Core::GpuGraphResourceId destination, const u32 value){
-            const auto producedTask = m_graph.addClearBufferTask(makeAvboitClearTaskDesc(identity, markerLabel, avboitClearTask), Core::GpuClearBufferTaskDesc{ .destination = destination, .clearValue = value, });
-            if(!producedTask){
-                avboitClearTask = {};
+        auto appendAvboitBufferClear = lambda[mut graph, mut avboitClearTask, in avboitClearScheduling](in Name identity, in StringView markerLabel, in GpuGraphResourceId destination, in u32 value) -> b8{
+            GpuClearBufferTaskDesc clear;
+            clear.destination = destination;
+            clear.clearValue = value;
+            const auto producedTask = graph.addClearBufferTask(AvboitClearTaskDesc(avboitClearScheduling, identity, markerLabel, avboitClearTask), clear);
+            if(!producedTask.has_value()){
+                avboitClearTask = GpuTaskId();
                 return false;
             }
-            avboitClearTask = *producedTask;
+            avboitClearTask = producedTask.value();
             return true;
         };
         if(
@@ -573,34 +422,22 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
             || !appendAvboitBufferClear(s_AvboitClearDepthWarpIdentity, s_AvboitClearDepthWarpLabel, inputs.depthWarp, 0u)
             || !appendAvboitBufferClear(s_AvboitClearControlIdentity, s_AvboitClearControlLabel, inputs.control, 0u)
             || !appendAvboitBufferClear(s_AvboitClearExtinctionIdentity, s_AvboitClearExtinctionLabel, inputs.extinction, 0u)
-            || !appendAvboitBufferClear(s_AvboitClearExtinctionOverflowIdentity, s_AvboitClearExtinctionOverflowLabel, inputs.extinctionOverflow, NWB_AVBOIT_OVERFLOW_INVALID)
+            || !appendAvboitBufferClear(s_AvboitClearExtinctionOverflowIdentity, s_AvboitClearExtinctionOverflowLabel, inputs.extinctionOverflow, s_AvboitOverflowInvalid)
         )
-            return MakeUnexpected(Failure{});
-        const auto avboitClearTaskResult5 = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(s_AvboitClearTransmittanceIdentity, s_AvboitClearTransmittanceLabel, avboitClearTask),
-            makeAvboitFloatClearDesc(inputs.transmittance, Core::Color(1.f, 1.f, 1.f, 1.f), avboitClearEndHooks)
+            return MakeUnexpected(Failure());
+        const auto avboitClearTaskResult5 = graph.addClearTextureTask(
+            AvboitClearTaskDesc(avboitClearScheduling, s_AvboitClearTransmittanceIdentity, s_AvboitClearTransmittanceLabel, avboitClearTask),
+            makeAvboitFloatClearDesc(inputs.transmittance, Color(1.0f, 1.0f, 1.0f, 1.0f), avboitClearEndHooks)
         );
-        if(!avboitClearTaskResult5){
-            avboitClearTask = {};
-            return MakeUnexpected(Failure{});
+        if(!avboitClearTaskResult5.has_value()){
+            avboitClearTask = GpuTaskId();
+            return MakeUnexpected(Failure());
         }
-        avboitClearTask = *avboitClearTaskResult5;
-        m_avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
+        avboitClearTask = avboitClearTaskResult5.value();
+        avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
     }
     result.clearTask = avboitClearTask;
     return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

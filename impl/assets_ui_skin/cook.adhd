@@ -2,99 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/asset.adhd>
+#include <impl/assets_ui_skin/cook_entry.adhd>
 #include <impl/assets_ui_skin/ui_skin_binary_codec.adhd>
 #include <impl/assets_ui_skin/validation.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_ui_skin/asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct UiSkinCookEntry{
-    Core::Assets::AssetArena& arena;
-    UiSkin::RegionVector regions;
-    Core::Assets::AssetRef<Texture> texture;
-    Name virtualPath = s_NameNone;
-    u32 atlasWidth = 0u;
-    u32 atlasHeight = 0u;
-    f32 referenceDensity = 1.0f;
-    b8 completeToolkitSkin = false;
-    UiSkinPalette palette;
-    UiSkinTypography typography;
-
-
-public:
-    explicit UiSkinCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
-        : arena(memoryArena)
-        , regions(memoryArena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-template<typename FileArenaT>
-    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return ParseUiSkinCookMetadata(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
-}
-
-template<typename RootArenaT, typename FileArenaT>
-    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return ParseUiSkinCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
-}
-[[nodiscard]] Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::AssetArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -439,6 +349,7 @@ Expected<UiSkinTypography> ParseUiSkinTypography(in Path path, in MetascriptValu
     return result;
 }
 
+[asset_writer]
 b8 SerializeUiSkinAsset(in UiSkin skin, mut Vector<u8> outBinary){
     if(!skin.validatePayload())
         return false;
@@ -501,54 +412,8 @@ b8 ParseUiSkinRegions(in Path path, in MetascriptValue asset, mut Vector<UiSkinR
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_ui_skin/ui_skin_binary_codec.adhd.h>
-
-#include <core/assets/cook_metadata.h>
-#include <core/common/log.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("UiSkinAssetCodec::serialize")))
-        return false;
-    const UiSkin& skin = *MakeNotNull(checked_cast<const UiSkin*>(&asset));
-    return SerializeUiSkinAsset(skin, outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::AssetArena& arena){
+Expected<UiSkin> BuildUiSkinAsset(in UiSkinCookEntry entry){
     return BuildUiSkinAssetFromCookData(
-        arena,
         entry.virtualPath,
         entry.texture,
         entry.atlasWidth,
@@ -561,79 +426,65 @@ Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::As
     );
 }
 
+Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    UiSkinCookEntry parsed;
+    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_UiSkinDiagnosticPrefix))
+        return MakeUnexpected(Failure());
+    if(!AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_UiSkinDiagnosticPrefix, parsed))
+        return MakeUnexpected(Failure());
+    if(!ValidateMetadataAssetFields(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedUiSkinMetadataField(fieldName);
+    }))
+        return MakeUnexpected(Failure());
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    const Expected<UiSkinPalette> paletteResult = ParseUiSkinPalette(nwbFilePath, asset);
+    if(!paletteResult.has_value())
+        return MakeUnexpected(Failure());
+    parsed.palette = paletteResult.value();
+    const Expected<UiSkinTypography> typographyResult = ParseUiSkinTypography(nwbFilePath, asset);
+    if(!typographyResult.has_value())
+        return MakeUnexpected(Failure());
+    parsed.typography = typographyResult.value();
+    const Expected<AssetRef<Texture>> textureResult = ReadMetadataAssetRefField<Texture>(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinTextureField, true);
+    if(!textureResult.has_value())
+        return MakeUnexpected(Failure());
+    parsed.texture = textureResult.value();
 
+    const Expected<Array<u32, 4>> extentResult = ReadUiSkinU32Array(nwbFilePath, asset, s_UiSkinAtlasExtentField, true, s_UiSkinAtlasExtentComponentCount);
+    if(!extentResult.has_value())
+        return MakeUnexpected(Failure());
+    parsed.atlasWidth = extentResult.value()[0u];
+    parsed.atlasHeight = extentResult.value()[1u];
+    const Expected<f32> referenceDensityResult = ReadMetadataFiniteF32Field(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinReferenceDensityField, true);
+    if(!referenceDensityResult.has_value())
+        return MakeUnexpected(Failure());
+    parsed.referenceDensity = referenceDensityResult.value();
 
-Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    UiSkinCookEntry parsed(arena);
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_UiSkinDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_UiSkinDiagnosticPrefix, parsed))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, &IsAllowedUiSkinMetadataField))
-        return MakeUnexpected(Failure{});
-
-    auto paletteResult = ParseUiSkinPalette(nwbFilePath, asset);
-    if(!paletteResult)
-        return MakeUnexpected(Failure{});
-    parsed.palette = *paletteResult;
-    auto typographyResult = ParseUiSkinTypography(nwbFilePath, asset);
-    if(!typographyResult)
-        return MakeUnexpected(Failure{});
-    parsed.typography = *typographyResult;
-    auto textureResult = Core::Assets::ReadMetadataAssetRefField<Texture>(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinTextureField, true);
-    if(!textureResult)
-        return MakeUnexpected(Failure{});
-    parsed.texture = *textureResult;
-
-    auto extentResult = ReadUiSkinU32Array(nwbFilePath, asset, s_UiSkinAtlasExtentField, true, s_UiSkinAtlasExtentComponentCount);
-    if(!extentResult)
-        return MakeUnexpected(Failure{});
-    parsed.atlasWidth = (*extentResult)[0u];
-    parsed.atlasHeight = (*extentResult)[1u];
-    auto referenceDensityResult = Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinReferenceDensityField, true);
-    if(!referenceDensityResult)
-        return MakeUnexpected(Failure{});
-    parsed.referenceDensity = *referenceDensityResult;
-
-    auto toolkitContractResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinToolkitContractField, false);
-    if(!toolkitContractResult)
-        return MakeUnexpected(Failure{});
-    const AStringView toolkitContract = toolkitContractResult->text;
-    const b8 hasToolkitContract = toolkitContractResult->present;
+    const Expected<MetadataStringField> toolkitContractResult = ReadMetadataStringField(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinToolkitContractField, false);
+    if(!toolkitContractResult.has_value())
+        return MakeUnexpected(Failure());
+    const StringView toolkitContract = toolkitContractResult.value().text;
+    const b8 hasToolkitContract = toolkitContractResult.value().present;
     if(!ValidateUiSkinToolkitContractValue(nwbFilePath, hasToolkitContract, toolkitContract))
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     parsed.completeToolkitSkin = hasToolkitContract;
 
     if(!ParseUiSkinRegions(nwbFilePath, asset, parsed.regions))
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
 
-    if(!BuildUiSkinAsset(parsed, arena))
-        return MakeUnexpected(Failure{});
+    if(!BuildUiSkinAsset(parsed).has_value())
+        return MakeUnexpected(Failure());
     return parsed;
 }
 
-Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<UiSkinCookEntry, &ParseUiSkinCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_UiSkinDiagnosticPrefix, arena, scratchArena);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<UiSkinCookEntry>(root, virtualRoot, file, document, s_UiSkinDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<UiSkinCookEntry>{
+        return ParseUiSkinCookMetadata(path, file, value);
+    });
 }
 
 

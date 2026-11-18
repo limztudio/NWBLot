@@ -2,112 +2,71 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/text/service.adhd>
+#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
+// The layout retains its exact font versions until a replacement is shaped successfully.
+class Label : NoCopy{
+    private String m_text;
+    private String m_language;
+    private Expected<TextLayout, TextLayoutStatus> m_layout = MakeUnexpected(TextLayoutStatus::InvalidParameters);
+    private u64 m_serviceIdentity = 0u;
+    private u64 m_fontGeneration = 0u;
+    private f32 m_fontSize = s_TextDefaultFontSize;
+    private u32 m_scriptTag = s_TextDefaultScriptTag;
+    private TextDirection m_direction = TextDirection::LeftToRight;
+    private b8 m_dirty = true;
 
-#include <global/optional.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// A passive label caches logical layout; paint confines its ink to the supplied region and inherited clip at the current display scale.
-class Label final : NoCopy{
-public:
-    explicit Label(::ArenaBase& arena)
-        : m_text(arena)
-        , m_language(s_TextDefaultLanguage, arena)
-    {}
-
-
-public:
-    [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request){
-        return SetLabelTextRequest(request, m_text, m_language, m_fontSize, m_scriptTag, m_direction, m_dirty);
+    public Label(){
+        this.m_language.assign(s_TextDefaultLanguage);
     }
 
-    [[nodiscard]] Expected<Rect> measure(TextService& text, const DisplayMetrics& display){
-        if(!m_layout.has_value() || m_dirty || m_serviceIdentity != text.identity() || m_fontGeneration != text.generation()){
-            const ShapeRequest request{
-                StringView(m_text.data(), m_text.size()),
-                StringView(m_language.data(), m_language.size()),
-                m_fontSize,
-                m_scriptTag,
-                m_direction,
-            };
-            auto layout = text.layout(request);
-            if(!layout)
-                return MakeUnexpected(Failure{});
-            m_layout = Move(*layout);
-            m_serviceIdentity = text.identity();
-            m_fontGeneration = text.generation();
-            m_dirty = false;
+    public TextLayoutStatus setText(in ShapeRequest request){
+        return SetLabelTextRequest(request, this.m_text, this.m_language, this.m_fontSize, this.m_scriptTag, this.m_direction, this.m_dirty);
+    }
+
+    public Expected<Rect> measure(mut TextService text, in DisplayMetrics display){
+        if(!this.m_layout.has_value() || this.m_dirty || this.m_serviceIdentity != text.identity() || this.m_fontGeneration != text.generation()){
+            ShapeRequest request;
+            request.text = this.m_text;
+            request.language = this.m_language;
+            request.fontSize = this.m_fontSize;
+            request.scriptTag = this.m_scriptTag;
+            request.direction = this.m_direction;
+            Expected<TextLayout, TextLayoutStatus> layout = text.layout(request);
+            if(!layout.has_value())
+                return MakeUnexpected(Failure());
+            this.m_layout = layout;
+            this.m_serviceIdentity = text.identity();
+            this.m_fontGeneration = text.generation();
+            this.m_dirty = false;
         }
-        return text.measure(*m_layout, display);
+        return text.measure(this.m_layout.value(), display);
     }
 
-    [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color = {}){
-        const auto measured = measure(text, paint.displayMetrics());
-        if(!measured)
+    public b8 paint(mut TextService text, mut PaintBuilder paint, in Rect bounds, in Color color){
+        const Expected<Rect> measured = this.measure(text, paint.displayMetrics());
+        if(!measured.has_value())
             return false;
         paint.pushClip(bounds);
-        const b8 painted = text.paint(paint, *m_layout, ResolveLabelPaintOrigin(bounds, *measured), color);
+        const b8 painted = text.paint(paint, this.m_layout.value(), ResolveLabelPaintOrigin(bounds, measured.value()), color);
         const b8 restored = paint.popClip();
         return painted && restored;
     }
 
-    [[nodiscard]] const TextLayout& layout()const noexcept{
-        FOUNDATION_ASSERT_MSG(m_layout.has_value(), FOUNDATION_TEXT("Label::layout() requires a successful measure() first"));
-        return *m_layout;
+    public b8 paint(mut TextService text, mut PaintBuilder paint, in Rect bounds){
+        return this.paint(text, paint, bounds, Color());
     }
 
-
-private:
-    AString<::ArenaBase> m_text;
-    AString<::ArenaBase> m_language;
-    Optional<TextLayout> m_layout;
-    u64 m_serviceIdentity = 0u;
-    u64 m_fontGeneration = 0u;
-    f32 m_fontSize = s_TextDefaultFontSize;
-    u32 m_scriptTag = s_TextDefaultScriptTag;
-    TextDirection::Enum m_direction = TextDirection::LeftToRight;
-    b8 m_dirty = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public in TextLayout layout()const{
+        assert(this.m_layout.has_value(), "Label::layout() requires a successful measure() first");
+        return this.m_layout.value();
+    }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::Ui::Label"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class Label{
-    TextLayoutStatus setText(...);
-    Expected<Rect> measure(...);
-    b8 paint(...);
-    in TextLayout layout(...)const;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

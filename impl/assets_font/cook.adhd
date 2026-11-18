@@ -2,90 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font/asset.adhd>
+#include <impl/assets_font/cook_entry.adhd>
 #include <impl/assets_font/font_binary_codec.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_font/asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FontCookEntry{
-    Core::Assets::AssetBytes fontBytes;
-    Name virtualPath = s_NameNone;
-    u32 faceIndex = 0u;
-
-
-public:
-    explicit FontCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
-        : fontBytes(memoryArena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
-
-template<typename RootArenaT, typename FileArenaT>
-    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<FontCookEntry> ParseFontCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return ParseFontCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
-}
-
-template<typename FileArenaT>
-    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
-    return ParseFontCookMetadataValue(virtualPath, Path(arena, nwbFilePath), asset, arena);
-}
-[[nodiscard]] Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,6 +15,42 @@ b8 IsValidFontCookVirtualPath(in Name virtualPath){
     return virtualPath != s_NameNone;
 }
 
+Expected<Path> ResolveFontCookSourcePath(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    if(!IsValidFontCookVirtualPath(virtualPath))
+        return MakeUnexpected(Failure());
+    if(!asset.isNull()){
+        if(!CheckMetadataAssetMap(nwbFilePath, asset, s_FontMetaDiagnosticPrefix) || !ValidateMetadataAssetFields(nwbFilePath, asset, s_FontMetaDiagnosticPrefix))
+            return MakeUnexpected(Failure());
+    }
+
+    Path fontPath = nwbFilePath;
+    fontPath.replaceExtension(s_PreparedFontExtension);
+    return fontPath;
+}
+
+Expected<FontCookEntry> BuildFontCookEntry(in Name virtualPath, in PreparedFontSource source){
+    if(!ValidateFontSource(source.fontBytes, source.faceIndex))
+        return MakeUnexpected(Failure());
+
+    FontCookEntry entry;
+    entry.fontBytes = source.fontBytes;
+    entry.virtualPath = virtualPath;
+    entry.faceIndex = source.faceIndex;
+    return entry;
+}
+
+[cook_sidecar(s_PreparedFontExtension)]
+Expected<FontCookEntry> ParseFontCookMetadataValue(in Name virtualPath, in Path path, in MetascriptValue asset){
+    const Expected<Path> fontPath = ResolveFontCookSourcePath(virtualPath, path, asset);
+    if(!fontPath.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<PreparedFontSource, StringView> source = ReadPreparedFontSource(fontPath.value(), s_FontCookIncludePreparedPixels);
+    if(!source.has_value())
+        return MakeUnexpected(Failure());
+    return BuildFontCookEntry(virtualPath, source.value());
+}
+
+[asset_writer]
 b8 SerializeFontAssetPayload(in Font font, mut Vector<u8> outBinary){
     if(!font.validatePayload())
         return false;
@@ -116,120 +70,14 @@ Expected<Font> BuildFontAssetFromPayload(in Name virtualPath, in Vector<u8> font
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_font/font_binary_codec.adhd.h>
-
-#include <core/assets/cook_metadata.h>
-#include <core/assets/paths.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_font_cook_metadata{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontPairedSidecarRuleAutoRegistrar({
-    .sidecarExtension = s_PreparedFontExtension,
-});
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("FontAssetCodec::serialize")))
-        return false;
-    const Font& font = *MakeNotNull(checked_cast<const Font*>(&asset));
-    return SerializeFontAssetPayload(font, outBinary);
+Expected<FontCookEntry> ParseFontCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<FontCookEntry>(root, virtualRoot, file, document, s_FontMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<FontCookEntry>{
+        return ParseFontCookMetadataValue(path, file, value);
+    });
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<FontCookEntry>(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        doc,
-        s_FontMetaDiagnosticPrefix,
-        [&nwbFilePath, &arena](const Name virtualPath, const Core::Metascript::Value& asset){
-            return ParseFontCookMetadataValue(virtualPath, nwbFilePath, asset, arena);
-        },
-        scratchArena
-    );
-}
-
-Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
-    FontCookEntry entry(arena);
-    if(!IsValidFontCookVirtualPath(virtualPath))
-        return MakeUnexpected(Failure{});
-    if(!asset.isNull()){
-        if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontMetaDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_FontMetaDiagnosticPrefix, InitializerList<AStringView>{}))
-            return MakeUnexpected(Failure{});
-    }
-    Path fontPath = nwbFilePath;
-    fontPath.replaceExtension(s_PreparedFontExtension);
-    auto source = ReadPreparedFontSource(fontPath, s_FontCookIncludePreparedPixels, arena);
-    if(!source || !ValidateFontSource(source->fontBytes, source->faceIndex))
-        return MakeUnexpected(Failure{});
-    entry.fontBytes.assign(source->fontBytes.begin(), source->fontBytes.end());
-    entry.virtualPath = virtualPath;
-    entry.faceIndex = source->faceIndex;
-    return entry;
-}
-
-Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena){
-    return BuildFontAssetFromPayload(arena, entry.virtualPath, entry.fontBytes, entry.faceIndex);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<Font> BuildFontAsset(in FontCookEntry entry){
+    return BuildFontAssetFromPayload(entry.virtualPath, entry.fontBytes, entry.faceIndex);
 }
 
 

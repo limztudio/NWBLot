@@ -58,6 +58,13 @@ extern class GpuTimingSampleAttribution{
     b8 valid(...)const;
 };
 
+[cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingRecordedSample"), cpp_flags(self_defaulted, non_thread_safe)]
+extern class GpuTimingRecordedSample{
+    GpuTimingSampleAttribution attribution()const;
+    void record(in GpuTimingSampleAttribution attribution)const;
+    void reset();
+};
+
 [cpp_header("<core/graphics/gpu_timing_types.h>"), cpp_name("::NWB::Core::GpuTimingSampleListener"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuTimingSampleListener{
     b8 valid(...)const;

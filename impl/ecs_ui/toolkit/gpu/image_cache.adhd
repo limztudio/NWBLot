@@ -2,73 +2,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/gpu/renderer.adhd>
+#include <impl/ecs_ui/toolkit/gpu/resource_versions.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+b8 SameCachedGpuGlyph(in GpuVersion<GpuGlyphVersion> cached, in SharedGlyphPage page){
+    return SameGlyphPageKey(cached.deref().m_page.deref().binding(), page.deref().binding());
+}
+b8 SameCachedGpuSdf(in GpuVersion<GpuSdfAtlasVersion> cached, in SharedSdfAtlasPage page){
+    return SameSdfAtlasPageKey(cached.deref().m_page.deref().binding(), page.deref().binding());
+}
+b8 SameCachedGpuTexture(in GpuVersion<GpuTextureImageVersion> cached, in SharedImageSource source){
+    return SameTextureImageKey(cached.deref().m_source.deref(), source.deref());
+}
 
+class GpuImageCache : NoCopy{
+    private Vector<GpuVersion<GpuGlyphVersion>> m_glyphCache;
+    private Vector<GpuVersion<GpuSdfAtlasVersion>> m_sdfCache;
+    private Vector<GpuVersion<GpuTextureImageVersion>> m_textureCache;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public mut Vector<GpuVersion<GpuGlyphVersion>> glyphs(){ return this.m_glyphCache; }
+    public mut Vector<GpuVersion<GpuSdfAtlasVersion>> sdfs(){ return this.m_sdfCache; }
+    public mut Vector<GpuVersion<GpuTextureImageVersion>> textures(){ return this.m_textureCache; }
 
-
-#include <global/arena_object.h>
-#include <global/refcount_ptr.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-using GpuVersion = RefCountPtr<RefCounter<T>, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>>;
-
-template<typename TPage> class GpuPageVersion;
-using GpuGlyphVersion = GpuPageVersion<SharedGlyphPage>;
-using GpuSdfAtlasVersion = GpuPageVersion<SharedSdfAtlasPage>;
-class GpuTextureImageVersion;
-
-
-class GpuImageCache final : NoCopy{
-public:
-    explicit GpuImageCache(Core::Alloc::GlobalArena& arena);
-    ~GpuImageCache()noexcept;
-
-
-public:
-    void reserve();
-    void clear()noexcept;
-    void trim(const DrawSnapshot& snapshot);
-    void evict()noexcept;
-    [[nodiscard]] auto& glyphs()noexcept{ return m_glyphCache; }
-    [[nodiscard]] auto& sdfs()noexcept{ return m_sdfCache; }
-    [[nodiscard]] auto& textures()noexcept{ return m_textureCache; }
-
-
-private:
-    Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
-    Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
-    Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureCache;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public void reserve(){
+        this.m_glyphCache.reserve(s_PaintMaxImages);
+        this.m_sdfCache.reserve(s_PaintMaxImages);
+        this.m_textureCache.reserve(s_PaintMaxImages);
+    }
+    public void clear(){
+        this.m_glyphCache.clear();
+        this.m_sdfCache.clear();
+        this.m_textureCache.clear();
+    }
+    [cpp_unwind]
+    public void trim(in DrawSnapshot snapshot){
+        const usize missing = CountMissingCacheEntries(this.m_glyphCache, snapshot.glyphPages(), SameCachedGpuGlyph)
+            + CountMissingCacheEntries(this.m_sdfCache, snapshot.sdfPages(), SameCachedGpuSdf)
+            + CountMissingCacheEntries(this.m_textureCache, snapshot.textureImages(), SameCachedGpuTexture);
+        if(!ShouldTrimGpuImageCache(this.m_glyphCache.size(), this.m_sdfCache.size(), this.m_textureCache.size(), missing))
+            return;
+        // Keep conflicting versions for validation. Frames keep their own references to evicted versions.
+        RetainReferencedCacheEntries(snapshot.glyphPages(), SameCachedGpuGlyph, this.m_glyphCache);
+        RetainReferencedCacheEntries(snapshot.sdfPages(), SameCachedGpuSdf, this.m_sdfCache);
+        RetainReferencedCacheEntries(snapshot.textureImages(), SameCachedGpuTexture, this.m_textureCache);
+    }
+    public void evict(){
+        if(!this.m_glyphCache.empty())
+            this.m_glyphCache.erase(this.m_glyphCache.begin());
+        else if(!this.m_sdfCache.empty())
+            this.m_sdfCache.erase(this.m_sdfCache.begin());
+        else if(!this.m_textureCache.empty())
+            this.m_textureCache.erase(this.m_textureCache.begin());
+    }
 }
 
 

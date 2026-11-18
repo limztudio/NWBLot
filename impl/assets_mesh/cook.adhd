@@ -3,6 +3,10 @@
 
 
 #include <impl/assets_mesh/cook_meshlet_growth.adhd>
+#include <impl/assets_mesh/source_metadata.adhd>
+#include <impl/assets_mesh/cook_stream_reorder.adhd>
+#include <impl/assets_mesh/meshlet_ref_encode.adhd>
+#include <impl/assets_mesh/meshlet_triangle_indices.adhd>
 #include <impl/assets_mesh/mesh_binary_codec.adhd>
 #include <impl/assets_mesh/skin_asset.adhd>
 #include <impl/assets_mesh/skin_cook.adhd>
@@ -12,131 +16,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_mesh/asset.adhd.h>
-#include <impl/assets_mesh/skin_asset.adhd.h>
-#include <impl/assets_mesh/cook_types.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/task/cpu/scheduler.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MeshCookEntry{
-    Name virtualPath = s_NameNone;
-    Core::Assets::AssetVector<Float3U> positions;
-    Core::Assets::AssetVector<Half4U> normals;
-    Core::Assets::AssetVector<Half4U> tangents;
-    Core::Assets::AssetVector<Float2U> uv0;
-    Core::Assets::AssetVector<Half4U> colors;
-    Core::Assets::AssetVector<MeshVertexRef> vertexRefs;
-    Core::Assets::AssetVector<MeshletDesc> meshlets;
-    Core::Assets::AssetVector<MeshletBounds> meshletBounds;
-    Core::Assets::AssetVector<MeshletPositionStreamRef> meshletPositionStreamRefs;
-    Core::Assets::AssetVector<MeshletAttributeStreamRef> meshletAttributeStreamRefs;
-    Core::Assets::AssetVector<u8> meshletPositionRefDeltas;
-    Core::Assets::AssetVector<u8> meshletAttributeRefDeltas;
-    Core::Assets::AssetVector<MeshletLocalVertexRef> meshletLocalVertexRefs;
-    Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
-
-
-public:
-    explicit MeshCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : positions(arena)
-        , normals(arena)
-        , tangents(arena)
-        , uv0(arena)
-        , colors(arena)
-        , vertexRefs(arena)
-        , meshlets(arena)
-        , meshletBounds(arena)
-        , meshletPositionStreamRefs(arena)
-        , meshletAttributeStreamRefs(arena)
-        , meshletPositionRefDeltas(arena)
-        , meshletAttributeRefDeltas(arena)
-        , meshletLocalVertexRefs(arena)
-        , meshletPrimitiveIndices(arena)
-    {}
-};
-
-[[nodiscard]] Expected<MeshCookEntry> ParseMeshCookMetadata(
-    const Path& assetRoot,
-    AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::CpuTaskScheduler& cpuScheduler,
-    Core::Alloc::ScratchArena& scratchArena
-);
-[[nodiscard]] Expected<MeshCookEntry> ParseMeshCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
-
-[[nodiscard]] Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SkinCookEntry{
-    Name virtualPath = s_NameNone;
-    Core::Assets::AssetRef<Mesh> mesh;
-    Core::Assets::AssetRef<Skeleton> skeleton;
-    Core::Assets::AssetVector<SkinInfluence4> influences;
-    Core::Assets::AssetVector<SkeletonJointMatrix> inverseBindMatrices;
-
-
-public:
-    explicit SkinCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : influences(arena)
-        , inverseBindMatrices(arena)
-    {}
-};
-
-[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
-[[nodiscard]] Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class MeshCookEntry{
+    public Name virtualPath = s_NameNone;
+    public Vector<f32x3u> positions;
+    public Vector<f16x4u> normals;
+    public Vector<f16x4u> tangents;
+    public Vector<f32x2u> uv0;
+    public Vector<f16x4u> colors;
+    public Vector<MeshVertexRef> vertexRefs;
+    public Vector<MeshletDesc> meshlets;
+    public Vector<MeshletBounds> meshletBounds;
+    public Vector<MeshletPositionStreamRef> meshletPositionStreamRefs;
+    public Vector<MeshletAttributeStreamRef> meshletAttributeStreamRefs;
+    public Vector<u8> meshletPositionRefDeltas;
+    public Vector<u8> meshletAttributeRefDeltas;
+    public Vector<MeshletLocalVertexRef> meshletLocalVertexRefs;
+    public Vector<u8> meshletPrimitiveIndices;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 b8 SerializeMeshBinaryPayload(
     in Span<f32x3u> positions,
@@ -229,197 +125,8 @@ Expected<Skin> BuildSkinAssetFromPayload(
     return asset;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_mesh/cook_metadata.adhd.h>
-#include <core/alloc/scratch.h>
-#include <core/assets/cook_metadata.h>
-#include <core/assets/metadata_fields.h>
-#include <core/assets/paths.h>
-#include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
-#include <impl/assets_mesh/binary_payload_io.adhd.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
-#include <impl/assets_mesh/payload_validation.adhd.h>
-#include <impl/assets_mesh/cook_stream_reorder.adhd.h>
-#include <impl/assets_mesh/cook_solid_topology.adhd.h>
-#include <impl/assets_skeleton/cook.adhd.h>
-#include <core/assets/binary_payload_io.h>
-#include <global/algorithm.h>
-#include <global/simd/vector.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_mesh_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 ParseSourceMeshMeta(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& outEntry){
-    auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(nwbFilePath, asset, s_MeshMetaKind, outEntry.positions.get_allocator().arena(), scratchArena);
-    if(!streamsResult)
-        return false;
-
-    SourceMeshStreams& streams = *streamsResult;
-    CopySourceMeshStreamsToCookStreams(
-        streams.positions,
-        streams.normals,
-        streams.tangents,
-        streams.uv0,
-        streams.colors,
-        streams.vertexRefs,
-        outEntry.positions,
-        outEntry.normals,
-        outEntry.tangents,
-        outEntry.uv0,
-        outEntry.colors,
-        outEntry.vertexRefs
-    );
-    return BuildCookMeshlets(
-        nwbFilePath,
-        streams.indices,
-        cpuScheduler.isParallelEnabled(),
-        cpuScheduler.workerThreadCount(),
-        outEntry.positions,
-        outEntry.normals,
-        outEntry.tangents,
-        outEntry.uv0,
-        outEntry.colors,
-        outEntry.vertexRefs,
-        outEntry.meshlets,
-        outEntry.meshletBounds,
-        outEntry.meshletPositionStreamRefs,
-        outEntry.meshletAttributeStreamRefs,
-        outEntry.meshletLocalVertexRefs,
-        outEntry.meshletPrimitiveIndices
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<MeshCookEntry> ParseMeshCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::CpuTaskScheduler& cpuScheduler,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    return Core::Assets::ParseCookMetadataDocument<MeshCookEntry>(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        doc,
-        s_MeshMetaText,
-        [&nwbFilePath, &arena, &cpuScheduler, &scratchArena](const Name virtualPath, const Core::Metascript::Value& asset){
-            return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, arena, cpuScheduler, scratchArena);
-        },
-        scratchArena
-    );
-}
-
-Expected<MeshCookEntry> ParseMeshCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
-    MeshCookEntry entry(arena);
-
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_MeshMetaText))
-        return MakeUnexpected(Failure{});
-
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_MeshMetaText, entry))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MeshMetaText, &IsAllowedMeshAssetField))
-        return MakeUnexpected(Failure{});
-    if(!__hidden_assets_mesh_cook::ParseSourceMeshMeta(nwbFilePath, asset, cpuScheduler, scratchArena, entry))
-        return MakeUnexpected(Failure{});
-    return entry;
-}
-
-Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    if(!ReorderMeshStreamsByMeshletTraversal(
-        meshEntry.virtualPath,
-        meshEntry.meshlets,
-        meshEntry.positions,
-        meshEntry.normals,
-        meshEntry.tangents,
-        meshEntry.uv0,
-        meshEntry.colors,
-        meshEntry.meshletPositionStreamRefs,
-        meshEntry.meshletAttributeStreamRefs
-    ))
-        return MakeUnexpected(Failure{});
-    if(!EncodeMeshletRefDeltas(meshEntry.meshletPositionStreamRefs, meshEntry.meshletAttributeStreamRefs, false, [&](const usize meshletIndex, const TStringView reason){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': meshlet {} {}"), s_MeshMetaKind, ConvertString(meshEntry.virtualPath.resolvedText()), meshletIndex, reason);
-        return false;
-    }, meshEntry.meshlets, meshEntry.meshletPositionRefDeltas, meshEntry.meshletAttributeRefDeltas))
-        return MakeUnexpected(Failure{});
-
-    const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, meshEntry.meshlets, meshEntry.meshletLocalVertexRefs, meshEntry.meshletPositionRefDeltas, meshEntry.meshletPrimitiveIndices, meshEntry.positions.size());
-    if(!triangleIndices)
-        return MakeUnexpected(Failure{});
-    Core::Assets::AssetVector<u32> solidWords(arena);
-    if(!BuildSolidTriangleWordsInto(meshEntry.positions, *triangleIndices, solidWords))
-        return MakeUnexpected(Failure{});
-
-    Mesh mesh(arena, meshEntry.virtualPath);
-    mesh.setPayload(
-        Move(meshEntry.positions),
-        Move(meshEntry.normals),
-        Move(meshEntry.tangents),
-        Move(meshEntry.uv0),
-        Move(meshEntry.colors),
-        Move(meshEntry.meshlets),
-        Move(meshEntry.meshletBounds),
-        Move(meshEntry.meshletPositionRefDeltas),
-        Move(meshEntry.meshletAttributeRefDeltas),
-        Move(meshEntry.meshletLocalVertexRefs),
-        Move(meshEntry.meshletPrimitiveIndices),
-        Move(solidWords)
-    );
-    if(!mesh.validatePayload())
-        return MakeUnexpected(Failure{});
-    return mesh;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MeshBinaryPayload::s_MeshSerializeContext))
-        return false;
-
-    const Mesh& mesh = static_cast<const Mesh&>(asset);
+[asset_writer]
+b8 SerializeMeshAsset(in Mesh mesh, mut Vector<u8> outBinary){
     if(!mesh.validatePayload())
         return false;
 
@@ -440,15 +147,8 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     );
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, s_SkinSerializeContext))
-        return false;
-
-    const Skin& skin = static_cast<const Skin&>(asset);
+[asset_writer]
+b8 SerializeSkinAsset(in Skin skin, mut Vector<u8> outBinary){
     if(!skin.validatePayload())
         return false;
 
@@ -461,71 +161,122 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     );
 }
 
-Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<SkinCookEntry>(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        doc,
-        s_SkinMetaDiagnosticPrefix,
-        [&nwbFilePath, &arena](const Name virtualPath, const Core::Metascript::Value& asset){
-            return ParseSkinCookMetadata(virtualPath, nwbFilePath, asset, arena);
-        },
-        scratchArena
-    );
-}
 
-Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
-    SkinCookEntry entry(arena);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SkinMetaDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, &IsAllowedSkinMetadataField))
-        return MakeUnexpected(Failure{});
-    auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
-    if(!meshResult)
-        return MakeUnexpected(Failure{});
-    entry.mesh = *meshResult;
-    auto skeletonResult = Core::Assets::ReadMetadataAssetRefField<Skeleton>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaSkeletonField, true);
-    if(!skeletonResult)
-        return MakeUnexpected(Failure{});
-    entry.skeleton = *skeletonResult;
-    if(!ParseSkinInfluenceMetadataInto(nwbFilePath, asset, s_SkinMetaKind, {}, true, entry.influences))
-        return MakeUnexpected(Failure{});
+Expected<SkinCookEntry> ParseSkinCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    SkinCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_SkinMetaDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_SkinMetaDiagnosticPrefix, entry)
+        || !ValidateMetadataAssetFields(file, value, s_SkinMetaDiagnosticPrefix, lambda[](in StringView field) -> b8{
+            return IsAllowedSkinMetadataField(field);
+        }))
+        return MakeUnexpected(Failure());
 
-    auto inverseBindMatricesResult = ParseSkinCookInverseBindMatrices(arena, nwbFilePath, asset);
-    if(!inverseBindMatricesResult)
-        return MakeUnexpected(Failure{});
-    AssignVector(entry.inverseBindMatrices, *inverseBindMatricesResult);
-    if(!ValidateSkinCookInfluenceJointIndexBounds(nwbFilePath, entry.inverseBindMatrices.size(), entry.influences))
-        return MakeUnexpected(Failure{});
-
+    const Expected<AssetRef<Mesh>> mesh = ReadMetadataAssetRefField<Mesh>(file, value, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
+    if(!mesh.has_value())
+        return MakeUnexpected(Failure());
+    entry.mesh = mesh.value();
+    const Expected<AssetRef<Skeleton>> skeleton = ReadMetadataAssetRefField<Skeleton>(file, value, s_SkinMetaDiagnosticPrefix, s_SkinMetaSkeletonField, true);
+    if(!skeleton.has_value())
+        return MakeUnexpected(Failure());
+    entry.skeleton = skeleton.value();
+    if(!ParseSkinInfluenceMetadataInto(file, value, s_SkinMetaKind, "", true, entry.influences))
+        return MakeUnexpected(Failure());
+    const Expected<Vector<SkeletonJointMatrix>> matrices = ParseSkinCookInverseBindMatrices(file, value);
+    if(!matrices.has_value())
+        return MakeUnexpected(Failure());
+    entry.inverseBindMatrices = matrices.value();
+    if(!ValidateSkinCookInfluenceJointIndexBounds(file, entry.inverseBindMatrices.size(), entry.influences))
+        return MakeUnexpected(Failure());
     return entry;
 }
 
-Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena){
-    return BuildSkinAssetFromPayload(arena, skinEntry.virtualPath, skinEntry.mesh, skinEntry.skeleton, skinEntry.influences, skinEntry.inverseBindMatrices);
+Expected<SkinCookEntry> ParseSkinCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<SkinCookEntry>(root, virtualRoot, file, document, s_SkinMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<SkinCookEntry>{
+        return ParseSkinCookMetadata(path, file, value);
+    });
+}
+
+Expected<Skin> BuildSkinAsset(in SkinCookEntry entry){
+    return BuildSkinAssetFromPayload(entry.virtualPath, entry.mesh, entry.skeleton, entry.influences, entry.inverseBindMatrices);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+[cpp_unwind]
+b8 BuildSourceMeshStreams(in Path file, in MetascriptValue value, in b8 parallelEnabled, in u32 workers, mut MeshCookEntry entry){
+    SourceMeshStreams streams;
+    if(!ReadCommonSourceMeshStreams(file, value, streams))
+        return false;
+    CopySourceMeshStreamsToCookStreams(
+        streams.positions, streams.normals, streams.tangents, streams.uv0, streams.colors, streams.vertexRefs,
+        entry.positions, entry.normals, entry.tangents, entry.uv0, entry.colors, entry.vertexRefs
+    );
+    return BuildCookMeshlets(
+        file, streams.indices, parallelEnabled, workers,
+        entry.positions, entry.normals, entry.tangents, entry.uv0, entry.colors, entry.vertexRefs,
+        entry.meshlets, entry.meshletBounds, entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs,
+        entry.meshletLocalVertexRefs, entry.meshletPrimitiveIndices
+    );
+}
 
+[cpp_unwind]
+Expected<MeshCookEntry> ReadMeshSourceValue(in Name virtualPath, in Path file, in MetascriptValue value, in b8 parallelEnabled, in u32 workers){
+    MeshCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_MeshMetaText)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_MeshMetaText, entry)
+        || !ValidateMetadataAssetFields(file, value, s_MeshMetaText, IsAllowedMeshAssetField))
+        return MakeUnexpected(Failure());
+    if(!BuildSourceMeshStreams(file, value, parallelEnabled, workers, entry))
+        return MakeUnexpected(Failure());
+    return entry;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_unwind]
+Expected<MeshCookEntry> ParseMeshCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value, in CpuTaskScheduler scheduler){
+    return ReadMeshSourceValue(virtualPath, file, value, scheduler.isParallelEnabled(), scheduler.workerThreadCount());
+}
 
+[cpp_unwind]
+Expected<MeshCookEntry> ParseMeshCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument doc, in CpuTaskScheduler scheduler){
+    const b8 parallelEnabled = scheduler.isParallelEnabled();
+    const u32 workers = scheduler.workerThreadCount();
+    return ParseCookMetadataDocument<MeshCookEntry>(root, virtualRoot, file, doc, s_MeshMetaText, lambda[in file, in parallelEnabled, in workers](in Name path, in MetascriptValue value) -> Expected<MeshCookEntry>{
+        return ReadMeshSourceValue(path, file, value, parallelEnabled, workers);
+    });
+}
 
-#endif
+b8 BuildMeshSolidWords(in MeshCookEntry entry, mut Vector<u32> solidWords){
+    const Expected<Vector<u32>> indices = BuildMeshletTriangleIndices(entry.meshlets, entry.meshletLocalVertexRefs, entry.meshletPositionRefDeltas, entry.meshletPrimitiveIndices, entry.positions.size());
+    return indices.has_value() && BuildSolidTriangleWordsInto(entry.positions, indices.value(), solidWords);
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+Expected<Mesh> BuildMeshAsset(mut MeshCookEntry entry){
+    if(!ReorderMeshStreamsByMeshletTraversal(
+        entry.virtualPath, entry.meshlets, entry.positions, entry.normals, entry.tangents, entry.uv0, entry.colors,
+        entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs
+    ))
+        return MakeUnexpected(Failure());
+    const Name path = entry.virtualPath;
+    if(!EncodeMeshletRefDeltas(entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs, false, lambda[in path](in usize index, in auto reason) -> b8{
+        error("{} '{}': meshlet {} {}", s_MeshMetaText, path.resolvedText(), index, reason);
+        return false;
+    }, entry.meshlets, entry.meshletPositionRefDeltas, entry.meshletAttributeRefDeltas))
+        return MakeUnexpected(Failure());
+    Vector<u32> solidWords;
+    if(!BuildMeshSolidWords(entry, solidWords))
+        return MakeUnexpected(Failure());
+    Mesh asset(path);
+    asset.setPayload(entry.positions, entry.normals, entry.tangents, entry.uv0, entry.colors, entry.meshlets, entry.meshletBounds,
+        entry.meshletPositionRefDeltas, entry.meshletAttributeRefDeltas, entry.meshletLocalVertexRefs, entry.meshletPrimitiveIndices, solidWords);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
 }
 
 

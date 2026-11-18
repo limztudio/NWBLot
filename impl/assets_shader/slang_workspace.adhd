@@ -1,0 +1,258 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_shader/cook_internal.adhd>
+#include <impl/assets_shader/source_dependencies.adhd>
+#include <impl/assets_shader/cook_constants.adhd>
+#include <impl/assets_shader/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShaderCompilerRequest{
+    public StringView shaderName = "";
+    public StringView stage = "";
+    public StringView entryPoint = "";
+    public StringView variantName = "";
+    public Span<ShaderMacroDefinition> defines;
+    public Span<StringView> externallyPlannedMacroIncludes;
+    public Path sourcePath;
+    public Path outputPath;
+    public Vector<Path> includeDirectories;
+    public Vector<Path> dependencies;
+    public ShaderOptimizationLevel optimizationLevel = ShaderOptimizationLevel::Default;
+    public b8 rayQuery = false;
+    public b8 compilerInputsHaveBom = false;
+}
+
+class SlangCompilerInputs{
+    public Vector<Path> includeDirectories;
+    public Path sourcePath;
+}
+
+class CompilerIncludeReplacement{
+    public String pathText;
+    public usize sourceOffset = 0u;
+    public usize sourceBytes = 0u;
+}
+
+class SlangWorkspaceCleanup{
+    private Path m_path;
+
+    public SlangWorkspaceCleanup(in Path path){ this.m_path = path; }
+    public ~SlangWorkspaceCleanup(){
+        const Expected<void, ErrorCode> removed = RemoveAllForCleanup(this.m_path);
+        if(!removed.has_value()){
+            const DiagnosticEventText text = FormatPathErrorDiagnostic("ShaderCook: failed to remove temporary compiler directory '{}', error {}", PathToString(this.m_path), removed.error().value());
+            DiagnosticEventRecord record;
+            record.event = s_SlangWorkspaceDiagnosticWarningEventName;
+            record.category = s_SlangWorkspaceCleanupDiagnosticCategory;
+            record.message = text.view();
+            CaptureDiagnosticEventAtCallSite(record);
+        }
+    }
+}
+
+Expected<Path> CreateSlangWorkDirectory(in Path parent){
+    const Expected<void, ErrorCode> ensured = EnsureDirectories(parent);
+    if(!ensured.has_value()){
+        error("ShaderCook: failed to create compiler temporary parent '{}' : {}", parent, ErrorCodeMessage(ensured.error()));
+        return MakeUnexpected(Failure());
+    }
+    while(true){
+        const u64 sequence = NextProcessSequence();
+        if(!ValidateTemporarySequenceNotOverflowed(sequence))
+            return MakeUnexpected(Failure());
+        String name(s_ShaderWorkspacePrefix);
+        name.reserve(name.size() + s_ShaderWorkspaceHexPidAndSeqReserveBytes);
+        AppendHexU64Text(cast<u64>(CurrentProcessId()), name);
+        name.push_back('_');
+        AppendHexU64Text(sequence, name);
+        const Path directory = parent / StringView(name);
+        const Expected<b8, ErrorCode> created = CreateDirectories(directory);
+        if(!created.has_value()){
+            error("ShaderCook: failed to create isolated compiler directory '{}' : {}", directory, ErrorCodeMessage(created.error()));
+            return MakeUnexpected(Failure());
+        }
+        if(created.value())
+            return directory;
+    }
+    return MakeUnexpected(Failure());
+}
+
+Expected<String> BuildSlangPathText(in Path path){
+    if(!TryComputeCompilerPathTextCapacity(NativePathSize(path), s_NativePathUsesChar).has_value())
+        return MakeUnexpected(Failure());
+    return PathToString(path);
+}
+
+Expected<Path> BuildSlangOverlayPath(in Path overlay, in Path absolute){
+    if(!absolute.isAbsolute())
+        return MakeUnexpected(Failure());
+    const Path root = FirstPathComponent(absolute);
+    if(root.empty())
+        return MakeUnexpected(Failure());
+    const Path relative = absolute.lexicallyRelative(root);
+    if(relative.empty())
+        return MakeUnexpected(Failure());
+    const Expected<String> rootText = BuildSlangPathText(root);
+    if(!rootText.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<usize> capacity = TryComputeCompilerOverlayRootKeyCapacity(rootText.value().size());
+    if(!capacity.has_value())
+        return MakeUnexpected(Failure());
+    const String key = FormatCompilerOverlayRootKey(s_SlangWorkspaceRootKeyPrefix, s_SlangWorkspaceHexDigits, rootText.value(), capacity.value());
+    return overlay / StringView(key) / relative;
+}
+
+b8 WriteSlangOverlaySource(in Path file, in ShaderCompilerRequest request, in Path overlay, in Path output, mut String source){
+    SpliceSourceLines(source);
+    String scan(StringView(source));
+    MaskCStyleSourceComments(scan);
+    const StringView view(scan);
+    Vector<CompilerIncludeReplacement> replacements;
+    usize bytes = source.size();
+    usize begin = 0u;
+    while(begin < view.size()){
+        usize end = view.find('\n', begin);
+        if(end == usize.max)
+            end = view.size();
+        const StringView line = view.substr(begin, end - begin);
+        const Expected<IncludeDirective> directive = TryExtractIncludeDirective(line);
+        if(directive.has_value()){
+            if(directive.value().kind == IncludeKind::Unsupported){
+                error("ShaderCook: unsupported dependency directive '{}' in '{}'", TrimView(line), file);
+                return false;
+            }
+            if(directive.value().kind != IncludeKind::Macro){
+                const StringView name = directive.value().name;
+                const Path includePath(name);
+                if(includePath.isAbsolute()){
+                    const Expected<Path, ErrorCode> absolute = AbsolutePath(includePath);
+                    if(!absolute.has_value()){
+                        error("ShaderCook: failed to resolve compiler include '{}': {}", includePath, ErrorCodeMessage(absolute.error()));
+                        return false;
+                    }
+                    const Path normalized = absolute.value().lexicallyNormal();
+                    const Expected<Path> mapped = BuildSlangOverlayPath(overlay, normalized);
+                    if(!mapped.has_value() || !IsSlangCompilerDependencyPath(request.dependencies, normalized)){
+                        error("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency", name, file);
+                        return false;
+                    }
+                    const Expected<String> pathText = BuildSlangPathText(mapped.value());
+                    if(!pathText.has_value())
+                        return false;
+                    const Expected<usize> next = TryComputeCompilerReplacementOutputBytes(bytes, name.size(), pathText.value().size());
+                    if(!next.has_value()){
+                        error("ShaderCook: BOM-stripped compiler input '{}' exceeds representable size", output);
+                        return false;
+                    }
+                    bytes = next.value();
+                    AppendArenaElement<CompilerIncludeReplacement>(replacements);
+                    mut CompilerIncludeReplacement replacement = replacements[replacements.size() - 1u];
+                    replacement.pathText.assign(StringView(pathText.value()));
+                    replacement.sourceBytes = name.size();
+                    replacement.sourceOffset = begin + TextSubviewOffset(line, name);
+                }
+            }
+        }
+        begin = AdvanceLineScanBegin(end, view.size());
+    }
+    if(!CanRepresentStreamSize(bytes)){
+        error("ShaderCook: BOM-stripped compiler input '{}' exceeds stream size", output);
+        return false;
+    }
+    BinaryOutputStream stream(output);
+    if(!stream.isOpen()){
+        error("ShaderCook: failed to open BOM-stripped compiler input '{}' for writing", output);
+        return false;
+    }
+    const StringView sourceView(source);
+    usize cursor = 0u;
+    for(in CompilerIncludeReplacement replacement : replacements){
+        stream.writeText(sourceView.substr(cursor, replacement.sourceOffset - cursor));
+        stream.writeText(replacement.pathText);
+        cursor = replacement.sourceOffset + replacement.sourceBytes;
+    }
+    stream.writeText(sourceView.substr(cursor));
+    if(stream.close())
+        return true;
+    error("ShaderCook: failed to write or close BOM-stripped compiler input '{}'", output);
+    return false;
+}
+
+Expected<SlangCompilerInputs> PrepareSlangCompilerInputs(in ShaderCompilerRequest request, in Path overlay){
+    SlangCompilerInputs inputs;
+    if(!ValidateCompilerRequestHasDependencies(request.shaderName, request.dependencies.empty()))
+        return MakeUnexpected(Failure());
+    if(!request.compilerInputsHaveBom){
+        inputs.sourcePath = request.sourcePath;
+        inputs.includeDirectories = request.includeDirectories;
+        return inputs;
+    }
+    const Expected<void, ErrorCode> ensured = EnsureDirectories(overlay);
+    if(!ensured.has_value()){
+        error("ShaderCook: failed to create temporary compiler source directory '{}' : {}", overlay, ErrorCodeMessage(ensured.error()));
+        return MakeUnexpected(Failure());
+    }
+    for(in Path dependency : request.dependencies){
+        const Expected<Path> mapped = BuildSlangOverlayPath(overlay, dependency);
+        if(!mapped.has_value()){
+            error("ShaderCook: failed to map compiler input '{}' into the temporary source directory", dependency);
+            return MakeUnexpected(Failure());
+        }
+        const Path parent = mapped.value().parentPath();
+        const Expected<void, ErrorCode> created = EnsureDirectories(parent);
+        if(!created.has_value()){
+            error("ShaderCook: failed to create temporary compiler source parent '{}' : {}", parent, ErrorCodeMessage(created.error()));
+            return MakeUnexpected(Failure());
+        }
+        String source;
+        const Expected<void, ErrorCode> read = ReadTextFile(dependency, source);
+        if(!read.has_value()){
+            error("ShaderCook: failed to read compiler input '{}' while writing BOM-stripped source: {}", dependency, ErrorCodeMessage(read.error()));
+            return MakeUnexpected(Failure());
+        }
+        StripUtf8Bom(source);
+        if(!WriteSlangOverlaySource(dependency, request, overlay, mapped.value(), source))
+            return MakeUnexpected(Failure());
+    }
+    const Expected<Path, ErrorCode> absolute = AbsolutePath(request.sourcePath);
+    if(!absolute.has_value()){
+        error("ShaderCook: failed to resolve compiler source '{}': {}", request.sourcePath, ErrorCodeMessage(absolute.error()));
+        return MakeUnexpected(Failure());
+    }
+    const Path normalized = absolute.value().lexicallyNormal();
+    const Expected<Path> mapped = BuildSlangOverlayPath(overlay, normalized);
+    if(!mapped.has_value() || !IsSlangCompilerDependencyPath(request.dependencies, normalized)){
+        error("ShaderCook: failed to map source '{}' into the temporary compiler source directory", request.sourcePath);
+        return MakeUnexpected(Failure());
+    }
+    inputs.sourcePath = mapped.value();
+    const Expected<usize> capacity = TryComputeCompilerIncludeDirectoryCapacity(request.shaderName, request.includeDirectories.size());
+    if(!capacity.has_value())
+        return MakeUnexpected(Failure());
+    inputs.includeDirectories.reserve(capacity.value());
+    for(in Path directory : request.includeDirectories){
+        const Expected<Path, ErrorCode> resolved = AbsolutePath(directory);
+        if(!resolved.has_value()){
+            error("ShaderCook: failed to resolve compiler include directory '{}': {}", directory, ErrorCodeMessage(resolved.error()));
+            return MakeUnexpected(Failure());
+        }
+        const Expected<Path> mappedDirectory = BuildSlangOverlayPath(overlay, resolved.value().lexicallyNormal());
+        if(!mappedDirectory.has_value()){
+            error("ShaderCook: failed to map include directory '{}' into the temporary compiler source directory", directory);
+            return MakeUnexpected(Failure());
+        }
+        AppendOwnedPath(inputs.includeDirectories, mappedDirectory.value());
+    }
+    for(in Path directory : request.includeDirectories)
+        AppendOwnedPath(inputs.includeDirectories, directory);
+    return inputs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

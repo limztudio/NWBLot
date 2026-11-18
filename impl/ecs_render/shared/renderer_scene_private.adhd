@@ -2,115 +2,75 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/caustic/settings.adhd>
+#include <impl/ecs_render/shadow/light_space_settings.adhd>
+#include <impl/ecs_render/shadow/push_constants.adhd>
+#include <impl/ecs_render/shadow/slot_selection.adhd>
+#include <impl/ecs_render/shared/renderer_push_constants_private.adhd>
+#include <impl/ecs_scene/camera.adhd>
+#include <impl/ecs_scene/lighting.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/caustic/settings.adhd.h>
-#include <impl/ecs_render/shadow/push_constants.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
-#include <impl/ecs_scene/module.adhd.h>
+[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_MAX_LIGHTS")]
+extern const u32 s_ShaderMaxSceneLights;
 
-#include <core/ecs/world.h>
-
-#include <global/algorithm.h>
-#include <global/simd/vector.h>
-#include <global/span.h>
+static_assert(s_SceneMaxLights == s_ShaderMaxSceneLights);
+static_assert(size_of<RayTracingLightingClassificationInput>() == size_of<u32>());
+static_assert(size_of<RayTracingLightingClassification>() == size_of<u32>() * 2u);
+static_assert(size_of<DeferredBindlessResourceSlots>() == size_of<u32>() * 44u, "Deferred bindless slots must match eleven std140 uint4 lanes");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(RayTracingLightingClassificationInput) == sizeof(u32));
-static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
-static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 44u, "Deferred bindless slots must match eleven std140 uint4 lanes");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE u32 ResolveSceneLights(Core::ECS::World& world, const Span<SceneLightGpuData> outLights, const Span<f32> outCausticImportance)noexcept{
-    const usize maxLightCount = Min(outLights.size(), outCausticImportance.size());
-    if(maxLightCount == 0u)
+u32 ResolveSceneLights(mut World world, mut Span<SceneLightGpuData> outLights, mut Span<f32> outCausticImportance){
+    const usize capacity = Min(outLights.size(), outCausticImportance.size());
+    if(capacity == 0u)
         return 0u;
 
-    const u32 capacity = static_cast<u32>(Min<usize>(maxLightCount, NWB_SCENE_MAX_LIGHTS));
+    const MatrixSingle defaultBasis = BuildDefaultSceneViewBasis();
+    Array<SceneLight, s_SceneMaxLights> sceneLights;
+    Array<f32, s_SceneMaxLights> shadowImportance;
+    const usize count = GatherSceneLights(world, defaultBasis[2], capacity, sceneLights);
+    const SceneCameraView cameraView = ResolveSceneCameraView(world, s_CameraFallbackAspectRatio);
+    VectorSingle cameraPosition = VectorZero();
+    if(cameraView.valid())
+        cameraPosition = VectorSingle(cameraView.components.value().transform.position);
 
-    const SIMDMatrix defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
-    Array<NWB::Impl::Scene::SceneLight, NWB_SCENE_MAX_LIGHTS> sceneLights{};
-    Array<f32, NWB_SCENE_MAX_LIGHTS> shadowImportance{};
-    const usize gatheredCount = NWB::Impl::Scene::GatherSceneLights(world, defaultBasis.v[2], Span(sceneLights.data(), capacity));
-    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, NWB::Impl::Scene::s_CameraFallbackAspectRatio);
-    const SIMDVectorSingle cameraPositionData = cameraView.valid() ? LoadFloat(cameraView.transform->position) : VectorZero();
-
-    for(usize i = 0u; i < gatheredCount; ++i){
-        const NWB::Impl::Scene::SceneLight& src = sceneLights[i];
+    for(usize i = 0u; i < count; ++i){
+        in SceneLight src = sceneLights[i];
+        f32 causticSlot = s_CausticSlotDisabled;
+        if(src.enableCaustics)
+            causticSlot = s_ShadowSlotUnassigned;
         outLights[i] = BuildUnassignedSceneLightGpuData(
             LoadFloat(src.position),
             LoadFloat(src.direction),
             LoadFloat(src.colorIntensity),
             src.range,
-            static_cast<f32>(src.type),
-            src.enableCaustics ? s_ShadowSlotUnassigned : s_CausticSlotDisabled,
+            cast<f32>(src.type),
+            causticSlot,
             src.angularRadius,
             src.sourceRadius,
-            cameraPositionData,
+            cameraPosition,
             outCausticImportance[i],
             shadowImportance[i]
         );
     }
 
-    // Importance-ranked shadow slots: most important lights get the pool (slot -> params.z; rest stay lit).
-    // Selection over <= NWB_SCENE_MAX_LIGHTS lights stays cheap.
-    const u32 lightCount = static_cast<u32>(gatheredCount);
-    Span<SceneLightGpuData> mutableLights = outLights;
-    AssignShadowSlotLights(Span<const f32>(shadowImportance.data(), lightCount), lightCount, mutableLights);
-
-    return static_cast<u32>(gatheredCount);
+    const u32 lightCount = cast<u32>(count);
+    AssignShadowSlotLights(shadowImportance, lightCount, outLights);
+    return lightCount;
 }
 
-[[nodiscard]] FOUNDATION_INLINE SceneShadingGpuData ResolveSceneShadingState(const f32 fallbackAspectRatio, const u32 lightCount, Core::ECS::World& world)noexcept{
-    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
+SceneShadingGpuData ResolveSceneShadingState(in f32 fallbackAspectRatio, in u32 lightCount, mut World world){
+    const SceneCameraView cameraView = ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid())
-        return MakeSceneShadingGpuData(LoadFloat(cameraView.transform->position), lightCount);
-
-    const SIMDMatrix defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
-    return MakeSceneShadingGpuData(defaultBasis.v[3], lightCount);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        return MakeSceneShadingGpuData(VectorSingle(cameraView.components.value().transform.position), lightCount);
+    const MatrixSingle defaultBasis = BuildDefaultSceneViewBasis();
+    return MakeSceneShadingGpuData(defaultBasis[3], lightCount);
 }
 
 

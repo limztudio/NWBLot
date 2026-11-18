@@ -5,6 +5,9 @@
 #include <impl/ecs_render/csg/format_private.adhd>
 #include <impl/ecs_render/csg/types.adhd>
 #include <impl/ecs_render/deferred/deferred_system.adhd>
+#include <impl/ecs_render/deferred/deferred_bindless_slots_builder.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
 #include <impl/ecs_render/deferred/format_private.adhd>
 #include <impl/ecs_render/kernel/renderer_constants_private.adhd>
 
@@ -23,11 +26,6 @@ const Format s_CsgRemovedIntervalDepthCoreFormat = Format::RGBA32_FLOAT;
 const Format s_CsgRemovedIntervalCapNormalCoreFormat = Format::RGBA16_FLOAT;
 const Format s_CsgRemovedIntervalDataCoreFormat = Format::RGBA32_UINT;
 const Format s_CsgRemovedIntervalCountCoreFormat = Format::RG32_UINT;
-const usize s_MeshGbufferBaseColorLocation = 0u;
-const usize s_MeshGbufferNormalLocation = 1u;
-const usize s_MeshGbufferWorldPositionLocation = 2u;
-const usize s_MeshGbufferSpecularRoughnessLocation = 3u;
-const usize s_MeshGbufferTargetCount = 4u;
 const Name s_DeferredAlbedoTargetName = "engine/deferred/gbuffer_albedo";
 const Name s_DeferredNormalTargetName = "engine/deferred/gbuffer_normal";
 const Name s_DeferredWorldPositionTargetName = "engine/deferred/gbuffer_world_position";
@@ -267,260 +265,230 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_CAP_NORMAL_CORE_FORMAT")]
+extern const Format s_ShaderCsgCapNormalCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_INTERVAL_DEPTH_CORE_FORMAT")]
+extern const Format s_ShaderCsgIntervalDepthCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_INTERVAL_ID_CORE_FORMAT")]
+extern const Format s_ShaderCsgIntervalIdCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_EVENT_DATA_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverEventDataCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_EVENT_COUNT_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverEventCountCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_SPAN_DATA_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverSpanDataCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_RECEIVER_SPAN_COUNT_CORE_FORMAT")]
+extern const Format s_ShaderCsgReceiverSpanCountCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_DEPTH_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalDepthCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalCapNormalCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_DATA_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalDataCoreFormat;
+
+[cpp_header("<impl/assets/graphics/csg/constants.h>"), cpp_name("NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT")]
+extern const Format s_ShaderCsgRemovedIntervalCountCoreFormat;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_BASE_COLOR_LOCATION")]
+extern const u32 s_ShaderMeshGbufferBaseColorLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_NORMAL_LOCATION")]
+extern const u32 s_ShaderMeshGbufferNormalLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION")]
+extern const u32 s_ShaderMeshGbufferWorldPositionLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION")]
+extern const u32 s_ShaderMeshGbufferSpecularRoughnessLocation;
+
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_GBUFFER_TARGET_COUNT")]
+extern const u32 s_ShaderMeshGbufferTargetCount;
+
+static_assert(s_CsgCapNormalCoreFormat == s_ShaderCsgCapNormalCoreFormat);
+static_assert(s_CsgIntervalDepthCoreFormat == s_ShaderCsgIntervalDepthCoreFormat);
+static_assert(s_CsgIntervalIdCoreFormat == s_ShaderCsgIntervalIdCoreFormat);
+static_assert(s_CsgReceiverEventDataCoreFormat == s_ShaderCsgReceiverEventDataCoreFormat);
+static_assert(s_CsgReceiverEventCountCoreFormat == s_ShaderCsgReceiverEventCountCoreFormat);
+static_assert(s_CsgReceiverSpanDataCoreFormat == s_ShaderCsgReceiverSpanDataCoreFormat);
+static_assert(s_CsgReceiverSpanCountCoreFormat == s_ShaderCsgReceiverSpanCountCoreFormat);
+static_assert(s_CsgRemovedIntervalDepthCoreFormat == s_ShaderCsgRemovedIntervalDepthCoreFormat);
+static_assert(s_CsgRemovedIntervalCapNormalCoreFormat == s_ShaderCsgRemovedIntervalCapNormalCoreFormat);
+static_assert(s_CsgRemovedIntervalDataCoreFormat == s_ShaderCsgRemovedIntervalDataCoreFormat);
+static_assert(s_CsgRemovedIntervalCountCoreFormat == s_ShaderCsgRemovedIntervalCountCoreFormat);
+static_assert(s_MeshGbufferBaseColorLocation == s_ShaderMeshGbufferBaseColorLocation);
+static_assert(s_MeshGbufferNormalLocation == s_ShaderMeshGbufferNormalLocation);
+static_assert(s_MeshGbufferWorldPositionLocation == s_ShaderMeshGbufferWorldPositionLocation);
+static_assert(s_MeshGbufferSpecularRoughnessLocation == s_ShaderMeshGbufferSpecularRoughnessLocation);
+static_assert(s_MeshGbufferTargetCount == s_ShaderMeshGbufferTargetCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/deferred_bindless_slots_builder.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/deferred/deferred_internal.adhd.h>
-#include <impl/ecs_render/deferred/deferred_system.adhd.h>
-#include <impl/ecs_render/deferred/format_private.adhd.h>
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
-#include <impl/ecs_render/deferred/renderer_deferred_state.adhd.h>
-#include <impl/ecs_render/csg/format_private.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/kernel/renderer_format_private.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/assets/graphics/csg/constants.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
-
-#include <core/common/log.h>
-#include <core/graphics/api.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/atomic_identity.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(s_CsgCapNormalCoreFormat == NWB_CSG_CAP_NORMAL_CORE_FORMAT);
-static_assert(s_CsgIntervalDepthCoreFormat == NWB_CSG_INTERVAL_DEPTH_CORE_FORMAT);
-static_assert(s_CsgIntervalIdCoreFormat == NWB_CSG_INTERVAL_ID_CORE_FORMAT);
-static_assert(s_CsgReceiverEventDataCoreFormat == NWB_CSG_RECEIVER_EVENT_DATA_CORE_FORMAT);
-static_assert(s_CsgReceiverEventCountCoreFormat == NWB_CSG_RECEIVER_EVENT_COUNT_CORE_FORMAT);
-static_assert(s_CsgReceiverSpanDataCoreFormat == NWB_CSG_RECEIVER_SPAN_DATA_CORE_FORMAT);
-static_assert(s_CsgReceiverSpanCountCoreFormat == NWB_CSG_RECEIVER_SPAN_COUNT_CORE_FORMAT);
-static_assert(s_CsgRemovedIntervalDepthCoreFormat == NWB_CSG_REMOVED_INTERVAL_DEPTH_CORE_FORMAT);
-static_assert(s_CsgRemovedIntervalCapNormalCoreFormat == NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_CORE_FORMAT);
-static_assert(s_CsgRemovedIntervalDataCoreFormat == NWB_CSG_REMOVED_INTERVAL_DATA_CORE_FORMAT);
-static_assert(s_CsgRemovedIntervalCountCoreFormat == NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT);
-static_assert(s_MeshGbufferBaseColorLocation == NWB_MESH_GBUFFER_BASE_COLOR_LOCATION);
-static_assert(s_MeshGbufferNormalLocation == NWB_MESH_GBUFFER_NORMAL_LOCATION);
-static_assert(s_MeshGbufferWorldPositionLocation == NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION);
-static_assert(s_MeshGbufferSpecularRoughnessLocation == NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION);
-static_assert(s_MeshGbufferTargetCount == NWB_MESH_GBUFFER_TARGET_COUNT);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 DeferredFrameTargets::valid()const noexcept{
-#if defined(NWB_DEBUG)
+b8 DeferredFrameTargets::valid()const{
+    if(!s_RuntimeAssertionsEnabled)
+        return this.framebuffer.valid();
     return
-        ValidDeferredTargetExtent(width, height)
-        && albedoFormat != Core::Format::UNKNOWN
-        && normalFormat != Core::Format::UNKNOWN
-        && worldPositionFormat != Core::Format::UNKNOWN
-        && specularRoughnessFormat != Core::Format::UNKNOWN
-        && opaqueColorFormat != Core::Format::UNKNOWN
-        && compositeColorFormat != Core::Format::UNKNOWN
-        && depthFormat != Core::Format::UNKNOWN
-        && csgIntervalTargetsValid()
-        && albedo != nullptr
-        && normal != nullptr
-        && worldPosition != nullptr
-        && specularRoughness != nullptr
-        && opaqueColor != nullptr
-        && compositeColor != nullptr
-        && depth != nullptr
-        && framebuffer != nullptr
-        && bindless.valid()
-        && avboit.valid()
+        ValidDeferredTargetExtent(this.width, this.height)
+        && this.albedoFormat != Format::UNKNOWN
+        && this.normalFormat != Format::UNKNOWN
+        && this.worldPositionFormat != Format::UNKNOWN
+        && this.specularRoughnessFormat != Format::UNKNOWN
+        && this.opaqueColorFormat != Format::UNKNOWN
+        && this.compositeColorFormat != Format::UNKNOWN
+        && this.depthFormat != Format::UNKNOWN
+        && this.csgIntervalTargetsValid()
+        && this.albedo.valid()
+        && this.normal.valid()
+        && this.worldPosition.valid()
+        && this.specularRoughness.valid()
+        && this.opaqueColor.valid()
+        && this.compositeColor.valid()
+        && this.depth.valid()
+        && this.framebuffer.valid()
+        && this.bindless.valid()
+        && this.avboit.valid()
     ;
-#else
-    return framebuffer != nullptr;
-#endif
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTargets& targets)noexcept{
-    DeferredLaggedLightingHistoryResources& history = targets.laggedLightingHistory;
+b8 RendererDeferredSystem::createLaggedLightingHistoryResources(mut DeferredFrameTargets targets){
+    mut DeferredLaggedLightingHistoryResources history = targets.laggedLightingHistory;
     if(history.valid())
         return true;
-
-    FOUNDATION_ASSERT(targets.bindless.valid());
-    FOUNDATION_ASSERT(targets.shadowVisibility);
-    FOUNDATION_ASSERT(targets.causticIrradiance);
-    FOUNDATION_ASSERT(targets.surfelIrradiance);
-
-    resetLaggedLightingHistoryResources(targets);
-
-    auto& device = m_graphics->getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    assert(targets.bindless.valid());
+    assert(targets.shadowVisibility.valid());
+    assert(targets.causticIrradiance.valid());
+    assert(targets.surfelIrradiance.valid());
+    this.resetLaggedLightingHistoryResources(targets);
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         LogLaggedLightingHistoryHeapMissing();
         return false;
     }
 
-    Core::TextureDesc shadowHistoryDesc;
+    TextureDesc shadowHistoryDesc;
     shadowHistoryDesc
         .setWidth(targets.width)
         .setHeight(targets.height)
-        .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
-        .setDimension(Core::TextureDimension::Texture2DArray)
+        .setArraySize(s_SceneShadowSlotCount)
+        .setDimension(TextureDimension::Texture2DArray)
         .setFormat(targets.shadowVisibilityFormat)
-        .setInitialState(Core::ResourceStates::Common)
+        .setInitialState(ResourceStates::Common)
         .setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_shadow_visibility")
     ;
-    auto shadowVisibilityResult = m_graphics->createTexture(shadowHistoryDesc);
-    if(shadowVisibilityResult)
-        history.shadowVisibility = Move(*shadowVisibilityResult);
-    else
-        history.shadowVisibility.reset();
-    if(!shadowVisibilityResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged shadow-visibility history"));
-        resetLaggedLightingHistoryResources(targets);
+    auto shadowVisibilityResult = this.m_graphics.createTexture(shadowHistoryDesc);
+    if(!shadowVisibilityResult.has_value()){
+        error("RendererSystem: failed to create lagged shadow-visibility history");
+        this.resetLaggedLightingHistoryResources(targets);
         return false;
     }
+    history.shadowVisibility = shadowVisibilityResult.value();
 
-    Core::TextureDesc irradianceHistoryDesc;
+    TextureDesc irradianceHistoryDesc;
     irradianceHistoryDesc
         .setWidth(targets.width)
         .setHeight(targets.height)
         .setFormat(targets.causticIrradianceFormat)
-        .setInitialState(Core::ResourceStates::Common)
+        .setInitialState(ResourceStates::Common)
         .setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_caustic_irradiance")
     ;
-    auto causticIrradianceResult = m_graphics->createTexture(irradianceHistoryDesc);
-    if(causticIrradianceResult)
-        history.causticIrradiance = Move(*causticIrradianceResult);
-    else
-        history.causticIrradiance.reset();
-    if(!causticIrradianceResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged caustic-irradiance history"));
-        resetLaggedLightingHistoryResources(targets);
+    auto causticIrradianceResult = this.m_graphics.createTexture(irradianceHistoryDesc);
+    if(!causticIrradianceResult.has_value()){
+        error("RendererSystem: failed to create lagged caustic-irradiance history");
+        this.resetLaggedLightingHistoryResources(targets);
         return false;
     }
+    history.causticIrradiance = causticIrradianceResult.value();
 
     irradianceHistoryDesc.setFormat(targets.surfelIrradianceFormat).setName("engine/temporal/lagged_surfel_irradiance");
-    auto surfelIrradianceResult = m_graphics->createTexture(irradianceHistoryDesc);
-    if(surfelIrradianceResult)
-        history.surfelIrradiance = Move(*surfelIrradianceResult);
-    else
-        history.surfelIrradiance.reset();
-    if(!surfelIrradianceResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
-        resetLaggedLightingHistoryResources(targets);
+    auto surfelIrradianceResult = this.m_graphics.createTexture(irradianceHistoryDesc);
+    if(!surfelIrradianceResult.has_value()){
+        error("RendererSystem: failed to create lagged surfel-irradiance history");
+        this.resetLaggedLightingHistoryResources(targets);
         return false;
     }
+    history.surfelIrradiance = surfelIrradianceResult.value();
 
     if(
         !AssignSampledTexture(
             heap,
-            Core::GpuDescriptorClass::SampledImage2DArray,
+            GpuDescriptorClass::SampledImage2DArray,
             history.shadowVisibility,
             targets.shadowVisibilityFormat,
             s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray,
+            TextureDimension::Texture2DArray,
             history.shadowVisibilityDescriptor
         )
         || !AssignSampledTexture(
             heap,
-            Core::GpuDescriptorClass::SampledImage,
+            GpuDescriptorClass::SampledImage,
             history.causticIrradiance,
             targets.causticIrradianceFormat,
             s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D,
+            TextureDimension::Texture2D,
             history.causticIrradianceDescriptor
         )
         || !AssignSampledTexture(
             heap,
-            Core::GpuDescriptorClass::SampledImage,
+            GpuDescriptorClass::SampledImage,
             history.surfelIrradiance,
             targets.surfelIrradianceFormat,
             s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D,
+            TextureDimension::Texture2D,
             history.surfelIrradianceDescriptor
         )
     ){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register lagged lighting-history images in the descriptor heap"));
-        resetLaggedLightingHistoryResources(targets);
+        error("RendererSystem: failed to register lagged lighting-history images in the descriptor heap");
+        this.resetLaggedLightingHistoryResources(targets);
         return false;
     }
 
-    history.slots = DeferredBindlessSlotsBuilder{}.buildHistory(
+    history.slots = DeferredBindlessSlotsBuilder().buildHistory(
         targets.bindless.slots,
         history.shadowVisibilityDescriptor.slot(),
         history.causticIrradianceDescriptor.slot(),
         history.surfelIrradianceDescriptor.slot()
     );
 
-    Core::BufferDesc slotsBufferDesc;
+    BufferDesc slotsBufferDesc;
     slotsBufferDesc
-        .setByteSize(sizeof(DeferredBindlessResourceSlots))
+        .setByteSize(size_of<DeferredBindlessResourceSlots>())
         .setIsConstantBuffer(true)
         .setDebugName("ECSRender_DeferredLaggedLightingResourceSlots")
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .enableAutomaticStateTracking(ResourceStates::Common)
     ;
-    auto slotsBufferResult = m_graphics->createBuffer(slotsBufferDesc);
-    if(slotsBufferResult)
-        history.slotsBuffer = Move(*slotsBufferResult);
-    else
-        history.slotsBuffer.reset();
-    if(!slotsBufferResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged lighting-history slot buffer"));
-        resetLaggedLightingHistoryResources(targets);
+    auto slotsBufferResult = this.m_graphics.createBuffer(slotsBufferDesc);
+    if(!slotsBufferResult.has_value()){
+        error("RendererSystem: failed to create lagged lighting-history slot buffer");
+        this.resetLaggedLightingHistoryResources(targets);
+        return false;
+    }
+    history.slotsBuffer = slotsBufferResult.value();
+
+    const Expected<GpuDescriptorHandle> slotsBufferDescriptor = RegisterConstantBuffer(heap, history.slotsBuffer);
+    if(!slotsBufferDescriptor.has_value()){
+        error("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap");
+        this.resetLaggedLightingHistoryResources(targets);
         return false;
     }
 
-    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RegisterConstantBuffer(heap, history.slotsBuffer);
-    history.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
-    if(!slotsBufferDescriptor){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));
-        resetLaggedLightingHistoryResources(targets);
-        return false;
-    }
-
-    static u64 s_NextLaggedLightingHistoryGeneration = 0u;
-    AdvanceWrappingNonzero(s_NextLaggedLightingHistoryGeneration);
-    history.generation = s_NextLaggedLightingHistoryGeneration;
+    history.slotsBufferDescriptor = slotsBufferDescriptor.value();
+    history.generation = AllocateWrappingIdentity<DeferredLaggedLightingHistoryResources>();
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -149,8 +149,8 @@ public:
     }
 };
 
-using RouteIndex = HashMap<RouteKey, usize, GraphicsArena, RouteHash, RouteEqual>;
-using AssignmentIndex = HashMap<AssignmentKey, usize, GraphicsArena, AssignmentHash, AssignmentEqual>;
+using RouteIndex = HashMap<RouteKey, usize, ::ArenaBase, RouteHash, RouteEqual>;
+using AssignmentIndex = HashMap<AssignmentKey, usize, ::ArenaBase, AssignmentHash, AssignmentEqual>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -235,7 +235,7 @@ class GpuTaskTimingHistorySnapshot final : NoCopy{
 
 
 public:
-    explicit GpuTaskTimingHistorySnapshot(GraphicsArena& arena)noexcept
+    explicit GpuTaskTimingHistorySnapshot(::ArenaBase& arena)noexcept
         : m_histories(arena)
         , m_assignments(arena)
     {}
@@ -254,8 +254,8 @@ private:
 
 
 private:
-    GraphicsVector<GpuTaskTimingHistoryEntry> m_histories;
-    GraphicsVector<GpuTaskTimingAssignmentState> m_assignments;
+    Vector<GpuTaskTimingHistoryEntry, ::ArenaBase> m_histories;
+    Vector<GpuTaskTimingAssignmentState, ::ArenaBase> m_assignments;
     Optional<GpuTaskTimingHistoryDetail::RouteIndex> m_historyIndex;
     Optional<GpuTaskTimingHistoryDetail::AssignmentIndex> m_assignmentIndex;
     u16 m_deviceGeneration = 0u;
@@ -270,18 +270,18 @@ class GpuTaskTimingHistoryStore final : NoCopy{
 private:
     struct HistoryRecord{
         GpuTaskTimingHistoryEntry entry;
-        GraphicsVector<f64> samples;
+        Vector<f64, ::ArenaBase> samples;
 
 
     public:
-        explicit HistoryRecord(GraphicsArena& arena)noexcept
+        explicit HistoryRecord(::ArenaBase& arena)noexcept
             : samples(arena)
         {}
     };
 
 
 public:
-    explicit GpuTaskTimingHistoryStore(GraphicsArena& arena, u32 maximumSamplesPerHistory = s_DefaultGpuTaskTimingHistorySampleCount)noexcept;
+    explicit GpuTaskTimingHistoryStore(::ArenaBase& arena, u32 maximumSamplesPerHistory = s_DefaultGpuTaskTimingHistorySampleCount)noexcept;
 
 
 public:
@@ -319,9 +319,9 @@ private:
 
 
 private:
-    GraphicsArena& m_arena;
-    GraphicsVector<HistoryRecord> m_histories;
-    GraphicsVector<GpuTaskTimingAssignmentState> m_assignments;
+    ::ArenaBase& m_arena;
+    Vector<HistoryRecord, ::ArenaBase> m_histories;
+    Vector<GpuTaskTimingAssignmentState, ::ArenaBase> m_assignments;
     Optional<GpuTaskTimingHistoryDetail::RouteIndex> m_historyIndex;
     Optional<GpuTaskTimingHistoryDetail::AssignmentIndex> m_assignmentIndex;
     u32 m_maximumSamplesPerHistory = 1u;

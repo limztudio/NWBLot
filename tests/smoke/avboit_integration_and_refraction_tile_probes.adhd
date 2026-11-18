@@ -502,11 +502,11 @@ b8 RunAvboitIntegrationProbe(in ActiveSceneSubsystems sceneSubsystems, mut Proje
         auto& device = graphics.getDevice();
         auto& heap = device.getDescriptorHeap();
         Core::ShaderHandle shader;
-        const Impl::TransparentSubsystem* const transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
-        const auto integrateShaderRef = transparentSubsystem ? transparentSubsystem->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+        const auto transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
+        const auto integrateShaderRef = transparentSubsystem ? (*transparentSubsystem)->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
         if(
             !integrateShaderRef.valid()
-            || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, probeName, FOUNDATION_TEXT("AvboitIntegrationProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader)
+            || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, probeName, "AvboitIntegrationProbe", graphics, context.assetManager, context.shaderPathResolver, {}, shader)
         )
             return false;
         Core::BindingLayoutDesc layoutDesc(context.objectArena);
@@ -848,14 +848,14 @@ b8 RunRefractionTileProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectR
         Core::ShaderHandle finalizeShader;
         Core::ShaderHandle verifyCompactShader;
         Core::ShaderHandle verifyDenseShader;
-        const Impl::RefractiveSubsystem* const refractiveSubsystem = sceneSubsystems.findSubsystem<Impl::RefractiveSubsystem>();
-        const auto classifyShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionClassifyTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
-        const auto finalizeShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionFinalizeTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+        const auto refractiveSubsystem = sceneSubsystems.findSubsystem<Impl::RefractiveSubsystem>();
+        const auto classifyShaderRef = refractiveSubsystem ? (*refractiveSubsystem)->refractionClassifyTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+        const auto finalizeShaderRef = refractiveSubsystem ? (*refractiveSubsystem)->refractionFinalizeTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
         const auto verifyShaderRef = sceneSubsystems.findSceneAsset<Impl::ComputeShader>(verifyShaderName);
         if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
             return false;
         const auto loadProbeShader = [&](const Name& shaderName, const AStringView variantName, Core::ShaderHandle& outShader){
-            return Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shaderName, variantName, probeName, FOUNDATION_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, outShader);
+            return Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shaderName, variantName, probeName, "RefractionTileProbe", graphics, context.assetManager, context.shaderPathResolver, {}, outShader);
         };
         if(
             !loadProbeShader(classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, classifyShader)

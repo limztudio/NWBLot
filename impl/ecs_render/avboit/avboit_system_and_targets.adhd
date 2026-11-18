@@ -18,6 +18,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/avboit/binding_slots.h>"), cpp_name("NWB_AVBOIT_ACCUM_COLOR_LOCATION")]
+extern const u32 s_ShaderAvboitAccumColorLocation;
+
+[cpp_header("<impl/assets/graphics/avboit/binding_slots.h>"), cpp_name("NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION")]
+extern const u32 s_ShaderAvboitAccumExtinctionLocation;
+
+[cpp_header("<impl/assets/graphics/avboit/binding_slots.h>"), cpp_name("NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION")]
+extern const u32 s_ShaderAvboitAccumForegroundColorLocation;
+
+[cpp_header("<impl/assets/graphics/avboit/binding_slots.h>"), cpp_name("NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION")]
+extern const u32 s_ShaderAvboitAccumForegroundExtinctionLocation;
+
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT")]
+extern const Format s_ShaderAvboitTransmittanceCoreFormat;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(s_AvboitAccumColorLocation == s_ShaderAvboitAccumColorLocation, "AVBOIT accum color location drifted");
+static_assert(s_AvboitAccumExtinctionLocation == s_ShaderAvboitAccumExtinctionLocation, "AVBOIT accum extinction location drifted");
+static_assert(s_AvboitAccumForegroundColorLocation == s_ShaderAvboitAccumForegroundColorLocation, "AVBOIT accum foreground color location drifted");
+static_assert(s_AvboitAccumForegroundExtinctionLocation == s_ShaderAvboitAccumForegroundExtinctionLocation, "AVBOIT accum foreground extinction location drifted");
+static_assert(Format::R16_FLOAT == s_ShaderAvboitTransmittanceCoreFormat, "AVBOIT transmittance format drifted");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class AvboitTargetAllocationBytes{
     public u64 coverageBytes = 0u;
     public u64 depthWarpBytes = 0u;
@@ -380,41 +409,6 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(mut DeferredFrameT
 mut RhiSampler RendererAvboitSystem::linearSampler(){
     assert(this.m_avboitState.m_linearSampler.valid());
     return this.m_avboitState.m_linearSampler.deref();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(s_AvboitAccumColorLocation == NWB_AVBOIT_ACCUM_COLOR_LOCATION, "AVBOIT accum color location drifted");
-static_assert(s_AvboitAccumExtinctionLocation == NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION, "AVBOIT accum extinction location drifted");
-static_assert(s_AvboitAccumForegroundColorLocation == NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION, "AVBOIT accum foreground color location drifted");
-static_assert(s_AvboitAccumForegroundExtinctionLocation == NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION, "AVBOIT accum foreground extinction location drifted");
-static_assert(Core::Format::R16_FLOAT == NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT, "AVBOIT transmittance format drifted");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -7,6 +7,7 @@ extern class World{
     T addComponent<T>(...);
     T addSystem<T>(...);
     b8 alive(...)const;
+    Optional<mut T> borrowSystem<T>();
     void clear(...);
     void clearMessages(...);
     u64 componentMutationVersion(...)const;
@@ -18,6 +19,7 @@ extern class World{
     usize entityCount(...)const;
     T getComponent<T>(...)const;
     b8 hasComponent(...)const;
+    T makeSystemResource<T>()const;
     usize messageCount(...)const;
     void postMessage(...);
     void removeComponent(...);

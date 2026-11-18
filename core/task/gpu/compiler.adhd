@@ -115,6 +115,8 @@ extern class GpuTaskGraphQueueAssignmentOptions{
     usize queueLoadCount;
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     u64 timingFrameIndex;
+    void clearTimingHistory();
+    void setTimingHistory(in borrow GpuTaskTimingHistorySnapshot snapshot);
 };
 
 [cpp_header("<core/task/gpu/compiler.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignments"), cpp_flags(no_copy, no_assign)]

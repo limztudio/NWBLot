@@ -2,143 +2,58 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_mesh/payload_validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/payload_validation.adhd.h>
+const StringView s_PositionStreamNameView = "position";
+const StringView s_NormalStreamNameView = "normal";
+const StringView s_TangentStreamNameView = "tangent";
+const StringView s_Uv0StreamNameView = "uv0";
+const StringView s_ColorStreamNameView = "color";
+const StringView s_PositionsStreamLabel = "positions";
+const StringView s_NormalsStreamLabel = "normals";
+const StringView s_TangentsStreamLabel = "tangents";
+const StringView s_Uv0StreamLabel = "uv0";
+const StringView s_ColorsStreamLabel = "colors";
+const StringView s_MeshletsStreamLabel = "meshlets";
+const StringView s_MeshletBoundsStreamLabel = "meshlet bounds";
+const StringView s_MeshletPositionRefDeltasStreamLabel = "meshlet position ref deltas";
+const StringView s_MeshletAttributeRefDeltasStreamLabel = "meshlet attribute ref deltas";
+const StringView s_MeshletLocalVertexRefsStreamLabel = "meshlet local vertex refs";
+const StringView s_MeshletPrimitiveIndicesStreamLabel = "meshlet primitive indices";
+const StringView s_SolidTriangleWordsStreamLabel = "solid triangle words";
 
-#include <core/assets/binary_payload_io.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshBinaryPayload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_MeshLoadBinaryContext = FOUNDATION_TEXT("Mesh::loadBinary");
-#if defined(NWB_COOK)
-inline constexpr TStringView s_MeshSerializeContext = FOUNDATION_TEXT("MeshAssetCodec::serialize");
-#endif
-inline constexpr TStringView s_MeshAssetKindLabel = FOUNDATION_TEXT("mesh");
-
-static_assert(sizeof(MeshBinaryHeader) == sizeof(u32) + (sizeof(u64) * 11u), "MeshBinaryHeader layout drifted");
-static_assert(alignof(MeshBinaryHeader) == 1u, "MeshBinaryHeader must stay packed");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshAssetBinaryPayload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_PositionStreamNameView = FOUNDATION_TEXT("position");
-inline constexpr TStringView s_NormalStreamNameView = FOUNDATION_TEXT("normal");
-inline constexpr TStringView s_TangentStreamNameView = FOUNDATION_TEXT("tangent");
-inline constexpr TStringView s_Uv0StreamNameView = FOUNDATION_TEXT("uv0");
-inline constexpr TStringView s_ColorStreamNameView = FOUNDATION_TEXT("color");
-inline constexpr TStringView s_PositionsStreamLabel = FOUNDATION_TEXT("positions");
-inline constexpr TStringView s_NormalsStreamLabel = FOUNDATION_TEXT("normals");
-inline constexpr TStringView s_TangentsStreamLabel = FOUNDATION_TEXT("tangents");
-inline constexpr TStringView s_Uv0StreamLabel = FOUNDATION_TEXT("uv0");
-inline constexpr TStringView s_ColorsStreamLabel = FOUNDATION_TEXT("colors");
-inline constexpr TStringView s_MeshletsStreamLabel = FOUNDATION_TEXT("meshlets");
-inline constexpr TStringView s_MeshletBoundsStreamLabel = FOUNDATION_TEXT("meshlet bounds");
-inline constexpr TStringView s_MeshletPositionRefDeltasStreamLabel = FOUNDATION_TEXT("meshlet position ref deltas");
-inline constexpr TStringView s_MeshletAttributeRefDeltasStreamLabel = FOUNDATION_TEXT("meshlet attribute ref deltas");
-inline constexpr TStringView s_MeshletLocalVertexRefsStreamLabel = FOUNDATION_TEXT("meshlet local vertex refs");
-inline constexpr TStringView s_MeshletPrimitiveIndicesStreamLabel = FOUNDATION_TEXT("meshlet primitive indices");
-inline constexpr TStringView s_SolidTriangleWordsStreamLabel = FOUNDATION_TEXT("solid triangle words");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename MeshT>
-[[nodiscard]] b8 AddMeshBaseReserveBytes(const MeshT& mesh, usize& inOutReserveBytes)noexcept(
-    noexcept(
-        AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.positionStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.normalStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.tangentStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.uv0Stream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.colorStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshlets())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletBounds())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPositionRefDeltas())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletAttributeRefDeltas())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletLocalVertexRefs())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPrimitiveIndices())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.solidTriangleWords())
-    )
-){
-    return
-        AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.positionStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.normalStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.tangentStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.uv0Stream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.colorStream())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshlets())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletBounds())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPositionRefDeltas())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletAttributeRefDeltas())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletLocalVertexRefs())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPrimitiveIndices())
-        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.solidTriangleWords())
-    ;
+interface IMeshPayloadStreams{
+    in Vector<f32x3u> positionStream()const;
+    in Vector<f16x4u> normalStream()const;
+    in Vector<f16x4u> tangentStream()const;
+    in Vector<f32x2u> uv0Stream()const;
+    in Vector<f16x4u> colorStream()const;
+    in Vector<MeshletDesc> meshlets()const;
+    in Vector<MeshletBounds> meshletBounds()const;
+    in Vector<u8> meshletPositionRefDeltas()const;
+    in Vector<u8> meshletAttributeRefDeltas()const;
+    in Vector<MeshletLocalVertexRef> meshletLocalVertexRefs()const;
+    in Vector<u8> meshletPrimitiveIndices()const;
+    in Vector<u32> solidTriangleWords()const;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 AddMeshBaseReserveBytes<T : IMeshPayloadStreams>(in T mesh, mut usize bytes)noexcept_like(){
+    return AddBinaryVectorReserveBytes(bytes, mesh.positionStream())
+        && AddBinaryVectorReserveBytes(bytes, mesh.normalStream())
+        && AddBinaryVectorReserveBytes(bytes, mesh.tangentStream())
+        && AddBinaryVectorReserveBytes(bytes, mesh.uv0Stream())
+        && AddBinaryVectorReserveBytes(bytes, mesh.colorStream())
+        && AddBinaryVectorReserveBytes(bytes, mesh.meshlets())
+        && AddBinaryVectorReserveBytes(bytes, mesh.meshletBounds())
+        && AddBinaryVectorReserveBytes(bytes, mesh.meshletPositionRefDeltas())
+        && AddBinaryVectorReserveBytes(bytes, mesh.meshletAttributeRefDeltas())
+        && AddBinaryVectorReserveBytes(bytes, mesh.meshletLocalVertexRefs())
+        && AddBinaryVectorReserveBytes(bytes, mesh.meshletPrimitiveIndices())
+        && AddBinaryVectorReserveBytes(bytes, mesh.solidTriangleWords());
 }
 
 

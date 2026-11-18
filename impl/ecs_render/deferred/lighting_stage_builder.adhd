@@ -2,91 +2,157 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/deferred_system.adhd>
+#include <impl/ecs_render/deferred/graph_types.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/graph_types.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+class DeferredLightingStageInputs{
+    public mut DeferredFrameTargets targets;
+    public GpuGraphResourceId albedo;
+    public GpuGraphResourceId normal;
+    public GpuGraphResourceId worldPosition;
+    public GpuGraphResourceId depth;
+    public GpuGraphResourceId shadowVisibility;
+    public GpuGraphResourceId causticIrradiance;
+    public GpuGraphResourceId surfelIrradiance;
+    public GpuGraphResourceId sceneShading;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId bindlessSlots;
+    public GpuGraphResourceId opaqueColor;
+    public GpuTaskId graphicsPrefixTask;
+    public GpuTaskId shadowVisibilityTask;
+    public GpuTaskId surfelGiTask;
+    public GpuTaskId avboitFinalTask;
+    public GpuTaskId hardwareCausticsTask;
+    public GpuTaskId softwareCausticsTask;
+    public GpuExternalCompletionId historyReadReadyCompletion;
+    public Optional<in DeferredLaggedLightingHistoryResources> history;
+    public b8 useLaggedLightingHistory = false;
+    public b8 declaresHardwareCaustics = false;
+    public b8 hasTransparentRenderers = false;
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+    public DeferredLightingStageInputs(mut DeferredFrameTargets targets){ this.targets = targets; }
+}
 
+class DeferredLightingStageBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererDeferredSystem m_deferredSystem;
+    public DeferredLightingStageBuilder(mut GpuTaskGraph graph, mut RendererDeferredSystem deferredSystem){
+        this.m_graph = graph;
+        this.m_deferredSystem = deferredSystem;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public Expected<DeferredLightingStageResult> declare(mut DeferredLightingStageInputs inputs, mut GpuTimingSubmissionTicket timingTicket){
+        DeferredLightingStageResult result;
+        if(
+            !inputs.albedo.valid()
+            || !inputs.normal.valid()
+            || !inputs.worldPosition.valid()
+            || !inputs.depth.valid()
+            || !inputs.shadowVisibility.valid()
+            || !inputs.causticIrradiance.valid()
+            || !inputs.surfelIrradiance.valid()
+            || !inputs.sceneShading.valid()
+            || !inputs.lights.valid()
+            || !inputs.bindlessSlots.valid()
+            || !inputs.opaqueColor.valid()
+            || !inputs.graphicsPrefixTask.valid()
+            || !inputs.avboitFinalTask.valid()
+            || !inputs.shadowVisibilityTask.valid()
+            || !inputs.surfelGiTask.valid()
+            || (inputs.declaresHardwareCaustics && !inputs.hardwareCausticsTask.valid())
+            || (!inputs.declaresHardwareCaustics && !inputs.softwareCausticsTask.valid())
+        )
+            return MakeUnexpected(Failure());
+        const b8 useLaggedLightingHistory = inputs.useLaggedLightingHistory;
+        if(useLaggedLightingHistory && !inputs.history.has_value())
+            return MakeUnexpected(Failure());
 
+        const b8 laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !inputs.history.value().slotsUploaded;
+        if(laggedBindlessSlotsGraphOwned){
+            const auto blob = this.m_graph.copyUploadValue(inputs.history.value().slots);
+            if(!blob.has_value())
+                return MakeUnexpected(Failure());
+            GpuTaskSchedulingHint uploadScheduling;
+            uploadScheduling.cost = GpuTaskCostHint::Tiny;
+            uploadScheduling.forceSubmissionBoundary = false;
+            uploadScheduling.allowPacketMerge = true;
+            GpuTaskDesc uploadDesc;
+            uploadDesc.setIdentity(s_RenderNameRenderLaggedLightingBindlessSlotsUpload).setMarkerLabel("Lagged Lighting Bindless Slots Upload")
+                .setScheduling(uploadScheduling).setDependency(inputs.graphicsPrefixTask);
+            GpuUploadBufferTaskDesc upload;
+            upload.source = blob.value();
+            upload.destination = inputs.bindlessSlots;
+            upload.finalState = ResourceStates::Common;
+            const auto added = this.m_graph.addUploadBufferTask(uploadDesc, upload);
+            if(!added.has_value())
+                return MakeUnexpected(Failure());
+            result.historySlotsUploadTask = added.value();
+        }
 
-NWB_IMPL_BEGIN
+        FixedVector<GpuTaskId, 4u> dependencies;
+        FixedVector<GpuExternalCompletionId, 1u> external;
+        if(useLaggedLightingHistory){
+            dependencies.push_back(inputs.graphicsPrefixTask);
+            if(laggedBindlessSlotsGraphOwned)
+                dependencies.push_back(result.historySlotsUploadTask);
+            // The transparent finalizer restores depth layout before lighting samples it.
+            if(inputs.hasTransparentRenderers)
+                dependencies.push_back(inputs.avboitFinalTask);
+            external.push_back(inputs.historyReadReadyCompletion);
+        }
+        else{
+            dependencies.push_back(inputs.shadowVisibilityTask);
+            if(!inputs.declaresHardwareCaustics)
+                dependencies.push_back(inputs.softwareCausticsTask);
+            dependencies.push_back(inputs.surfelGiTask);
+            dependencies.push_back(inputs.avboitFinalTask);
+            if(inputs.declaresHardwareCaustics)
+                dependencies.push_back(inputs.hardwareCausticsTask);
+        }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererDeferredSystem;
-
-
-// Deferred lighting stage owns lagged-history selector upload plus lighting task declaration.
-struct DeferredLightingStageInputs{
-    DeferredFrameTargets& targets;
-    Core::GpuGraphResourceId albedo;
-    Core::GpuGraphResourceId normal;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId shadowVisibility;
-    Core::GpuGraphResourceId causticIrradiance;
-    Core::GpuGraphResourceId surfelIrradiance;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId bindlessSlots;
-    Core::GpuGraphResourceId opaqueColor;
-    Core::GpuTaskId graphicsPrefixTask;
-    Core::GpuTaskId shadowVisibilityTask;
-    Core::GpuTaskId surfelGiTask;
-    Core::GpuTaskId avboitFinalTask;
-    Core::GpuTaskId hardwareCausticsTask;
-    Core::GpuTaskId softwareCausticsTask;
-    Core::GpuExternalCompletionId historyReadReadyCompletion;
-    const DeferredLaggedLightingHistoryResources* history = nullptr;
-    b8 useLaggedLightingHistory = false;
-    b8 declaresHardwareCaustics = false;
-    b8 hasTransparentRenderers = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredLightingStageBuilder final : NoCopy{
-public:
-    DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem)noexcept
-        : m_graph(graph)
-        , m_deferredSystem(deferredSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<DeferredLightingStageResult> declare(const DeferredLightingStageInputs& inputs, Core::GpuTimingSubmissionTicket& timingTicket);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererDeferredSystem& m_deferredSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        const Array<GpuTaskResourceUse, 11u> resourceUses(
+            ReadTextureUse(inputs.albedo, s_FramebufferSubresources, ResourceStates::ShaderResource),
+            ReadTextureUse(inputs.normal, s_FramebufferSubresources, ResourceStates::ShaderResource),
+            ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, ResourceStates::ShaderResource),
+            ReadTextureUse(inputs.depth, s_FramebufferSubresources, ResourceStates::ShaderResource),
+            ReadTextureUse(inputs.shadowVisibility, s_ShadowVisibilitySubresources),
+            ReadTextureUse(inputs.causticIrradiance, s_FramebufferSubresources),
+            ReadTextureUse(inputs.surfelIrradiance, s_FramebufferSubresources),
+            ReadUse(inputs.sceneShading, ResourceStates::ConstantBuffer),
+            ReadUse(inputs.lights, ResourceStates::ShaderResource),
+            ReadUse(inputs.bindlessSlots, ResourceStates::ConstantBuffer),
+            WriteTextureUse(inputs.opaqueColor, s_FramebufferSubresources, ResourceStates::UnorderedAccess)
+        );
+        GpuTaskSchedulingHint scheduling;
+        scheduling.cost = GpuTaskCostHint::Large;
+        scheduling.forceSubmissionBoundary = !laggedBindlessSlotsGraphOwned;
+        scheduling.allowPacketMerge = laggedBindlessSlotsGraphOwned;
+        scheduling.mergeWithPrevious = laggedBindlessSlotsGraphOwned;
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(Name(s_RenderNameRenderDeferredLighting))
+            .setMarkerLabel(s_DeferredLightingLabel)
+            .setScheduling(scheduling)
+            .setDependencies(dependencies)
+            .setExternalDependencies(external)
+            .setResourceUses(resourceUses)
+        ;
+        const auto lighting = this.m_deferredSystem.declareDeferredLightingTask(this.m_graph, desc, useLaggedLightingHistory, inputs.targets, timingTicket);
+        if(!lighting.has_value())
+            return MakeUnexpected(Failure());
+        result.lightingTask = lighting.value();
+        return result;
+    }
 }
 
 

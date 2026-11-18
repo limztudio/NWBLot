@@ -66,7 +66,7 @@ public:
 }
 
 struct ClipboardCompletion{
-    AString<Alloc::GlobalArena> text;
+    AString<::ArenaBase> text;
     ClipboardRequestToken token;
     ClipboardOperation::Enum operation = ClipboardOperation::ReadText;
     ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
@@ -74,7 +74,7 @@ struct ClipboardCompletion{
 
 
 public:
-    explicit ClipboardCompletion(Alloc::GlobalArena& arena)noexcept
+    explicit ClipboardCompletion(::ArenaBase& arena)noexcept
         : text(arena)
     {}
 };

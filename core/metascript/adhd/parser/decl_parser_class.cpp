@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/literal_decoder.h>
+
 #include <core/metascript/adhd/ast/keyword_semantics.h>
+#include <core/metascript/adhd/ast/operator_semantics.h>
 
 #include "decl_parser.h"
 
@@ -55,8 +58,46 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE
 #undef NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE
+        if(!matchedAttr && attr.name == KeywordSemantics::s_CppTypeAlias){
+            if(isExtern || attr.arguments.size() != 2u || attr.arguments[0].kind != TokenType::Identifier || attr.arguments[1].kind != TokenType::Identifier){
+                m_cursor.error(attr.line, attr.column, "'[cpp_type_alias(Name, Type)]' requires two names on an authored class");
+                return nullptr;
+            }
+            TypeAliasDecl* alias = AllocateAstNode<TypeAliasDecl>(m_cursor.arena());
+            alias->span = { attr.line, attr.column };
+            alias->name = attr.arguments[0].text;
+            alias->aliasedType = AllocateAstNode<TypeRef>(m_cursor.arena());
+            alias->aliasedType->name = attr.arguments[1].text;
+            decl->cppTypeAliases.push_back(alias);
+            matchedAttr = true;
+        }
+        if(!matchedAttr && attr.name == KeywordSemantics::s_Friend){
+            if(isExtern || !decl->friendClasses.empty() || attr.arguments.empty()){
+                m_cursor.error(attr.line, attr.column, "'[friend(...)]' requires one list of peer class names on an authored class");
+                return nullptr;
+            }
+            for(const ParsedAttributeArg& peer : attr.arguments){
+                if(peer.kind != TokenType::Identifier || peer.text == decl->name || ContainsStringView(decl->friendClasses, peer.text)){
+                    m_cursor.error(attr.line, attr.column, "'[friend(...)]' requires distinct peer class names");
+                    return nullptr;
+                }
+                decl->friendClasses.push_back(peer.text);
+            }
+            matchedAttr = true;
+        }
+        if(!matchedAttr && attr.name == KeywordSemantics::s_RecordLayout){
+            u64 alignment = 0u;
+            if(isExtern || decl->recordAlignment || attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::IntegerLiteral
+                || !LiteralDecoder::TryParseUnsignedIntegerLiteral(attr.arguments[0].text, alignment)
+                || !alignment || (alignment & (alignment - 1u)) || alignment > Limit<usize>::s_Max){
+                m_cursor.error(attr.line, attr.column, "layout requires one power-of-two alignment on an ordinary class");
+                return nullptr;
+            }
+            decl->recordAlignment = static_cast<usize>(alignment);
+            matchedAttr = true;
+        }
         if(!matchedAttr){
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'serialize', 'reflect', 'arena', 'modular', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'ordered', 'layout(alignment)', 'friend(...)', 'move_only', 'serialize', 'reflect', 'arena', 'modular', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
             return nullptr;
         }
     }
@@ -68,6 +109,15 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
 
     if(!parseColonTypeList(decl->implementedInterfaces, "expected implemented interface name after ':'", true))
         return nullptr;
+
+    if(decl->isMoveOnly && (isExtern || decl->isArenaOwner || decl->isSerialize || decl->recordAlignment)){
+        m_cursor.error(span.line, span.column, "'[move_only]' requires an ordinary value class");
+        return nullptr;
+    }
+    if(decl->recordAlignment && (decl->isArenaOwner || !decl->implementedInterfaces.empty() || !decl->subsystemTypeName.empty() || !decl->assetTypeName.empty() || !decl->componentTypeName.empty() || !decl->systemTypeName.empty())){
+        m_cursor.error(span.line, span.column, "layout is only supported on plain value records");
+        return nullptr;
+    }
 
     if(isExtern && m_cursor.match(TokenType::Semicolon))
         return decl;

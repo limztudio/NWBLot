@@ -38,6 +38,7 @@ public:
     [[nodiscard]] static b8 IsSimdStorageOrUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
     [[nodiscard]] static b8 IsStringSwitchType(MStringView typeName)noexcept;
     [[nodiscard]] static const FieldDecl* FindClassField(const ClassDecl& classDecl, MStringView name)noexcept;
+    [[nodiscard]] b8 canAccessPrivateMembers(const ClassDecl& target, const ClassDecl* caller)const noexcept;
     [[nodiscard]] static b8 HasCustomAssignOperator(const ClassDecl& classDecl)noexcept;
 
 

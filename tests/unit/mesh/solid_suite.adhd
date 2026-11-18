@@ -553,10 +553,10 @@ Expected<Core::Assets::AssetBytes> CookMeshBinary(Core::Assets::AssetArena& aren
     Core::CpuTaskScheduler scheduler(1u);
     Core::Alloc::ScratchArena scratch{Name(Tests::s_SolidCaseMeshSolidCodecCook)};
     const NWB::Path sourcePath(arena, "tests/mesh/solid_codec.nwb");
-    auto entry = Impl::ParseMeshCookMetadata(Tests::s_OneOffNameTestsMeshSolidCodec, sourcePath, *asset, arena, scheduler, scratch);
+    auto entry = Impl::ParseMeshCookMetadata(arena, Tests::s_OneOffNameTestsMeshSolidCodec, sourcePath, *asset, scheduler);
     if(!entry)
         return MakeUnexpected(Failure{});
-    auto mesh = Impl::BuildMeshAsset(*entry, arena, scratch);
+    auto mesh = Impl::BuildMeshAsset(arena, *entry);
     if(!mesh)
         return MakeUnexpected(Failure{});
     Core::Assets::AssetBytes binary(arena);

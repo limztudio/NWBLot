@@ -9,11 +9,11 @@
 
 
 b8 IsPreparedSceneTlasStorageReady(in RendererRayTracingState state, in usize instanceCount){
-    return state.m_tlas.valid()
-        && state.m_tlas.deref().getBackingBufferHandle().valid()
-        && state.m_tlasMaxInstances >= instanceCount
-        && state.m_tlasHeapHandle.valid()
-        && state.m_tlasHeapHandle.descriptorClass() == GpuDescriptorClass::AccelStruct;
+    return state.sceneBvh.m_tlas.valid()
+        && state.sceneBvh.m_tlas.deref().getBackingBufferHandle().valid()
+        && state.sceneBvh.m_tlasMaxInstances >= instanceCount
+        && state.sceneBvh.m_tlasHeapHandle.valid()
+        && state.sceneBvh.m_tlasHeapHandle.descriptorClass() == GpuDescriptorClass::AccelStruct;
 }
 
 

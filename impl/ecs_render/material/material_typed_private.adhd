@@ -2,199 +2,147 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/material/instance_typed_ranges.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/material/pipeline_types.adhd.h>
-#include <impl/ecs_scene/components.adhd.h>
-
-#include <core/common/log.h>
-
-#include <global/algorithm.h>
-#include <global/assert.h>
-#include <global/compile.h>
-#include <global/containers.h>
-#include <global/hash_utils.h>
-#include <global/span.h>
+type MaterialTypedConstantRangeMap = HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange>;
+type MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges>;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MaterialTypedByteBucket{
+    public u64 byteHash;
+    public usize byteCount;
+    public MaterialTypedByteBucket(in MaterialTypedByteContentLookup lookup){
+        this.byteHash = lookup.byteHash;
+        this.byteCount = lookup.bytes.size();
+    }
+    public usize hash()const{ return HashMaterialTypedByteContent(this.byteHash, this.byteCount); }
+    public b8 operator==(in MaterialTypedByteBucket other)const{
+        return this.byteHash == other.byteHash && this.byteCount == other.byteCount;
+    }
+}
 
+[move_only]
+class MaterialTypedByteEntry{
+    public Vector<u8> bytes;
+    public MaterialTypedByteRange range;
+    public usize next = usize.max;
+}
 
-NWB_IMPL_BEGIN
+class PendingMaterialTypedByteEntry : NoCopy{
+    private mut Vector<MaterialTypedByteEntry> m_entries;
+    private usize m_originalSize;
+    private b8 m_committed = false;
 
+    public PendingMaterialTypedByteEntry(mut Vector<MaterialTypedByteEntry> entries){
+        this.m_entries = entries;
+        this.m_originalSize = entries.size();
+    }
+    public void commit(){ this.m_committed = true; }
+    public ~PendingMaterialTypedByteEntry(){
+        if(!this.m_committed && this.m_entries.size() > this.m_originalSize)
+            this.m_entries.pop_back();
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Hash and size narrow the lookup. Distinct byte strings can share both.
+class MaterialTypedByteContentRangeMap : NoCopy{
+    private HashMap<MaterialTypedByteBucket, usize> m_heads;
+    private Vector<MaterialTypedByteEntry> m_entries;
 
+    [owner_result]
+    private MaterialTypedByteEntry emptyEntry()const{ return MaterialTypedByteEntry(); }
 
-namespace ECSRenderDetail{
+    [cpp_unwind]
+    private mut MaterialTypedByteEntry copyBytes(in Span<u8> bytes){
+        const usize index = this.m_entries.size();
+        this.m_entries.push_back(this.emptyEntry());
+        mut MaterialTypedByteEntry entry = this.m_entries[index];
+        AppendTriviallyCopyableVector(entry.bytes, bytes);
+        return this.m_entries[index];
+    }
 
+    public usize size()const{ return this.m_entries.size(); }
+    [cpp_unwind]
+    public void reserve(in usize count){
+        this.m_heads.reserve(count);
+        this.m_entries.reserve(count);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MaterialTypedByteRangeKeyHasher = Hasher<MaterialTypedByteRangeKey>;
-using MaterialTypedConstantRangeMap = HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
-
-struct MaterialTypedByteContentKey{
-    u64 byteHash = 0u;
-    Vector<u8, Core::Alloc::ScratchArena> bytes;
-
-
-public:
-    MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteContentLookup& lookup)
-        : byteHash(lookup.byteHash)
-        , bytes(arena)
-    {
-        if(!lookup.bytes.empty()){
-            bytes.reserve(lookup.bytes.size());
-            bytes.assign(lookup.bytes.begin(), lookup.bytes.end());
+    public Optional<MaterialTypedByteRange> find(in MaterialTypedByteContentLookup lookup)const{
+        const auto head = this.m_heads.find(MaterialTypedByteBucket(lookup));
+        if(head != this.m_heads.end()){
+            usize index = head.value();
+            while(index != usize.max){
+                in MaterialTypedByteEntry entry = this.m_entries[index];
+                if(EqualMaterialTypedByteContent(lookup.byteHash, entry.bytes, lookup.byteHash, lookup.bytes))
+                    return Optional<MaterialTypedByteRange>(entry.range);
+                index = entry.next;
+            }
         }
+        return Optional<MaterialTypedByteRange>();
     }
-};
 
-[[nodiscard]] FOUNDATION_INLINE b8 operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept{
-    return EqualMaterialTypedByteContent(lhs.byteHash, lhs.bytes, rhs.byteHash, rhs.bytes);
+    [cpp_unwind]
+    public b8 insert(in MaterialTypedByteContentLookup lookup, in MaterialTypedByteRange range){
+        if(this.find(lookup).has_value())
+            return false;
+        const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
+        PendingMaterialTypedByteEntry pending(this.m_entries);
+        const usize index = this.m_entries.size();
+        mut MaterialTypedByteEntry entry = this.copyBytes(lookup.bytes);
+        entry.next = head.first.value();
+        entry.range = range;
+        head.first.value() = index;
+        pending.commit();
+        return true;
+    }
+
+    [cpp_unwind]
+    public Expected<MaterialTypedByteRange> findOrAppend(in Span<u8> bytes, mut Vector<u8> upload){
+        if(bytes.empty())
+            return MaterialTypedByteRange();
+        const MaterialTypedByteContentLookup lookup(UpdateFnv64(s_Fnv64OffsetBasis, bytes), bytes);
+        const auto found = this.find(lookup);
+        if(found.has_value())
+            return found.value();
+
+        // Source bytes may point into the upload vector being grown.
+        const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
+        PendingMaterialTypedByteEntry pending(this.m_entries);
+        const usize index = this.m_entries.size();
+        mut MaterialTypedByteEntry entry = this.copyBytes(bytes);
+        const auto range = AppendMaterialTypedByteRange(entry.bytes, upload);
+        if(!range.has_value())
+            return MakeUnexpected(Failure());
+        entry.next = head.first.value();
+        entry.range = range.value();
+        head.first.value() = index;
+        pending.commit();
+        return range;
+    }
 }
 
-struct MaterialTypedByteContentKeyHasher{
-    [[nodiscard]] usize operator()(const MaterialTypedByteContentKey& key)const noexcept{
-        return HashMaterialTypedByteContent(key.byteHash, key.bytes.size());
-    }
-    [[nodiscard]] usize operator()(const MaterialTypedByteContentLookup& lookup)const noexcept{
-        return HashMaterialTypedByteContent(lookup.byteHash, lookup.bytes.size());
-    }
-};
-
-struct MaterialTypedByteContentKeyEqual{
-    using is_transparent = void;
-
-
-public:
-    [[nodiscard]] b8 operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)const noexcept{
-        return lhs == rhs;
-    }
-
-    [[nodiscard]] b8 operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const noexcept{
-        return EqualMaterialTypedByteContent(lhs.byteHash, lhs.bytes, rhs.byteHash, rhs.bytes);
-    }
-};
-
-// Dedup map for mutable typed ranges; identical blocks share one range.
-// Used by the material draw pass and the shadow occluder packing alike.
-using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteContentKeyHasher, MaterialTypedByteContentKeyEqual>;
-
-using NWB::Impl::TryBuildMaterialTypedByteAppendRange;
-
-template<typename DestinationByteVector>
-[[nodiscard]] FOUNDATION_INLINE Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes){
-    const auto appendRange = TryBuildMaterialTypedByteAppendRange(materialTypedBytes.size(), typedBytes.size());
-    if(!appendRange)
-        return MakeUnexpected(Failure{});
-    if(typedBytes.empty())
-        return appendRange->byteRange;
-
-    const usize requiredTypedByteCapacity = appendRange->alignedByteEnd;
-    if(requiredTypedByteCapacity > materialTypedBytes.capacity())
-        materialTypedBytes.reserve(::NextGrowingCapacity(materialTypedBytes.capacity(), requiredTypedByteCapacity));
-    materialTypedBytes.resize(appendRange->byteRange.byteOffset, 0u);
-    AppendTriviallyCopyableVector(materialTypedBytes, typedBytes);
-    materialTypedBytes.resize(appendRange->alignedByteEnd, 0u);
-    return appendRange->byteRange;
-}
-
-template<typename DestinationByteVector>
-[[nodiscard]] FOUNDATION_INLINE Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(
-    const Name& materialName,
-    const u64 typedLayoutHash,
-    const Span<const u8> typedBytes,
-    DestinationByteVector& materialTypedBytes,
-    MaterialTypedConstantRangeMap& rangeMap
-){
+[cpp_unwind]
+Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(in Name materialName, in u64 typedLayoutHash,
+    in Span<u8> bytes, mut Vector<u8> upload, mut MaterialTypedConstantRangeMap ranges){
     MaterialTypedByteRangeKey key;
     key.materialName = materialName;
     key.typedLayoutHash = typedLayoutHash;
-    const auto foundRange = rangeMap.find(key);
-    if(foundRange != rangeMap.end())
-        return foundRange.value();
-
-    const auto range = AppendMaterialTypedByteRange(typedBytes, materialTypedBytes);
-    if(!range)
-        return MakeUnexpected(Failure{});
-    if(!rangeMap.emplace(key, *range).second){
-        FOUNDATION_ASSERT(false);
-        return MakeUnexpected(Failure{});
+    const auto found = ranges.find(key);
+    if(found != ranges.end())
+        return found.value();
+    const auto range = AppendMaterialTypedByteRange(bytes, upload);
+    if(!range.has_value())
+        return MakeUnexpected(Failure());
+    if(!ranges.try_emplace(key, range.value()).second){
+        assert(false);
+        return MakeUnexpected(Failure());
     }
     return range;
-}
-
-template<typename DestinationByteVector, typename MaterialTypedByteRangeMap>
-[[nodiscard]] FOUNDATION_INLINE Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes, MaterialTypedByteRangeMap& rangeMap){
-    if(typedBytes.empty())
-        return MaterialTypedByteRange{};
-
-    const MaterialTypedByteContentLookup lookup{ ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()), typedBytes };
-    const auto foundRange = rangeMap.find(lookup);
-    if(foundRange != rangeMap.end())
-        return foundRange.value();
-
-    // Copy before growing the upload vector: typedBytes may alias its existing storage.
-    MaterialTypedByteContentKey rangeKey(materialTypedBytes.get_allocator().arena(), lookup);
-    const Span<const u8> ownedBytes(rangeKey.bytes.data(), rangeKey.bytes.size());
-    const auto range = AppendMaterialTypedByteRange(ownedBytes, materialTypedBytes);
-    if(!range)
-        return MakeUnexpected(Failure{});
-
-    const auto insertedRange = rangeMap.emplace(Move(rangeKey), *range);
-    if(!insertedRange.second){
-        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("RendererSystem: material typed range insertion duplicated a missing key"));
-        return MakeUnexpected(Failure{});
-    }
-    return range;
-}
-
-using NWB::Impl::ResolveMaterialTypedUploadByteCount;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_DEBUG)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

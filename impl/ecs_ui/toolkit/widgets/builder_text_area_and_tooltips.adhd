@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/edit/types.adhd>
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd>
 #include <impl/ecs_ui/toolkit/widgets/style.adhd>
 
 
@@ -79,115 +87,186 @@ b8 ShouldDismissPaintedTooltip(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+class TextAreaEditActions : IEditActionSink{
+    private in EditModel m_model;
+    private in TextAreaState m_state;
+    private in Context m_context;
+    private u64 m_instanceGeneration;
+    private u64 m_revision;
+
+    public TextAreaEditActions(in EditModel model, in TextAreaState state, in Context context){
+        this.m_model = model;
+        this.m_state = state;
+        this.m_context = context;
+        this.m_instanceGeneration = model.instanceGeneration();
+        this.m_revision = state.revision();
+    }
+
+    public b8 apply(mut EditModel model, in EditAction action, in b8 readOnly)override{
+        return !this.m_context.failed() && SameAddress(model, this.m_model)
+            && model.instanceGeneration() == this.m_instanceGeneration && this.m_state.revision() == this.m_revision
+            && action <= EditAction::Abandon;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
+b8 Builder::tooltip(in StringView stableKey, in StringView anchorKey, in StringView text, mut TooltipState state, in TooltipOptions options){
+    const auto anchorIndex = this.annotationAnchorIndex(anchorKey);
+    if(this.panelDeclarationBlocked() || !anchorIndex.has_value() || this.m_scope.value().m_tooltips.size() >= s_LayoutMaxNodes){
+        this.m_context.fail();
+        return false;
+    }
+    mut BuilderItem anchor = this.m_scope.value().m_items[anchorIndex.value()];
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Tooltip);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
+        return false;
+    if(BindTooltipOwner(widget.value().id, widget.value().declarationGeneration, state.m_owner, state.m_ownerDeclaration)){
+        state.reset();
+        state.m_owner = widget.value().id;
+        state.m_ownerDeclaration = widget.value().declarationGeneration;
+    }
+    in InputRouter input = this.m_context.input();
+    const auto accepted = input.findTarget(anchor.state.id, anchor.state.declarationGeneration);
+    const auto hovered = input.findTarget(input.hover());
+    const b8 overAnchor = hovered.has_value() && (hovered.value().id == anchor.state.id || hovered.value().owner == anchor.state.id);
+    const b8 eligible = accepted.has_value() && IsTooltipHoverEligible(
+        options.enabled,
+        anchor.enabled,
+        input.windowFocused(),
+        input.pointerKnown(),
+        this.m_pointerBusy,
+        input.primaryDown(),
+        input.secondaryDown(),
+        input.capture().valid(),
+        accepted.value().enabled,
+        accepted.value().popup,
+        this.m_context.popupToken(),
+        overAnchor
+    );
+    if(!UpdateTooltipState(state, anchor.state.id, anchor.state.declarationGeneration, this.m_context.popupToken(), input.focusLossGeneration(), input.hoverActivityGeneration(), eligible, this.m_deltaSeconds, options)){
+        this.m_context.fail();
+        return false;
+    }
+    auto frame = this.makeTooltipFrame();
+    frame.widget = widget.value();
+    frame.anchor = anchor.state;
+    frame.state = Optional<mut TooltipState>(state);
+    frame.style = this.m_tooltipStyle;
+    frame.options = options;
+    frame.revision = state.revision();
+    frame.anchorIndex = cast<u32>(anchorIndex.value());
+    frame.layer = this.m_context.popupLayer() + 1u;
+    const ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
+    auto layout = this.m_text.layout(request);
+    if(!layout.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    MoveInto<TextLayout>(frame.text, layout.value());
+    anchor.annotated = true;
+    mut Vector<BuilderTooltipFrame> tooltips = this.m_scope.value().m_tooltips;
+    tooltips.emplace_back();
+    MoveInto<BuilderTooltipFrame>(tooltips[tooltips.size() - 1u], frame);
+    return true;
+}
 
-#include <global/scope_exit.h>
-#include <global/simd/vector_arithmetic.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_builder_text_area_and_tooltips{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TextAreaActions final : public IEditActionSink{
-public:
-    TextAreaActions(const EditModel& model, const TextAreaState& state, const Context& context)noexcept
-        : m_model(model)
-        , m_state(state)
-        , m_context(context)
-        , m_instanceGeneration(model.instanceGeneration())
-        , m_revision(state.revision())
-    {}
-    virtual ~TextAreaActions()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual b8 apply(EditModel& model, const EditAction::Enum action, const b8)noexcept override{
-        if(m_context.failed() || &model != &m_model || model.instanceGeneration() != m_instanceGeneration || m_state.revision() != m_revision)
+b8 Builder::paintTooltips(){
+    ControlVisualPainter painter;
+    for(mut BuilderTooltipFrame frame : this.m_scope.value().m_tooltips){
+        if(!frame.state.has_value() || frame.state.value().revision() != frame.revision || frame.anchorIndex >= this.m_scope.value().m_items.size())
             return false;
-        return action <= EditAction::Abandon;
+        in BuilderItem anchor = this.m_scope.value().m_items[frame.anchorIndex];
+        const Optional<LayoutBox> box = this.m_scope.value().m_layout.box(anchor.node);
+        if(!box.has_value() || anchor.state.id != frame.anchor.id || anchor.state.declarationGeneration != frame.anchor.declarationGeneration)
+            return false;
+        if(!frame.state.value().visible())
+            continue;
+        const Rect clip = this.visibleClip(box.value().clip);
+        in Point pointer = this.m_context.input().pointerPosition();
+        in InputRouter input = this.m_context.input();
+        if(ShouldDismissPaintedTooltip(
+            anchor.enabled,
+            input.pointerKnown(),
+            input.windowFocused(),
+            this.m_pointerBusy,
+            input.primaryDown(),
+            input.secondaryDown(),
+            this.m_context.topPopupToken(),
+            frame.state.value().m_popup,
+            box.value().rectangle,
+            clip,
+            pointer
+        )){
+            if(!UpdateTooltipState(frame.state.value(), frame.anchor.id, frame.anchor.declarationGeneration, frame.state.value().m_popup, input.focusLossGeneration(), input.hoverActivityGeneration(), false, 0.0f, frame.options))
+                return false;
+            frame.revision = frame.state.value().revision();
+            continue;
+        }
+        const auto background = this.region(frame.style.background, frame.style.fallback);
+        if(!background.has_value())
+            return false;
+        const Insets padding = MaxUiPadding(frame.style.padding, background.value().padding);
+        const auto textBounds = this.m_text.measure(frame.text, this.m_paint.displayMetrics());
+        if(!textBounds.has_value())
+            return false;
+        const Point measured = Point(textBounds.value().width, textBounds.value().height);
+        const PopupOptions options = BuildTooltipPopupOptions(box.value().rectangle, measured, padding, background.value(), frame.options);
+        const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
+        if(!placement.has_value())
+            return false;
+        if(!painter.paintTooltipOverlay(this.m_paint, this.m_text, frame.layer, background.value().name, placement.value().bounds, padding, frame.text, textBounds.value(), frame.style.text) || frame.state.value().revision() != frame.revision)
+            return false;
+        frame.state.value().m_placement = placement.value();
     }
-
-
-private:
-    const EditModel& m_model;
-    const TextAreaState& m_state;
-    const Context& m_context;
-    const u64 m_instanceGeneration;
-    const u64 m_revision;
-};
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-EditBoxResult TextAreaCoordinator::declareTextArea(const AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options){
-    if(m_builder.itemDeclarationBlocked() || !IsValidTextAreaWheelLines(options.wheelLines) || model.textMode() != EditTextMode::Multiline){
-        m_builder.m_context.fail();
-        return {};
+EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mut TextAreaState state, in TextAreaOptions options){
+    if(this.itemDeclarationBlocked() || !IsValidTextAreaWheelLines(options.wheelLines) || model.textMode() != EditTextMode::Multiline){
+        this.m_context.fail();
+        return EditBoxResult();
     }
-    if(!m_builder.synchronizePopup()){
+    if(!this.synchronizePopup()){
         EditBoxResult result;
         result.valid = true;
         return result;
     }
-    m_builder.m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_builder.m_declaring = false; });
-    const auto widget = m_builder.m_context.declare(stableKey, WidgetKind::TextArea);
-    if(!widget)
-        return {};
-    if(!textAreaAvailable(model, state) || !m_builder.m_context.claimState(**widget, model.instanceGeneration())){
-        m_builder.m_context.fail();
-        return {};
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::TextArea);
+    if(!widget.has_value())
+        return EditBoxResult();
+    if(!this.textAreaAvailable(model, state) || !this.m_context.claimState(widget.value(), model.instanceGeneration())){
+        this.m_context.fail();
+        return EditBoxResult();
     }
     if(!options.enabled)
-        m_builder.m_context.input().invalidateTarget((*widget)->id);
+        this.m_context.input().invalidateTarget(widget.value().id);
     const u64 stateRevision = state.revision();
     const u64 modelGeneration = model.instanceGeneration();
-    const EditBoxOptions editOptions{ options.width, options.height, options.enabled, options.readOnly };
+    EditBoxOptions editOptions;
+    editOptions.width = options.width;
+    editOptions.height = options.height;
+    editOptions.enabled = options.enabled;
+    editOptions.readOnly = options.readOnly;
     EditBoxResult result;
     result.valid = true;
-    result.focused = options.enabled && m_builder.m_context.input().focus() == (*widget)->id;
-    if(m_builder.m_editHost){
-        TextAreaNavigationResolver navigation(m_builder.m_arena, m_builder.m_text, m_builder.m_context, state, m_builder.m_style.fontSize, m_builder.m_textScriptTag, StringView(m_builder.m_textLanguage.data(), m_builder.m_textLanguage.size()));
-        __hidden_builder_text_area_and_tooltips::TextAreaActions actions(model, state, m_builder.m_context);
-        result = m_builder.m_editHost->editNavigated(**widget, editOptions, m_builder.m_context.popupToken(), model, state.m_navigation, navigation, actions);
+    result.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
+    if(this.m_editHost.has_value()){
+        TextAreaNavigationResolver navigation(this.m_text, this.m_context, state, this.m_style.fontSize, this.m_textScriptTag, StringView(this.m_textLanguage));
+        TextAreaEditActions actions(model, state, this.m_context);
+        result = this.m_editHost.value().editNavigated(widget.value(), editOptions, this.m_context.popupToken(), model, state.m_navigation, navigation, actions);
     }
-    if(!result.valid || m_builder.m_context.failed() || state.revision() != stateRevision || model.instanceGeneration() != modelGeneration){
+    if(!result.valid || this.m_context.failed() || state.revision() != stateRevision || model.instanceGeneration() != modelGeneration){
         result.valid = false;
-        m_builder.m_context.fail();
+        this.m_context.fail();
         return result;
     }
     const Point requestedScroll = state.scroll();
@@ -200,8 +279,8 @@ EditBoxResult TextAreaCoordinator::declareTextArea(const AStringView stableKey, 
         model.anchor(),
         model.caret(),
         result.focused,
-        m_builder.m_context.input().capture(),
-        (*widget)->id,
+        this.m_context.input().capture(),
+        widget.value().id,
         state.m_compositionGeneration,
         state.m_visual.modelGeneration,
         state.m_visual.revision,
@@ -215,21 +294,21 @@ EditBoxResult TextAreaCoordinator::declareTextArea(const AStringView stableKey, 
         state.m_visual.caretElapsed,
         firstBinding
     );
-    TextAreaFrame frame;
+    BuilderTextAreaFrame frame;
     frame.wheelLines = options.wheelLines;
-    frame.model = &model;
-    frame.state = &state;
+    frame.model = Optional<mut EditModel>(model);
+    frame.state = Optional<mut TextAreaState>(state);
     frame.focused = result.focused;
-    snapshotTextArea(frame);
-    Item item(m_builder.m_arena);
-    item.style = m_builder.m_style;
-    item.editStyle = m_builder.m_editStyle;
-    item.scrollbarStyle = m_builder.m_scrollbarStyle;
-    item.state = **widget;
+    this.snapshotTextArea(frame);
+    auto item = this.makeItem();
+    item.style = this.m_style;
+    item.editStyle = this.m_editStyle;
+    item.scrollbarStyle = this.m_scrollbarStyle;
+    item.state = widget.value();
     item.editOptions = editOptions;
-    if(!m_builder.prepareEditBox(result, model, state.m_visual, item) || !m_builder.textAreaMatches(frame)){
+    if(!this.prepareEditBox(result, model, state.m_visual, item) || !this.textAreaMatches(frame)){
         result.valid = false;
-        m_builder.m_context.fail();
+        this.m_context.fail();
         return result;
     }
     if(ShouldRestoreInitialTextAreaScroll(firstBinding, state.m_revealCaret)){
@@ -237,48 +316,44 @@ EditBoxResult TextAreaCoordinator::declareTextArea(const AStringView stableKey, 
         state.m_scrollY = requestedScroll.y;
     }
     state.m_compositionGeneration = model.compositionGeneration();
-    item.textArea = static_cast<u32>(m_builder.m_scope->m_textAreas.size());
+    item.textArea = cast<u32>(this.m_scope.value().m_textAreas.size());
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = ResolveEditIntrinsicSize(m_builder.loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
-    if(!m_builder.addItemNode(description, item)){
+    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
+    if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
     }
-    frame.item = static_cast<u32>(m_builder.m_scope->m_items.size());
-    m_builder.m_scope->m_items.push_back(Move(item));
-    m_builder.m_scope->m_textAreas.push_back(frame);
+    frame.item = cast<u32>(this.m_scope.value().m_items.size());
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    this.m_scope.value().m_textAreas.push_back(frame);
     return result;
 }
 
-b8 TextAreaCoordinator::textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept{
-    for(usize index = 0u; index <= m_builder.m_popupFrameCount; ++index){
-        const BuilderScopeFrame& scope = index == 0u ? m_builder.m_scopeFrame : *m_builder.m_popupFrames[index - 1u];
-        for(const auto& frame : scope.m_textAreas){
-            if(frame.model == &model || frame.state == &state)
+b8 Builder::textAreaAvailable(in EditModel model, in TextAreaState state){
+    for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
+        in BuilderScopeFrame scope = this.popupFrameAt(index);
+        for(in auto frame : scope.m_textAreas){
+            if((frame.model.has_value() && SameAddress(frame.model.value(), model)) || (frame.state.has_value() && SameAddress(frame.state.value(), state)))
                 return false;
         }
     }
     return true;
 }
 
-void TextAreaCoordinator::snapshotTextArea(TextAreaFrame& frame)noexcept{
-    frame.stateRevision = frame.state->revision();
-    frame.navigation = frame.state->navigation().snapshot();
-    frame.modelStamp = frame.model->stamp();
+void Builder::snapshotTextArea(mut BuilderTextAreaFrame frame){
+    frame.stateRevision = frame.state.value().revision();
+    frame.navigation = frame.state.value().navigation().snapshot();
+    frame.modelStamp = frame.model.value().stamp();
 }
 
-EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options){
-    return TextAreaCoordinator(*this).declareTextArea(stableKey, model, state, options);
-}
-
-b8 Builder::textAreaMatches(const TextAreaFrame& frame)const noexcept{
+b8 Builder::textAreaMatches(in BuilderTextAreaFrame frame)const{
     return
-        popupAncestorsVisible() && frame.model && frame.state
-        && frame.state->revision() == frame.stateRevision && frame.state->navigation().matches(frame.navigation)
-        && frame.model->matchesStamp(frame.modelStamp)
-        && frame.state->m_visual.matchesStamp(frame.modelStamp, frame.focused)
+        this.popupAncestorsVisible() && frame.model.has_value() && frame.state.has_value()
+        && frame.state.value().revision() == frame.stateRevision && frame.state.value().navigation().matches(frame.navigation)
+        && frame.model.value().matchesStamp(frame.modelStamp)
+        && frame.state.value().m_visual.matchesStamp(frame.modelStamp, frame.focused)
     ;
 }
 
@@ -286,105 +361,118 @@ b8 Builder::textAreaMatches(const TextAreaFrame& frame)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TextAreaCoordinator::paintTextArea(const Item& item, const LayoutBox& box){
-    if(item.textArea >= m_builder.m_scope->m_textAreas.size())
+b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
+    if(item.textArea >= this.m_scope.value().m_textAreas.size())
         return false;
-    const TextAreaFrame& frame = m_builder.m_scope->m_textAreas[item.textArea];
-    if(!m_builder.textAreaMatches(frame))
+    in BuilderTextAreaFrame frame = this.m_scope.value().m_textAreas[item.textArea];
+    if(!this.textAreaMatches(frame))
         return false;
-    TextAreaState& state = *frame.state;
-    const Rect clip = m_builder.visibleClip(box.clip);
-    const f32 caretWidth = VectorGetX(VectorDivide(VectorReplicate(1.0f), VectorReplicate(m_builder.m_paint.displayMetrics().pixelScaleX)));
-    const Rect& visualBounds = item.editView.visualBounds();
-    const auto viewport = CalculateScrollViewportPlacement(box.rectangle, clip, item.padding, { visualBounds.width, visualBounds.height }, caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
-    if(!viewport)
+    mut TextAreaState state = frame.state.value();
+    const Rect clip = this.visibleClip(box.clip);
+    const f32 caretWidth = 1.0f / this.m_paint.displayMetrics().pixelScaleX;
+    in Rect visualBounds = item.editView.visualBounds();
+    const auto viewport = CalculateScrollViewportPlacement(box.rectangle, clip, item.padding, Point(visualBounds.width, visualBounds.height), caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
+    if(!viewport.has_value())
         return false;
-    const auto& lines = item.editView.layout().lines();
-    const f32 lineHeight = ResolveTextAreaBaseLineHeight(lines.empty(), item.editView.layout().fontSize(), lines.empty() ? 0.0f : lines.front().height);
+    in Vector<TextLine> lines = item.editView.layout().lines();
+    f32 firstLineHeight = 0.0f;
+    if(!lines.empty())
+        firstLineHeight = lines[0u].height;
+    const f32 lineHeight = ResolveTextAreaBaseLineHeight(lines.empty(), item.editView.layout().fontSize(), firstLineHeight);
     const auto stepResult = TryResolveTextAreaScrollStep(item.editView.layout().fontSize(), lineHeight, frame.wheelLines);
-    if(!stepResult)
+    if(!stepResult.has_value())
         return false;
-    const Point step = *stepResult;
-    const ControlToken token = state.m_scrollInput.prepare(item.state, m_builder.m_context.popupToken(), state.instanceGeneration(), state.revision(), frame.model->stamp(), item.editOptions.enabled, item.editOptions.readOnly, *viewport, step);
-    m_builder.m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
-    if(!applyTextAreaScrollInput(item, frame, token))
+    const Point step = stepResult.value();
+    const ControlToken token = state.m_scrollInput.prepare(item.state, this.m_context.popupToken(), state.instanceGeneration(), state.revision(), frame.model.value().stamp(), item.editOptions.enabled, item.editOptions.readOnly, viewport.value(), step);
+    this.m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
+    if(!this.applyTextAreaScrollInput(item, frame, token))
         return false;
-    const auto arranged = item.editView.arrangeViewport(box.rectangle, viewport->viewport, clip, state.scroll(), caretWidth, state.m_revealCaret);
-    if(!arranged)
+    const auto arranged = item.editView.arrangeViewport(box.rectangle, viewport.value().viewport, clip, state.scroll(), caretWidth, state.m_revealCaret);
+    if(!arranged.has_value())
         return false;
-    const EditBoxPlacement& placement = *arranged;
-    if(!TryUpdateScrollViewportOffsets({ placement.scroll, placement.scrollY }, state.m_scrollInput.placement))
+    in EditBoxPlacement placement = arranged.value();
+    if(!TryUpdateScrollViewportOffsets(Point(placement.scroll, placement.scrollY), state.m_scrollInput.placement))
         return false;
-    if(!item.editView.paint(m_builder.m_text, m_builder.m_paint, *m_builder.m_skin, placement, item.editStyle, item.editFlags) || !m_builder.textAreaMatches(frame))
+    if(!item.editView.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, item.editStyle, item.editFlags) || !this.textAreaMatches(frame))
         return false;
     state.m_visual.placement = placement;
     state.m_visual.scroll = placement.scroll;
     state.m_scrollY = placement.scrollY;
-    const HitTarget target = HitTargetFactory().makeTextAreaHitTarget(
+    HitTargetFactory targets;
+    const HitTarget target = targets.makeTextAreaHitTarget(
         box.rectangle,
-        m_builder.visibleClip(box.clip),
+        this.visibleClip(box.clip),
         item.editOptions.enabled,
         item.contextMenu,
         token,
         step,
         state.scrollbars()
     );
-    if(!m_builder.m_context.addTarget(item.state, target) || !paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
+    if(!this.m_context.addTarget(item.state, target) || !this.paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
         return false;
-    const b8 published = !m_builder.m_editHost || m_builder.m_editHost->publish(item.state, item.editView, placement, item.editOptions);
-    if(!published || !m_builder.textAreaMatches(frame))
+    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, item.editView, placement, item.editOptions);
+    if(!published || !this.textAreaMatches(frame))
         return false;
     return true;
 }
 
-b8 TextAreaCoordinator::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token){
-    TextAreaState& state = *frame.state;
+b8 Builder::applyTextAreaScrollInput(in BuilderItem item, in BuilderTextAreaFrame frame, in ControlToken token){
+    mut TextAreaState state = frame.state.value();
     const b8 enabled = item.editOptions.enabled;
     const auto horizontalId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollHorizontalThumb);
-    if(!horizontalId)
+    if(!horizontalId.has_value())
         return false;
     const auto verticalId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb);
-    if(!verticalId)
+    if(!verticalId.has_value())
         return false;
-    auto horizontal = m_builder.m_context.takePartPointerGesture(item.state, *horizontalId, enabled);
-    b8 haveHorizontal = horizontal && horizontal->control == token;
-    auto vertical = m_builder.m_context.takePartPointerGesture(item.state, *verticalId, enabled);
-    b8 haveVertical = vertical && vertical->control == token;
-    auto action = m_builder.m_context.takeControlAction(item.state, enabled, token);
+    auto horizontal = this.m_context.takePartPointerGesture(item.state, horizontalId.value(), enabled);
+    b8 haveHorizontal = horizontal.has_value() && horizontal.value().control == token;
+    auto vertical = this.m_context.takePartPointerGesture(item.state, verticalId.value(), enabled);
+    b8 haveVertical = vertical.has_value() && vertical.value().control == token;
+    auto action = this.m_context.takeControlAction(item.state, enabled, token);
     b8 haveAction = action.has_value();
     Point scroll = state.scroll();
     b8 manual = false;
     while(haveHorizontal || haveVertical || haveAction){
+        u64 horizontalSequence = 0u;
+        u64 verticalSequence = 0u;
+        u64 actionSequence = 0u;
+        if(haveHorizontal)
+            horizontalSequence = horizontal.value().updateSequence;
+        if(haveVertical)
+            verticalSequence = vertical.value().updateSequence;
+        if(haveAction)
+            actionSequence = action.value().id.sequence;
         const u8 stream = SelectNextTextAreaScrollStream(
             haveHorizontal,
-            haveHorizontal ? horizontal->updateSequence : 0u,
+            horizontalSequence,
             haveVertical,
-            haveVertical ? vertical->updateSequence : 0u,
+            verticalSequence,
             haveAction,
-            haveAction ? action->id.sequence : 0u
+            actionSequence
         );
         if(stream == 0u){
-            const auto dragged = TryDragScrollbarOffset(*horizontal, true);
-            if(!dragged)
+            const auto dragged = TryDragScrollbarOffset(horizontal.value(), true);
+            if(!dragged.has_value())
                 return false;
-            scroll.x = *dragged;
+            scroll.x = dragged.value();
             manual = true;
-            horizontal = m_builder.m_context.takePartPointerGesture(item.state, *horizontalId, enabled);
-            haveHorizontal = horizontal && horizontal->control == token;
+            horizontal = this.m_context.takePartPointerGesture(item.state, horizontalId.value(), enabled);
+            haveHorizontal = horizontal.has_value() && horizontal.value().control == token;
         }
         else if(stream == 1u){
-            const auto dragged = TryDragScrollbarOffset(*vertical, false);
-            if(!dragged)
+            const auto dragged = TryDragScrollbarOffset(vertical.value(), false);
+            if(!dragged.has_value())
                 return false;
-            scroll.y = *dragged;
+            scroll.y = dragged.value();
             manual = true;
-            vertical = m_builder.m_context.takePartPointerGesture(item.state, *verticalId, enabled);
-            haveVertical = vertical && vertical->control == token;
+            vertical = this.m_context.takePartPointerGesture(item.state, verticalId.value(), enabled);
+            haveVertical = vertical.has_value() && vertical.value().control == token;
         }
         else{
-            if(!TryApplyTextAreaScrollControlAction(*action, state.scrollbars(), scroll, manual))
+            if(!TryApplyTextAreaScrollControlAction(action.value(), state.scrollbars(), scroll, manual))
                 return false;
-            action = m_builder.m_context.takeControlAction(item.state, enabled, token);
+            action = this.m_context.takeControlAction(item.state, enabled, token);
             haveAction = action.has_value();
         }
     }
@@ -396,29 +484,30 @@ b8 TextAreaCoordinator::applyTextAreaScrollInput(const Item& item, const TextAre
     return true;
 }
 
-b8 TextAreaCoordinator::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token){
+b8 Builder::paintTextAreaScrollbars(in BuilderItem item, in ScrollViewportPlacement placement, in Rect clip, in ControlToken token){
     const b8 enabled = item.editOptions.enabled;
     b8 horizontalHovered = false;
     b8 horizontalPressed = false;
     if(placement.horizontal.visible){
         const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollHorizontalThumb);
-        if(!thumbId)
+        if(!thumbId.has_value())
             return false;
-        horizontalHovered = m_builder.m_context.input().hover() == *thumbId;
-        horizontalPressed = m_builder.m_context.input().capture() == *thumbId;
+        horizontalHovered = this.m_context.input().hover() == thumbId.value();
+        horizontalPressed = this.m_context.input().capture() == thumbId.value();
     }
     b8 verticalHovered = false;
     b8 verticalPressed = false;
     if(placement.vertical.visible){
         const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb);
-        if(!thumbId)
+        if(!thumbId.has_value())
             return false;
-        verticalHovered = m_builder.m_context.input().hover() == *thumbId;
-        verticalPressed = m_builder.m_context.input().capture() == *thumbId;
+        verticalHovered = this.m_context.input().hover() == thumbId.value();
+        verticalPressed = this.m_context.input().capture() == thumbId.value();
     }
-    if(!ControlVisualPainter().paintTextAreaScrollbarsVisual(
-        m_builder.m_paint,
-        *m_builder.m_skin,
+    ControlVisualPainter painter;
+    if(!painter.paintTextAreaScrollbarsVisual(
+        this.m_paint,
+        this.m_skin.value(),
         item.scrollbarStyle,
         placement,
         clip,
@@ -431,179 +520,49 @@ b8 TextAreaCoordinator::paintTextAreaScrollbars(const Item& item, const ScrollVi
         return false;
     if(!enabled)
         return true;
-    for(u32 axis = 0u; axis < s_ScrollAxisCount; ++axis){
-        const b8 horizontal = axis == 0u;
-        const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
-        if(!bar.visible)
-            continue;
-        Rect beforeRect;
-        Rect afterRect;
-        ResolveScrollbarBeforeAfterRects(bar, horizontal, beforeRect, afterRect);
-        const HitTarget beforeTarget = HitTargetFactory().makeScrollbarTrackActionHitTarget(
-            beforeRect,
-            clip,
-            token,
-            horizontal ? s_TextAreaScrollHorizontalBefore : s_TextAreaScrollVerticalBefore
-        );
-        const auto beforeId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalBefore : s_WidgetPartScrollVerticalBefore);
-        if(!beforeId || !m_builder.m_context.addPartTarget(item.state, *beforeId, beforeTarget))
-            return false;
-        const HitTarget afterTarget = HitTargetFactory().makeScrollbarTrackActionHitTarget(
-            afterRect,
-            clip,
-            token,
-            horizontal ? s_TextAreaScrollHorizontalAfter : s_TextAreaScrollVerticalAfter
-        );
-        const auto afterId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalAfter : s_WidgetPartScrollVerticalAfter);
-        if(!afterId || !m_builder.m_context.addPartTarget(item.state, *afterId, afterTarget))
-            return false;
-        const HitTarget thumbTarget = HitTargetFactory().makeScrollbarThumbHitTarget(bar, clip, token, horizontal);
-        const auto thumbId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb);
-        if(!thumbId || !m_builder.m_context.addPartTarget(item.state, *thumbId, thumbTarget))
-            return false;
-    }
+    if(!this.paintTextAreaScrollbarAxis(item, placement.horizontal, clip, token, true, s_TextAreaScrollHorizontalBefore, s_TextAreaScrollHorizontalAfter, s_WidgetPartScrollHorizontalBefore, s_WidgetPartScrollHorizontalAfter, s_WidgetPartScrollHorizontalThumb)
+        || !this.paintTextAreaScrollbarAxis(item, placement.vertical, clip, token, false, s_TextAreaScrollVerticalBefore, s_TextAreaScrollVerticalAfter, s_WidgetPartScrollVerticalBefore, s_WidgetPartScrollVerticalAfter, s_WidgetPartScrollVerticalThumb))
+        return false;
+    HitTargetFactory targets;
     if(placement.corner.width > 0.0f && placement.corner.height > 0.0f){
-        const HitTarget target = HitTargetFactory().makeScrollbarCornerHitTarget(placement.corner, clip, token);
+        const HitTarget target = targets.makeScrollbarCornerHitTarget(placement.corner, clip, token);
         const auto cornerId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollCorner);
-        if(!cornerId || !m_builder.m_context.addPartTarget(item.state, *cornerId, target))
+        if(!cornerId.has_value() || !this.m_context.addPartTarget(item.state, cornerId.value(), target))
             return false;
     }
     return true;
 }
 
-b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
-    return TextAreaCoordinator(*this).paintTextArea(item, box);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 TooltipCoordinator::declareTooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text, TooltipState& state, const TooltipOptions& options){
-    Item* anchor = m_builder.annotationAnchor(anchorKey);
-    if(m_builder.panelDeclarationBlocked() || !anchor || m_builder.m_scope->m_tooltips.size() >= s_LayoutMaxNodes){
-        m_builder.m_context.fail();
-        return false;
-    }
-    const auto widget = m_builder.m_context.declare(stableKey, WidgetKind::Tooltip);
-    if(!widget || !m_builder.m_context.claimState(**widget, state.instanceGeneration()))
-        return false;
-    if(BindTooltipOwner((*widget)->id, (*widget)->declarationGeneration, state.m_owner, state.m_ownerDeclaration)){
-        state.reset();
-        state.m_owner = (*widget)->id;
-        state.m_ownerDeclaration = (*widget)->declarationGeneration;
-    }
-    const InputRouter& input = m_builder.m_context.input();
-    const HitTarget* accepted = input.findTarget(anchor->state.id, anchor->state.declarationGeneration);
-    const HitTarget* hovered = input.findTarget(input.hover());
-    const b8 overAnchor = hovered && (hovered->id == anchor->state.id || hovered->owner == anchor->state.id);
-    const b8 eligible = accepted && IsTooltipHoverEligible(
-        options.enabled,
-        anchor->enabled,
-        input.windowFocused(),
-        input.pointerKnown(),
-        m_builder.m_pointerBusy,
-        input.primaryDown(),
-        input.secondaryDown(),
-        input.capture().valid(),
-        accepted->enabled,
-        accepted->popup,
-        m_builder.m_context.popupToken(),
-        overAnchor
+b8 Builder::paintTextAreaScrollbarAxis(in BuilderItem item, in ScrollbarPlacement bar, in Rect clip, in ControlToken token, in b8 horizontal, in u32 beforeAction, in u32 afterAction, in StringView beforeKey, in StringView afterKey, in StringView thumbKey){
+    if(!bar.visible)
+        return true;
+    HitTargetFactory targets;
+    Rect beforeRect;
+    Rect afterRect;
+    ResolveScrollbarBeforeAfterRects(bar, horizontal, beforeRect, afterRect);
+    const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(
+        beforeRect,
+        clip,
+        token,
+        beforeAction
     );
-    if(!TooltipBehavior::Update(state, anchor->state.id, anchor->state.declarationGeneration, m_builder.m_context.popupToken(), input.focusLossGeneration(), input.hoverActivityGeneration(), eligible, m_builder.m_deltaSeconds, options)){
-        m_builder.m_context.fail();
+    const auto beforeId = TryMakeWidgetId(item.state.id, beforeKey);
+    if(!beforeId.has_value() || !this.m_context.addPartTarget(item.state, beforeId.value(), beforeTarget))
         return false;
-    }
-    TooltipFrame frame(m_builder.m_arena);
-    frame.widget = **widget;
-    frame.anchor = anchor->state;
-    frame.state = &state;
-    frame.style = m_builder.m_tooltipStyle;
-    frame.options = options;
-    frame.revision = state.revision();
-    frame.anchorIndex = static_cast<u32>(anchor - m_builder.m_scope->m_items.data());
-    frame.layer = m_builder.m_context.popupLayer() + 1u;
-    const ShapeRequest request = m_builder.textShapeRequest(text, m_builder.m_style.fontSize);
-    auto layout = m_builder.m_text.layout(request);
-    if(!layout){
-        m_builder.m_context.fail();
+    const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(
+        afterRect,
+        clip,
+        token,
+        afterAction
+    );
+    const auto afterId = TryMakeWidgetId(item.state.id, afterKey);
+    if(!afterId.has_value() || !this.m_context.addPartTarget(item.state, afterId.value(), afterTarget))
         return false;
-    }
-    frame.text = Move(*layout);
-    anchor->annotated = true;
-    m_builder.m_scope->m_tooltips.push_back(Move(frame));
+    const HitTarget thumbTarget = targets.makeScrollbarThumbHitTarget(bar, clip, token, horizontal);
+    const auto thumbId = TryMakeWidgetId(item.state.id, thumbKey);
+    if(!thumbId.has_value() || !this.m_context.addPartTarget(item.state, thumbId.value(), thumbTarget))
+        return false;
     return true;
-}
-
-b8 TooltipCoordinator::paintTooltips(){
-    for(auto& frame : m_builder.m_scope->m_tooltips){
-        if(!frame.state || frame.state->revision() != frame.revision || frame.anchorIndex >= m_builder.m_scope->m_items.size())
-            return false;
-        const Item& anchor = m_builder.m_scope->m_items[frame.anchorIndex];
-        const Optional<LayoutBox> box = m_builder.m_scope->m_layout.box(anchor.node);
-        if(!box || anchor.state.id != frame.anchor.id || anchor.state.declarationGeneration != frame.anchor.declarationGeneration)
-            return false;
-        if(!frame.state->visible())
-            continue;
-        const Rect clip = m_builder.visibleClip(box->clip);
-        const Point& pointer = m_builder.m_context.input().pointerPosition();
-        const InputRouter& input = m_builder.m_context.input();
-        if(ShouldDismissPaintedTooltip(
-            anchor.enabled,
-            input.pointerKnown(),
-            input.windowFocused(),
-            m_builder.m_pointerBusy,
-            input.primaryDown(),
-            input.secondaryDown(),
-            m_builder.m_context.topPopupToken(),
-            frame.state->m_popup,
-            box->rectangle,
-            clip,
-            pointer
-        )){
-            if(!TooltipBehavior::Update(*frame.state, frame.anchor.id, frame.anchor.declarationGeneration, frame.state->m_popup, input.focusLossGeneration(), input.hoverActivityGeneration(), false, 0.0f, frame.options))
-                return false;
-            frame.revision = frame.state->revision();
-            continue;
-        }
-        const UiSkinRegion* background = m_builder.region(frame.style.background, frame.style.fallback);
-        if(!background)
-            return false;
-        const Insets padding = MaxUiPadding(frame.style.padding, background->padding);
-        const auto textBounds = m_builder.m_text.measure(frame.text, m_builder.m_paint.displayMetrics());
-        if(!textBounds)
-            return false;
-        const Point measured{ textBounds->width, textBounds->height };
-        const PopupOptions options = BuildTooltipPopupOptions(box->rectangle, measured, padding, *background, frame.options);
-        const auto placement = PlacePopup(options, m_builder.m_paint.displayMetrics());
-        if(!placement)
-            return false;
-        if(!ControlVisualPainter().paintTooltipOverlay(m_builder.m_paint, m_builder.m_text, frame.layer, background->name, placement->bounds, padding, frame.text, *textBounds, frame.style.text) || frame.state->revision() != frame.revision)
-            return false;
-        frame.state->m_placement = *placement;
-    }
-    return true;
-}
-
-b8 Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text, TooltipState& state, const TooltipOptions& options){
-    return TooltipCoordinator(*this).declareTooltip(stableKey, anchorKey, text, state, options);
-}
-
-b8 Builder::paintTooltips(){
-    return TooltipCoordinator(*this).paintTooltips();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

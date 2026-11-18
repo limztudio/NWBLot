@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::PathResolver")]
+extern class ShaderArchivePathResolver;
+
 [cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::Record")]
 extern class Record{
     Name shaderName;
@@ -21,6 +24,12 @@ extern Expected<Name> BuildVirtualPathName(in Name a0, in StringView a1, in Name
 
 [cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::FindVirtualPath")]
 extern Expected<Name> FindVirtualPath(in auto a0, in Name a1, in StringView a2, in Name a3);
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::ReadIndex")]
+extern Expected<Vector<Record>> ReadShaderArchiveIndex(in BinaryUpdateContext context, in BinaryByteView binary);
+
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::WriteIndex")]
+extern b8 WriteShaderArchiveIndex(mut BinaryUpdateContext context, in Span<Record> records);
 
 [cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::SerializeIndex")]
 extern Expected<Vector<u8>> SerializeIndex(in auto a0, mut auto a1, mut auto a2);

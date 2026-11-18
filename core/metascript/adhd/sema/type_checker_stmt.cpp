@@ -58,11 +58,46 @@ b8 TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVect
         info.mode = param.mode;
         info.isConst = (param.mode == ParamPassingMode::In);
         info.isParam = true;
+        info.retainsBorrow = param.retainsBorrow;
         scope.push_back(info);
     }
 
+    if(!method.probesReturnValue){
+        for(Expr* probe : method.exceptionProbes){
+            if(!checkExpr(ownerClass, scope, false, method, *probe, errors))
+                return false;
+        }
+    }
     if(!checkStatementList(ownerClass, method, method.body, scope, errors))
         ok = false;
+    if(!method.exceptionProbes.empty()){
+        const Span<const ScopedVarInfo> parameters(scope.data(), method.params.size());
+        const auto checkProbe = [&](auto&& recurse, const Expr& expr) -> b8{
+            if(expr.kind == ExprKind::Lambda || expr.injectScratchArena || expr.injectClassArena){
+                reportError(errors, expr.span, "'noexcept_like' cannot depend on a local arena or lambda");
+                return false;
+            }
+            if(expr.kind == ExprKind::Identifier && !FindScopedVar(parameters, expr.text)
+                && !m_symbols.findGlobalConstant(expr.text) && !FindBuiltinGlobalConstant(expr.text)
+                && !m_symbols.findFreeFunction(expr.text) && !FindBuiltinFunction(expr.text)
+                && !FindTemplateParam(ownerClass, &method, expr.text) && !m_symbols.hasTypeSymbol(expr.text)
+                && !FindBuiltinObjectType(expr.text) && !BuiltinTypeSemantics::IsBuiltinTypeName(expr.text)){
+                reportError(errors, expr.span, "'noexcept_like' requires a visible parameter, type, function, or global constant");
+                return false;
+            }
+            if((expr.lhs && !recurse(recurse, *expr.lhs)) || (expr.rhs && !recurse(recurse, *expr.rhs)))
+                return false;
+            for(const Expr* argument : expr.arguments){
+                if(argument && !recurse(recurse, *argument))
+                    return false;
+            }
+            return true;
+        };
+        for(const Expr* probe : method.exceptionProbes){
+            if(!checkProbe(checkProbe, *probe))
+                ok = false;
+        }
+    }
     if(!method.isConstructor && !method.isDestructor && !IsVoidTypeRef(m_symbols.unwrapTypeAlias(method.returnType))){
         if(!StatementsContainReturnOrNative(method.body)){
             reportError(errors, method.span, "non-void function or method must contain a 'return' statement");
@@ -365,7 +400,13 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         loopVar.inferredTypeName = resolvedElemName;
         loopVar.mode = stmt.rangeMode;
         loopVar.isConst = (stmt.rangeMode == ParamPassingMode::In);
+        if(stmt.expr){
+            const MStringView collection = inferExprBaseType(ownerClass, &method, *stmt.expr, scope);
+            if(const auto* owner = BorrowLifetimeAnalyzer(*this).localReferenceOwner(ownerClass, method, *stmt.expr, scope, !IsBorrowViewType(collection)))
+                loopVar.referenceOwnerName = owner->name;
+        }
         loopVar.isParam = true;
+        loopVar.retainsBorrow = true;
         scope.push_back(loopVar);
         if(!checkLoopOrParallelBody(isPar))
             ok = false;

@@ -3,114 +3,63 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
+#include <impl/ecs_render/material/compute_emulation_output_index.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <impl/ecs_render/material/compute_emulation_output_index.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Plan, typename AcceptMode>
-[[nodiscard]] b8 CaptureAliasFreeGeneratedGeometryDraws(const MaterialPassDrawItemsView& source, AcceptMode acceptMode, Plan& plan, Core::Alloc::ScratchArena& scratchArena){
-    plan.drawItems.reserve(source.computeDrawItems.size());
-    plan.outputBuffers.reserve(source.computeDrawItems.size());
-    plan.outputLayouts.reserve(source.computeDrawItems.size());
-    plan.outputHeapSlots.reserve(source.computeDrawItems.size());
-    MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(scratchArena);
-    MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
-    for(const MaterialPassDrawItem& drawItem : source.computeDrawItems){
-        if(!acceptMode(drawItem.pipelineKey.csgMode))
-            return false;
-        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-        if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid())
-            return false;
-        if(!outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get())) || !slots.insert(mesh.emulationVertexHeapHandle.slot()))
-            return false;
-        plan.drawItems.push_back(drawItem);
-        plan.outputBuffers.push_back(mesh.emulationVertexBuffer);
-        plan.outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
-        plan.outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
-    }
-    return true;
+b8 IsAliasFreeCaptureCountConsistent(in usize drawCount, in usize outputBufferCount, in usize outputHeapSlotCount){
+    return drawCount != 0u && drawCount == outputBufferCount && outputBufferCount == outputHeapSlotCount;
 }
 
-using ::NWB::Impl::MatchesRetainedGeneratedGeometryOutputs;
+class AliasFreeComputeEmulationGraphPlan{
+    public Vector<MaterialPassDrawItem> drawItems;
+    public Vector<BufferHandle> outputBuffers;
+    public Vector<GeneratedGeometryOutputLayout> outputLayouts;
+    public Vector<u32> outputHeapSlots;
+    public b8 captured = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
-using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
-using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
-using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
-
-struct AliasFreeComputeEmulationGraphPlan{
-    DrawItemVector drawItems;
-    BufferVector outputBuffers;
-    OutputLayoutVector outputLayouts;
-    HeapSlotVector outputHeapSlots;
-    b8 captured = false;
-
-
-public:
-    explicit AliasFreeComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
-        : drawItems(arena)
-        , outputBuffers(arena)
-        , outputLayouts(arena)
-        , outputHeapSlots(arena)
-    {}
-
-
-public:
-    void reset()noexcept;
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena);
-
-    [[nodiscard]] b8 matches()const noexcept{
-        return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
+    public void reset(){
+        this.drawItems.clear();
+        this.outputBuffers.clear();
+        this.outputLayouts.clear();
+        this.outputHeapSlots.clear();
+        this.captured = false;
     }
-};
 
+    [cpp_unwind]
+    public b8 capture(in MaterialPassDrawItemsView source, in b8 requireCsg){
+        this.reset();
+        const usize count = source.computeDrawItems.size();
+        if(count == 0u)
+            return false;
+        this.drawItems.reserve(count);
+        this.outputBuffers.reserve(count);
+        this.outputLayouts.reserve(count);
+        this.outputHeapSlots.reserve(count);
+        MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> buffers;
+        MaterialPassEmulationOutputIndex<u32> slots;
+        for(in MaterialPassDrawItem item : source.computeDrawItems){
+            in MaterialPassMeshResourceSnapshot mesh = item.meshResources;
+            if((item.pipelineKey.csgMode != MaterialPipelineCsgMode::None) != requireCsg
+                || !mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid()
+                || !buffers.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer)) || !slots.insert(mesh.emulationVertexHeapHandle.slot())){
+                this.reset();
+                return false;
+            }
+            this.drawItems.push_back(item);
+            this.outputBuffers.push_back(mesh.emulationVertexBuffer);
+            this.outputLayouts.push_back(MakeGeneratedGeometryOutputLayout(mesh.emulationIndexByteOffset, item.pipelineResources.indexedGeometryOutput));
+            this.outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
+        }
+        this.captured = IsAliasFreeCaptureCountConsistent(this.drawItems.size(), this.outputBuffers.size(), this.outputHeapSlots.size());
+        return this.captured;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 matches()const{
+        return MatchesRetainedGeneratedGeometryOutputs(this.captured, this.drawItems, this.outputBuffers, this.outputLayouts, this.outputHeapSlots);
+    }
 }
 
 

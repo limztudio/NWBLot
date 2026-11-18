@@ -26,6 +26,9 @@ class MaterialPipelineKey{
     public MaterialPipelinePass pass = MaterialPipelinePass::Opaque;
     public b8 twoSided = false;
     public MaterialPipelineCsgMode csgMode = MaterialPipelineCsgMode::None;
+
+    public usize hash()const{ return HashMaterialPipelineKey(this); }
+    public b8 operator==(in MaterialPipelineKey other)const{ return EqualMaterialPipelineKey(this, other); }
 }
 
 class MaterialPipelineResources{

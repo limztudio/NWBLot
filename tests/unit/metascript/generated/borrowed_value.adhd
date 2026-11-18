@@ -1,0 +1,46 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class BorrowedCount{
+    private in u32 m_count;
+    public BorrowedCount(in u32 count){
+        this.m_count = count;
+    }
+    public u32 current()const{
+        return this.m_count;
+    }
+}
+
+
+BorrowedCount BorrowFirstCount(in Span<u32> counts){
+    return BorrowedCount(counts[0u]);
+}
+
+BorrowedCount BorrowMappedCount(in HashMap<u32, u32> counts, in u32 key){
+    return BorrowedCount(counts.at(key));
+}
+
+u32 ReadOptionalCount(in Optional<in u32> count){
+    if(count.has_value())
+        return count.value();
+    return 0u;
+}
+
+Optional<in u32> BorrowOptionalCount(in borrow u32 count){
+    return Optional<in u32>(count);
+}
+
+Expected<mut u32> BorrowExpectedCount(mut u32 count){
+    Expected<mut u32> result(count);
+    return result;
+}
+
+void UpdateExpectedCount(mut Expected<mut u32> count, in u32 value){
+    if(count.has_value())
+        count.value() = value;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -208,7 +208,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
             if(expr.op == TokenType::Minus){
                 if(isMatrix){
                     const MStringView matRegType = SimdRegisterCppType(simdType);
-                    out.append("([&]()noexcept{ const ");
+                    out.append("([&]()").append(lambdaExceptionSpec()).append("{ const ");
                     out.append(matRegType.data(), matRegType.size());
                     out.append(" __m = ");
                     emitSimdRegExpr(out, *expr.lhs, simdType);

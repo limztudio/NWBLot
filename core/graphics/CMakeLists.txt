@@ -6,6 +6,13 @@ elseif(NOT NWB_GRAPHICS_BACKEND STREQUAL "Vulkan")
     message(FATAL_ERROR "Unknown graphics backend: ${NWB_GRAPHICS_BACKEND}")
 endif()
 
+nwb_declare_static_library(nwb_basis_transcoder)
+target_sources(nwb_basis_transcoder PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/basis_transcoder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/basis_transcoder.h"
+)
+target_link_libraries(nwb_basis_transcoder PUBLIC nwb_common PRIVATE nwb::basis_universal)
+
 nwb_declare_static_library(nwb_shader_bytecode)
 target_sources(nwb_shader_bytecode PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.cpp"

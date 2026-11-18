@@ -2,133 +2,64 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/paint_context.adhd>
+#include <impl/ecs_ui/toolkit/paint_primitives.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_ui/toolkit/paint_primitives.adhd.h>
+static_assert(s_PaintCallbackInlineBytes == 64u);
+type UiPaintCallback = Func<64u, void(mut UiPaintContext)>;
 
-#include <global/inplace_function.h>
+class UiPaintLease : NoCopy{
+    private LinkedSlot<UiPaintCallback> m_running = LinkedSlot<UiPaintCallback>();
 
+    public UiPaintLease(mut LinkedSlot<UiPaintCallback> owner){
+        this.m_running.takeFrom(owner);
+        this.m_running.connect(owner);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public ~UiPaintLease(){
+        if(this.m_running.linked())
+            this.m_running.peer().takeFrom(this.m_running);
+    }
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiPaintContext;
-
+    [cpp_unwind]
+    public void invoke(mut UiPaintContext context){
+        this.m_running.value()(context);
+    }
+}
 
 class UiPaintSlot{
-private:
-    static constexpr usize s_CallbackInlineBytes = Ui::s_PaintCallbackInlineBytes;
-    using Callback = InplaceFunction<s_CallbackInlineBytes, void(UiPaintContext&)>;
+    private LinkedSlot<UiPaintCallback> m_slot = LinkedSlot<UiPaintCallback>();
 
-    struct Lease{
-        UiPaintSlot* owner;
-        Callback callback;
-
-        explicit Lease(UiPaintSlot& slot)noexcept
-            : owner(&slot)
-            , callback(Move(slot.m_callback))
-        {
-            slot.m_active = this;
-        }
-
-        ~Lease()noexcept{
-            if(owner){
-                owner->m_active = nullptr;
-                owner->m_callback = Move(callback);
-            }
-        }
-    };
-
-
-public:
-    UiPaintSlot()noexcept = default;
-    ~UiPaintSlot()noexcept{ detach(); }
-    UiPaintSlot(const UiPaintSlot& other)
-        : m_callback(other.m_callback)
-    {}
-    UiPaintSlot(UiPaintSlot&& other)noexcept{ moveFrom(other); }
-
-    UiPaintSlot& operator=(const UiPaintSlot& other){
-        if(this != &other){
-            detach();
-            m_callback = other.m_callback;
-        }
-        return *this;
-    }
-    UiPaintSlot& operator=(UiPaintSlot&& other)noexcept{
-        if(this != &other){
-            detach();
-            moveFrom(other);
-        }
-        return *this;
-    }
-    template<typename Func>
-        requires (!IsSame_V<Decay_T<Func>, UiPaintSlot> && requires(Callback& callback, Func&& func){ callback = Forward<Func>(func); })
-    UiPaintSlot& operator=(Func&& func)noexcept(noexcept(m_callback = Forward<Func>(func))){
-        detach();
-        m_callback = Forward<Func>(func);
-        return *this;
+    [cpp_take_assignment]
+    public void setCallback(mut UiPaintCallback callback){
+        this.m_slot.disconnect();
+        if(cast<b8>(callback))
+            TakeLinkedSlotValue<UiPaintCallback>(this.m_slot, callback);
+        else
+            this.m_slot.resetValue();
     }
 
-    explicit operator b8()const noexcept{ return static_cast<b8>(m_callback); }
-    [[nodiscard]] b8 present()const noexcept{ return m_active != nullptr || static_cast<b8>(m_callback); }
+    [cpp_explicit_bool]
+    public b8 callable()const{ return this.m_slot.hasValue(); }
 
-    void reset()noexcept{
-        detach();
-        m_callback.reset();
+    public b8 present()const{ return this.callable() || this.m_slot.linked(); }
+
+    public void reset(){
+        this.m_slot.disconnect();
+        this.m_slot.resetValue();
     }
 
-    void invoke(UiPaintContext& context){
-        FOUNDATION_ASSERT(m_callback && !m_active);
-        Lease lease(*this);
-        lease.callback(context);
+    [cpp_unwind]
+    public void invoke(mut UiPaintContext context){
+        if(!this.callable() || this.m_slot.linked())
+            TerminateInvariant();
+        UiPaintLease lease(this.m_slot);
+        lease.invoke(context);
     }
-
-
-private:
-    void detach()noexcept{
-        if(m_active){
-            m_active->owner = nullptr;
-            m_active = nullptr;
-        }
-    }
-
-    void moveFrom(UiPaintSlot& other)noexcept{
-        m_callback = Move(other.m_callback);
-        m_active = other.m_active;
-        if(m_active)
-            m_active->owner = this;
-        other.m_active = nullptr;
-    }
-
-
-private:
-    Callback m_callback;
-    Lease* m_active = nullptr;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

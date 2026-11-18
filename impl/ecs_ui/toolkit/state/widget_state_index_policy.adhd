@@ -46,6 +46,23 @@ class WidgetStateIndexPolicy{
         return true;
     }
 
+    public b8 refreshIndex(in Span<WidgetState> entries, mut HashMap<u64, usize> indexById, mut b8 dirty)const{
+        if(!dirty)
+            return true;
+        if(!this.rebuildIndex(entries, indexById))
+            return false;
+        dirty = false;
+        return true;
+    }
+
+    public Expected<usize> lookup(in Span<WidgetState> entries, in WidgetId id, in HashMap<u64, usize> indexById)const{
+        if(!indexById.contains(id.value))
+            return MakeUnexpected(Failure());
+        const usize index = indexById.at(id.value);
+        [essential] assert(index < entries.size() && entries[index].id == id);
+        return index;
+    }
+
     public Expected<usize> findIndex(
         in Span<WidgetState> entries,
         in WidgetId id,
@@ -53,19 +70,10 @@ class WidgetStateIndexPolicy{
         mut b8 inOutIndexDirty,
         mut b8 outInvariantFailed
     )const{
-        outInvariantFailed = false;
-        if(inOutIndexDirty){
-            if(!this.rebuildIndex(entries, inOutIndex)){
-                outInvariantFailed = true;
-                return MakeUnexpected(Failure());
-            }
-            inOutIndexDirty = false;
-        }
-        if(!inOutIndex.contains(id.value))
+        outInvariantFailed = !this.refreshIndex(entries, inOutIndex, inOutIndexDirty);
+        if(outInvariantFailed)
             return MakeUnexpected(Failure());
-        const usize index = inOutIndex[id.value];
-        assert(index < entries.size() && entries[index].id == id);
-        return index;
+        return this.lookup(entries, id, inOutIndex);
     }
 
     public void eraseAt(

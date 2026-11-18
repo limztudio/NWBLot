@@ -2,17 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/rt_shadow_state.adhd>
 #include <impl/global.adhd>
 #include <impl/ecs_render/shader/shader_system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RtShadowState"), cpp_header("<impl/ecs_render/shadow/rt_shadow_state.adhd.h>")]
-extern class RtShadowState;
-[cpp_name("::NWB::Impl::RtSoftShadowState"), cpp_header("<impl/ecs_render/shadow/rt_shadow_state.adhd.h>")]
-extern class RtSoftShadowState;
 
 
 [modular]

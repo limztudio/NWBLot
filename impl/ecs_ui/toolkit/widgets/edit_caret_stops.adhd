@@ -224,6 +224,7 @@ b8 AdoptEditCaretGeometryInto(
     in Span<EditCaretMapping> mapping,
     in usize committedBytes,
     in EditTextMode mode,
+    in Span<usize> requiredCarets,
     mut Vector<usize> outBoundaries,
     mut Vector<EditBoxCaretStop> outStops,
     mut Vector<EditCaretLine> outLines
@@ -237,6 +238,10 @@ b8 AdoptEditCaretGeometryInto(
     Vector<EditCaretLine> lines;
     if(!BuildEditCaretStopsAndLinesInto(expectedText, textLines, clusters, boundaries, committedBytes, mapping, stops, lines))
         return false;
+    for(in usize caret : requiredCarets){
+        if(!ResolveEditCaretRect(expectedText, textLines, clusters, boundaries, caret).has_value())
+            return false;
+    }
     outBoundaries.clear();
     outBoundaries.reserve(boundaries.size());
     for(in usize boundary : boundaries)

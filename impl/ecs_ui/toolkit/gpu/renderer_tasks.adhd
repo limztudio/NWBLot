@@ -1,0 +1,414 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/gpu/frame.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MatchesPreparedGpuSampledCounts(
+    in usize declaredGlyphs,
+    in usize preparedGlyphs,
+    in usize declaredSdfs,
+    in usize preparedSdfs,
+    in usize declaredTextures,
+    in usize preparedTextures
+){
+    return declaredGlyphs == preparedGlyphs && declaredSdfs == preparedSdfs && declaredTextures == preparedTextures;
+}
+
+b8 GpuTextureMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphResourceId id, in TextureHandle expected){
+    auto actual = declarations.borrowTexture(id);
+    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
+}
+
+b8 GpuBufferMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphResourceId id, in BufferHandle expected){
+    auto actual = declarations.borrowBuffer(id);
+    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
+}
+
+b8 GpuPipelineMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphPipelineId id, in GraphicsPipelineHandle expected){
+    auto actual = declarations.borrowGraphicsPipeline(id);
+    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuRasterTask{
+    public GpuFrame frame;
+    public GpuGraphResourceId color;
+    public GpuGraphResourceId skin;
+    public GpuGraphPipelineId pipeline;
+    public GpuGraphResourceId vertices;
+    public GpuGraphResourceId indices;
+    public GpuSampledGraphResources glyphPages;
+    public GpuSampledGraphResources sdfPages;
+    public GpuSampledGraphResources textureImages;
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        requirements.requiresPrimaryGraphicsQueue = false;
+        return requirements;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        return RecordGpuRaster(this, commands, context);
+    }
+    public void accepted(in QueueSubmissionToken token){ this.frame.deref().m_raster = token; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuOutputTask{
+    public GpuFrame frame;
+    public GpuGraphResourceId backBuffer;
+    public GpuGraphResourceId color;
+    public GpuGraphPipelineId graphPipeline;
+    public AcquiredPresentationFrame acquired;
+    public GraphicsPipelineHandle pipeline;
+    public u32 presentationMode = s_ShaderUiPresentationSdr;
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        requirements.requiresPrimaryGraphicsQueue = true;
+        return requirements;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        return RecordGpuOutput(this, commands, context);
+    }
+    public void accepted(in QueueSubmissionToken token){ this.frame.deref().m_finalConsumer = token; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+b8 ReplayCaptured(in GpuTaskRecordContext context, in GpuCommandIrCapture capture, mut CommandList commands){
+    if(capture.recordCount() == 0u)
+        return !commands.commandRecordingFailed();
+    const auto stream = capture.exportOwned();
+    if(!stream.has_value())
+        return false;
+    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacket(stream.value(), context.declarations, context.compiledPlan, context.packet, commands);
+    return replay.valid() && !commands.commandRecordingFailed();
+}
+
+[cpp_unwind]
+b8 CaptureRasterState(
+    in GpuRasterTask payload,
+    in GpuTaskRecordContext context,
+    in GpuCommandIrOwnerAnchor descriptorOwner,
+    in Viewport viewport,
+    in RhiRect scissor,
+    mut GpuDescriptorHeap heap,
+    mut GpuCommandIrCapture capture
+){
+    in GpuFrame frame = payload.frame;
+    GpuCommandIrRasterStateDesc state;
+    state.pipeline = payload.pipeline;
+    state.pipelineOwner = frame.deref().m_resources.deref().m_pipeline;
+    state.colorAttachment = payload.color;
+    state.framebufferOwner = frame.deref().m_target.deref().m_framebuffer;
+    state.viewport = viewport;
+    state.scissor = scissor;
+    state.hasScissor = true;
+    GpuCommandIrRasterVertexOwner vertex;
+    vertex.resource = payload.vertices;
+    vertex.buffer = frame.deref().m_vertices;
+    vertex.slot = s_ShaderUiVertexBufferIndex;
+    state.vertexBuffers.push_back(vertex);
+    state.indexResource = payload.indices;
+    state.indexBuffer = frame.deref().m_indices;
+    state.indexFormat = Format::R32_UINT;
+    if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
+        return false;
+    return capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, payload.pipeline, frame.deref().m_resources.deref().m_pipeline, descriptorOwner);
+}
+
+[cpp_unwind]
+b8 CaptureOutputState(
+    in GpuOutputTask payload,
+    in GpuTaskRecordContext context,
+    in GpuCommandIrOwnerAnchor descriptorOwner,
+    in Viewport viewport,
+    mut GpuDescriptorHeap heap,
+    mut GpuCommandIrCapture capture
+){
+    GpuCommandIrRasterStateDesc state;
+    state.pipeline = payload.graphPipeline;
+    state.pipelineOwner = payload.pipeline;
+    state.colorAttachment = payload.backBuffer;
+    state.framebufferOwner = payload.acquired.framebuffer;
+    state.viewport = viewport;
+    if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
+        return false;
+    return capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, payload.graphPipeline, payload.pipeline, descriptorOwner);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext context, mut CommandList commands){
+    // A task-local stream must not silently disappear from a caller's separate packet capture.
+    if(context.hasCommandIrCapture())
+        return false;
+    in GpuFrame frame = payload.frame;
+    if(!frame.valid() || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid() || !payload.pipeline.valid())
+        return false;
+    if(!GpuPipelineMatches(context.declarations, payload.pipeline, frame.deref().m_resources.deref().m_pipeline))
+        return false;
+    if(frame.deref().m_snapshot.vertices().empty())
+        return frame.deref().m_snapshot.commands().empty() && !commands.commandRecordingFailed();
+    if(
+        !frame.deref().m_vertices.valid() || !frame.deref().m_indices.valid() || !payload.vertices.valid() || !payload.indices.valid()
+        || !GpuBufferMatches(context.declarations, payload.vertices, frame.deref().m_vertices)
+        || !GpuBufferMatches(context.declarations, payload.indices, frame.deref().m_indices)
+    )
+        return false;
+    GpuCommandIrCapture capture(frame.deref().m_resources.deref().graphics().allocator());
+    if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
+        return false;
+    mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();
+    const auto descriptorOwner = RetainGpuCommandIrOwner<GpuFrame>(capture, frame);
+    if(!descriptorOwner.has_value())
+        return false;
+    in TextureDesc target = frame.deref().m_target.deref().m_color.deref().getDescription();
+    const GpuRasterGeometry geometry(frame.deref().m_snapshot.displayMetrics(), target.width, target.height);
+    const auto initialPush = TryInitializeGpuPaintPushConstants(geometry, frame.deref().m_resources.deref().m_samplerDescriptor.slot());
+    if(!initialPush.has_value())
+        return false;
+    GpuPaintPushConstants push = initialPush.value();
+    const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
+    RhiRect boundScissor = RhiRect();
+    b8 hasRasterState = false;
+    b8 hasDraw = false;
+    for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
+        const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
+        if(!resolvedScissor.has_value() || draw.indexCount == 0u)
+            continue;
+        in RhiRect scissor = resolvedScissor.value();
+        if(!hasRasterState || scissor != boundScissor){
+            if(!CaptureRasterState(payload, context, descriptorOwner.value(), viewport, scissor, heap, capture))
+                return false;
+            boundScissor = scissor;
+            hasRasterState = true;
+        }
+        if(!ResolvePaintPushConstants(frame.deref(), draw, push))
+            return false;
+        if(!capture.capturePushValue(context.task, context.packet, context.queue, push))
+            return false;
+        DrawArguments arguments;
+        arguments.setVertexCount(draw.indexCount).setStartIndexLocation(draw.firstIndex);
+        if(!capture.captureDraw(context.task, context.packet, context.queue, arguments, true))
+            return false;
+        hasDraw = true;
+    }
+    if(hasDraw && !capture.captureEndRenderPass(context.task, context.packet, context.queue))
+        return false;
+    if(!ReplayCaptured(context, capture, commands))
+        return false;
+    if(hasDraw){
+        [essential]
+        info("UiGpuRenderer: raster command IR replay active");
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 RecordOutputCommandIr(in GpuOutputTask payload, in GpuTaskRecordContext context, mut CommandList commands){
+    if(context.hasCommandIrCapture())
+        return false;
+    in GpuFrame frame = payload.frame;
+    if(!frame.valid() || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid() || !payload.graphPipeline.valid() || !GpuPipelineMatches(context.declarations, payload.graphPipeline, payload.pipeline))
+        return false;
+    GpuCommandIrCapture capture(frame.deref().m_resources.deref().graphics().allocator());
+    if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
+        return false;
+    mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();
+    const auto descriptorOwner = RetainGpuCommandIrOwner<GpuFrame>(capture, frame);
+    if(!descriptorOwner.has_value())
+        return false;
+    in TextureDesc target = payload.acquired.backBuffer.texture.deref().getDescription();
+    const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
+    if(!CaptureOutputState(payload, context, descriptorOwner.value(), viewport, heap, capture))
+        return false;
+    const GpuOutputPushConstants push = MakeGpuOutputPushConstants(frame.deref().m_target.deref().m_sampledImage.slot(), frame.deref().m_resources.deref().m_samplerDescriptor.slot(), payload.presentationMode);
+    if(!capture.capturePushValue(context.task, context.packet, context.queue, push))
+        return false;
+    DrawArguments draw;
+    draw.setVertexCount(s_GpuFullscreenTriangleVertexCount);
+    if(!capture.captureDraw(context.task, context.packet, context.queue, draw, false) || !capture.captureEndRenderPass(context.task, context.packet, context.queue))
+        return false;
+    return ReplayCaptured(context, capture, commands);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Optional<RhiRect> ResolveGpuScissorRect(in GpuRasterGeometry geometry, in DrawCommand draw){
+    const auto bounds = TryComputeGpuScissorBounds(geometry, draw);
+    if(!bounds.has_value())
+        return Optional<RhiRect>();
+    return Optional<RhiRect>(RhiRect(bounds.value().x, bounds.value().y, bounds.value().z, bounds.value().w));
+}
+
+b8 ResolvePaintPushConstants(in GpuFrameData frame, in DrawCommand draw, mut GpuPaintPushConstants push){
+    u32 textureSlot = s_ShaderUiInvalidHeapSlot;
+    u32 sdfSpreadPixels = 0u;
+    u32 sdfDistanceEncoding = 0u;
+    if(draw.material == PaintMaterial::Skin)
+        textureSlot = frame.m_skin.deref().m_texture.sampledImageHeapHandle.slot();
+    else if(draw.material == PaintMaterial::Glyph){
+        if(draw.glyphPageIndex >= frame.m_glyphPages.size())
+            return false;
+        textureSlot = frame.m_glyphPages[draw.glyphPageIndex].deref().m_sampledImage.slot();
+    }
+    else if(draw.material == PaintMaterial::SdfGlyph){
+        if(draw.sdfPageIndex >= frame.m_sdfPages.size())
+            return false;
+        in auto page = frame.m_sdfPages[draw.sdfPageIndex];
+        textureSlot = page.deref().m_sampledImage.slot();
+        sdfSpreadPixels = page.deref().m_page.deref().binding().spreadPixels;
+        sdfDistanceEncoding = page.deref().m_page.deref().binding().distanceEncoding;
+    }
+    else if(draw.material == PaintMaterial::Image){
+        if(draw.textureImageIndex >= frame.m_textureImages.size())
+            return false;
+        textureSlot = frame.m_textureImages[draw.textureImageIndex].deref().m_texture.sampledImageHeapHandle.slot();
+    }
+    AssignGpuPaintMaterialPushConstants(draw.material, textureSlot, draw.sdfChannel, sdfSpreadPixels, sdfDistanceEncoding, push);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTaskRecordContext context){
+    in GpuFrame frame = payload.frame;
+    if(
+        !frame.valid() || !frame.deref().m_prepared || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid()
+        || !GpuTextureMatches(context.declarations, payload.color, frame.deref().m_target.deref().m_color)
+        || !GpuTextureMatches(context.declarations, payload.skin, frame.deref().m_skin.deref().m_texture.texture)
+    )
+        return false;
+    if(!MatchesPreparedGpuSampledCounts(
+        payload.glyphPages.size(),
+        frame.deref().m_glyphPages.size(),
+        payload.sdfPages.size(),
+        frame.deref().m_sdfPages.size(),
+        payload.textureImages.size(),
+        frame.deref().m_textureImages.size()
+    ))
+        return false;
+    for(usize index = 0u; index < payload.glyphPages.size(); ++index){
+        if(!GpuTextureMatches(context.declarations, payload.glyphPages[index], frame.deref().m_glyphPages[index].deref().m_texture))
+            return false;
+    }
+    for(usize index = 0u; index < payload.sdfPages.size(); ++index){
+        if(!GpuTextureMatches(context.declarations, payload.sdfPages[index], frame.deref().m_sdfPages[index].deref().m_texture))
+            return false;
+    }
+    for(usize index = 0u; index < payload.textureImages.size(); ++index){
+        if(!GpuTextureMatches(context.declarations, payload.textureImages[index], frame.deref().m_textureImages[index].deref().m_texture.texture))
+            return false;
+    }
+    if(frame.deref().m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
+        return RecordRasterCommandIr(payload, context, commands);
+    in TextureDesc target = frame.deref().m_target.deref().m_color.deref().getDescription();
+    const GpuRasterGeometry geometry(frame.deref().m_snapshot.displayMetrics(), target.width, target.height);
+    const auto initialPush = TryInitializeGpuPaintPushConstants(geometry, frame.deref().m_resources.deref().m_samplerDescriptor.slot());
+    if(!initialPush.has_value())
+        return false;
+    GpuPaintPushConstants push = initialPush.value();
+    mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();
+    const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
+    RhiRect boundScissor = RhiRect();
+    b8 heapBound = false;
+    for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
+        const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
+        if(!resolvedScissor.has_value())
+            continue;
+        in RhiRect scissor = resolvedScissor.value();
+        if(!heapBound || scissor != boundScissor){
+            ViewportState view;
+            view.addViewport(viewport).addScissorRect(scissor);
+            VertexBufferBinding vertices;
+            vertices.setBuffer(frame.deref().m_vertices.deref()).setSlot(s_ShaderUiVertexBufferIndex);
+            IndexBufferBinding indices;
+            indices.setBuffer(frame.deref().m_indices.deref()).setFormat(Format::R32_UINT);
+            GraphicsState state;
+            state
+                .setPipeline(frame.deref().m_resources.deref().m_pipeline.deref())
+                .setFramebuffer(frame.deref().m_target.deref().m_framebuffer.deref())
+                .setViewport(view)
+                .addVertexBuffer(vertices)
+                .setIndexBuffer(indices)
+            ;
+            commands.setGraphicsState(state);
+            if(!heapBound){
+                heap.bindGraphics(commands, frame.deref().m_resources.deref().m_pipeline.deref());
+                heapBound = true;
+            }
+            boundScissor = scissor;
+        }
+        if(!ResolvePaintPushConstants(frame.deref(), draw, push))
+            return false;
+        commands.setPushConstants(push);
+        DrawArguments arguments;
+        arguments.setVertexCount(draw.indexCount).setStartIndexLocation(draw.firstIndex);
+        commands.drawIndexed(arguments);
+    }
+    commands.endRenderPass();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+b8 RecordGpuOutput(in GpuOutputTask payload, mut CommandList commands, in GpuTaskRecordContext context){
+    in GpuFrame frame = payload.frame;
+    if(
+        !frame.valid() || !payload.pipeline.valid() || !payload.acquired.valid()
+        || !GpuTextureMatches(context.declarations, payload.backBuffer, payload.acquired.backBuffer.texture)
+        || !GpuTextureMatches(context.declarations, payload.color, frame.deref().m_target.deref().m_color)
+    )
+        return false;
+    if(frame.deref().m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
+        return RecordOutputCommandIr(payload, context, commands);
+    in TextureDesc target = payload.acquired.backBuffer.texture.deref().getDescription();
+    ViewportState viewport;
+    viewport.addViewport(Viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f));
+    GraphicsState state;
+    state.setPipeline(payload.pipeline.deref()).setFramebuffer(payload.acquired.framebuffer.deref()).setViewport(viewport);
+    commands.setGraphicsState(state);
+    mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();
+    heap.bindGraphics(commands, payload.pipeline.deref());
+    const GpuOutputPushConstants push = MakeGpuOutputPushConstants(frame.deref().m_target.deref().m_sampledImage.slot(), frame.deref().m_resources.deref().m_samplerDescriptor.slot(), payload.presentationMode);
+    commands.setPushConstants(push);
+    DrawArguments draw;
+    draw.setVertexCount(s_GpuFullscreenTriangleVertexCount);
+    commands.draw(draw);
+    commands.endRenderPass();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

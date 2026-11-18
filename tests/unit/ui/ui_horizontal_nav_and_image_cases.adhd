@@ -46,7 +46,7 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
 [[nodiscard]] FOUNDATION_INLINE b8 ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
-    return GpuImageResources::ValidateGlyphPages(snapshot) && GpuImageResources::ValidateSdfPages(snapshot) && GpuImageResources::ValidateTextureImages(snapshot);
+    return ValidateGpuGlyphPages(snapshot) && ValidateGpuSdfPages(snapshot) && ValidateGpuTextureImages(snapshot);
 }
 
 FOUNDATION_INLINE void SetCommandTextureImageIndex(DrawSnapshot& snapshot, const usize commandIndex, const u32 imageIndex)noexcept{
@@ -58,7 +58,7 @@ FOUNDATION_INLINE void ResetFirstSnapshotTextureImage(DrawSnapshot& snapshot)noe
 }
 
 FOUNDATION_INLINE void AppendSnapshotTextureImage(DrawSnapshot& snapshot, const SharedImageSource& image){
-    const_cast<Impl::Ui::PaintVector<SharedImageSource>&>(snapshot.textureImages()).push_back(image);
+    const_cast<Vector<SharedImageSource, ::ArenaBase>&>(snapshot.textureImages()).push_back(image);
 }
 
 FOUNDATION_INLINE void SetSnapshotCommandRaw(DrawSnapshot& snapshot, const usize commandIndex, const DrawCommand& command)noexcept{
@@ -100,7 +100,7 @@ FOUNDATION_INLINE void SetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noe
         auto additionResult = self.makeImage("tests/ui/overflow_gpu_image", 73u);
         if(!additionResult || !*additionResult)
             return false;
-        const_cast<Impl::Ui::PaintVector<SharedImageSource>&>(outSnapshot.textureImages()).push_back(Move(*additionResult));
+        const_cast<Vector<SharedImageSource, ::ArenaBase>&>(outSnapshot.textureImages()).push_back(Move(*additionResult));
     }
     return true;
 }
@@ -286,6 +286,7 @@ public:
     ImageLoaderTests()
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
         , m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageLoader))
+        , m_pool(m_arena)
         , m_registry(m_arena)
         , m_source(m_arena)
         , m_assets(m_arena, m_registry, m_source)
@@ -333,6 +334,7 @@ public:
     Tests::CapturingLogger m_logger;
     Core::Common::LoggerRegistrationGuard m_loggerGuard;
     AssetArena m_arena;
+    Core::Alloc::SharedPool m_pool;
     AssetRegistry m_registry;
     MemoryImageBinarySource m_source;
     AssetManager m_assets;
@@ -427,6 +429,7 @@ public:
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
         , m_inputArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceInput))
         , m_sourceArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceOwned))
+        , m_pool(m_sourceArena)
     {}
 
     [[nodiscard]] b8 prepareDefault(Core::Alloc::GlobalArena& arena, Texture& texture)const{
@@ -518,6 +521,7 @@ public:
     Core::Common::LoggerRegistrationGuard m_loggerGuard;
     Core::Alloc::GlobalArena m_inputArena;
     Core::Alloc::GlobalArena m_sourceArena;
+    Core::Alloc::SharedPool m_pool;
 };
 
 static_assert(!IsDefaultConstructible_V<ImageSource>);
@@ -601,13 +605,13 @@ using ::NWB::Tests::UiCases::s_UiInputNameSprite;
 using ::NWB::Tests::UiCases::s_UiInputNameUnknownRegion;
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiGpuValGlyphPages(const DrawSnapshot& snapshot)noexcept{
-    return ::NWB::Impl::Ui::GpuImageResources::ValidateGlyphPages(snapshot);
+    return ::NWB::Impl::Ui::ValidateGpuGlyphPages(snapshot);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiGpuValSdfPages(const DrawSnapshot& snapshot)noexcept{
-    return ::NWB::Impl::Ui::GpuImageResources::ValidateSdfPages(snapshot);
+    return ::NWB::Impl::Ui::ValidateGpuSdfPages(snapshot);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiGpuValTextureImages(const DrawSnapshot& snapshot)noexcept{
-    return ::NWB::Impl::Ui::GpuImageResources::ValidateTextureImages(snapshot);
+    return ::NWB::Impl::Ui::ValidateGpuTextureImages(snapshot);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiGpuValAllImageBindings(const DrawSnapshot& snapshot)noexcept{
     return __hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot);
@@ -1545,7 +1549,7 @@ void VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlace
 
 
 void VerifyImageLoaderTests_RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone(mut ImageLoaderTests self){
-    const Expected<SharedImageSource> imageResult = LoadImageSource(self.m_arena, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> imageResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
     ASSERT_TRUE(imageResult.has_value());
     const SharedImageSource image = imageResult.value();
     ASSERT_TRUE(UiImageHandlePresent(image));
@@ -1556,37 +1560,37 @@ void VerifyImageLoaderTests_RealCodecLoadRetainsExactTextureAfterTemporaryAssetA
 }
 
 void VerifyImageLoaderTests_EmptyReferenceFailsBeforeReadingTheBinarySource(mut ImageLoaderTests self){
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, AssetRef<Texture>()).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, AssetRef<Texture>()).has_value());
     EXPECT_EQ(self.m_source.m_readCount, 0u);
     EXPECT_TRUE(self.sawError("texture asset reference is empty"));
 }
 
 void VerifyImageLoaderTests_MissingPathAndFailedBinaryReadReturnNoSource(mut ImageLoaderTests self){
     const AssetRef<Texture> missing = MakeUiMissingTextureAssetRef();
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, missing).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, missing).has_value());
     EXPECT_EQ(self.m_source.m_readCount, 1u);
     self.m_source.m_available = false;
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
     EXPECT_EQ(self.m_source.m_readCount, 2u);
     EXPECT_TRUE(self.sawError("failed to read binary"));
 }
 
 void VerifyImageLoaderTests_MissingTextureCodecFailsAfterReadingAValidBinary(mut ImageLoaderTests self){
     ASSERT_TRUE(self.unregisterTextureCodec());
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
     EXPECT_EQ(self.m_source.m_readCount, 1u);
     EXPECT_TRUE(self.sawError("failed to deserialize"));
 }
 
 void VerifyImageLoaderTests_RealTextureCodecRejectsWrongMagicTruncationAndTrailingBytes(mut ImageLoaderTests self){
     self.flipFirstBinaryByte();
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
     self.rebuildBinary(3u);
     self.m_source.m_binary.pop_back();
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
     self.rebuildBinary(3u);
     self.m_source.m_binary.push_back(0u);
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
     EXPECT_EQ(self.m_source.m_readCount, 3u);
     EXPECT_TRUE(self.sawError("invalid texture asset format"));
     EXPECT_TRUE(self.sawError("texture payload is truncated"));
@@ -1595,23 +1599,23 @@ void VerifyImageLoaderTests_RealTextureCodecRejectsWrongMagicTruncationAndTraili
 
 void VerifyImageLoaderTests_CodecReturningARealDifferentAssetTypeIsRejectedByTheTypedManager(mut ImageLoaderTests self){
     ASSERT_TRUE(self.registerMisdirectedCodec(true));
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
     EXPECT_EQ(self.m_source.m_readCount, 1u);
     EXPECT_TRUE(self.sawError("is not a texture"));
 }
 
 void VerifyImageLoaderTests_CodecReturningAValidTextureAtAnotherIdentityIsRejected(mut ImageLoaderTests self){
     ASSERT_TRUE(self.registerMisdirectedCodec(false));
-    EXPECT_FALSE(LoadImageSource(self.m_arena, self.m_assets, self.m_identity).has_value());
+    EXPECT_FALSE(LoadImageSource(self.m_pool, self.m_assets, self.m_identity).has_value());
     EXPECT_EQ(self.m_source.m_readCount, 1u);
     EXPECT_TRUE(self.sawError("loaded texture identity does not match"));
 }
 
 void VerifyImageLoaderTests_RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersions(mut ImageLoaderTests self){
-    const Expected<SharedImageSource> firstResult = LoadImageSource(self.m_arena, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> firstResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
     ASSERT_TRUE(firstResult.has_value());
     const SharedImageSource first = firstResult.value();
-    const Expected<SharedImageSource> secondResult = LoadImageSource(self.m_arena, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> secondResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
     ASSERT_TRUE(secondResult.has_value());
     const SharedImageSource second = secondResult.value();
     ASSERT_TRUE(UiImageHandlePresent(first));
@@ -1626,7 +1630,7 @@ void VerifyImageLoaderTests_RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersion
 }
 
 void VerifyImageLoaderTests_FailedReplacementPreservesRetainedSourceAndLaterSuccessPublishesAFreshVersion(mut ImageLoaderTests self){
-    const Expected<SharedImageSource> currentResult = LoadImageSource(self.m_arena, self.m_assets, self.m_identity);
+    const Expected<SharedImageSource> currentResult = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
     ASSERT_TRUE(currentResult.has_value());
     SharedImageSource current = currentResult.value();
     ASSERT_TRUE(UiImageHandlePresent(current));
@@ -1634,7 +1638,7 @@ void VerifyImageLoaderTests_FailedReplacementPreservesRetainedSourceAndLaterSucc
     const u64 oldGeneration = UiReadImageGeneration(retained);
 
     self.m_source.m_binary.pop_back();
-    Expected<SharedImageSource> replacement = LoadImageSource(self.m_arena, self.m_assets, self.m_identity);
+    Expected<SharedImageSource> replacement = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
     EXPECT_FALSE(replacement.has_value());
     if(replacement.has_value())
         current = replacement.value();
@@ -1643,7 +1647,7 @@ void VerifyImageLoaderTests_FailedReplacementPreservesRetainedSourceAndLaterSucc
     UiImageLoaderExpectPayload(current, 3u);
 
     self.rebuildBinary(67u);
-    replacement = LoadImageSource(self.m_arena, self.m_assets, self.m_identity);
+    replacement = LoadImageSource(self.m_pool, self.m_assets, self.m_identity);
     ASSERT_TRUE(replacement.has_value());
     current = replacement.value();
     EXPECT_EQ(UiReadImageIdentity(current), UiReadImageIdentity(retained));
@@ -1664,7 +1668,7 @@ void VerifyUiImageSourceTests_NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds(m
     Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImagePaint);
     ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
     ASSERT_TRUE(texture.validatePayload());
-    const Expected<SharedImageSource> sourceResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> sourceResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(sourceResult.has_value());
     const SharedImageSource source = sourceResult.value();
     ASSERT_TRUE(UiImageHandlePresent(source));
@@ -1689,7 +1693,7 @@ void VerifyUiImageSourceTests_RetainedSourceOutlivesCallerReplacementTextureAndI
         UiImageSourceCallerArena callerArena = UiImageSourceCallerArena(s_UiCaseTestsUiImageSourceTemporary);
         Texture texture = Texture(callerArena.arena, s_UiCaseTestsUiImageTemporary);
         ASSERT_TRUE(self.prepareDefault(callerArena.arena, texture));
-        const Expected<SharedImageSource> sourceReplacement = MakeImageSource(self.m_sourceArena, texture);
+        const Expected<SharedImageSource> sourceReplacement = MakeImageSource(self.m_pool, texture);
         ASSERT_TRUE(sourceReplacement.has_value());
         source = sourceReplacement.value();
         ASSERT_TRUE(UiImageHandlePresent(source));
@@ -1717,10 +1721,10 @@ void VerifyUiImageSourceTests_RetainedSourceOutlivesCallerReplacementTextureAndI
 void VerifyUiImageSourceTests_IdenticalLoadsAndSamePathReplacementReceiveFreshGenerations(mut UiImageSourceTests self){
     Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageSharedPath);
     ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
-    const Expected<SharedImageSource> originalResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> originalResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(originalResult.has_value());
     const SharedImageSource original = originalResult.value();
-    const Expected<SharedImageSource> identicalResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> identicalResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(identicalResult.has_value());
     const SharedImageSource identical = identicalResult.value();
     ASSERT_TRUE(UiImageHandlePresent(original));
@@ -1731,7 +1735,7 @@ void VerifyUiImageSourceTests_IdenticalLoadsAndSamePathReplacementReceiveFreshGe
     UiImageSourceTextureDescription changed = UiImageSourceTextureDescription();
     changed.seed = 149u;
     ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, changed));
-    const Expected<SharedImageSource> replacementResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> replacementResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(replacementResult.has_value());
     const SharedImageSource replacement = replacementResult.value();
     ASSERT_TRUE(UiImageHandlePresent(replacement));
@@ -1746,7 +1750,7 @@ void VerifyUiImageSourceTests_IdenticalLoadsAndSamePathReplacementReceiveFreshGe
 void VerifyUiImageSourceTests_CopiedSharedHandleRetainsTheSameImmutableVersionAfterOriginalRelease(mut UiImageSourceTests self){
     Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageRetained);
     ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
-    const Expected<SharedImageSource> originalResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> originalResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(originalResult.has_value());
     SharedImageSource original = originalResult.value();
     ASSERT_TRUE(UiImageHandlePresent(original));
@@ -1767,7 +1771,7 @@ void VerifyUiImageSourceTests_SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStre
     Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageHdr);
     ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, description));
     ASSERT_TRUE(texture.validatePayload());
-    const Expected<SharedImageSource> sourceResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> sourceResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(sourceResult.has_value());
     ASSERT_TRUE(UiImageHandlePresent(sourceResult.value()));
     self.expectSeparateHdrAlphaStream(texture, sourceResult.value());
@@ -1791,20 +1795,20 @@ void VerifyUiImageSourceTests_RejectsValidCubeAndVolumeAssetsRatherThanFlattenin
         Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageSpatial);
         ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, description));
         ASSERT_TRUE(texture.validatePayload());
-        EXPECT_FALSE(MakeImageSource(self.m_sourceArena, texture).has_value());
+        EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
 }
 
 void VerifyUiImageSourceTests_RejectsMissingAssetIdentityAndEmptyTexturePayload(mut UiImageSourceTests self){
     Texture unnamed = Texture(self.m_inputArena);
     ASSERT_TRUE(self.prepareDefault(self.m_inputArena, unnamed));
-    EXPECT_FALSE(MakeImageSource(self.m_sourceArena, unnamed).has_value());
+    EXPECT_FALSE(MakeImageSource(self.m_pool, unnamed).has_value());
     Texture empty = Texture(self.m_inputArena, s_UiFixtureNameTestsUiImageEmpty);
-    EXPECT_FALSE(MakeImageSource(self.m_sourceArena, empty).has_value());
+    EXPECT_FALSE(MakeImageSource(self.m_pool, empty).has_value());
     Texture texture = Texture(self.m_inputArena, s_UiFixtureNameTestsUiImageNoBytes);
     ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
     self.installEmptyBytesKeepMips(texture);
-    EXPECT_FALSE(MakeImageSource(self.m_sourceArena, texture).has_value());
+    EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
 }
 
 void VerifyUiImageSourceTests_RejectsInvalidShapeAndUnknownMetadataWithoutMintingUsableVersions(mut UiImageSourceTests self){
@@ -1813,7 +1817,7 @@ void VerifyUiImageSourceTests_RejectsInvalidShapeAndUnknownMetadataWithoutMintin
         Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageInvalidMetadata);
         ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
         self.installShapeVariant(texture, variant);
-        EXPECT_FALSE(MakeImageSource(self.m_sourceArena, texture).has_value());
+        EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
 }
 
@@ -1823,7 +1827,7 @@ void VerifyUiImageSourceTests_RejectsIncompleteDiscontiguousOrMalformedMipMetada
         Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageInvalidMips);
         ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
         self.installMipVariant(texture, variant);
-        EXPECT_FALSE(MakeImageSource(self.m_sourceArena, texture).has_value());
+        EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
 }
 
@@ -1833,20 +1837,20 @@ void VerifyUiImageSourceTests_RejectsPayloadLengthAndAlphaTransportMismatches(mu
         Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageInvalidTransport);
         ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
         self.installTransportVariant(texture, variant);
-        EXPECT_FALSE(MakeImageSource(self.m_sourceArena, texture).has_value());
+        EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     }
 }
 
 void VerifyUiImageSourceTests_RejectedSamePathReplacementPreservesPreviouslyAcceptedOwnedVersion(mut UiImageSourceTests self){
     Texture texture = Texture(self.m_inputArena, s_UiCaseTestsUiImageReplace);
     ASSERT_TRUE(self.prepareDefault(self.m_inputArena, texture));
-    const Expected<SharedImageSource> acceptedResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> acceptedResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(acceptedResult.has_value());
     const SharedImageSource accepted = acceptedResult.value();
     ASSERT_TRUE(UiImageHandlePresent(accepted));
     const u64 generation = UiReadImageGeneration(accepted);
     self.installTransportVariant(texture, 0u);
-    EXPECT_FALSE(MakeImageSource(self.m_sourceArena, texture).has_value());
+    EXPECT_FALSE(MakeImageSource(self.m_pool, texture).has_value());
     EXPECT_EQ(UiReadImageGeneration(accepted), generation);
     const auto acceptedIdentity = UiReadImageIdentity(accepted);
     EXPECT_EQ(acceptedIdentity.name(), texture.virtualPath());
@@ -1855,7 +1859,7 @@ void VerifyUiImageSourceTests_RejectedSamePathReplacementPreservesPreviouslyAcce
     UiImageSourceTextureDescription replacement = UiImageSourceTextureDescription();
     replacement.seed = 73u;
     ASSERT_TRUE(self.prepareCustom(self.m_inputArena, texture, replacement));
-    const Expected<SharedImageSource> nextResult = MakeImageSource(self.m_sourceArena, texture);
+    const Expected<SharedImageSource> nextResult = MakeImageSource(self.m_pool, texture);
     ASSERT_TRUE(nextResult.has_value());
     const SharedImageSource next = nextResult.value();
     ASSERT_TRUE(UiImageHandlePresent(next));

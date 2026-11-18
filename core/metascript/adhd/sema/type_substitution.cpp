@@ -122,6 +122,10 @@ TypeRef* TypeSubstitution::SubstituteAliasType(const TypeRef& origType, const Sp
     cloned->span = method->span;
     cloned->isOperator = method->isOperator;
     cloned->isConst = method->isConst;
+    cloned->allowsCppUnwind = method->allowsCppUnwind;
+    cloned->exportsExplicitBool = method->exportsExplicitBool;
+    cloned->exportsTakingAssignment = method->exportsTakingAssignment;
+    cloned->exportsRvalueOverload = method->exportsRvalueOverload;
     return cloned;
 }
 

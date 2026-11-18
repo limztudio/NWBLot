@@ -2,66 +2,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const b8 s_ModelCookEntryLogBuildFailure = true;
+#include <impl/assets_model/cook.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 ShouldCollectOptionalModelDependency(in b8 hasDependency, in Name dependencyName){
     return hasDependency && dependencyName != s_NameNone;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_model/cook.adhd.h>
-
-#include <core/assets/cook_dependency_registry.h>
-#include <core/assets/cook_entry_registry.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_model_volume_entry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto modelEntry = ParseModelCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena);
-    if(!modelEntry)
+b8 ExtractModelDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    const Expected<ModelCookEntry> modelEntry = ParseModelCookMetadata(context.virtualPath, context.nwbFilePath, context.asset);
+    if(!modelEntry.has_value())
         return false;
 
-    for(const ModelSkeletonObject& skeletonObject : modelEntry->skeletonObjects){
+    for(in ModelSkeletonObject skeletonObject : modelEntry.value().skeletonObjects){
         if(!collector.addAssetDependency(skeletonObject.skeleton.name(), Skeleton::AssetTypeName()))
             return false;
     }
-    for(const ModelStaticMeshObject& staticMeshObject : modelEntry->staticMeshObjects){
+    for(in ModelStaticMeshObject staticMeshObject : modelEntry.value().staticMeshObjects){
         if(!collector.addAssetDependency(staticMeshObject.mesh.name(), Mesh::AssetTypeName()))
             return false;
         if(ShouldCollectOptionalModelDependency(staticMeshObject.material.valid(), staticMeshObject.material.name()) && !collector.addAssetDependency(staticMeshObject.material.name(), Material::AssetTypeName()))
             return false;
     }
-    for(const ModelSkinnedMeshObject& skinnedMeshObject : modelEntry->skinnedMeshObjects){
+    for(in ModelSkinnedMeshObject skinnedMeshObject : modelEntry.value().skinnedMeshObjects){
         if(!collector.addAssetDependency(skinnedMeshObject.skin.name(), Skin::AssetTypeName()))
             return false;
         if(ShouldCollectOptionalModelDependency(skinnedMeshObject.material.valid(), skinnedMeshObject.material.name()) && !collector.addAssetDependency(skinnedMeshObject.material.name(), Material::AssetTypeName()))
@@ -70,55 +36,20 @@ static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext
     return true;
 }
 
-static b8 RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(
-        FOUNDATION_TEXT("model"),
-        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return ParseModelCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-        },
-        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-            return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-        },
-        &BuildModelAsset,
-        s_ModelCookEntryLogBuildFailure,
-        registry
-    );
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cook_entry("model", s_ModelMetaDiagnosticPrefix, ParseModelCookMetadata, document_and_value, log_failure)]
+Expected<Model> CookModelVolumeEntry(in ModelCookEntry entry){
+    return BuildModelAsset(entry);
 }
 
-static b8 RegisterModelCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(Model::AssetTypeName(), &ExtractModelDependencies);
+[cook_registrar]
+b8 RegisterModelCookDependency(mut CookDependencyRegistry registry){
+    return registry.registerType(Model::AssetTypeName(), ExtractModelDependencies);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_ModelCookEntryRegistrar, RegisterModelCookEntry);
-NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_ModelCookDependencyRegistrar, RegisterModelCookDependency);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

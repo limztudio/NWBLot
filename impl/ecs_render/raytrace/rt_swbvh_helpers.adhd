@@ -2,87 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/raytrace/rt_private.adhd>
+#include <impl/ecs_render/optics/coincident_volumes.adhd>
+#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/shadow/prepared_shadow_material_context.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/optics/coincident_volumes.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/shadow/prepared_shadow_material_context.adhd.h>
-
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-
-#include <global/algorithm.h>
-#include <global/hash_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RayTracingSoftwareBvhDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MeshBufferSlotLookup = HashMap<NotNull<Core::Buffer*>, u32, Core::Alloc::ScratchArena, Hasher<NotNull<Core::Buffer*>>, EqualTo<NotNull<Core::Buffer*>>>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ::NWB::Impl::HasPreparedShadowMaterialContextBuffers;
-using ::NWB::Impl::HasPreparedSceneBvhBuffers;
-
-template<typename ArenaT>
-FOUNDATION_INLINE void AppendLightSpaceSceneBuffers(
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources,
-    const b8 includeCsgBuffers,
-    Vector<Core::BufferHandle, ArenaT>& outBuffers
-){
-    outBuffers.push_back(meshResources.positionBuffer);
-    outBuffers.push_back(meshResources.triangleIndexBuffer);
-    outBuffers.push_back(meshResources.attributeBuffer);
-    if(meshResources.meshletCount != 0u){
-        outBuffers.push_back(meshResources.meshletDescBuffer);
-        outBuffers.push_back(meshResources.meshletLocalBoundsBuffer);
-    }
-    if(includeCsgBuffers){
-        if(meshResources.runtimeLocalBoundsBuffer)
-            outBuffers.push_back(meshResources.runtimeLocalBoundsBuffer);
-        if(meshResources.swBvhNodeBuffer)
-            outBuffers.push_back(meshResources.swBvhNodeBuffer);
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+type MeshBufferSlotLookup = HashMap<usize, u32>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,93 +9,115 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/task/gpu/task_desc.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] constexpr Core::GpuTaskCommandRequirements SharedComputeEmulationCommandRequirements(const b8 generatePhase)noexcept{
-    return { generatePhase ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+// These buffers return to Common at packet close. The first consumer owns the transition to its read state.
+[cpp_unwind]
+b8 AppendImmutableBufferUpload(mut GpuTaskGraph graph, in GpuUploadBlobId blob, in GpuGraphResourceId destination, in Name identity, in StringView label, mut GpuTaskId dependency, in b8 mergeWithPrevious){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = mergeWithPrevious;
+    GpuTaskDesc task;
+    task.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
+    task.setDependency(dependency);
+    GpuUploadBufferTaskDesc upload;
+    upload.source = blob;
+    upload.destination = destination;
+    upload.finalState = ResourceStates::Common;
+    const auto result = graph.addUploadBufferTask(task, upload);
+    if(!result.has_value()){
+        dependency = GpuTaskId();
+        return false;
+    }
+    dependency = result.value();
+    return true;
 }
 
-template<typename Payload>
-struct SharedComputeEmulationPhaseTaskCommandRequirementsBase{
-public:
-    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
-        return SharedComputeEmulationCommandRequirements(payload.phase == SharedComputeEmulationPhase::Generate);
-    }
-};
+[cpp_unwind]
+b8 AppendImmutableBufferUpload(mut GpuTaskGraph graph, in GpuUploadBlobId blob, in GpuGraphResourceId destination, in Name identity, in StringView label, mut GpuTaskId dependency){
+    return AppendImmutableBufferUpload(graph, blob, destination, identity, label, dependency, true);
+}
 
-#define NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES(phaseIdPrefix, phaseLabelPrefix) \
-    const Array<Name, 10u> sharedPhaseIdentities = { \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_a"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_a"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_b"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_b"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_c"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_c"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_d"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_d"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_e"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_e"), \
-    }; \
-    const Array<AStringView, 10u> sharedPhaseMarkers = { \
-        phaseLabelPrefix " Shared Compute Emulation Generate A", \
-        phaseLabelPrefix " Shared Compute Emulation Raster A", \
-        phaseLabelPrefix " Shared Compute Emulation Generate B", \
-        phaseLabelPrefix " Shared Compute Emulation Raster B", \
-        phaseLabelPrefix " Shared Compute Emulation Generate C", \
-        phaseLabelPrefix " Shared Compute Emulation Raster C", \
-        phaseLabelPrefix " Shared Compute Emulation Generate D", \
-        phaseLabelPrefix " Shared Compute Emulation Raster D", \
-        phaseLabelPrefix " Shared Compute Emulation Generate E", \
-        phaseLabelPrefix " Shared Compute Emulation Raster E", \
-    }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+GpuTaskCommandRequirements SharedComputeEmulationCommandRequirements(in b8 generatePhase){
+    GpuTaskCommandRequirements requirements;
+    if(generatePhase)
+        requirements.requiredCapabilities = GpuQueueCapability::Compute;
+    else
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+    return requirements;
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class SharedComputeEmulationPhaseTable{
+    public Array<Name, s_SharedComputeEmulationMaximumPhaseCount> identities;
+    public Array<StringView, s_SharedComputeEmulationMaximumPhaseCount> markers;
+
+    public void set(in usize index, in Name identity, in StringView marker){
+        this.identities[index] = identity;
+        this.markers[index] = marker;
+    }
+}
+
+
+SharedComputeEmulationPhaseTable OpaqueSharedComputeEmulationPhases(){
+    SharedComputeEmulationPhaseTable table;
+    table.set(0u, Name("render.graphics_prefix.opaque.shared_compute_emulation_generate_a"), "Opaque Shared Compute Emulation Generate A");
+    table.set(1u, Name("render.graphics_prefix.opaque.shared_compute_emulation_raster_a"), "Opaque Shared Compute Emulation Raster A");
+    table.set(2u, Name("render.graphics_prefix.opaque.shared_compute_emulation_generate_b"), "Opaque Shared Compute Emulation Generate B");
+    table.set(3u, Name("render.graphics_prefix.opaque.shared_compute_emulation_raster_b"), "Opaque Shared Compute Emulation Raster B");
+    table.set(4u, Name("render.graphics_prefix.opaque.shared_compute_emulation_generate_c"), "Opaque Shared Compute Emulation Generate C");
+    table.set(5u, Name("render.graphics_prefix.opaque.shared_compute_emulation_raster_c"), "Opaque Shared Compute Emulation Raster C");
+    table.set(6u, Name("render.graphics_prefix.opaque.shared_compute_emulation_generate_d"), "Opaque Shared Compute Emulation Generate D");
+    table.set(7u, Name("render.graphics_prefix.opaque.shared_compute_emulation_raster_d"), "Opaque Shared Compute Emulation Raster D");
+    table.set(8u, Name("render.graphics_prefix.opaque.shared_compute_emulation_generate_e"), "Opaque Shared Compute Emulation Generate E");
+    table.set(9u, Name("render.graphics_prefix.opaque.shared_compute_emulation_raster_e"), "Opaque Shared Compute Emulation Raster E");
+    return table;
+}
+
+SharedComputeEmulationPhaseTable AvboitOccupancySharedComputeEmulationPhases(){
+    SharedComputeEmulationPhaseTable table;
+    table.set(0u, Name("render.avboit.occupancy.shared_compute_emulation_generate_a"), "AVBOIT Occupancy Shared Compute Emulation Generate A");
+    table.set(1u, Name("render.avboit.occupancy.shared_compute_emulation_raster_a"), "AVBOIT Occupancy Shared Compute Emulation Raster A");
+    table.set(2u, Name("render.avboit.occupancy.shared_compute_emulation_generate_b"), "AVBOIT Occupancy Shared Compute Emulation Generate B");
+    table.set(3u, Name("render.avboit.occupancy.shared_compute_emulation_raster_b"), "AVBOIT Occupancy Shared Compute Emulation Raster B");
+    table.set(4u, Name("render.avboit.occupancy.shared_compute_emulation_generate_c"), "AVBOIT Occupancy Shared Compute Emulation Generate C");
+    table.set(5u, Name("render.avboit.occupancy.shared_compute_emulation_raster_c"), "AVBOIT Occupancy Shared Compute Emulation Raster C");
+    table.set(6u, Name("render.avboit.occupancy.shared_compute_emulation_generate_d"), "AVBOIT Occupancy Shared Compute Emulation Generate D");
+    table.set(7u, Name("render.avboit.occupancy.shared_compute_emulation_raster_d"), "AVBOIT Occupancy Shared Compute Emulation Raster D");
+    table.set(8u, Name("render.avboit.occupancy.shared_compute_emulation_generate_e"), "AVBOIT Occupancy Shared Compute Emulation Generate E");
+    table.set(9u, Name("render.avboit.occupancy.shared_compute_emulation_raster_e"), "AVBOIT Occupancy Shared Compute Emulation Raster E");
+    return table;
+}
+
+SharedComputeEmulationPhaseTable AvboitExtinctionSharedComputeEmulationPhases(){
+    SharedComputeEmulationPhaseTable table;
+    table.set(0u, Name("render.avboit.extinction.shared_compute_emulation_generate_a"), "AVBOIT Extinction Shared Compute Emulation Generate A");
+    table.set(1u, Name("render.avboit.extinction.shared_compute_emulation_raster_a"), "AVBOIT Extinction Shared Compute Emulation Raster A");
+    table.set(2u, Name("render.avboit.extinction.shared_compute_emulation_generate_b"), "AVBOIT Extinction Shared Compute Emulation Generate B");
+    table.set(3u, Name("render.avboit.extinction.shared_compute_emulation_raster_b"), "AVBOIT Extinction Shared Compute Emulation Raster B");
+    table.set(4u, Name("render.avboit.extinction.shared_compute_emulation_generate_c"), "AVBOIT Extinction Shared Compute Emulation Generate C");
+    table.set(5u, Name("render.avboit.extinction.shared_compute_emulation_raster_c"), "AVBOIT Extinction Shared Compute Emulation Raster C");
+    table.set(6u, Name("render.avboit.extinction.shared_compute_emulation_generate_d"), "AVBOIT Extinction Shared Compute Emulation Generate D");
+    table.set(7u, Name("render.avboit.extinction.shared_compute_emulation_raster_d"), "AVBOIT Extinction Shared Compute Emulation Raster D");
+    table.set(8u, Name("render.avboit.extinction.shared_compute_emulation_generate_e"), "AVBOIT Extinction Shared Compute Emulation Generate E");
+    table.set(9u, Name("render.avboit.extinction.shared_compute_emulation_raster_e"), "AVBOIT Extinction Shared Compute Emulation Raster E");
+    return table;
+}
+
+SharedComputeEmulationPhaseTable AvboitAccumulationSharedComputeEmulationPhases(){
+    SharedComputeEmulationPhaseTable table;
+    table.set(0u, Name("render.avboit.accumulation.shared_compute_emulation_generate_a"), "AVBOIT Accumulation Shared Compute Emulation Generate A");
+    table.set(1u, Name("render.avboit.accumulation.shared_compute_emulation_raster_a"), "AVBOIT Accumulation Shared Compute Emulation Raster A");
+    table.set(2u, Name("render.avboit.accumulation.shared_compute_emulation_generate_b"), "AVBOIT Accumulation Shared Compute Emulation Generate B");
+    table.set(3u, Name("render.avboit.accumulation.shared_compute_emulation_raster_b"), "AVBOIT Accumulation Shared Compute Emulation Raster B");
+    table.set(4u, Name("render.avboit.accumulation.shared_compute_emulation_generate_c"), "AVBOIT Accumulation Shared Compute Emulation Generate C");
+    table.set(5u, Name("render.avboit.accumulation.shared_compute_emulation_raster_c"), "AVBOIT Accumulation Shared Compute Emulation Raster C");
+    table.set(6u, Name("render.avboit.accumulation.shared_compute_emulation_generate_d"), "AVBOIT Accumulation Shared Compute Emulation Generate D");
+    table.set(7u, Name("render.avboit.accumulation.shared_compute_emulation_raster_d"), "AVBOIT Accumulation Shared Compute Emulation Raster D");
+    table.set(8u, Name("render.avboit.accumulation.shared_compute_emulation_generate_e"), "AVBOIT Accumulation Shared Compute Emulation Generate E");
+    table.set(9u, Name("render.avboit.accumulation.shared_compute_emulation_raster_e"), "AVBOIT Accumulation Shared Compute Emulation Raster E");
+    return table;
+}
 
 
 // Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff.
@@ -114,21 +136,19 @@ GpuTaskSchedulingHint SharedComputeEmulationChainScheduling(){
 void MakeSharedComputeEmulationPhaseTaskDesc(
     in Name identity,
     in StringView markerLabel,
-    in GpuTaskId dependency,
+    in borrow GpuTaskId dependency,
     in Span<GpuTaskResourceUse> resourceUses,
     in Span<GpuTaskResourceSetUse> resourceSetUses,
     mut GpuTaskDesc desc
 ){
-    Array<GpuTaskId, 1u> dependencies = Array<GpuTaskId, 1u>();
-    dependencies[0] = dependency;
     desc
         .setIdentity(identity)
         .setMarkerLabel(markerLabel)
         .setScheduling(SharedComputeEmulationChainScheduling())
-        .setDependencies(dependencies)
         .setResourceUses(resourceUses)
         .setResourceSetUses(resourceSetUses)
     ;
+    desc.setDependency(dependency);
 }
 
 

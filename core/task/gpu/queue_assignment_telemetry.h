@@ -63,6 +63,19 @@ public:
         Alloc::ScratchArena& scratchArena
     );
 
+    [[nodiscard]] b8 update(
+        const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments,
+        const GpuCompiledGraph::ReadView& compiledPlan, const GpuGraphSubmissionTransaction& transaction, const Name& allocationLog
+    ){
+        Alloc::ScratchArena scratch(allocationLog);
+        return update(declarations, assignments, compiledPlan, transaction, scratch);
+    }
+
+    [[nodiscard]] b8 updateForFrameGraph(
+        const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments,
+        const GpuCompiledGraph::ReadView& compiledPlan, const GpuGraphSubmissionTransaction& transaction, Telemetry::FrameGraphBuilder& builder
+    );
+
     [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentTelemetry* find(GpuTaskId task)const noexcept;
 

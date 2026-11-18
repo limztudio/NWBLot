@@ -66,7 +66,7 @@ public:
 class UiNumericEditBuilderTests : public NumericFixture{
 public:
     void usePlainHost(PlainHost& host)noexcept{
-        m_builder.setEditHost(&host);
+        m_builder.setEditHost(host);
     }
 
     void armLoanInteger()noexcept{
@@ -106,7 +106,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         if(onRevision){
             IntegerEditModel& model = *MakeNotNull(Exchange(onRevision, nullptr));
             mutationApplied = model.setValue(99);
@@ -114,7 +114,7 @@ public:
         return contentRevision;
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         const StringView result = ComboSource::text(index);
         if(onText){
             IntegerEditModel& model = *MakeNotNull(Exchange(onText, nullptr));
@@ -304,7 +304,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         if(onRevision){
             EditModel& draft = *MakeNotNull(Exchange(onRevision, nullptr));
             mutationApplied = mutate(draft);
@@ -312,7 +312,7 @@ public:
         return contentRevision;
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         const StringView result = ComboSource::text(index);
         if(onText){
             EditModel& draft = *MakeNotNull(Exchange(onText, nullptr));

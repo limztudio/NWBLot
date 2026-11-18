@@ -142,6 +142,20 @@ template<typename CharT = char, typename ArenaT, typename PathT>
     return PathToString<CharT>(arena, path.native());
 }
 
+template<typename PathArenaT, typename VectorArenaT, typename SourceArenaT>
+inline void AppendOwnedPath(Vector<Path<PathArenaT>, VectorArenaT>& paths, const Path<SourceArenaT>& path){
+    paths.emplace_back(paths.get_allocator().arena(), path);
+}
+
+template<typename ArenaT, typename PathArenaT>
+[[nodiscard]] inline AString<ArenaT> NativePathComparisonKey(ArenaT& arena, const Path<PathArenaT>& path){
+    AString<ArenaT> key = PathToString(arena, path);
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    CanonicalizeTextInPlace(key);
+#endif
+    return key;
+}
+
 template<typename CharT = char, typename ArenaT, GlobalFilesystemPathDetail::PathChar SourceCharT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> PathToGenericString(ArenaT& arena, const BasicStringView<SourceCharT> path){
     BasicString<CharT, ArenaT> output = PathToString<CharT>(arena, path);
@@ -289,6 +303,18 @@ template<typename PathT>
     }
     return false;
 }
+
+
+template<typename ArenaT, typename SourceArenaT>
+[[nodiscard]] inline Path<ArenaT> FirstPathComponent(ArenaT& arena, const Path<SourceArenaT>& path){
+    const auto first = path.begin();
+    return first == path.end() ? Path<ArenaT>(arena) : Path<ArenaT>(arena, first.nativeComponent());
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline usize NativePathSize(const Path<ArenaT>& path)noexcept{ return path.native().size(); }
+
+inline constexpr b8 s_NativePathUsesChar = IsSame_V<Path<ArenaBase>::value_type, char>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,81 +2,49 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/import_types.adhd.h>
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+static_assert(GpuGraphResourceId().generation == 0u && GpuGraphResourceId().index == s_DeferredGraphInvalidIndex);
 
-#include <core/task/gpu/task_graph.h>
+class DeferredGraphResourceImportInputs{
+    public in DeferredFrameTargets targets;
+    public in DeferredLightingGraphResources lightingResources;
+    public in MeshFrameBindingSnapshot frameBindings;
+    public in MeshViewBufferSnapshot meshViewSnapshot;
+    public in CsgGraphResourceSnapshot csgResources;
+    public in RayTracingDeferredGraphResourceSnapshot rayTracingResources;
+    public Optional<in DeferredLaggedLightingHistoryResources> history;
+    public Optional<in DeferredLaggedLightingHistoryResources> captureHistory;
+    public b8 clearAvboitTargets = false;
+    public b8 capturesLaggedLightingHistory = false;
+    public b8 hasCsgFrameWork = false;
 
+    public DeferredGraphResourceImportInputs(in DeferredFrameTargets targets, in DeferredLightingGraphResources lightingResources, in MeshFrameBindingSnapshot frameBindings,
+        in MeshViewBufferSnapshot meshViewSnapshot, in CsgGraphResourceSnapshot csgResources, in RayTracingDeferredGraphResourceSnapshot rayTracingResources){
+        this.targets = targets;
+        this.lightingResources = lightingResources;
+        this.frameBindings = frameBindings;
+        this.meshViewSnapshot = meshViewSnapshot;
+        this.csgResources = csgResources;
+        this.rayTracingResources = rayTracingResources;
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[modular]
+class DeferredGraphResourceImportBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    public DeferredGraphResourceImportBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(Core::GpuGraphResourceId{}.generation == 0u && Core::GpuGraphResourceId{}.index == s_DeferredGraphInvalidIndex);
-
-
-class RayTracingDeferredGraphResourceSnapshot;
-
-
-// Deferred graph resource imports own G-buffer, CSG, lighting-history, and AVBOIT target imports.
-struct DeferredGraphResourceImportInputs{
-    DeferredFrameTargets& targets;
-    const DeferredLightingGraphResources& lightingResources;
-    const MeshFrameBindingSnapshot& frameBindings;
-    const MeshViewBufferSnapshot& meshViewSnapshot;
-    const CsgGraphResourceSnapshot& csgResources;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
-    const DeferredLaggedLightingHistoryResources* history = nullptr;
-    const DeferredLaggedLightingHistoryResources* captureHistory = nullptr;
-    b8 clearAvboitTargets = false;
-    b8 capturesLaggedLightingHistory = false;
-    b8 hasCsgFrameWork = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphResourceImportBuilder final : NoCopy{
-public:
-    explicit DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph)noexcept
-        : m_graph(graph)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<DeferredGraphResourceImportResult> declare(const DeferredGraphResourceImportInputs& inputs)const;
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public Expected<DeferredGraphResourceImportResult> declare(in DeferredGraphResourceImportInputs inputs)const;
 }
 
 

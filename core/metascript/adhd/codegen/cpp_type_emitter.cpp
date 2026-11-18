@@ -4,9 +4,11 @@
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 #include <core/metascript/adhd/sema/type_layout_analyzer.h>
+#include <core/metascript/adhd/sema/const_eval.h>
 #include <global/numeric_text.h>
 
 #include "cpp_type_emitter.h"
+#include "source_emitter.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,6 +140,13 @@ void CppTypeEmitter::emitConstantTextCpp(MString& out, const MStringView text)co
 }
 
 void CppTypeEmitter::emitTypeArgCpp(MString& out, const TypeArg& arg)const{
+    if(m_canonicalTemplateArguments && !arg.constantText.empty()){
+        i64 value = 0;
+        if(TryEvaluateTextConstant(arg.constantText, m_symbols, value)){
+            AppendUnsignedDecimal(out, static_cast<usize>(value));
+            return;
+        }
+    }
     if(arg.type)
         emitTypeCpp(out, *arg.type);
     else if(!arg.constantText.empty())
@@ -145,6 +154,13 @@ void CppTypeEmitter::emitTypeArgCpp(MString& out, const TypeArg& arg)const{
 }
 
 void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
+    if(m_canonicalTemplateArguments && m_symbols.findTypeAlias(type.name)){
+        const TypeRef* const resolved = m_symbols.unwrapTypeAlias(&type);
+        if(resolved && resolved->name != type.name){
+            emitTypeCpp(out, *resolved);
+            return;
+        }
+    }
     if(type.refMode != ParamPassingMode::None){
         out.append("::NotNull<");
         if(type.refMode == ParamPassingMode::In)
@@ -322,7 +338,7 @@ void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> 
     out.push_back('>');
 }
 
-void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum mode, const TypeRef& type, const b8 topLevelConst)const{
+void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum mode, const TypeRef& type, const b8 topLevelConst, const b8 retainsBorrow)const{
     if(mode == ParamPassingMode::Mut){
         if(!m_symbols.hasTypeSymbol(type.name)){
             if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(type.name); genericInfo && genericInfo->isBorrowView && type.templateArgs.size() == 1u && type.templateArgs[0].type){
@@ -341,7 +357,7 @@ void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum
         return;
     }
 
-    if(m_symbols.isSmallValueType(type.name) && (type.templateArgs.empty() || IsBorrowViewType(m_symbols.resolveBaseTypeName(type.name))) && !type.isFuncType){
+    if(!retainsBorrow && m_symbols.isSmallValueType(type.name) && (type.templateArgs.empty() || IsBorrowViewType(m_symbols.resolveBaseTypeName(type.name))) && !type.isFuncType){
         if(topLevelConst)
             out.append("const ");
         emitTypeCpp(out, type);
@@ -366,7 +382,7 @@ void CppTypeEmitter::emitParamListCpp(MString& out, const Span<const ParamDecl> 
         first = false;
         const ParamDecl& p = params[i];
         if(p.type)
-            emitParamTypeCpp(out, p.mode, *p.type);
+            emitParamTypeCpp(out, p.mode, *p.type, true, p.retainsBorrow || p.cppConstReference);
         out.push_back(' ');
         out.append(p.name.data(), p.name.size());
     }
@@ -511,8 +527,13 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
                     out.push_back('&');
                 }
             }
+            else if(p.forwardsArgument || p.copiesArgument){
+                emitTypeCpp(out, *p.type);
+                if(p.forwardsArgument)
+                    out.append("&&");
+            }
             else{
-                emitParamTypeCpp(out, p.mode, *p.type);
+                emitParamTypeCpp(out, p.mode, *p.type, true, p.retainsBorrow || p.cppConstReference);
             }
         }
         out.push_back(' ');
@@ -521,9 +542,38 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
     out.push_back(')');
 
     if(method.isConst)
-        out.append("const noexcept");
-    else
-        out.append("noexcept");
+        out.append("const");
+    if(!method.exceptionProbes.empty()){
+        SourceEmitter expressions(out.get_allocator().arena(), m_symbols);
+        expressions.setCurrentNamespace(m_currentNamespace);
+        out.append("noexcept(");
+        for(const ParamDecl& p : method.params){
+            if(p.copiesArgument){
+                out.append("::IsNothrowDestructible_V<");
+                emitTypeCpp(out, *p.type);
+                out.append("> && ");
+            }
+        }
+        for(usize i = 0u; i < method.exceptionProbes.size(); ++i){
+            if(i != 0u)
+                out.append(" && ");
+            out.append("noexcept(");
+            if(method.probesReturnValue){
+                out.append("::DeclVal<void(*)(");
+                emitTypeCpp(out, *method.returnType);
+                out.append(")noexcept>()(");
+            }
+            expressions.emitExpr(out, *method.exceptionProbes[i]);
+            if(method.probesReturnValue)
+                out.push_back(')');
+            out.push_back(')');
+        }
+        out.push_back(')');
+    }
+    else if(!method.allowsCppUnwind)
+        out.append(method.isConst ? " noexcept" : "noexcept");
+    else if(method.isDestructor)
+        out.append("noexcept(false)");
     if(isDeclarationInClass && (method.isOverride || isOverrideDestructor))
         out.append(" override");
 }

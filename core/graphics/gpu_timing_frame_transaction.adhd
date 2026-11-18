@@ -9,6 +9,7 @@ extern class GpuTimingFrameTransaction{
     void discard(...);
     b8 needsRetirement(...)const;
     b8 prepareForRecovery(...);
+    b8 recordEnd(mut CommandList commandList);
 };
 
 

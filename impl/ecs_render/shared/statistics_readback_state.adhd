@@ -2,310 +2,171 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/shared/statistics_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/shared/statistics_types.adhd.h>
+interface IStatisticsOutcome<StatisticsT>{
+    usize counterCount()const;
+    void accept(mut StatisticsT metadata)const;
+    void copyCounters(in Span<u32> counters, in StatisticsT metadata, mut StatisticsT latest)const;
+}
 
-#include <core/alloc/global.h>
-#include <core/graphics/rhi/command.h>
+class StatisticsReadbackSlot<StatisticsT>{
+    public StatisticsT metadata;
+    public b8 reserved = false;
+    public b8 inFlight = false;
 
-#include <global/arena_object.h>
-#include <global/refcount_ptr.h>
-#include <global/sync.h>
+    public StatisticsReadbackSlot(){ this.metadata = StatisticsT(); }
+}
 
+class StatisticsReadbackState<StatisticsT, OutcomeT : IStatisticsOutcome<StatisticsT>> : NoCopy{
+    private Array<StatisticsReadbackSlot<StatisticsT>, s_StatisticsReadbackSlotCount> m_slots;
+    private StatisticsT m_latest;
+    private u64 m_generation = 1u;
+    private u64 m_nextSequence = 1u;
+    private Futex m_mutex;
+    private u16 m_deviceGeneration;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// CPU lifecycle shared by owner and leases; completion follows GPU token completion.
-template<typename StatisticsT>
-class StatisticsReadbackStateBase : NoCopy{
-protected:
-    struct Slot{
-        StatisticsT metadata;
-        b8 reserved = false;
-        b8 inFlight = false;
-    };
-
-
-public:
-    explicit StatisticsReadbackStateBase(const u16 deviceGeneration)noexcept
-        : m_deviceGeneration(deviceGeneration)
-    {}
-
-
-public:
-    // Owner joins GPU work before invalidation; stale callbacks cannot affect next epoch.
-    void reset(const u16 deviceGeneration)noexcept{
-        NothrowScopedLock lock(m_mutex);
-
-        m_generation = m_generation == Limit<u64>::s_Max ? 0u : m_generation + 1u;
-        m_deviceGeneration = deviceGeneration;
-        m_latest = {};
-        for(Slot& slot : m_slots)
-            slot = {};
+    public StatisticsReadbackState(in u16 deviceGeneration){
+        this.m_deviceGeneration = deviceGeneration;
+        this.m_latest = StatisticsT();
     }
 
-    [[nodiscard]] StatisticsReservationKey reserve(const StatisticsT& metadata)noexcept{
-        NothrowScopedLock lock(m_mutex);
+    public void reset(in u16 deviceGeneration){
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        if(this.m_generation == u64.max)
+            this.m_generation = 0u;
+        else
+            ++this.m_generation;
+        this.m_deviceGeneration = deviceGeneration;
+        this.m_latest = StatisticsT();
+        for(usize index = 0u; index < s_StatisticsReadbackSlotCount; ++index)
+            this.m_slots[index] = StatisticsReadbackSlot<StatisticsT>();
+    }
 
-        if(m_deviceGeneration == 0u || m_generation == 0u || m_nextSequence == Limit<u64>::s_Max)
-            return {};
+    public StatisticsReservationKey reserve(in StatisticsT metadata){
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        if(this.m_deviceGeneration == 0u || this.m_generation == 0u || this.m_nextSequence == u64.max)
+            return StatisticsReservationKey();
         for(u32 index = 0u; index < s_StatisticsReadbackSlotCount; ++index){
-            Slot& slot = m_slots[index];
+            mut StatisticsReadbackSlot<StatisticsT> slot = this.m_slots[index];
             if(slot.reserved || slot.inFlight)
                 continue;
             slot.metadata = metadata;
-            slot.metadata.sequence = m_nextSequence++;
-            slot.metadata.generation = m_generation;
-            slot.metadata.acceptedToken = {};
+            slot.metadata.sequence = this.m_nextSequence;
+            ++this.m_nextSequence;
+            slot.metadata.generation = this.m_generation;
+            slot.metadata.acceptedToken = QueueSubmissionToken();
             slot.metadata.hardwareReady = false;
             slot.reserved = true;
-            return StatisticsReservationKey{ slot.metadata.sequence, m_generation, index };
+            return StatisticsReservationKey(slot.metadata.sequence, this.m_generation, index);
         }
-        return {};
+        return StatisticsReservationKey();
     }
 
-    void discard(const StatisticsReservationKey& key)noexcept{
-        NothrowScopedLock lock(m_mutex);
-
-        Slot* slot = matchingSlot(key);
-        if(slot && slot->reserved && !slot->inFlight)
-            *slot = {};
+    private b8 matches(in StatisticsReservationKey key)const{
+        if(!key.valid() || key.generation != this.m_generation || key.slot >= s_StatisticsReadbackSlotCount)
+            return false;
+        in StatisticsReadbackSlot<StatisticsT> slot = this.m_slots[key.slot];
+        return slot.metadata.sequence == key.sequence && slot.metadata.generation == key.generation;
     }
 
-    [[nodiscard]] Expected<StatisticsPendingReadback> pending(const u32 index)const noexcept{
-        NothrowScopedLock lock(m_mutex);
+    public void discard(in StatisticsReservationKey key){
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        if(!this.matches(key))
+            return;
+        mut StatisticsReadbackSlot<StatisticsT> slot = this.m_slots[key.slot];
+        if(slot.reserved && !slot.inFlight)
+            this.m_slots[key.slot] = StatisticsReadbackSlot<StatisticsT>();
+    }
 
+    public Expected<StatisticsPendingReadback> pending(in u32 index)const{
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
         if(index >= s_StatisticsReadbackSlotCount)
-            return MakeUnexpected(Failure{});
-        const Slot& slot = m_slots[index];
-        const Core::QueueSubmissionToken& token = slot.metadata.acceptedToken;
-        if(!slot.inFlight || !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration)
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
+        in StatisticsReadbackSlot<StatisticsT> slot = this.m_slots[index];
+        const QueueSubmissionToken token = slot.metadata.acceptedToken;
+        if(!slot.inFlight || !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != this.m_deviceGeneration)
+            return MakeUnexpected(Failure());
         return StatisticsPendingReadback(StatisticsReservationKey(slot.metadata.sequence, slot.metadata.generation, index), token);
     }
 
-    [[nodiscard]] Expected<StatisticsT> tryGetLatestStatistics()const noexcept{
-        NothrowScopedLock lock(m_mutex);
-
-        if(m_latest.sequence == 0u)
-            return MakeUnexpected(Failure{});
-        return m_latest;
+    public Expected<StatisticsT> tryGetLatestStatistics()const{
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        if(this.m_latest.sequence == 0u)
+            return MakeUnexpected(Failure());
+        return this.m_latest;
     }
 
-
-protected:
-    [[nodiscard]] Slot* matchingSlot(const StatisticsReservationKey& key)noexcept{
-        if(!key.valid() || key.generation != m_generation || key.slot >= s_StatisticsReadbackSlotCount)
-            return nullptr;
-        Slot& slot = m_slots[key.slot];
-        return slot.metadata.sequence == key.sequence && slot.metadata.generation == key.generation ? &slot : nullptr;
+    public void accept(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady){
+        this.accept(key, token, hardwareReady, OutcomeT());
     }
 
-    [[nodiscard]] Slot* beginAcceptWithinLock(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
-        Slot* slot = matchingSlot(key);
-        if(!slot || !slot->reserved || slot->inFlight)
-            return nullptr;
-        slot->reserved = false;
-        slot->inFlight = true;
-        slot->metadata.acceptedToken = token;
-        slot->metadata.hardwareReady = hardwareReady;
-        return slot;
-    }
-
-    [[nodiscard]] Slot* beginCompleteWithinLock(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token)noexcept{
-        Slot* slot = matchingSlot(key);
-        if(!slot || !slot->inFlight)
-            return nullptr;
-        const Core::QueueSubmissionToken& accepted = slot->metadata.acceptedToken;
-        if(!token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration || accepted != token)
-            return nullptr;
-        return slot;
-    }
-
-    template<usize RequiredCounterCount, typename ApplyFn>
-    void completeSlot(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters, ApplyFn&& applyCounters)noexcept{
-        NothrowScopedLock lock(m_mutex);
-
-        Slot* slot = beginCompleteWithinLock(key, token);
-        if(!slot)
+    public void accept(in StatisticsReservationKey key, in QueueSubmissionToken token, in b8 hardwareReady, in OutcomeT outcome){
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        if(!this.matches(key))
             return;
-        if(counters.size() >= RequiredCounterCount && slot->metadata.sequence > m_latest.sequence){
-            m_latest = slot->metadata;
-            applyCounters(m_latest, slot->metadata, counters);
-        }
-        *slot = {};
+        mut StatisticsReadbackSlot<StatisticsT> slot = this.m_slots[key.slot];
+        if(!slot.reserved || slot.inFlight)
+            return;
+        slot.reserved = false;
+        slot.inFlight = true;
+        slot.metadata.acceptedToken = token;
+        slot.metadata.hardwareReady = hardwareReady;
+        outcome.accept(slot.metadata);
     }
 
-
-protected:
-    Array<Slot, s_StatisticsReadbackSlotCount> m_slots{};
-    StatisticsT m_latest;
-    u64 m_generation = 1u;
-    u64 m_nextSequence = 1u;
-    mutable Futex m_mutex;
-    u16 m_deviceGeneration = 0u;
-};
-
-template<typename StateT>
-using StatisticsControlHandle = RefCountPtr< RefCounter<StateT>, ArenaRefDeleter<RefCounter<StateT>, Core::Alloc::GlobalArena> >;
-
-template<typename ControlT>
-[[nodiscard]] FOUNDATION_INLINE Expected<RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>> CreateStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    using HandleT = RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>;
-    auto control = HandleT(NewArenaObject<ControlT>(arena, deviceGeneration), ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-    if(!control)
-        return MakeUnexpected(Failure{});
-    return control;
+    public void complete(in StatisticsReservationKey key, in QueueSubmissionToken token, in Span<u32> counters){
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        if(!this.matches(key))
+            return;
+        mut StatisticsReadbackSlot<StatisticsT> slot = this.m_slots[key.slot];
+        if(!slot.inFlight || !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != this.m_deviceGeneration || slot.metadata.acceptedToken != token)
+            return;
+        const OutcomeT outcome = OutcomeT();
+        if(counters.size() >= outcome.counterCount() && slot.metadata.sequence > this.m_latest.sequence){
+            this.m_latest = slot.metadata;
+            outcome.copyCounters(counters, slot.metadata, this.m_latest);
+        }
+        this.m_slots[key.slot] = StatisticsReadbackSlot<StatisticsT>();
+    }
 }
 
-// Destruction releases only an unaccepted reservation.
-template<typename ControlHandleT, typename StatisticsT>
-class StatisticsReservationBase : NoCopy{
-public:
-    StatisticsReservationBase(ControlHandleT control, const StatisticsT& metadata)noexcept
-        : m_control(Move(control))
-    {
-        if(m_control)
-            m_key = m_control->reserve(metadata);
-    }
-    StatisticsReservationBase(StatisticsReservationBase&& other)noexcept
-        : m_control(Move(other.m_control))
-        , m_key(other.m_key)
-    {
-        other.m_key = {};
-    }
-    ~StatisticsReservationBase()noexcept{
-        discard();
-    }
+[move_only]
+class StatisticsReservation<StatisticsT, OutcomeT : IStatisticsOutcome<StatisticsT>>{
+    private PlanReservation<Shared<StatisticsReadbackState<StatisticsT, OutcomeT>>, StatisticsReservationKey> m_lease;
 
-
-public:
-    StatisticsReservationBase& operator=(StatisticsReservationBase&& other)noexcept{
-        if(this != &other){
-            discard();
-            m_control = Move(other.m_control);
-            m_key = other.m_key;
-            other.m_key = {};
+    public StatisticsReservation(in Shared<StatisticsReadbackState<StatisticsT, OutcomeT>> control, in StatisticsT metadata){
+        if(control.valid()){
+            const StatisticsReservationKey key = control.deref().reserve(metadata);
+            this.m_lease.adopt(control, key, key.valid());
         }
-        return *this;
     }
 
+    public b8 valid()const{ return this.m_lease.valid(); }
 
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_key.valid(); }
-
-    [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
-
-    void discard()noexcept{
-        if(m_control && m_key.valid())
-            m_control->discard(m_key);
-        m_key = {};
-        m_control = nullptr;
+    public u32 slotIndex()const{
+        if(!this.m_lease.valid())
+            return 0u;
+        return this.m_lease.plan().slot;
     }
 
-    template<typename... AcceptArgs>
-    void acceptReservation(const Core::QueueSubmissionToken& token, const b8 hardwareReady, AcceptArgs&&... args)noexcept{
-        if(m_control && m_key.valid())
-            m_control->accept(m_key, token, hardwareReady, Forward<AcceptArgs>(args)...);
-        m_key = {};
-        m_control = nullptr;
+    public void discard(){ this.m_lease.discard(); }
+
+    public void acceptReservation(in QueueSubmissionToken token, in b8 hardwareReady){
+        this.acceptReservation(token, hardwareReady, OutcomeT());
     }
 
-
-protected:
-    ControlHandleT m_control;
-    StatisticsReservationKey m_key;
-};
-
-template<typename StateT, typename StatisticsT>
-class StatisticsReadbackBase : NoCopy{
-public:
-    using Control = RefCounter<StateT>;
-    using ControlHandle = StatisticsControlHandle<StateT>;
-
-
-public:
-    StatisticsReadbackBase(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-    {}
-
-
-public:
-    void resetReadbackBuffers()noexcept{
-        if(m_control)
-            m_control->reset(0u);
-        for(Core::BufferHandle& buffer : m_buffers)
-            buffer = nullptr;
+    public void acceptReservation(in QueueSubmissionToken token, in b8 hardwareReady, in OutcomeT outcome){
+        if(this.m_lease.valid()){
+            const Shared<StatisticsReadbackState<StatisticsT, OutcomeT>> control = this.m_lease.control();
+            control.deref().accept(this.m_lease.plan(), token, hardwareReady, outcome);
+        }
+        this.m_lease.release();
     }
-
-    [[nodiscard]] Expected<StatisticsT> latestStatistics()const noexcept{
-        if(!m_control)
-            return MakeUnexpected(Failure{});
-        return m_control->tryGetLatestStatistics();
-    }
-
-
-protected:
-    template<typename SnapshotT>
-    void populateSnapshot(const StatisticsT& metadata, SnapshotT& outSnapshot)const noexcept{
-        outSnapshot.control = m_control;
-        outSnapshot.metadata = metadata;
-        for(u32 index = 0u; index < s_StatisticsReadbackSlotCount; ++index)
-            outSnapshot.buffers[index] = m_buffers[index];
-    }
-
-
-protected:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    ControlHandle m_control;
-    Array<Core::BufferHandle, s_StatisticsReadbackSlotCount> m_buffers{};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

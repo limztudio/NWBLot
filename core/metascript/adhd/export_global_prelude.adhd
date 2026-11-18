@@ -38,6 +38,7 @@
 #include <global/json_text.adhd>
 #include <global/latin1_text.adhd>
 #include <global/limit.adhd>
+#include <global/linked_slot.adhd>
 #include <global/name.adhd>
 #include <global/name_hash.adhd>
 #include <global/name_hash_text.adhd>
@@ -69,6 +70,7 @@
 #include <global/type.adhd>
 #include <global/type_borrow.adhd>
 #include <global/type_properties.adhd>
+#include <global/unique_ptr.adhd>
 #include <global/utf8_text.adhd>
 
 #include <global/filesystem/archive.adhd>

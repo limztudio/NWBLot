@@ -20,7 +20,7 @@ namespace Tests{
 
 template<typename PathArenaT>
 [[nodiscard]] FOUNDATION_INLINE Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const ::Path<PathArenaT>& fontPath, Core::Assets::AssetArena& arena){
-    auto source = Impl::ReadPreparedFontSource(fontPath, false, arena);
+    auto source = Impl::ReadPreparedFontSource(arena, fontPath, false);
     if(!source)
         return MakeUnexpected(source.error());
     return Core::Assets::AssetBytes(source->fontBytes.begin(), source->fontBytes.end(), arena);

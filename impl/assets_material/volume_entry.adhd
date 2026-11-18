@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_material/cook_types.adhd>
+#include <impl/assets_material/cook_shader_metadata_and_asset_emit.adhd>
+#include <impl/assets_shader/shader_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,133 +63,58 @@ Expected<Vector<Name>> CollectSortedMaterialResourceDependencyNames(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+register_asset Material using NonStandaloneAssetRegistration<Material>;
 
+[cook_entry("material", s_MaterialMetaDiagnosticPrefix, ParseMaterialCookMetadata, document_only, quiet)]
+Expected<Material> CookMaterialVolumeEntry(in MaterialCookEntry entry){
+    return BuildMaterialAsset(entry);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class MaterialStageDependency{
+    public Name path = s_NameNone;
+    public Name assetType = s_NameNone;
+}
 
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_material/cook.adhd.h>
-
-#include <impl/assets_shader/asset.adhd.h>
-#include <impl/assets_shader/shader_types.adhd.h>
-
-#include <core/assets/cook_dependency_registry.h>
-#include <core/assets/cook_entry_registry.h>
-#include <core/assets/cook_metadata.h>
-#include <core/assets/paths.h>
-
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_material_volume_entry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_MaterialAssetKindLabel = FOUNDATION_TEXT("material");
-
-static_assert(Material::AssetTypeName() == s_MaterialCookEntryAssetTypeName, "Material cook entry asset type drifted");
-
-static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    if(!context.document)
-        return false;
-    const auto materialEntry = ParseMaterialCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena);
-    if(!materialEntry)
-        return false;
-
-    Vector<Pair<Name, Name>, Core::Alloc::ScratchArena> stageShaders(context.scratchArena);
-    stageShaders.reserve(materialEntry->stageShaders.size());
-    for(const auto& [shaderType, shaderRef] : materialEntry->stageShaders){
-        const Name expectedShaderType = ShaderAssetTypes::AssetTypeNameFromShaderType(shaderType);
-        if(!expectedShaderType)
+b8 CollectMaterialDependencies(in MaterialCookEntry entry, mut ICookDependencyCollector collector){
+    Vector<MaterialStageDependency> stages;
+    stages.reserve(entry.stageShaders.size());
+    for(in auto pair : entry.stageShaders){
+        MaterialStageDependency dependency;
+        dependency.path = pair.second.name();
+        dependency.assetType = AssetTypeNameFromShaderType(pair.first);
+        if(dependency.assetType == s_NameNone)
             return false;
-        stageShaders.emplace_back(shaderRef.name(), expectedShaderType);
+        stages.push_back(dependency);
     }
-    Sort(stageShaders.begin(), stageShaders.end(), [](const Pair<Name, Name>& lhs, const Pair<Name, Name>& rhs)noexcept{
-        if(lhs.first() != rhs.first())
-            return lhs.first() < rhs.first();
-        return lhs.second() < rhs.second();
+    SortSequence<MaterialStageDependency>(stages, lambda[](in MaterialStageDependency lhs, in MaterialStageDependency rhs) -> b8{
+        if(lhs.path != rhs.path)
+            return lhs.path < rhs.path;
+        return lhs.assetType < rhs.assetType;
     });
-    for(const Pair<Name, Name>& stageShader : stageShaders){
-        if(!collector.addAssetDependency(stageShader.first(), stageShader.second()))
+    for(in MaterialStageDependency stage : stages){
+        if(!collector.addAssetDependency(stage.path, stage.assetType))
             return false;
     }
-
-    const auto resourceNames = CollectSortedMaterialResourceDependencyNames(context.scratchArena, materialEntry->parameters);
-    if(!resourceNames)
+    const Expected<Vector<Name>> resources = CollectSortedMaterialResourceDependencyNames(entry.parameters);
+    if(!resources.has_value())
         return false;
-    for(const Name resourceName : *resourceNames){
-        if(!collector.addAssetDependency(resourceName))
+    for(in Name resource : resources.value()){
+        if(!collector.addAssetDependency(resource))
             return false;
     }
     return true;
 }
 
-static b8 RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
-        s_MaterialAssetKindLabel,
-        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return ParseMaterialCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-        },
-        nullptr,
-        [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildMaterialAsset(entry, arena); },
-        s_MaterialLogCookBuildFailure,
-        registry
-    );
+b8 ExtractMaterialDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return context.visitDocument(lambda[in context, mut collector](in MetascriptDocument doc) -> b8{
+        const Expected<MaterialCookEntry> entry = ParseMaterialCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, doc);
+        return entry.has_value() && CollectMaterialDependencies(entry.value(), collector);
+    });
 }
 
-static b8 RegisterMaterialCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(s_MaterialCookEntryAssetTypeName, &ExtractMaterialDependencies);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_MaterialCookEntryRegistrar, RegisterMaterialCookEntry);
-NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_MaterialCookDependencyRegistrar, RegisterMaterialCookDependency);
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MaterialNonStandaloneAssetTypeRegistrar(s_MaterialCookEntryAssetTypeName, s_MaterialNonStandaloneKindLabel);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cook_registrar]
+b8 RegisterMaterialDependencies(mut CookDependencyRegistry registry){
+    return registry.registerType(Material::AssetTypeName(), ExtractMaterialDependencies);
 }
 
 

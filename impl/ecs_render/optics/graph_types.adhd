@@ -17,9 +17,6 @@ type OpticalFinalizeHandle = RayTracingOpticalBoundsFinalizeHandle;
 type OpticalUploadHandle = RayTracingOpticalSceneUploadHandle;
 type OpticalUploadControlHandle = RayTracingOpticalUploadControlHandle;
 
-const Name s_RenderNameRaytraceOpticalRuntimeInputs = "raytrace_optical_runtime_inputs";
-const Name s_RenderNameRaytraceOpticalResolvedScene = "raytrace_optical_resolved_scene";
-const Name s_RenderNameRayOpticalBoundsFinalize = "RayOpticalBoundsFinalize";
 const Name s_RenderNameRenderRaytraceOpticalSceneReady = "render.raytrace.optical_scene_ready";
 const Name s_RenderNameRenderRaytraceOpticalSceneUpload = "render.raytrace.optical_scene_upload";
 const Name s_RenderNameRenderRaytraceOpticalBoundsFinalize = "render.raytrace.optical_bounds_finalize";

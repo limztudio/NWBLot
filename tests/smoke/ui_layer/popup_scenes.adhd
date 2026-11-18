@@ -73,7 +73,7 @@ class UiNestedPopupSmokeScene{
     private void observeState(mut UiPaintContext context);
     private void paintMarkers(mut UiPaintContext context)const;
     private Array<u64, 29u> values()const;
-    private Rect rowBounds(in ListState state, in IListDataSource source, in u64 key)const;
+    private Rect rowBounds(in ListState state, in Expected<u64> index)const;
 }
 
 
@@ -474,12 +474,12 @@ void UiNestedPopupSmokeScene::observeState(mut UiPaintContext context){
         this.m_rectangles[4u] = StoreRect(VectorSingle(parent.x, parent.y, 100.0f, 32.0f) + VectorSingle(8.0f, 28.0f, 0.0f, 0.0f));
         this.m_rectangles[5u] = this.m_beforeEdit.placement.bounds;
         this.m_rectangles[6u] = this.m_beforeList.placement().bounds;
-        this.m_rectangles[7u] = this.rowBounds(this.m_beforeList, this.m_source, 2u);
+        this.m_rectangles[7u] = this.rowBounds(this.m_beforeList, this.m_source.indexOf(2u));
         this.m_rectangles[8u] = StoreRect(parentFrame + VectorSingle(8.0f, 124.0f, -16.0f, 32.0f));
         this.m_rectangles[9u] = StoreRect(VectorSingle(parent.x, parent.y, 100.0f, 32.0f) + VectorSingle(8.0f, 160.0f, 0.0f, 0.0f));
         this.m_rectangles[10u] = this.m_afterEdit.placement.bounds;
         this.m_rectangles[11u] = this.m_afterList.placement().bounds;
-        this.m_rectangles[12u] = this.rowBounds(this.m_afterList, this.m_source, 2u);
+        this.m_rectangles[12u] = this.rowBounds(this.m_afterList, this.m_source.indexOf(2u));
         this.m_rectangles[16u] = this.m_combo.bounds();
         this.m_rectangles[19u] = this.m_search.combo().bounds();
         this.m_rectangles[23u] = StoreRect(parentFrame + VectorSingle(8.0f, 328.0f, -16.0f, 32.0f));
@@ -493,16 +493,16 @@ void UiNestedPopupSmokeScene::observeState(mut UiPaintContext context){
         }
         if(this.m_combo.isOpen()){
             this.m_rectangles[17u] = this.m_combo.placement().bounds;
-            this.m_rectangles[18u] = this.rowBounds(this.m_combo.listState(), this.m_source, 2u);
+            this.m_rectangles[18u] = this.rowBounds(this.m_combo.listState(), this.m_source.indexOf(2u));
         }
         if(this.m_search.combo().isOpen()){
             this.m_rectangles[20u] = this.m_search.combo().placement().bounds;
             this.m_rectangles[21u] = this.m_search.editorState().placement.bounds;
-            this.m_rectangles[22u] = this.rowBounds(this.m_search.combo().listState(), this.m_source.filtered(), 2u);
+            this.m_rectangles[22u] = this.rowBounds(this.m_search.combo().listState(), this.m_source.filtered().indexOf(2u));
         }
         if(this.m_menu.isOpen()){
             this.m_rectangles[24u] = this.m_menu.placement().bounds;
-            this.m_rectangles[25u] = this.rowBounds(this.m_menu.listState(), this.m_source, 2u);
+            this.m_rectangles[25u] = this.rowBounds(this.m_menu.listState(), this.m_source.indexOf(2u));
         }
     }
     ObserveNestedPopupSmokeTargets(
@@ -601,9 +601,8 @@ Array<u64, 29u> UiNestedPopupSmokeScene::values()const{
     return out;
 }
 
-Rect UiNestedPopupSmokeScene::rowBounds(in ListState state, in IListDataSource source, in u64 key)const{
+Rect UiNestedPopupSmokeScene::rowBounds(in ListState state, in Expected<u64> index)const{
     const ScrollPlacement placement = state.placement();
-    const Expected<u64> index = source.indexOf(key);
     if(!index.has_value() || index.value() < placement.firstRow || index.value() >= placement.endRow)
         return Rect();
     return VisibleSmokeListRow(placement, index.value());

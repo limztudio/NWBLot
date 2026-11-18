@@ -2,169 +2,75 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/reflection/frame_snapshot.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/reflection/types.adhd.h>
-#include <impl/ecs_render/reflection/frame_parameters.adhd.h>
-#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
-#include <impl/ecs_render/reflection/postprocess_resources.adhd.h>
-#include <impl/ecs_render/reflection/feedback_resources.adhd.h>
-#include <impl/ecs_render/reflection/reflection_pipelines.adhd.h>
+#include <impl/ecs_render/reflection/reflection_pipelines.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
+static_assert(size_of<ReflectionFrameParameters>() == 176u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(opaqueSpecularSlot) == 16u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(maxRayDistance) == 128u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(environmentTopR) == 140u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(environmentBottomR) == 152u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(screenThickness) == 164u, "Reflection frame parameters must match the shader");
 
-#include <core/alloc/global.h>
-#include <core/graphics/rhi/pipeline.h>
-#include <core/graphics/gpu_timing.h>
+class ReflectionCsgDispatchState{
+    public ReflectionFrameSnapshot resources;
+    public Optional<GpuTimingFrameTransaction> timing;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererShaderSystem;
-class DeferredFrameTargets;
-
-static_assert(sizeof(ReflectionFrameParameters) == 176u);
-static_assert(offsetof(ReflectionFrameParameters, opaqueSpecularSlot) == 16u);
-static_assert(offsetof(ReflectionFrameParameters, maxRayDistance) == 128u);
-static_assert(offsetof(ReflectionFrameParameters, environmentTopR) == 140u);
-static_assert(offsetof(ReflectionFrameParameters, environmentBottomR) == 152u);
-static_assert(offsetof(ReflectionFrameParameters, screenThickness) == 164u);
-
-// Copy handles and slots together before declaration; only parameter values vary per frame.
-struct ReflectionFrameSnapshot{
-    ReflectionFrameParameters parameters;
-    Core::TextureHandle opaqueRadiance;
-    Core::TextureHandle glassRadiance;
-    Core::BufferHandle queue;
-    Core::BufferHandle counters;
-    Core::BufferHandle indirectArgs;
-    Core::BufferHandle frameParameters;
-    Core::ComputePipelineHandle classifyPipeline;
-    Core::ComputePipelineHandle buildArgsPipeline;
-    Core::ComputePipelineHandle hardwarePipeline;
-    ReflectionDepthPyramidSnapshot depthPyramid;
-    RayTracingSceneGraphResources scene;
-    ReflectionStatisticsReadbackSnapshot statistics;
-    ReflectionPostprocessSnapshot postprocess;
-    ReflectionFeedbackSnapshot feedback;
-    u32 frameParametersSlot = 0u;
-
-
-public:
-    [[nodiscard]] b8 hasHardwareWork()const noexcept{ return parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u; }
-
-    [[nodiscard]] b8 valid()const noexcept{
-        return parameters.width > 0u && parameters.height > 0u && opaqueRadiance && glassRadiance && queue && counters && indirectArgs && frameParameters && classifyPipeline && buildArgsPipeline && depthPyramid.valid();
+    public ReflectionCsgDispatchState(mut GpuTimingRecorder recorder){
+        this.timing.emplace(recorder);
     }
-};
+}
+type ReflectionCsgDispatchHandle = Shared<ReflectionCsgDispatchState>;
 
-struct ReflectionCsgDispatchState{
-    ReflectionFrameSnapshot resources;
-    Optional<Core::GpuTimingFrameTransaction> timing;
+[modular]
+class RendererReflectionSystem : NoCopy{
+    private SharedPool m_versions = SharedPool();
+    private mut GraphicsRuntime m_graphics;
+    private ReflectionStatisticsReadback m_statistics;
+    private RendererReflectionPostprocess m_postprocess;
+    private RendererReflectionFeedback m_feedback;
+    private RendererReflectionPipelines m_pipelines;
+    private ReflectionFrameSnapshot m_resources;
+    private Vector<ReflectionCsgDispatchHandle> m_csgDispatchStates;
+    private Optional<usize> m_preparedCsgDispatch;
+    private Array<GpuDescriptorHandle, s_ReflectionDescriptorCount> m_descriptors;
+    private GpuDescriptorHandle m_depthSampledDescriptor;
+    private Array<GpuDescriptorHandle, s_ReflectionMaxDepthMips> m_depthMipSampledDescriptors;
+    private Array<GpuDescriptorHandle, s_ReflectionMaxDepthMips> m_depthMipStorageDescriptors;
 
+    public RendererReflectionSystem(mut GraphicsRuntime graphics, mut RendererShaderSystem shaders){
+        this.m_graphics = graphics;
+        this.m_statistics = ReflectionStatisticsReadback(graphics);
+        this.m_postprocess = RendererReflectionPostprocess(graphics, shaders);
+        this.m_feedback = RendererReflectionFeedback(graphics);
+        this.m_pipelines = RendererReflectionPipelines(graphics, shaders);
+    }
+    [cpp_unwind]
+    public void invalidateResources();
+    [cpp_unwind]
+    public b8 prepareResources(in u32 width, in u32 height, in b8 prepareHardware, in b8 prepareCsgHardware, in ReflectionSettings settings);
+    public Expected<ReflectionCsgDispatchHandle> acquireCsgDispatchState(in ReflectionFrameSnapshot resources);
+    [cpp_unwind]
+    public void pollStatistics(){ this.m_statistics.pollCompleted(); }
+    public Expected<ReflectionStatistics> tryGetLatestStatistics()const{ return this.m_statistics.latestStatistics(); }
+    public ReflectionFrameSnapshot snapshotFrameResources(in DeferredFrameTargets targets, in MeshViewBufferSnapshot view, in RayTracingSceneGraphResources scene,
+        in ReflectionSettings settings, in u32 frameIndex, in ReflectionSceneContentStamp stamp)const;
 
-public:
-    ReflectionCsgDispatchState(const ReflectionFrameSnapshot& frame, Core::GpuTimingRecorder& recorder)noexcept
-        : resources(frame)
-    { timing.emplace(recorder); }
-};
-using ReflectionCsgDispatchControl = RefCounter<ReflectionCsgDispatchState>;
-using ReflectionCsgDispatchHandle = RefCountPtr< ReflectionCsgDispatchControl, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena> >;
-
-class RendererReflectionSystem final : NoCopy{
-public:
-    RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_statistics(arena, graphics)
-        , m_postprocess(arena, graphics, shaders)
-        , m_feedback(arena, graphics)
-        , m_csgDispatchStates(arena)
-        , m_pipelines(graphics, shaders)
-    {}
-
-
-public:
-    // Caller joins submitted work and discards snapshots before teardown.
-    void invalidateResources();
-    [[nodiscard]] b8 prepareResources(u32 width, u32 height, b8 prepareHardware, b8 prepareCsgHardware, const ReflectionSettings& settings);
-    [[nodiscard]] Expected<ReflectionCsgDispatchHandle> acquireCsgDispatchState(const ReflectionFrameSnapshot& resources)noexcept;
-    void pollStatistics(){ m_statistics.pollCompleted(); }
-    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept{ return m_statistics.latestStatistics(); }
-    [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
-        const DeferredFrameTargets& targets,
-        const MeshViewBufferSnapshot& view,
-        const RayTracingSceneGraphResources& scene,
-        const ReflectionSettings& settings,
-        u32 frameIndex,
-        const ReflectionSceneContentStamp& stamp
-    )const noexcept;
-
-
-private:
-    void releaseTargets();
-    [[nodiscard]] b8 prepareCsgDispatchResources();
-    [[nodiscard]] b8 prepareQueue(u32 capacity);
-    [[nodiscard]] b8 prepareArguments(u32 capacity, b8 sliced);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    ReflectionStatisticsReadback m_statistics;
-    RendererReflectionPostprocess m_postprocess;
-    RendererReflectionFeedback m_feedback;
-    ReflectionFrameSnapshot m_resources;
-    Vector<ReflectionCsgDispatchHandle, Core::Alloc::GlobalArena> m_csgDispatchStates;
-    ReflectionCsgDispatchControl* m_preparedCsgDispatch = nullptr;
-    RendererReflectionPipelines m_pipelines;
-    Array<Core::GpuDescriptorHandle, s_ReflectionDescriptorCount> m_descriptors{};
-    Core::GpuDescriptorHandle m_depthSampledDescriptor;
-    Array<Core::GpuDescriptorHandle, s_ReflectionMaxDepthMips> m_depthMipSampledDescriptors{};
-    Array<Core::GpuDescriptorHandle, s_ReflectionMaxDepthMips> m_depthMipStorageDescriptors{};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    private void releaseTargets();
+    [cpp_unwind]
+    private b8 prepareCsgDispatchResources();
+    [cpp_unwind]
+    private b8 prepareQueue(in u32 capacity);
+    [cpp_unwind]
+    private b8 prepareArguments(in u32 capacity, in b8 sliced);
 }
 
 

@@ -104,6 +104,19 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace AssetCookRole{
+    enum Enum : u8{
+        None,
+        Writer,
+        Registrar,
+        Entry,
+        GatherMerge,
+        DocumentParser,
+        VolumePrepare,
+        Setup,
+    };
+};
+
 struct MethodDecl{
     AccessSpecifier::Enum access = AccessSpecifier::None;
     MStringView ownerClassName;
@@ -123,10 +136,17 @@ struct MethodDecl{
     b8 isOperator = false;
     b8 isInline = false;
     b8 isOutOfLine = false;
+    b8 allowsCppUnwind = false;
+    b8 exportsExplicitBool = false;
+    b8 exportsTakingAssignment = false;
+    b8 exportsRvalueOverload = false;
+    MVector<Expr*> exceptionProbes;
+    b8 probesReturnValue = false;
     b8 isReflect = false;
     b8 usesScratchArena = false;
     b8 usesTaskScope = false;
     b8 injectsCallerArena = false;
+    b8 returnsFromOwnerArena = false;
     b8 hasSynthesizedArenaParams = false;
     MStringView cppNamespace;
     MStringView cppExportName;
@@ -139,6 +159,14 @@ struct MethodDecl{
     b8 isExtern = false;
     b8 isVariadic = false;
     b8 returnsBorrowedView = false;
+    AssetCookRole::Enum assetCookRole = AssetCookRole::None;
+    MStringView pairedSidecar;
+    MStringView cookKindLabel;
+    MStringView cookDiagnosticPrefix;
+    MStringView cookValueReader;
+    MStringView cookCodec;
+    b8 cookAcceptsValue = false;
+    b8 cookLogsFailure = false;
     u8 callLoweringKind = 0u;
 
 
@@ -149,6 +177,7 @@ public:
         , templateParams(arena)
         , params(arena)
         , body(arena)
+        , exceptionProbes(arena)
     {}
 
     [[nodiscard]] constexpr b8 acceptsArgCount(const usize count)const noexcept{
@@ -192,6 +221,8 @@ struct ClassDecl{
     MStringView name;
     MVector<TemplateParamDecl> templateParams;
     MVector<TypeRef*> implementedInterfaces;
+    MVector<MStringView> friendClasses;
+    MVector<TypeAliasDecl*> cppTypeAliases;
     MVector<FieldDecl*> fields;
     MVector<FieldDecl*> orderedFields;
     MVector<MethodDecl*> methods;
@@ -202,7 +233,10 @@ struct ClassDecl{
     SourceSpan span;
     usize totalSize = 1u;
     usize totalAlign = 1u;
+    usize recordAlignment = 0u;
+    b8 preserveFieldOrder = false;
     b8 isSerialize = false;
+    b8 isMoveOnly = false;
     b8 isReflect = false;
     b8 isArenaOwner = false;
     b8 isModular = false;
@@ -235,6 +269,8 @@ public:
     explicit ClassDecl(MetaArena& arena)noexcept
         : templateParams(arena)
         , implementedInterfaces(arena)
+        , friendClasses(arena)
+        , cppTypeAliases(arena)
         , fields(arena)
         , orderedFields(arena)
         , methods(arena)
@@ -311,9 +347,28 @@ struct ImportedCppHeader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct AssetRegistration{
+    MStringView className;
+    TypeRef* registrar;
+    SourceSpan span;
+};
+
+struct StaticAssertion{
+    Expr* condition;
+    Expr* message;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TranslationUnit{
     // Substituted type views borrow these stable strings for the unit's lifetime.
     List<MString, MetaArena> substitutedConstantTexts;
+    MStringView namespaceWrapper;
+    MStringView cppNamespace;
+    MVector<StaticAssertion> staticAssertions;
+    MVector<AssetRegistration> assetRegistrations;
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MStringView> sourceNativeBlocks;
     MVector<MStringView> requiredGlobalHeaders;
@@ -335,6 +390,8 @@ struct TranslationUnit{
 public:
     explicit TranslationUnit(MetaArena& arena)noexcept
         : substitutedConstantTexts(arena)
+        , staticAssertions(arena)
+        , assetRegistrations(arena)
         , topLevelNativeBlocks(arena)
         , sourceNativeBlocks(arena)
         , requiredGlobalHeaders(arena)

@@ -2,54 +2,49 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_mesh/runtime/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
+class BufferFlags{
+    public b8 canHaveUAVs;
+    public b8 canHaveRawViews;
+    public b8 accelStructBuildInput;
+    public ResourceQueueSharing queueSharing;
+    public b8 isIndexBuffer;
 
-#include <impl/ecs_mesh/runtime/types.adhd.h>
+    public BufferFlags(){
+        this.canHaveUAVs = false;
+        this.canHaveRawViews = false;
+        this.accelStructBuildInput = false;
+        this.queueSharing = ResourceQueueSharing::Exclusive;
+        this.isIndexBuffer = false;
+    }
 
-#include <core/alloc/scratch.h>
-#include <core/graphics/runtime/runtime.h>
+    public BufferFlags(in b8 uav, in b8 rawViews, in b8 buildInput, in ResourceQueueSharing sharing, in b8 indexBuffer){
+        this.canHaveUAVs = uav;
+        this.canHaveRawViews = rawViews;
+        this.accelStructBuildInput = buildInput;
+        this.queueSharing = sharing;
+        this.isIndexBuffer = indexBuffer;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RuntimeMeshBufferUpload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct BufferFlags{
-    b8 canHaveUAVs = false;
-    b8 canHaveRawViews = false;
-    b8 accelStructBuildInput = false;
-    Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive;
-    b8 isIndexBuffer = false;
-};
-
-template<typename PayloadT>
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags = {}){
-    const auto payloadBytes = TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(PayloadT));
-    if(!payloadBytes)
+Expected<BufferHandle, BufferSetupFailure> SetupBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload, in BufferFlags flags){
+    const Expected<usize> byteCount = TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(T));
+    if(!byteCount.has_value())
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 
-    Core::GraphicsStandaloneService::BufferSetupDesc setup;
+    StandaloneBufferSetupDesc setup = StandaloneBufferSetupDesc();
     setup.bufferDesc
-        .setByteSize(static_cast<u64>(*payloadBytes))
-        .setStructStride(sizeof(PayloadT))
+        .setByteSize(cast<u64>(byteCount.value()))
+        .setStructStride(sizeof(T))
         .setCanHaveUAVs(flags.canHaveUAVs)
         .setCanHaveRawViews(flags.canHaveRawViews)
         .setIsAccelStructBuildInput(flags.accelStructBuildInput)
@@ -57,63 +52,37 @@ template<typename PayloadT>
         .setQueueSharing(flags.queueSharing)
         .setDebugName(debugName)
     ;
-    setup.data = payload.data();
-    setup.dataSize = *payloadBytes;
-    auto buffer = graphics.standaloneGraph().setupBuffer(setup);
-    if(!buffer)
+    setup.setData<T>(payload);
+    Expected<BufferHandle> buffer = graphics.standaloneGraph().setupBuffer(setup);
+    if(!buffer.has_value())
         return MakeUnexpected(BufferSetupFailure::CreateFailed);
-    return Move(*buffer);
+    return buffer.value();
 }
 
-template<typename PayloadT>
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags){
-    if(payload.empty())
-        return MakeUnexpected(BufferSetupFailure::EmptyPayload);
-
-    return SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
+Expected<BufferHandle, BufferSetupFailure> SetupBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload){
+    return SetupBuffer<T>(graphics, debugName, payload, BufferFlags());
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::ScratchArena& scratchArena,
-    const Name& debugName,
-    const Span<const u8> payload,
-    const BufferFlags flags
-){
+Expected<BufferHandle, BufferSetupFailure> SetupRequiredBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload, in BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
+    return SetupBuffer<T>(graphics, debugName, payload, flags);
+}
 
+Expected<BufferHandle, BufferSetupFailure> SetupRequiredPaddedRawByteBuffer(mut GraphicsRuntime graphics, in Name debugName, in Span<u8> payload, in BufferFlags flags){
+    if(payload.empty())
+        return MakeUnexpected(BufferSetupFailure::EmptyPayload);
     const Expected<usize> paddedByteCount = TryComputePaddedRawByteCount(payload.size());
-    if(!paddedByteCount)
+    if(!paddedByteCount.has_value())
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
-
-    if(*paddedByteCount == payload.size())
+    if(paddedByteCount.value() == payload.size())
         return SetupBuffer<u8>(graphics, debugName, payload, flags);
 
-    // Upload records before payload dies; explicitly zero the allocated tail.
-    Vector<u8, Core::Alloc::ScratchArena> paddedPayload{scratchArena};
-    paddedPayload.reserve(*paddedByteCount);
+    Vector<u8> paddedPayload = Vector<u8>();
+    paddedPayload.reserve(paddedByteCount.value());
     paddedPayload.assign(payload.begin(), payload.end());
-    paddedPayload.resize(*paddedByteCount, 0u);
+    paddedPayload.resize(paddedByteCount.value(), 0u);
     return SetupBuffer<u8>(graphics, debugName, paddedPayload, flags);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

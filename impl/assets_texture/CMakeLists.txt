@@ -25,7 +25,7 @@ nwb_target_adhd_sources(nwb_assets_texture_loader
         "${CMAKE_CURRENT_LIST_DIR}/texture_mip_decoder.adhd"
 )
 target_link_libraries(nwb_assets_texture_loader PUBLIC nwb_assets nwb_assets_texture nwb_assets_texture_types nwb_graphics)
-target_link_libraries(nwb_assets_texture_loader PRIVATE nwb::basis_universal)
+target_link_libraries(nwb_assets_texture_loader PRIVATE nwb_basis_transcoder)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_texture_cook)
@@ -34,6 +34,7 @@ if(NWB_BUILD_PIPELINE)
         SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_entry.adhd"
     )
     target_link_libraries(nwb_assets_texture_cook PUBLIC nwb_assets nwb_assets_cook nwb_assets_texture_types nwb_metascript)
     target_compile_definitions(nwb_assets_texture_cook PRIVATE NWB_COOK=1)

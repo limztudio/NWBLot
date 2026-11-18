@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_texture/asset.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextureCookEntry{
+    public Name virtualPath = s_NameNone;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 depth = 1u;
+    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
+    public TexturePayloadFormat payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+    public TextureAlphaMode alphaMode = TextureAlphaMode::Opaque;
+    public u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+    public Vector<u8> payloadBytes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

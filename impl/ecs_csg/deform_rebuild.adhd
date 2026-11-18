@@ -1,0 +1,80 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_csg/deform_cap_builder.adhd>
+#include <impl/ecs_csg/shape_registry.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgDeformRebuild : NoCopy{
+    private Vector<u32> m_parameterByteSizes;
+    private Vector<Optional<Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>>> m_callbacks;
+    private Vector<CsgDeformVertex> m_vertices;
+    private Vector<CsgDeformTriangle> m_triangles;
+
+    public void bindRegistry(in CsgShapeRegistry registry, in Span<CsgDeformCutDesc> cuts){
+        this.m_parameterByteSizes.assign(cuts.size(), 0u);
+        this.m_callbacks.clear();
+        this.m_callbacks.resize(cuts.size());
+        for(usize cutIndex = 0u; cutIndex < cuts.size(); ++cutIndex){
+            if(!cuts[cutIndex].active)
+                continue;
+            const Expected<CsgShapeTypeInfo> shapeType = registry.findShapeType(cuts[cutIndex].shape.shapeType);
+            if(shapeType.has_value() && shapeType.value().desc.signedDistanceCallback){
+                this.m_parameterByteSizes[cutIndex] = shapeType.value().desc.parameterByteSize;
+                this.m_callbacks[cutIndex] = shapeType.value().desc.signedDistanceCallback;
+            }
+        }
+    }
+
+    private Expected<CsgDeformStats, CsgDeformFailure> execute(
+        in Span<CsgDeformVertex> inputVertices,
+        in Span<CsgDeformTriangle> inputTriangles,
+        in Span<CsgDeformCutDesc> cuts,
+        in CsgDeformBuildOptions options
+    ){
+        return ExecuteCsgDeformPreview(
+            inputVertices, inputTriangles, cuts, options,
+            this.m_parameterByteSizes, this.m_callbacks,
+            this.m_vertices, this.m_triangles
+        );
+    }
+
+    public Expected<CsgDeformStats, CsgDeformFailure> build(
+        in Span<CsgDeformVertex> inputVertices,
+        in Span<CsgDeformTriangle> inputTriangles,
+        in Span<CsgDeformCutDesc> cuts,
+        in CsgDeformBuildOptions options,
+        mut Vector<CsgDeformVertex> outVertices,
+        mut Vector<CsgDeformTriangle> outTriangles
+    ){
+        // Input spans can refer to the output vectors.
+        const Expected<CsgDeformStats, CsgDeformFailure> result = this.execute(inputVertices, inputTriangles, cuts, options);
+        outVertices.clear();
+        outTriangles.clear();
+        if(!result.has_value())
+            return MakeUnexpected(result.error());
+        AssignVector(outVertices, this.m_vertices);
+        AssignVector(outTriangles, this.m_triangles);
+        return result.value();
+    }
+
+    public CsgDeformViability viability(
+        in Span<CsgDeformVertex> inputVertices,
+        in Span<CsgDeformTriangle> inputTriangles,
+        in Span<CsgDeformCutDesc> cuts,
+        in CsgDeformBuildOptions options
+    ){
+        const Expected<CsgDeformStats, CsgDeformFailure> result = this.execute(inputVertices, inputTriangles, cuts, options);
+        if(!result.has_value())
+            return MakeCsgDeformViability(false, result.error().reason);
+        return MakeCsgDeformViability(true, CsgDeformViabilityReason::Ok);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

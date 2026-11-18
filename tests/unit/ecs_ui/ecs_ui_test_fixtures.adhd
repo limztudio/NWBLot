@@ -45,7 +45,7 @@ using namespace NWB::Impl;
 
 template<typename ViewT, typename LayoutExpectedT>
 [[nodiscard]] FOUNDATION_INLINE b8 AdoptExpectedEcsUiLayout(ViewT& view, LayoutExpectedT&& layout){
-    return static_cast<b8>(layout) && view.adoptLayout(Move(*layout));
+    return static_cast<b8>(layout) && view.adoptLayout(*layout);
 }
 
 

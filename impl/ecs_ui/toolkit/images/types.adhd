@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 b8 ValidateImageSourceTextureDimension(in Name virtualPath, in b8 isTexture2D, in u32 depth){
     if(!isTexture2D || depth != 1u){
         error("MakeImageSource: texture '{}' must be a static 2D image with depth one", virtualPath.resolvedText());
@@ -16,6 +17,7 @@ b8 ValidateImageSourceTextureDimension(in Name virtualPath, in b8 isTexture2D, i
     return true;
 }
 
+[cpp_unwind]
 b8 ValidateImageSourceLoadIdentity(in b8 validIdentity, in Name loadedVirtualPath, in Name expectedVirtualPath){
     if(!validIdentity){
         error("LoadImageSource: texture asset reference is empty");

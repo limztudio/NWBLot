@@ -21,6 +21,9 @@ extern Expected<DecodedUtf8CodePoint> DecodeUtf8CodePoint(in StringView a0);
 [cpp_name("::DecodeUtf8Scalar")]
 extern Expected<DecodedUtf8CodePoint> DecodeUtf8Scalar(in StringView a0);
 
+[cpp_name("::EncodeUtf8CodePoint")]
+extern b8 EncodeUtf8CodePoint(in u32 codePoint, mut String outText);
+
 [cpp_name("::FindLineKeyValue")]
 extern Expected<StringView> FindLineKeyValue(in StringView a0, in StringView a1);
 

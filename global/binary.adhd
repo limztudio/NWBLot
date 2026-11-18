@@ -2,6 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/binary.h>"), cpp_name("::BinaryByteView"), cpp_flags(self_defaulted, brace_init)]
+extern class BinaryByteView{
+    u8 operator[](in usize index)const;
+    b8 empty()const;
+    usize size()const;
+    b8 hasData()const;
+    Span<u8> span()const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_name("::BinaryVectorPayloadFailure::Enum")]
 extern enum BinaryVectorPayloadFailure : u8{
     CountOverflow,
@@ -12,6 +25,21 @@ extern enum BinaryVectorPayloadFailure : u8{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_header("<global/binary.h>"), cpp_name("::ClearByteOutput")]
+extern void ClearByteOutput(mut auto output);
+
+[cpp_header("<global/binary.h>"), cpp_name("::ReserveByteOutput")]
+extern void ReserveByteOutput(mut auto output, in usize count);
+
+[cpp_header("<global/binary.h>"), cpp_name("::AppendOutputByte")]
+extern void AppendOutputByte(mut auto output, in u8 value);
+
+[cpp_header("<global/binary.h>"), cpp_name("::ByteOutputSize")]
+extern usize ByteOutputSize(in auto output);
+
+[cpp_header("<global/binary.h>"), cpp_name("::ByteOutputView"), cpp_flags(borrow_view)]
+extern Span<u8> ByteOutputView(in auto output);
 
 [cpp_name("::AddBinaryRepeatedReserveBytes")]
 extern b8 AddBinaryRepeatedReserveBytes(mut usize a0, in isize a1, in isize a2);
@@ -39,6 +67,12 @@ extern b8 AppendString(mut auto a0, in StringView a1);
 
 [cpp_name("::AppendStringTableText")]
 extern Expected<u32> AppendStringTableText(mut auto a0, in StringView a1);
+
+[cpp_header("<global/binary.h>"), cpp_name("::PodArrayBytes"), cpp_flags(borrow_view)]
+extern Span<u8> PodArrayBytes<T>(in Span<T> values);
+
+[cpp_header("<global/binary.h>"), cpp_name("::PodBytes"), cpp_flags(borrow_view)]
+extern Span<u8> PodBytes(in auto value);
 
 [cpp_name("::BytesMatch")]
 extern b8 BytesMatch(in auto a0, in auto a1);

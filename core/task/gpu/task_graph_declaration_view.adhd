@@ -10,6 +10,11 @@ extern class GpuPresentEndpoint{
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphDeclarationReadView"), cpp_flags(no_copy, no_assign)]
 extern class GpuTaskGraphDeclarationReadView{
+    Optional<mut RhiTexture> borrowTexture(in GpuGraphResourceId id)const;
+    Optional<mut GraphicsPipeline> borrowGraphicsPipeline(in GpuGraphPipelineId id)const;
+    Optional<mut ComputePipeline> borrowComputePipeline(in GpuGraphPipelineId id)const;
+    Optional<mut Buffer> borrowBuffer(in GpuGraphResourceId id)const;
+    b8 appendAcceptedFrameGraphTelemetry(in GpuTaskGraphAnalysis analysis, mut FrameGraphBuilder builder, in GpuTaskGraphQueueAssignments assignments, in GpuCompiledGraphReadView compiledPlan, in GpuTaskGraphQueueAssignmentTelemetryTracker telemetry)const;
     b8 appendFrameGraphTelemetry(...)const;
     u64 declarationRevision(...)const;
     GpuTaskGraphExternalCompletionView externalCompletionAt(...)const;
@@ -27,6 +32,7 @@ extern class GpuTaskGraphDeclarationReadView{
     usize resourceVersionCount(...)const;
     GpuTaskGraphTaskView taskAt(...)const;
     usize taskCount(...)const;
+    Expected<BinaryByteView> uploadBlobData(in GpuUploadBlobId blob)const;
     usize uploadBlobCount(...)const;
     b8 valid(...)const;
     b8 validExternalCompletion(...)const;
@@ -39,6 +45,9 @@ extern class GpuTaskGraphDeclarationReadView{
     b8 validTask(...)const;
     b8 validUploadBlob(...)const;
 };
+
+[cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::VisitGpuTaskTexture")]
+extern b8 VisitGpuTaskTexture(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphResourceId resource, in Func<b8(mut RhiTexture)> visit);
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphExternalCompletionView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuTaskGraphExternalCompletionView{
@@ -73,6 +82,7 @@ extern class GpuTaskGraphResourceSetView{
     Name identity;
     StringView markerLabel;
     usize memberCount;
+    Span<GpuGraphResourceId> memberSpan()const;
 };
 
 [cpp_header("<core/task/gpu/task_graph_declaration_view.h>"), cpp_name("::NWB::Core::GpuTaskGraphResourceVersionView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]

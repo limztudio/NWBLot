@@ -22,6 +22,7 @@ struct ScopedVarInfo{
     MStringView name;
     MStringView inferredTypeName;
     MStringView borrowedLocalOwnerName;
+    MStringView referenceOwnerName;
     TypeRef* type = nullptr;
     const Expr* lambdaExpr = nullptr;
     const MethodDecl* callableFunction = nullptr;
@@ -29,6 +30,7 @@ struct ScopedVarInfo{
     u32 declaredParallelDepth = 0u;
     b8 isConst = false;
     b8 isParam = false;
+    b8 retainsBorrow = false;
     b8 borrowsLocalStringOwner = false;
 };
 
@@ -106,6 +108,8 @@ private:
     void markScratchArenaUsed(MethodDecl& method)noexcept;
     [[nodiscard]] b8 isUnshadowedTypeScopeAccess(Span<const ScopedVarInfo> scope, MStringView scopeName)const noexcept;
     [[nodiscard]] b8 isOwnedStackLocalVar(const ScopedVarInfo& local)const noexcept;
+    [[nodiscard]] const TypeRef* wrappedReferenceType(const TypeRef* wrapper)const noexcept;
+    [[nodiscard]] b8 checkWrappedReferenceArgument(const ClassDecl* ownerClass, const MethodDecl& method, const TypeRef& target, Expr& argument, Span<const ScopedVarInfo> scope, MVector<ParseError>& errors)const;
     [[nodiscard]] b8 isTaskLocalIdentifierExpr(const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     void markSimdResultWrapperAdaptation(const TypeRef* targetTypeRef, Expr& argExpr)const noexcept;
     void markFormatArgWrap(const ClassDecl* ownerClass, const MethodDecl* method, Expr& arg, Span<const ScopedVarInfo> scope, b8 requireDiagnosticWrapFlag)const noexcept;

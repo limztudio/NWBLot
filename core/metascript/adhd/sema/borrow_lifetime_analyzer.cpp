@@ -16,12 +16,20 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, const b8 requireObject)const noexcept{
     const TypeRef* exprTypeRef = nullptr;
     const MStringView baseType = m_checker.inferExprBaseType(ownerClass, method, expr, scope, &exprTypeRef);
-    if(m_checker.m_symbols.resolveRefMode(exprTypeRef) != ParamPassingMode::None)
+    if(m_checker.m_symbols.resolveRefMode(exprTypeRef) != ParamPassingMode::None){
+        if(requireObject && expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            const TypeRef* receiverType = nullptr;
+            const MStringView receiver = m_checker.inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope, &receiverType);
+            const b8 unwrapsBorrow = m_checker.wrappedReferenceType(receiverType) && FindSpecialMethodSemantics(expr.lhs->text) == SpecialMethodKind::UnwrapValue;
+            if(!unwrapsBorrow && !IsBorrowViewType(receiver))
+                return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs->lhs, scope, true);
+        }
         return false;
-    if(IsBorrowViewType(baseType))
+    }
+    if(!requireObject && IsBorrowViewType(baseType))
         return false;
 
     switch(expr.kind){
@@ -29,7 +37,7 @@ b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, con
     case ExprKind::ThisMember:
         return false;
     case ExprKind::MemberAccess:
-        return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
+        return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope, requireObject);
     case ExprKind::Index:{
         if(!expr.lhs)
             return false;
@@ -80,6 +88,49 @@ b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, con
     default:
         return true;
     }
+}
+
+const ScopedVarInfo* BorrowLifetimeAnalyzer::localReferenceOwner(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& expr, const Span<const ScopedVarInfo> scope, const b8 takingAddress)const noexcept{
+    const b8 needsStorage = takingAddress || expr.wrapInNotNull;
+    if(expr.kind == ExprKind::Identifier){
+        const ScopedVarInfo* local = TypeChecker::FindScopedVar(scope, expr.text);
+        if(!local)
+            return nullptr;
+        if(!local->referenceOwnerName.empty())
+            return TypeChecker::FindScopedVar(scope, local->referenceOwnerName);
+        if(!needsStorage)
+            return nullptr;
+        if(local->isParam)
+            return local->mode == ParamPassingMode::In && !local->retainsBorrow ? local : nullptr;
+        return m_checker.m_symbols.resolveRefMode(local->type) == ParamPassingMode::None && local->mode == ParamPassingMode::None ? local : nullptr;
+    }
+    if((expr.kind == ExprKind::MemberAccess || expr.kind == ExprKind::Index) && expr.lhs){
+        if(expr.kind == ExprKind::Index){
+            const MStringView container = m_checker.inferExprBaseType(ownerClass, &method, *expr.lhs, scope);
+            if(IsBorrowViewType(container))
+                return localReferenceOwner(ownerClass, method, *expr.lhs, scope);
+        }
+        return localReferenceOwner(ownerClass, method, *expr.lhs, scope, needsStorage);
+    }
+    if(expr.kind != ExprKind::Call)
+        return nullptr;
+    const TypeRef* const result = m_checker.inferExprTypeRef(ownerClass, &method, expr, scope);
+    const b8 borrowedResult = m_checker.wrappedReferenceType(result) != nullptr || m_checker.m_symbols.resolveRefMode(result) != ParamPassingMode::None;
+    const b8 createsView = expr.lhs && expr.lhs->kind == ExprKind::Identifier && IsBorrowViewType(m_checker.m_symbols.resolveBaseTypeName(expr.lhs->text));
+    if(expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs && (needsStorage || borrowedResult)){
+        const Expr& receiver = *expr.lhs->lhs;
+        const TypeRef* const receiverType = m_checker.inferExprTypeRef(ownerClass, &method, receiver, scope);
+        const b8 readsStoredBorrow = m_checker.wrappedReferenceType(receiverType) != nullptr && FindSpecialMethodSemantics(expr.lhs->text) == SpecialMethodKind::UnwrapValue;
+        if(const auto* owner = localReferenceOwner(ownerClass, method, receiver, scope, !readsStoredBorrow))
+            return owner;
+    }
+    for(const Expr* arg : expr.arguments){
+        if(!arg)
+            continue;
+        if(const auto* owner = localReferenceOwner(ownerClass, method, *arg, scope, createsView || (borrowedResult && (arg->isRetainedArg || arg->isMutArg))))
+            return owner;
+    }
+    return nullptr;
 }
 
 b8 BorrowLifetimeAnalyzer::borrowsTemporaryStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{

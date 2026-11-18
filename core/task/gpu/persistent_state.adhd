@@ -2,10 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache::Candidate"), cpp_flags(no_copy, no_assign)]
+extern class GpuPersistentStateCandidate{
+    b8 valid()const;
+    b8 empty()const;
+};
+
 [cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache"), cpp_flags(no_copy, no_assign)]
 extern class GpuPersistentResourceStateCache{
+    b8 buildMergedBufferSubset(in CommandListResourceStateHandoff source, in Span<BufferHandle> buffers, mut GpuPersistentStateCandidate candidate)const;
+    b8 buildFilteredResourceSubset(in CommandListResourceStateHandoff source, in Span<TextureHandle> textures, in Span<BufferHandle> buffers, mut GpuPersistentStateCandidate candidate)const;
+    b8 buildMergedResourceSubset(in CommandListResourceStateHandoff source, in Span<TextureHandle> textures, in Span<BufferHandle> buffers, mut GpuPersistentStateCandidate candidate)const;
+    b8 commit(mut GpuPersistentStateCandidate candidate);
     b8 empty(...)const;
-    b8 replaceBufferSubset(...);
+    Optional<in CommandListResourceStateHandoff> borrowSource()const;
+    b8 replaceBufferSubset(in CommandListResourceStateHandoff source, in Span<BufferHandle> buffers);
     b8 replaceResourceSubset(...);
     void reset(...);
     b8 valid(...)const;

@@ -102,8 +102,8 @@ public:
 
 public:
     [[nodiscard]] Optional<WidgetState> findState(const WidgetId widget)const noexcept{
-        if(const WidgetState* found = m_context.states().find(widget))
-            return *found;
+        if(const auto found = m_context.states().find(widget))
+            return **found;
         return {};
     }
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_context.input(); }

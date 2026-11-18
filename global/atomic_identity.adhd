@@ -8,6 +8,9 @@ extern void AdvanceNonWrappingRevision(mut u64 a0);
 [cpp_name("::AdvanceWrappingNonzero")]
 extern void AdvanceWrappingNonzeroU64(mut u64 a0);
 
+[cpp_header("<global/atomic_identity.h>"), cpp_name("::AllocateWrappingIdentity")]
+extern u64 AllocateWrappingIdentity<Domain>();
+
 [cpp_name("::AllocateServiceIdentity")]
 extern u64 AllocateServiceIdentity();
 

@@ -45,6 +45,13 @@ public:
 };
 
 
+inline Expected<GpuTaskId> AddFrameTimingBeginTask(
+    GpuTaskGraph& graph, const GpuTaskDesc& desc, GpuTimingFrameTransaction& transaction, Device& device, const GpuTimingScopeDefinition& scope
+){
+    return graph.addTask<FrameTimingBeginGraphTask>(desc, { transaction, device, scope });
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

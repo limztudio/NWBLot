@@ -10,85 +10,100 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_FRAME_HEAP_SLOT_COUNT")]
+extern const u32 s_ShaderMeshFrameHeapSlotCount;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_FRAME_HEAP_SLOT_INSTANCE")]
+extern const u32 s_ShaderMeshFrameHeapSlotInstance;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED")]
+extern const u32 s_ShaderMeshFrameHeapSlotMaterialTyped;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_FRAME_HEAP_SLOT_VIEW")]
+extern const u32 s_ShaderMeshFrameHeapSlotView;
 
-#include <impl/ecs_render/avboit/avboit.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX")]
+extern const u32 s_ShaderMeshFrameHeapSlotGeneratedVertex;
 
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/backend_selection.h>
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_PUSH_CONSTANT_BYTE_SIZE")]
+extern const u32 s_ShaderMeshPushConstantByteSize;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT")]
+extern const u32 s_ShaderMeshPushDispatchMeshletCount;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX")]
+extern const u32 s_ShaderMeshPushDispatchInstanceIndex;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshPushDispatchMaterialConstantByteOffset;
 
-NWB_IMPL_BEGIN
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_PUSH_DISPATCH_FLAGS")]
+extern const u32 s_ShaderMeshPushDispatchFlags;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET")]
+extern const u32 s_ShaderMeshPushFrameHeapSlotWordOffset;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE")]
+extern const u32 s_ShaderMeshComputePushConstantByteSize;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_COMPUTE_INDEX_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshComputeIndexByteOffset;
 
-namespace ECSRenderDetail{
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE")]
+extern const u32 s_ShaderAvboitDrawPushConstantByteSize;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshEmulationVertexPositionByteOffset;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshEmulationVertexNormalByteOffset;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshEmulationVertexTangentByteOffset;
 
-static_assert(sizeof(MeshFrameHeapSlots) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_COUNT, "Mesh frame heap-slot payload must stay a uint4");
-static_assert(offsetof(MeshFrameHeapSlots, instance) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_INSTANCE, "Instance heap slot must map to frame heap lane x");
-static_assert(offsetof(MeshFrameHeapSlots, materialTyped) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED, "Material heap slot must map to frame heap lane y");
-static_assert(offsetof(MeshFrameHeapSlots, view) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_VIEW, "View heap slot must map to frame heap lane z");
-static_assert(offsetof(MeshFrameHeapSlots, generatedVertex) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX, "Generated-vertex heap slot must map to frame heap lane w");
-static_assert(sizeof(ShaderDrivenPushConstants) == NWB_MESH_PUSH_CONSTANT_BYTE_SIZE, "ShaderDrivenPushConstants layout must stay stable");
-static_assert(offsetof(ShaderDrivenPushConstants, meshletCount) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT, "ShaderDrivenPushConstants dispatch.x must be meshlet count");
-static_assert(offsetof(ShaderDrivenPushConstants, instanceIndex) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX, "ShaderDrivenPushConstants dispatch.y must be instance index");
-static_assert(offsetof(ShaderDrivenPushConstants, materialConstantByteOffset) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
-static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_FLAGS, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
-static_assert(offsetof(ShaderDrivenPushConstants, frameHeapSlots) == sizeof(u32) * NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET, "ShaderDrivenPushConstants frame heap slots must follow the viewport lanes");
-static_assert(sizeof(MeshComputePushConstants) == NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE);
-static_assert(offsetof(MeshComputePushConstants, generatedIndexByteOffset) == NWB_MESH_COMPUTE_INDEX_BYTE_OFFSET);
-static_assert(sizeof(MeshComputePushConstants) <= Core::s_MaxPushConstantSize);
-static_assert(sizeof(TransparentDrawPushConstants) == NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE, "TransparentDrawPushConstants layout must stay stable");
-static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
-static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
-static_assert(offsetof(EmulatedVertex, position) == NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "EmulatedVertex position offset must match the mesh emulation shader");
-static_assert(offsetof(EmulatedVertex, normal) == NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "EmulatedVertex normal offset must match the mesh emulation shader");
-static_assert(offsetof(EmulatedVertex, tangent) == NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "EmulatedVertex tangent offset must match the mesh emulation shader");
-static_assert(offsetof(EmulatedVertex, uv0) == NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "EmulatedVertex uv0 offset must match the mesh emulation shader");
-static_assert(offsetof(EmulatedVertex, color) == NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "EmulatedVertex color offset must match the mesh emulation shader");
-static_assert(offsetof(EmulatedVertex, worldPosition) == NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "EmulatedVertex world-position offset must match the mesh emulation shader");
-static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
-static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT, "SceneShadingGpuData layout must match the shading shaders");
-static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
-static_assert(sizeof(SceneLightGpuData) == sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT, "SceneLightGpuData layout must match the shading shaders");
-static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData must stay SIMD-aligned");
-static_assert(s_EmulatedVertexBufferIndex == NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX, "s_EmulatedVertexBufferIndex must match NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX");
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshEmulationVertexUv0ByteOffset;
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshEmulationVertexColorByteOffset;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET")]
+extern const u32 s_ShaderMeshEmulationVertexWorldPositionByteOffset;
 
+[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT")]
+extern const u32 s_ShaderSceneShadingBufferFloatCount;
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX")]
+extern const u32 s_ShaderMeshEmulationVertexBufferIndex;
+static_assert(size_of<MeshFrameHeapSlots>() == size_of<u32>() * s_ShaderMeshFrameHeapSlotCount, "Mesh frame heap-slot payload must stay a uint4");
+static_assert(offset_of<MeshFrameHeapSlots>(instance) == size_of<u32>() * s_ShaderMeshFrameHeapSlotInstance, "Instance heap slot must map to frame heap lane x");
+static_assert(offset_of<MeshFrameHeapSlots>(materialTyped) == size_of<u32>() * s_ShaderMeshFrameHeapSlotMaterialTyped, "Material heap slot must map to frame heap lane y");
+static_assert(offset_of<MeshFrameHeapSlots>(view) == size_of<u32>() * s_ShaderMeshFrameHeapSlotView, "View heap slot must map to frame heap lane z");
+static_assert(offset_of<MeshFrameHeapSlots>(generatedVertex) == size_of<u32>() * s_ShaderMeshFrameHeapSlotGeneratedVertex, "Generated-vertex heap slot must map to frame heap lane w");
+static_assert(size_of<ShaderDrivenPushConstants>() == s_ShaderMeshPushConstantByteSize, "ShaderDrivenPushConstants layout must stay stable");
+static_assert(offset_of<ShaderDrivenPushConstants>(meshletCount) == size_of<u32>() * s_ShaderMeshPushDispatchMeshletCount, "ShaderDrivenPushConstants dispatch.x must be meshlet count");
+static_assert(offset_of<ShaderDrivenPushConstants>(instanceIndex) == size_of<u32>() * s_ShaderMeshPushDispatchInstanceIndex, "ShaderDrivenPushConstants dispatch.y must be instance index");
+static_assert(offset_of<ShaderDrivenPushConstants>(materialConstantByteOffset) == size_of<u32>() * s_ShaderMeshPushDispatchMaterialConstantByteOffset, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
+static_assert(offset_of<ShaderDrivenPushConstants>(dispatchFlags) == size_of<u32>() * s_ShaderMeshPushDispatchFlags, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
+static_assert(offset_of<ShaderDrivenPushConstants>(frameHeapSlots) == size_of<u32>() * s_ShaderMeshPushFrameHeapSlotWordOffset, "ShaderDrivenPushConstants frame heap slots must follow the viewport lanes");
+static_assert(size_of<MeshComputePushConstants>() == s_ShaderMeshComputePushConstantByteSize);
+static_assert(offset_of<MeshComputePushConstants>(generatedIndexByteOffset) == s_ShaderMeshComputeIndexByteOffset);
+static_assert(size_of<MeshComputePushConstants>() <= s_MaxPushConstantSize);
+static_assert(size_of<TransparentDrawPushConstants>() == s_ShaderAvboitDrawPushConstantByteSize, "TransparentDrawPushConstants layout must stay stable");
+static_assert(size_of<TransparentDrawPushConstants>() <= s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
+static_assert(size_of<EmulatedVertex>() == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
+static_assert(offset_of<EmulatedVertex>(position) == s_ShaderMeshEmulationVertexPositionByteOffset, "EmulatedVertex position offset must match the mesh emulation shader");
+static_assert(offset_of<EmulatedVertex>(normal) == s_ShaderMeshEmulationVertexNormalByteOffset, "EmulatedVertex normal offset must match the mesh emulation shader");
+static_assert(offset_of<EmulatedVertex>(tangent) == s_ShaderMeshEmulationVertexTangentByteOffset, "EmulatedVertex tangent offset must match the mesh emulation shader");
+static_assert(offset_of<EmulatedVertex>(uv0) == s_ShaderMeshEmulationVertexUv0ByteOffset, "EmulatedVertex uv0 offset must match the mesh emulation shader");
+static_assert(offset_of<EmulatedVertex>(color) == s_ShaderMeshEmulationVertexColorByteOffset, "EmulatedVertex color offset must match the mesh emulation shader");
+static_assert(offset_of<EmulatedVertex>(worldPosition) == s_ShaderMeshEmulationVertexWorldPositionByteOffset, "EmulatedVertex world-position offset must match the mesh emulation shader");
+static_assert(align_of<EmulatedVertex>() >= align_of<f32x4>(), "EmulatedVertex must stay SIMD-aligned");
+static_assert(size_of<SceneShadingGpuData>() == size_of<f32>() * s_ShaderSceneShadingBufferFloatCount, "SceneShadingGpuData layout must match the shading shaders");
+static_assert(align_of<SceneShadingGpuData>() >= align_of<f32x4>(), "SceneShadingGpuData must stay SIMD-aligned");
+static_assert(size_of<SceneLightGpuData>() == size_of<f32>() * s_ShaderSceneLightRecordFloatCount, "SceneLightGpuData layout must match the shading shaders");
+static_assert(align_of<SceneLightGpuData>() >= align_of<f32x4>(), "SceneLightGpuData must stay SIMD-aligned");
+static_assert(s_EmulatedVertexBufferIndex == s_ShaderMeshEmulationVertexBufferIndex, "s_EmulatedVertexBufferIndex must match NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

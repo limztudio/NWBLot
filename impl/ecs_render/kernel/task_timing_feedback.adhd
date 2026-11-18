@@ -8,233 +8,176 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+static_assert(u32(RendererTaskTimingFeedbackCollectionAction::None) == 0u);
 
+class PendingRendererTimingSubscription : NoCopy{
+    private mut GpuTimingRecorder m_recorder;
+    private GpuTimingSampleSubscription m_subscription;
+    private b8 m_pending = true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_feedback_types.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/compiler.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(static_cast<u32>(RendererTaskTimingFeedbackCollectionAction::None) == 0u);
-
-
-// Renderer owns timing lifetime; compiler consumes only an immutable history snapshot.
-class RendererTaskTimingFeedback final : NoCopy{
-private:
-    static void OnGpuTimingSampleCallback(void* const context, const Core::GpuTimingSample& sample)noexcept{
-        auto& feedback = *MakeNotNull(static_cast<RendererTaskTimingFeedback*>(context));
-        feedback.onGpuTimingSample(sample);
+    public PendingRendererTimingSubscription(mut GpuTimingRecorder recorder, in GpuTimingSampleSubscription subscription){
+        this.m_recorder = recorder;
+        this.m_subscription = subscription;
     }
-
-
-public:
-    RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Span<const Name> feedbackCollectionScopes)
-        : m_graphics(graphics)
-        , m_state(arena)
-        , m_history(arena)
-        , m_snapshot(arena)
-        , m_feedbackCollectionScopes(arena)
-    {
-        FOUNDATION_ASSERT(!feedbackCollectionScopes.empty());
-        m_feedbackCollectionScopes.reserve(feedbackCollectionScopes.size());
-        m_feedbackCollectionScopes.assign(feedbackCollectionScopes.begin(), feedbackCollectionScopes.end());
+    public void commit(){ this.m_pending = false; }
+    public ~PendingRendererTimingSubscription(){
+        if(this.m_pending)
+            this.m_recorder.unsubscribeSampleListener(this.m_subscription);
     }
+}
 
-    ~RendererTaskTimingFeedback()noexcept{
-        deactivate();
+// The recorder drains retained callbacks before the renderer releases its history.
+class RendererTaskTimingFeedback : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    private RendererTaskTimingFeedbackState m_state;
+    private GpuTaskTimingHistoryStore m_history = GpuTaskTimingHistoryStore();
+    private GpuTaskTimingHistorySnapshot m_snapshot = GpuTaskTimingHistorySnapshot();
+    private Vector<Name> m_feedbackCollectionScopes;
+    private Futex m_lifecycleMutex;
+    private Futex m_mutex;
+    private GpuTaskTimingFeedbackPolicy m_policy;
+    private GpuTimingSampleSubscription m_subscription;
+    private b8 m_active = false;
+
+    [cpp_unwind]
+    public RendererTaskTimingFeedback(mut GraphicsRuntime graphics, in Span<Name> feedbackCollectionScopes){
+        this.m_graphics = graphics;
+        assert(!feedbackCollectionScopes.empty());
+        this.m_feedbackCollectionScopes.reserve(feedbackCollectionScopes.size());
+        for(in Name scope : feedbackCollectionScopes)
+            this.m_feedbackCollectionScopes.push_back(scope);
     }
+    public ~RendererTaskTimingFeedback(){ this.deactivate(); }
 
-
-public:
-    FOUNDATION_INLINE void activate(){
-        ScopedLock lifecycleLock(m_lifecycleMutex);
-
+    [cpp_unwind]
+    public void activate(){
+        const FutexGuard lifecycleLock = AcquireFutex(this.m_lifecycleMutex);
         b8 feedbackCollectionEnabled = false;
         {
-            ScopedLock lock(m_mutex);
-            if(m_active)
+            const FutexGuard lock = AcquireFutex(this.m_mutex);
+            if(this.m_active)
                 return;
-            feedbackCollectionEnabled = m_policy.enabled;
+            feedbackCollectionEnabled = this.m_policy.enabled;
         }
 
-        Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
-        const auto subscriptionResult = timing.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = this, .invoke = &OnGpuTimingSampleCallback, });
-        if(!subscriptionResult){
+        mut GpuTimingRecorder timing = this.m_graphics.gpuTiming();
+        const auto subscription = timing.subscribeSampleObserver(this);
+        if(!subscription.has_value()){
             LogRendererTaskTimingFeedbackSubscriptionFailure();
             return;
         }
-        const Core::GpuTimingSampleSubscription subscription = *subscriptionResult;
-        ScopeExit discardSubscription([&]()noexcept{ timing.unsubscribeSampleListener(subscription); });
-
-        if(feedbackCollectionEnabled){
-            if(!timing.setFeedbackCollectionScopes(subscription, m_feedbackCollectionScopes)){
-                LogRendererTaskTimingFeedbackScopeCollectionFailure();
-                return;
-            }
+        PendingRendererTimingSubscription pending(timing, subscription.value());
+        if(feedbackCollectionEnabled && !timing.setFeedbackCollectionScopes(subscription.value(), this.m_feedbackCollectionScopes)){
+            LogRendererTaskTimingFeedbackScopeCollectionFailure();
+            return;
         }
 
-        ScopedLock lock(m_mutex);
-        m_subscription = subscription;
-        m_active = true;
-        discardSubscription.release();
+        const FutexGuard lock = AcquireFutex(this.m_mutex);
+        this.m_subscription = subscription.value();
+        this.m_active = true;
+        pending.commit();
     }
 
-    FOUNDATION_INLINE void deactivate()noexcept{
-        ScopedLock lifecycleLock(m_lifecycleMutex);
-
-        Core::GpuTimingSampleSubscription subscription;
+    public void deactivate(){
+        const FutexGuard lifecycleLock = AcquireFutex(this.m_lifecycleMutex);
+        GpuTimingSampleSubscription subscription = GpuTimingSampleSubscription();
         {
-            ScopedLock lock(m_mutex);
-            if(!m_active)
+            const FutexGuard lock = AcquireFutex(this.m_mutex);
+            if(!this.m_active)
                 return;
-            m_active = false;
-            subscription = m_subscription;
-            m_subscription = {};
+            this.m_active = false;
+            subscription = this.m_subscription;
+            this.m_subscription = GpuTimingSampleSubscription();
         }
-
-        // Unsubscription removes this bridge's demand and waits for retaining callbacks.
-        m_graphics.gpuTiming().unsubscribeSampleListener(subscription);
-        reset();
+        this.m_graphics.gpuTiming().unsubscribeSampleListener(subscription);
+        this.reset();
     }
 
-    [[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTimingSampleAttribution> beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const b8 recordsNonCommittingTimingSample){
-        if(!CanBeginRendererTaskTimingFeedbackSample(scopeName, m_feedbackCollectionScopes, key.valid(), expectedQueue.valid()))
-            return Core::s_NoGpuTimingSampleAttribution;
-
-        ScopedLock lock(m_mutex);
-        if(!CanPublishRendererTaskTimingFeedbackSnapshot(m_active, m_subscription.valid(), m_policy.enabled))
-            return Core::s_NoGpuTimingSampleAttribution;
-
-        const auto attribution = m_graphics.gpuTiming().allocateSampleAttribution();
-        if(!attribution)
+    [cpp_unwind]
+    public Expected<GpuTimingSampleAttribution> beginSample(
+        in Name scopeName, in GpuTaskTimingKey key, in GpuPhysicalQueueId expectedQueue,
+        in b8 recordsNonCommittingTimingSample
+    ){
+        if(!CanBeginRendererTaskTimingFeedbackSample(scopeName, this.m_feedbackCollectionScopes, key.valid(), expectedQueue.valid()))
+            return s_NoGpuTimingSampleAttribution;
+        const FutexGuard lock = AcquireFutex(this.m_mutex);
+        if(!CanPublishRendererTaskTimingFeedbackSnapshot(this.m_active, this.m_subscription.valid(), this.m_policy.enabled))
+            return s_NoGpuTimingSampleAttribution;
+        const auto attribution = this.m_graphics.gpuTiming().allocateSampleAttribution();
+        if(!attribution.has_value())
             return MakeUnexpected(attribution.error());
-
-        if(!m_state.trackSample(*attribution, scopeName, key, expectedQueue, m_graphics.getFrameIndex(), recordsNonCommittingTimingSample))
-            return MakeUnexpected(Failure{});
-        return *attribution;
+        if(!this.m_state.trackSample(attribution.value(), scopeName, key, expectedQueue, this.m_graphics.getFrameIndex(), recordsNonCommittingTimingSample))
+            return MakeUnexpected(Failure());
+        return attribution.value();
     }
 
-    FOUNDATION_INLINE void acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept{
-        if(attribution == Core::s_NoGpuTimingSampleAttribution)
+    public void acceptSubmission(in GpuTimingSampleAttribution attribution, in QueueSubmissionToken token){
+        if(attribution == s_NoGpuTimingSampleAttribution)
             return;
-
-        ScopedLock lock(m_mutex);
-        m_state.acceptSubmission(attribution, token, m_active);
+        const FutexGuard lock = AcquireFutex(this.m_mutex);
+        this.m_state.acceptSubmission(attribution, token, this.m_active);
     }
-
-    FOUNDATION_INLINE void discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
-        if(attribution == Core::s_NoGpuTimingSampleAttribution)
+    public void discardRecording(in GpuTimingSampleAttribution attribution){
+        if(attribution == s_NoGpuTimingSampleAttribution)
             return;
-
-        ScopedLock lock(m_mutex);
-        m_state.discardRecording(attribution);
+        const FutexGuard lock = AcquireFutex(this.m_mutex);
+        this.m_state.discardRecording(attribution);
     }
 
-    FOUNDATION_INLINE void configureCompileOptions(Core::GpuTaskGraphCompileOptions& options, const u64 frameIndex){
-        options.queueAssignmentOptions.timingHistory = nullptr;
-        options.queueAssignmentOptions.timingFeedbackPolicy = {};
+    [cpp_unwind]
+    public void configureCompileOptions(mut GpuTaskGraphCompileOptions options, in u64 frameIndex){
+        options.queueAssignmentOptions.clearTimingHistory();
+        options.queueAssignmentOptions.timingFeedbackPolicy = GpuTaskTimingFeedbackPolicy();
         options.queueAssignmentOptions.timingFrameIndex = 0u;
-
-        RendererTaskTimingFeedbackDrainResult drainResult;
+        RendererTaskTimingFeedbackDrainResult drained = RendererTaskTimingFeedbackDrainResult();
         {
-            ScopedLock lock(m_mutex);
-            const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
-            m_history.resetForDeviceGeneration(deviceGeneration);
-            drainResult = m_state.drain(m_history, deviceGeneration);
-
-            if(CanPublishRendererTaskTimingFeedbackSnapshot(m_active, m_subscription.valid(), m_policy.enabled)){
-                m_history.snapshot(m_snapshot);
-                if(m_snapshot.valid()){
-                    options.queueAssignmentOptions.timingHistory = &m_snapshot;
-                    options.queueAssignmentOptions.timingFeedbackPolicy = m_policy;
+            const FutexGuard lock = AcquireFutex(this.m_mutex);
+            const u16 generation = this.m_graphics.getDevice().getDeviceGeneration();
+            this.m_history.resetForDeviceGeneration(generation);
+            drained = this.m_state.drain(this.m_history, generation);
+            if(CanPublishRendererTaskTimingFeedbackSnapshot(this.m_active, this.m_subscription.valid(), this.m_policy.enabled)){
+                this.m_history.snapshot(this.m_snapshot);
+                if(this.m_snapshot.valid()){
+                    options.queueAssignmentOptions.setTimingHistory(this.m_snapshot);
+                    options.queueAssignmentOptions.timingFeedbackPolicy = this.m_policy;
                     options.queueAssignmentOptions.timingFrameIndex = frameIndex;
                 }
             }
         }
-        LogRendererTaskTimingFeedbackRejections(drainResult.rejectedAssignmentCount, drainResult.rejectedSampleCount);
+        LogRendererTaskTimingFeedbackRejections(drained.rejectedAssignmentCount, drained.rejectedSampleCount);
     }
-
-    FOUNDATION_INLINE void reset()noexcept{
-        ScopedLock lock(m_mutex);
-        m_state.reset();
-        m_history.reset(m_snapshot);
+    public void reset(){
+        const FutexGuard lock = AcquireFutex(this.m_mutex);
+        this.m_state.reset();
+        this.m_history.reset(this.m_snapshot);
     }
-
-
-private:
-    FOUNDATION_INLINE void onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept{
-        if(sample.attribution == Core::s_NoGpuTimingSampleAttribution)
+    public void onGpuTimingSample(in GpuTimingSample sample){
+        if(sample.attribution == s_NoGpuTimingSampleAttribution)
             return;
-
-        ScopedLock lock(m_mutex);
-        m_state.completeSample(sample, m_active);
+        const FutexGuard lock = AcquireFutex(this.m_mutex);
+        this.m_state.completeSample(sample, this.m_active);
     }
-
-
-private:
-    Core::GraphicsRuntime& m_graphics;
-    RendererTaskTimingFeedbackState m_state;
-    Core::GpuTaskTimingHistoryStore m_history;
-    Core::GpuTaskTimingHistorySnapshot m_snapshot;
-    Vector<Name, Core::Alloc::GlobalArena> m_feedbackCollectionScopes;
-    Futex m_lifecycleMutex;
-    Futex m_mutex;
-    Core::GpuTaskTimingFeedbackPolicy m_policy;
-    Core::GpuTimingSampleSubscription m_subscription;
-    b8 m_active = false;
-};
-
-namespace ECSRenderDetail{
-
-
-// Callers own the recording scope and clear attribution when dispatch records nothing.
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTimingSampleAttribution> BeginTaskTimingSample(RendererTaskTimingFeedback* const timingFeedback, const Core::GpuTimingScopeDefinition* const timingScope, const Core::GpuTaskRecordContext& context){
-    if(!timingFeedback || !timingScope)
-        return Core::s_NoGpuTimingSampleAttribution;
-    const Core::GpuPhysicalQueueInfo* const queueInfo = context.compiledPlan.queueInfo(context.queue);
-    const Core::GpuCompiledTaskView compiledTask = context.compiledPlan.findTask(context.task);
-    if(!queueInfo || !compiledTask.valid())
-        return Core::s_NoGpuTimingSampleAttribution;
-    const Core::GpuTaskGraphTaskView task = context.declarations.taskAt(context.task.index);
-    return timingFeedback->beginSample(
-        timingScope->identity,
-        Core::GpuTaskTimingKey{ .task = task.identity, .variant = task.timing.variant, .resolutionClass = task.timing.resolutionClass, .queue = queueInfo->queueClass, },
-        context.queue,
-        compiledTask.plan->recordsNonCommittingTimingSample
-    );
 }
 
 
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+Expected<GpuTimingSampleAttribution> BeginTaskTimingSample(
+    mut RendererTaskTimingFeedback feedback, in GpuTimingScopeDefinition scope, in GpuTaskRecordContext context
+){
+    const auto queueInfo = context.compiledPlan.findQueueInfo(context.queue);
+    const auto compiledTask = context.compiledPlan.findTask(context.task);
+    if(!queueInfo.has_value() || !compiledTask.valid())
+        return s_NoGpuTimingSampleAttribution;
+    const GpuTaskGraphTaskView task = context.declarations.taskAt(context.task.index);
+    GpuTaskTimingKey key = GpuTaskTimingKey();
+    key.task = task.identity;
+    key.variant = task.timing.variant;
+    key.resolutionClass = task.timing.resolutionClass;
+    key.queue = queueInfo.value().queueClass;
+    return feedback.beginSample(scope.identity, key, context.queue, compiledTask.recordsNonCommittingTimingSample());
 }
 
 

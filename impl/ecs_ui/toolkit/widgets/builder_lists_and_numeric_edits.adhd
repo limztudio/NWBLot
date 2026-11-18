@@ -2,18 +2,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_input.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_layout_preparer.adhd>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd>
+#include <impl/ecs_ui/toolkit/context.adhd>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/actions.adhd>
 #include <impl/ecs_ui/toolkit/widgets/style.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<f64x2u> TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight){
-    const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
-    const f64 end = start + cast<f64>(rowHeight);
-    if(!IsFinite(start) || !IsFinite(end) || end <= start)
-        return MakeUnexpected(Failure());
-    return f64x2u(start, end);
+b8 IsValidVirtualListWheelRows(in f32 wheelRows){
+    return IsFinite(wheelRows) && wheelRows > 0.0f;
 }
 
 b8 NeedsListScrollOffsetRescale(
@@ -33,91 +41,135 @@ b8 IsListRowsFocused(in WidgetId focusId, in WidgetId listId, in WidgetId comman
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+class NumericEditActions : IEditActionSink{
+    private in EditModel m_draft;
+    private in Context m_context;
+    private mut NumericEditResult m_result;
+    private mut u64 m_revision;
+    private Optional<mut IntegerEditModel> m_integer;
+    private Optional<in IntegerBounds> m_integerBounds;
+    private Optional<mut FloatEditModel> m_float;
+    private Optional<in FloatBounds> m_floatBounds;
+
+    public NumericEditActions(in borrow IntegerBounds bounds, in Context context, mut IntegerEditModel model, mut NumericEditResult result, mut u64 revision){
+        this.m_draft = model.draft();
+        this.m_context = context;
+        this.m_result = result;
+        this.m_revision = revision;
+        this.m_integer = Optional<mut IntegerEditModel>(model);
+        this.m_integerBounds = Optional<in IntegerBounds>(bounds);
+    }
+
+    public NumericEditActions(in borrow FloatBounds bounds, in Context context, mut FloatEditModel model, mut NumericEditResult result, mut u64 revision){
+        this.m_draft = model.draft();
+        this.m_context = context;
+        this.m_result = result;
+        this.m_revision = revision;
+        this.m_float = Optional<mut FloatEditModel>(model);
+        this.m_floatBounds = Optional<in FloatBounds>(bounds);
+    }
+
+    private u64 currentRevision()const{
+        if(this.m_integer.has_value())
+            return this.m_integer.value().revision();
+        return this.m_float.value().revision();
+    }
+
+    public b8 apply(mut EditModel draft, in EditAction action, in b8 readOnly)override{
+        if(this.m_context.failed() || !SameAddress(draft, this.m_draft) || this.currentRevision() != this.m_revision){
+            this.m_result.valid = false;
+            return false;
+        }
+        NumericEditResult result;
+        if(action == EditAction::Submit){
+            if(readOnly)
+                result.valid = true;
+            else if(this.m_integer.has_value())
+                result = this.m_integer.value().submit(this.m_integerBounds.value());
+            else
+                result = this.m_float.value().submit(this.m_floatBounds.value());
+        }
+        else if(action == EditAction::Cancel){
+            if(this.m_integer.has_value())
+                result = this.m_integer.value().cancel();
+            else
+                result = this.m_float.value().cancel();
+        }
+        else if(action == EditAction::Blur && !readOnly){
+            if(this.m_integer.has_value())
+                result = this.m_integer.value().blur(this.m_integerBounds.value());
+            else
+                result = this.m_float.value().blur(this.m_floatBounds.value());
+        }
+        else if(action == EditAction::Abandon || action == EditAction::Blur){
+            if(this.m_integer.has_value())
+                result = this.m_integer.value().abandon();
+            else
+                result = this.m_float.value().abandon();
+        }
+        this.m_revision = this.currentRevision();
+        MergeNumericEditResult(result, this.m_result);
+        return result.valid && !this.m_context.failed();
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list_input.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list_layout_preparer.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
-
-#include <global/scope_exit.h>
-#include <global/simd/vector_arithmetic.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const UiSkinRegion* ListCoordinator::prepareListFrame(
-    const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token,
-    const u64 rowCount, const b8 focusOnCommit, const WidgetId commandFocus, ListFrame& outFrame
-){
-    outFrame.source = &source;
-    outFrame.state = &state;
-    outFrame.widgetStyle = m_builder.m_style;
-    outFrame.style = m_builder.m_listStyle;
+Optional<in UiSkinRegion> Builder::prepareListFrame(in borrow IListDataSource source, mut ListState state, in ListOptions options, in ControlToken token, in u64 rowCount, in b8 focusOnCommit, in WidgetId commandFocus, mut BuilderListFrame outFrame){
+    outFrame.source = Optional<in IListDataSource>(source);
+    outFrame.state = Optional<mut ListState>(state);
+    outFrame.widgetStyle = this.m_style;
+    outFrame.style = this.m_listStyle;
     outFrame.options = options;
     outFrame.token = token;
     outFrame.rowCount = rowCount;
     outFrame.focusOnCommit = focusOnCommit;
     outFrame.commandFocus = commandFocus;
     outFrame.padding = outFrame.style.padding;
-    const UiSkinRegion* background = m_builder.region(outFrame.style.background, outFrame.style.backgroundFallback);
-    if(!background)
-        return nullptr;
-    outFrame.padding = MaxUiPadding(outFrame.padding, background->padding);
-    return prepareListMetrics(outFrame) ? background : nullptr;
+    const auto background = this.region(outFrame.style.background, outFrame.style.backgroundFallback);
+    if(!background.has_value())
+        return Optional<in UiSkinRegion>();
+    outFrame.padding = MaxUiPadding(outFrame.padding, background.value().padding);
+    if(!this.prepareListMetrics(outFrame))
+        return Optional<in UiSkinRegion>();
+    return background;
 }
 
-b8 ListCoordinator::prepareListMetrics(ListFrame& frame){
-    if(!m_builder.listMatches(frame) || !m_builder.m_skin)
+b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
+    if(!this.listMatches(frame) || !this.m_skin.has_value())
         return false;
-    const auto metrics = MeasureSelectable(*m_builder.m_skin, frame.style.row);
-    if(!metrics)
+    const auto metrics = MeasureSelectable(this.m_skin.value(), frame.style.row);
+    if(!metrics.has_value())
         return false;
-    frame.style.row.padding = metrics->padding;
+    frame.style.row.padding = metrics.value().padding;
     const auto keyResult = TryBuildListMeasureKey(
         frame.token.contentGeneration,
         frame.token.contentRevision,
         frame.rowCount,
-        m_builder.m_text.identity(),
-        m_builder.m_text.generation(),
+        this.m_text.identity(),
+        this.m_text.generation(),
         frame.widgetStyle.fontSize,
-        m_builder.m_paint.displayMetrics(),
-        *metrics,
-        m_builder.m_textScriptTag,
-        StringView(m_builder.m_textLanguage.data(), m_builder.m_textLanguage.size())
+        this.m_paint.displayMetrics(),
+        metrics.value(),
+        this.m_textScriptTag,
+        StringView(this.m_textLanguage)
     );
-    if(!keyResult)
+    if(!keyResult.has_value())
         return false;
-    const ListMeasureKey key = *keyResult;
+    const ListMeasureKey key = keyResult.value();
     frame.measureKey = key;
-    ListState& state = *frame.state;
+    mut ListState state = frame.state.value();
     if(key != state.m_measureKey || state.m_rowHeight <= 0.0f){
-        auto empty = m_builder.m_text.layout(m_builder.textShapeRequest({}, key.fontSize));
-        if(!empty)
+        auto empty = this.m_text.layout(this.textShapeRequest("", key.fontSize));
+        if(!empty.has_value())
             return false;
-        const auto bounds = m_builder.m_text.measure(*empty, m_builder.m_paint.displayMetrics());
-        if(!bounds)
+        const auto bounds = this.m_text.measure(empty.value(), this.m_paint.displayMetrics());
+        if(!bounds.has_value())
             return false;
-        const f32 height = ResolveListRowBaseHeight(*metrics, bounds->height);
-        if(!IsFinite(height) || height <= 0.0f || !m_builder.listMatches(frame))
+        const f32 height = ResolveListRowBaseHeight(metrics.value(), bounds.value().height);
+        if(!IsFinite(height) || height <= 0.0f || !this.listMatches(frame))
             return false;
         state.m_measureKey = key;
         state.m_rowHeight = height;
@@ -140,165 +192,134 @@ b8 ListCoordinator::prepareListMetrics(ListFrame& frame){
     frame.scrollOffset = state.scrollOffset();
     frame.cursorKey = state.cursorKey();
     frame.revealCursor = state.m_ensureCursor;
-    return m_builder.listMatches(frame);
+    return this.listMatches(frame);
 }
 
-ListResult Builder::virtualList(const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
-    return ListCoordinator(*this).virtualList(stableKey, source, state, options);
-}
-
-const UiSkinRegion* Builder::prepareListFrame(const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token, const u64 rowCount, const b8 focusOnCommit, const WidgetId commandFocus, ListFrame& outFrame){
-    return ListCoordinator(*this).prepareListFrame(source, state, options, token, rowCount, focusOnCommit, commandFocus, outFrame);
-}
-
-b8 Builder::listMatches(const ListFrame& frame)const{
-    return
-        frame.source && listStateMatches(frame)
-        && frame.source->instanceGeneration() == frame.token.contentGeneration && listStateMatches(frame)
-        && frame.source->revision() == frame.token.contentRevision && listStateMatches(frame)
-        && frame.source->rowCount() == frame.rowCount
-        && listStateMatches(frame)
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<ListLayoutPreparer::ListRow> ListLayoutPreparer::prepareListRow(const ListFrame& frame, const u64 index){
-    ListRow row(m_builder.m_arena);
-    if(!m_builder.listMatches(frame) || index >= frame.rowCount)
-        return MakeUnexpected(Failure{});
-    const u64 key = frame.source->key(index);
-    if(key == 0u || !m_builder.listStateMatches(frame))
-        return MakeUnexpected(Failure{});
-    const auto resolved = frame.source->indexOf(key);
-    if(!resolved || *resolved != index || !m_builder.listStateMatches(frame))
-        return MakeUnexpected(Failure{});
-    const b8 enabled = frame.options.enabled && frame.source->enabled(index);
-    if(!m_builder.listStateMatches(frame))
-        return MakeUnexpected(Failure{});
-    const ShapeRequest request{ frame.source->text(index), StringView(reinterpret_cast<const char*>(frame.measureKey.language.data()), frame.measureKey.languageLength), frame.widgetStyle.fontSize, frame.measureKey.scriptTag, TextDirection::LeftToRight };
-    if(!m_builder.listStateMatches(frame))
-        return MakeUnexpected(Failure{});
-    // The source owns a temporary view; shaping must copy it before any further source callback.
-    auto layout = m_builder.m_text.layout(request);
-    if(!layout || !m_builder.listMatches(frame))
-        return MakeUnexpected(Failure{});
-    const auto bounds = m_builder.m_text.measure(*layout, m_builder.m_paint.displayMetrics());
-    if(!bounds)
-        return MakeUnexpected(Failure{});
-    row.index = index;
-    row.key = key;
-    row.enabled = enabled;
-    row.textBounds = *bounds;
-    row.text = Move(*layout);
-    if(!m_builder.listMatches(frame))
-        return MakeUnexpected(Failure{});
-    return row;
-}
-
-Expected<ScrollPlacement> ListLayoutPreparer::measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip){
-    auto& rows = frame.rows;
-    ListState& state = *frame.state;
-    ScrollState scroll;
-    if(!m_builder.listMatches(frame) || !scroll.setOffset(frame.scrollOffset))
-        return MakeUnexpected(Failure{});
-    const b8 revealCursor = frame.revealCursor && frame.cursorKey != 0u;
-    u64 cursorIndex = 0u;
-    if(revealCursor){
-        const auto resolved = frame.source->indexOf(frame.cursorKey);
-        if(!resolved || *resolved >= frame.rowCount || !m_builder.listStateMatches(frame))
-            return MakeUnexpected(Failure{});
-        cursorIndex = *resolved;
-        if(frame.source->key(cursorIndex) != frame.cursorKey || !m_builder.listStateMatches(frame) || !frame.source->enabled(cursorIndex) || !m_builder.listMatches(frame))
-            return MakeUnexpected(Failure{});
+ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, in ListOptions options){
+    ListResult result;
+    if(this.itemDeclarationBlocked() || !IsValidVirtualListWheelRows(options.wheelRows)){
+        this.m_context.fail();
+        return result;
     }
-    for(;;){
-        auto candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
-        if(!candidate)
-            return MakeUnexpected(Failure{});
-        if(revealCursor){
-            const auto span = TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight);
-            if(!span || !scroll.ensureVisible(span->x, span->y, candidate->viewport.height))
-                return MakeUnexpected(Failure{});
-        }
-        if(revealCursor)
-            candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
-        if(!candidate || candidate->endRow - candidate->firstRow > s_ListMaxPreparedRows)
-            return MakeUnexpected(Failure{});
-        f32 height = frame.rowHeight;
-        for(u64 index = candidate->firstRow; index < candidate->endRow; ++index){
-            const auto found = LowerBound(rows.begin(), rows.end(), index, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
-            if(found != rows.end() && found->index == index)
-                continue;
-            // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
-            if(rows.size() >= s_ListMaxPreparedRows)
-                return MakeUnexpected(Failure{});
-            auto row = prepareListRow(frame, index);
-            if(!row)
-                return MakeUnexpected(Failure{});
-            height = ComputeListRowPaddedHeight(row->textBounds.height, frame.style.row.padding, height);
-            rows.insert(found, Move(*row));
-        }
-        if(!IsFinite(height) || height <= 0.0f || !m_builder.listMatches(frame))
-            return MakeUnexpected(Failure{});
-        if(height == frame.rowHeight){
-            frame.scrollOffset = candidate->offset;
-            // Another declaration can share this state with a different sizing context.
-            if(state.m_measureKey == frame.measureKey){
-                const SIMDVectorSingle current = VectorReplicate(state.m_rowHeight);
-                const SIMDVectorSingle candidate = VectorReplicate(frame.rowHeight);
-                state.m_rowHeight = VectorGetX(VectorSelect(candidate, current, VectorGreater(current, candidate)));
+    // A body callback may have closed or reopened its popup; no model loan is allowed past that boundary.
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::VirtualList);
+    if(!widget.has_value())
+        return result;
+    const b8 previouslyFocused = this.m_context.input().focus() == widget.value().id;
+    const u64 previousSelection = state.selectedKey();
+    if(!ReconcileListState(state, source)){
+        this.m_context.fail();
+        return result;
+    }
+    ControlToken token;
+    token.instanceGeneration = state.inputGeneration();
+    token.contentGeneration = source.instanceGeneration();
+    token.contentRevision = source.revision();
+    this.m_context.input().fenceControl(widget.value().id, widget.value().declarationGeneration, token);
+    if(!options.enabled)
+        this.m_context.input().invalidateTarget(widget.value().id);
+    result.valid = true;
+    result.selectionChanged = previousSelection != state.selectedKey();
+    result.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
+    ListInput input(this.m_context);
+    const ListInputMatches matches = lambda[]() -> b8{ return true; };
+    const Optional<in IListDataSource> sourceLoan(source);
+    const Optional<in ListOptions> optionsLoan(options);
+    const ListInputApplyAction apply = lambda[in sourceLoan, in optionsLoan, mut state, mut result](in ControlAction action) -> ListActionOutcome{
+        if(ApplyListControlAction(sourceLoan.value(), optionsLoan.value(), action, state, result))
+            return ListActionOutcome::Continue;
+        return ListActionOutcome::Failed;
+    };
+    if(!input.consume(
+        widget.value(),
+        token,
+        options.enabled,
+        state,
+        matches,
+        apply
+    )){
+        this.m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    auto frame = this.makeListFrame();
+    const auto background = this.prepareListFrame(source, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !result.focused, WidgetId(), frame);
+    if(!background.has_value()){
+        this.m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    // A fractional offset or a skin minimum can expose more than one row in a natural viewport.
+    // Finish that bounded measurement before its intrinsic height enters the parent layout.
+    if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
+        while(true){
+            LayoutBox provisional;
+            provisional.rectangle = ResolveListProbeRect(background.value(), frame.padding, frame.style.scrollbarWidth, frame.rowHeight);
+            provisional.clip = provisional.rectangle;
+            ListLayoutPreparer layout(this.m_scope.value(), this.m_context, this.m_text, this.m_paint);
+            const auto placement = layout.measureListPlacement(frame, provisional, provisional.clip);
+            if(!placement.has_value()){
+                this.m_context.fail();
+                result.valid = false;
+                return result;
             }
-            return *candidate;
+            const f32 height = ResolveListIntrinsicSize(background.value(), frame.padding, frame.rowHeight).y;
+            if(height == placement.value().bounds.height)
+                break;
         }
-        // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
-        const f64 offset = ComputeListExpandedScrollOffset(
-            candidate->contentClip.y,
-            candidate->viewport.y,
-            candidate->offset,
-            candidate->firstRow,
-            frame.rowHeight,
-            height
-        );
-        if(!scroll.setOffset(offset))
-            return MakeUnexpected(Failure{});
-        frame.rowHeight = height;
     }
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.enabled = options.enabled;
+    item.list = cast<u32>(this.m_scope.value().m_lists.size());
+    LayoutNodeDesc description;
+    description.width = options.width;
+    description.height = options.height;
+    description.intrinsicSize = ResolveListIntrinsicSize(background.value(), frame.padding, frame.rowHeight);
+    if(!this.addItemNode(description, item)){
+        result.valid = false;
+        return result;
+    }
+    AppendOwned<BuilderListFrame>(this.m_scope.value().m_lists, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    return result;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ListCoordinator::paintList(const Item& item, const LayoutBox& box){
-    if(item.list >= m_builder.m_scope->m_lists.size())
+b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
+    if(item.list >= this.m_scope.value().m_lists.size())
         return false;
-    ListFrame& frame = m_builder.m_scope->m_lists[item.list];
-    if(!m_builder.listMatches(frame))
+    mut BuilderListFrame frame = this.m_scope.value().m_lists[item.list];
+    if(!this.listMatches(frame))
         return false;
-    const Rect clip = m_builder.visibleClip(box.clip);
-    const auto measuredPlacement = ListLayoutPreparer(m_builder).measureListPlacement(frame, box, clip);
-    if(!measuredPlacement)
+    const Rect clip = this.visibleClip(box.clip);
+    ListLayoutPreparer layout(this.m_scope.value(), this.m_context, this.m_text, this.m_paint);
+    const auto measuredPlacement = layout.measureListPlacement(frame, box, clip);
+    if(!measuredPlacement.has_value())
         return false;
-    const ScrollPlacement& placement = *measuredPlacement;
-    if(!frame.state->m_scroll.setOffset(frame.scrollOffset))
+    in ScrollPlacement placement = measuredPlacement.value();
+    if(!frame.state.value().m_scroll.setOffset(frame.scrollOffset))
         return false;
-    frame.state->m_scrollRowHeight = frame.rowHeight;
-    frame.state->m_scrollSourceGeneration = frame.token.contentGeneration;
-    if(frame.revealCursor && frame.state->cursorKey() == frame.cursorKey)
-        frame.state->m_ensureCursor = false;
-    frame.state->m_placement = placement;
-    const UiSkinRegion* background = m_builder.region(frame.style.background, frame.style.backgroundFallback);
-    if(!background)
+    frame.state.value().m_scrollRowHeight = frame.rowHeight;
+    frame.state.value().m_scrollSourceGeneration = frame.token.contentGeneration;
+    if(frame.revealCursor && frame.state.value().cursorKey() == frame.cursorKey)
+        frame.state.value().m_ensureCursor = false;
+    frame.state.value().m_placement = placement;
+    const auto background = this.region(frame.style.background, frame.style.backgroundFallback);
+    if(!background.has_value())
         return false;
-    m_builder.m_paint.pushClip(clip);
-    const b8 painted = m_builder.m_paint.drawRegion(background->name, box.rectangle);
-    const b8 popped = m_builder.m_paint.popClip();
+    this.m_paint.pushClip(clip);
+    const b8 painted = this.m_paint.drawRegion(background.value().name, box.rectangle);
+    const b8 popped = this.m_paint.popClip();
     if(!painted || !popped)
         return false;
-    const HitTarget host = HitTargetFactory().makeListHostHitTarget(
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeListHostHitTarget(
         box.rectangle,
         clip,
         item.enabled,
@@ -310,219 +331,141 @@ b8 ListCoordinator::paintList(const Item& item, const LayoutBox& box){
         frame.rowCount,
         frame.focusOnCommit
     );
-    if(!m_builder.m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement))
+    if(!this.m_context.addTarget(item.state, host) || !this.paintListRows(item, frame, placement))
         return false;
     // Paint owns its glyph pages now; keep no shaped rows alive through later sibling lists.
     frame.rows.clear();
     if(placement.scrollbarVisible){
         const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollbar);
-        if(!thumbId)
+        if(!thumbId.has_value())
             return false;
-        const b8 hover = m_builder.m_context.input().hover() == *thumbId;
-        if(!ControlVisualPainter().paintListScrollbarVisual(m_builder.m_paint, *m_builder.m_skin, frame.style, placement, clip, hover))
+        const b8 hover = this.m_context.input().hover() == thumbId.value();
+        ControlVisualPainter painter;
+        if(!painter.paintListScrollbarVisual(this.m_paint, this.m_skin.value(), frame.style, placement, clip, hover))
             return false;
         if(item.enabled){
-            const HitTarget trackTarget = HitTargetFactory().makeListScrollbarTrackHitTarget(placement, clip, frame.token);
+            const HitTarget trackTarget = targets.makeListScrollbarTrackHitTarget(placement, clip, frame.token);
             const auto trackId = TryMakeWidgetId(item.state.id, s_WidgetPartTrack);
-            if(!trackId || !m_builder.m_context.addPartTarget(item.state, *trackId, trackTarget))
+            if(!trackId.has_value() || !this.m_context.addPartTarget(item.state, trackId.value(), trackTarget))
                 return false;
-            const HitTarget thumbTarget = HitTargetFactory().makeListScrollbarThumbHitTarget(placement, clip, frame.token);
-            if(!m_builder.m_context.addPartTarget(item.state, *thumbId, thumbTarget))
+            const HitTarget thumbTarget = targets.makeListScrollbarThumbHitTarget(placement, clip, frame.token);
+            if(!this.m_context.addPartTarget(item.state, thumbId.value(), thumbTarget))
                 return false;
         }
     }
     return true;
 }
 
-b8 ListCoordinator::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
-    const auto& rows = frame.rows;
+b8 Builder::paintListRows(in BuilderItem item, in BuilderListFrame frame, in ScrollPlacement placement){
+    HitTargetFactory targets;
+    in Vector<BuilderListRow> rows = frame.rows;
     const auto rowsId = TryMakeWidgetId(item.state.id, s_WidgetPartRows);
-    if(!rowsId)
+    if(!rowsId.has_value())
         return false;
-    const b8 focused = IsListRowsFocused(m_builder.m_context.input().focus(), item.state.id, frame.commandFocus);
-    auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
-    for(u64 index = placement.firstRow; index < placement.endRow; ++index, ++found){
-        if(found == rows.end() || found->index != index || !m_builder.listStateMatches(frame))
+    const b8 focused = IsListRowsFocused(this.m_context.input().focus(), item.state.id, frame.commandFocus);
+    usize found = ListRowInsertionIndex(rows, placement.firstRow);
+    for(u64 index = placement.firstRow; index < placement.endRow; ++index){
+        if(found == rows.size() || rows[found].index != index || !this.listStateMatches(frame))
             return false;
-        const ListRow& row = *found;
+        in BuilderListRow row = rows[found];
+        ++found;
         const u64 key = row.key;
         const b8 enabled = item.enabled && row.enabled;
-        const auto part = TryMakeWidgetPartId(*rowsId, key);
-        if(!part)
+        const auto part = TryMakeWidgetPartId(rowsId.value(), key);
+        if(!part.has_value())
             return false;
         const auto rectangle = CalculateScrollRowBounds(index, placement, frame.rowHeight);
-        if(!rectangle)
+        if(!rectangle.has_value())
             return false;
-        const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_builder.m_context.input().hover() == *part, focused && frame.state->cursorKey() == key };
-        if(!PaintSelectable(m_builder.m_paint, m_builder.m_text, *m_builder.m_skin, row.text, row.textBounds, frame.style.row.padding, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
+        SelectablePaintFlags flags;
+        flags.enabled = enabled;
+        flags.selected = frame.state.value().selectedKey() == key;
+        flags.hover = this.m_context.input().hover() == part.value();
+        flags.focused = focused && frame.state.value().cursorKey() == key;
+        if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), row.text, row.textBounds, frame.style.row.padding, rectangle.value(), placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
             return false;
         if(item.enabled){
-            const HitTarget target = HitTargetFactory().makeListRowHitTarget(*rectangle, placement.contentClip, enabled, frame.token, key);
-            if(!m_builder.m_context.addPartTarget(item.state, *part, target))
+            const HitTarget target = targets.makeListRowHitTarget(rectangle.value(), placement.contentClip, enabled, frame.token, key);
+            if(!this.m_context.addPartTarget(item.state, part.value(), target))
                 return false;
         }
     }
-    return m_builder.listMatches(frame);
-}
-
-b8 Builder::paintList(const Item& item, const LayoutBox& box){
-    return ListCoordinator(*this).paintList(item, box);
+    return this.listMatches(frame);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_builder_lists_and_numeric_edits{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template <typename Model, typename Bounds>
-class NumericActions final : public IEditActionSink{
-public:
-    NumericActions(const Bounds& bounds, const Context& context, Model& model, NumericEditResult& result, u64& revision)noexcept
-        : m_model(model)
-        , m_bounds(bounds)
-        , m_result(result)
-        , m_revision(revision)
-        , m_context(context)
-    {}
-    virtual ~NumericActions()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual b8 apply(EditModel& draft, const EditAction::Enum action, const b8 readOnly)noexcept override{
-        if(m_context.failed() || &draft != &m_model.draft() || m_model.revision() != m_revision){
-            m_result.valid = false;
-            return false;
-        }
-        NumericEditResult result;
-        switch(action){
-        case EditAction::Submit:
-            if(readOnly)
-                result.valid = true;
-            else
-                result = m_model.submit(m_bounds);
-            break;
-        case EditAction::Cancel: result = m_model.cancel(); break;
-        case EditAction::Blur: result = readOnly ? m_model.abandon() : m_model.blur(m_bounds); break;
-        case EditAction::Abandon: result = m_model.abandon(); break;
-        default: break;
-        }
-        m_revision = m_model.revision();
-        MergeNumericEditResult(result, m_result);
-        return result.valid && !m_context.failed();
-    }
-
-
-private:
-    Model& m_model;
-    const Bounds& m_bounds;
-    NumericEditResult& m_result;
-    u64& m_revision;
-    const Context& m_context;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
-NumericEditBoxResult NumericEditCoordinator::declareNumericEdit(const AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, const ValidateBoundsF validateBounds, FrameListT& frames){
+NumericEditBoxResult Builder::integerEdit(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerEditOptions options){
     NumericEditBoxResult result;
-    result.numeric.valid = true;
-    if(m_builder.declarationBlocked() || !validateBounds(options.bounds)){
-        m_builder.m_context.fail();
-        result.numeric.valid = false;
+    if(this.declarationBlocked() || !ValidateIntegerBounds(options.bounds)){
+        this.m_context.fail();
         return result;
     }
-    FrameT frame;
-    frame.model = &model;
-    frame.state = &state;
+    result.numeric.valid = true;
+    BuilderIntegerEditFrame frame;
+    frame.model = Optional<mut IntegerEditModel>(model);
+    frame.state = Optional<mut EditBoxState>(state);
     frame.revision = model.revision();
-    __hidden_builder_lists_and_numeric_edits::NumericActions actions(options.bounds, m_builder.m_context, model, result.numeric, frame.revision);
-    const usize previousCount = m_builder.m_scope->m_items.size();
-    if constexpr(IsSame_V<FrameT, IntegerEditFrame>)
-        result.edit = m_builder.declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, &frame);
-    else
-        result.edit = m_builder.declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, nullptr, &frame);
-    result.numeric.valid &= result.edit.valid;
-    if(result.edit.valid && m_builder.m_scope->m_items.size() > previousCount){
-        frame.item = static_cast<u32>(previousCount);
-        frames.push_back(frame);
+    NumericEditActions actions(options.bounds, this.m_context, model, result.numeric, frame.revision);
+    const usize previousCount = this.m_scope.value().m_items.size();
+    result.edit = this.declareEditBox(stableKey, options.edit, model.lendDraft(), state, Optional<mut IEditActionSink>(actions), Optional<mut BuilderIntegerEditFrame>(frame), Optional<mut BuilderFloatEditFrame>());
+    result.numeric.valid = result.numeric.valid && result.edit.valid;
+    if(result.edit.valid && this.m_scope.value().m_items.size() > previousCount){
+        frame.item = cast<u32>(previousCount);
+        this.m_scope.value().m_integerEdits.push_back(frame);
     }
     return result;
 }
 
-NumericEditBoxResult NumericEditCoordinator::integerEdit(const AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options){
-    return declareNumericEdit<IntegerEditFrame>(stableKey, model, state, options, ValidateIntegerBounds, m_builder.m_scope->m_integerEdits);
+NumericEditBoxResult Builder::floatEdit(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state, in FloatEditOptions options){
+    NumericEditBoxResult result;
+    if(this.declarationBlocked() || !ValidateFloatBounds(options.bounds)){
+        this.m_context.fail();
+        return result;
+    }
+    result.numeric.valid = true;
+    BuilderFloatEditFrame frame;
+    frame.model = Optional<mut FloatEditModel>(model);
+    frame.state = Optional<mut EditBoxState>(state);
+    frame.revision = model.revision();
+    NumericEditActions actions(options.bounds, this.m_context, model, result.numeric, frame.revision);
+    const usize previousCount = this.m_scope.value().m_items.size();
+    result.edit = this.declareEditBox(stableKey, options.edit, model.lendDraft(), state, Optional<mut IEditActionSink>(actions), Optional<mut BuilderIntegerEditFrame>(), Optional<mut BuilderFloatEditFrame>(frame));
+    result.numeric.valid = result.numeric.valid && result.edit.valid;
+    if(result.edit.valid && this.m_scope.value().m_items.size() > previousCount){
+        frame.item = cast<u32>(previousCount);
+        this.m_scope.value().m_floatEdits.push_back(frame);
+    }
+    return result;
 }
 
-NumericEditBoxResult NumericEditCoordinator::floatEdit(const AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options){
-    return declareNumericEdit<FloatEditFrame>(stableKey, model, state, options, ValidateFloatBounds, m_builder.m_scope->m_floatEdits);
-}
-
-NumericEditBoxResult Builder::integerEdit(const AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options){
-    return NumericEditCoordinator(*this).integerEdit(stableKey, model, state, options);
-}
-
-NumericEditBoxResult Builder::floatEdit(const AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options){
-    return NumericEditCoordinator(*this).floatEdit(stableKey, model, state, options);
-}
-
-b8 Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept{
-    return
-        popupAncestorsVisible() && frame.state
-        && draft.matchesStamp(frame.draftStamp)
-        && frame.state->matchesStamp(frame.draftStamp, frame.focused)
-    ;
-}
-
-b8 Builder::numericEditMatches(const Item& item)const noexcept{
+b8 Builder::numericEditMatches(in BuilderItem item)const{
     if(item.integerEdit != s_LayoutNoParent){
-        if(item.integerEdit >= m_scope->m_integerEdits.size() || !numericEditFrameMatches(m_scope->m_integerEdits[item.integerEdit]))
+        if(item.integerEdit >= this.m_scope.value().m_integerEdits.size() || !this.numericEditFrameMatches(this.m_scope.value().m_integerEdits[item.integerEdit]))
             return false;
     }
     if(item.floatEdit != s_LayoutNoParent){
-        if(item.floatEdit >= m_scope->m_floatEdits.size() || !numericEditFrameMatches(m_scope->m_floatEdits[item.floatEdit]))
+        if(item.floatEdit >= this.m_scope.value().m_floatEdits.size() || !this.numericEditFrameMatches(this.m_scope.value().m_floatEdits[item.floatEdit]))
             return false;
     }
     return true;
 }
 
-b8 Builder::numericStateAvailable(const EditBoxState& state)const noexcept{
-    for(usize index = 0u; index <= m_popupFrameCount; ++index){
-        const BuilderScopeFrame& scope = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
-        for(const auto& frame : scope.m_integerEdits){
-            if(frame.state == &state)
+b8 Builder::numericStateAvailable(in EditBoxState state)const{
+    for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
+        in BuilderScopeFrame scope = this.readPopupFrameAt(index);
+        for(in auto frame : scope.m_integerEdits){
+            if(frame.state.has_value() && SameAddress(frame.state.value(), state))
                 return false;
         }
-        for(const auto& frame : scope.m_floatEdits){
-            if(frame.state == &state)
+        for(in auto frame : scope.m_floatEdits){
+            if(frame.state.has_value() && SameAddress(frame.state.value(), state))
                 return false;
         }
     }
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

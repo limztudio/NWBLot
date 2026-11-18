@@ -2,6 +2,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
+#include <impl/ecs_render/material/instance_typed_ranges.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/optics/optical_scene_resources.adhd>
+#include <impl/ecs_render/raytrace/prepared_builds.adhd>
+#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd>
+#include <impl/ecs_render/raytrace/prepared_scene_sw_bvh_traversal.adhd>
+#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.adhd>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd>
+#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd>
+#include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd>
+#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/raytrace/rt_private.adhd>
+#include <impl/ecs_render/raytrace/rt_swbvh_helpers.adhd>
+#include <impl/ecs_render/raytrace/scene_bvh.adhd>
+#include <impl/ecs_render/raytrace/scene_bvh_build.adhd>
+#include <impl/ecs_render/raytrace/software_scene_refit.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
+#include <impl/ecs_render/shadow/light_space_scene_gather.adhd>
+#include <impl/ecs_render/shadow/shadow_material_context_preparer.adhd>
+#include <impl/ecs_render/shadow/shadow_occluder_material_gather.adhd>
+#include <impl/ecs_scene/module.adhd>
+#include <impl/ecs_render/raytrace/raytracing_mesh_blas_and_tlas_builds.adhd>
 #include <impl/ecs_render/raytrace/raytrace_internal.adhd>
 #include <impl/ecs_render/shadow/types.adhd>
 
@@ -39,92 +67,32 @@ b8 CanReuseStaticSceneSwBvh(in b8 staticScene, in b8 hashValid, in u64 cachedHas
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cpp_unwind]
+b8 RendererRayTracingSystem::prepareSceneTlasResources(){
+    this.m_preparedSceneContentStamp = RayTracingSceneContentStamp();
+    this.m_rayTracingState.m_refraction.m_refractionCertifiedInstanceIndex = u32.max;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_builds.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_sw_bvh_traversal.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.adhd.h>
-#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
-#include <impl/ecs_render/raytrace/raytrace_internal.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/raytrace/rt_swbvh_helpers.adhd.h>
-#include <impl/ecs_render/raytrace/scene_bvh.adhd.h>
-#include <impl/ecs_render/raytrace/scene_bvh_build.adhd.h>
-#include <impl/ecs_render/raytrace/software_scene_refit.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/shadow/light_space_scene_gather.adhd.h>
-#include <impl/ecs_render/shadow/shadow_material_context_preparer.adhd.h>
-#include <impl/ecs_render/shadow/shadow_occluder_material_gather.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/api.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/algorithm.h>
-#include <global/not_null.h>
-#include <global/simdmath.h>
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena){
-    using namespace RayTracingSoftwareBvhDetail;
-
-    m_preparedSceneContentStamp = {};
-    m_rayTracingState.m_refraction.m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
-
-    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
         return false;
 
-    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
-    if(!meshSystemPtr)
+    const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
+    if(!meshSystem.has_value())
         return false;
 
-    auto rendererView = m_world.view<RendererComponent>();
-    const usize candidateCount = rendererView.candidateCount();
-    LightSpaceShadowSceneGather lightSpaceGather(m_lightSpaceShadow, m_csgShapeRegistry, m_world, scratchArena);
+    const usize candidateCount = this.m_world.view<RendererComponent>().candidateCount();
+    LightSpaceShadowSceneGather lightSpaceGather(this.m_lightSpaceShadow, this.m_csgShapeRegistry, this.m_world);
     lightSpaceGather.begin(candidateCount, true);
-    Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
+    Vector<RayTracingInstanceDesc> instances;
     // Instance descs hold raw BLAS pointers. The graph-owned TLAS retains handles until Shadow Preparation submits.
-    Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena> instanceBlases{ scratchArena };
+    Vector<RayTracingAccelStructHandle> instanceBlases;
     // Kept parallel to instances for hardware InstanceID lookup.
-    Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
+    Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
     // All-occluder trace context; draw buffers hold one transparency class.
-    InstanceGpuDataVector shadowInstanceData{ scratchArena };
-    MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
-    ECSRenderDetail::MaterialTypedConstantRangeMap shadowConstantTypedRanges(0, ECSRenderDetail::MaterialTypedConstantRangeMap::hasher(), ECSRenderDetail::MaterialTypedConstantRangeMap::key_equal(), scratchArena);
-    ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
-    Vector<RayTracingInstanceWorldBounds, Core::Alloc::ScratchArena> instanceWorldBounds{ scratchArena };
+    InstanceGpuDataVector shadowInstanceData;
+    MaterialTypedByteDataVector shadowMaterialTypedBytes;
+    MaterialTypedConstantRangeMap shadowConstantTypedRanges;
+    MaterialTypedByteContentRangeMap shadowMutableTypedRanges;
+    Vector<RayTracingInstanceWorldBounds> instanceWorldBounds;
     instances.reserve(candidateCount);
     instanceBlases.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
@@ -132,137 +100,144 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     instanceWorldBounds.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
-    MeshBufferSlotLookup meshSlotLookup(0, Hasher<NotNull<Core::Buffer*>>(), EqualTo<NotNull<Core::Buffer*>>(), scratchArena);
+    MeshBufferSlotLookup meshSlotLookup;
     meshSlotLookup.reserve(candidateCount);
 
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
+        error("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout");
         return false;
     }
-    MeshHeapHandleGather meshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
+    MeshHeapHandleGather meshHeapHandles(heap, this.m_rayTracingState.shadow.m_hwMeshHeapHandleCache);
     meshHeapHandles.begin();
 
-    m_rayTracingState.m_shadowMeshIndexBuffers.clear();
-    m_rayTracingState.m_shadowMeshAttributeBuffers.clear();
-    m_rayTracingState.m_shadowMeshPositionBuffers.clear();
-    m_rayTracingState.m_shadowMeshIndexHandles.clear();
-    m_rayTracingState.m_shadowMeshAttributeHandles.clear();
-    m_rayTracingState.m_shadowMeshPositionHandles.clear();
-    m_rayTracingState.m_shadowMeshCount = 0u;
+    this.m_rayTracingState.shadow.m_shadowMeshIndexBuffers.clear();
+    this.m_rayTracingState.shadow.m_shadowMeshAttributeBuffers.clear();
+    this.m_rayTracingState.shadow.m_shadowMeshPositionBuffers.clear();
+    this.m_rayTracingState.shadow.m_shadowMeshIndexHandles.clear();
+    this.m_rayTracingState.shadow.m_shadowMeshAttributeHandles.clear();
+    this.m_rayTracingState.shadow.m_shadowMeshPositionHandles.clear();
+    this.m_rayTracingState.shadow.m_shadowMeshCount = 0u;
     // Gates transparent-shadow resource preparation.
-    m_rayTracingState.m_sceneHasTransparentOccluder = false;
+    this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder = false;
     b8 staticScene = true;
     b8 contentComplete = true;
     b8 allInstanceBoundsValid = true;
     u32 refractiveInstanceCount = 0u;
-    u32 singleRefractiveInstanceIndex = Limit<u32>::s_Max;
-    RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
+    u32 singleRefractiveInstanceIndex = u32.max;
+    RayTracingOpticalSceneGather opticalScene(candidateCount);
 
-    ShadowMaterialSampledTextureCollector sampledTextureCollector(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
-    ShadowOccluderMaterialGather occluderMaterials(m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
+    Vector<TextureHandle> pendingSampledTextures;
+    ShadowMaterialSampledTextureCollector sampledTextureCollector(this.m_preparedShadowTraceMaterialSampledTextures, pendingSampledTextures);
+    sampledTextureCollector.indexExisting();
+    ShadowOccluderMaterialGather occluderMaterials(this.m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
 
-    for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
+    for(in auto row : this.m_world.view<RendererComponent>()){
+        const EntityID entity = Get<0>(row);
+        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
+        if(!renderer.visible || this.m_opticalVolumes.isSuppressed(entity))
             continue;
 
-        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
+        const auto meshResult = ResolveRenderableMeshResources(meshSystem.value(), this.m_meshSystem, entity);
         // An entity without a mesh attachment contributes no geometry to the scene.
-        if(!meshResult && meshResult.error() == RenderableMeshResolution::Absent)
+        if(!meshResult.has_value() && meshResult.error() == RenderableMeshResolution::Absent)
             continue;
-        if(!meshResult || !meshResult->meshResources.blas || !meshResult->meshResources.triangleIndexBuffer || !meshResult->meshResources.attributeBuffer || !meshResult->meshResources.positionBuffer){
+        if(!meshResult.has_value() || !meshResult.value().meshResources.blas.valid() || !meshResult.value().meshResources.triangleIndexBuffer.valid() || !meshResult.value().meshResources.attributeBuffer.valid()
+            || !meshResult.value().meshResources.positionBuffer.valid()){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
         }
         // Runtime mesh updates disable static TLAS reuse.
-        if(meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
+        if(meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh)
             staticScene = false;
 
         // Reuse one table slot for instances sharing geometry.
-        const NotNull<Core::Buffer*> meshIndexBuffer(meshResult->meshResources.triangleIndexBuffer.get());
+        mut Buffer meshIndexBuffer = meshResult.value().meshResources.triangleIndexBuffer.deref();
+        const usize meshKey = meshResult.value().meshResources.triangleIndexBuffer.identity();
         u32 meshSlot = 0u;
-        const auto foundMeshSlot = meshSlotLookup.find(meshIndexBuffer);
-        if(foundMeshSlot != meshSlotLookup.end())
-            meshSlot = foundMeshSlot.value();
+        if(meshSlotLookup.contains(meshKey))
+            meshSlot = meshSlotLookup.at(meshKey);
         else{
-            const auto indexHandle = meshHeapHandles.acquire(meshResult->meshResources.triangleIndexBuffer);
-            if(!indexHandle){
+            const auto indexHandle = meshHeapHandles.acquire(meshResult.value().meshResources.triangleIndexBuffer);
+            if(!indexHandle.has_value()){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                error("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap");
                 return false;
             }
-            const auto attributeHandle = meshHeapHandles.acquire(meshResult->meshResources.attributeBuffer);
-            if(!attributeHandle){
+            const auto attributeHandle = meshHeapHandles.acquire(meshResult.value().meshResources.attributeBuffer);
+            if(!attributeHandle.has_value()){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                error("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap");
                 return false;
             }
-            const auto positionHandle = meshHeapHandles.acquire(meshResult->meshResources.positionBuffer);
-            if(!positionHandle){
+            const auto positionHandle = meshHeapHandles.acquire(meshResult.value().meshResources.positionBuffer);
+            if(!positionHandle.has_value()){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                error("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap");
                 return false;
             }
 
-            meshSlot = m_rayTracingState.m_shadowMeshCount;
-            m_rayTracingState.m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
-            m_rayTracingState.m_shadowMeshAttributeBuffers.push_back(MakeNotNull(meshResult->meshResources.attributeBuffer.get()));
-            m_rayTracingState.m_shadowMeshPositionBuffers.push_back(MakeNotNull(meshResult->meshResources.positionBuffer.get()));
-            m_rayTracingState.m_shadowMeshIndexHandles.push_back(*indexHandle);
-            m_rayTracingState.m_shadowMeshAttributeHandles.push_back(*attributeHandle);
-            m_rayTracingState.m_shadowMeshPositionHandles.push_back(*positionHandle);
-            if(!meshSlotLookup.emplace(meshIndexBuffer, meshSlot).second){
-                FOUNDATION_ASSERT(false);
+            meshSlot = this.m_rayTracingState.shadow.m_shadowMeshCount;
+            this.m_rayTracingState.shadow.m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
+            this.m_rayTracingState.shadow.m_shadowMeshAttributeBuffers.push_back(meshResult.value().meshResources.attributeBuffer.deref());
+            this.m_rayTracingState.shadow.m_shadowMeshPositionBuffers.push_back(meshResult.value().meshResources.positionBuffer.deref());
+            this.m_rayTracingState.shadow.m_shadowMeshIndexHandles.push_back(indexHandle.value());
+            this.m_rayTracingState.shadow.m_shadowMeshAttributeHandles.push_back(attributeHandle.value());
+            this.m_rayTracingState.shadow.m_shadowMeshPositionHandles.push_back(positionHandle.value());
+            if(!meshSlotLookup.try_emplace(meshKey, meshSlot).second){
+                assert(false);
                 meshHeapHandles.sweep();
                 return false;
             }
-            ++m_rayTracingState.m_shadowMeshCount;
+            ++this.m_rayTracingState.shadow.m_shadowMeshCount;
         }
 
-        Core::RayTracingInstanceDesc instanceDesc;
-        instanceDesc.setBottomLevelAS(meshResult->meshResources.blas.get());
-        instanceDesc.setInstanceID(static_cast<u32>(instances.size()));
+        RayTracingInstanceDesc instanceDesc;
+        instanceDesc.setBottomLevelAS(meshResult.value().meshResources.blas.deref());
+        instanceDesc.setInstanceID(cast<u32>(instances.size()));
         instanceDesc.setInstanceMask(s_RayTracingAllInstanceMask);
 
-        const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        SIMDMatrix objectToWorld = MatrixIdentity();
-        if(transformPtr){
-            objectToWorld = MatrixAffineTransformation(LoadFloat(transformPtr->scale), VectorZero(), LoadFloat(transformPtr->rotation), LoadFloat(transformPtr->position));
-            StoreFloat(objectToWorld, instanceDesc.transform);
+        Optional<in TransformComponent> transform;
+        if(this.m_world.hasComponent<TransformComponent>(entity))
+            transform.emplace(this.m_world.getComponent<TransformComponent>(entity));
+        MatrixSingle objectToWorld = MatrixIdentity();
+        if(transform.has_value()){
+            objectToWorld = LoadTransformMatrix(transform.value());
+            instanceDesc.transform = f32x3x4(objectToWorld);
         }
 
         // Build material context in InstanceID order; unresolved materials remain opaque.
-        const u32 meshInstanceIndex = static_cast<u32>(instances.size());
+        const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        if(!occluderMaterials.resolve(entity, renderer.material, transformPtr, meshInstanceIndex, instanceMaterial, shadowInstance, &m_rayTracingState.m_sceneHasTransparentOccluder))
+        if(!occluderMaterials.resolve(entity, renderer.material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>(this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder)))
             return false;
-        instanceMaterial.indexSlot = m_rayTracingState.m_shadowMeshIndexHandles[meshSlot].slot();
-        instanceMaterial.attributeSlot = m_rayTracingState.m_shadowMeshAttributeHandles[meshSlot].slot();
-        instanceMaterial.positionSlot = m_rayTracingState.m_shadowMeshPositionHandles[meshSlot].slot();
+        instanceMaterial.indexSlot = this.m_rayTracingState.shadow.m_shadowMeshIndexHandles[meshSlot].slot();
+        instanceMaterial.attributeSlot = this.m_rayTracingState.shadow.m_shadowMeshAttributeHandles[meshSlot].slot();
+        instanceMaterial.positionSlot = this.m_rayTracingState.shadow.m_shadowMeshPositionHandles[meshSlot].slot();
 
         const b8 transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
         const b8 refractive = (instanceMaterial.flags & RtInstanceMaterialFlag::Refractive) != 0u;
         // Opaque candidates terminate RayQuery; transparent candidates retain material evaluation.
         if(!transparent)
-            instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
+            instanceDesc.setFlags(RayTracingInstanceFlags::ForceOpaque);
         instanceDesc.setInstanceMask(ResolveRayTracingInstanceMask(transparent, refractive));
-        const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
-        const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
-        lightSpaceGather.appendHardwareReceiver(entity, transparent, meshInstanceIndex, objectToWorld, localMin, localMax, meshResult->meshResources);
-        SIMDVectorSingle opticalMin = VectorZero();
-        SIMDVectorSingle opticalMax = VectorZero();
+        const VectorSingle localMin = VectorSingle(meshResult.value().meshResources.csgLocalBounds.minBounds);
+        const VectorSingle localMax = VectorSingle(meshResult.value().meshResources.csgLocalBounds.maxBounds);
+        lightSpaceGather.appendHardwareReceiver(entity, transparent, meshInstanceIndex, objectToWorld, localMin, localMax, meshResult.value().meshResources);
+        VectorSingle opticalMin = VectorZero();
+        VectorSingle opticalMax = VectorZero();
         b8 opticalBoundsValid = false;
         RayTracingInstanceWorldBounds worldBounds;
-        if(!meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()){
+        if(!meshResult.value().resolvedMesh.runtime && !meshResult.value().meshResources.runtimeMesh && meshResult.value().meshResources.csgLocalBounds.valid()){
             const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
-            if(bounds){
-                StoreFloat(bounds->minimum, worldBounds.minimum);
-                StoreFloat(bounds->maximum, worldBounds.maximum);
+            if(bounds.has_value()){
+                worldBounds.minimum = f32x3u(VectorSingle(bounds.value().minimum));
+                worldBounds.maximum = f32x3u(VectorSingle(bounds.value().maximum));
                 if(transparent){
-                    opticalMin = bounds->minimum;
-                    opticalMax = bounds->maximum;
+                    opticalMin = VectorSingle(bounds.value().minimum);
+                    opticalMax = VectorSingle(bounds.value().maximum);
                     opticalBoundsValid = true;
                 }
             }
@@ -275,139 +250,139 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
             ++refractiveInstanceCount;
             singleRefractiveInstanceIndex = meshInstanceIndex;
         }
-        const b8 runtimeOpticalBounds = transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid();
+        const b8 runtimeOpticalBounds = transparent && (meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh) && meshResult.value().meshResources.runtimeLocalBoundsBuffer.valid()
+            && meshResult.value().meshResources.runtimeLocalBoundsHeapHandle.valid();
         if(runtimeOpticalBounds)
-            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
+            opticalScene.appendRuntime(entity, renderer, meshResult.value().meshResources.runtimeLocalBoundsBuffer, meshResult.value().meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
         else
             opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
 
         instances.push_back(instanceDesc);
-        instanceBlases.push_back(meshResult->meshResources.blas);
+        instanceBlases.push_back(meshResult.value().meshResources.blas);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
         instanceWorldBounds.push_back(worldBounds);
     }
 
-    if(!lightSpaceGather.finishHardware(instances, instanceMaterials, contentComplete, m_rayTracingState.m_sceneHasTransparentOccluder))
+    if(!lightSpaceGather.finishHardware(instances, instanceMaterials, contentComplete, this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder))
         return false;
-    const auto& csg = m_lightSpaceShadow.m_csg.snapshot;
+    in CsgShadowSnapshot csg = this.m_lightSpaceShadow.m_csg.snapshot;
 
-    RayTracingDiagnostics().shadowMeshHeapHighWater(true, m_rayTracingState.m_shadowMeshCount, m_rayTracingState.m_shadowMeshHeapHighWater);
+    RayTracingDiagnostics().shadowMeshHeapHighWater(true, this.m_rayTracingState.shadow.m_shadowMeshCount, this.m_rayTracingState.shadow.m_shadowMeshHeapHighWater);
     meshHeapHandles.sweep();
 
-    m_rayTracingState.m_tlasInstanceCount = static_cast<u32>(instances.size());
+    this.m_rayTracingState.sceneBvh.m_tlasInstanceCount = cast<u32>(instances.size());
     if(instances.empty()){
-        m_rayTracingState.m_tlasStaticSceneHashValid = false;
-        m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
+        this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid = false;
+        this.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid = false;
         return false;
     }
 
     if(CanCertifySingleRefractiveInstanceEntry(staticScene, opticalScene.boundsCompleteExceptRuntime, csg.hasCsg, allInstanceBoundsValid, refractiveInstanceCount, singleRefractiveInstanceIndex, instances.size())){
-        if(RefractiveBoundsIsolation().isIsolated(instanceWorldBounds, singleRefractiveInstanceIndex)){
+        if(RefractiveBoundsIsolation().isIsolated(Span<RayTracingInstanceWorldBounds>(instanceWorldBounds), singleRefractiveInstanceIndex)){
             instanceMaterials[singleRefractiveInstanceIndex].flags |= RtInstanceMaterialFlag::RefractionEntryCertified;
-            m_rayTracingState.m_refraction.m_refractionCertifiedInstanceIndex = singleRefractiveInstanceIndex;
+            this.m_rayTracingState.m_refraction.m_refractionCertifiedInstanceIndex = singleRefractiveInstanceIndex;
         }
     }
 
     // TLAS and material context use separate static keys.
-    const u64 tlasStaticSceneHash = staticScene ? TlasStaticSceneIdentity::Compute(instances) : 0u;
+    u64 tlasStaticSceneHash = 0u;
+    if(staticScene)
+        tlasStaticSceneHash = ComputeTlasStaticSceneIdentity(Span<RayTracingInstanceDesc>(instances));
     const b8 canReuseTlas = CanReuseStaticSceneTlas(
-        staticScene, m_rayTracingState.m_tlasStaticSceneHashValid, m_rayTracingState.m_tlasStaticSceneHash, tlasStaticSceneHash,
-        static_cast<b8>(m_rayTracingState.m_tlas), m_rayTracingState.m_tlasMaxInstances, instances.size(),
-        IsDescriptorClass(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)
+        staticScene, this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid, this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHash, tlasStaticSceneHash,
+        this.m_rayTracingState.sceneBvh.m_tlas.valid(), this.m_rayTracingState.sceneBvh.m_tlasMaxInstances, instances.size(),
+        IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, GpuDescriptorClass::AccelStruct)
     );
     if(!staticScene || !canReuseTlas)
-        m_rayTracingState.m_tlasStaticSceneHashValid = false;
+        this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid = false;
 
-    if(!canReuseTlas && (!m_rayTracingState.m_tlas || m_rayTracingState.m_tlasMaxInstances < instances.size())){
-        const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_tlasMaxInstances, instances.size(), s_TlasInitialInstanceCapacity);
+    if(!canReuseTlas && (!this.m_rayTracingState.sceneBvh.m_tlas.valid() || this.m_rayTracingState.sceneBvh.m_tlasMaxInstances < instances.size())){
+        const usize capacity = NextGrowingCapacity(this.m_rayTracingState.sceneBvh.m_tlasMaxInstances, instances.size(), s_TlasInitialInstanceCapacity);
 
-        Core::RayTracingAccelStructDesc accelStructDesc(m_arena);
+        RayTracingAccelStructDesc accelStructDesc = this.m_graphics.getDevice().makeAccelStructDesc();
         accelStructDesc.setTopLevelMaxInstances(capacity);
-        accelStructDesc.setBuildFlags(Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
-        accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+        accelStructDesc.setBuildFlags(RayTracingAccelStructBuildFlags::PreferFastTrace);
+        accelStructDesc.setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute);
         accelStructDesc.setDebugName(s_SceneTlasDebugName);
 
-        auto& device = m_graphics.getDevice();
+        mut Device device = this.m_graphics.getDevice();
         auto tlasResult = device.createAccelStruct(accelStructDesc);
-        if(!tlasResult){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene TLAS (capacity {})"), static_cast<u64>(capacity));
+        if(!tlasResult.has_value()){
+            error("RendererSystem: failed to create scene TLAS (capacity {})", cast<u64>(capacity));
             return false;
         }
-        Core::RayTracingAccelStructHandle tlas = Move(*tlasResult);
+        RayTracingAccelStructHandle tlas = tlasResult.value();
         // Retire the old heap block before replacing the TLAS generation.
-        RetireDescriptor(heap, m_rayTracingState.m_tlasHeapHandle);
-        m_rayTracingState.m_tlas = Move(tlas);
-        RayTracingBuildPolicy().initializeCreatedSceneTlas(capacity, m_rayTracingState.m_tlasBackingFresh, m_rayTracingState.m_tlasMaxInstances);
+        RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
+        this.m_rayTracingState.sceneBvh.m_tlas = tlas;
+        RayTracingBuildPolicy().initializeCreatedSceneTlas(capacity, this.m_rayTracingState.sceneBvh.m_tlasBackingFresh, this.m_rayTracingState.sceneBvh.m_tlasMaxInstances);
     }
 
     // Allocate a heap block only for a new TLAS generation.
-    if(!IsDescriptorClass(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)){
-        RetireDescriptor(heap, m_rayTracingState.m_tlasHeapHandle);
-        if(!AssignDescriptor(heap, Core::GpuDescriptorClass::AccelStruct, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()), m_rayTracingState.m_tlasHeapHandle)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
+    if(!IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, GpuDescriptorClass::AccelStruct)){
+        RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
+        if(!AssignDescriptor(heap, GpuDescriptorClass::AccelStruct, DescriptorWriteItemRayTracingAccelStruct(0u, this.m_rayTracingState.sceneBvh.m_tlas.deref()), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle)){
+            error("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap");
             return false;
         }
     }
 
-    ShadowMaterialContextPreparer materialContextPreparer(*this);
-    const auto materialContextHash = materialContextPreparer.prepare(PreparedShadowMaterialContextRoute::Hardware, staticScene, instances.size(), instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
-    if(!materialContextHash)
+    ShadowMaterialContextPreparer materialContextPreparer(this);
+    const auto materialContextHash = materialContextPreparer.prepare(PreparedShadowMaterialContextRoute::Hardware, staticScene, instances.size(), Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
+        Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes);
+    if(!materialContextHash.has_value())
         return false;
-    const u64 hwMaterialContextHash = *materialContextHash;
+    const u64 hwMaterialContextHash = materialContextHash.value();
 
     // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
     if(!canReuseTlas){
-        if(!m_preparedSceneTlas.capture(m_rayTracingState, staticScene, tlasStaticSceneHash, instances, instanceBlases)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: could not freeze scene TLAS build after preflight"));
+        if(!this.m_preparedSceneTlas.capture(this.m_rayTracingState, staticScene, tlasStaticSceneHash, Span<RayTracingInstanceDesc>(instances), Span<RayTracingAccelStructHandle>(instanceBlases))){
+            error("RendererSystem: could not freeze scene TLAS build after preflight");
             return false;
         }
     }
 
     // Publish semantic identity from the complete current gather, including cache-hit frames.
     // Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
-    if(!m_hardwareOpticalScene.prepare(opticalScene) || !m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
+    if(!this.m_hardwareOpticalScene.prepare(opticalScene) || !this.m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem))
         return false;
-    m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(tlasStaticSceneHash, hwMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
-    lightSpaceGather.publishHardwareCaptureIdentity(m_preparedSceneContentStamp.material, tlasStaticSceneHash, staticScene, contentComplete, instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes, m_preparedShadowTraceMaterialSampledTextures);
+    this.m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(tlasStaticSceneHash, hwMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
+    lightSpaceGather.publishHardwareCaptureIdentity(this.m_preparedSceneContentStamp.material, tlasStaticSceneHash, staticScene, contentComplete, Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
+        Span<InstanceGpuData>(shadowInstanceData), Span<u8>(shadowMaterialTypedBytes), Span<TextureHandle>(this.m_preparedShadowTraceMaterialSampledTextures));
 
     return true;
 }
 
+[cpp_unwind]
+b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
+    const SceneSwBvhMeshReadinessPolicy readinessPolicy();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
-    using namespace RayTracingSoftwareBvhDetail;
-    const SceneSwBvhMeshReadinessPolicy readinessPolicy;
-
-    m_preparedSceneContentStamp = {};
-    m_lightSpaceShadow.m_captureSceneTrusted = false;
+    this.m_preparedSceneContentStamp = RayTracingSceneContentStamp();
+    this.m_lightSpaceShadow.m_captureSceneTrusted = false;
 
     // Software scene BVH and material context share hardware instance ordering.
-    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
-    if(!meshSystemPtr)
+    const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
+    if(!meshSystem.has_value())
         return false;
 
-    auto rendererView = m_world.view<RendererComponent>();
-    const usize candidateCount = rendererView.candidateCount();
-    LightSpaceShadowSceneGather lightSpaceGather(m_lightSpaceShadow, m_csgShapeRegistry, m_world, scratchArena);
+    const usize candidateCount = this.m_world.view<RendererComponent>().candidateCount();
+    LightSpaceShadowSceneGather lightSpaceGather(this.m_lightSpaceShadow, this.m_csgShapeRegistry, this.m_world);
     lightSpaceGather.begin(candidateCount, false);
 
     // Parallel instance records and CPU BVH build values.
-    Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
-    Vector<SoftwareSceneRefitInstanceGpu, Core::Alloc::ScratchArena> sceneRefitInputs{ scratchArena };
-    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sceneRefitRoots{ scratchArena };
-    Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena> instanceBvhPrimitives{ scratchArena };
+    Vector<SceneSwBvhInstanceGpu> instances;
+    Vector<SoftwareSceneRefitInstanceGpu> sceneRefitInputs;
+    Vector<BufferHandle> sceneRefitRoots;
+    Vector<SceneBvhPrimitiveCalculation> instanceBvhPrimitives;
     // Parallel material records index scene-BVH leaves.
-    Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
+    Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
     // All-occluder trace context; draw buffers hold one transparency class.
-    InstanceGpuDataVector shadowInstanceData{ scratchArena };
-    MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
-    Vector<PreparedSceneSwBvhMesh, Core::Alloc::ScratchArena> preparedMeshes{ scratchArena };
-    ECSRenderDetail::MaterialTypedConstantRangeMap shadowConstantTypedRanges(0, ECSRenderDetail::MaterialTypedConstantRangeMap::hasher(), ECSRenderDetail::MaterialTypedConstantRangeMap::key_equal(), scratchArena);
-    ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
+    InstanceGpuDataVector shadowInstanceData;
+    MaterialTypedByteDataVector shadowMaterialTypedBytes;
+    Vector<PreparedSceneSwBvhMesh> preparedMeshes;
+    MaterialTypedConstantRangeMap shadowConstantTypedRanges;
+    MaterialTypedByteContentRangeMap shadowMutableTypedRanges;
     instances.reserve(candidateCount);
     sceneRefitInputs.reserve(candidateCount);
     sceneRefitRoots.reserve(candidateCount);
@@ -418,281 +393,285 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
     preparedMeshes.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
-    MeshBufferSlotLookup meshSlotLookup(0, Hasher<NotNull<Core::Buffer*>>(), EqualTo<NotNull<Core::Buffer*>>(), scratchArena);
+    MeshBufferSlotLookup meshSlotLookup;
     meshSlotLookup.reserve(candidateCount);
 
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
+        error("RendererSystem: software scene BVH requires the initialized global descriptor heap");
         return false;
     }
-    MeshHeapHandleGather meshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
+    MeshHeapHandleGather meshHeapHandles(heap, this.m_rayTracingState.shadow.m_swMeshHeapHandleCache);
     meshHeapHandles.begin();
-    m_rayTracingState.m_swShadowMeshNodeBuffers.clear();
-    m_rayTracingState.m_swShadowMeshPositionBuffers.clear();
-    m_rayTracingState.m_swShadowMeshIndexBuffers.clear();
-    m_rayTracingState.m_swShadowMeshAttributeBuffers.clear();
-    m_rayTracingState.m_swShadowMeshNodeHandles.clear();
-    m_rayTracingState.m_swShadowMeshPositionHandles.clear();
-    m_rayTracingState.m_swShadowMeshIndexHandles.clear();
-    m_rayTracingState.m_swShadowMeshAttributeHandles.clear();
-    m_rayTracingState.m_swShadowMeshCount = 0u;
+    this.m_rayTracingState.shadow.m_swShadowMeshNodeBuffers.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshPositionBuffers.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshIndexBuffers.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshAttributeBuffers.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshNodeHandles.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshPositionHandles.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshIndexHandles.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshAttributeHandles.clear();
+    this.m_rayTracingState.shadow.m_swShadowMeshCount = 0u;
     b8 staticScene = true;
     b8 contentComplete = true;
-    RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
+    RayTracingOpticalSceneGather opticalScene(candidateCount);
 
-    ShadowMaterialSampledTextureCollector sampledTextureCollector(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
-    ShadowOccluderMaterialGather occluderMaterials(m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
+    Vector<TextureHandle> pendingSampledTextures;
+    ShadowMaterialSampledTextureCollector sampledTextureCollector(this.m_preparedShadowTraceMaterialSampledTextures, pendingSampledTextures);
+    sampledTextureCollector.indexExisting();
+    ShadowOccluderMaterialGather occluderMaterials(this.m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
 
-    for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
+    for(in auto row : this.m_world.view<RendererComponent>()){
+        const EntityID entity = Get<0>(row);
+        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
+        if(!renderer.visible || this.m_opticalVolumes.isSuppressed(entity))
             continue;
 
-        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
-        if(!meshResult && meshResult.error() == RenderableMeshResolution::Absent)
+        const auto meshResult = ResolveRenderableMeshResources(meshSystem.value(), this.m_meshSystem, entity);
+        if(!meshResult.has_value() && meshResult.error() == RenderableMeshResolution::Absent)
             continue;
         const b8 meshReady = meshResult.has_value();
         // Preflight selects pending mesh storage; the prepared build and traversal validate topology before use.
-        const b8 topologyReady = meshReady && readinessPolicy.isTopologyReady(meshReady, meshResult->meshResources.swBvhTopologyBuilt, meshResult->meshResources.runtimeMesh, meshResult->meshResources.swBvhBuildPending);
+        const b8 topologyReady = meshReady && readinessPolicy.isTopologyReady(meshReady, meshResult.value().meshResources.swBvhTopologyBuilt, meshResult.value().meshResources.runtimeMesh, meshResult.value().meshResources.swBvhBuildPending);
         if(
             !meshReady
             || !topologyReady
-            || !meshResult->meshResources.swBvhNodeBuffer
-            || !IsDescriptorClass(meshResult->meshResources.swBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-            || !meshResult->meshResources.positionBuffer
-            || !meshResult->meshResources.triangleIndexBuffer
-            || !meshResult->meshResources.attributeBuffer
-            || !meshResult->meshResources.csgLocalBounds.valid()
+            || !meshResult.value().meshResources.swBvhNodeBuffer.valid()
+            || !IsDescriptorClass(meshResult.value().meshResources.swBvhNodeHeapHandle, GpuDescriptorClass::StorageBuffer)
+            || !meshResult.value().meshResources.positionBuffer.valid()
+            || !meshResult.value().meshResources.triangleIndexBuffer.valid()
+            || !meshResult.value().meshResources.attributeBuffer.valid()
+            || !meshResult.value().meshResources.csgLocalBounds.valid()
         ){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
         }
         // Runtime mesh updates disable static scene-BVH reuse.
-        if(meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
+        if(meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh)
             staticScene = false;
 
         // Reuse one table slot for instances sharing geometry.
-        const NotNull<Core::Buffer*> meshNodeBuffer(meshResult->meshResources.swBvhNodeBuffer.get());
+        mut Buffer meshNodeBuffer = meshResult.value().meshResources.swBvhNodeBuffer.deref();
+        const usize meshKey = meshResult.value().meshResources.swBvhNodeBuffer.identity();
         u32 meshSlot = 0u;
-        const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
-        if(foundMeshSlot != meshSlotLookup.end())
-            meshSlot = foundMeshSlot.value();
+        if(meshSlotLookup.contains(meshKey))
+            meshSlot = meshSlotLookup.at(meshKey);
         else{
-            const Core::GpuDescriptorHandle nodeHandle = meshResult->meshResources.swBvhNodeHeapHandle;
-            const Core::GpuDescriptorHandle positionHandle = meshResult->meshResources.swBvhPositionHeapHandle;
-            const Core::GpuDescriptorHandle indexHandle = meshResult->meshResources.swBvhTriangleIndexHeapHandle;
-            if(!positionHandle.valid() || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer || !indexHandle.valid() || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
+            const GpuDescriptorHandle nodeHandle = meshResult.value().meshResources.swBvhNodeHeapHandle;
+            const GpuDescriptorHandle positionHandle = meshResult.value().meshResources.swBvhPositionHeapHandle;
+            const GpuDescriptorHandle indexHandle = meshResult.value().meshResources.swBvhTriangleIndexHeapHandle;
+            if(!positionHandle.valid() || positionHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer || !indexHandle.valid() || indexHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                error("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap");
                 return false;
             }
 
-            const auto attributeHandle = meshHeapHandles.acquire(meshResult->meshResources.attributeBuffer);
-            if(!attributeHandle){
+            const auto attributeHandle = meshHeapHandles.acquire(meshResult.value().meshResources.attributeBuffer);
+            if(!attributeHandle.has_value()){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                error("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap");
                 return false;
             }
 
-            const Core::BufferDesc& nodeDesc = meshResult->meshResources.swBvhNodeBuffer->getCreationDescription();
-            const Core::BufferDesc& positionDesc = meshResult->meshResources.positionBuffer->getCreationDescription();
-            const Core::BufferDesc& indexDesc = meshResult->meshResources.triangleIndexBuffer->getCreationDescription();
-            const Core::BufferDesc& attributeDesc = meshResult->meshResources.attributeBuffer->getCreationDescription();
+            in BufferDesc nodeDesc = meshResult.value().meshResources.swBvhNodeBuffer.deref().getCreationDescription();
+            in BufferDesc positionDesc = meshResult.value().meshResources.positionBuffer.deref().getCreationDescription();
+            in BufferDesc indexDesc = meshResult.value().meshResources.triangleIndexBuffer.deref().getCreationDescription();
+            in BufferDesc attributeDesc = meshResult.value().meshResources.attributeBuffer.deref().getCreationDescription();
             PreparedSceneSwBvhMesh preparedMesh;
-            preparedMesh.meshName = meshResult->meshResources.meshName;
-            preparedMesh.nodeBuffer = meshResult->meshResources.swBvhNodeBuffer;
-            preparedMesh.positionBuffer = meshResult->meshResources.positionBuffer;
-            preparedMesh.triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer;
-            preparedMesh.attributeBuffer = meshResult->meshResources.attributeBuffer;
+            preparedMesh.meshName = meshResult.value().meshResources.meshName;
+            preparedMesh.nodeBuffer = meshResult.value().meshResources.swBvhNodeBuffer;
+            preparedMesh.positionBuffer = meshResult.value().meshResources.positionBuffer;
+            preparedMesh.triangleIndexBuffer = meshResult.value().meshResources.triangleIndexBuffer;
+            preparedMesh.attributeBuffer = meshResult.value().meshResources.attributeBuffer;
             preparedMesh.nodeHeapHandle = nodeHandle;
             preparedMesh.positionHeapHandle = positionHandle;
             preparedMesh.triangleIndexHeapHandle = indexHandle;
-            preparedMesh.attributeHeapHandle = *attributeHandle;
-            preparedMesh.runtimeMeshVersion = meshResult->meshResources.runtimeMeshVersion;
-            preparedMesh.geometryContentRevision = meshResult->meshResources.runtimeGeometryContentRevision;
+            preparedMesh.attributeHeapHandle = attributeHandle.value();
+            preparedMesh.runtimeMeshVersion = meshResult.value().meshResources.runtimeMeshVersion;
+            preparedMesh.geometryContentRevision = meshResult.value().meshResources.runtimeGeometryContentRevision;
             preparedMesh.nodeByteSize = nodeDesc.byteSize;
             preparedMesh.positionByteSize = positionDesc.byteSize;
             preparedMesh.triangleIndexByteSize = indexDesc.byteSize;
             preparedMesh.attributeByteSize = attributeDesc.byteSize;
-            preparedMesh.primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResult->meshResources.meshletPrimitiveIndexCount);
-            preparedMesh.runtimeMesh = meshResult->meshResources.runtimeMesh;
-            preparedMeshes.push_back(Move(preparedMesh));
+            preparedMesh.primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResult.value().meshResources.meshletPrimitiveIndexCount);
+            preparedMesh.runtimeMesh = meshResult.value().meshResources.runtimeMesh;
+            preparedMeshes.push_back(preparedMesh);
 
-            meshSlot = m_rayTracingState.m_swShadowMeshCount;
-            m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
-            m_rayTracingState.m_swShadowMeshPositionBuffers.push_back(MakeNotNull(meshResult->meshResources.positionBuffer.get()));
-            m_rayTracingState.m_swShadowMeshIndexBuffers.push_back(MakeNotNull(meshResult->meshResources.triangleIndexBuffer.get()));
-            m_rayTracingState.m_swShadowMeshAttributeBuffers.push_back(MakeNotNull(meshResult->meshResources.attributeBuffer.get()));
-            m_rayTracingState.m_swShadowMeshNodeHandles.push_back(nodeHandle);
-            m_rayTracingState.m_swShadowMeshPositionHandles.push_back(positionHandle);
-            m_rayTracingState.m_swShadowMeshIndexHandles.push_back(indexHandle);
-            m_rayTracingState.m_swShadowMeshAttributeHandles.push_back(*attributeHandle);
-            if(!meshSlotLookup.emplace(meshNodeBuffer, meshSlot).second){
-                FOUNDATION_ASSERT(false);
+            meshSlot = this.m_rayTracingState.shadow.m_swShadowMeshCount;
+            this.m_rayTracingState.shadow.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
+            this.m_rayTracingState.shadow.m_swShadowMeshPositionBuffers.push_back(meshResult.value().meshResources.positionBuffer.deref());
+            this.m_rayTracingState.shadow.m_swShadowMeshIndexBuffers.push_back(meshResult.value().meshResources.triangleIndexBuffer.deref());
+            this.m_rayTracingState.shadow.m_swShadowMeshAttributeBuffers.push_back(meshResult.value().meshResources.attributeBuffer.deref());
+            this.m_rayTracingState.shadow.m_swShadowMeshNodeHandles.push_back(nodeHandle);
+            this.m_rayTracingState.shadow.m_swShadowMeshPositionHandles.push_back(positionHandle);
+            this.m_rayTracingState.shadow.m_swShadowMeshIndexHandles.push_back(indexHandle);
+            this.m_rayTracingState.shadow.m_swShadowMeshAttributeHandles.push_back(attributeHandle.value());
+            if(!meshSlotLookup.try_emplace(meshKey, meshSlot).second){
+                assert(false);
                 meshHeapHandles.sweep();
                 return false;
             }
-            ++m_rayTracingState.m_swShadowMeshCount;
+            ++this.m_rayTracingState.shadow.m_swShadowMeshCount;
         }
 
-        const NWB::Impl::Scene::TransformComponent* objectTransformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        const SIMDMatrix objectToWorld = objectTransformPtr ? MatrixAffineTransformation(LoadFloat(objectTransformPtr->scale), VectorZero(), LoadFloat(objectTransformPtr->rotation), LoadFloat(objectTransformPtr->position)) : MatrixIdentity();
-        SIMDVectorSingle determinant;
-        const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
+        Optional<in TransformComponent> transform;
+        if(this.m_world.hasComponent<TransformComponent>(entity))
+            transform.emplace(this.m_world.getComponent<TransformComponent>(entity));
+        MatrixSingle objectToWorld = MatrixIdentity();
+        if(transform.has_value())
+            objectToWorld = LoadTransformMatrix(transform.value());
+        const MatrixSingle worldToObject = Inverse(objectToWorld);
 
-        const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
-        const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
-        const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
-        if(!worldBounds){
+        const VectorSingle localMin = VectorSingle(meshResult.value().meshResources.csgLocalBounds.minBounds);
+        const VectorSingle localMax = VectorSingle(meshResult.value().meshResources.csgLocalBounds.maxBounds);
+        const auto worldBounds = AabbTransform(objectToWorld, localMin, localMax);
+        if(!worldBounds.has_value()){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
         }
-        SIMDVectorSingle worldMin = worldBounds->minBounds;
-        SIMDVectorSingle worldMax = worldBounds->maxBounds;
+        VectorSingle worldMin = worldBounds.value().minBounds;
+        VectorSingle worldMax = worldBounds.value().maxBounds;
         InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
-        StoreFloat(worldToObject, instance.worldToObject);
-        instance.primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResult->meshResources.meshletPrimitiveIndexCount);
+        instance.worldToObject = f32x3x4(worldToObject);
+        instance.primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResult.value().meshResources.meshletPrimitiveIndexCount);
 
         // Build material context in scene-BVH leaf order; unresolved materials remain opaque.
-        const u32 meshInstanceIndex = static_cast<u32>(instances.size());
+        const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        if(!occluderMaterials.resolve(entity, renderer.material, objectTransformPtr, meshInstanceIndex, instanceMaterial, shadowInstance))
+        if(!occluderMaterials.resolve(entity, renderer.material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>()))
             return false;
-        instanceMaterial.indexSlot = m_rayTracingState.m_swShadowMeshIndexHandles[meshSlot].slot();
-        instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
-        instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
-        instanceMaterial.nodeSlot = m_rayTracingState.m_swShadowMeshNodeHandles[meshSlot].slot();
+        instanceMaterial.indexSlot = this.m_rayTracingState.shadow.m_swShadowMeshIndexHandles[meshSlot].slot();
+        instanceMaterial.attributeSlot = this.m_rayTracingState.shadow.m_swShadowMeshAttributeHandles[meshSlot].slot();
+        instanceMaterial.positionSlot = this.m_rayTracingState.shadow.m_swShadowMeshPositionHandles[meshSlot].slot();
+        instanceMaterial.nodeSlot = this.m_rayTracingState.shadow.m_swShadowMeshNodeHandles[meshSlot].slot();
         const SceneBvhPrimitiveCalculation bvhPrimitive = MakeSceneBvhPrimitiveCalculation(worldMin, worldMax, instanceMaterial.flags);
 
-        SIMDVectorSingle opticalMin = VectorZero();
-        SIMDVectorSingle opticalMax = VectorZero();
+        VectorSingle opticalMin = VectorZero();
+        VectorSingle opticalMax = VectorZero();
         b8 opticalBoundsValid = false;
-        if(bvhPrimitive.transparentOccluder && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh){
+        if(bvhPrimitive.transparentOccluder && !meshResult.value().resolvedMesh.runtime && !meshResult.value().meshResources.runtimeMesh){
             const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
-            if(bounds){
-                opticalMin = bounds->minimum;
-                opticalMax = bounds->maximum;
+            if(bounds.has_value()){
+                opticalMin = VectorSingle(bounds.value().minimum);
+                opticalMax = VectorSingle(bounds.value().maximum);
                 opticalBoundsValid = true;
             }
         }
         const b8 runtimeOpticalBounds =
-            bvhPrimitive.transparentOccluder && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
-            && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
+            bvhPrimitive.transparentOccluder && (meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh)
+            && meshResult.value().meshResources.runtimeLocalBoundsBuffer.valid() && meshResult.value().meshResources.runtimeLocalBoundsHeapHandle.valid()
         ;
-        Float34 instanceWorld{};
-        StoreFloat(objectToWorld, instanceWorld);
         if(runtimeOpticalBounds)
-            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
+            opticalScene.appendRuntime(entity, renderer, meshResult.value().meshResources.runtimeLocalBoundsBuffer, meshResult.value().meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
         else
             opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 
-        lightSpaceGather.appendSoftwareCaptureIdentity(entity, meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh, meshResult->meshResources, instanceMaterial, shadowInstance, opticalScene.instances.back());
-        lightSpaceGather.appendSoftwareReceiver(entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, meshResult->meshResources);
-        sceneRefitInputs.push_back({ instanceWorld, instanceMaterial.nodeSlot, {} });
-        sceneRefitRoots.push_back(meshResult->meshResources.swBvhNodeBuffer);
-        lightSpaceGather.appendSoftwareCaster(meshResult->meshResources);
+        lightSpaceGather.appendSoftwareCaptureIdentity(entity, meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh, meshResult.value().meshResources, instanceMaterial, shadowInstance, opticalScene.instances.back());
+        lightSpaceGather.appendSoftwareReceiver(entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, meshResult.value().meshResources);
+        SoftwareSceneRefitInstanceGpu refitInput;
+        refitInput.objectToWorld = f32x3x4(objectToWorld);
+        refitInput.meshNodeSlot = instanceMaterial.nodeSlot;
+        sceneRefitInputs.push_back(refitInput);
+        sceneRefitRoots.push_back(meshResult.value().meshResources.swBvhNodeBuffer);
+        lightSpaceGather.appendSoftwareCaster(meshResult.value().meshResources);
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    RayTracingDiagnostics().shadowMeshHeapHighWater(false, m_rayTracingState.m_swShadowMeshCount, m_rayTracingState.m_swShadowMeshHeapHighWater);
+    RayTracingDiagnostics().shadowMeshHeapHighWater(false, this.m_rayTracingState.shadow.m_swShadowMeshCount, this.m_rayTracingState.shadow.m_swShadowMeshHeapHighWater);
     meshHeapHandles.sweep();
 
-    if(!lightSpaceGather.finishSoftware(instances, instanceMaterials, contentComplete))
+    if(!lightSpaceGather.finishSoftware(Span<SceneSwBvhInstanceGpu>(instances), instanceMaterials, contentComplete))
         return false;
-    const auto& csg = m_lightSpaceShadow.m_csg.snapshot;
-    const u32 instanceCount = static_cast<u32>(instances.size());
+    in CsgShadowSnapshot csg = this.m_lightSpaceShadow.m_csg.snapshot;
+    const u32 instanceCount = cast<u32>(instances.size());
     if(instanceCount == 0u){
-        m_rayTracingState.m_sceneBvhInstanceCount = 0u;
-        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-        m_rayTracingState.m_swShadowMaterialContextHashValid = false;
+        this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount = 0u;
+        this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
+        this.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid = false;
         return true;
     }
 
     // Topology hash includes bounds, transforms, and transparent-subtree class.
-    const u64 sceneStaticHash = staticScene ? RayTracingSceneIdentityBuilder().staticSceneHash(instances, instanceBvhPrimitives) : 0u;
-    const usize requiredNodeCount = ComputeBinaryBvhNodeCount(static_cast<usize>(instanceCount));
+    u64 sceneStaticHash = 0u;
+    if(staticScene)
+        sceneStaticHash = RayTracingSceneIdentityBuilder().staticSceneHash(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives));
+    const usize requiredNodeCount = ComputeBinaryBvhNodeCount(cast<usize>(instanceCount));
     if(!RayTracingBuildPolicy().validateSceneSwBvhNodeCount(requiredNodeCount))
         return false;
     const b8 canReuseSceneBvh = CanReuseStaticSceneSwBvh(
-        staticScene, m_rayTracingState.m_sceneSwBvhStaticSceneHashValid, m_rayTracingState.m_sceneSwBvhStaticSceneHash,
-        sceneStaticHash, m_rayTracingState.m_sceneBvhInstanceCount, instanceCount, HasPreparedSceneBvhBuffers(m_rayTracingState, instanceCount)
+        staticScene, this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid, this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHash,
+        sceneStaticHash, this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount, instanceCount, HasPreparedSceneBvhBuffers(this.m_rayTracingState, instanceCount)
     );
     if(!staticScene || !canReuseSceneBvh)
-        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-    if(canReuseSceneBvh && !capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount))
+        this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
+    if(canReuseSceneBvh && !this.capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount))
         return false;
 
     if(!canReuseSceneBvh){
-        RayTraceMaterialResources materials(m_graphics, m_rayTracingState, m_rayTracingState);
-        SoftwareBvhBuilder builder(m_arena, m_graphics, m_shaderSystem, m_rayTracingState);
-        if(!builder.ensureSceneBvhBuffers(instanceCount, materials) || !HasPreparedSceneBvhBuffers(m_rayTracingState, instanceCount))
+        RayTraceMaterialResources materials(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
+        SoftwareBvhBuilder builder(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
+        if(!builder.ensureSceneBvhBuffers(instanceCount, materials) || !HasPreparedSceneBvhBuffers(this.m_rayTracingState, instanceCount))
             return false;
         // CPU-build the small scene BVH and upload the shared node layout.
-        Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
-        Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
-        Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
-        Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
-        if(!BuildAndPackSceneBvhNodesInto(instances, instanceBvhPrimitives, indices, instanceLeafCost, buildNodes, nodes))
+        Vector<u32> indices;
+        Vector<u32> instanceLeafCost;
+        Vector<SceneBvhNodeCalculation> buildNodes;
+        Vector<NwbBvhNodeGpu> nodes;
+        if(!BuildAndPackSceneBvhNodesInto(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives), indices, instanceLeafCost, buildNodes, nodes))
             return false;
 
-        if(!capturePreparedSceneBvh(staticScene, sceneStaticHash, nodes, instances))
+        if(!this.capturePreparedSceneBvh(staticScene, sceneStaticHash, Span<NwbBvhNodeGpu>(nodes), Span<SceneSwBvhInstanceGpu>(instances)))
             return false;
     }
 
     if(!staticScene){
-        auto preparedRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs, sceneRefitRoots, m_preparedSceneBvh.nodeBuffer(), m_preparedSceneBvh.nodeHeapHandle(), static_cast<u32>(requiredNodeCount), m_shaderSystem);
-        if(!preparedRefit){
-            m_preparedSceneSwBvhRefit.reset();
+        auto preparedRefit = this.m_sceneSwBvhRefit.prepare(Span<SoftwareSceneRefitInstanceGpu>(sceneRefitInputs), Span<BufferHandle>(sceneRefitRoots), this.m_preparedSceneBvh.nodeBuffer(),
+            this.m_preparedSceneBvh.nodeHeapHandle(), cast<u32>(requiredNodeCount), this.m_shaderSystem);
+        if(!preparedRefit.has_value()){
+            this.m_preparedSceneSwBvhRefit.reset();
             return false;
         }
-        m_preparedSceneSwBvhRefit = Move(*preparedRefit);
+        this.m_preparedSceneSwBvhRefit = preparedRefit.value();
     }
 
-    ShadowMaterialContextPreparer materialContextPreparer(*this);
-    const auto materialContextHash = materialContextPreparer.prepare(PreparedShadowMaterialContextRoute::Software, staticScene, instances.size(), instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
-    if(!materialContextHash)
+    ShadowMaterialContextPreparer materialContextPreparer(this);
+    const auto materialContextHash = materialContextPreparer.prepare(PreparedShadowMaterialContextRoute::Software, staticScene, instances.size(), Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
+        Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes);
+    if(!materialContextHash.has_value())
         return false;
-    const u64 swMaterialContextHash = *materialContextHash;
+    const u64 swMaterialContextHash = materialContextHash.value();
 
-    m_rayTracingState.m_sceneBvhInstanceCount = instanceCount;
-    const b8 frozenGraphScene = readinessPolicy.isFrozenSoftwareSceneReady(m_preparedSceneBvh.ready(), m_preparedShadowMaterialContext.ready(), m_preparedShadowMaterialContext.route());
+    this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount = instanceCount;
+    const b8 frozenGraphScene = readinessPolicy.isFrozenSoftwareSceneReady(this.m_preparedSceneBvh.ready(), this.m_preparedShadowMaterialContext.ready(), this.m_preparedShadowMaterialContext.route());
     if(frozenGraphScene){
-        if(!m_preparedSceneSwBvhTraversal.capture(preparedMeshes, instanceCount)){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not freeze software scene traversal"));
-            clearPreparedSceneBvh();
-            clearPreparedShadowMaterialContext();
+        const b8 storageReady = this.m_preparedSceneBvh.covers(instanceCount)
+            && this.m_preparedShadowMaterialContext.softwareSnapshotCovers(instanceCount)
+            && this.preparedTraversalStorageMatchesCurrent();
+        if(!this.m_preparedSceneSwBvhTraversal.capture(Span<PreparedSceneSwBvhMesh>(preparedMeshes), instanceCount, storageReady, this.m_world)){
+            warning("RendererSystem: could not freeze software scene traversal");
+            this.clearPreparedSceneBvh();
+            this.clearPreparedShadowMaterialContext();
             return false;
         }
     }
     else
-        m_preparedSceneSwBvhTraversal.clear();
-    if(!m_softwareOpticalScene.prepare(opticalScene) || !m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
+        this.m_preparedSceneSwBvhTraversal.clear();
+    if(!this.m_softwareOpticalScene.prepare(opticalScene) || !this.m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem))
         return false;
-    m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(sceneStaticHash, swMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
+    this.m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(sceneStaticHash, swMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
     // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
-    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(m_preparedSceneContentStamp);
-    lightSpaceGather.publishSoftwareCaptureIdentity(instanceCount, instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes, m_preparedShadowTraceMaterialSampledTextures, contentComplete);
+    this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.prepareScene(this.m_preparedSceneContentStamp);
+    lightSpaceGather.publishSoftwareCaptureIdentity(instanceCount, Span<NwbRtInstanceMaterialGpu>(instanceMaterials), Span<InstanceGpuData>(shadowInstanceData), Span<u8>(shadowMaterialTypedBytes),
+        Span<TextureHandle>(this.m_preparedShadowTraceMaterialSampledTextures), contentComplete);
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

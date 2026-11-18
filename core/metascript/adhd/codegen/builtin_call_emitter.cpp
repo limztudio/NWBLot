@@ -131,7 +131,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                             out.append(", ");
                         hasArg = true;
                         if(i == byteViewArgIdx){
-                            out.append("([](const auto& __adhd_bytes)noexcept{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ");
+                            out.append("([](const auto& __adhd_bytes)").append(m_emitter.lambdaExceptionSpec()).append("{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ");
                             out.append(CodegenSymbols::s_BinaryByteViewType.data(), CodegenSymbols::s_BinaryByteViewType.size());
                             out.append("{ reinterpret_cast<const ");
                             out.append(CodegenSymbols::s_ByteCppType.data(), CodegenSymbols::s_ByteCppType.size());
@@ -155,6 +155,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 }
             }
             switch(fnInfo->callLowering){
+            case BuiltinCallLowering::PlatformLiteralArg0:
             case BuiltinCallLowering::BinaryByteViewArg0:
             case BuiltinCallLowering::BinaryByteViewArg1:
                 break;

@@ -2,6 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::ResolvedCookPaths")]
+extern class CookResolvedPaths{
+    Path repoRoot;
+    Vector<ResolvedAssetRoot> assetRoots;
+    Path outputDirectory;
+    Path cacheDirectory;
+};
+
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::ResolveCookVirtualAssetPath"), cpp_flags(scratch_arena)]
+extern Expected<Path> ResolveCookVirtualAssetPath(in CookResolvedPaths paths, in StringView name);
+
 [cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::PrepareGeneratedIncludeRoot")]
 extern b8 PrepareGeneratedIncludeRoot(in Path a0, in StringView a1);
 

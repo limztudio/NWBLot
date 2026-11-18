@@ -63,9 +63,11 @@ inline constexpr TStringView s_FatalAssertLabel = FOUNDATION_TEXT("FATAL ASSERT 
 
 
 #if FOUNDATION_OCCUR_ASSERT
+#define FOUNDATION_ASSERT_CHECK(condition) static_cast<b8>(condition)
 #define FOUNDATION_ASSERT(condition) FOUNDATION_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
 #define FOUNDATION_ASSERT_MSG(condition, ...) FOUNDATION_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
 #else
+#define FOUNDATION_ASSERT_CHECK(condition) true
 #define FOUNDATION_ASSERT(condition)
 #define FOUNDATION_ASSERT_MSG(condition, ...)
 #endif

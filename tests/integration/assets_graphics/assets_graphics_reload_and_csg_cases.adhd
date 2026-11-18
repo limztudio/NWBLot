@@ -438,7 +438,7 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
         EXPECT_EQ(prepared.dependencies[0u], JoinGraphicsPath(root, "shader.slang"));
         EXPECT_EQ(prepared.dependencies[1u], JoinGraphicsPath(root, "common.slangi"));
         ASSERT_TRUE(HasPreparedShaderDefine(prepared, s_CsgAuthoredDefine));
-        const CookStringVector authoredValues = GetPreparedShaderDefineValues(prepared, s_CsgAuthoredDefine);
+        const Vector<String> authoredValues = GetPreparedShaderDefineValues(prepared, s_CsgAuthoredDefine);
         ASSERT_EQ(authoredValues.size(), 1u);
         EXPECT_EQ(ViewArenaString(authoredValues[0u]), "authored");
         EXPECT_EQ(prepared.variantCount, expectedVariantCount);
@@ -447,7 +447,7 @@ void VerifyAssetsGraphics_ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInher
             EXPECT_EQ(prepared.dependencies[2u], JoinGraphicsPath(csgRoot, "first.slangi"));
             EXPECT_EQ(prepared.dependencies[3u], JoinGraphicsPath(csgRoot, "second.slangi"));
             ASSERT_TRUE(HasPreparedShaderDefine(prepared, s_CsgModuleOptionDefine));
-            const CookStringVector inheritedValues = GetPreparedShaderDefineValues(prepared, s_CsgModuleOptionDefine);
+            const Vector<String> inheritedValues = GetPreparedShaderDefineValues(prepared, s_CsgModuleOptionDefine);
             ASSERT_EQ(inheritedValues.size(), 2u);
             EXPECT_EQ(ViewArenaString(inheritedValues[0u]), "0");
             EXPECT_EQ(ViewArenaString(inheritedValues[1u]), "1");

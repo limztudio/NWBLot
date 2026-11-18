@@ -2,86 +2,54 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
+// Shadow visibility and surfel irradiance clear on either a graphics or a compute queue.
+class FloatTextureClearGraphTask{
+    private GpuGraphResourceId m_destination;
+    private TextureSubresourceSet m_subresources;
+    private Color m_value;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
-
-#include <core/graphics/backend_selection/backend.h>
-#include <core/task/gpu/capture/command_ir.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Shadow-visibility all-lit and surfel-irradiance clears share one float-clear record path; only the subresources and clear color differ per use.
-struct FloatTextureClearGraphTask{
-    // Native uncompressed color clears accept either Compute or Graphics commands.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, false, Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute, };
-
-
-public:
-    struct Payload{
-        Core::GpuGraphResourceId destination;
-        Core::TextureSubresourceSet subresources = {};
-        Core::Color floatValue = {};
-    };
-
-
-public:
-    [[nodiscard]] FOUNDATION_INLINE static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        Core::Texture* const destination = context.declarations.textureForResource(payload.destination);
-        if(!CanRecordFloatTextureClear(destination != nullptr, commandList.isRenderPassActive()))
-            return false;
-
-        const Core::GpuClearTextureTaskDesc clearDesc{ .destination = payload.destination, .subresources = payload.subresources, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = payload.floatValue, };
-        if(context.commandIrCapture && !context.commandIrCapture->captureClearTexture(context.task, context.packet, context.queue, payload.destination, clearDesc))
-            return false;
-        commandList.clearTextureFloat(*destination, clearDesc.subresources, clearDesc.floatValue);
-        return true;
+    public FloatTextureClearGraphTask(in GpuGraphResourceId destination, in TextureSubresourceSet subresources, in Color value){
+        this.m_destination = destination;
+        this.m_subresources = subresources;
+        this.m_value = value;
     }
-};
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.alternativeCapabilities = GpuQueueCapability::Graphics | GpuQueueCapability::Compute;
+        return commands;
+    }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        GpuClearTextureTaskDesc clear;
+        clear.destination = this.m_destination;
+        clear.subresources = this.m_subresources;
+        clear.valueType = GpuClearTextureTaskValueType::Float;
+        clear.floatValue = this.m_value;
+        return VisitGpuTaskTexture(context.declarations, this.m_destination, lambda[in clear, in context, mut commandList](mut RhiTexture texture) -> b8{
+            if(commandList.isRenderPassActive())
+                return false;
+            if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in clear](mut GpuCommandIrCapture capture) -> b8{
+                return capture.captureClearTexture(context.task, context.packet, context.queue, clear.destination, clear);
+            }))
+                return false;
+            commandList.clearTextureFloat(texture, clear.subresources, clear.floatValue);
+            return true;
+        });
+    }
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+Expected<GpuTaskId> AddFloatTextureClearTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in GpuGraphResourceId destination,
+    in TextureSubresourceSet subresources,
+    in Color value
+){
+    return graph.addPayloadTask(desc, FloatTextureClearGraphTask(destination, subresources, value));
 }
 
 

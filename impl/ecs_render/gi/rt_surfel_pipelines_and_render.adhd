@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/gi/rt_surfel_gi_state.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/raytrace/rt_private.adhd>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
 #include <impl/assets_graphics/gi_subsystem.adhd>
 #include <impl/ecs_render/gi/quality_settings.adhd>
 #include <impl/ecs_render/gi/rt_surfel_internal.adhd>
@@ -364,82 +372,75 @@ b8 SurfelGiPipelineSet::ensureSurfelTraceBuildArgsPipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_LINEAR_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelLinearGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_X")]
+extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountX;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Y")]
+extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountY;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Z")]
+extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountZ;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_RESOLVE_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelResolveGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPSAMPLE_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelUpsampleGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_BUMP_TOP")]
+extern const u32 s_ShaderSurfelCounterBumpTop;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_FREE_TOP")]
+extern const u32 s_ShaderSurfelCounterFreeTop;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE")]
+extern const u32 s_ShaderSurfelCounterTraceGeometryFailure;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
-#include <impl/assets_graphics/gi_subsystem.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/gi/quality_settings.adhd.h>
-#include <impl/ecs_render/gi/rt_surfel_gi_state.adhd.h>
-#include <impl/ecs_render/gi/rt_surfel_internal.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
 b8 RendererRayTracingSystem::renderSurfelGiPhases(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const b8 dispatchAgeFree,
-    const b8 dispatchHashBuild,
-    const b8 dispatchSpawn,
-    const b8 dispatchTraceBuildArgs,
-    const b8 dispatchTrace,
-    const b8 dispatchResolve,
-    const b8 dispatchRemaining
-){
-    if(!hasSurfelWork())
+        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
+        in b8 dispatchAgeFree, in b8 dispatchHashBuild, in b8 dispatchSpawn, in b8 dispatchTraceBuildArgs, in b8 dispatchTrace, in b8 dispatchResolve, in b8 dispatchRemaining
+    ){
+    if(!this.hasSurfelWork())
         return true;
 
-    FOUNDATION_ASSERT(targets.bindless.valid());
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    assert(targets.bindless.valid());
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
     // Only the trace pass is backend-specific.
-    const b8 useHwTrace = m_rayTracingState.m_surfelUseHwTrace;
-    const b8 useCsgTrace = m_rayTracingState.m_surfelUseCsgTrace;
-    Core::ComputePipeline* const tracePipeline = useHwTrace
-        ? (useCsgTrace ? m_rayTracingState.m_surfelTraceCsgHwPipeline.get() : m_rayTracingState.m_surfelTraceHwPipeline.get())
-        : (useCsgTrace ? m_rayTracingState.m_surfelTraceCsgPipeline.get() : m_rayTracingState.m_surfelTracePipeline.get())
-    ;
+    const b8 useHwTrace = this.m_rayTracingState.surfelGi.m_surfelUseHwTrace;
+    const b8 useCsgTrace = this.m_rayTracingState.surfelGi.m_surfelUseCsgTrace;
+    ComputePipelineHandle tracePipeline = this.m_rayTracingState.surfelGi.m_surfelTracePipeline;
+    if(useHwTrace){
+        tracePipeline = this.m_rayTracingState.surfelGi.m_surfelTraceHwPipeline;
+        if(useCsgTrace)
+            tracePipeline = this.m_rayTracingState.surfelGi.m_surfelTraceCsgHwPipeline;
+    }
+    else if(useCsgTrace)
+        tracePipeline = this.m_rayTracingState.surfelGi.m_surfelTraceCsgPipeline;
 
     if(!AreAllSurfelGiPhasePipelinesReady(
-        static_cast<b8>(m_rayTracingState.m_surfelSpawnPipeline),
-        static_cast<b8>(m_rayTracingState.m_surfelAgeFreePipeline),
-        static_cast<b8>(m_rayTracingState.m_surfelHashBuildPipeline),
-        tracePipeline != nullptr,
-        static_cast<b8>(m_rayTracingState.m_surfelResolvePipeline),
-        static_cast<b8>(m_rayTracingState.m_surfelUpsamplePipeline),
-        static_cast<b8>(m_rayTracingState.m_surfelTraceBuildArgsPipeline)
+        this.m_rayTracingState.surfelGi.m_surfelSpawnPipeline.valid(),
+        this.m_rayTracingState.surfelGi.m_surfelAgeFreePipeline.valid(),
+        this.m_rayTracingState.surfelGi.m_surfelHashBuildPipeline.valid(),
+        tracePipeline.valid(),
+        this.m_rayTracingState.surfelGi.m_surfelResolvePipeline.valid(),
+        this.m_rayTracingState.surfelGi.m_surfelUpsamplePipeline.valid(),
+        this.m_rayTracingState.surfelGi.m_surfelTraceBuildArgsPipeline.valid()
     )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: active surfel GI phase pipeline is missing"));
+        error("RendererSystem: active surfel GI phase pipeline is missing");
         return false;
     }
 
@@ -447,63 +448,69 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         !targets.bindless.valid()
         || !IsValidSurfelGiResolveFactor(targets.surfelResolveFactor)
         || !deferredLightingResources.valid()
-        || !IsDescriptorClass(m_rayTracingState.m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelGuidePoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelFreeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelPoolSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !IsDescriptorClass(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !IsDescriptorClass(targets.bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage)
-        || !IsDescriptorClass(targets.bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage)
-        || !IsDescriptorClass(targets.bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage)
-        || !IsDescriptorClass(targets.bindless.surfelIrradianceHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !IsDescriptorClass(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
-        || (useHwTrace && (!m_rayTracingState.m_tlas || !IsDescriptorClass(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelConstantsHeapHandle, GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelPoolHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelGuidePoolHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelCellHeadHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelCounterHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelFreeListHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelPoolSnapshotHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.surfelGi.m_surfelCellHeadSnapshotHeapHandle, GpuDescriptorClass::StorageBuffer)
+        || !IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle, GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, GpuDescriptorClass::UniformBuffer)
+        || !IsDescriptorClass(targets.bindless.gbufferWorldPosition, GpuDescriptorClass::SampledImage)
+        || !IsDescriptorClass(targets.bindless.gbufferNormal, GpuDescriptorClass::SampledImage)
+        || !IsDescriptorClass(targets.bindless.surfelIrradianceHalf, GpuDescriptorClass::SampledImage)
+        || !IsDescriptorClass(targets.bindless.surfelIrradianceHalfStorage, GpuDescriptorClass::StorageImage)
+        || !IsDescriptorClass(targets.bindless.surfelIrradianceStorage, GpuDescriptorClass::StorageImage)
+        || (useHwTrace && (!this.m_rayTracingState.sceneBvh.m_tlas || !IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, GpuDescriptorClass::AccelStruct)))
     ){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
+        error("RendererSystem: surfel GI heap registration is incomplete");
         return false;
     }
 
-    const u32 poolCapacity = m_rayTracingState.m_surfelPoolCapacity;
+    const u32 poolCapacity = this.m_rayTracingState.surfelGi.m_surfelPoolCapacity;
 
     SurfelHeapPushConstants surfelPush = MakeSurfelHeapPushConstants(
-        m_rayTracingState.m_surfelConstantsHeapHandle.slot(),
-        m_rayTracingState.m_surfelPoolHeapHandle.slot(),
-        m_rayTracingState.m_surfelGuidePoolHeapHandle.slot(),
-        m_rayTracingState.m_surfelCellHeadHeapHandle.slot(),
-        m_rayTracingState.m_surfelCounterHeapHandle.slot(),
-        m_rayTracingState.m_surfelFreeListHeapHandle.slot(),
-        m_rayTracingState.m_surfelPoolSnapshotHeapHandle.slot(),
-        m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle.slot(),
-        m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelConstantsHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelPoolHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelGuidePoolHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelCellHeadHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelCounterHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelFreeListHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelPoolSnapshotHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelCellHeadSnapshotHeapHandle.slot(),
+        this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsHeapHandle.slot(),
         targets.bindless.slotsBufferDescriptor.slot(),
-        m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot()
+        this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.slot()
     );
 
     // Order every in-place field update, including prior-frame spawn writes.
-    commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelPoolBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelGuidePoolBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelCellHeadBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelCounterBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelFreeListBuffer.get(), true);
-    commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(), true);
+    if(this.m_rayTracingState.surfelGi.m_surfelPoolBuffer.valid())
+        commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelPoolBuffer.deref(), true);
+    if(this.m_rayTracingState.surfelGi.m_surfelGuidePoolBuffer.valid())
+        commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelGuidePoolBuffer.deref(), true);
+    if(this.m_rayTracingState.surfelGi.m_surfelCellHeadBuffer.valid())
+        commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelCellHeadBuffer.deref(), true);
+    if(this.m_rayTracingState.surfelGi.m_surfelCounterBuffer.valid())
+        commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelCounterBuffer.deref(), true);
+    if(this.m_rayTracingState.surfelGi.m_surfelFreeListBuffer.valid())
+        commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelFreeListBuffer.deref(), true);
+    if(this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsBuffer.valid())
+        commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsBuffer.deref(), true);
 
     // Age-free recycles unseen surfels before the graph-owned cell-head reset and hash rebuild.
     if(dispatchAgeFree){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelAgeFree, m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelAgeFree, this.m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(m_rayTracingState.m_surfelAgeFreePipeline.get());
+        ComputeState state;
+        state.setPipeline(this.m_rayTracingState.surfelGi.m_surfelAgeFreePipeline.deref());
         commandList.setComputeState(state);
-        heap.bindCompute(commandList, *m_rayTracingState.m_surfelAgeFreePipeline.get());
-        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-        commandList.dispatch(ComputeSurfelLinearDispatchGroups(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
+        heap.bindCompute(commandList, this.m_rayTracingState.surfelGi.m_surfelAgeFreePipeline.deref());
+        commandList.setPushConstants(surfelPush);
+        commandList.dispatch(ComputeSurfelLinearDispatchGroups(poolCapacity, cast<u32>(s_ShaderSurfelLinearGroupSize)), 1u, 1u);
     }
 
     if(!HasSurfelPhaseAfterAgeFree(dispatchHashBuild, dispatchSpawn, dispatchTraceBuildArgs, dispatchTrace, dispatchResolve, dispatchRemaining))
@@ -511,15 +518,15 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Rebuild bucket lists before spawning uncovered surface representatives.
     if(dispatchHashBuild){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelHashBuild, m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelHashBuild, this.m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(m_rayTracingState.m_surfelHashBuildPipeline.get());
+        ComputeState state;
+        state.setPipeline(this.m_rayTracingState.surfelGi.m_surfelHashBuildPipeline.deref());
         commandList.setComputeState(state);
-        heap.bindCompute(commandList, *m_rayTracingState.m_surfelHashBuildPipeline.get());
-        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-        commandList.dispatch(ComputeSurfelLinearDispatchGroups(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
+        heap.bindCompute(commandList, this.m_rayTracingState.surfelGi.m_surfelHashBuildPipeline.deref());
+        commandList.setPushConstants(surfelPush);
+        commandList.dispatch(ComputeSurfelLinearDispatchGroups(poolCapacity, cast<u32>(s_ShaderSurfelLinearGroupSize)), 1u, 1u);
     }
 
     if(!HasSurfelPhaseAfterHashBuild(dispatchSpawn, dispatchTraceBuildArgs, dispatchTrace, dispatchResolve, dispatchRemaining))
@@ -527,18 +534,18 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Spawn retains compatible surfaces and inserts uncovered candidates into bounded bucket lists.
     if(dispatchSpawn){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelSpawn, m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelSpawn, this.m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
 
         ApplySurfelSpawnPushConstantSlots(surfelPush, targets.bindless.gbufferWorldPosition.slot(), targets.bindless.gbufferNormal.slot());
 
-        Core::ComputeState state;
-        state.setPipeline(m_rayTracingState.m_surfelSpawnPipeline.get());
+        ComputeState state;
+        state.setPipeline(this.m_rayTracingState.surfelGi.m_surfelSpawnPipeline.deref());
         commandList.setComputeState(state);
-        heap.bindCompute(commandList, *m_rayTracingState.m_surfelSpawnPipeline.get());
-        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-        commandList.dispatch(ResolveSurfelSpawnDispatchGroup(targets.width, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), ResolveSurfelSpawnDispatchGroup(targets.height, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
+        heap.bindCompute(commandList, this.m_rayTracingState.surfelGi.m_surfelSpawnPipeline.deref());
+        commandList.setPushConstants(surfelPush);
+        commandList.dispatch(ResolveSurfelSpawnDispatchGroup(targets.width, cast<u32>(s_ShaderSurfelGroupSize)), ResolveSurfelSpawnDispatchGroup(targets.height, cast<u32>(s_ShaderSurfelGroupSize)), 1u);
     }
 
     if(!HasSurfelPhaseAfterSpawn(dispatchTraceBuildArgs, dispatchTrace, dispatchResolve, dispatchRemaining))
@@ -547,33 +554,35 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     // Build an indirect dispatch sized for live surfels.
     if(dispatchTraceBuildArgs){
         commandList.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(m_rayTracingState.m_surfelTraceBuildArgsPipeline.get());
+        ComputeState state;
+        state.setPipeline(this.m_rayTracingState.surfelGi.m_surfelTraceBuildArgsPipeline.deref());
         commandList.setComputeState(state);
-        heap.bindCompute(commandList, *m_rayTracingState.m_surfelTraceBuildArgsPipeline.get());
-        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-        commandList.dispatch(NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_X, NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Y, NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Z);
+        heap.bindCompute(commandList, this.m_rayTracingState.surfelGi.m_surfelTraceBuildArgsPipeline.deref());
+        commandList.setPushConstants(surfelPush);
+        commandList.dispatch(s_ShaderSurfelTraceBuildArgsDispatchGroupCountX, s_ShaderSurfelTraceBuildArgsDispatchGroupCountY, s_ShaderSurfelTraceBuildArgsDispatchGroupCountZ);
     }
 
     if(!HasSurfelPhaseAfterTraceBuildArgs(dispatchTrace, dispatchResolve, dispatchRemaining))
         return true;
 
     if(dispatchTrace){
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelTrace, m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelTrace, this.m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(tracePipeline);
-        state.setIndirectParams(m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get());
+        ComputeState state;
+        state.setPipeline(tracePipeline.deref());
+        state.setIndirectParams(this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsBuffer.deref());
         commandList.setComputeState(state);
         // Hardware trace additionally selects the TLAS generation at set 2.
-        if(m_rayTracingState.m_surfelUseHwTrace && !m_rayTracingState.m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
+        if(this.m_rayTracingState.surfelGi.m_surfelUseHwTrace && !this.m_rayTracingState.sceneBvh.m_tlasHeapHandle.valid()){
+            error("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle");
             return false;
         }
-        const Core::GpuDescriptorHandle tlasHeapHandle = m_rayTracingState.m_surfelUseHwTrace ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();
-        heap.bindCompute(commandList, *tracePipeline, tlasHeapHandle);
-        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
+        GpuDescriptorHandle tlasHeapHandle = GpuDescriptorHandleInvalid();
+        if(this.m_rayTracingState.surfelGi.m_surfelUseHwTrace)
+            tlasHeapHandle = this.m_rayTracingState.sceneBvh.m_tlasHeapHandle;
+        heap.bindCompute(commandList, tracePipeline.deref(), tlasHeapHandle);
+        commandList.setPushConstants(surfelPush);
         commandList.dispatchIndirect(0u);
     }
 
@@ -584,22 +593,22 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(dispatchResolve){
         const SurfelGiResolveSize resolveSize = MakeSurfelGiResolveSize(targets.width, targets.height, targets.surfelResolveFactor);
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelResolve, m_graphics.getDevice(), commandList);
+            GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelResolve, this.m_graphics.getDevice(), commandList);
 
             commandList.commitBarriers();
 
             ApplySurfelResolvePushConstantSlots(surfelPush, targets.bindless.gbufferWorldPosition.slot(), targets.bindless.gbufferNormal.slot(), targets.bindless.surfelIrradianceHalfStorage.slot());
 
-            Core::ComputeState state;
-            state.setPipeline(m_rayTracingState.m_surfelResolvePipeline.get());
+            ComputeState state;
+            state.setPipeline(this.m_rayTracingState.surfelGi.m_surfelResolvePipeline.deref());
             commandList.setComputeState(state);
-            heap.bindCompute(commandList, *m_rayTracingState.m_surfelResolvePipeline.get());
-            commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-            const u32 groupSize = static_cast<u32>(NWB_SURFEL_RESOLVE_GROUP_SIZE);
+            heap.bindCompute(commandList, this.m_rayTracingState.surfelGi.m_surfelResolvePipeline.deref());
+            commandList.setPushConstants(surfelPush);
+            const u32 groupSize = cast<u32>(s_ShaderSurfelResolveGroupSize);
             commandList.dispatch(DivideUp(resolveSize.width, groupSize), DivideUp(resolveSize.height, groupSize), 1u);
             if(commandList.commandRecordingFailed())
                 return false;
-            LogSurfelGiResolveDispatchIfNeeded(targets.surfelResolveFactor, targets.width, targets.height, resolveSize, m_rayTracingState.m_surfelResolveDispatchLogged);
+            LogSurfelGiResolveDispatchIfNeeded(targets.surfelResolveFactor, targets.width, targets.height, resolveSize, this.m_rayTracingState.surfelGi.m_surfelResolveDispatchLogged);
         }
     }
 
@@ -608,7 +617,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Surface-aware upsample preserves coverage across edges.
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeSurfelUpsample, m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelUpsample, this.m_graphics.getDevice(), commandList);
 
         commandList.commitBarriers();
 
@@ -620,60 +629,48 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
             targets.bindless.surfelIrradianceStorage.slot()
         );
 
-        Core::ComputeState state;
-        state.setPipeline(m_rayTracingState.m_surfelUpsamplePipeline.get());
+        ComputeState state;
+        state.setPipeline(this.m_rayTracingState.surfelGi.m_surfelUpsamplePipeline.deref());
         commandList.setComputeState(state);
-        heap.bindCompute(commandList, *m_rayTracingState.m_surfelUpsamplePipeline.get());
-        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-        const u32 groupSize = static_cast<u32>(NWB_SURFEL_UPSAMPLE_GROUP_SIZE);
+        heap.bindCompute(commandList, this.m_rayTracingState.surfelGi.m_surfelUpsamplePipeline.deref());
+        commandList.setPushConstants(surfelPush);
+        const u32 groupSize = cast<u32>(s_ShaderSurfelUpsampleGroupSize);
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }
 
     // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only consumes completed diagnostics.
     {
-        const u32 frameIndex = m_rayTracingState.m_surfelFrameIndex;
-        const Core::QueueSubmissionToken submissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
+        const u32 frameIndex = this.m_rayTracingState.surfelGi.m_surfelFrameIndex;
+        const QueueSubmissionToken submissionToken = this.m_rayTracingState.surfelGi.m_surfelCountReadbackSubmissionToken;
         b8 submissionComplete = false;
         if(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity()){
-            const Expected<u64> completedValue = m_graphics.getDevice().queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration, });
-            submissionComplete = completedValue && HasCompletedSurfelCountReadbackValue(*completedValue, submissionToken.value);
+            GpuPhysicalQueueId queue;
+            queue.index = submissionToken.physicalQueueIndex;
+            queue.deviceGeneration = submissionToken.deviceGeneration;
+            const Expected<u64> completedValue = this.m_graphics.getDevice().queueGetCompletedInstance(queue);
+            submissionComplete = completedValue.has_value() && HasCompletedSurfelCountReadbackValue(completedValue.value(), submissionToken.value);
         }
-        if(submissionComplete && IsSurfelCountReadbackDelayElapsed(frameIndex, m_rayTracingState.m_surfelCountReadbackFrame)){
-            Core::Buffer& readback = *m_rayTracingState.m_surfelCounterReadback;
-            const Expected<void*> mappedCounts = m_graphics.getDevice().mapBuffer(readback, Core::CpuAccessMode::Read);
-            if(mappedCounts){
-                const NotNull<const u32*> counts = MakeNotNull(static_cast<const u32*>(*mappedCounts));
-                const u32 bumpTop = counts.get()[NWB_SURFEL_COUNTER_BUMP_TOP];
-                const u32 freeTop = counts.get()[NWB_SURFEL_COUNTER_FREE_TOP];
-                const u32 geometryFailures = counts.get()[NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE];
-                m_graphics.getDevice().unmapBuffer(readback);
+        if(submissionComplete && IsSurfelCountReadbackDelayElapsed(frameIndex, this.m_rayTracingState.surfelGi.m_surfelCountReadbackFrame)){
+            Array<u32, s_SurfelReadbackCounterCount> counts;
+            if(this.m_graphics.getDevice().readMappedBuffer(this.m_rayTracingState.surfelGi.m_surfelCounterReadback.deref(), counts)){
+                const u32 bumpTop = counts[s_ShaderSurfelCounterBumpTop];
+                const u32 freeTop = counts[s_ShaderSurfelCounterFreeTop];
+                const u32 geometryFailures = counts[s_ShaderSurfelCounterTraceGeometryFailure];
                 LogSurfelCountReadbackCounts(
                     bumpTop,
                     freeTop,
                     geometryFailures,
-                    m_rayTracingState.m_surfelPoolCapacity,
-                    m_rayTracingState.m_surfelTraceGeometryFailureFlags
+                    this.m_rayTracingState.surfelGi.m_surfelPoolCapacity,
+                    this.m_rayTracingState.surfelGi.m_surfelTraceGeometryFailureFlags
                 );
             }
-            m_rayTracingState.m_surfelCountReadbackSubmissionToken = {};
+            this.m_rayTracingState.surfelGi.m_surfelCountReadbackSubmissionToken = QueueSubmissionToken();
         }
     }
 
     // Subsequent frames use steady-state round-robin updates.
-    AdvanceSurfelGiFrameState(m_rayTracingState.m_surfelSeeded, m_rayTracingState.m_surfelFrameIndex);
+    AdvanceSurfelGiFrameState(this.m_rayTracingState.surfelGi.m_surfelSeeded, this.m_rayTracingState.surfelGi.m_surfelFrameIndex);
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

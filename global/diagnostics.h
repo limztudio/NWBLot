@@ -11,6 +11,7 @@
 #include "diagnostic_event_text_formatter.h"
 
 #include <format>
+#include <source_location>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -284,6 +285,12 @@ FOUNDATION_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventReco
 
     DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
     DiagnosticDetail::g_EventActive.notifyAll();
+}
+
+inline void CaptureDiagnosticEventAtCallSite(DiagnosticEventRecord record, const std::source_location location = std::source_location::current())noexcept{
+    record.file = location.file_name();
+    record.line = location.line();
+    CaptureDiagnosticEvent(record);
 }
 
 inline void CaptureDiagnosticEvent(const StringView category, const StringView message, const StringView file = {}, const u32 line = 0u)noexcept{

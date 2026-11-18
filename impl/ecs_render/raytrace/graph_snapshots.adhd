@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/refraction/statistics_readback.adhd>
+#include <impl/ecs_render/shadow/light_space_shadow.adhd>
 #include <impl/ecs_render/raytrace/graph_types.adhd>
 #include <impl/ecs_render/shadow/types.adhd>
 
@@ -9,18 +11,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::LightSpaceShadowSnapshot"), cpp_header("<impl/ecs_render/shadow/light_space_shadow.adhd.h>")]
-extern class LightSpaceShadowSnapshot;
-[cpp_name("::NWB::Impl::RefractionStatisticsReadbackSnapshot"), cpp_header("<impl/ecs_render/refraction/statistics_readback.adhd.h>")]
-extern class RefractionStatisticsReadbackSnapshot;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Shadow Visibility freezes its route policy before the coordinator declares topology. Handles stay in snapshots below.
 class RayTracingShadowVisibilityGraphPlanSnapshot{
-    public LightSpaceShadowSnapshot lightSpace;
+    public LightSpaceShadowSnapshot lightSpace = LightSpaceShadowSnapshot();
     public GraphOwnedAdaptiveShadowPlan adaptivePlan;
 
     public b8 hardwareTransparentTrace = false;
@@ -109,7 +102,7 @@ class RayTracingSurfelPersistentResourceSnapshot{
 
 // Prepared once before compilation. Recording consumes retained handles only, so HW failure cannot switch sets after declare.
 class RayTracingRefractionGraphResources{
-    public RefractionStatisticsReadbackSnapshot statistics;
+    public RefractionStatisticsReadbackSnapshot statistics = RefractionStatisticsReadbackSnapshot();
     public ComputePipelineHandle pipeline;
     public ComputePipelineHandle densePipeline;
     public ComputePipelineHandle screenFallbackPipeline;

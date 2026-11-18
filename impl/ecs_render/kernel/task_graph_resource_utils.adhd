@@ -8,95 +8,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-
-#include <core/graphics/backend_selection/backend.h>
-#include <core/task/gpu/task_desc.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ::NWB::Impl::TextureResourceDesc;
-using ::NWB::Impl::BufferResourceDesc;
-using ::NWB::Impl::ImportExternalTexture;
-using ::NWB::Impl::ImportExternalBuffer;
-using ::NWB::Impl::FindOrImportTexture;
-using ::NWB::Impl::FindOrImportBuffer;
-using ::NWB::Impl::HazardDomainDesc;
-using ::NWB::Impl::ReadUse;
-using ::NWB::Impl::ReadBufferUse;
-using ::NWB::Impl::ReadTextureUse;
-using ::NWB::Impl::WriteUse;
-using ::NWB::Impl::WriteTextureUse;
-using ::NWB::Impl::AccelStructResourceDesc;
-using ::NWB::Impl::ReadWriteUse;
-using ::NWB::Impl::ReadWriteTextureUse;
-using ::NWB::Impl::TaskDesc;
-
-template<typename Plan>
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(Core::GpuTaskGraph& graph, const Plan& plan, Core::Alloc::ScratchArena& scratchArena, const Name& identity, const AStringView label){
-    if(!plan.captured || plan.outputBuffers.empty())
-        return MakeUnexpected(Failure{});
-
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
-    members.reserve(plan.outputBuffers.size());
-    for(const Core::BufferHandle& buffer : plan.outputBuffers){
-        const auto importedResource = FindOrImportBuffer(graph, buffer, label);
-        if(!importedResource || !importedResource->valid())
-            return MakeUnexpected(Failure{});
-        members.push_back(*importedResource);
-    }
-    const auto resultResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members));
-    if(!resultResult)
-        return MakeUnexpected(Failure{});
-    const Core::GpuGraphResourceSetId result = *resultResult;
-    return result;
+GpuTaskResourceSetUse MakeResourceSetUse(in GpuGraphResourceSetId resources, in ResourceStates state, in GpuTaskResourceAccess access){
+    GpuTaskResourceSetUse use;
+    use.resourceSet = resources;
+    use.requiredState = state;
+    use.access = access;
+    return use;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskDesc TaskDesc(const Name& identity, const AStringView label, const Core::GpuTaskId& dependency)noexcept{
-    Core::GpuTaskDesc desc = ::NWB::Impl::TaskDesc(identity, label);
+GpuTaskDesc TaskDesc(in Name identity, in StringView label, in borrow GpuTaskId dependency){
+    GpuTaskDesc desc = TaskDesc(identity, label);
     if(dependency.valid())
-        desc.setDependencies({ &dependency, 1u });
+        desc.setDependency(dependency);
     return desc;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+GpuTaskExternalStateSource ExternalStateSourceFromCache(in GpuPersistentResourceStateCache cache){
+    GpuTaskExternalStateSource result;
+    const auto source = cache.borrowSource();
+    if(source.has_value())
+        result.setState(source.value());
+    return result;
 }
 
 

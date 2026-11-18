@@ -2,6 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/components.adhd>
+#include <impl/assets_ui_skin/types.adhd>
+#include <impl/ecs_ui/toolkit/input/pointer.adhd>
+#include <impl/ecs_ui/toolkit/gpu/renderer.adhd>
+#include <impl/ecs_ui/edit_geometry.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/assets_ui_skin/asset.adhd>
+#include <impl/ecs_ui/toolkit/text/font.adhd>
+#include <impl/ecs_ui/edit_box_host.adhd>
+#include <impl/ecs_ui/paint_context.adhd>
+#include <impl/ecs_ui/skin_selection.adhd>
+#include <impl/ecs_ui/toolkit/gpu/push_constants.adhd>
 #include <impl/assets_scene/asset.adhd>
 #include <impl/ecs_ui/layer_types.adhd>
 
@@ -9,73 +21,29 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+const StringView s_UiLayerSystemOwnerName = "UiLayerSystem";
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/components.adhd.h>
-#include <impl/ecs_ui/paint_context.adhd.h>
-#include <impl/ecs_ui/edit_box_host.adhd.h>
-#include <impl/ecs_ui/skin_selection.adhd.h>
-
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_ui_skin/types.adhd.h>
-#include <impl/ecs_ui/toolkit/input/pointer.adhd.h>
-#include <impl/ecs_ui/toolkit/gpu/renderer.adhd.h>
-
-#include <core/ecs/system.h>
-#include <core/input/module.h>
-#include <core/graphics/runtime/render_pass.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_UiLayerSystemOwnerName = FOUNDATION_TEXT("UiLayerSystem");
-
-using ActiveSceneSubsystemsConstPtr = const ActiveSceneSubsystems*;
-using UiLayerShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
-using UiInputKeyBinding = Ui::InputKeyBinding;
-using UiPaintBuilder = Ui::PaintBuilder;
-using UiTextService = Ui::TextService;
-using UiContext = Ui::Context;
-using UiBuilder = Ui::Builder;
-using UiLiveRootVector = Ui::PaintVector<UiLiveRoot>;
-using UiWidgetRootVector = Ui::PaintVector<Ui::WidgetRoot>;
-using UiGpuRenderer = Ui::GpuRenderer;
-using UiDisplayMetrics = Ui::DisplayMetrics;
-using UiPoint = Ui::Point;
-using UiInputEvent = Ui::InputEvent;
-using UiPointerInput = Ui::PointerInput;
-using UiGpuCommandRecordingMode = Ui::GpuCommandRecordingMode::Enum;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+type UiGpuRenderer = GpuRenderer;
+type UiLayerShaderPathResolveCallback = ShaderArchivePathResolver;
+type UiInputKeyBinding = InputKeyBinding;
+type UiPaintBuilder = PaintBuilder;
+type UiTextService = TextService;
+type UiContext = Context;
+type UiBuilder = Builder;
+type UiLiveRootVector = Vector<UiLiveRoot>;
+type UiWidgetRootVector = Vector<WidgetRoot>;
+type UiDisplayMetrics = DisplayMetrics;
+type UiPoint = Point;
+type UiInputEvent = InputEvent;
+type UiPointerInput = PointerInput;
+type UiGpuCommandRecordingMode = GpuCommandRecordingMode;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
-[arena, system("ui_layer")]
+[arena, ordered, system("ui_layer"), friend(UiLayerPaintGuard)]
 class UiLayerSystem : IRenderPass, IInputEventHandler{
     private mut World m_world;
     private mut GraphicsRuntime m_graphics;
@@ -84,9 +52,9 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private mut ITextInputService m_textInput;
     private mut AssetManager m_assetManager;
     private ActiveSceneSubsystems m_defaultSceneSubsystems;
-    private ActiveSceneSubsystemsConstPtr m_activeSceneSubsystems;
+    private ActiveSceneSubsystemsRef m_activeSceneSubsystems;
     private UiSkinSelectionState m_skinSelection;
-    private UniquePtr<IAsset> m_skinAsset;
+    private UniquePtr<UiSkin> m_skinAsset;
     private UiPaintBuilder m_paint;
     private UiTextService m_text;
     private UiContext m_context;
@@ -104,7 +72,7 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private u32 m_height = 0u;
     // Native-key ownership survives focus transfer; the CPU router retains each resolved held intention.
     private Array<u8, s_UiNativeKeySlotCount> m_nativeKeyOwners;
-    private UiLayerPresentation m_presentation = UiLayerPresentation::Scene;
+    private UiLayerPresentation m_presentation;
     private u8 m_pointerOwner = 0u;
     private b8 m_blockNativeChars = false;
     private b8 m_blockCommandChars = false;
@@ -121,11 +89,38 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
         in UiLayerShaderPathResolveCallback shaderPathResolver,
         in AssetRef<UiSkin> skin,
         in UiLayerPresentation presentation
-    );
-    public ~UiLayerSystem();
+    ){
+        this.m_world = world;
+        this.m_graphics = graphics;
+        this.m_input = input;
+        this.m_clipboard = clipboard;
+        this.m_textInput = textInput;
+        this.m_assetManager = assetManager;
+        this.m_skinSelection = MakeUiSkinSelectionState(skin);
+        this.m_editHost = UiEditBoxHost(this.m_context, textInput, clipboard);
+        this.m_ui = UiBuilder(this.m_context, this.m_paint, this.m_text);
+        this.m_renderer = UiGpuRenderer(graphics, assetManager, shaderPathResolver);
+        this.m_presentation = presentation;
+        this.writeAccess<UiPaintComponent>();
+        this.m_ui.setEditHost(this.m_editHost);
+        this.m_liveRoots.reserve(s_InputMaxTargets);
+        this.m_rootIdentities.reserve(s_InputMaxTargets);
+        this.m_input.addHandlerToBack(this);
+        if(!this.m_input.windowFocused())
+            this.windowFocusUpdate(false);
+        if(this.m_presentation == UiLayerPresentation::Scene)
+            this.m_graphics.setTaskGraphOutputLayerContributor(this.m_renderer);
+    }
+    public ~UiLayerSystem(){
+        this.m_input.removeHandler(this);
+        this.m_graphics.clearTaskGraphOutputLayerContributor(this.m_renderer);
+    }
 
-    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsConstPtr subsystems);
-    public void setGpuCommandRecordingMode(in UiGpuCommandRecordingMode mode);
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
+        this.m_activeSceneSubsystems = subsystems;
+        this.m_renderer.setActiveSceneSubsystems(subsystems);
+    }
+    public void setGpuCommandRecordingMode(in UiGpuCommandRecordingMode mode){ this.m_renderer.setCommandRecordingMode(mode); }
 
     public CpuTaskOptions taskOptions()const override;
     public void prepare(mut World world)override;
@@ -161,6 +156,7 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private void resetNormalizedInput();
     private void resetNativeInputState();
     private b8 loadFonts();
+    private b8 tryBindSkin(in AssetRef<UiSkin> ref);
     private AssetRef<UiSkin> basicSkin()const;
     private AssetRef<UiSkin> resolveSkin(in AssetRef<UiSkin> ref)const;
 }
@@ -203,597 +199,556 @@ b8 CanBeginUiLayerPaintFrame(in b8 resourcesReady, in b8 rendererHasPendingFrame
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/scope_exit.h>
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
-#include <global/termination.h>
-#include <global/timer.h>
-#include <impl/ecs_ui/edit_box_host.adhd.h>
-#include <impl/ecs_ui/edit_geometry.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiLayerSystem::UiLayerSystem(
-    ::ArenaBase& __adhd_mother_arena,
-    Core::ECS::World& world,
-    Core::GraphicsRuntime& graphics,
-    Core::InputDispatcher& input,
-    Core::IClipboardService& clipboard,
-    Core::ITextInputService& textInput,
-    Core::Assets::AssetManager& assetManager,
-    const UiLayerShaderPathResolveCallback& shaderPathResolver,
-    const Core::Assets::AssetRef<UiSkin>& skin,
-    const UiLayerPresentation::Enum presentation
-)noexcept
-    : Core::ECS::ISystem(__adhd_mother_arena)
-    , Core::IRenderPass(graphics)
-    , __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
-    , m_world(::MakeNotNull(&world))
-    , m_graphics(::MakeNotNull(&graphics))
-    , m_input(::MakeNotNull(&input))
-    , m_clipboard(::MakeNotNull(&clipboard))
-    , m_textInput(::MakeNotNull(&textInput))
-    , m_assetManager(::MakeNotNull(&assetManager))
-    , m_defaultSceneSubsystems(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_activeSceneSubsystems(nullptr)
-    , m_skinSelection(MakeUiSkinSelectionState(skin))
-    , m_paint(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_text(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_context(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_editHost(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), m_context, textInput, clipboard)
-    , m_ui(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), m_context, m_paint, m_text)
-    , m_liveRoots(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_rootIdentities(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_renderer(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), graphics, assetManager, shaderPathResolver)
-    , m_presentation(presentation)
-{
-    writeAccess<UiPaintComponent>();
-    m_ui.setEditHost(&m_editHost);
-    m_liveRoots.reserve(Ui::s_InputMaxTargets);
-    m_rootIdentities.reserve(Ui::s_InputMaxTargets);
-    m_input->addHandlerToBack(*this);
-    if(!m_input->windowFocused())
-        windowFocusUpdate(false);
-    if(m_presentation == UiLayerPresentation::Scene)
-        m_graphics->setTaskGraphOutputLayerContributor(&m_renderer);
+CpuTaskOptions UiLayerSystem::taskOptions()const{
+    CpuTaskOptions options;
+    options.cost = CpuTaskCost::Light;
+    options.target = CpuTaskTarget::MainThread;
+    return options;
 }
 
-UiLayerSystem::~UiLayerSystem()noexcept{
-    m_input->removeHandler(*this);
-    m_graphics->clearTaskGraphOutputLayerContributor(m_renderer);
+void UiLayerSystem::prepare(mut World world){
+    this.synchronizeInput();
 }
 
-void UiLayerSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* const subsystems)noexcept{
-    m_activeSceneSubsystems = subsystems;
-    m_renderer.setActiveSceneSubsystems(subsystems);
+void UiLayerSystem::abandonPendingFrame(){
+    this.abandonPendingFrame(false);
 }
 
-void UiLayerSystem::setGpuCommandRecordingMode(const UiGpuCommandRecordingMode& mode)noexcept{
-    m_renderer.setCommandRecordingMode(mode);
-}
-
-Core::CpuTaskOptions UiLayerSystem::taskOptions()const noexcept{
-    return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
-}
-
-void UiLayerSystem::prepare([[maybe_unused]] Core::ECS::World& world)noexcept{
-    synchronizeInput();
-}
-
-b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount)noexcept{
-    m_resourcesReady = false;
-    m_width = width;
-    m_height = height;
-    if(width == 0u || height == 0u)
-        return true;
-
-    if(!m_activeSceneSubsystems){
-        if(!m_defaultSceneSubsystems.loadProjectStartScene(*m_assetManager))
-            return false;
-        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
-        m_renderer.setActiveSceneSubsystems(m_activeSceneSubsystems);
-    }
-    if(!m_activeSceneSubsystems->hasSubsystem<UiSubsystem>()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
-        return false;
-    }
-
-    if(!m_fontsReady){
-        if(!loadFonts())
-            return false;
-    }
-    if(!m_renderer.validateResources(width, height))
-        return false;
-
-    const UiSkinSelectionResult::Enum selection = EnsureUiSkinSelection(m_skinSelection, basicSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref){
-        const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
-        if(ref == m_skinSelection.selected && m_skinAsset){
-            const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-            return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation);
-        }
-        auto candidateAsset = m_assetManager->loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName);
-        const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
-        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation))
-            return false;
-        m_skinAsset = Move(*candidateAsset);
-        return true;
-    });
-    if(selection == UiSkinSelectionResult::Failed)
-        return false;
-    if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
-    }
-
-    f32 scaleX = 1.0f;
-    f32 scaleY = 1.0f;
-    m_graphics->getDPIScaleInfo(scaleX, scaleY);
-    displayScaleChanged(scaleX, scaleY);
-    m_resourcesReady = true;
-    return true;
-}
-
-void UiLayerSystem::invalidateResources()noexcept{
-    m_resourcesReady = false;
-    m_frameDelta.clear();
-    abandonPendingFrame(true);
-    resetNativeInputState();
-    m_renderer.invalidateResources();
-}
-
-b8 UiLayerSystem::prepareResources(Core::Framebuffer* framebuffer)noexcept{
-    if(!framebuffer || !m_resourcesReady)
-        return false;
-    const b8 prepared = m_renderer.prepareTaskGraphOutputLayer(m_graphics->acquiredPresentationFrame());
-    if(!prepared && m_presentation == UiLayerPresentation::Standalone)
-        m_graphics->requestDeviceRecreation();
-    return prepared;
-}
-
-void UiLayerSystem::render(Core::Framebuffer* framebuffer)noexcept{
-    // The project chooses the final-output owner explicitly; optional layer failures cannot replace scene output.
-    if(!framebuffer || !m_resourcesReady || m_presentation == UiLayerPresentation::Scene)
-        return;
-    if(!m_renderer.renderStandalone(m_graphics->acquiredPresentationFrame())){
-        // The void render-pass API cannot abort presentation; recreation prevents presenting an unwritten acquired image.
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: standalone UI presentation failed"));
-        m_graphics->requestDeviceRecreation();
-    }
-}
-
-void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY)noexcept{
-    FOUNDATION_ASSERT(IsValidUiDisplayScale(scaleX, scaleY));
-    const SIMDVectorSingle scale = VectorSet(scaleX, scaleY, scaleX, scaleY);
-    m_frameDelta.clear();
-    abandonPendingFrame(true);
-    const SIMDVectorSingle extent = VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height));
-    const SIMDVectorSingle logicalSize = VectorDivide(extent, scale);
-    m_display = { VectorGetX(logicalSize), VectorGetY(logicalSize), scaleX, scaleY };
-}
-
-b8 UiLayerSystem::setInputBindings(const Span<const Ui::InputKeyBinding> bindings)noexcept{
-    synchronizeNativeInput();
-    return m_context.input().setBindings(bindings);
-}
-
-b8 UiLayerSystem::loadFonts()noexcept{
-    if(m_fontsReady)
-        return true;
-    const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems ? m_activeSceneSubsystems->findSubsystem<UiSubsystem>() : nullptr;
-    if(!uiSubsystem)
-        return false;
-    const usize fontCount = uiSubsystem->basicFonts.size();
-    if(!ValidateUiSubsystemFontCount(fontCount, Ui::s_TextMaxFontSources))
-        return false;
-    Array<UniquePtr<Font>, Ui::s_TextMaxFontSources> assets;
-    Array<UniquePtr<FontAtlas>, Ui::s_TextMaxFontSources> atlasAssets;
-    Core::Alloc::ScratchArena scratchArena(s_UiLoadFontsArenaName);
-    Vector<Ui::FontSource, Core::Alloc::ScratchArena> sources(scratchArena);
-    sources.reserve(fontCount);
-    for(usize index = 0u; index < fontCount; ++index){
-        const Core::Assets::AssetRef<FontAtlas>& atlasRef = uiSubsystem->basicFonts[index];
-        auto loadedAtlas = m_assetManager->loadTypedSync<FontAtlas>(atlasRef.name(), s_UiLayerSystemOwnerName);
-        if(!loadedAtlas)
-            return false;
-        atlasAssets[index] = Move(*loadedAtlas);
-        const FontAtlas& atlas = *atlasAssets[index];
-        const Core::Assets::AssetRef<Font>& fontRef = atlas.payload().font;
-        auto font = m_assetManager->loadTypedSync<Font>(fontRef.name(), s_UiLayerSystemOwnerName);
-        if(!font)
-            return false;
-        assets[index] = Move(*font);
-        sources.push_back({ fontRef, *assets[index], 1u, &atlas });
-    }
-    // TextService owns the exact font bytes and immutable baked atlas versions; loaded asset objects can be released here.
-    m_fontsReady = m_text.setFonts(scratchArena, sources);
-    return m_fontsReady;
-}
-
-void UiLayerSystem::abandonPendingFrame()noexcept{
-    abandonPendingFrame(false);
-}
-
-void UiLayerSystem::abandonPendingFrame(const b8 resetUi)noexcept{
-    m_blockCommandChars = false;
-    m_context.abandonFrame();
-    m_editHost.reset();
+void UiLayerSystem::abandonPendingFrame(in b8 resetUi){
+    this.m_blockCommandChars = false;
+    this.m_context.abandonFrame();
+    this.m_editHost.reset();
     if(resetUi)
-        m_ui.reset();
+        this.m_ui.reset();
 }
 
-void UiLayerSystem::resetNormalizedInput()noexcept{
-    m_blockCommandChars = false;
-    m_context.resetInput();
-    m_editHost.reset();
+void UiLayerSystem::resetNormalizedInput(){
+    this.m_blockCommandChars = false;
+    this.m_context.resetInput();
+    this.m_editHost.reset();
 }
 
-void UiLayerSystem::resetNativeInputState()noexcept{
-    m_context.input().cancelDeviceInput(0u);
-    m_nativeKeyOwners.fill(0u);
-    m_pressedButtons = 0u;
-    m_pointerOwner = UiInputOwner::Scene;
-    m_blockNativeChars = false;
-    m_blockCommandChars = false;
+void UiLayerSystem::resetNativeInputState(){
+    this.m_context.input().cancelDeviceInput(0u);
+    for(mut u8 owner : this.m_nativeKeyOwners)
+        owner = 0u;
+    this.m_pressedButtons = 0u;
+    this.m_pointerOwner = cast<u8>(UiInputOwner::Scene);
+    this.m_blockNativeChars = false;
+    this.m_blockCommandChars = false;
 }
 
-Core::Assets::AssetRef<UiSkin> UiLayerSystem::basicSkin()const noexcept{
-    if(!m_activeSceneSubsystems)
-        return {};
-    const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
-    return uiSubsystem ? uiSubsystem->basicSkin : Core::Assets::AssetRef<UiSkin>{};
+void UiLayerSystem::displayScaleChanged(in f32 scaleX, in f32 scaleY){
+    assert(IsValidUiDisplayScale(scaleX, scaleY));
+    const VectorSingle scale(scaleX, scaleY, scaleX, scaleY);
+    this.m_frameDelta.clear();
+    this.abandonPendingFrame(true);
+    const VectorSingle extent(cast<f32>(this.m_width), cast<f32>(this.m_height), cast<f32>(this.m_width), cast<f32>(this.m_height));
+    const VectorSingle logicalSize = extent / scale;
+    this.m_display.logicalWidth = logicalSize.x;
+    this.m_display.logicalHeight = logicalSize.y;
+    this.m_display.pixelScaleX = scaleX;
+    this.m_display.pixelScaleY = scaleY;
 }
 
-Core::Assets::AssetRef<UiSkin> UiLayerSystem::resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
-    const Core::Assets::AssetRef<UiSkin> fallbackSkin = basicSkin();
-    if(!fallbackSkin.valid())
-        return {};
-    if(!ref.valid() || ref == fallbackSkin)
-        return fallbackSkin;
-    return m_activeSceneSubsystems->findSceneAsset<UiSkin>(ref.name());
+b8 UiLayerSystem::setInputBindings(in Span<UiInputKeyBinding> bindings){
+    this.synchronizeNativeInput();
+    return this.m_context.input().setBindings(bindings);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-::NWB::Core::KeyboardInputResult UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, const i32 mods)noexcept{
-    if(!Ui::IsValidInputKeyCode(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
-        return false;
-    synchronizeNativeInput();
+KeyboardInputResult UiLayerSystem::keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods){
+    if(!IsValidInputKeyCode(key) || action < s_InputActionReleaseBase || action > s_InputActionRepeat)
+        return KeyboardInputResult();
+    this.synchronizeNativeInput();
     const usize slot = ResolveUiNativeKeySlot(key);
     b8 held = false;
     u8 previousOwner = 0u;
     b8 customOwned = false;
-    ResolveUiNativeKeyAdmission(m_nativeKeyOwners[slot], m_context.input().ownsKey(key), held, previousOwner, customOwned);
-    const b8 isRelease = action == Core::InputAction::Release;
+    ResolveUiNativeKeyAdmission(this.m_nativeKeyOwners[slot], this.m_context.input().ownsKey(key), held, previousOwner, customOwned);
+    const b8 isRelease = action == s_InputActionReleaseBase;
     if(!isRelease)
-        m_blockCommandChars = false;
+        this.m_blockCommandChars = false;
     if(isRelease || customOwned || !held){
-        Ui::InputEvent event;
-        event.type = isRelease ? Ui::InputEventType::KeyUp : Ui::InputEventType::KeyDown;
-        event.key = key;
-        event.shift = (mods & Core::InputModifier::Shift) != 0;
-        event.control = (mods & Core::InputModifier::Control) != 0;
-        event.alt = (mods & Core::InputModifier::Alt) != 0;
-        event.super = (mods & Core::InputModifier::Super) != 0;
-        event.repeat = !isRelease && (action == Core::InputAction::Repeat || held);
+        InputEvent event;
         if(isRelease)
-            routeInput(event);
+            event.type = InputEventType::KeyUp;
         else
-            routeInput(event, m_blockCommandChars);
+            event.type = InputEventType::KeyDown;
+        event.key = key;
+        event.shift = (mods & cast<i32>(InputModifier::Shift)) != 0;
+        event.control = (mods & cast<i32>(InputModifier::Control)) != 0;
+        event.alt = (mods & cast<i32>(InputModifier::Alt)) != 0;
+        event.super = (mods & cast<i32>(InputModifier::Super)) != 0;
+        event.repeat = !isRelease && (action == s_InputActionRepeat || held);
+        if(isRelease)
+            this.routeInput(event);
+        else
+            this.routeInput(event, this.m_blockCommandChars);
     }
-    const b8 routerClaimsKey = m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key);
+    const b8 routerClaimsKey = this.m_context.input().hasPopup() || this.m_context.input().focus().valid() || this.m_context.input().ownsKey(key);
     b8 consumed = false;
-    FinalizeUiNativeKeyState(isRelease, held, previousOwner, routerClaimsKey, m_nativeKeyOwners[slot], m_blockNativeChars, consumed);
-    return { consumed, m_blockCommandChars };
+    FinalizeUiNativeKeyState(isRelease, held, previousOwner, routerClaimsKey, this.m_nativeKeyOwners[slot], this.m_blockNativeChars, consumed);
+    KeyboardInputResult result;
+    result.consumed = consumed;
+    result.blocksText = this.m_blockCommandChars;
+    return result;
 }
 
-b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods)noexcept{
-    synchronizeNativeInput();
-    m_editHost.collectNative();
-    if(m_editHost.hasTextFocus()){
-        if(ShouldSuppressControlCharInput((mods & Core::InputModifier::Control) != 0, (mods & Core::InputModifier::Alt) != 0))
+b8 UiLayerSystem::keyboardCharInput(in u32 unicode, in i32 mods){
+    this.synchronizeNativeInput();
+    this.m_editHost.collectNative();
+    if(this.m_editHost.hasTextFocus()){
+        if(ShouldSuppressControlCharInput((mods & cast<i32>(InputModifier::Control)) != 0, (mods & cast<i32>(InputModifier::Alt)) != 0))
             return true;
-        return m_editHost.character(unicode);
+        return this.m_editHost.character(unicode);
     }
-    if(m_blockNativeChars || m_context.input().hasPopup() || m_context.input().focus().valid())
+    if(this.m_blockNativeChars || this.m_context.input().hasPopup() || this.m_context.input().focus().valid())
         return true;
     return false;
 }
 
-b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
+b8 UiLayerSystem::mousePosUpdate(in f64 xpos, in f64 ypos){
     if(!ValidUiMouseCoordinate(xpos, ypos))
         return false;
-    synchronizeNativeInput();
-    m_pointer = { static_cast<f32>(xpos), static_cast<f32>(ypos) };
-    Ui::PointerInput event;
-    event.source = Ui::s_NativePointerSource;
-    event.position = m_pointer;
+    this.synchronizeNativeInput();
+    this.m_pointer = Point(cast<f32>(xpos), cast<f32>(ypos));
+    PointerInput event;
+    event.source = s_NativePointerSource;
+    event.position = this.m_pointer;
     event.hoverCapable = true;
-    if(m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Scene){
-        event.phase = Ui::PointerPhase::Leave;
-        routePointerInput(event);
+    if(this.m_pressedButtons != 0u && this.m_pointerOwner == cast<u8>(UiInputOwner::Scene)){
+        event.phase = PointerPhase::Leave;
+        this.routePointerInput(event);
         return false;
     }
-    event.phase = Ui::PointerPhase::Move;
+    event.phase = PointerPhase::Move;
     b8 consumed = false;
-    routePointerInput(event, consumed);
-    return consumed || (m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Custom);
+    this.routePointerInput(event, consumed);
+    return consumed || (this.m_pressedButtons != 0u && this.m_pointerOwner == cast<u8>(UiInputOwner::Custom));
 }
 
-b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods)noexcept{
-    if(button < Core::MouseButton::Left || button > Core::MouseButton::Button8 || (action != Core::InputAction::Press && action != Core::InputAction::Release))
+b8 UiLayerSystem::mouseButtonUpdate(in i32 button, in i32 action, in i32 mods){
+    if(button < cast<i32>(MouseButton::Left) || button > cast<i32>(MouseButton::Button8) || (action != s_InputActionPress && action != s_InputActionReleaseBase))
         return false;
-    synchronizeNativeInput();
-    const u32 bit = 1u << static_cast<u32>(button);
-    const b8 firstPress = action == Core::InputAction::Press && (m_pressedButtons & bit) == 0u;
-    if(action == Core::InputAction::Press && m_pressedButtons == 0u){
-        const b8 acceptsSource = m_context.input().acceptsPointerSource(Ui::s_NativePointerSource);
-        const b8 nativeActive = m_context.input().activePointerSource() == Ui::s_NativePointerSource;
-        m_pointerOwner = ResolveUiPointerPressOwner(
+    this.synchronizeNativeInput();
+    const u32 bit = 1u << cast<u32>(button);
+    const b8 firstPress = action == s_InputActionPress && (this.m_pressedButtons & bit) == 0u;
+    if(action == s_InputActionPress && this.m_pressedButtons == 0u){
+        const b8 acceptsSource = this.m_context.input().acceptsPointerSource(s_NativePointerSource);
+        const b8 nativeActive = this.m_context.input().activePointerSource() == s_NativePointerSource;
+        this.m_pointerOwner = ResolveUiPointerPressOwner(
             nativeActive,
-            nativeActive && m_context.input().wouldConsumePointer(m_pointer),
-            m_context.input().hasPopup(),
-            !nativeActive && m_context.input().hitTest(m_pointer).valid()
+            nativeActive && this.m_context.input().wouldConsumePointer(this.m_pointer),
+            this.m_context.input().hasPopup(),
+            !nativeActive && this.m_context.input().hitTest(this.m_pointer).valid()
         );
-        if(acceptsSource && m_pointerOwner != UiInputOwner::Custom)
-            m_context.input().clearFocus();
+        if(acceptsSource && this.m_pointerOwner != cast<u8>(UiInputOwner::Custom))
+            this.m_context.input().clearFocus();
     }
-    if(action == Core::InputAction::Press)
-        m_pressedButtons |= bit;
-    const u8 owner = m_pointerOwner;
-    Ui::PointerInput event;
-    event.source = Ui::s_NativePointerSource;
-    event.position = m_pointer;
-    event.extend = (mods & Core::InputModifier::Shift) != 0;
+    if(action == s_InputActionPress)
+        this.m_pressedButtons |= bit;
+    const u8 owner = this.m_pointerOwner;
+    PointerInput event;
+    event.source = s_NativePointerSource;
+    event.position = this.m_pointer;
+    event.extend = (mods & cast<i32>(InputModifier::Shift)) != 0;
     event.hoverCapable = true;
-    if(owner == UiInputOwner::Custom && (button == Core::MouseButton::Left || button == Core::MouseButton::Right)){
-        event.phase = action == Core::InputAction::Release ? Ui::PointerPhase::Release : Ui::PointerPhase::Press;
-        event.intent = button == Core::MouseButton::Left ? Ui::PointerIntent::Activate : Ui::PointerIntent::ContextMenu;
-        if(event.phase == Ui::PointerPhase::Press && event.intent == Ui::PointerIntent::Activate)
-            event.timestampMs = Max<u64>(1u, DurationInMS<u64>(TimerNow()));
-        routePointerInput(event);
+    if(owner == cast<u8>(UiInputOwner::Custom) && (button == cast<i32>(MouseButton::Left) || button == cast<i32>(MouseButton::Right))){
+        if(action == s_InputActionReleaseBase)
+            event.phase = PointerPhase::Release;
+        else
+            event.phase = PointerPhase::Press;
+        if(button == cast<i32>(MouseButton::Left))
+            event.intent = PointerIntent::Activate;
+        else
+            event.intent = PointerIntent::ContextMenu;
+        if(event.phase == PointerPhase::Press && event.intent == PointerIntent::Activate)
+            event.timestampMs = Max(cast<u64>(1u), DurationInMS<u64>(TimerNow()));
+        this.routePointerInput(event);
     }
-    if(owner == UiInputOwner::Custom && button == Core::MouseButton::Middle && action == Core::InputAction::Press && m_context.input().acceptsPointerSource(Ui::s_NativePointerSource)){
-        m_editHost.collectNative();
-        const b8 pasted = m_editHost.pastePrimary(m_pointer);
+    if(owner == cast<u8>(UiInputOwner::Custom) && button == cast<i32>(MouseButton::Middle) && action == s_InputActionPress && this.m_context.input().acceptsPointerSource(s_NativePointerSource)){
+        this.m_editHost.collectNative();
+        const b8 pasted = this.m_editHost.pastePrimary(this.m_pointer);
         if(!pasted)
-            m_editHost.synchronizeFocus();
+            this.m_editHost.synchronizeFocus();
     }
-    if(firstPress && (owner == UiInputOwner::Scene || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))){
-        event.phase = Ui::PointerPhase::Leave;
-        routePointerInput(event);
+    if(firstPress && (owner == cast<u8>(UiInputOwner::Scene) || (button != cast<i32>(MouseButton::Left) && button != cast<i32>(MouseButton::Right)))){
+        event.phase = PointerPhase::Leave;
+        this.routePointerInput(event);
     }
-    if(action == Core::InputAction::Release){
-        m_pressedButtons &= ~bit;
-        if(m_pressedButtons == 0u){
-            m_pointerOwner = UiInputOwner::Scene;
-            event.phase = Ui::PointerPhase::Move;
+    if(action == s_InputActionReleaseBase){
+        this.m_pressedButtons &= ~bit;
+        if(this.m_pressedButtons == 0u){
+            this.m_pointerOwner = cast<u8>(UiInputOwner::Scene);
+            event.phase = PointerPhase::Move;
             event.timestampMs = 0u;
-            routePointerInput(event);
+            this.routePointerInput(event);
         }
     }
-    return owner != UiInputOwner::Scene;
+    return owner != cast<u8>(UiInputOwner::Scene);
 }
 
-b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset)noexcept{
+b8 UiLayerSystem::mouseScrollUpdate(in f64 xoffset, in f64 yoffset){
     if(!ValidUiMouseScroll(xoffset, yoffset))
         return false;
-    synchronizeNativeInput();
-    if(m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Scene)
+    this.synchronizeNativeInput();
+    if(this.m_pressedButtons != 0u && this.m_pointerOwner == cast<u8>(UiInputOwner::Scene))
         return false;
-    Ui::PointerInput event;
-    event.source = Ui::s_NativePointerSource;
-    event.phase = Ui::PointerPhase::Scroll;
-    event.position = m_pointer;
+    PointerInput event;
+    event.source = s_NativePointerSource;
+    event.phase = PointerPhase::Scroll;
+    event.position = this.m_pointer;
     event.scrollX = xoffset;
     event.scrollY = yoffset;
     event.hoverCapable = true;
     b8 consumed = false;
-    routePointerInput(event, consumed);
-    return consumed || m_pointerOwner == UiInputOwner::Custom;
+    this.routePointerInput(event, consumed);
+    return consumed || this.m_pointerOwner == cast<u8>(UiInputOwner::Custom);
 }
 
-void UiLayerSystem::windowFocusUpdate(const b8 focused)noexcept{
-    Ui::InputEvent event;
-    event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
-    routeInput(event);
+void UiLayerSystem::windowFocusUpdate(in b8 focused){
+    InputEvent event;
+    if(focused)
+        event.type = InputEventType::FocusGained;
+    else
+        event.type = InputEventType::FocusLost;
+    this.routeInput(event);
     if(!focused)
-        resetNativeInputState();
+        this.resetNativeInputState();
 }
 
-void UiLayerSystem::pointerLeave()noexcept{
-    Ui::PointerInput event;
-    event.source = Ui::s_NativePointerSource;
-    event.phase = Ui::PointerPhase::Leave;
-    event.position = m_pointer;
+void UiLayerSystem::pointerLeave(){
+    PointerInput event;
+    event.source = s_NativePointerSource;
+    event.phase = PointerPhase::Leave;
+    event.position = this.m_pointer;
     event.hoverCapable = true;
-    routePointerInput(event);
+    this.routePointerInput(event);
 }
 
-void UiLayerSystem::pointerCaptureLost()noexcept{
-    if(m_pressedButtons == 0u)
+void UiLayerSystem::pointerCaptureLost(){
+    if(this.m_pressedButtons == 0u)
         return;
-    Ui::PointerInput event;
-    event.source = Ui::s_NativePointerSource;
-    event.phase = Ui::PointerPhase::Cancel;
-    event.position = m_pointer;
+    PointerInput event;
+    event.source = s_NativePointerSource;
+    event.phase = PointerPhase::Cancel;
+    event.position = this.m_pointer;
     event.hoverCapable = true;
-    routePointerInput(event);
-    m_pressedButtons = 0u;
-    m_pointerOwner = UiInputOwner::Scene;
+    this.routePointerInput(event);
+    this.m_pressedButtons = 0u;
+    this.m_pointerOwner = cast<u8>(UiInputOwner::Scene);
 }
 
-b8 UiLayerSystem::wantsKeyboard()const noexcept{
-    return m_resourcesReady && m_context.input().wantsCommands();
+b8 UiLayerSystem::wantsKeyboard()const{
+    return this.m_resourcesReady && this.m_context.input().wantsCommands();
 }
 
-b8 UiLayerSystem::wantsPointer()const noexcept{
-    if(m_pressedButtons != 0u)
-        return m_pointerOwner != UiInputOwner::Scene;
-    return m_resourcesReady && m_context.input().wantsPointer();
+b8 UiLayerSystem::wantsPointer()const{
+    if(this.m_pressedButtons != 0u)
+        return this.m_pointerOwner != cast<u8>(UiInputOwner::Scene);
+    return this.m_resourcesReady && this.m_context.input().wantsPointer();
 }
 
-void UiLayerSystem::routeInput(const Ui::InputEvent& event)noexcept{
+void UiLayerSystem::routeInput(in UiInputEvent event){
     b8 unusedBlockText = false;
-    routeInput(event, unusedBlockText);
+    this.routeInput(event, unusedBlockText);
 }
 
-void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8& outBlockText)noexcept{
+void UiLayerSystem::routeInput(in UiInputEvent event, mut b8 outBlockText){
     outBlockText = false;
-    m_editHost.collectNative();
-    const Ui::WidgetId previousCapture = m_context.input().capture();
-    const auto normalized = m_context.input().queue(event);
-    if(!normalized){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
-        resetNormalizedInput();
+    this.m_editHost.collectNative();
+    const WidgetId previousCapture = this.m_context.input().capture();
+    const auto normalized = this.m_context.input().queue(event);
+    if(!normalized.has_value()){
+        error("UiLayerSystem: invalid or overflowing normalized input");
+        this.resetNormalizedInput();
         return;
     }
-    const b8 submit = m_editHost.prepareSubmit(*normalized);
-    const Ui::InputRoutingResult result = m_context.input().process();
-    m_editHost.input(*normalized, previousCapture, submit);
+    const b8 submit = this.m_editHost.prepareSubmit(normalized.value());
+    const InputRoutingResult result = this.m_context.input().process();
+    this.m_editHost.input(normalized.value(), previousCapture, submit);
     // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
-    outBlockText = ShouldBlockRoutedCommandText(normalized->type == Ui::InputEventType::CommandDown, normalized->command != Ui::InputCommand::None, normalized->allowText);
+    outBlockText = ShouldBlockRoutedCommandText(normalized.value().type == InputEventType::CommandDown, normalized.value().command != InputCommand::None, normalized.value().allowText);
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
 
-void UiLayerSystem::routePointerInput(const Ui::PointerInput& input)noexcept{
+void UiLayerSystem::routePointerInput(in UiPointerInput input){
     b8 unusedConsumed = false;
-    routePointerInput(input, unusedConsumed);
+    this.routePointerInput(input, unusedConsumed);
 }
 
-void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8& outConsumed)noexcept{
+void UiLayerSystem::routePointerInput(in UiPointerInput input, mut b8 outConsumed){
     outConsumed = false;
-    m_editHost.collectNative();
-    const Ui::WidgetId previousCapture = m_context.input().capture();
-    const auto normalized = m_context.input().queuePointer(input);
-    if(!normalized){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
-        resetNormalizedInput();
+    this.m_editHost.collectNative();
+    const WidgetId previousCapture = this.m_context.input().capture();
+    const auto normalized = this.m_context.input().queuePointer(input);
+    if(!normalized.has_value()){
+        error("UiLayerSystem: invalid or overflowing pointer input");
+        this.resetNormalizedInput();
         return;
     }
-    const Ui::InputRoutingResult result = m_context.input().process();
+    const InputRoutingResult result = this.m_context.input().process();
     if(result.pointerRouted)
-        m_editHost.input(*normalized, previousCapture, false);
+        this.m_editHost.input(normalized.value(), previousCapture, false);
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
     outConsumed = result.pointerConsumed;
 }
 
-void UiLayerSystem::synchronizeNativeInput()noexcept{
+void UiLayerSystem::synchronizeNativeInput(){
     // Native dispatch occurs outside world system execution; use its joined boundary before reading host roots.
-    m_world->taskScope().wait();
-    synchronizeInput();
+    this.m_world.taskScope().wait();
+    this.synchronizeInput();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_unused]] Core::ECS::World& world, const f32 delta)noexcept{
-    m_frameDelta.add(delta);
-    synchronizeInput();
-    if(!CanBeginUiLayerPaintFrame(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready()))
-        return {};
-    AdvanceUiLayerFrameGeneration(m_frameGeneration);
-    const UiSkin& skin = *MakeNotNull(Core::Assets::CastAsset<UiSkin>(m_skinAsset.get()));
-    if(!m_context.beginFrame(m_frameGeneration))
+class UiLayerPaintGuard : NoCopy{
+    private mut UiLayerSystem m_layer;
+    private b8 m_armed = true;
+
+    public UiLayerPaintGuard(mut UiLayerSystem layer){
+        this.m_layer = layer;
+    }
+    public ~UiLayerPaintGuard(){
+        if(this.m_armed)
+            this.m_layer.abandonPendingFrame(true);
+    }
+    public void release(){ this.m_armed = false; }
+}
+
+b8 UiLayerSystem::tryBindSkin(in AssetRef<UiSkin> ref){
+    const AssetRef<UiSkin> resolved = this.resolveSkin(ref);
+    if(ref == this.m_skinSelection.selected && this.m_skinAsset.valid()){
+        in UiSkin current = this.m_skinAsset.deref();
+        return ValidateUiSkinToolkitContract(current) && this.m_renderer.setSkin(resolved, current, this.m_skinSelection.generation);
+    }
+    auto candidate = LoadTypedAssetSync<UiSkin>(this.m_assetManager, resolved.name(), s_UiLayerSystemOwnerName);
+    if(!candidate.has_value() || !candidate.value().valid())
+        return false;
+    in UiSkin skin = candidate.value().deref();
+    if(!ValidateUiSkinToolkitContract(skin) || !this.m_renderer.setSkin(resolved, skin, this.m_skinSelection.generation))
+        return false;
+    this.m_skinAsset.swap(candidate.value());
+    return true;
+}
+
+b8 UiLayerSystem::validateResources(in u32 width, in u32 height, in u32 sampleCount){
+    this.m_resourcesReady = false;
+    this.m_width = width;
+    this.m_height = height;
+    if(width == 0u || height == 0u)
+        return true;
+
+    if(!this.m_activeSceneSubsystems.has_value()){
+        if(!this.m_defaultSceneSubsystems.loadProjectStartScene(this.m_assetManager))
+            return false;
+        this.m_activeSceneSubsystems = Optional<in ActiveSceneSubsystems>(this.m_defaultSceneSubsystems);
+        this.m_renderer.setActiveSceneSubsystems(this.m_activeSceneSubsystems);
+    }
+    if(!this.m_activeSceneSubsystems.value().hasSubsystem<UiSubsystem>()){
+        error("UiLayerSystem: active scene does not include required subsystem 'ui_subsystem'");
+        return false;
+    }
+
+    if(!this.m_fontsReady){
+        if(!this.loadFonts())
+            return false;
+    }
+    if(!this.m_renderer.validateResources(width, height))
+        return false;
+
+    mut UiLayerSystem layer = this;
+    auto tryBind = lambda[mut layer](in AssetRef<UiSkin> ref) -> b8{ return layer.tryBindSkin(ref); };
+    const UiSkinSelectionResult selection = EnsureUiSkinSelection(this.m_skinSelection, this.basicSkin(), tryBind);
+    if(selection == UiSkinSelectionResult::Failed)
+        return false;
+    if(selection == UiSkinSelectionResult::DefaultFallback){
+        warning("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default", this.m_skinSelection.requested.name().resolvedText());
+    }
+
+    f32 scaleX = 1.0f;
+    f32 scaleY = 1.0f;
+    this.m_graphics.getDPIScaleInfo(scaleX, scaleY);
+    this.displayScaleChanged(scaleX, scaleY);
+    this.m_resourcesReady = true;
+    return true;
+}
+
+void UiLayerSystem::invalidateResources(){
+    this.m_resourcesReady = false;
+    this.m_frameDelta.clear();
+    this.abandonPendingFrame(true);
+    this.resetNativeInputState();
+    this.m_renderer.invalidateResources();
+}
+
+b8 UiLayerSystem::prepareResources(in FramebufferPtr framebuffer){
+    if(!IsValidFramebufferPtr(framebuffer) || !this.m_resourcesReady)
+        return false;
+    const b8 prepared = this.m_renderer.prepareTaskGraphOutputLayer(this.m_graphics.acquiredPresentationFrame());
+    if(!prepared && this.m_presentation == UiLayerPresentation::Standalone)
+        this.m_graphics.requestDeviceRecreation();
+    return prepared;
+}
+
+void UiLayerSystem::render(in FramebufferPtr framebuffer){
+    // The project chooses the final-output owner explicitly; optional layer failures cannot replace scene output.
+    if(!IsValidFramebufferPtr(framebuffer) || !this.m_resourcesReady || this.m_presentation == UiLayerPresentation::Scene)
+        return;
+    if(!this.m_renderer.renderStandalone(this.m_graphics.acquiredPresentationFrame())){
+        // The void render-pass API cannot abort presentation; recreation prevents presenting an unwritten acquired image.
+        error("UiLayerSystem: standalone UI presentation failed");
+        this.m_graphics.requestDeviceRecreation();
+    }
+}
+
+b8 UiLayerSystem::loadFonts(){
+    if(this.m_fontsReady)
+        return true;
+    if(!this.m_activeSceneSubsystems.has_value())
+        return false;
+    const auto uiSubsystem = this.m_activeSceneSubsystems.value().findSubsystem<UiSubsystem>();
+    if(!uiSubsystem.has_value())
+        return false;
+    const usize fontCount = uiSubsystem.value().basicFonts.size();
+    if(!ValidateUiSubsystemFontCount(fontCount, s_TextMaxFontSources))
+        return false;
+    Array<UniquePtr<Font>, s_TextMaxFontSources> assets;
+    Array<UniquePtr<FontAtlas>, s_TextMaxFontSources> atlasAssets;
+    Vector<FontSource> sources;
+    sources.reserve(fontCount);
+    for(usize index = 0u; index < fontCount; ++index){
+        in AssetRef<FontAtlas> atlasRef = uiSubsystem.value().basicFonts[index];
+        auto loadedAtlas = LoadTypedAssetSync<FontAtlas>(this.m_assetManager, atlasRef.name(), s_UiLayerSystemOwnerName);
+        if(!loadedAtlas.has_value())
+            return false;
+        atlasAssets[index] = loadedAtlas.value();
+        in FontAtlas atlas = atlasAssets[index].deref();
+        in AssetRef<Font> fontRef = atlas.payload().font;
+        auto font = LoadTypedAssetSync<Font>(this.m_assetManager, fontRef.name(), s_UiLayerSystemOwnerName);
+        if(!font.has_value())
+            return false;
+        assets[index] = font.value();
+        sources.push_back(FontSource(fontRef, assets[index].deref(), 1u, atlas));
+    }
+    // TextService owns the exact font bytes and immutable baked atlas versions; loaded asset objects can be released here.
+    this.m_fontsReady = this.m_text.setFonts(sources);
+    return this.m_fontsReady;
+}
+
+AssetRef<UiSkin> UiLayerSystem::basicSkin()const{
+    if(!this.m_activeSceneSubsystems.has_value())
+        return AssetRef<UiSkin>();
+    const auto uiSubsystem = this.m_activeSceneSubsystems.value().findSubsystem<UiSubsystem>();
+    if(uiSubsystem.has_value())
+        return uiSubsystem.value().basicSkin;
+    return AssetRef<UiSkin>();
+}
+
+AssetRef<UiSkin> UiLayerSystem::resolveSkin(in AssetRef<UiSkin> ref)const{
+    const AssetRef<UiSkin> fallbackSkin = this.basicSkin();
+    if(!fallbackSkin.valid())
+        return AssetRef<UiSkin>();
+    if(!ref.valid() || ref == fallbackSkin)
+        return fallbackSkin;
+    return this.m_activeSceneSubsystems.value().findSceneAsset<UiSkin>(ref.name());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<void, CpuTaskAdmissionError> UiLayerSystem::update(mut World world, in f32 delta){
+    this.m_frameDelta.add(delta);
+    this.synchronizeInput();
+    if(!CanBeginUiLayerPaintFrame(this.m_resourcesReady, this.m_renderer.hasPendingFrame(), this.m_context.ready()))
+        return Expected<void, CpuTaskAdmissionError>();
+    AdvanceUiLayerFrameGeneration(this.m_frameGeneration);
+    in UiSkin skin = this.m_skinAsset.deref();
+    if(!this.m_context.beginFrame(this.m_frameGeneration))
         TerminateInvariant();
-    ScopeExit abandon([this]()noexcept{ abandonPendingFrame(true); });
-    const f32 frameDelta = m_frameDelta.consume();
-    m_editHost.beginFrame(m_frameGeneration, m_display);
-    if(m_editHost.takeClipboardFailure())
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: clipboard publication failed"));
-    m_ui.reset();
-    m_ui.setSkin(skin);
-    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation, Core::Assets::AssetRef<UiSkin>(skin.virtualPath()), skin);
-    m_paint.reserve(s_UiLayerPaintReserveQuads);
-    m_ui.setDeltaSeconds(frameDelta);
-    m_ui.setPointerBusy(m_pressedButtons != 0u || m_context.input().primaryDown() || m_context.input().secondaryDown());
-    UiPaintContext context{ *m_world, *m_clipboard, *m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
-    Sort(m_liveRoots.begin(), m_liveRoots.end(), &IsUiLiveRootOrderedBefore);
-    for(const auto& root : m_liveRoots){
-        UiPaintComponent* component = m_world->tryGetComponent<UiPaintComponent>(root.entity);
-        if(!component || !component->visible || !component->paint)
+    UiLayerPaintGuard abandon(this);
+    const f32 frameDelta = this.m_frameDelta.consume();
+    this.m_editHost.beginFrame(this.m_frameGeneration, this.m_display);
+    if(this.m_editHost.takeClipboardFailure())
+        warning("UiLayerSystem: clipboard publication failed");
+    this.m_ui.reset();
+    this.m_ui.setSkin(skin);
+    this.m_paint.begin(this.m_display, this.m_frameGeneration, this.m_skinSelection.generation, AssetRef<UiSkin>(skin.virtualPath()), skin);
+    this.m_paint.reserve(s_UiLayerPaintReserveQuads);
+    this.m_ui.setDeltaSeconds(frameDelta);
+    this.m_ui.setPointerBusy(this.m_pressedButtons != 0u || this.m_context.input().primaryDown() || this.m_context.input().secondaryDown());
+    UiPaintContext context(this.m_world, this.m_clipboard, this.m_textInput, this.m_paint, this.m_text, this.m_display, this.m_ui);
+    context.deltaSeconds = frameDelta;
+    SortSequence<UiLiveRoot>(this.m_liveRoots, IsUiLiveRootOrderedBefore);
+    for(in UiLiveRoot root : this.m_liveRoots){
+        if(!this.m_world.hasComponent<UiPaintComponent>(root.entity))
             continue;
-        if(!m_context.beginRoot({ root.entity.id, 1u }))
+        mut UiPaintComponent component = this.m_world.getComponent<UiPaintComponent>(root.entity);
+        if(!component.visible || !component.paint.present())
+            continue;
+        WidgetRoot id;
+        id.value = root.entity.id;
+        if(!this.m_context.beginRoot(id))
             break;
         context.entity = root.entity;
-        component->paint.invoke(context);
-        if(!m_ui.balanced())
-            m_context.fail();
-        if(!m_context.endRoot())
+        component.paint.invoke(context);
+        if(!this.m_ui.balanced())
+            this.m_context.fail();
+        if(!this.m_context.endRoot())
             break;
     }
-    if(!m_context.finishFrame()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
-        return {};
+    if(!this.m_context.finishFrame()){
+        error("UiLayerSystem: rejected unbalanced or invalid UI declarations");
+        return Expected<void, CpuTaskAdmissionError>();
     }
-    m_editHost.finishFrame();
-    if(!m_renderer.submit(m_paint.freeze())){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
-        abandonPendingFrame();
+    this.m_editHost.finishFrame();
+    DrawSnapshot snapshot = this.m_paint.freeze();
+    if(!this.m_renderer.submit(snapshot)){
+        error("UiLayerSystem: GPU renderer rejected a new paint snapshot");
+        this.abandonPendingFrame();
         abandon.release();
-        return {};
+        return Expected<void, CpuTaskAdmissionError>();
     }
     abandon.release();
-    return {};
+    return Expected<void, CpuTaskAdmissionError>();
 }
 
-void UiLayerSystem::collectRoots()noexcept{
-    m_liveRoots.clear();
-    m_rootIdentities.clear();
-    m_world->view<UiPaintComponent>().each([this](const Core::ECS::EntityID entity, UiPaintComponent& component){
+void UiLayerSystem::collectRoots(){
+    this.m_liveRoots.clear();
+    this.m_rootIdentities.clear();
+    for(in auto row : this.m_world.view<UiPaintComponent>()){
+        const EntityID entity = Get<0>(row);
+        in UiPaintComponent component = this.m_world.getComponent<UiPaintComponent>(entity);
         if(!component.visible || !component.paint.present())
-            return;
-        m_liveRoots.push_back({ entity, component.order });
-        m_rootIdentities.push_back({ entity.id, 1u });
-    });
-}
-
-void UiLayerSystem::synchronizeInput()noexcept{
-    collectRoots();
-    m_context.retainRoots(m_rootIdentities);
-    if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
-        const auto status = m_renderer.lastAcceptedPresentationStatus();
-        if(status == Core::PresentationReceiptStatus::Accepted){
-            const b8 committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
-            FOUNDATION_FATAL_ASSERT(committed);
-            m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
-        }
-        else if(status == Core::PresentationReceiptStatus::Rejected)
-            abandonPendingFrame();
+            continue;
+        UiLiveRoot live;
+        live.entity = entity;
+        live.order = component.order;
+        this.m_liveRoots.push_back(live);
+        WidgetRoot identity;
+        identity.value = entity.id;
+        this.m_rootIdentities.push_back(identity);
     }
-    m_editHost.synchronizeFocus();
+
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void UiLayerSystem::synchronizeInput(){
+    this.collectRoots();
+    this.m_context.retainRoots(this.m_rootIdentities);
+    if(this.m_context.ready() && this.m_renderer.lastAcceptedGeneration() == this.m_context.readyGeneration()){
+        const auto status = this.m_renderer.lastAcceptedPresentationStatus();
+        if(status == PresentationReceiptStatus::Accepted){
+            const b8 committed = this.m_context.commitFrame(this.m_renderer.lastAcceptedGeneration());
+            [essential] assert(committed);
+            this.m_editHost.commitFrame(this.m_renderer.lastAcceptedGeneration());
+        }
+        else if(status == PresentationReceiptStatus::Rejected)
+            this.abandonPendingFrame();
+    }
+    this.m_editHost.synchronizeFocus();
 }
 
 

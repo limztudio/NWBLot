@@ -64,6 +64,7 @@ extern class GpuCompiledGraph{
 extern class GpuCompiledGraphReadView{
     GpuTaskGraphCompileStatistics compileStatistics(...)const;
     u16 deviceGeneration(...)const;
+    Optional<GpuPhysicalQueueInfo> findQueueInfo(in GpuPhysicalQueueId queue)const;
     Optional<GpuPhysicalQueueInfo> findQueueInfoForTask(...)const;
     GpuCompiledTaskView findTask(...)const;
     u64 generation(...)const;
@@ -71,6 +72,9 @@ extern class GpuCompiledGraphReadView{
     Span<GpuCompiledOwnershipTransfer> logicalOwnershipTransferSpan(...)const;
     GpuCompiledPacketView packet(...)const;
     usize packetCount(...)const;
+    GpuSubmissionPacketRange packetTimingEnvelopeRange()const;
+    GpuTaskPacketizationDecision packetizationDecisionForTask(in GpuTaskId task)const;
+    Optional<GpuCompiledPresentEndpoint> findPresentEndpoint()const;
     GpuSubmissionPacketId packetForTask(...)const;
     GpuSubmissionPacketId packetIdAt(...)const;
     GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(...)const;
@@ -111,6 +115,7 @@ extern class GpuCompiledOwnershipTransfer{
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPacketView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCompiledPacketView{
     GpuSubmissionPacketId id;
+    Span<GpuTaskId> taskSpan()const;
     Optional<GpuSubmissionPacket> packetPlan(...)const;
     b8 valid(...)const;
 };
@@ -142,6 +147,7 @@ extern class GpuCompiledTask{
 
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTaskView"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCompiledTaskView{
+    b8 recordsNonCommittingTimingSample()const;
     b8 valid(...)const;
 };
 
@@ -254,7 +260,9 @@ extern class GpuTaskGraphPhysicalQueueCompileStatistics{
 
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskRecordContext"), cpp_flags(binary_serializable, no_assign)]
 extern class GpuTaskRecordContext{
+    b8 hasCommandIrCapture()const;
     GpuTaskGraphDeclarationReadView declarations;
+    GpuCompiledGraphReadView compiledPlan;
     u64 recordingAttemptGeneration;
     GpuTaskId task;
     GpuSubmissionPacketId packet;
@@ -263,6 +271,10 @@ extern class GpuTaskRecordContext{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::CaptureGpuTaskCommandsIfEnabled")]
+extern b8 CaptureGpuTaskCommandsIfEnabled(in GpuTaskRecordContext context, in Func<b8(mut GpuCommandIrCapture)> capture);
 
 
 [cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileStatistics::s_OwnershipTransferRouteCount")]

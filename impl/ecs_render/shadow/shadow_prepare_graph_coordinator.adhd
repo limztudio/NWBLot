@@ -2,132 +2,74 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
+class ShadowPrepareGraphContext{
+    public mut GpuTaskGraph graph;
+    public mut GraphicsRuntime graphics;
+    public mut RendererMeshSystem mesh;
+    public mut RendererRayTracingSystem rayTracing;
+    public mut GpuPersistentResourceStateCache persistentState;
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/persistent_state.h>
-#include <core/task/gpu/task_graph.h>
+    public ShadowPrepareGraphContext(
+        mut GpuTaskGraph graph,
+        mut GraphicsRuntime graphics,
+        mut RendererMeshSystem mesh,
+        mut RendererRayTracingSystem rayTracing,
+        mut GpuPersistentResourceStateCache persistentState
+    ){
+        this.graph = graph;
+        this.graphics = graphics;
+        this.mesh = mesh;
+        this.rayTracing = rayTracing;
+        this.persistentState = persistentState;
+    }
+}
 
+[modular, friend(RendererFramePipeline, DeferredFrameTopologyValidator, FrameExecuteStateLifecycleSet, FrameExecuteTimingState, ShadowPreparePacketValidator)]
+class ShadowPrepareGraphCoordinator : NoCopy{
+    private GpuTaskId m_deferredBindlessSlotsUploadTask;
+    private GpuTaskId m_rayTraceMaterialContextSlotsUploadTask;
+    private GpuTaskId m_csgTraceContextUploadTask;
+    private GpuTaskId m_causticEmissionTargetsUploadTask;
+    private GpuTaskId m_surfelFrameConstantsUploadTask;
+    private GpuTaskId m_shadowInstanceMaterialUploadTask;
+    private GpuTaskId m_shadowInstanceUploadTask;
+    private GpuTaskId m_shadowMaterialTypedUploadTask;
+    private GpuTaskId m_sceneBvhNodesUploadTask;
+    private GpuTaskId m_sceneBvhInstancesUploadTask;
+    private GpuTaskId m_deferredShadowPrepareTask;
+    private GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
+    private GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
+    private GpuTaskId m_deferredShadowPrepareSceneRefitTask;
+    private GpuTaskId m_sceneBvhRefitInputsUploadTask;
+    private GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
+    private ShadowPreparationOutcome m_shadowPreparationOutcome;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-class RendererMeshSystem;
-class RendererRayTracingSystem;
-class DeferredFrameTargets;
-
-
-struct ShadowPrepareGraphContext{
-    Core::GpuTaskGraph& graph;
-    Core::GraphicsRuntime& graphics;
-    RendererMeshSystem& mesh;
-    RendererRayTracingSystem& rayTracing;
-    Core::GpuPersistentResourceStateCache& persistentState;
-};
-
-
-class ShadowPrepareGraphCoordinator final : NoCopy{
-    friend class RendererFramePipeline;
-    friend class DeferredFrameTopologyValidator;
-    friend struct FrameExecuteStateLifecycleSet;
-    friend struct FrameExecuteTimingState;
-    friend class ShadowPreparePacketValidator;
-
-
-public:
-    ShadowPrepareGraphCoordinator()noexcept = default;
-
-
-public:
-    [[nodiscard]] b8 declareDeferredShadowPrepareTask(
-        const ShadowPrepareGraphContext& context,
-        const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
-        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
-        Core::GpuGraphResourceId currentBindlessSlots,
-        Core::GpuGraphResourceId materialContextSlots,
-        Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
-        Span<const Core::GpuGraphResourceId> softwareBvhBuildStateResources,
-        b8 softwareTraceResourcesPrepared,
-        Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
-        Core::GpuTimingSubmissionTicket& timingTicket
+    [cpp_unwind]
+    public b8 declareDeferredShadowPrepareTask(
+        in ShadowPrepareGraphContext context,
+        in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuGraphResourceId materialContextSlots,
+        in Span<GpuGraphResourceId> shadowTraceGeometryResources,
+        in Span<GpuGraphResourceId> softwareBvhBuildStateResources,
+        in b8 softwareTraceResourcesPrepared,
+        mut DeferredFrameTargets deferredTargets,
+        mut GpuTimingSubmissionTicket timingTicket
     );
-    void resetShadowPrepareUploadTaskState()noexcept;
-    void resetShadowPrepareTaskState()noexcept;
 
+    public void resetShadowPrepareUploadTaskState();
 
-private:
-    // Optional selector upload. Merges into Shadow Preparation's first Graphics packet; acceptance commits the CPU residency bit with the first consumer.
-    Core::GpuTaskId m_deferredBindlessSlotsUploadTask;
-    // Descriptor-slot snapshot. Merges into the same first Graphics packet; later Compute trace consumers inherit Shadow Preparation's handoff.
-    Core::GpuTaskId m_rayTraceMaterialContextSlotsUploadTask;
-    Core::GpuTaskId m_csgTraceContextUploadTask;
-    // Optional refractive-AABB stream. Merges into that same first Graphics packet; caustic consumers inherit Shadow Preparation's handoff.
-    Core::GpuTaskId m_causticEmissionTargetsUploadTask;
-    // Optional per-frame surfel constant payload; merges into the first Graphics packet alongside Shadow Preparation.
-    Core::GpuTaskId m_surfelFrameConstantsUploadTask;
-    // Optional ABI-coupled shadow material context batch; merges into Shadow Preparation so its SRV handoff owns later trace consumers.
-    Core::GpuTaskId m_shadowInstanceMaterialUploadTask;
-    Core::GpuTaskId m_shadowInstanceUploadTask;
-    Core::GpuTaskId m_shadowMaterialTypedUploadTask;
-    // CPU-built software scene-BVH pair. Both must merge into Shadow Preparation's packet before it owns the later handoff.
-    Core::GpuTaskId m_sceneBvhNodesUploadTask;
-    Core::GpuTaskId m_sceneBvhInstancesUploadTask;
-    Core::GpuTaskId m_deferredShadowPrepareTask;
-    // Per-mesh software builds lower sentinel clears and callbacks before Shadow Preparation's scene-build endpoint. Both bounds stay in that packet.
-    Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
-    Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
-    Core::GpuTaskId m_deferredShadowPrepareSceneRefitTask;
-    Core::GpuTaskId m_sceneBvhRefitInputsUploadTask;
-    // TLAS/BLAS builds record in Shadow Preparation; this adjacent callback publishes their AccelStructRead bounds in the same first packet.
-    Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
-    // Graph payloads borrow this outcome until the graph is reset.
-    ShadowPreparationOutcome m_shadowPreparationOutcome;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void resetShadowPrepareTaskState();
 }
 
 

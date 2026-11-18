@@ -114,6 +114,9 @@ template<typename T>
 const T* AddressOf(const T&&) = delete;
 
 template<typename T>
+[[nodiscard]] usize ObjectAddressKey(const T& value)noexcept{ return reinterpret_cast<usize>(AddressOf(value)); }
+
+template<typename T>
 [[nodiscard]] constexpr b8 SameAddress(const T& lhs, const T& rhs)noexcept{ return AddressOf(lhs) == AddressOf(rhs); }
 
 template<typename T>

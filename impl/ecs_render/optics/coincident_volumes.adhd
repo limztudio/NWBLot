@@ -2,23 +2,76 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_csg/components.adhd>
+#include <impl/ecs_scene/components.adhd>
+#include <impl/ecs_render/optics/optical_scene.adhd>
+#include <impl/ecs_render/material/material_surface_lookup.adhd>
 #include <impl/ecs_render/optics/coincident_volume_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::RendererMaterialSystem"), cpp_header("<impl/ecs_render/material/material_system.adhd.h>")]
-extern class RendererMaterialSystem : NoCopy;
-
 // Pipeline owns one frozen selection shared by all consumers; raster/RT keep their ABIs.
-[modular]
 class RendererOpticalVolumeSelection : NoCopy{
     private HashSet<EntityID> m_suppressed;
 
     public RendererOpticalVolumeSelection(){}
 
-    public void prepare(mut World world, mut RendererMaterialSystem materials);
+    public void prepare(mut World world, mut IPreparedMaterialLookup materials){
+        const Optional<mut MeshSystem> meshSystem = world.borrowSystem<MeshSystem>();
+        if(!meshSystem.has_value() || world.view<RendererComponent>().candidateCount() < s_MinCoincidentCandidateCount){
+            this.reset();
+            return;
+        }
+
+        usize candidateCapacity = 0u;
+        for(in auto row : world.view<RendererComponent>()){
+            if(RendererComponentOpticalVolumeMergingEnabled(world.getComponent<RendererComponent>(Get<0>(row))))
+                ++candidateCapacity;
+        }
+        if(candidateCapacity < s_MinCoincidentCandidateCount){
+            this.reset();
+            return;
+        }
+
+        Vector<CoincidentOpticalVolumeCandidate> candidates;
+        candidates.reserve(candidateCapacity);
+        for(in auto row : world.view<RendererComponent>()){
+            const EntityID entity = Get<0>(row);
+            in RendererComponent renderer = world.getComponent<RendererComponent>(entity);
+            if(!RendererComponentOpticalVolumeMergingEnabled(renderer))
+                continue;
+            const Expected<mut MaterialSurfaceInfo> material = materials.findMaterialSurfaceInfo(renderer.material);
+            if(!material.has_value())
+                continue;
+            const b8 closed = OpticalBoundaryModeIsClosed(renderer.opticalBoundaryMode);
+            if(!MaterialParticipatesInOpticalVolumeSelection(material.value().transparent, material.value().refractive, closed))
+                continue;
+            const auto mesh = meshSystem.value().resolveRenderableMeshStatus(entity);
+            if(!mesh.has_value() || mesh.value().runtime || !mesh.value().mesh.valid())
+                continue;
+            if(world.hasComponent<StaticCsgMeshComponent>(entity) || world.hasComponent<SkinnedCsgMeshComponent>(entity) || world.hasComponent<CsgReceiverComponent>(entity))
+                continue;
+
+            Optional<in MaterialInstanceComponent> materialInstance;
+            if(world.hasComponent<MaterialInstanceComponent>(entity))
+                materialInstance = Optional<in MaterialInstanceComponent>(world.getComponent<MaterialInstanceComponent>(entity));
+            const auto bytes = materials.findPreparedMaterialInstanceMutableTypedBytes(entity, material.value(), materialInstance);
+            if(!bytes.has_value())
+                continue;
+            CoincidentOpticalVolumeCandidate candidate = MakeCoincidentOpticalVolumeCandidate(entity, mesh.value().mesh, renderer, bytes.value());
+            if(world.hasComponent<TransformComponent>(entity)){
+                in TransformComponent transform = world.getComponent<TransformComponent>(entity);
+                candidate.position = transform.position;
+                candidate.rotation = transform.rotation;
+                candidate.scale = transform.scale;
+            }
+            candidates.push_back(candidate);
+        }
+        this.select(Span<CoincidentOpticalVolumeCandidate>(candidates));
+    }
 
     // Candidates must contain each entity at most once.
     public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){

@@ -12,6 +12,12 @@ extern class MetadataStringField{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::VisitMetadataDocumentFile")]
+extern b8 VisitMetadataDocumentFile(in Path file, in StringView prefix, in Func<64u, b8(in MetascriptDocument)> visitor);
+
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::CheckMetadataSourceExtension")]
+extern b8 CheckMetadataSourceExtension(in Path file, in StringView source, in StringView extension, in StringView prefix);
+
 [cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::CheckPairedSourceExtension")]
 extern b8 CheckPairedSourceExtension(in Path a0, in StringView a1, in StringView a2, in StringView a3, mut auto a4);
 

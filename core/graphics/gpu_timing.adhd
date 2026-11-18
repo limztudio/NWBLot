@@ -27,6 +27,7 @@ extern class GpuTimingRecorder{
     b8 setFeedbackCollectionScopes(...);
     void setQueryCollectionEnabled(...);
     Expected<GpuTimingSampleSubscription> subscribeSampleListener(...);
+    Expected<GpuTimingSampleSubscription> subscribeSampleObserver(mut auto observer);
     void unsubscribeSampleListener(...);
     void collect(...);
     b8 materializeRequestedQueries(...);

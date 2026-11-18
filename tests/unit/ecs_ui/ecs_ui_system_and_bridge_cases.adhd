@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/paint_context.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_ui/ecs_ui_test_fixtures.adhd>
 
@@ -23,6 +24,7 @@ native{
 #include <impl/ecs_ui/skin_selection.adhd.h>
 #include <impl/ecs_ui/text_edit_session.adhd.h>
 #include <impl/ecs_ui/toolkit/context.adhd.h>
+#include <impl/ecs_ui/toolkit/gpu/renderer.adhd.h>
 
 #include <core/ecs/entity.h>
 #include <core/task/cpu/scheduler.h>
@@ -43,6 +45,10 @@ using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
 
+
+static_assert(IsSame_V<Ui::GpuRenderer::ShaderPathResolveCallback, ShaderArchive::PathResolver>);
+static_assert(requires(Ui::GpuRenderer& renderer, ::ArenaBase& arena){ renderer.submit(Ui::DrawSnapshot(arena)); });
+static_assert(requires{ static_cast<b8(Ui::GpuRenderer::*)(Ui::DrawSnapshot&&)noexcept>(&Ui::GpuRenderer::submit); });
 
 class PaintSlotFixture{
 public:
@@ -152,7 +158,7 @@ void VerifyPaintSlot_ClearAndRemoveReaddDoNotRestoreTheRunningCallback(){
 
     native(mut entity, mut fixture, in id){
         entity.getComponent<UiPaintComponent>().paint = [id](UiPaintContext& ctx){
-            auto current = ctx.world.entity(id);
+            auto current = ctx.world->entity(id);
             current.removeComponent<UiPaintComponent>();
             current.addComponent<UiPaintComponent>();
             throw 42;
@@ -362,7 +368,7 @@ void VerifyUiTextEditOwned_PollCopiesEventsWithoutApplyingAndOwnedCommitSurvives
     FakeTextInput service = FakeTextInput(arena.arena);
     UiEditModel model = UiEditModel(arena.arena);
     UiTextEditSession session = UiTextEditSession(arena.arena, service);
-    TextInputEvent event = TextInputEvent(arena.arena);
+    TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
     ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
@@ -424,7 +430,7 @@ void VerifyUiTextEditOwned_CancelWithoutModelLeavesTransientCompositionForTheNex
 void VerifyUiTextEditOwned_CopiedSurroundingDeletionRequiresPublishedRevisionAndGraphemeAlignedRange(){
     TestArena arena = TestArena();
     UiEditModel model = UiEditModel(arena.arena);
-    TextInputEvent event = TextInputEvent(arena.arena);
+    TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(model.setText("a\xCC\x81z"));
     event.kind = TextInputEventKind::DeleteSurrounding;
     event.surroundingRevision = 7u;
@@ -447,7 +453,7 @@ void VerifyUiTextEditOwned_MalformedCopiedEventsAndRejectedPreeditPreserveCommit
     UiEditLimits limits = UiEditLimits();
     limits.maxBytes = 4u;
     UiEditModel model = UiEditModel(arena.arena, limits);
-    TextInputEvent event = TextInputEvent(arena.arena);
+    TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(model.setText("base"));
     event.kind = TextInputEventKind::Preedit;
     event.text.assign("\xED\x95\x9C");
@@ -491,7 +497,7 @@ void VerifyUiTextEditOwned_OwnedCollectionAdoptionAndCancellationRejectAnotherTh
     FakeTextInput service = FakeTextInput(arena.arena);
     UiEditModel model = UiEditModel(arena.arena);
     UiTextEditSession session = UiTextEditSession(arena.arena, service);
-    TextInputEvent event = TextInputEvent(arena.arena);
+    TextInputEvent event = TextInputEvent();
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
     b8 cancelled = true;

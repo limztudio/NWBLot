@@ -2,75 +2,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_RESOURCE_SET")]
+extern const u32 s_BindlessResourceSetIndex;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_SAMPLER_SET")]
+extern const u32 s_BindlessSamplerSetIndex;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET")]
+extern const u32 s_BindlessAccelStructSetIndex;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE")]
+extern const u32 s_BindlessSampledImageBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE")]
+extern const u32 s_BindlessStorageImageBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER")]
+extern const u32 s_BindlessSampledBufferBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER")]
+extern const u32 s_BindlessStorageBufferBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER")]
+extern const u32 s_BindlessUniformBufferBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY")]
+extern const u32 s_BindlessSampledImage2DArrayBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D")]
+extern const u32 s_BindlessSampledImage3DBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT")]
+extern const u32 s_BindlessSampledImage2DArrayUintBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE")]
+extern const u32 s_BindlessSampledImageCubeBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_SAMPLER")]
+extern const u32 s_BindlessSamplerBinding;
+
+[cpp_header("<impl/assets/graphics/bindless/binding_slots.h>"), cpp_name("NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT")]
+extern const u32 s_BindlessAccelStructBinding;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets/graphics/bindless/binding_slots.h>
+static_assert(s_BindlessResourceSetIndex == 0u);
+static_assert(s_BindlessSamplerSetIndex == s_BindlessResourceSetIndex + 1u);
+static_assert(s_BindlessAccelStructSetIndex == s_BindlessSamplerSetIndex + 1u);
 
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsGraphicsBindless{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(NWB_BINDLESS_HEAP_RESOURCE_SET == 0u);
-static_assert(NWB_BINDLESS_HEAP_SAMPLER_SET == NWB_BINDLESS_HEAP_RESOURCE_SET + 1u);
-static_assert(NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET == NWB_BINDLESS_HEAP_SAMPLER_SET + 1u);
-
-
-// Adapts the shared ABI into the runtime payload; keeps the renderer off asset constants.
-[[nodiscard]] constexpr Core::GpuDescriptorHeapAbi MakeGpuDescriptorHeapAbi()noexcept{
-    Core::GpuDescriptorHeapAbi abi;
-    abi.resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;
-    abi.samplerSetIndex = NWB_BINDLESS_HEAP_SAMPLER_SET;
-    abi.accelStructSetIndex = NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET;
-    abi.sampledImageBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE;
-    abi.storageImageBinding = NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE;
-    abi.sampledBufferBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER;
-    abi.storageBufferBinding = NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER;
-    abi.uniformBufferBinding = NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER;
-    abi.sampledImage2DArrayBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY;
-    abi.sampledImage3DBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D;
-    abi.sampledImage2DArrayUintBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT;
-    abi.sampledImageCubeBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE;
-    abi.samplerBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLER;
-    abi.accelStructBinding = NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT;
+GpuDescriptorHeapAbi MakeGpuDescriptorHeapAbi(){
+    GpuDescriptorHeapAbi abi;
+    abi.resourceSetIndex = s_BindlessResourceSetIndex;
+    abi.samplerSetIndex = s_BindlessSamplerSetIndex;
+    abi.accelStructSetIndex = s_BindlessAccelStructSetIndex;
+    abi.sampledImageBinding = s_BindlessSampledImageBinding;
+    abi.storageImageBinding = s_BindlessStorageImageBinding;
+    abi.sampledBufferBinding = s_BindlessSampledBufferBinding;
+    abi.storageBufferBinding = s_BindlessStorageBufferBinding;
+    abi.uniformBufferBinding = s_BindlessUniformBufferBinding;
+    abi.sampledImage2DArrayBinding = s_BindlessSampledImage2DArrayBinding;
+    abi.sampledImage3DBinding = s_BindlessSampledImage3DBinding;
+    abi.sampledImage2DArrayUintBinding = s_BindlessSampledImage2DArrayUintBinding;
+    abi.sampledImageCubeBinding = s_BindlessSampledImageCubeBinding;
+    abi.samplerBinding = s_BindlessSamplerBinding;
+    abi.accelStructBinding = s_BindlessAccelStructBinding;
     return abi;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

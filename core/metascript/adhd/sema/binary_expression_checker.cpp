@@ -72,7 +72,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             recvIsConst,
             &opDeclCls
         )){
-            if(opDeclCls && ownerClass != opDeclCls && opMethod->access != AccessSpecifier::Public){
+            if(opDeclCls && !m_checker.m_symbols.canAccessPrivateMembers(*opDeclCls, ownerClass) && opMethod->access != AccessSpecifier::Public){
                 m_checker.reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
                 ok = false;
             }
@@ -263,15 +263,14 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
                 if(!expr.isNotNullRebind && !expr.rhs->wrapInSimdResult && expr.lhs->resolvedSimdType.empty() && m_checker.m_symbols.resolveRefMode(lhsTargetTypeRef) == ParamPassingMode::None){
                     const TypeLayoutAnalyzer layoutAnalyzer(m_checker.m_symbols);
                     const TypeRef* unwrappedLhs = m_checker.m_symbols.unwrapTypeAlias(lhsTargetTypeRef);
-                    const BuiltinGenericTypeInfo* lhsGenericInfo = unwrappedLhs ? FindBuiltinGenericType(unwrappedLhs->name) : nullptr;
-                    if(lhsGenericInfo && lhsGenericInfo->inlineLayoutKind == InlineLayoutKind::Optional && !unwrappedLhs->templateArgs.empty() && unwrappedLhs->templateArgs[0].type && layoutAnalyzer.requiresMotherArena(*unwrappedLhs->templateArgs[0].type)){
+                    if(layoutAnalyzer.isArenaBackedValueWrapper(*lhsTargetTypeRef)){
                         const Expr* rootLhs = TypeChecker::UnwrapMemberOrIndexRoot(expr.lhs);
                         if(rootLhs && rootLhs->kind == ExprKind::ThisMember && ownerClass){
-                            expr.useAdhdOptionalClassAssign = true;
+                            expr.useAdhdWrappedClassAssign = true;
                             ownerClass->needsClassArena = true;
                         }
                         else{
-                            expr.useAdhdOptionalScratchAssign = true;
+                            expr.useAdhdWrappedScratchAssign = true;
                             m_checker.markScratchArenaUsed(method);
                         }
                     }
@@ -343,6 +342,18 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
                         mutableRoot->borrowedLocalOwnerName = borrowedOwnerName;
                     }
                 }
+            }
+        }
+        if(expr.op == TokenType::Equal && m_checker.wrappedReferenceType(m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope))){
+            if(const auto* source = BorrowLifetimeAnalyzer(m_checker).localReferenceOwner(ownerClass, method, *expr.rhs, scope)){
+                const Expr* root = TypeChecker::UnwrapMemberOrIndexRoot(expr.lhs);
+                const ScopedVarInfo* target = root && root->kind == ExprKind::Identifier ? TypeChecker::FindScopedVar(scope, root->text) : nullptr;
+                if(!target || target->isParam || target->mode != ParamPassingMode::None || target < source){
+                    m_checker.reportError(errors, expr.span, "cannot assign a stored reference into a longer-lived target");
+                    ok = false;
+                }
+                else
+                    const_cast<ScopedVarInfo*>(target)->referenceOwnerName = source->name;
             }
         }
     }

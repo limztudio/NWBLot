@@ -24,7 +24,9 @@ extern class MetascriptValue{
     StringView asReference(...)const;
     StringView asString(...)const;
     mut MetascriptValue field(...);
+    b8 copyStringList(mut Vector<String> output)const;
     b8 forEachMapEntry(in Func<b8(in StringView, in MetascriptValue)> a0)const;
+    Optional<in MetascriptValue> borrowField(in StringView name)const;
     b8 hasField(...)const;
     b8 isDouble(...)const;
     b8 isInteger(...)const;

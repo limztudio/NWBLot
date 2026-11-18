@@ -2,54 +2,154 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_material/cook_entry.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
+const StringView s_AvboitAccumulateGeneratedDirLeaf = "material_avboit_accumulate_pixel_shaders";
+const StringView s_AvboitAccumulateAuthoringHeader = "avboit/accumulate_ps_authoring.slangi";
+const StringView s_AvboitOccupancyGeneratedDirLeaf = "material_avboit_occupancy_pixel_shaders";
+const StringView s_AvboitOccupancyAuthoringHeader = "avboit/occupancy_ps_authoring.slangi";
+const StringView s_AvboitExtinctionGeneratedDirLeaf = "material_avboit_extinction_pixel_shaders";
+const StringView s_AvboitExtinctionAuthoringHeader = "avboit/extinction_ps_authoring.slangi";
+const StringView s_AvboitGeneratedPixelShaderHeaderLine = "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
+const StringView s_MaterialGeneratedPixelShaderDirLeaf = "material_pixel_shaders";
+const StringView s_MaterialGeneratedPixelShaderHeaderLine = "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
+const StringView s_MaterialGeneratedPixelShaderAuthoringHeader = "mesh/material_ps_authoring.slangi";
+const StringView s_MaterialGeneratedPixelShaderNamePrefix = "generated/material_ps/";
+b8 ShouldEmitMaterialAvboitPixelShader(in b8 transparent, in StringView surfaceSource){
+    return transparent && !surfaceSource.empty();
+}
 
+b8 ShouldEmitGeneratedMaterialPixelShader(in b8 hasExplicitShaders, in StringView surfaceSource){
+    return !hasExplicitShaders && !surfaceSource.empty();
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+enum<u8> MaterialPixelPass{
+    Surface = 0,
+    Accumulate = 1,
+    Occupancy = 2,
+    Extinction = 3,
+    kCount
+}
 
+class MaterialPixelShaderPassSpec{
+    public StringView directory = s_MaterialGeneratedPixelShaderDirLeaf;
+    public StringView header = s_MaterialGeneratedPixelShaderHeaderLine;
+    public StringView authoring = s_MaterialGeneratedPixelShaderAuthoringHeader;
+    public StringView prefix = s_MaterialGeneratedPixelShaderNamePrefix;
+    public StringView label = "Material pixel shader generation";
+    public StringView passLabel = "";
+}
 
-#include <impl/assets_material/cook.adhd.h>
+MaterialPixelShaderPassSpec MaterialShaderPassSpec(in MaterialPixelPass pass){
+    MaterialPixelShaderPassSpec spec;
+    if(pass == MaterialPixelPass::Surface)
+        return spec;
+    spec.header = s_AvboitGeneratedPixelShaderHeaderLine;
+    if(pass == MaterialPixelPass::Accumulate){
+        spec.directory = s_AvboitAccumulateGeneratedDirLeaf;
+        spec.authoring = s_AvboitAccumulateAuthoringHeader;
+        spec.prefix = s_AvboitAccumulatePixelShaderGeneratedPrefix;
+        spec.passLabel = s_MaterialAvboitAccumulatePassLabel;
+    }
+    else if(pass == MaterialPixelPass::Occupancy){
+        spec.directory = s_AvboitOccupancyGeneratedDirLeaf;
+        spec.authoring = s_AvboitOccupancyAuthoringHeader;
+        spec.prefix = s_AvboitOccupancyPixelShaderGeneratedPrefix;
+        spec.passLabel = s_MaterialAvboitOccupancyPassLabel;
+    }
+    else{
+        spec.directory = s_AvboitExtinctionGeneratedDirLeaf;
+        spec.authoring = s_AvboitExtinctionAuthoringHeader;
+        spec.prefix = s_AvboitExtinctionPixelShaderGeneratedPrefix;
+        spec.passLabel = s_MaterialAvboitExtinctionPassLabel;
+    }
+    return spec;
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MaterialAvboitShaderGenerator{
-public:
-    [[nodiscard]] static Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitAccumulate(const Path& cacheDirectory, AStringView configurationSafeName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena, Span<MaterialCookEntry> materialEntries);
-    [[nodiscard]] static Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitOccupancy(const Path& cacheDirectory, AStringView configurationSafeName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena, Span<MaterialCookEntry> materialEntries);
-    [[nodiscard]] static Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitExtinction(const Path& cacheDirectory, AStringView configurationSafeName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena, Span<MaterialCookEntry> materialEntries);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<Vector<GeneratedMaterialPixelShader>> EmitMaterialPassPixelShaders(in Path cache, in StringView configuration, in Name sharedMesh,
+    in MaterialPixelPass pass, mut Span<MaterialCookEntry> entries){
+    const MaterialPixelShaderPassSpec spec = MaterialShaderPassSpec(pass);
+    const b8 mainPass = pass == MaterialPixelPass::Surface;
+    String label(spec.label);
+    if(!mainPass){
+        label.assign("Material AVBOIT ");
+        label.append(spec.passLabel);
+        label.append(" pixel shader generation");
+    }
+    usize count = 0u;
+    for(in MaterialCookEntry entry : entries){
+        if(mainPass && ShouldEmitGeneratedMaterialPixelShader(!entry.stageShaders.empty(), entry.surfaceSource))
+            ++count;
+        if(!mainPass && ShouldEmitMaterialAvboitPixelShader(entry.transparent, entry.surfaceSource))
+            ++count;
+    }
+    Vector<GeneratedMaterialPixelShader> generated;
+    generated.reserve(count);
+    const Path root = cache / configuration / s_GeneratedCacheDirectory / spec.directory;
+    const Expected<void, ErrorCode> cleared = RemoveAllIfExists(root);
+    if(!cleared.has_value()){
+        error("{}: failed to clear generated directory '{}': {}", label, root, ErrorCodeMessage(cleared.error()));
+        return MakeUnexpected(Failure());
+    }
+    for(mut MaterialCookEntry entry : entries){
+        if(mainPass){
+            if(!ValidateMaterialGeneratedPixelShaderEntry(entry.virtualPath, !entry.stageShaders.empty(), !entry.surfaceSource.empty(), entry.materialInterface))
+                return MakeUnexpected(Failure());
+            if(!entry.stageShaders.empty())
+                continue;
+        }
+        else{
+            if(!ShouldEmitMaterialAvboitPixelShader(entry.transparent, entry.surfaceSource))
+                continue;
+            if(!ValidateTransparentMaterialInterface(entry.virtualPath, entry.materialInterface, spec.passLabel))
+                return MakeUnexpected(Failure());
+        }
+        String source;
+        BuildGeneratedMaterialPixelShaderSource(spec.header, spec.authoring, entry.materialInterface, entry.surfaceSource, source);
+        String relative(entry.virtualPath);
+        relative.append(s_GeneratedShaderSourceExtension);
+        const Path output = root / relative;
+        const Expected<void, ErrorCode> created = EnsureDirectories(output.parentPath());
+        if(!created.has_value()){
+            error("{}: failed to create generated parent '{}': {}", label, output.parentPath(), ErrorCodeMessage(created.error()));
+            return MakeUnexpected(Failure());
+        }
+        if(!WriteTextFile(output, source)){
+            error("{}: failed to write generated pixel shader '{}'", label, output);
+            return MakeUnexpected(Failure());
+        }
+        AppendArenaElement<GeneratedMaterialPixelShader>(generated);
+        mut GeneratedMaterialPixelShader shader = generated[generated.size() - 1u];
+        shader.name.assign(spec.prefix);
+        shader.name.append(entry.virtualPath);
+        shader.source.assign(StringView(PathToGenericString(output)));
+        const Expected<Name> name = ParseNameText(shader.name);
+        if(!name.has_value()){
+            if(mainPass)
+                error("Material cook: generated pixel shader name is invalid for material '{}'", entry.virtualPath);
+            else
+                error("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'", spec.passLabel, entry.virtualPath);
+            return MakeUnexpected(Failure());
+        }
+        if(mainPass){
+            if(!entry.stageShaders.emplace(ShaderType::PixelStage, AssetRef<IShader>(name.value())).second
+                || !entry.stageShaders.emplace(ShaderType::MeshStage, AssetRef<IShader>(sharedMesh)).second){
+                error("Material cook: failed to assign generated stage shaders for material '{}'", entry.virtualPath);
+                return MakeUnexpected(Failure());
+            }
+        }
+        else if(pass == MaterialPixelPass::Accumulate)
+            entry.avboitAccumulatePixelShaderName.assign(shader.name);
+        else if(pass == MaterialPixelPass::Occupancy)
+            entry.avboitOccupancyPixelShaderName.assign(shader.name);
+        else
+            entry.avboitExtinctionPixelShaderName.assign(shader.name);
+    }
+    return generated;
 }
 
 

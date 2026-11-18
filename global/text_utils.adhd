@@ -32,6 +32,9 @@ extern usize CountBareLineFeeds(in StringView a0);
 [cpp_name("::EqualsAsciiIgnoreCase<char>")]
 extern b8 EqualsAsciiIgnoreCase(in StringView a0, in StringView a1);
 
+[cpp_name("::ErrorCodeCategoryName")]
+extern StringView ErrorCodeCategoryName(in ErrorCode error);
+
 [cpp_name("::ErrorCodeMessage"), cpp_flags(scratch_arena)]
 extern String ErrorCodeMessage(in ErrorCode a0);
 
@@ -118,6 +121,10 @@ extern StringView UnquoteDoubleQuotedView(in StringView a0);
 
 [cpp_name("::UnquoteMatchingAsciiQuotes")]
 extern String UnquoteMatchingAsciiQuotes(in auto a0);
+
+
+[cpp_header("<global/text_utils.h>"), cpp_name("::TextSubviewOffset")]
+extern usize TextSubviewOffset(in StringView text, in StringView part);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

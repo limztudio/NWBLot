@@ -2,126 +2,68 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
+#include <impl/ecs_ui/toolkit/text/layout.adhd>
+#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_visual_paint.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/grapheme.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_visual_paint.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
+// Owns the layout, its font versions, and the caret geometry for its hard lines.
+[move_only]
+class EditCaretGeometry{
+    private TextLayout m_layout;
+    private EditBoundaryVector m_boundaries;
+    private Vector<EditBoxCaretStop> m_stops;
+    private Vector<EditCaretLine> m_lines;
+    private EditTextMode m_mode = EditTextMode::SingleLine;
+    private b8 m_ready = false;
 
-#include <global/not_null.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Owns source bytes, exact font versions and LTR hard-line caret data; no model or service is retained.
-class EditCaretGeometry final{
-public:
-    explicit EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept
-        : m_layout(arena)
-        , m_boundaries(arena)
-        , m_stops(arena)
-        , m_lines(arena)
-    {}
-    EditCaretGeometry(EditCaretGeometry&&)noexcept = default;
-    EditCaretGeometry(const EditCaretGeometry&) = delete;
-
-
-public:
-    EditCaretGeometry& operator=(EditCaretGeometry&&)noexcept = default;
-
-    EditCaretGeometry& operator=(const EditCaretGeometry&) = delete;
-
-
-public:
-    // Mapping is supplied by the committed/preedit snapshot; adoption is atomic.
-    [[nodiscard]] b8 adoptLayout(TextLayout&& layout, const StringView expectedText, const Span<const EditCaretMapping> mapping, const usize committedBytes, const EditTextMode::Enum mode){
-        if(!ValidateEditCaretClusterGlyphs(layout.clusters(), layout.glyphs()))
+    // Keep the old layout and geometry until the candidate and mapping pass validation.
+    [cpp_unwind]
+    public b8 adoptLayout(mut TextLayout layout, in StringView expectedText, in Span<EditCaretMapping> mapping, in usize committedBytes, in EditTextMode mode){
+        return this.adoptLayout(layout, expectedText, mapping, committedBytes, mode, Span<usize>());
+    }
+    [cpp_unwind]
+    public b8 adoptLayout(mut TextLayout layout, in StringView expectedText, in Span<EditCaretMapping> mapping, in usize committedBytes, in EditTextMode mode, in Span<usize> requiredCarets){
+        if(!ValidateEditCaretClusterGlyphs(Span<TextCluster>(layout.clusters()), Span<PlacedGlyph>(layout.glyphs())))
             return false;
         if(!AdoptEditCaretGeometryInto(
-            layout.utf8(),
-            layout.fontSize(),
-            layout.lines(),
-            layout.clusters(),
-            layout.glyphs().size(),
-            layout.measure(),
-            layout.inkBounds(),
-            expectedText,
-            mapping,
-            committedBytes,
-            mode,
-            m_boundaries,
-            m_stops,
-            m_lines
+            layout.utf8(), layout.fontSize(), Span<TextLine>(layout.lines()), Span<TextCluster>(layout.clusters()),
+            layout.glyphs().size(), layout.measure(), layout.inkBounds(), expectedText, mapping, committedBytes,
+            mode, requiredCarets, this.m_boundaries, this.m_stops, this.m_lines
         ))
             return false;
-        m_layout = Move(layout);
-        m_mode = mode;
-        m_ready = true;
+        MoveInto<TextLayout>(this.m_layout, layout);
+        this.m_mode = mode;
+        this.m_ready = true;
         return true;
     }
-    // Native preedit can address scalar edges inside graphemes; rectangles are local and have zero width.
-    [[nodiscard]] Expected<Rect> caretRect(const usize displayByte)const noexcept{
-        return TryResolveEditCaretRectWhenReady(m_ready, m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, displayByte);
+
+    // Native preedit may address scalar edges inside graphemes.
+    public Expected<Rect> caretRect(in usize displayByte)const{
+        return TryResolveEditCaretRectWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, displayByte);
     }
-    [[nodiscard]] Expected<usize> hitTest(const Point localPoint)const noexcept{
-        return TryHitTestEditCaretGeometryWhenReady(m_ready, m_lines, m_stops, localPoint);
+    public Expected<usize> hitTest(in Point localPoint)const{
+        return TryHitTestEditCaretGeometryWhenReady(this.m_ready, this.m_lines, this.m_stops, localPoint);
     }
-    [[nodiscard]] Expected<usize> verticalTarget(const usize displayCaret, const b8 down, const f32 preferredX)const noexcept{
-        return TryResolveEditCaretVerticalTargetWhenReady(m_ready, m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, m_lines, m_stops, displayCaret, down, preferredX);
+    public Expected<usize> verticalTarget(in usize displayCaret, in b8 down, in f32 preferredX)const{
+        return TryResolveEditCaretVerticalTargetWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.m_lines, this.m_stops, displayCaret, down, preferredX);
     }
-    // A valid nonintersecting range yields an empty rectangle. Selected LF bytes use the supplied trailing cap.
-    [[nodiscard]] Expected<Rect> rangeOnLine(const EditBoxRange range, const u32 lineIndex, const f32 breakWidth)const noexcept{
-        return TryResolveEditCaretRangeOnLineWhenReady(m_ready, m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, m_lines, range, lineIndex, breakWidth);
+    public Expected<Rect> rangeOnLine(in EditBoxRange range, in u32 lineIndex, in f32 breakWidth)const{
+        return TryResolveEditCaretRangeOnLineWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.m_lines, range, lineIndex, breakWidth);
     }
 
-    [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
-
-    [[nodiscard]] const EditBoundaryVector& boundaries()const noexcept{ return m_boundaries; }
-
-    [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const noexcept{ return m_stops; }
-
-    [[nodiscard]] const PaintVector<EditCaretLine>& lines()const noexcept{ return m_lines; }
-
-    [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_mode; }
-
-    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
-
-
-private:
-    TextLayout m_layout;
-    EditBoundaryVector m_boundaries;
-    PaintVector<EditBoxCaretStop> m_stops;
-    PaintVector<EditCaretLine> m_lines;
-    EditTextMode::Enum m_mode = EditTextMode::SingleLine;
-    b8 m_ready = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public in TextLayout layout()const{ return this.m_layout; }
+    public in EditBoundaryVector boundaries()const{ return this.m_boundaries; }
+    public in Vector<EditBoxCaretStop> caretStops()const{ return this.m_stops; }
+    public in Vector<EditCaretLine> lines()const{ return this.m_lines; }
+    public EditTextMode textMode()const{ return this.m_mode; }
+    public b8 ready()const{ return this.m_ready; }
 }
 
 

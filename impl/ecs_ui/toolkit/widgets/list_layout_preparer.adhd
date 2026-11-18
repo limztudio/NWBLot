@@ -2,62 +2,158 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/builder_scope.adhd>
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/builder_scope.adhd.h>
+Expected<f64x2u> TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight){
+    const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
+    const f64 end = start + cast<f64>(rowHeight);
+    if(!IsFinite(start) || !IsFinite(end) || end <= start)
+        return MakeUnexpected(Failure());
+    return f64x2u(start, end);
+}
 
+usize ListRowInsertionIndex(in Vector<BuilderListRow> rows, in u64 index){
+    usize begin = 0u;
+    usize end = rows.size();
+    while(begin < end){
+        const usize middle = begin + (end - begin) / 2u;
+        if(rows[middle].index < index)
+            begin = middle + 1u;
+        else
+            end = middle;
+    }
+    return begin;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class ListLayoutPreparer{
+    private in BuilderScopeFrame m_scope;
+    private in Context m_context;
+    private mut TextService m_text;
+    private in PaintBuilder m_paint;
 
+    public ListLayoutPreparer(in BuilderScopeFrame scope, in Context context, mut TextService text, in PaintBuilder paint){
+        this.m_scope = scope;
+        this.m_context = context;
+        this.m_text = text;
+        this.m_paint = paint;
+    }
 
-NWB_IMPL_UI_BEGIN
+    [owner_result, cpp_unwind]
+    private Expected<BuilderListRow> prepareListRow(in BuilderListFrame frame, in u64 index)const{
+        BuilderListRow row;
+        if(!this.m_scope.listMatches(this.m_context, frame) || index >= frame.rowCount)
+            return MakeUnexpected(Failure());
+        const u64 key = frame.source.value().key(index);
+        if(key == 0u || !this.m_scope.listStateMatches(this.m_context, frame))
+            return MakeUnexpected(Failure());
+        const auto resolved = frame.source.value().indexOf(key);
+        if(!resolved.has_value() || resolved.value() != index || !this.m_scope.listStateMatches(this.m_context, frame))
+            return MakeUnexpected(Failure());
+        const b8 enabled = frame.options.enabled && frame.source.value().enabled(index);
+        if(!this.m_scope.listStateMatches(this.m_context, frame))
+            return MakeUnexpected(Failure());
+        ShapeRequest request;
+        request.text = frame.source.value().text(index);
+        const auto language = ReadBinaryTextSlice(Span<u8>(frame.measureKey.language), 0u, frame.measureKey.languageLength);
+        if(!language.has_value())
+            return MakeUnexpected(Failure());
+        request.language = language.value();
+        request.fontSize = frame.widgetStyle.fontSize;
+        request.scriptTag = frame.measureKey.scriptTag;
+        request.direction = TextDirection::LeftToRight;
+        if(!this.m_scope.listStateMatches(this.m_context, frame))
+            return MakeUnexpected(Failure());
+        // Shape the temporary text before calling the source again.
+        auto layout = this.m_text.layout(request);
+        if(!layout.has_value() || !this.m_scope.listMatches(this.m_context, frame))
+            return MakeUnexpected(Failure());
+        const auto bounds = this.m_text.measure(layout.value(), this.m_paint.displayMetrics());
+        if(!bounds.has_value())
+            return MakeUnexpected(Failure());
+        row.index = index;
+        row.key = key;
+        row.enabled = enabled;
+        row.textBounds = bounds.value();
+        MoveInto<TextLayout>(row.text, layout.value());
+        if(!this.m_scope.listMatches(this.m_context, frame))
+            return MakeUnexpected(Failure());
+        return row;
+    }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class ListLayoutPreparer final{
-private:
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ListRow = BuilderScopeFrame::ListRow;
-
-
-public:
-    explicit ListLayoutPreparer(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<ScrollPlacement> measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip);
-
-
-private:
-    [[nodiscard]] Expected<ListRow> prepareListRow(const ListFrame& frame, u64 index);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public Expected<ScrollPlacement> measureListPlacement(mut BuilderListFrame frame, in LayoutBox box, in Rect clip)const{
+        mut Vector<BuilderListRow> rows = frame.rows;
+        mut ListState state = frame.state.value();
+        ScrollState scroll;
+        if(!this.m_scope.listMatches(this.m_context, frame) || !scroll.setOffset(frame.scrollOffset))
+            return MakeUnexpected(Failure());
+        const b8 revealCursor = frame.revealCursor && frame.cursorKey != 0u;
+        u64 cursorIndex = 0u;
+        if(revealCursor){
+            const auto resolved = frame.source.value().indexOf(frame.cursorKey);
+            if(!resolved.has_value() || resolved.value() >= frame.rowCount || !this.m_scope.listStateMatches(this.m_context, frame))
+                return MakeUnexpected(Failure());
+            cursorIndex = resolved.value();
+            if(frame.source.value().key(cursorIndex) != frame.cursorKey || !this.m_scope.listStateMatches(this.m_context, frame) || !frame.source.value().enabled(cursorIndex) || !this.m_scope.listMatches(this.m_context, frame))
+                return MakeUnexpected(Failure());
+        }
+        while(true){
+            auto candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+            if(!candidate.has_value())
+                return MakeUnexpected(Failure());
+            if(revealCursor){
+                const auto span = TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight);
+                if(!span.has_value() || !scroll.ensureVisible(span.value().x, span.value().y, candidate.value().viewport.height))
+                    return MakeUnexpected(Failure());
+            }
+            if(revealCursor)
+                candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+            if(!candidate.has_value() || candidate.value().endRow - candidate.value().firstRow > s_ListMaxPreparedRows)
+                return MakeUnexpected(Failure());
+            f32 height = frame.rowHeight;
+            for(u64 index = candidate.value().firstRow; index < candidate.value().endRow; ++index){
+                const usize found = ListRowInsertionIndex(rows, index);
+                if(found != rows.size() && rows[found].index == index)
+                    continue;
+                // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
+                if(rows.size() >= s_ListMaxPreparedRows)
+                    return MakeUnexpected(Failure());
+                auto row = this.prepareListRow(frame, index);
+                if(!row.has_value())
+                    return MakeUnexpected(Failure());
+                height = ComputeListRowPaddedHeight(row.value().textBounds.height, frame.style.row.padding, height);
+                rows.emplace(rows.begin() + cast<isize>(found));
+                MoveInto<BuilderListRow>(rows[found], row.value());
+            }
+            if(!IsFinite(height) || height <= 0.0f || !this.m_scope.listMatches(this.m_context, frame))
+                return MakeUnexpected(Failure());
+            if(height == frame.rowHeight){
+                frame.scrollOffset = candidate.value().offset;
+                // Another declaration can share this state with a different sizing context.
+                if(state.m_measureKey == frame.measureKey && !(state.m_rowHeight > frame.rowHeight))
+                    state.m_rowHeight = frame.rowHeight;
+                return candidate.value();
+            }
+            // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
+            const f64 offset = ComputeListExpandedScrollOffset(
+                candidate.value().contentClip.y,
+                candidate.value().viewport.y,
+                candidate.value().offset,
+                candidate.value().firstRow,
+                frame.rowHeight,
+                height
+            );
+            if(!scroll.setOffset(offset))
+                return MakeUnexpected(Failure());
+            frame.rowHeight = height;
+        }
+    }
 }
 
 

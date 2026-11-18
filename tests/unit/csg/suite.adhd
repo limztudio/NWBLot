@@ -41,93 +41,52 @@ namespace CsgTestsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TestCsgVisibilityFilter{
-    Core::ECS::EntityID hiddenEntity = Core::ECS::s_InvalidEntityId;
-};
-
-[[nodiscard]] FOUNDATION_INLINE b8 TestCsgReceiverVisible(
-    [[maybe_unused]] Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    [[maybe_unused]] const Impl::CsgReceiverKind::Enum receiverKind,
-    [[maybe_unused]] const Impl::CsgReceiverComponent& receiver,
-    void* userData
-)noexcept{
-    const auto* filter = static_cast<const TestCsgVisibilityFilter*>(userData);
-    return !filter || entity != filter->hiddenEntity;
-}
-
-[[nodiscard]] FOUNDATION_INLINE Impl::CsgFrameState BuildFilteredCsgFrameState(
-    Core::ECS::World& world,
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::ECS::EntityID hiddenEntity
-){
-    TestCsgVisibilityFilter filter;
-    filter.hiddenEntity = hiddenEntity;
-
-    Impl::CsgFrameBuildDesc desc;
-    desc.receiverVisible = &TestCsgReceiverVisible;
-    desc.receiverVisibleUserData = &filter;
-    return Impl::BuildCsgFrameState(world, scratchArena, desc);
-}
-
 [[nodiscard]] FOUNDATION_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> PreviewDeformWithoutRegistry(
-    Core::Alloc::ScratchArena& scratchArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
     const Span<const Impl::CsgDeformTriangle> inputTriangles,
     const Span<const Impl::CsgDeformCutDesc> cuts,
     const Impl::CsgDeformBuildOptions& options,
-    Impl::CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
-    Impl::CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
+    Vector<Impl::CsgDeformVertex, Core::Alloc::ScratchArena>& outVertices,
+    Vector<Impl::CsgDeformTriangle, Core::Alloc::ScratchArena>& outTriangles
 ){
-    return Impl::PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, nullptr, outVertices, outTriangles);
+    return Impl::PreviewCsgDeformCuts(inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
 }
 
 template<typename CommitArenaT>
 [[nodiscard]] FOUNDATION_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithoutRegistry(
-    Core::Alloc::ScratchArena& scratchArena,
     CommitArenaT& commitArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
     const Span<const Impl::CsgDeformTriangle> inputTriangles,
     const Span<const Impl::CsgDeformCutDesc> cuts,
     const Impl::CsgDeformBuildOptions& options,
-    Impl::CsgDeformVertexVector<CommitArenaT>& outVertices,
-    Impl::CsgDeformTriangleVector<CommitArenaT>& outTriangles
+    Vector<Impl::CsgDeformVertex, CommitArenaT>& outVertices,
+    Vector<Impl::CsgDeformTriangle, CommitArenaT>& outTriangles
 ){
-    return Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, outVertices, outTriangles);
+    return Impl::CommitCsgDeformCuts(AllocationIdentity(commitArena), inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
 }
 
 template<typename CommitArenaT>
 [[nodiscard]] FOUNDATION_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithRegistry(
-    Core::Alloc::ScratchArena& scratchArena,
     CommitArenaT& commitArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
     const Span<const Impl::CsgDeformTriangle> inputTriangles,
     const Span<const Impl::CsgDeformCutDesc> cuts,
     const Impl::CsgDeformBuildOptions& options,
     const Impl::CsgShapeRegistry& registry,
-    Impl::CsgDeformVertexVector<CommitArenaT>& outVertices,
-    Impl::CsgDeformTriangleVector<CommitArenaT>& outTriangles
+    Vector<Impl::CsgDeformVertex, CommitArenaT>& outVertices,
+    Vector<Impl::CsgDeformTriangle, CommitArenaT>& outTriangles
 ){
-    return Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, &registry, outVertices, outTriangles);
+    return Impl::CommitCsgDeformCuts(AllocationIdentity(commitArena), inputVertices, inputTriangles, cuts, options, registry, outVertices, outTriangles);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Impl::CsgDeformViability CheckDeformViabilityWithRegistry(
-    Core::Alloc::ScratchArena& scratchArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
     const Span<const Impl::CsgDeformTriangle> inputTriangles,
     const Span<const Impl::CsgDeformCutDesc> cuts,
     const Impl::CsgDeformBuildOptions& options,
     const Impl::CsgShapeRegistry& registry
 ){
-    return Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options, &registry);
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 CsgWorldBoundsMinX(const Impl::CsgShapeBounds& bounds)noexcept{
-    return VectorGetX(bounds.minBounds);
-}
-
-[[nodiscard]] FOUNDATION_INLINE f32 CsgWorldBoundsMaxX(const Impl::CsgShapeBounds& bounds)noexcept{
-    return VectorGetX(bounds.maxBounds);
+    return Impl::CheckCsgDeformCutsViability(inputVertices, inputTriangles, cuts, options, registry);
 }
 
 
@@ -162,10 +121,10 @@ using CsgDeformStats = Impl::CsgDeformStats;
 using CsgDeformFailure = Impl::CsgDeformFailure;
 using CsgShapeBounds = Impl::CsgShapeBounds;
 namespace CsgDeformViabilityReason = Impl::CsgDeformViabilityReason;
-using GlobalDeformVertices = Impl::CsgDeformVertexVector<GlobalArena>;
-using GlobalDeformTriangles = Impl::CsgDeformTriangleVector<GlobalArena>;
-using ScratchDeformVertices = Impl::CsgDeformVertexVector<ScratchArena>;
-using ScratchDeformTriangles = Impl::CsgDeformTriangleVector<ScratchArena>;
+using GlobalDeformVertices = Vector<Impl::CsgDeformVertex, GlobalArena>;
+using GlobalDeformTriangles = Vector<Impl::CsgDeformTriangle, GlobalArena>;
+using ScratchDeformVertices = Vector<Impl::CsgDeformVertex, ScratchArena>;
+using ScratchDeformTriangles = Vector<Impl::CsgDeformTriangle, ScratchArena>;
 
 using CsgShapeTypeId = Impl::CsgShapeTypeId;
 using CsgShapeRegistry = Impl::CsgShapeRegistry;
@@ -200,13 +159,10 @@ using Impl::RegisterBuiltInCsgShapeTypes;
 using Impl::HasCsgFrameCandidates;
 using Impl::BuildCsgFrameState;
 
-using CsgTestsDetail::BuildFilteredCsgFrameState;
 using CsgTestsDetail::PreviewDeformWithoutRegistry;
 using CsgTestsDetail::CommitDeformWithoutRegistry;
 using CsgTestsDetail::CommitDeformWithRegistry;
 using CsgTestsDetail::CheckDeformViabilityWithRegistry;
-using CsgTestsDetail::CsgWorldBoundsMinX;
-using CsgTestsDetail::CsgWorldBoundsMaxX;
 
 struct CsgScratchTestArena{
     ScratchArena scratch;
@@ -220,12 +176,11 @@ using CsgGlobalTestArena = Tests::TestArena<>;
     ScratchArena& scratchArena,
     Tests::EcsTestWorld& testWorld
 ){
-    CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
+    CsgFrameReceiverLookup receiverLookup(scratchArena, testWorld.world);
     return receiverLookup.resolveReceiverDrawState(entity, receiverPass);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<CsgDeformStats, CsgDeformFailure> PreviewDeform(
-    ScratchArena& scratchArena,
     const Span<const CsgDeformVertex> inputVertices,
     const Span<const CsgDeformTriangle> inputTriangles,
     const Span<const CsgDeformCutDesc> cuts,
@@ -233,11 +188,10 @@ using CsgGlobalTestArena = Tests::TestArena<>;
     ScratchDeformVertices& outVertices,
     ScratchDeformTriangles& outTriangles
 ){
-    return PreviewDeformWithoutRegistry(scratchArena, inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
+    return PreviewDeformWithoutRegistry(inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<CsgDeformStats, CsgDeformFailure> CommitDeform(
-    ScratchArena& scratchArena,
     GlobalArena& commitArena,
     const Span<const CsgDeformVertex> inputVertices,
     const Span<const CsgDeformTriangle> inputTriangles,
@@ -246,11 +200,10 @@ using CsgGlobalTestArena = Tests::TestArena<>;
     GlobalDeformVertices& outVertices,
     GlobalDeformTriangles& outTriangles
 ){
-    return CommitDeformWithoutRegistry(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
+    return CommitDeformWithoutRegistry(commitArena, inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<CsgDeformStats, CsgDeformFailure> CommitDeformRegistered(
-    ScratchArena& scratchArena,
     GlobalArena& commitArena,
     const Span<const CsgDeformVertex> inputVertices,
     const Span<const CsgDeformTriangle> inputTriangles,
@@ -260,18 +213,17 @@ using CsgGlobalTestArena = Tests::TestArena<>;
     GlobalDeformVertices& outVertices,
     GlobalDeformTriangles& outTriangles
 ){
-    return CommitDeformWithRegistry(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, registry, outVertices, outTriangles);
+    return CommitDeformWithRegistry(commitArena, inputVertices, inputTriangles, cuts, options, registry, outVertices, outTriangles);
 }
 
 [[nodiscard]] FOUNDATION_INLINE CsgDeformViability CheckDeformViabilityRegistered(
-    ScratchArena& scratchArena,
     const Span<const CsgDeformVertex> inputVertices,
     const Span<const CsgDeformTriangle> inputTriangles,
     const Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options,
     const CsgShapeRegistry& registry
 ){
-    return CheckDeformViabilityWithRegistry(scratchArena, inputVertices, inputTriangles, cuts, options, registry);
+    return CheckDeformViabilityWithRegistry(inputVertices, inputTriangles, cuts, options, registry);
 }
 
 
@@ -418,7 +370,7 @@ void VerifyCsg_SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices()
 
     GlobalDeformVertices commitVertices(commitArena.arena);
     GlobalDeformTriangles commitTriangles(commitArena.arena);
-    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeform(scratchArena.scratch, commitArena.arena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
+    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeform(commitArena.arena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
     ASSERT_TRUE(commit.has_value());
     EXPECT_EQ(commit.value().appliedCutCount, 2u);
     ASSERT_FALSE(commitTriangles.empty());
@@ -472,12 +424,12 @@ void VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit(){
 
     const CsgDeformBuildOptions options = CsgDeformBuildOptions();
 
-    const CsgDeformViability viability = CheckCsgDeformCutsViability(scratchArena.scratch, inputVertices, inputTriangles, cuts, options);
+    const CsgDeformViability viability = CheckCsgDeformCutsViability(inputVertices, inputTriangles, cuts, options);
     EXPECT_FALSE(viability.viable);
 
     ScratchDeformVertices previewVertices(scratchArena.scratch);
     ScratchDeformTriangles previewTriangles(scratchArena.scratch);
-    const Expected<CsgDeformStats, CsgDeformFailure> preview = PreviewDeform(scratchArena.scratch, inputVertices, inputTriangles, cuts, options, previewVertices, previewTriangles);
+    const Expected<CsgDeformStats, CsgDeformFailure> preview = PreviewDeform(inputVertices, inputTriangles, cuts, options, previewVertices, previewTriangles);
     ASSERT_FALSE(preview.has_value());
     EXPECT_EQ(preview.error().reason, CsgDeformViabilityReason::NoKeptGeometry);
     EXPECT_EQ(preview.error().stats.inputVertexCount, 3u);
@@ -487,7 +439,7 @@ void VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit(){
 
     GlobalDeformVertices commitVertices(commitArena.arena);
     GlobalDeformTriangles commitTriangles(commitArena.arena);
-    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeform(scratchArena.scratch, commitArena.arena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
+    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeform(commitArena.arena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
     ASSERT_FALSE(commit.has_value());
     EXPECT_EQ(commit.error().reason, CsgDeformViabilityReason::NoKeptGeometry);
     EXPECT_EQ(commit.error().stats.inputVertexCount, 3u);
@@ -502,7 +454,7 @@ void VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit(){
     GlobalDeformTriangles wrongTriangles(otherArena.arena);
     wrongVertices.push_back(vertex);
     wrongTriangles.push_back(inputTriangles[0u]);
-    const Expected<CsgDeformStats, CsgDeformFailure> wrongArena = CommitDeform(scratchArena.scratch, commitArena.arena, inputVertices, inputTriangles, cuts, options, wrongVertices, wrongTriangles);
+    const Expected<CsgDeformStats, CsgDeformFailure> wrongArena = CommitDeform(commitArena.arena, inputVertices, inputTriangles, cuts, options, wrongVertices, wrongTriangles);
     ASSERT_FALSE(wrongArena.has_value());
     EXPECT_EQ(wrongArena.error().reason, CsgDeformViabilityReason::InvalidOutputArena);
     EXPECT_EQ(wrongArena.error().stats.inputVertexCount, 0u);
@@ -614,19 +566,19 @@ void VerifyCsg_ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts
     const Expected<CsgShapeBounds> defaultBounds = registry.buildShapeBounds(resolvedSlabId, identityMatrix, emptyPayload);
     ASSERT_TRUE(defaultBounds.has_value());
     EXPECT_TRUE(defaultBounds.value().finiteBounds);
-    EXPECT_FLOAT_EQ(CsgWorldBoundsMinX(defaultBounds.value()), -0.5f);
-    EXPECT_FLOAT_EQ(CsgWorldBoundsMaxX(defaultBounds.value()), 0.5f);
+    EXPECT_FLOAT_EQ(defaultBounds.value().minBounds.x, -0.5f);
+    EXPECT_FLOAT_EQ(defaultBounds.value().maxBounds.x, 0.5f);
 
     const Expected<f32> defaultDistance = registry.evaluateSignedDistance(resolvedSlabId, VectorSingle(-0.25f, 0.0f, 0.0f, 1.0f), emptyPayload);
     ASSERT_TRUE(defaultDistance.has_value());
     EXPECT_FLOAT_EQ(defaultDistance.value(), 0.25f);
 
-    EXPECT_FALSE(CheckCsgDeformCutsViability(scratchArena.scratch, inputVertices, inputTriangles, cuts, options).viable);
-    EXPECT_TRUE(CheckDeformViabilityRegistered(scratchArena.scratch, inputVertices, inputTriangles, cuts, options, registry).viable);
+    EXPECT_FALSE(CheckCsgDeformCutsViability(inputVertices, inputTriangles, cuts, options).viable);
+    EXPECT_TRUE(CheckDeformViabilityRegistered(inputVertices, inputTriangles, cuts, options, registry).viable);
 
     GlobalDeformVertices commitVertices(commitArena.arena);
     GlobalDeformTriangles commitTriangles(commitArena.arena);
-    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeformRegistered(scratchArena.scratch, commitArena.arena, inputVertices, inputTriangles, cuts, options, registry, commitVertices, commitTriangles);
+    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeformRegistered(commitArena.arena, inputVertices, inputTriangles, cuts, options, registry, commitVertices, commitTriangles);
     ASSERT_TRUE(commit.has_value());
     EXPECT_EQ(commit.value().appliedCutCount, 1u);
     ASSERT_FALSE(commitTriangles.empty());
@@ -638,12 +590,19 @@ void VerifyCsg_ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts
     }
 }
 
+class CsgHiddenReceiver : ICsgReceiverVisibility{
+    public EntityID hidden = s_InvalidEntityId;
+
+    public b8 visible(mut World world, in EntityID entity, in CsgReceiverKind kind, in CsgReceiverComponent receiver)const override{
+        return entity != this.hidden;
+    }
+}
+
 void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
-    CsgScratchTestArena scratchArena(s_OneOffNameTestsCsgScratch);
     {
         EcsTestWorld testWorld = EcsTestWorld();
         EXPECT_FALSE(HasCsgFrameCandidates(testWorld.world));
-        const CsgFrameState state = BuildCsgFrameState(testWorld.world, scratchArena.scratch);
+        const CsgFrameState state = BuildCsgFrameState(testWorld.world);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -660,7 +619,7 @@ void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
         cutter.shapeType = s_CsgInputNameEngineCsgBox;
 
         EXPECT_FALSE(HasCsgFrameCandidates(world));
-        const CsgFrameState state = BuildCsgFrameState(world, scratchArena.scratch);
+        const CsgFrameState state = BuildCsgFrameState(world);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -676,7 +635,7 @@ void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
         receiver.receiverGroup = s_CsgInputNameProjectCsgGroupA;
 
         EXPECT_FALSE(HasCsgFrameCandidates(world));
-        const CsgFrameState state = BuildCsgFrameState(world, scratchArena.scratch);
+        const CsgFrameState state = BuildCsgFrameState(world);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -707,7 +666,7 @@ void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
         cutter.shapeType = s_CsgInputNameEngineCsgBox;
 
         EXPECT_TRUE(HasCsgFrameCandidates(world));
-        const CsgFrameState state = BuildCsgFrameState(world, scratchArena.scratch);
+        const CsgFrameState state = BuildCsgFrameState(world);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -732,7 +691,11 @@ void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
         cutter.receiverGroup = s_CsgInputNameProjectCsgGroupA;
         cutter.shapeType = s_CsgInputNameEngineCsgCapsule;
 
-        const CsgFrameState state = BuildFilteredCsgFrameState(world, scratchArena.scratch, hiddenReceiverEntity);
+        CsgHiddenReceiver filter = CsgHiddenReceiver();
+        filter.hidden = hiddenReceiverEntity;
+        CsgFrameBuildDesc desc = CsgFrameBuildDesc();
+        desc.visibility = CsgReceiverVisibility(filter);
+        const CsgFrameState state = BuildCsgFrameState(world, desc);
 
         EXPECT_FALSE(state.empty());
         EXPECT_EQ(state.receiverCount, 1u);
@@ -756,7 +719,7 @@ void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
         CsgFrameBuildDesc desc = CsgFrameBuildDesc();
         desc.includeOpaquePass = false;
 
-        const CsgFrameState state = BuildCsgFrameState(world, scratchArena.scratch, desc);
+        const CsgFrameState state = BuildCsgFrameState(world, desc);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -816,18 +779,16 @@ void VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs
 
         usize resolvedCutterCount = 0u;
         const Name expectedGroup = receiver.receiverGroup;
-        const CsgFrameReceiverLookup receiverLookup(world, scratchArena.scratch);
+        const CsgFrameReceiverLookup receiverLookup = CsgFrameReceiverLookup(world);
         const Expected<CsgReceiverDrawState> resolvedDrawStateResult1 = receiverLookup.resolveReceiverDrawState(receiverEntity, CsgReceiverPass::Opaque);
         ASSERT_TRUE(resolvedDrawStateResult1.has_value());
-        receiverLookup.forEachReceiverCutter(
-            resolvedDrawStateResult1.value(),
-            lambda[in expectedGroup, mut resolvedCutterCount](in EntityID cutterEntityId, in CsgCutterComponent resolvedCutter) -> void{
-                if(cutterEntityId == s_InvalidEntityId)
-                    return;
-                EXPECT_EQ(resolvedCutter.receiverGroup, expectedGroup);
+        for(in auto cutter : receiverLookup.receiverCutters(resolvedDrawStateResult1.value())){
+            ASSERT_TRUE(cutter.has_value());
+            if(cutter.value().entity != s_InvalidEntityId){
+                EXPECT_EQ(cutter.value().cutter.receiverGroup, expectedGroup);
                 ++resolvedCutterCount;
             }
-        );
+        }
         EXPECT_EQ(resolvedCutterCount, 2u);
     }
 

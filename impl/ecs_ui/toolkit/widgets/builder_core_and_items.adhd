@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd>
 #include <impl/ecs_ui/toolkit/widgets/popup_style.adhd>
 
 
@@ -42,539 +47,504 @@ LayoutNodeDesc BuildSizedLeafNodeDesc(in LayoutSize width, in LayoutSize height,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
-
-#include <global/scope_exit.h>
-#include <global/simd/vector_arithmetic.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text)
-    : m_arena(arena)
-    , m_context(context)
-    , m_paint(paint)
-    , m_text(text)
-    , m_scopeFrame(arena)
-    , m_scope(MakeNotNull(&m_scopeFrame))
-    , m_popupFrames(arena)
-    , m_textLanguage(s_TextDefaultLanguage, arena)
-{
-    m_popupFrames.reserve(s_MaxNestedPopupFrames);
-    for(usize frameIndex = 0u; frameIndex < s_MaxNestedPopupFrames; ++frameIndex)
-        m_popupFrames.push_back(Core::MakeGlobalUnique<BuilderScopeFrame>(m_arena, m_arena));
-}
-
-b8 Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
-    if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || !IsValidPanelDirection(direction)){
-        m_context.fail();
+b8 Builder::beginPanel(in StringView stableKey, in Rect bounds, in LayoutDirection direction){
+    if(this.declarationBlocked() || this.m_scope.value().m_panelActive || this.m_scope.value().m_windowActive || !this.m_skin.has_value() || !IsValidPanelDirection(direction)){
+        this.m_context.fail();
         return false;
     }
-    const UiSkinRegion* panel = region(m_style.panel, m_style.panel);
-    const auto state = m_context.declare(stableKey, WidgetKind::Panel);
-    if(!panel || !state){
-        m_context.fail();
+    const auto panel = this.region(this.m_style.panel, this.m_style.panel);
+    const auto state = this.m_context.declare(stableKey, WidgetKind::Panel);
+    if(!panel.has_value() || !state.has_value()){
+        this.m_context.fail();
         return false;
     }
-    reset();
-    m_scope->m_panelStyle = m_style;
-    m_scope->m_panelState = **state;
-    m_scope->m_bounds = bounds;
-    const LayoutNodeDesc description = UiScopeDescriptorFactory().panelRoot(bounds, direction, panel->padding, m_style.gap);
+    this.reset();
+    this.m_scope.value().m_panelStyle = this.m_style;
+    this.m_scope.value().m_panelState = state.value();
+    this.m_scope.value().m_bounds = bounds;
+    const LayoutNodeDesc description = UiScopeDescriptorFactory().panelRoot(bounds, direction, panel.value().padding, this.m_style.gap);
     u32 node = 0u;
-    const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
-    if(!admittedNode || !m_context.pushScope(stableKey)){
-        m_context.fail();
+    const auto admittedNode = this.m_scope.value().m_layout.addNode(s_LayoutNoParent, description);
+    if(!admittedNode.has_value() || !this.m_context.pushScope(stableKey)){
+        this.m_context.fail();
         return false;
     }
-    node = *admittedNode;
-    m_scope->m_stack.push_back(node);
-    m_scope->m_panelActive = true;
+    node = admittedNode.value();
+    this.m_scope.value().m_stack.push_back(node);
+    this.m_scope.value().m_panelActive = true;
     return true;
 }
 
 b8 Builder::endPanel(){
-    if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_popupState || m_scope->m_stack.size() != 1u || m_context.failed() || !m_scope->m_layout.arrange(m_scope->m_bounds)){
-        m_context.fail();
+    if(this.declarationBlocked() || !this.m_scope.value().m_panelActive || this.m_scope.value().m_windowActive || this.m_scope.value().m_popupState.has_value() || this.m_scope.value().m_stack.size() != 1u
+        || this.m_context.failed() || !this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds)){
+        this.m_context.fail();
         return false;
     }
-    m_finalizing = true;
-    ScopeExit finish([this]()noexcept{ m_finalizing = false; });
-    const b8 painted = paintPanel();
-    const b8 popped = m_context.popScope();
-    m_scope->m_panelActive = false;
-    m_scope->m_stack.clear();
-    const b8 combosPainted = painted && popped && paintDeferred();
-    publishSliderResults(combosPainted);
-    releaseDeferredLoans();
+    this.m_finalizing = true;
+    BuilderOperationEnd finish(this.m_finalizing);
+    const b8 painted = this.paintPanel();
+    const b8 popped = this.m_context.popScope();
+    this.m_scope.value().m_panelActive = false;
+    this.m_scope.value().m_stack.clear();
+    const b8 combosPainted = painted && popped && this.paintDeferred();
+    this.publishSliderResults(combosPainted);
+    this.releaseDeferredLoans();
     if(!combosPainted)
-        m_context.fail();
+        this.m_context.fail();
     return combosPainted;
 }
 
-b8 Builder::endContainer()noexcept{
-    if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_stack.size() <= 1u){
-        m_context.fail();
+b8 Builder::endContainer(){
+    if(this.declarationBlocked() || !this.m_scope.value().m_panelActive || this.m_scope.value().m_stack.size() <= 1u){
+        this.m_context.fail();
         return false;
     }
-    m_scope->m_stack.pop_back();
-    return m_context.popScope();
+    this.m_scope.value().m_stack.pop_back();
+    return this.m_context.popScope();
 }
 
-b8 Builder::button(const AStringView stableKey, const StringView text, const WidgetOptions& options){
-    const auto item = addItem(stableKey, text, WidgetKind::Button, options);
-    return item && m_context.takeActivation((*item)->state, (*item)->enabled);
+b8 Builder::button(in StringView stableKey, in StringView text, in WidgetOptions options){
+    const auto item = this.addItem(stableKey, text, WidgetKind::Button, options);
+    return item.has_value() && this.m_context.takeActivation(item.value().state, item.value().enabled);
 }
 
-b8 Builder::checkbox(const AStringView stableKey, const StringView text, b8& checked, const WidgetOptions& options){
-    const auto item = addItem(stableKey, text, WidgetKind::Checkbox, options);
-    if(!item)
+b8 Builder::checkbox(in StringView stableKey, in StringView text, mut b8 checked, in WidgetOptions options){
+    const auto item = this.addItem(stableKey, text, WidgetKind::Checkbox, options);
+    if(!item.has_value())
         return false;
-    const b8 changed = m_context.takeActivation((*item)->state, (*item)->enabled);
+    const b8 changed = this.m_context.takeActivation(item.value().state, item.value().enabled);
     if(changed)
         checked = !checked;
-    (*item)->checked = checked;
+    item.value().checked = checked;
     return changed;
 }
 
-b8 Builder::selectable(const AStringView stableKey, const StringView text, const b8 selected, const WidgetOptions& options){
-    const auto item = addItem(stableKey, text, WidgetKind::Selectable, options);
-    if(!item)
+b8 Builder::selectable(in StringView stableKey, in StringView text, in b8 selected, in WidgetOptions options){
+    const auto item = this.addItem(stableKey, text, WidgetKind::Selectable, options);
+    if(!item.has_value())
         return false;
-    (*item)->selectableStyle = m_listStyle.row;
-    (*item)->checked = selected;
-    return m_context.takeActivation((*item)->state, (*item)->enabled);
+    item.value().selectableStyle = this.m_listStyle.row;
+    item.value().checked = selected;
+    return this.m_context.takeActivation(item.value().state, item.value().enabled);
 }
 
-void Builder::reset()noexcept{
-    if(declarationBlocked()){
-        m_context.fail();
+void Builder::reset(){
+    if(this.declarationBlocked()){
+        this.m_context.fail();
         return;
     }
-    if(m_scope->m_panelActive || m_scope->m_windowActive)
-        m_context.fail();
-    m_scope = MakeNotNull(&m_scopeFrame);
-    m_scopeFrame.reset();
-    for(auto& frame : m_popupFrames)
-        frame->reset();
-    m_popupFrameCount = 0u;
+    if(this.m_scope.value().m_panelActive || this.m_scope.value().m_windowActive)
+        this.m_context.fail();
+    this.m_scope = Optional<mut BuilderScopeFrame>(this.m_scopeFrame);
+    this.m_scopeFrame.reset();
+    for(mut auto frame : this.m_popupFrames){
+        if(frame.valid())
+            frame.value().reset();
+    }
+    this.m_popupFrameCount = 0u;
 }
 
-b8 Builder::separator(const AStringView stableKey, const SeparatorOptions& options){
-    if(itemDeclarationBlocked() || !IsValidSeparatorDeclaration(options)){
-        m_context.fail();
+b8 Builder::separator(in StringView stableKey, in SeparatorOptions options){
+    if(this.itemDeclarationBlocked() || !IsValidSeparatorDeclaration(options)){
+        this.m_context.fail();
         return false;
     }
-    const UiSkinRegion* skinRegion = region(m_style.separator, m_style.separator);
-    const auto state = m_context.declare(stableKey, WidgetKind::Separator);
-    if(!skinRegion || !state){
-        m_context.fail();
+    const auto skinRegion = this.region(this.m_style.separator, this.m_style.separator);
+    const auto state = this.m_context.declare(stableKey, WidgetKind::Separator);
+    if(!skinRegion.has_value() || !state.has_value()){
+        this.m_context.fail();
         return false;
     }
-    Item item(m_arena);
-    item.style = m_style;
-    item.state = **state;
-    const LayoutNodeDesc description = ResolveSeparatorNodeDesc(*skinRegion, options);
-    if(!addItemNode(description, item))
+    auto item = this.makeItem();
+    item.style = this.m_style;
+    item.state = state.value();
+    const LayoutNodeDesc description = ResolveSeparatorNodeDesc(skinRegion.value(), options);
+    if(!this.addItemNode(description, item))
         return false;
-    m_scope->m_items.push_back(Move(item));
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return true;
 }
 
-void Builder::setSkin(const UiSkin& skin)noexcept{
-    if(!balanced() || m_context.failed()){
-        m_context.fail();
+void Builder::setSkin(in borrow UiSkin skin){
+    if(!this.balanced() || this.m_context.failed()){
+        this.m_context.fail();
         return;
     }
-    m_skin = &skin;
+    this.m_skin = Optional<in UiSkin>(skin);
     ApplyBuilderSkinStyles(
         skin.palette(),
         skin.typography().defaultFontSize,
-        m_skinDefaultFontSize,
-        m_style,
-        m_tooltipStyle,
-        m_editStyle,
-        m_scrollbarStyle,
-        m_popupStyle,
-        m_radioGroupStyle,
-        m_sliderStyle,
-        m_progressStyle
+        this.m_skinDefaultFontSize,
+        this.m_style,
+        this.m_tooltipStyle,
+        this.m_editStyle,
+        this.m_scrollbarStyle,
+        this.m_popupStyle,
+        this.m_radioGroupStyle,
+        this.m_sliderStyle,
+        this.m_progressStyle
     );
 }
 
-b8 Builder::setTextShaping(const u32 scriptTag, const StringView language){
-    if(!balanced() || m_context.failed()){
-        m_context.fail();
+b8 Builder::setTextShaping(in u32 scriptTag, in StringView language){
+    if(!this.balanced() || this.m_context.failed()){
+        this.m_context.fail();
         return false;
     }
-    const ShapeRequest request{ {}, language, s_TextDefaultFontSize, scriptTag, TextDirection::LeftToRight };
+    ShapeRequest request;
+    request.language = language;
+    request.scriptTag = scriptTag;
     if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
         return false;
-    m_textLanguage.assign(language.data(), language.size());
-    m_textScriptTag = scriptTag;
+    this.m_textLanguage.assign(language);
+    this.m_textScriptTag = scriptTag;
     return true;
 }
 
-b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
-    if(panelDeclarationBlocked() || m_scope->m_stack.size() >= s_ContextMaxScopeDepth || !m_context.declare(stableKey, WidgetKind::Container)){
-        m_context.fail();
+b8 Builder::beginContainer(in StringView stableKey, in LayoutDirection direction, in ContainerOptions options){
+    if(this.panelDeclarationBlocked() || this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth || !this.m_context.declare(stableKey, WidgetKind::Container).has_value()){
+        this.m_context.fail();
         return false;
     }
     const LayoutNodeDesc description = UiScopeDescriptorFactory().container(direction, options);
     u32 node = 0u;
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode || !m_context.pushScope(stableKey)){
-        m_context.fail();
+    const auto admittedNode = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), description);
+    if(!admittedNode.has_value() || !this.m_context.pushScope(stableKey)){
+        this.m_context.fail();
         return false;
     }
-    node = *admittedNode;
-    m_scope->m_stack.push_back(node);
+    node = admittedNode.value();
+    this.m_scope.value().m_stack.push_back(node);
     return true;
 }
 
-Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
-    if(itemDeclarationBlocked()){
-        m_context.fail();
-        return MakeUnexpected(Failure{});
+Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringView text, in WidgetKind kind, in WidgetOptions options){
+    if(this.itemDeclarationBlocked()){
+        this.m_context.fail();
+        return MakeUnexpected(Failure());
     }
-    const auto state = m_context.declare(stableKey, kind);
-    if(!state)
-        return MakeUnexpected(Failure{});
-    Item item(m_arena);
-    item.style = m_style;
-    item.state = **state;
-    item.enabled = options.enabled && synchronizePopup();
-    const ShapeRequest request = textShapeRequest(text, m_style.fontSize);
-    auto layout = m_text.layout(request);
-    if(!layout){
-        m_context.fail();
-        return MakeUnexpected(Failure{});
+    const auto state = this.m_context.declare(stableKey, kind);
+    if(!state.has_value())
+        return MakeUnexpected(Failure());
+    auto item = this.makeItem();
+    item.style = this.m_style;
+    item.state = state.value();
+    item.enabled = options.enabled && this.synchronizePopup();
+    const ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
+    auto layout = this.m_text.layout(request);
+    if(!layout.has_value()){
+        this.m_context.fail();
+        return MakeUnexpected(Failure());
     }
-    item.text = Move(*layout);
-    const auto textBounds = m_text.measure(item.text, m_paint.displayMetrics());
-    if(!textBounds){
-        m_context.fail();
-        return MakeUnexpected(Failure{});
+    MoveInto<TextLayout>(item.text, layout.value());
+    const auto textBounds = this.m_text.measure(item.text, this.m_paint.displayMetrics());
+    if(!textBounds.has_value()){
+        this.m_context.fail();
+        return MakeUnexpected(Failure());
     }
-    item.textBounds = *textBounds;
-    const Point textSize{ item.textBounds.width, item.textBounds.height };
+    item.textBounds = textBounds.value();
+    const Point textSize = Point(item.textBounds.width, item.textBounds.height);
     Point intrinsicSize = textSize;
     if(kind == WidgetKind::Selectable){
-        const auto metrics = MeasureSelectable(*m_skin, m_listStyle.row);
-        if(!metrics){
-            m_context.fail();
-            return MakeUnexpected(Failure{});
+        const auto metrics = MeasureSelectable(this.m_skin.value(), this.m_listStyle.row);
+        if(!metrics.has_value()){
+            this.m_context.fail();
+            return MakeUnexpected(Failure());
         }
-        item.padding = metrics->padding;
-        intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, metrics->minimum);
+        item.padding = metrics.value().padding;
+        intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, metrics.value().minimum);
     }
     else if(kind == WidgetKind::Button){
-        if(!region(m_style.button, m_style.button)){
-            m_context.fail();
-            return MakeUnexpected(Failure{});
+        if(!this.region(this.m_style.button, this.m_style.button).has_value()){
+            this.m_context.fail();
+            return MakeUnexpected(Failure());
         }
-        Point minimum{};
-        loadButtonMetrics(minimum, item.padding);
+        Point minimum;
+        this.loadButtonMetrics(minimum, item.padding);
         intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, minimum);
     }
     else if(kind == WidgetKind::Checkbox){
-        const auto checkboxExtent = ControlStyleMetrics().checkboxExtent(*m_skin, m_style);
-        if(!checkboxExtent){
-            m_context.fail();
-            return MakeUnexpected(Failure{});
+        const auto checkboxExtent = ControlStyleMetrics().checkboxExtent(this.m_skin.value(), this.m_style);
+        if(!checkboxExtent.has_value()){
+            this.m_context.fail();
+            return MakeUnexpected(Failure());
         }
-        intrinsicSize = ResolveCheckboxIntrinsicSize(textSize, *checkboxExtent, m_style.gap);
-        item.checkboxExtent = *checkboxExtent;
+        intrinsicSize = ResolveCheckboxIntrinsicSize(textSize, checkboxExtent.value(), this.m_style.gap);
+        item.checkboxExtent = checkboxExtent.value();
     }
     const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, intrinsicSize);
-    if(!addItemNode(description, item))
-        return MakeUnexpected(Failure{});
-    m_scope->m_items.push_back(Move(item));
-    return MakeNotNull(&m_scope->m_items.back());
+    if(!this.addItemNode(description, item))
+        return MakeUnexpected(Failure());
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    return Expected<mut BuilderItem>(this.m_scope.value().m_items[this.m_scope.value().m_items.size() - 1u]);
 }
 
-b8 Builder::addItemNode(const LayoutNodeDesc& description, Item& item){
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
-        m_context.fail();
+b8 Builder::addItemNode(in LayoutNodeDesc description, mut BuilderItem item){
+    const auto admittedNode = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), description);
+    if(!admittedNode.has_value()){
+        this.m_context.fail();
         return false;
     }
-    item.node = *admittedNode;
+    item.node = admittedNode.value();
     return true;
 }
 
-const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)const noexcept{
-    if(!m_skin)
-        return nullptr;
-    const auto preferredIdx = m_skin->findRegionIndex(preferred);
-    if(preferredIdx)
-        return &m_skin->regions()[*preferredIdx];
-    const auto fallbackIdx = m_skin->findRegionIndex(fallback);
-    return fallbackIdx ? &m_skin->regions()[*fallbackIdx] : nullptr;
+Optional<in UiSkinRegion> Builder::region(in Name preferred, in Name fallback)const{
+    if(!this.m_skin.has_value())
+        return Optional<in UiSkinRegion>();
+    const auto preferredIdx = this.m_skin.value().findRegionIndex(preferred);
+    if(preferredIdx.has_value())
+        return Optional<in UiSkinRegion>(this.m_skin.value().regions()[preferredIdx.value()]);
+    const auto fallbackIdx = this.m_skin.value().findRegionIndex(fallback);
+    if(fallbackIdx.has_value())
+        return Optional<in UiSkinRegion>(this.m_skin.value().regions()[fallbackIdx.value()]);
+    return Optional<in UiSkinRegion>();
 }
 
-Insets Builder::resolveRegionsPadding(const Insets& initial, const Span<const Name> names, const Name& fallback)const noexcept{
-    if(!m_skin)
+Insets Builder::resolveRegionsPadding(in Insets initial, in Span<Name> names, in Name fallback)const{
+    if(!this.m_skin.has_value())
         return initial;
-    return ControlStyleMetrics().skinRegionsMaxPadding(*m_skin, initial, names, fallback);
+    return ControlStyleMetrics().skinRegionsMaxPadding(this.m_skin.value(), initial, names, fallback);
 }
 
-void Builder::loadButtonMetrics(Point& size, Insets& padding)const noexcept{
-    if(!m_skin)
+void Builder::loadButtonMetrics(mut Point size, mut Insets padding)const{
+    if(!this.m_skin.has_value())
         return;
-    ControlStyleMetrics().buttonMetrics(*m_skin, m_style, size, padding);
+    ControlStyleMetrics().buttonMetrics(this.m_skin.value(), this.m_style, size, padding);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Builder::Item* Builder::annotationAnchor(const AStringView stableKey)noexcept{
-    const auto id = TryMakeWidgetId(m_context.scopeId(), stableKey);
-    if(!id)
-        return nullptr;
-    for(auto& item : m_scope->m_items){
-        if(item.state.id == *id && item.state.kind != WidgetKind::Separator)
-            return &item;
-    }
-    return nullptr;
-}
 
 b8 Builder::validateDeferredSources()const{
     // Every loan remains live through all later source callbacks, including those in an ended child scope.
-    for(const auto& frame : m_scope->m_radioGroups){
-        if(!radioGroupMatches(frame))
+    for(in auto frame : this.m_scope.value().m_radioGroups){
+        if(!this.radioGroupMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_lists){
-        if(!listMatches(frame))
+    for(in auto frame : this.m_scope.value().m_lists){
+        if(!this.listMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_combos){
-        if(!comboMatches(frame))
+    for(in auto frame : this.m_scope.value().m_combos){
+        if(!this.comboMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_contextMenus){
-        if(!contextMenuMatches(frame))
+    for(in auto frame : this.m_scope.value().m_contextMenus){
+        if(!this.contextMenuMatches(frame))
             return false;
     }
     return true;
 }
 
-b8 Builder::validateDeferredStates()const noexcept{
+b8 Builder::validateDeferredStates()const{
     // No source callbacks run after these model checks until every scope's loans have been released.
-    for(const auto& frame : m_scope->m_sliders){
-        if(!sliderMatches(frame))
+    for(in auto frame : this.m_scope.value().m_sliders){
+        if(!this.sliderMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_textAreas){
-        if(!textAreaMatches(frame))
+    for(in auto frame : this.m_scope.value().m_textAreas){
+        if(!this.textAreaMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_integerEdits){
-        if(!numericEditFrameMatches(frame))
+    for(in auto frame : this.m_scope.value().m_integerEdits){
+        if(!this.numericEditFrameMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_floatEdits){
-        if(!numericEditFrameMatches(frame))
+    for(in auto frame : this.m_scope.value().m_floatEdits){
+        if(!this.numericEditFrameMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_radioGroups){
-        if(!radioGroupStateMatches(frame))
+    for(in auto frame : this.m_scope.value().m_radioGroups){
+        if(!this.radioGroupStateMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_lists){
-        if(!listStateMatches(frame))
+    for(in auto frame : this.m_scope.value().m_lists){
+        if(!this.listStateMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_combos){
-        if(!comboStateMatches(frame))
+    for(in auto frame : this.m_scope.value().m_combos){
+        if(!this.comboStateMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_contextMenus){
-        if(!contextMenuStateMatches(frame))
+    for(in auto frame : this.m_scope.value().m_contextMenus){
+        if(!this.contextMenuStateMatches(frame))
             return false;
     }
-    for(const auto& frame : m_scope->m_tooltips){
-        if(!frame.state || frame.state->revision() != frame.revision)
+    for(in auto frame : this.m_scope.value().m_tooltips){
+        if(!frame.state.has_value() || frame.state.value().revision() != frame.revision)
             return false;
     }
     return true;
 }
 
-void Builder::releaseDeferredLoans()noexcept{
+void Builder::releaseDeferredLoans(){
     // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
-    m_scope->m_radioGroups.clear();
-    m_scope->m_sliders.clear();
-    const auto clearEditLoanFrames = [this](auto& frames)noexcept{
-        for(auto& frame : frames){
-            frame.model = nullptr;
-            frame.state = nullptr;
-            if(frame.item < m_scope->m_items.size())
-                m_scope->m_items[frame.item].editState = nullptr;
-        }
-    };
-    clearEditLoanFrames(m_scope->m_textAreas);
-    clearEditLoanFrames(m_scope->m_integerEdits);
-    clearEditLoanFrames(m_scope->m_floatEdits);
-    for(auto& frame : m_scope->m_lists){
-        frame.source = nullptr;
-        frame.state = nullptr;
+    this.m_scope.value().m_radioGroups.clear();
+    this.m_scope.value().m_sliders.clear();
+    for(mut auto frame : this.m_scope.value().m_textAreas){
+        frame.model.reset();
+        frame.state.reset();
+        if(frame.item < this.m_scope.value().m_items.size())
+            this.m_scope.value().m_items[frame.item].editState.reset();
     }
-    for(auto& frame : m_scope->m_combos){
-        frame.source = nullptr;
-        frame.results = nullptr;
-        frame.searchSource = nullptr;
-        frame.search = nullptr;
-        frame.state = nullptr;
+    for(mut auto frame : this.m_scope.value().m_integerEdits){
+        frame.model.reset();
+        frame.state.reset();
+        if(frame.item < this.m_scope.value().m_items.size())
+            this.m_scope.value().m_items[frame.item].editState.reset();
+    }
+    for(mut auto frame : this.m_scope.value().m_floatEdits){
+        frame.model.reset();
+        frame.state.reset();
+        if(frame.item < this.m_scope.value().m_items.size())
+            this.m_scope.value().m_items[frame.item].editState.reset();
+    }
+    for(mut auto frame : this.m_scope.value().m_lists){
+        frame.source.reset();
+        frame.state.reset();
+    }
+    for(mut auto frame : this.m_scope.value().m_combos){
+        frame.source.reset();
+        frame.results.reset();
+        frame.searchSource.reset();
+        frame.search.reset();
+        frame.state.reset();
         if(frame.editor != s_LayoutNoParent)
-            m_scope->m_comboEditors[frame.editor].editState = nullptr;
+            this.m_scope.value().m_comboEditors[frame.editor].editState.reset();
     }
-    for(auto& frame : m_scope->m_contextMenus){
-        frame.source = nullptr;
-        frame.state = nullptr;
+    for(mut auto frame : this.m_scope.value().m_contextMenus){
+        frame.source.reset();
+        frame.state.reset();
     }
-    for(auto& frame : m_scope->m_tooltips)
-        frame.state = nullptr;
+    for(mut auto frame : this.m_scope.value().m_tooltips)
+        frame.state.reset();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Builder::image(const AStringView stableKey, const Name& regionName, const ImageOptions& options){
-    if(itemDeclarationBlocked() || !m_skin){
-        m_context.fail();
+b8 Builder::image(in StringView stableKey, in Name regionName, in ImageOptions options){
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value()){
+        this.m_context.fail();
         return false;
     }
-    if(!synchronizePopup())
+    if(!this.synchronizePopup())
         return true;
-    m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    const auto widget = m_context.declare(stableKey, WidgetKind::Image);
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Image);
     ImageFrame frame;
     frame.options = options;
-    if(!widget || !ControlStyleMetrics().imageMetrics(*m_skin, regionName, options, frame.metrics, frame.region)){
-        m_context.fail();
+    if(!widget.has_value() || !ControlStyleMetrics().imageMetrics(this.m_skin.value(), regionName, options, frame.metrics, frame.region)){
+        this.m_context.fail();
         return false;
     }
-    return publishImageFrame(**widget, Move(frame));
+    return this.publishImageFrame(widget.value(), frame);
 }
 
-b8 Builder::image(const AStringView stableKey, const SharedImageSource& source, const ImageOptions& options){
-    if(itemDeclarationBlocked() || !m_skin){
-        m_context.fail();
+b8 Builder::image(in StringView stableKey, in SharedImageSource source, in ImageOptions options){
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value()){
+        this.m_context.fail();
         return false;
     }
-    if(!synchronizePopup())
+    if(!this.synchronizePopup())
         return true;
-    m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    const auto widget = m_context.declare(stableKey, WidgetKind::Image);
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Image);
     ImageFrame frame;
     frame.source = source;
     frame.options = options;
-    if(!widget || !frame.source){
-        m_context.fail();
+    if(!widget.has_value() || !frame.source.valid()){
+        this.m_context.fail();
         return false;
     }
-    const auto metrics = MeasureImage(frame.options, *frame.source);
-    if(!metrics){
-        m_context.fail();
+    const auto metrics = MeasureImage(frame.options, frame.source.deref());
+    if(!metrics.has_value()){
+        this.m_context.fail();
         return false;
     }
-    frame.metrics = *metrics;
-    return publishImageFrame(**widget, Move(frame));
+    frame.metrics = metrics.value();
+    return this.publishImageFrame(widget.value(), frame);
 }
 
-b8 Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){
-    Item item(m_arena);
+b8 Builder::publishImageFrame(in WidgetState widget, mut ImageFrame frame){
+    auto item = this.makeItem();
     item.state = widget;
-    item.image = static_cast<u32>(m_scope->m_images.size());
+    item.image = cast<u32>(this.m_scope.value().m_images.size());
     const LayoutNodeDesc description = BuildSizedLeafNodeDesc(frame.options.width, frame.options.height, frame.metrics.contentSize);
-    if(!addItemNode(description, item))
+    if(!this.addItemNode(description, item))
         return false;
-    m_scope->m_images.push_back(Move(frame));
-    m_scope->m_items.push_back(Move(item));
+    AppendOwned<ImageFrame>(this.m_scope.value().m_images, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return true;
 }
 
-b8 Builder::paintImage(const Item& item, const LayoutBox& box){
-    if(item.image >= m_scope->m_images.size())
+b8 Builder::paintImage(in BuilderItem item, in LayoutBox box){
+    if(item.image >= this.m_scope.value().m_images.size())
         return false;
-    const ImageFrame& frame = m_scope->m_images[item.image];
-    const auto placement = PlaceImage(box.rectangle, visibleClip(box.clip));
-    if(!placement)
+    in ImageFrame frame = this.m_scope.value().m_images[item.image];
+    const auto placement = PlaceImage(box.rectangle, this.visibleClip(box.clip));
+    if(!placement.has_value())
         return false;
-    m_paint.pushClip(placement->clip);
-    const b8 painted = frame.source ? m_paint.drawImage(frame.source, placement->bounds, s_FullImageUvRect, frame.options.tint) : m_paint.drawRegion(frame.region, placement->bounds, frame.options.tint);
-    return finishClipPaint(item, placement->bounds, placement->clip, painted);
+    this.m_paint.pushClip(placement.value().clip);
+    b8 painted = false;
+    if(frame.source.valid())
+        painted = this.m_paint.drawImage(frame.source, placement.value().bounds, s_FullImageUvRect, frame.options.tint);
+    else
+        painted = this.m_paint.drawRegion(frame.region, placement.value().bounds, frame.options.tint);
+    return this.finishClipPaint(item, placement.value().bounds, placement.value().clip, painted);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Builder::progress(const AStringView stableKey, const f64 fraction, const ProgressOptions& options){
-    if(itemDeclarationBlocked() || !m_skin){
-        m_context.fail();
+b8 Builder::progress(in StringView stableKey, in f64 fraction, in ProgressOptions options){
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value()){
+        this.m_context.fail();
         return false;
     }
-    if(!synchronizePopup())
+    if(!this.synchronizePopup())
         return true;
-    m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    const auto widget = m_context.declare(stableKey, WidgetKind::Progress);
-    if(!widget)
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Progress);
+    if(!widget.has_value())
         return false;
     ProgressFrame frame;
     frame.fraction = fraction;
     frame.options = options;
-    frame.style = m_progressStyle;
-    if(!ControlStyleMetrics().progressMetrics(*m_skin, fraction, options, frame.style, frame.metrics)){
-        m_context.fail();
+    frame.style = this.m_progressStyle;
+    if(!ControlStyleMetrics().progressMetrics(this.m_skin.value(), fraction, options, frame.style, frame.metrics)){
+        this.m_context.fail();
         return false;
     }
-    Item item(m_arena);
-    item.state = **widget;
-    item.progress = static_cast<u32>(m_scope->m_progress.size());
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.progress = cast<u32>(this.m_scope.value().m_progress.size());
     const LayoutNodeDesc description = BuildWidthLeafNodeDesc(frame.options.width, frame.metrics.contentSize);
-    if(!addItemNode(description, item))
+    if(!this.addItemNode(description, item))
         return false;
-    m_scope->m_progress.push_back(Move(frame));
-    m_scope->m_items.push_back(Move(item));
+    AppendOwned<ProgressFrame>(this.m_scope.value().m_progress, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return true;
 }
 
-b8 Builder::paintProgress(const Item& item, const LayoutBox& box){
-    if(item.progress >= m_scope->m_progress.size())
+b8 Builder::paintProgress(in BuilderItem item, in LayoutBox box){
+    ControlVisualPainter painter;
+    if(item.progress >= this.m_scope.value().m_progress.size())
         return false;
-    const ProgressFrame& frame = m_scope->m_progress[item.progress];
-    const auto placement = PlaceProgress(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction);
-    if(!placement)
+    in ProgressFrame frame = this.m_scope.value().m_progress[item.progress];
+    const auto placement = PlaceProgress(box.rectangle, this.visibleClip(box.clip), frame.metrics, frame.fraction);
+    if(!placement.has_value())
         return false;
-    const b8 painted = ControlVisualPainter().paintProgressBarRegions(m_paint, frame.style, *placement);
-    return finishClipPaint(item, placement->bounds, placement->clip, painted);
+    const b8 painted = painter.paintProgressBarRegions(this.m_paint, frame.style, placement.value());
+    return this.finishClipPaint(item, placement.value().bounds, placement.value().clip, painted);
 }
 
 
@@ -582,56 +552,59 @@ b8 Builder::paintProgress(const Item& item, const LayoutBox& box){
 
 
 b8 Builder::paintPanel(){
-    const Optional<LayoutBox> panel = m_scope->m_layout.box(0u);
-    if(!panel)
+    HitTargetFactory targets;
+    const Optional<LayoutBox> panel = this.m_scope.value().m_layout.box(0u);
+    if(!panel.has_value())
         return false;
-    m_paint.pushClip(visibleClip(panel->clip));
-    const b8 painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
-    const b8 popped = m_paint.popClip();
-    const HitTarget barrier = HitTargetFactory().makeBarrierHitTarget(panel->rectangle, visibleClip(panel->clip));
-    if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
+    this.m_paint.pushClip(this.visibleClip(panel.value().clip));
+    const b8 painted = this.m_paint.drawRegion(this.m_scope.value().m_panelStyle.panel, panel.value().rectangle);
+    const b8 popped = this.m_paint.popClip();
+    const HitTarget barrier = targets.makeBarrierHitTarget(panel.value().rectangle, this.visibleClip(panel.value().clip));
+    if(!painted || !popped || !this.m_context.addTarget(this.m_scope.value().m_panelState, barrier))
         return false;
-    return paintItems();
+    return this.paintItems();
 }
 
 b8 Builder::paintItems(){
-    for(const auto& item : m_scope->m_items){
-        const Optional<LayoutBox> box = m_scope->m_layout.box(item.node);
-        if(!popupAncestorsVisible() || !box || !paintItem(item, *box))
+    for(in auto item : this.m_scope.value().m_items){
+        const Optional<LayoutBox> box = this.m_scope.value().m_layout.box(item.node);
+        if(!this.popupAncestorsVisible() || !box.has_value() || !this.paintItem(item, box.value()))
             return false;
     }
     return true;
 }
 
-b8 Builder::paintItem(const Item& item, const LayoutBox& box){
+b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
+    HitTargetFactory targets;
+    ControlVisualPainter painter;
     if(item.state.kind == WidgetKind::ComboBox || item.state.kind == WidgetKind::SearchComboBox)
-        return paintCombo(item, box);
+        return this.paintCombo(item, box);
     if(item.state.kind == WidgetKind::TextArea)
-        return paintTextArea(item, box);
+        return this.paintTextArea(item, box);
     if(item.state.kind == WidgetKind::EditBox)
-        return paintEditBox(item, box);
+        return this.paintEditBox(item, box);
     if(item.state.kind == WidgetKind::Selectable)
-        return paintSelectable(item, box);
+        return this.paintSelectable(item, box);
     if(item.state.kind == WidgetKind::VirtualList)
-        return paintList(item, box);
+        return this.paintList(item, box);
     if(item.state.kind == WidgetKind::RadioGroup)
-        return paintRadioGroup(item, box);
+        return this.paintRadioGroup(item, box);
     if(item.state.kind == WidgetKind::Slider)
-        return paintSlider(item, box);
+        return this.paintSlider(item, box);
     if(item.state.kind == WidgetKind::Progress)
-        return paintProgress(item, box);
+        return this.paintProgress(item, box);
     if(item.state.kind == WidgetKind::Image)
-        return paintImage(item, box);
-    const InputRouter& input = m_context.input();
+        return this.paintImage(item, box);
+    in InputRouter input = this.m_context.input();
     const b8 hover = input.hover() == item.state.id;
     const b8 pressed = input.pressed(item.state.id);
     const b8 focused = input.focus() == item.state.id;
     const b8 interactive = IsBasicControlInteractive(item.state.kind);
-    const Rect clip = visibleClip(box.clip);
-    if(!ControlVisualPainter().paintBasicControlItemVisual(
-        m_paint,
-        m_text,
-        *m_skin,
+    const Rect clip = this.visibleClip(box.clip);
+    if(!painter.paintBasicControlItemVisual(
+        this.m_paint,
+        this.m_text,
+        this.m_skin.value(),
         item.state.kind,
         item.style,
         item.text,
@@ -652,42 +625,36 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
         return true;
     if(NeedsBasicControlHitTarget(interactive, item.annotated)){
         // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
-        const HitTarget target = HitTargetFactory().makeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
-        return m_context.addTarget(item.state, target);
+        const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
+        return this.m_context.addTarget(item.state, target);
     }
     return true;
 }
 
-b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
-    const InputRouter& input = m_context.input();
-    const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
-    const Rect clip = visibleClip(box.clip);
-    if(!PaintSelectable(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
+b8 Builder::paintSelectable(in BuilderItem item, in LayoutBox box){
+    HitTargetFactory targets;
+    in InputRouter input = this.m_context.input();
+    SelectablePaintFlags flags;
+    flags.enabled = item.enabled;
+    flags.selected = item.checked;
+    flags.hover = input.hover() == item.state.id;
+    flags.focused = input.focus() == item.state.id;
+    const Rect clip = this.visibleClip(box.clip);
+    if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
         return false;
-    const HitTarget target = HitTargetFactory().makeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
-    return m_context.addTarget(item.state, target);
+    const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
+    return this.m_context.addTarget(item.state, target);
 }
 
-b8 Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, b8 painted){
-    const b8 popped = m_paint.popClip();
+b8 Builder::finishClipPaint(in BuilderItem item, in Rect bounds, in Rect clip, in b8 painted){
+    HitTargetFactory targets;
+    const b8 popped = this.m_paint.popClip();
     if(!painted || !popped)
         return false;
     if(!item.annotated)
         return true;
-    const HitTarget target = HitTargetFactory().makeAnnotatedClipHitTarget(bounds, clip, item.contextMenu);
-    return m_context.addTarget(item.state, target);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    const HitTarget target = targets.makeAnnotatedClipHitTarget(bounds, clip, item.contextMenu);
+    return this.m_context.addTarget(item.state, target);
 }
 
 

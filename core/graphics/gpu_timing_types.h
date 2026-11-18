@@ -111,6 +111,18 @@ inline constexpr b8 operator!=(const GpuTimingSampleAttribution& lhs, const GpuT
 
 inline constexpr GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution;
 
+// An immutable task payload records its attribution before the scheduler resolves that recording.
+class GpuTimingRecordedSample final{
+public:
+    [[nodiscard]] GpuTimingSampleAttribution attribution()const noexcept{ return m_attribution; }
+    void record(const GpuTimingSampleAttribution attribution)const noexcept{ m_attribution = attribution; }
+    void reset()noexcept{ m_attribution = s_NoGpuTimingSampleAttribution; }
+
+
+private:
+    mutable GpuTimingSampleAttribution m_attribution;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -2,7 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/runtime/types.adhd>
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/assets_mesh/meshlet_ref_encode.adhd>
+#include <impl/ecs_mesh/runtime/buffer_upload.adhd>
+#include <impl/ecs_mesh/skinning/local_bounds.adhd>
+#include <impl/ecs_mesh/skinning/runtime_cache.adhd>
+#include <impl/ecs_mesh/skinning/skinning_internal.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,6 +19,64 @@ enum<u8> ExistingRuntimeMeshDisposition{
     ReuploadDirty = 2,
     ReplaceStaleSource = 3,
     kCount
+}
+
+b8 BuildRuntimeZippedPayload(in Mesh mesh, in Span<SkinInfluence4> skinStream, mut MeshSkinningRuntimeInstance instance){
+    const Expected<MeshletRefTotalCounts> totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
+    if(!totalCounts.has_value())
+        return false;
+    Vector<MeshletPositionStreamRef> runtimePositionRefs = Vector<MeshletPositionStreamRef>();
+    Vector<MeshletAttributeStreamRef> runtimeAttributeRefs = Vector<MeshletAttributeStreamRef>();
+    runtimePositionRefs.resize(totalCounts.value().positionRefCount);
+    runtimeAttributeRefs.resize(totalCounts.value().attributeRefCount);
+    instance.meshletPositionRefDeltas.clear();
+    instance.meshletAttributeRefDeltas.clear();
+    instance.attributeSkins.clear();
+    if(!TryDecodeRuntimeZippedMeshletStreams(
+        mesh.meshlets(),
+        mesh.meshletPositionRefDeltas(),
+        mesh.meshletAttributeRefDeltas(),
+        mesh.positionStream(),
+        mesh.normalStream(),
+        mesh.tangentStream(),
+        mesh.uv0Stream().size(),
+        mesh.colorStream().size(),
+        skinStream.size(),
+        instance.restPositions,
+        instance.restNormals,
+        instance.restTangents,
+        instance.meshlets,
+        runtimePositionRefs,
+        runtimeAttributeRefs
+    ))
+        return false;
+
+    if(!ResolveRuntimeZippedAttributeSkins(
+        instance.meshlets,
+        runtimePositionRefs,
+        instance.meshletLocalVertexRefs,
+        runtimeAttributeRefs.size(),
+        instance.attributeSkins
+    ))
+        return false;
+
+    if(!EncodeMeshletRefDeltas(
+        runtimePositionRefs,
+        runtimeAttributeRefs,
+        true,
+        lambda[](in usize meshletIndex, in auto reason) -> b8{
+            error("MeshSkinningRuntimeCache: runtime meshlet {} {}", meshletIndex, reason);
+            return false;
+        },
+        instance.meshlets,
+        instance.meshletPositionRefDeltas,
+        instance.meshletAttributeRefDeltas
+    ))
+        return false;
+
+    instance.meshletPositionRefCount = cast<u32>(runtimePositionRefs.size());
+    instance.meshletAttributeRefCount = cast<u32>(runtimeAttributeRefs.size());
+    return BuildRuntimeMeshLocalBounds(instance.sourceName, instance.restPositions, instance.localBounds);
 }
 
 ExistingRuntimeMeshDisposition ClassifyExistingRuntimeMesh(
@@ -56,500 +119,218 @@ b8 FinalizeRuntimeBufferUpload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+const StringView s_MeshSkinningAssetLoadContext = "MeshSkinningRuntimeCache";
 
+[cpp_name("NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE"), cpp_header("<impl/assets/graphics/mesh/runtime_bounds_constants.h>")]
+extern const u32 s_ShaderRuntimeMeshBoundsBytes;
+static_assert(s_RuntimeMeshBoundsByteSize == s_ShaderRuntimeMeshBoundsBytes, "Runtime mesh bounds byte size must match shader ABI");
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_mesh/skinning/runtime_cache.adhd.h>
-#include <impl/ecs_mesh/skinning/local_bounds.adhd.h>
-#include <impl/ecs_mesh/skinning/skinning_internal.adhd.h>
-#include <impl/ecs_mesh/skinning/runtime_instance.adhd.h>
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
-#include <impl/ecs_mesh/components.adhd.h>
-#include <impl/ecs_mesh/runtime/buffer_upload.adhd.h>
-#include <impl/ecs_mesh/runtime/types.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
-#include <impl/assets_mesh/asset.adhd.h>
-#include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
-#include <impl/assets_mesh/meshlet_ref_validation.adhd.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
-#include <impl/assets_mesh/meshlet_vertex_attributes.adhd.h>
-#include <impl/assets_mesh/skin_asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/scope_exit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_runtime_cache_storage{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr TStringView s_AssetLoadContext = FOUNDATION_TEXT("MeshSkinningRuntimeCache");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 BuildRuntimeZippedPayload(const Mesh& mesh, const Span<const SkinInfluence4> skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
-    const Expected<MeshletRefTotalCounts> totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
-    if(!totalCounts.has_value())
+b8 ValidateRuntimeMeshUploadPayload(in MeshSkinningRuntimeInstance instance){
+    if(!ValidateRuntimeMeshUploadPayloadStreams(instance.sourceName, instance.hasCompleteSplitMeshPayload(), instance.restPositions.size(),
+        instance.restNormals.size(), instance.restTangents.size(), instance.uv0.size(), instance.colors.size(), instance.skin.size(), instance.meshlets,
+        instance.meshletPositionRefDeltas, instance.meshletAttributeRefDeltas, instance.meshletLocalVertexRefs.size(), instance.meshletPrimitiveIndices.size(), instance.attributeSkins))
         return false;
-    Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
-    Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
-    runtimePositionRefs.resize(totalCounts->positionRefCount);
-    runtimeAttributeRefs.resize(totalCounts->attributeRefCount);
-    instance.meshletPositionRefDeltas.clear();
-    instance.meshletAttributeRefDeltas.clear();
-    instance.attributeSkins.clear();
-    if(!TryDecodeRuntimeZippedMeshletStreams(
-        mesh.meshlets(),
-        mesh.meshletPositionRefDeltas(),
-        mesh.meshletAttributeRefDeltas(),
-        mesh.positionStream(),
-        mesh.normalStream(),
-        mesh.tangentStream(),
-        mesh.uv0Stream().size(),
-        mesh.colorStream().size(),
-        skinStream.size(),
-        instance.restPositions,
-        instance.restNormals,
-        instance.restTangents,
-        instance.meshlets,
-        Span<MeshletPositionStreamRef>(runtimePositionRefs.data(), runtimePositionRefs.size()),
-        Span<MeshletAttributeStreamRef>(runtimeAttributeRefs.data(), runtimeAttributeRefs.size())
-    ))
-        return false;
-
-    if(!ResolveRuntimeZippedAttributeSkins(
-        instance.meshlets,
-        runtimePositionRefs,
-        instance.meshletLocalVertexRefs,
-        runtimeAttributeRefs.size(),
-        instance.attributeSkins
-    ))
-        return false;
-
-    if(!EncodeMeshletRefDeltas(runtimePositionRefs, runtimeAttributeRefs, true, [&](const usize meshletIndex, const TStringView reason){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}"), meshletIndex, reason);
-        return false;
-    }, instance.meshlets, instance.meshletPositionRefDeltas, instance.meshletAttributeRefDeltas
-    ))
-        return false;
-
-    instance.meshletPositionRefCount = static_cast<u32>(runtimePositionRefs.size());
-    instance.meshletAttributeRefCount = static_cast<u32>(runtimeAttributeRefs.size());
-    return BuildRuntimeMeshLocalBounds(instance.sourceName, instance.restPositions, instance.localBounds);
-}
-
-[[nodiscard]] b8 ValidateRuntimeMeshUploadPayload(const MeshSkinningRuntimeInstance& instance){
-    if(!ValidateRuntimeMeshUploadPayloadStreams(
-        instance.sourceName,
-        instance.hasCompleteSplitMeshPayload(),
-        instance.restPositions.size(),
-        instance.restNormals.size(),
-        instance.restTangents.size(),
-        instance.uv0.size(),
-        instance.colors.size(),
-        instance.skin.size(),
-        instance.meshlets,
-        instance.meshletPositionRefDeltas,
-        instance.meshletAttributeRefDeltas,
-        instance.meshletLocalVertexRefs.size(),
-        instance.meshletPrimitiveIndices.size(),
-        instance.attributeSkins
-    ))
-        return false;
-    // Skin::loadBinary already admitted the copied skin and inverse bind data.
-    FOUNDATION_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
-    FOUNDATION_ASSERT(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
+    assert(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= cast<u32>(u16.max) + 1u);
+    assert(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
 #if defined(NWB_DEBUG)
-    for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices)
-        FOUNDATION_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
-    for(const SkinInfluence4& skin : instance.skin)
-        FOUNDATION_ASSERT(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
+    for(in SkeletonJointMatrix matrix : instance.inverseBindMatrices)
+        assert(MatrixIsInvertibleAffine(LoadFloat(matrix), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
+    for(in SkinInfluence4 skin : instance.skin)
+        assert(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
 #endif
     return true;
 }
 
-template<typename PayloadT>
-[[nodiscard]] b8 AssignRuntimeBuffer(
-    const MeshSkinningRuntimeInstance& instance,
-    const AStringView suffix,
-    const Span<const PayloadT> payload,
-    const b8 canHaveUavs,
-    const AStringView label,
-    Core::GraphicsRuntime& graphics,
-    const b8 canHaveRawViews,
-    const b8 accelStructBuildInput,
-    const Core::ResourceQueueSharing::Mask queueSharing,
-    const b8 isIndexBuffer,
-    Core::BufferHandle& outBuffer
-){
-    const Name bufferName = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
-    if(!bufferName){
-        outBuffer.reset();
+b8 AssignRuntimeBuffer<T>(in MeshSkinningRuntimeInstance instance, in StringView suffix, in Span<T> payload, in b8 writable, in StringView label,
+    mut GraphicsRuntime graphics, in b8 raw, in b8 buildInput, in ResourceQueueSharing sharing, in b8 indexBuffer, mut BufferHandle buffer){
+    const Name name = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
+    if(name == s_NameNone){
+        buffer.reset();
         return false;
     }
-
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, bufferName, payload, { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer });
-    return FinalizeRuntimeBufferUpload(buffer, instance.handle.value, label, outBuffer);
+    const auto result = SetupRequiredBuffer<T>(graphics, name, payload, BufferFlags(writable, raw, buildInput, sharing, indexBuffer));
+    return FinalizeRuntimeBufferUpload(result, instance.handle.value, label, buffer);
 }
 
-[[nodiscard]] b8 AssignPaddedRawRuntimeBuffer(
-    const MeshSkinningRuntimeInstance& instance,
-    const AStringView suffix,
-    const Span<const u8> payload,
-    const b8 canHaveUavs,
-    const AStringView label,
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::ScratchArena& scratchArena,
-    Core::BufferHandle& outBuffer
-){
-    const Name bufferName = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
-    if(!bufferName){
-        outBuffer = nullptr;
+b8 AssignPaddedRawRuntimeBuffer(in MeshSkinningRuntimeInstance instance, in StringView suffix, in Span<u8> payload, in b8 writable, in StringView label, mut GraphicsRuntime graphics, mut BufferHandle buffer){
+    const Name name = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
+    if(name == s_NameNone){
+        buffer.reset();
         return false;
     }
-
-    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, bufferName, payload, { canHaveUavs, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
-    return FinalizeRuntimeBufferUpload(buffer, instance.handle.value, label, outBuffer);
+    const auto result = SetupRequiredPaddedRawByteBuffer(graphics, name, payload, BufferFlags(writable, true, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false));
+    return FinalizeRuntimeBufferUpload(result, instance.handle.value, label, buffer);
 }
 
-template<typename HandleMapT, typename InstanceMapT>
-[[nodiscard]] auto* FindInstanceByHandle(HandleMapT& handleToEntity, InstanceMapT& instances, const RuntimeMeshHandle handle)noexcept{
-    const Expected<Core::ECS::EntityID> foundEntity = TryFindRuntimeMeshEntityByHandle(handleToEntity, handle.value);
-    using ResultPtr = decltype(&instances.find(*foundEntity).value());
-    if(!foundEntity)
-        return static_cast<ResultPtr>(nullptr);
-
-    const auto foundInstance = instances.find(*foundEntity);
-    if(foundInstance == instances.end())
-        return static_cast<ResultPtr>(nullptr);
-    return &foundInstance.value();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)noexcept{
-    return __hidden_runtime_cache_storage::FindInstanceByHandle(m_handleToEntity, m_instances, handle);
-}
-
-const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const noexcept{
-    return __hidden_runtime_cache_storage::FindInstanceByHandle(m_handleToEntity, m_instances, handle);
-}
-
-const Mesh& MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const noexcept{
-    const auto asset = MakeNotNull(Core::Assets::CastAsset<Mesh>(meshAsset.get()));
-    return *asset;
-}
-
-const Skin& MeshSkinningRuntimeCache::MeshSkinningSource::skin()const noexcept{
-    const auto asset = MakeNotNull(Core::Assets::CastAsset<Skin>(skinAsset.get()));
-    return *asset;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena){
-    auto skinningBindingView = world.view<SkinnedMeshBindingComponent>();
-    const usize rendererCandidateCount = skinningBindingView.candidateCount();
-    if(rendererCandidateCount == 0u){
-        clear();
+[cpp_unwind]
+void MeshSkinningRuntimeCache::prepareResources(mut World world){
+    auto view = world.view<SkinnedMeshBindingComponent>();
+    const usize count = view.candidateCount();
+    if(count == 0u){
+        this.clear();
         return;
     }
-
-    m_instances.reserve(rendererCandidateCount);
-    m_handleToEntity.reserve(rendererCandidateCount);
-    m_sources.reserve(rendererCandidateCount);
-
-    const b8 pruneStaleInstances = !m_instances.empty();
-    skinningBindingView.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
-        if(!ensureRuntimeMesh(entity, scratchArena, component))
-            component.runtimeMesh.reset();
+    this.m_instances.reserve(count);
+    this.m_handleToEntity.reserve(count);
+    this.m_sources.reserve(count);
+    const b8 prune = !this.m_instances.empty();
+    mut MeshSkinningRuntimeCache cache = this;
+    view.each(lambda[mut cache](in EntityID entity, mut SkinnedMeshBindingComponent binding) -> void{
+        if(!cache.ensureRuntimeMesh(entity, binding))
+            binding.runtimeMesh.reset();
     });
-
-    if(!pruneStaleInstances)
-        return;
-
-    for(auto it = m_instances.begin(); it != m_instances.end();){
-        const Core::ECS::EntityID entity = it->first;
-        if(world.tryGetComponent<SkinnedMeshBindingComponent>(entity)){
-            ++it;
-            continue;
+    if(prune){
+        Vector<EntityID> stale;
+        for(in auto item : this.m_instances){
+            if(!world.hasComponent<SkinnedMeshBindingComponent>(item.first))
+                stale.push_back(item.first);
         }
-
-        it = eraseInstance(it);
+        for(in EntityID entity : stale)
+            this.releaseRuntimeMesh(entity);
     }
 }
 
-void MeshSkinningRuntimeCache::clear()noexcept{
-    m_handleToEntity.clear();
-    m_instances.clear();
-    m_sources.clear();
-}
-
-b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena, SkinnedMeshBindingComponent& component){
-    const Name& sourceName = component.skin.name();
-    if(!component.skin.valid()){
-        releaseRuntimeMesh(entity);
-        component.runtimeMesh.reset();
+[cpp_unwind]
+b8 MeshSkinningRuntimeCache::ensureSourceLoaded(in AssetRef<Skin> ref){
+    assert(ref.valid());
+    if(this.m_sources.contains(ref.name()))
+        return true;
+    auto skin = LoadTypedAssetSync<Skin>(this.m_assets, ref.name(), s_MeshSkinningAssetLoadContext);
+    if(!skin.has_value())
+        return false;
+    auto mesh = LoadTypedAssetSync<Mesh>(this.m_assets, skin.value().deref().mesh().name(), s_MeshSkinningAssetLoadContext);
+    if(!mesh.has_value())
+        return false;
+    const auto stored = this.m_sources.try_emplace(ref.name());
+    if(!stored.second){
+        error("MeshSkinningRuntimeCache: source identity was already registered");
         return false;
     }
-
-    const auto foundInstance = m_instances.find(entity);
-    const b8 hasExistingInstance = foundInstance != m_instances.end();
-    const ExistingRuntimeMeshDisposition::Enum disposition = ClassifyExistingRuntimeMesh(
-        hasExistingInstance,
-        hasExistingInstance ? foundInstance.value().sourceName : s_NameNone,
-        sourceName,
-        hasExistingInstance ? static_cast<RuntimeMeshDirtyFlag::Flag>(foundInstance.value().dirtyFlags) : RuntimeMeshDirtyFlag::None
-    );
-    if(disposition == ExistingRuntimeMeshDisposition::ReuseClean || disposition == ExistingRuntimeMeshDisposition::ReuploadDirty){
-        MeshSkinningRuntimeInstance& instance = foundInstance.value();
-        component.runtimeMesh = instance.handle;
-        if(disposition == ExistingRuntimeMeshDisposition::ReuploadDirty){
-            if(!uploadRuntimeMeshBuffers(instance, scratchArena)){
-                releaseRuntimeMesh(entity);
-                component.runtimeMesh.reset();
-                return false;
-            }
-            instance.dirtyFlags &= ~RuntimeMeshDirtyFlag::All;
-        }
-        return instance.valid();
-    }
-    if(disposition == ExistingRuntimeMeshDisposition::ReplaceStaleSource){
-        releaseRuntimeMesh(entity);
-        component.runtimeMesh.reset();
-    }
-
-    const auto sourceResult = ensureSourceLoaded(component.skin);
-    if(!sourceResult)
-        return false;
-    MeshSkinningSource& source = **sourceResult;
-    const Mesh& mesh = source.mesh();
-    const Skin& skin = source.skin();
-
-    MeshSkinningRuntimeInstance instance(m_arena);
-    instance.entity = entity;
-    const Expected<RuntimeMeshHandle> handleResult = allocateHandle();
-    if(!handleResult){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-    instance.handle = *handleResult;
-    instance.sourceName = sourceName;
-    ::AdhdAssign(instance.uv0, mesh.uv0Stream());
-    ::AdhdAssign(instance.colors, mesh.colorStream());
-    ::AdhdAssign(instance.skin, skin.influences());
-    instance.skeletonJointCount = static_cast<u32>(skin.inverseBindMatrices().size());
-    ::AdhdAssign(instance.inverseBindMatrices, skin.inverseBindMatrices());
-    ::AdhdAssign(instance.meshletBounds, mesh.meshletBounds());
-    ::AdhdAssign(instance.meshletLocalVertexRefs, mesh.meshletLocalVertexRefs());
-    ::AdhdAssign(instance.meshletPrimitiveIndices, mesh.meshletPrimitiveIndices());
-    ::AdhdAssign(instance.solidTriangleWords, mesh.solidTriangleWords());
-    instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
-    if(!__hidden_runtime_cache_storage::BuildRuntimeZippedPayload(mesh, skin.influences(), scratchArena, instance)){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-
-    if(!uploadRuntimeMeshBuffers(instance, scratchArena)){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-    instance.dirtyFlags &= ~RuntimeMeshDirtyFlag::All;
-
-    if(!instance.valid()){
-        eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: prepared runtime mesh is incomplete"));
-        return false;
-    }
-
-    const RuntimeMeshHandle handle = instance.handle;
-    auto [storedInstance, instanceInserted] = m_instances.try_emplace(entity, Move(instance));
-    if(!instanceInserted){
-        eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime instance identity was already registered"));
-        return false;
-    }
-    ScopeExit discardInstance([&]()noexcept{ m_instances.erase(storedInstance); });
-    const auto [storedEntity, handleInserted] = m_handleToEntity.emplace(handle.value, entity);
-    if(!handleInserted){
-        m_instances.erase(storedInstance);
-        discardInstance.release();
-        eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime mesh handle was already registered"));
-        return false;
-    }
-
-    ++source.referenceCount;
-    component.runtimeMesh = handle;
-    discardInstance.release();
+    mut MeshSkinningSource source = stored.first.value();
+    mut UniquePtr<Skin> loadedSkin = skin.value();
+    mut UniquePtr<Mesh> loadedMesh = mesh.value();
+    MoveInto<UniquePtr<Skin>>(source.skinAsset, loadedSkin);
+    MoveInto<UniquePtr<Mesh>>(source.meshAsset, loadedMesh);
     return true;
 }
 
-Expected<NotNull<MeshSkinningRuntimeCache::MeshSkinningSource*>> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
-    FOUNDATION_ASSERT(skinAsset.valid());
-
-    const Name& sourceName = skinAsset.name();
-    const auto foundSource = m_sources.find(sourceName);
-    if(foundSource != m_sources.end()){
-        MeshSkinningSource& cachedSource = foundSource.value();
-        return MakeNotNull(&cachedSource);
+[cpp_unwind]
+b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(in EntityID entity, mut SkinnedMeshBindingComponent component){
+    const Name sourceName = component.skin.name();
+    if(!component.skin.valid()){
+        this.releaseRuntimeMesh(entity);
+        component.runtimeMesh.reset();
+        return false;
     }
-
-    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), __hidden_runtime_cache_storage::s_AssetLoadContext);
-    if(!loadedSkinAsset)
-        return MakeUnexpected(Failure{});
-
-    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>((*loadedSkinAsset)->mesh().name(), __hidden_runtime_cache_storage::s_AssetLoadContext);
-    if(!loadedMeshAsset)
-        return MakeUnexpected(Failure{});
-
-    MeshSkinningSource source;
-    source.meshAsset = Move(*loadedMeshAsset);
-    source.skinAsset = Move(*loadedSkinAsset);
-
-    auto [stored, inserted] = m_sources.try_emplace(sourceName, Move(source));
-    if(!inserted){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: source identity was already registered"));
-        return MakeUnexpected(Failure{});
+    const auto existing = this.m_instances.find(entity);
+    if(existing != this.m_instances.end()){
+        mut MeshSkinningRuntimeInstance instance = existing.value();
+        const auto disposition = ClassifyExistingRuntimeMesh(true, instance.sourceName, sourceName, instance.dirtyFlags);
+        if(disposition == ExistingRuntimeMeshDisposition::ReuseClean || disposition == ExistingRuntimeMeshDisposition::ReuploadDirty){
+            component.runtimeMesh = instance.handle;
+            if(disposition == ExistingRuntimeMeshDisposition::ReuploadDirty){
+                if(!this.uploadRuntimeMeshBuffers(instance)){
+                    this.releaseRuntimeMesh(entity);
+                    component.runtimeMesh.reset();
+                    return false;
+                }
+                instance.dirtyFlags &= ~RuntimeMeshDirtyFlag::All;
+            }
+            return instance.valid();
+        }
+        this.releaseRuntimeMesh(entity);
+        component.runtimeMesh.reset();
     }
-    MeshSkinningSource& storedSource = stored.value();
-    return MakeNotNull(&storedSource);
+    if(!this.ensureSourceLoaded(component.skin))
+        return false;
+    PendingSkinningInstance pending(this.m_instances, this.m_sources, entity, sourceName);
+    const auto handle = TryAllocateRuntimeMeshHandleValue(this.m_handleToEntity, this.m_nextHandleValue);
+    if(!handle.has_value())
+        return false;
+    const auto stored = this.m_instances.try_emplace(entity, this.emptyInstance());
+    if(!stored.second){
+        error("MeshSkinningRuntimeCache: runtime instance identity was already registered");
+        return false;
+    }
+    pending.inserted = true;
+    mut MeshSkinningRuntimeInstance instance = stored.first.value();
+    mut MeshSkinningSource source = this.m_sources.at(sourceName);
+    in Mesh mesh = source.meshAsset.deref();
+    in Skin skin = source.skinAsset.deref();
+    instance.handle.value = handle.value();
+    instance.entity = entity;
+    instance.sourceName = sourceName;
+    instance.uv0 = mesh.uv0Stream();
+    instance.colors = mesh.colorStream();
+    instance.skin = skin.influences();
+    instance.skeletonJointCount = cast<u32>(skin.inverseBindMatrices().size());
+    instance.inverseBindMatrices = skin.inverseBindMatrices();
+    instance.meshletBounds = mesh.meshletBounds();
+    instance.meshletLocalVertexRefs = mesh.meshletLocalVertexRefs();
+    instance.meshletPrimitiveIndices = mesh.meshletPrimitiveIndices();
+    instance.solidTriangleWords = Span<u32>(mesh.solidTriangleWords());
+    instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
+    if(!BuildRuntimeZippedPayload(mesh, skin.influences(), instance) || !this.uploadRuntimeMeshBuffers(instance))
+        return false;
+    instance.dirtyFlags &= ~RuntimeMeshDirtyFlag::All;
+    if(!instance.valid()){
+        error("MeshSkinningRuntimeCache: prepared runtime mesh is incomplete");
+        return false;
+    }
+    if(!this.m_handleToEntity.emplace(handle.value(), entity).second){
+        error("MeshSkinningRuntimeCache: runtime mesh handle was already registered");
+        return false;
+    }
+    ++source.referenceCount;
+    component.runtimeMesh = instance.handle;
+    pending.published = true;
+    return true;
 }
 
-b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
-    if(!__hidden_runtime_cache_storage::ValidateRuntimeMeshUploadPayload(instance))
+[cpp_unwind]
+b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeInstance instance){
+    if(!ValidateRuntimeMeshUploadPayload(instance))
         return false;
-
-    const b8 rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-    const Core::ResourceQueueSharing::Mask sharedQueues = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
-    // Software and hybrid tails read raw position/index buffers; keep views even with HWRT.
-
-    b8 uploaded = CreateMeshSkinningLocalBoundsBuffers(m_graphics, instance);
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Float3U>(instance, s_RestPositionsSuffix, instance.restPositions, false, s_RuntimeCacheRestPositionLabel, m_graphics, false, false, sharedQueues, false, instance.restPositionBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Half4U>(instance, s_RestNormalsSuffix, instance.restNormals, false, s_RuntimeCacheRestNormalLabel, m_graphics, false, false, sharedQueues, false, instance.restNormalBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Half4U>(instance, s_RestTangentsSuffix, instance.restTangents, false, s_RuntimeCacheRestTangentLabel, m_graphics, false, false, sharedQueues, false, instance.restTangentBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Float3U>(instance, s_SkinnedPositionsSuffix, instance.restPositions, true, s_RuntimeCacheSkinnedPositionLabel, m_graphics, true, rtSupported, sharedQueues, false, instance.skinnedPositionBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Half4U>(instance, s_SkinnedNormalsSuffix, instance.restNormals, true, s_RuntimeCacheSkinnedNormalLabel, m_graphics, false, false, sharedQueues, false, instance.skinnedNormalBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Half4U>(instance, s_SkinnedTangentsSuffix, instance.restTangents, true, s_RuntimeCacheSkinnedTangentLabel, m_graphics, false, false, sharedQueues, false, instance.skinnedTangentBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Float2U>(instance, s_Uv0Suffix, instance.uv0, false, s_RuntimeCacheUv0Label, m_graphics, false, false, sharedQueues, false, instance.uv0Buffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<Half4U>(instance, s_ColorsSuffix, instance.colors, false, s_RuntimeCacheColorLabel, m_graphics, false, false, sharedQueues, false, instance.colorBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<MeshletDesc>(instance, s_MeshletsSuffix, instance.meshlets, false, s_RuntimeCacheMeshletDescriptorLabel, m_graphics, false, false, sharedQueues, false, instance.meshletDescBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<MeshletBounds>(instance, s_MeshletBoundsSuffix, instance.meshletBounds, true, s_RuntimeCacheMeshletBoundsLabel, m_graphics, true, false, sharedQueues, false, instance.meshletBoundsBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignPaddedRawRuntimeBuffer(instance, s_MeshletPositionRefDeltasSuffix, instance.meshletPositionRefDeltas, false, s_RuntimeCacheMeshletPositionRefDeltaLabel, m_graphics, scratchArena, instance.meshletPositionRefDeltaBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignPaddedRawRuntimeBuffer(instance, s_MeshletAttributeRefDeltasSuffix, instance.meshletAttributeRefDeltas, false, s_RuntimeCacheMeshletAttributeRefDeltaLabel, m_graphics, scratchArena, instance.meshletAttributeRefDeltaBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<MeshletLocalVertexRef>(instance, s_MeshletLocalVertexRefsSuffix, instance.meshletLocalVertexRefs, false, s_RuntimeCacheMeshletLocalVertexRefLabel, m_graphics, false, false, sharedQueues, false, instance.meshletLocalVertexRefBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignPaddedRawRuntimeBuffer(instance, s_MeshletPrimitiveIndicesSuffix, instance.meshletPrimitiveIndices, false, s_RuntimeCacheMeshletPrimitiveIndexLabel, m_graphics, scratchArena, instance.meshletPrimitiveIndexBuffer) && uploaded;
-    uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<u32>(instance, s_AttributeSkinsSuffix, instance.attributeSkins, false, s_RuntimeCacheAttributeSkinLabel, m_graphics, false, false, sharedQueues, false, instance.attributeSkinBuffer) && uploaded;
+    const b8 rtSupported = this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct);
+    const ResourceQueueSharing sharedQueues = ResourceQueueSharing::GraphicsAndAsyncCompute;
+    b8 uploaded = CreateMeshSkinningLocalBoundsBuffers(this.m_graphics, instance);
+    uploaded = AssignRuntimeBuffer<f32x3u>(instance, s_RestPositionsSuffix, instance.restPositions, false, s_RuntimeCacheRestPositionLabel, this.m_graphics, false, false, sharedQueues, false, instance.restPositionBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<f16x4u>(instance, s_RestNormalsSuffix, instance.restNormals, false, s_RuntimeCacheRestNormalLabel, this.m_graphics, false, false, sharedQueues, false, instance.restNormalBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<f16x4u>(instance, s_RestTangentsSuffix, instance.restTangents, false, s_RuntimeCacheRestTangentLabel, this.m_graphics, false, false, sharedQueues, false, instance.restTangentBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<f32x3u>(instance, s_SkinnedPositionsSuffix, instance.restPositions, true, s_RuntimeCacheSkinnedPositionLabel, this.m_graphics, true, rtSupported, sharedQueues, false, instance.skinnedPositionBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<f16x4u>(instance, s_SkinnedNormalsSuffix, instance.restNormals, true, s_RuntimeCacheSkinnedNormalLabel, this.m_graphics, false, false, sharedQueues, false, instance.skinnedNormalBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<f16x4u>(instance, s_SkinnedTangentsSuffix, instance.restTangents, true, s_RuntimeCacheSkinnedTangentLabel, this.m_graphics, false, false, sharedQueues, false, instance.skinnedTangentBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<f32x2u>(instance, s_Uv0Suffix, instance.uv0, false, s_RuntimeCacheUv0Label, this.m_graphics, false, false, sharedQueues, false, instance.uv0Buffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<f16x4u>(instance, s_ColorsSuffix, instance.colors, false, s_RuntimeCacheColorLabel, this.m_graphics, false, false, sharedQueues, false, instance.colorBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<MeshletDesc>(instance, s_MeshletsSuffix, instance.meshlets, false, s_RuntimeCacheMeshletDescriptorLabel, this.m_graphics, false, false, sharedQueues, false, instance.meshletDescBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<MeshletBounds>(instance, s_MeshletBoundsSuffix, instance.meshletBounds, true, s_RuntimeCacheMeshletBoundsLabel, this.m_graphics, true, false, sharedQueues, false, instance.meshletBoundsBuffer) && uploaded;
+    uploaded = AssignPaddedRawRuntimeBuffer(instance, s_MeshletPositionRefDeltasSuffix, instance.meshletPositionRefDeltas, false, s_RuntimeCacheMeshletPositionRefDeltaLabel, this.m_graphics, instance.meshletPositionRefDeltaBuffer) && uploaded;
+    uploaded = AssignPaddedRawRuntimeBuffer(instance, s_MeshletAttributeRefDeltasSuffix, instance.meshletAttributeRefDeltas, false, s_RuntimeCacheMeshletAttributeRefDeltaLabel, this.m_graphics, instance.meshletAttributeRefDeltaBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<MeshletLocalVertexRef>(instance, s_MeshletLocalVertexRefsSuffix, instance.meshletLocalVertexRefs, false, s_RuntimeCacheMeshletLocalVertexRefLabel, this.m_graphics, false, false,
+        sharedQueues, false, instance.meshletLocalVertexRefBuffer) && uploaded;
+    uploaded = AssignPaddedRawRuntimeBuffer(instance, s_MeshletPrimitiveIndicesSuffix, instance.meshletPrimitiveIndices, false, s_RuntimeCacheMeshletPrimitiveIndexLabel, this.m_graphics, instance.meshletPrimitiveIndexBuffer) && uploaded;
+    uploaded = AssignRuntimeBuffer<u32>(instance, s_AttributeSkinsSuffix, instance.attributeSkins, false, s_RuntimeCacheAttributeSkinLabel, this.m_graphics, false, false, sharedQueues, false, instance.attributeSkinBuffer) && uploaded;
 
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
-        const auto triangleIndices = TryBuildMeshSkinningTraceIndices(scratchArena, instance);
-        if(!triangleIndices)
+        const auto triangleIndices = TryBuildMeshSkinningTraceIndices(instance);
+        if(!triangleIndices.has_value())
             return false;
 
-        uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<u32>(instance, s_RtTriangleIndicesBufferName, *triangleIndices, false, s_RuntimeCacheRtTriangleIndexLabel, m_graphics, true, rtSupported, sharedQueues, true, instance.triangleIndexBuffer) && uploaded;
+        uploaded = AssignRuntimeBuffer<u32>(instance, s_RtTriangleIndicesBufferName, triangleIndices.value(), false, s_RuntimeCacheRtTriangleIndexLabel, this.m_graphics, true, rtSupported, sharedQueues, true, instance.triangleIndexBuffer) && uploaded;
     }
 
     // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
-        const auto triangleAttributes = TryBuildMeshSkinningTraceAttributes(scratchArena, instance);
-        if(!triangleAttributes)
+        const auto triangleAttributes = TryBuildMeshSkinningTraceAttributes(instance);
+        if(!triangleAttributes.has_value())
             return false;
 
         // The per-frame skinned-normal repack pass writes this buffer as a raw UAV in place.
-        uploaded = __hidden_runtime_cache_storage::AssignRuntimeBuffer<AttribGpu>(instance, s_RtTriangleAttributesBufferName, *triangleAttributes, true, s_RuntimeCacheRtTriangleAttributeLabel, m_graphics, true, false, sharedQueues, false, instance.attributeBuffer) && uploaded;
+        uploaded = AssignRuntimeBuffer<AttribGpu>(instance, s_RtTriangleAttributesBufferName, triangleAttributes.value(), true, s_RuntimeCacheRtTriangleAttributeLabel, this.m_graphics, true, false, sharedQueues, false, instance.attributeBuffer) && uploaded;
     }
 
     return uploaded;
-}
-
-Expected<RuntimeMeshHandle> MeshSkinningRuntimeCache::allocateHandle(){
-    const Expected<u64> handleValue = TryAllocateRuntimeMeshHandleValue(m_handleToEntity, m_nextHandleValue);
-    if(!handleValue)
-        return MakeUnexpected(Failure{});
-
-    RuntimeMeshHandle handle;
-    handle.value = *handleValue;
-    return handle;
-}
-
-void MeshSkinningRuntimeCache::releaseRuntimeMesh(const Core::ECS::EntityID entity)noexcept{
-    const auto foundInstance = m_instances.find(entity);
-    if(foundInstance == m_instances.end())
-        return;
-
-    eraseInstance(foundInstance);
-}
-
-MeshSkinningRuntimeCache::InstanceMap::iterator MeshSkinningRuntimeCache::eraseInstance(const InstanceMap::iterator it)noexcept{
-    const MeshSkinningRuntimeInstance& instance = it.value();
-    m_handleToEntity.erase(instance.handle.value);
-    releaseSource(instance.sourceName);
-    return m_instances.erase(it);
-}
-
-void MeshSkinningRuntimeCache::releaseSource(const Name& sourceName)noexcept{
-    const auto foundSource = m_sources.find(sourceName);
-    if(foundSource == m_sources.end())
-        return;
-
-    MeshSkinningSource& source = foundSource.value();
-    if(ReleaseSkinningSourceReference(source.referenceCount))
-        m_sources.erase(foundSource);
-}
-
-void MeshSkinningRuntimeCache::eraseUnusedSource(const Name& sourceName)noexcept{
-    const auto foundSource = m_sources.find(sourceName);
-    if(foundSource != m_sources.end() && foundSource.value().referenceCount == 0u)
-        m_sources.erase(foundSource);
-}
-
-static_assert(s_RuntimeMeshBoundsByteSize == NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE, "Runtime mesh bounds byte size must match shader ABI");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

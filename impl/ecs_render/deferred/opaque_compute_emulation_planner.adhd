@@ -2,85 +2,162 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/deferred/task_graph_gbuffer_task.adhd>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd>
+#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd>
+#include <impl/ecs_render/material/task_graph_resource_sets.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd.h>
-#include <impl/ecs_render/deferred/task_graph_gbuffer_task.adhd.h>
-#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd.h>
+b8 CanCaptureOpaqueRegularComputeEmulationPlan(
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in b8 gbufferMaterialSampledTexturesCollected
+){
+    return materialFrameStatesGraphOwned && materialGeometryStatesGraphOwned && gbufferMaterialSampledTexturesCollected;
+}
 
+b8 CanCaptureOpaqueSharedComputeEmulationPlan(
+    in b8 hasOpaqueCsgFrameWork,
+    in b8 regularOutputOwned,
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in b8 gbufferMaterialSampledTexturesCollected
+){
+    return !hasOpaqueCsgFrameWork
+        && !regularOutputOwned
+        && materialFrameStatesGraphOwned
+        && materialGeometryStatesGraphOwned
+        && gbufferMaterialSampledTexturesCollected;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 CanCaptureOpaqueCsgReceiverComputeEmulationPlan(
+    in b8 hasOpaqueCsgFrameWork,
+    in b8 hasCsgFrameGpuWork,
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in b8 gbufferMaterialSampledTexturesCollected
+){
+    return hasOpaqueCsgFrameWork
+        && hasCsgFrameGpuWork
+        && materialFrameStatesGraphOwned
+        && materialGeometryStatesGraphOwned
+        && gbufferMaterialSampledTexturesCollected;
+}
 
+class OpaqueComputeEmulationPlanner : NoCopy{
+    private OpaqueRegularComputeEmulationGraphTaskPayload m_regularPayload;
+    private OpaqueCsgReceiverComputeEmulationGraphTaskPayload m_csgPayload;
+    private RegularSharedComputeEmulationGraphPlan m_sharedPlan;
+    private GpuGraphResourceSetId m_regularOutputSet;
+    private GpuGraphResourceSetId m_csgOutputSet;
+    private GpuGraphResourceId m_sharedOutput;
+    private b8 m_regularOutputOwned = false;
+    private b8 m_sharedOutputOwned = false;
+    private b8 m_csgOutputOwned = false;
 
-NWB_IMPL_BEGIN
+    public OpaqueComputeEmulationPlanner(mut RendererMaterialSystem materials, in DeferredFrameTargets targets,
+        in borrow GraphicsPrefixTimingTicket ticket, in borrow b8 meshReady, in borrow b8 shadingReady){
+        this.m_regularPayload = OpaqueRegularComputeEmulationGraphTaskPayload(materials, targets, ticket, meshReady, shadingReady);
+        this.m_csgPayload = OpaqueCsgReceiverComputeEmulationGraphTaskPayload(materials, targets, ticket, meshReady, shadingReady);
+    }
 
+    [cpp_unwind]
+    public void capture(mut GpuTaskGraph graph, in MaterialPassDrawItemPartitions opaqueDrawItems, in CsgFrameGpuData csgFrameData,
+        in MeshFrameBindingSnapshot frameBindings, in b8 hasOpaqueCsgFrameWork, in b8 hasCsgFrameGpuWork,
+        in b8 gbufferMaterialSampledTexturesCollected, mut GbufferGraphTask gbufferPayload, mut Optional<GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming){
+        // Generated-vertex buffers persist per mesh, so only the alias-free regular opaque case hoists compute ahead of raster.
+        this.m_regularPayload.frameBindings = frameBindings;
+        const b8 opaqueComputeEmulationPlanCaptured =
+            CanCaptureOpaqueRegularComputeEmulationPlan(
+                gbufferPayload.materialFrameStatesGraphOwned,
+                gbufferPayload.materialGeometryStatesGraphOwned,
+                gbufferMaterialSampledTexturesCollected
+            )
+            && this.m_regularPayload.plan.capture(MaterialPassDrawItemsView(opaqueDrawItems.regular), false)
+        ;
+        if(opaqueComputeEmulationPlanCaptured){
+            const auto opaqueComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
+                graph,
+                this.m_regularPayload.plan.generated.captured,
+                this.m_regularPayload.plan.generated.outputBuffers,
+                s_FrameGraphNameRenderGraphicsPrefixOpaqueComputeEmulationOutputs,
+                "Opaque Compute Emulation Outputs"
+            );
+            this.m_regularOutputOwned = opaqueComputeEmulationOutputSetResult.has_value();
+            if(opaqueComputeEmulationOutputSetResult.has_value())
+                this.m_regularOutputSet = opaqueComputeEmulationOutputSetResult.value();
+        }
+        if(opaqueComputeEmulationPlanCaptured && !this.m_regularOutputOwned)
+            warning("RendererSystem: could not declare graph-owned opaque compute-emulation output states");
+        gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = this.m_regularOutputOwned;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // A persistent generated-vertex buffer is normally a local dispatch/raster bridge.
+        // Handle the small alias classes explicitly: two through five regular opaque compute items sharing one frozen output and heap slot.
+        // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
+        const b8 opaqueSharedComputeEmulationPlanCaptured =
+            CanCaptureOpaqueSharedComputeEmulationPlan(
+                hasOpaqueCsgFrameWork,
+                this.m_regularOutputOwned,
+                gbufferPayload.materialFrameStatesGraphOwned,
+                gbufferPayload.materialGeometryStatesGraphOwned,
+                gbufferMaterialSampledTexturesCollected
+            )
+            && this.m_sharedPlan.capture(MaterialPassDrawItemsView(opaqueDrawItems.regular), s_SharedComputeEmulationMaximumDrawCount)
+        ;
+        if(opaqueSharedComputeEmulationPlanCaptured){
+            const auto opaqueSharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(graph, this.m_sharedPlan, "Opaque Shared Compute Emulation Output");
+            this.m_sharedOutputOwned = opaqueSharedComputeEmulationOutputResult.has_value();
+            if(opaqueSharedComputeEmulationOutputResult.has_value())
+                this.m_sharedOutput = opaqueSharedComputeEmulationOutputResult.value();
+        }
+        if(opaqueSharedComputeEmulationPlanCaptured && !this.m_sharedOutputOwned)
+            warning("RendererSystem: could not declare graph-owned shared opaque compute-emulation output state");
+        gbufferPayload.regularSharedComputeEmulationDrawsGraphOwned = this.m_sharedOutputOwned;
+        if(this.m_sharedOutputOwned)
+            gbufferPayload.regularSharedComputeEmulationTiming = Optional<mut Optional<GpuTimingMeasure>>(opaqueRegularSharedComputeEmulationTiming);
+        else
+            gbufferPayload.regularSharedComputeEmulationTiming.reset();
 
-
-class OpaqueComputeEmulationPlanner final : NoCopy{
-public:
-    OpaqueComputeEmulationPlanner(
-        Core::Alloc::GlobalArena& arena,
-        RendererMaterialSystem& materialSystem,
-        DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket*& timingTicket,
-        const b8& meshViewSetupReady,
-        const b8& sceneShadingSetupReady
-    )noexcept;
-
-
-public:
-    void capture(
-        Core::GpuTaskGraph& graph,
-        Core::Alloc::ScratchArena& scratchArena,
-        const MaterialPassDrawItemPartitions& opaqueDrawItems,
-        const CsgFrameGpuData& csgFrameData,
-        const MeshFrameBindingSnapshot& frameBindings,
-        b8 hasOpaqueCsgFrameWork,
-        b8 hasCsgFrameGpuWork,
-        b8 gbufferMaterialSampledTexturesCollected,
-        ECSRenderDetail::GbufferGraphTask::Payload& gbufferPayload,
-        Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming
-    );
-    [[nodiscard]] ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload& regularPayload()noexcept{ return m_regularPayload; }
-    [[nodiscard]] ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload& csgPayload()noexcept{ return m_csgPayload; }
-    [[nodiscard]] const RegularSharedComputeEmulationGraphPlan& sharedPlan()const noexcept{ return m_sharedPlan; }
-    [[nodiscard]] Core::GpuGraphResourceSetId regularOutputSet()const noexcept{ return m_regularOutputSet; }
-    [[nodiscard]] Core::GpuGraphResourceSetId csgOutputSet()const noexcept{ return m_csgOutputSet; }
-    [[nodiscard]] Core::GpuGraphResourceId sharedOutput()const noexcept{ return m_sharedOutput; }
-    [[nodiscard]] b8 regularOutputOwned()const noexcept{ return m_regularOutputOwned; }
-    [[nodiscard]] b8 sharedOutputOwned()const noexcept{ return m_sharedOutputOwned; }
-    [[nodiscard]] b8 csgOutputOwned()const noexcept{ return m_csgOutputOwned; }
-
-
-private:
-    ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload m_regularPayload;
-    ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload m_csgPayload;
-    RegularSharedComputeEmulationGraphPlan m_sharedPlan;
-    Core::GpuGraphResourceSetId m_regularOutputSet;
-    Core::GpuGraphResourceSetId m_csgOutputSet;
-    Core::GpuGraphResourceId m_sharedOutput;
-    b8 m_regularOutputOwned = false;
-    b8 m_sharedOutputOwned = false;
-    b8 m_csgOutputOwned = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        this.m_csgPayload.frameBindings = frameBindings;
+        const b8 opaqueCsgReceiverComputeEmulationPlanCaptured =
+            CanCaptureOpaqueCsgReceiverComputeEmulationPlan(
+                hasOpaqueCsgFrameWork,
+                hasCsgFrameGpuWork,
+                gbufferPayload.materialFrameStatesGraphOwned,
+                gbufferPayload.materialGeometryStatesGraphOwned,
+                gbufferMaterialSampledTexturesCollected
+            )
+            && this.m_csgPayload.plan.capture(MaterialPassDrawItemsView(opaqueDrawItems.csgReceiverSurface), MaterialPassDrawItemsView(opaqueDrawItems.regular), CsgFrameGpuDataView(csgFrameData))
+        ;
+        if(opaqueCsgReceiverComputeEmulationPlanCaptured){
+            const auto opaqueCsgReceiverComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
+                graph,
+                this.m_csgPayload.plan.captured,
+                this.m_csgPayload.plan.outputBuffers,
+                s_FrameGraphNameRenderGraphicsPrefixOpaqueCsgReceiverComputeEmulationOutputs,
+                "Opaque CSG Receiver Compute Emulation Outputs"
+            );
+            this.m_csgOutputOwned = opaqueCsgReceiverComputeEmulationOutputSetResult.has_value();
+            if(opaqueCsgReceiverComputeEmulationOutputSetResult.has_value())
+                this.m_csgOutputSet = opaqueCsgReceiverComputeEmulationOutputSetResult.value();
+        }
+        if(opaqueCsgReceiverComputeEmulationPlanCaptured && !this.m_csgOutputOwned)
+            warning("RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states");
+        gbufferPayload.csgReceiverComputeEmulationOutputStatesGraphOwned = this.m_csgOutputOwned;
+    }
+    public mut OpaqueRegularComputeEmulationGraphTaskPayload regularPayload(){ return this.m_regularPayload; }
+    public mut OpaqueCsgReceiverComputeEmulationGraphTaskPayload csgPayload(){ return this.m_csgPayload; }
+    public in RegularSharedComputeEmulationGraphPlan sharedPlan()const{ return this.m_sharedPlan; }
+    public GpuGraphResourceSetId regularOutputSet()const{ return this.m_regularOutputSet; }
+    public GpuGraphResourceSetId csgOutputSet()const{ return this.m_csgOutputSet; }
+    public GpuGraphResourceId sharedOutput()const{ return this.m_sharedOutput; }
+    public b8 regularOutputOwned()const{ return this.m_regularOutputOwned; }
+    public b8 sharedOutputOwned()const{ return this.m_sharedOutputOwned; }
+    public b8 csgOutputOwned()const{ return this.m_csgOutputOwned; }
 }
 
 

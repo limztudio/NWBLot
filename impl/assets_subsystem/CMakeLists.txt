@@ -21,6 +21,7 @@ if(NWB_BUILD_PIPELINE)
     nwb_target_adhd_sources(nwb_assets_subsystem_cook
         NAMESPACE "NWB::Impl"
         SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/asset.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
     )

@@ -2,102 +2,92 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/edit/numeric_model_operations.adhd>
+#include "numeric_model_operations.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class FloatEditModel : NoCopy{
+    private NumericEditDraft m_draft;
+    private f64 m_value = s_DefaultFloatEditValue;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/numeric_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Committed doubles are finite; signed zero and every finite value survive canonical text roundtrips.
-class FloatEditModel final : public NumericEditModelBase<f64, FloatBounds, FloatEditModel>{
-    friend class NumericEditModelBase<f64, FloatBounds, FloatEditModel>;
-
-
-public:
-    explicit FloatEditModel(::ArenaBase& arena)
-        : NumericEditModelBase(arena)
-    {
-        initializeDefault(s_DefaultFloatEditValue);
+    public FloatEditModel(){
+        if(!this.canonicalize(this.m_value).has_value())
+            TerminateInvariant();
     }
 
+    public f64 value()const{ return this.m_value; }
 
-public:
-    [[nodiscard]] NumericParseStatus::Enum status(const FloatBounds& bounds = {})const noexcept{
-        return EvaluateFloatDraftStatus(m_draft.text(), bounds);
+    public in EditModel draft()const{ return this.m_draft.model(); }
+
+    public mut EditModel lendDraft(){ return this.m_draft.lend(); }
+
+    public b8 dirty()const{ return this.m_draft.dirty(); }
+
+    public u64 revision()const{ return this.m_draft.revision(); }
+
+    public b8 setDraft(in StringView text){ return this.m_draft.setText(text); }
+
+    public b8 setValue(in f64 value){
+        if(!IsFinite(value) || !this.canonicalize(value).has_value())
+            return false;
+        this.m_value = value;
+        this.m_draft.advance();
+        return true;
     }
 
-    // Nonfinite values fail atomically. Successful external replacements always fence pending input.
-    [[nodiscard]] b8 setValue(const f64 value){
-        return IsFinite(value) && assignAuthoritativeValue(value);
+    public NumericParseStatus status(in FloatBounds bounds)const{ return EvaluateFloatDraftStatus(this.draft().text(), bounds); }
+
+    public NumericParseStatus status()const{ return this.status(FloatBounds()); }
+
+    public NumericEditResult submit(in FloatBounds bounds){ return this.commit(bounds, false); }
+
+    public NumericEditResult submit(){ return this.submit(FloatBounds()); }
+
+    public NumericEditResult blur(in FloatBounds bounds){ return this.commit(bounds, true); }
+
+    public NumericEditResult blur(){ return this.blur(FloatBounds()); }
+
+    public NumericEditResult cancel(){ return this.m_draft.restore(this.canonicalize(this.m_value), true); }
+
+    public NumericEditResult abandon(){ return this.m_draft.restore(this.canonicalize(this.m_value), false); }
+
+    private Expected<b8, ErrorCode> canonicalize(in f64 value){
+        CompactString text;
+        const Expected<void, ErrorCode> formatted = FormatF64Into(value, text);
+        if(!formatted.has_value())
+            return MakeUnexpected(formatted.error());
+        return this.m_draft.canonicalize(text.view());
     }
 
-
-private:
-    [[nodiscard]] NumericEditResult commit(const FloatBounds& bounds, const b8 canonical){
-        return commitDraftWith(
-            bounds,
-            canonical,
-            ValidateFloatBounds,
-            ParseFloatDraft,
-            HasFloatEditBitsChanged
-        );
+    private NumericEditResult commit(in FloatBounds bounds, in b8 canonical){
+        if(!ValidateFloatBounds(bounds))
+            return NumericEditResult();
+        const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(this.draft().text());
+        const b8 outside = parsed.has_value() && (parsed.value() < bounds.minimum || parsed.value() > bounds.maximum);
+        const b8 clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
+        const b8 accepted = parsed.has_value() && (!outside || clamped);
+        f64 candidate = this.m_value;
+        if(accepted){
+            candidate = parsed.value();
+            if(clamped){
+                if(candidate < bounds.minimum)
+                    candidate = bounds.minimum;
+                else
+                    candidate = bounds.maximum;
+            }
+        }
+        const b8 changed = HasFloatEditBitsChanged(candidate, this.m_value);
+        Expected<b8, ErrorCode> canonicalized = false;
+        if(canonical || clamped)
+            canonicalized = this.canonicalize(candidate);
+        const NumericEditResult result = this.m_draft.commit(canonical, accepted, clamped, changed, canonicalized);
+        if(result.committed)
+            this.m_value = candidate;
+        return result;
     }
-
-    [[nodiscard]] Expected<b8, ErrorCode> canonicalize(const f64 value){
-        return canonicalizeWith(value, [](const f64 candidate, const Span<char> buffer)noexcept{ return FormatF64(candidate, buffer); });
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::Ui::FloatEditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class FloatEditModel{
-    f64 value()const;
-    in EditModel draft()const;
-    b8 dirty()const;
-    u64 revision()const;
-    mut EditModel lendDraft();
-    b8 setDraft(...);
-    NumericEditResult submit(...);
-    NumericEditResult blur(...);
-    NumericEditResult cancel();
-    NumericEditResult abandon();
-    NumericParseStatus status(...)const;
-    b8 setValue(...);
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

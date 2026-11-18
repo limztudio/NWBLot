@@ -352,6 +352,7 @@ public:
     CoreExternRegistry()
         : m_arena(MetascriptArenaScope::s_ParserScratch)
         , m_sourceText(m_arena)
+        , m_loadError(m_arena)
         , m_ownedStrings(m_arena)
         , m_objectTypes(m_arena)
         , m_enums(m_arena)
@@ -379,6 +380,8 @@ public:
     {
         load();
     }
+
+    [[nodiscard]] MStringView loadError()const noexcept{ return m_loadError; }
 
     [[nodiscard]] const BuiltinObjectTypeInfo* findObjectType(const MStringView name)const noexcept{
         return FindInMap(m_objectTypes, m_objectTypeByName, name);
@@ -804,6 +807,7 @@ private:
             obj.isAbstract = cls->isAbstract;
             obj.isPolymorphicBase = cls->isPolymorphicBase;
             obj.formatArgWrapKind = 0u;
+            obj.templateParams = cls->templateParams;
 
             const usize objIdx = m_objectTypes.size();
             m_objectTypes.push_back(obj);
@@ -837,6 +841,8 @@ private:
                 rm.methodName = ownString(method->name);
                 const MStringView methodTplName = !method->templateParams.empty() ? method->templateParams[0].name : MStringView{};
                 unpackReturnType(method->returnType, methodTplName, rm.returnTypeName, rm.returnTypeArgName, rm.returnNestedTypeArgName, rm.returnErrorTypeName, nullptr);
+                if(method->returnType && !method->returnType->templateArgs.empty() && method->returnType->templateArgs[0].type)
+                    rm.returnTypeArgRefMode = method->returnType->templateArgs[0].type->refMode;
                 rm.synthesizeTypeRef = true;
                 rm.isMutating = !method->isConst;
                 rm.returnsReference = method->returnsReference || (method->returnType && method->returnType->refMode != ParamPassingMode::None);
@@ -852,8 +858,14 @@ private:
                     for(BuiltinFunctionArgRule::Enum& r : sig.argRules)
                         r = BuiltinFunctionArgRule::Any;
                     sig.arity = static_cast<u8>(method->params.size());
-                    for(usize pi = 0u; pi < method->params.size(); ++pi)
+                    sig.allowsCppUnwind = method->allowsCppUnwind;
+                    for(usize pi = 0u; pi < method->params.size(); ++pi){
                         sig.argRules[pi] = resolveArgRule(method->params[pi]);
+                        if(method->params[pi].cppConstReference)
+                            sig.cppConstReferenceMask |= 1u << pi;
+                        if(method->params[pi].retainsBorrow)
+                            sig.retainedArgMask |= 1u << pi;
+                    }
 
                     const usize sigIdx = m_receiverSignatures.size();
                     m_receiverSignatures.push_back(sig);
@@ -966,7 +978,9 @@ private:
             unpackReturnType(fn->returnType, fnTplName, info.returnTypeName, info.returnTypeArgName, info.returnNestedTypeArgName, info.returnErrorTypeName, &info.returnRule);
             info.minArity = fn->minArgCount;
             info.arity = fn->params.size() <= info.argRules.size() ? fn->params.size() : info.argRules.size();
-            if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::ByteViewArg0))
+            if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::PlatformLiteralArg0))
+                info.callLowering = BuiltinCallLowering::PlatformLiteralArg0;
+            else if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::ByteViewArg0))
                 info.callLowering = BuiltinCallLowering::BinaryByteViewArg0;
             else if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::ByteViewArg1))
                 info.callLowering = BuiltinCallLowering::BinaryByteViewArg1;
@@ -981,8 +995,17 @@ private:
             info.returnsReference = fn->returnsReference || (fn->returnType && fn->returnType->refMode != ParamPassingMode::None);
             for(BuiltinFunctionArgRule::Enum& r : info.argRules)
                 r = BuiltinFunctionArgRule::Any;
-            for(usize pi = 0u; pi < info.arity; ++pi)
-                info.argRules[pi] = resolveArgRule(fn->params[pi]);
+            for(usize pi = 0u; pi < info.arity; ++pi){
+                const ParamDecl& param = fn->params[pi];
+                if(!fnTplName.empty() && param.type && param.type->name == fnTplName && param.type->templateArgs.empty()){
+                    info.explicitTypeParamMask |= 1u << pi;
+                    info.argRules[pi] = param.mode == ParamPassingMode::Mut ? BuiltinFunctionArgRule::MutAny : BuiltinFunctionArgRule::Any;
+                }
+                else
+                    info.argRules[pi] = resolveArgRule(param);
+                if(fn->params[pi].retainsBorrow)
+                    info.retainedArgMask |= 1u << pi;
+            }
 
             const usize fnIdx = m_functions.size();
             m_functions.push_back(info);
@@ -1008,6 +1031,18 @@ private:
         }
     }
 
+    void recordLoadError(const MStringView source, const Span<const ParseError> errors, const MStringView fallback){
+        m_loadError.assign("ADHD extern prelude");
+        if(!source.empty())
+            m_loadError.append(" '").append(source).append("'");
+        if(errors.empty()){
+            m_loadError.append(": ").append(fallback);
+            return;
+        }
+        const ParseError& first = errors.front();
+        m_loadError.append(StringFormat(m_arena, ":{}:{}: {}", first.line, first.column, first.message));
+    }
+
     void load(){
         Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
         MetaArena parseArena(MetascriptArenaScope::s_ParserScratch);
@@ -1016,9 +1051,11 @@ private:
         const b8 loadedGlobal = tryReadProjectFile(ContractSemantics::s_GlobalExternPreludePath, parseArena, rawGlobalSource);
         MString rawCoreSource(parseArena);
         const b8 loadedCore = tryReadProjectFile(ContractSemantics::s_CoreExternPreludePath, parseArena, rawCoreSource);
-        FOUNDATION_ASSERT(loadedGlobal && !rawGlobalSource.empty() && loadedCore && !rawCoreSource.empty());
-        if(!loadedGlobal || rawGlobalSource.empty() || !loadedCore || rawCoreSource.empty())
+        if(!loadedGlobal || rawGlobalSource.empty() || !loadedCore || rawCoreSource.empty()){
+            const MStringView source = (!loadedGlobal || rawGlobalSource.empty()) ? ContractSemantics::s_GlobalExternPreludePath : ContractSemantics::s_CoreExternPreludePath;
+            recordLoadError(source, {}, "file is missing or empty");
             return;
+        }
 
         MString rawPreludeSource(parseArena);
         rawPreludeSource.reserve(rawGlobalSource.size() + 2u + rawCoreSource.size());
@@ -1031,18 +1068,24 @@ private:
         Preprocessor preprocessor(parseArena, scratchArena, errors, &includeResolver, false);
         m_sourceText.clear();
         const b8 preprocessed = preprocessor.process(MStringView(rawPreludeSource.data(), rawPreludeSource.size()), m_sourceText);
-        FOUNDATION_ASSERT(preprocessed && errors.empty() && !m_sourceText.empty());
-        if(!preprocessed || !errors.empty() || m_sourceText.empty())
+        if(!preprocessed || !errors.empty() || m_sourceText.empty()){
+            recordLoadError({}, errors, "preprocessing yielded no declarations");
             return;
+        }
 
         const MStringView activeSource(m_sourceText.data(), m_sourceText.size());
         TranslationUnit parseUnit(parseArena);
-        ParserCursor cursor(activeSource, parseArena, scratchArena, errors);
+        ParserCursor cursor(activeSource, m_arena, scratchArena, errors);
         DeclParser declParser(cursor, activeSource, nullptr);
         const b8 parsed = declParser.parseTranslationUnit(parseUnit);
-        FOUNDATION_ASSERT(parsed && errors.empty());
-        if(!parsed || !errors.empty())
+        if(!parsed || !errors.empty()){
+            const MStringView token = cursor.current().text;
+            MStringView source;
+            if(!token.empty() && token.data() >= activeSource.data() && token.data() < activeSource.data() + activeSource.size())
+                source = preprocessor.includedFileAtOffset(static_cast<usize>(token.data() - activeSource.data()));
+            recordLoadError(source, errors, "unable to parse declarations");
             return;
+        }
 
         loadEnums(parseUnit.enums);
         loadClasses(parseUnit.classes);
@@ -1054,6 +1097,7 @@ private:
 private:
     MetaArena m_arena;
     MString m_sourceText;
+    MString m_loadError;
     MVector<GlobalUniquePtr<MString>> m_ownedStrings;
     MVector<BuiltinObjectTypeInfo> m_objectTypes;
     MVector<BuiltinEnumInfo> m_enums;
@@ -1094,6 +1138,10 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+MStringView BuiltinPreludeLoadError()noexcept{
+    return __hidden_adhd_type_utils::GetCoreExternRegistry().loadError();
+}
 
 const BuiltinObjectTypeInfo* FindBuiltinObjectType(const MStringView name)noexcept{
     if(const BuiltinObjectTypeInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinObjectTypes, name))
@@ -1346,6 +1394,8 @@ b8 IsContainerOrWrapperValueAccessMethod(const MStringView receiverTypeName, con
     const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(receiverTypeName);
     if(!genericInfo || genericInfo->isBorrowView)
         return false;
+    if(FindSpecialMethodSemantics(methodName) == SpecialMethodKind::CheckedElementAccess)
+        return genericInfo->isReflectedMap || genericInfo->isIndexableSequence;
     if(IsOptionalOrExpectedGenericType(receiverTypeName))
         return FindSpecialMethodSemantics(methodName) == SpecialMethodKind::UnwrapValue;
     if(genericInfo->inlineLayoutKind == InlineLayoutKind::Atomic)

@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_SubsystemLoadBinaryArena = "impl/assets_subsystem/load_binary";
-const Name s_SubsystemSerializeArena = "impl/assets_subsystem/serialize";
-
 const StringView s_SubsystemDiagnosticPrefix = "Subsystem meta";
 const StringView s_SubsystemSubsystemsFieldName = "subsystems";
 
@@ -33,6 +30,7 @@ class SubsystemHeaderBinary{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 ValidateSubsystemDependentRef(in Name virtualPath, in Name refName, in b8 isValidRef, in usize index){
     if(!isValidRef){

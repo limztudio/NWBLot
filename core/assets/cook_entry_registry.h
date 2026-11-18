@@ -183,11 +183,11 @@ public:
 
 
 public:
-    CookEntryBucket(CookArena& arena, const Name& assetType, const TStringView assetKindText, DocumentParseFunction parseDocument, ValueParseFunction parseValue, const NotNull<BuildAssetFunction> buildAsset, const b8 logBuildFailure)noexcept
+    CookEntryBucket(CookArena& arena, const Name& assetType, const TStringView assetKindText, DocumentParseFunction parseDocument, ValueParseFunction parseValue, const NotNull<BuildAssetFunction> buildAsset, const b8 logBuildFailure)
         : m_entries(arena)
         , m_entryLocations(arena)
         , m_cachedEntries(arena)
-        , m_assetKindText(assetKindText)
+        , m_assetKindText(assetKindText, arena)
         , m_parseDocument(parseDocument)
         , m_parseValue(parseValue)
         , m_buildAsset(buildAsset)
@@ -340,7 +340,7 @@ private:
     CookVector<EntryT> m_entries;
     CookVector<CookEntrySourceLocation> m_entryLocations;
     CookVector<CachedCookedBucketEntry> m_cachedEntries;
-    TStringView m_assetKindText;
+    TString<CookArena> m_assetKindText;
     DocumentParseFunction m_parseDocument = nullptr;
     ValueParseFunction m_parseValue = nullptr;
     NotNull<BuildAssetFunction> m_buildAsset;

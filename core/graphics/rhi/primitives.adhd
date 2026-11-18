@@ -42,6 +42,14 @@ extern class Rect{
     i32 width(...)const;
 };
 
+[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Rect"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+extern class RhiRect{
+    i32 minX;
+    i32 maxX;
+    i32 minY;
+    i32 maxY;
+};
+
 [cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::UIntColor"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
 extern class UIntColor{
     u32 r;

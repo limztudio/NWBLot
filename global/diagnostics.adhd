@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/assert.h>"), cpp_name("FOUNDATION_ASSERT_CHECK")]
+extern b8 AssertionCheck(in b8 condition);
+
 [cpp_name("::DiagnosticEventRecord"), cpp_flags(self_defaulted, brace_init)]
 extern class DiagnosticEventRecord{
     StringView category;
@@ -26,6 +29,12 @@ extern class DiagnosticEventText{
 
 [cpp_name("::CaptureDiagnosticEvent")]
 extern void CaptureDiagnosticEvent(in DiagnosticEventRecord a0);
+
+[cpp_header("<global/diagnostics.h>"), cpp_name("::MakeDiagnosticEventText")]
+extern DiagnosticEventText MakeDiagnosticEventText(in StringView format, in i32 value);
+
+[cpp_header("<global/diagnostics.h>"), cpp_name("::CaptureDiagnosticEventAtCallSite")]
+extern void CaptureDiagnosticEventAtCallSite(in DiagnosticEventRecord record);
 
 [cpp_name("::CaptureDiagnosticEvent")]
 extern void CaptureDiagnosticMessage(in StringView a0, in StringView a1);
@@ -58,6 +67,10 @@ extern const StringView s_DiagnosticEventGpuCrash;
 extern const StringView s_DiagnosticEventManualDump;
 [cpp_name("::DiagnosticEventName::s_Warning")]
 extern const StringView s_DiagnosticEventWarning;
+
+
+[cpp_header("<global/diagnostics.h>"), cpp_name("::MakeDiagnosticEventText")]
+extern DiagnosticEventText FormatPathErrorDiagnostic(in StringView format, in StringView path, in i32 value);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

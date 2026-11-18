@@ -58,7 +58,7 @@ using Impl::PreparedFontImageView;
 using Impl::PreparedFontSource;
 using Impl::ReadFontSfntDirectory;
 using Impl::ReadPreparedFontSource;
-using Impl::SerializePreparedFontSource;
+using Impl::WritePreparedFontSource;
 using Impl::ValidateFontSource;
 using Impl::s_FontMaxSourceBytes;
 using Impl::s_FontMaxTableCount;
@@ -254,11 +254,8 @@ AssetBytes MakeBinary(in FontBinaryHeader header, in AssetBytes source, mut Font
 b8 SerializeFixtureSource(in SourceFixture fixture, mut SourceTestArena testArena, mut AssetBytes outBinary){
     b8 ok = false;
     native(in fixture, mut testArena, mut outBinary, mut ok){
-        auto result = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, testArena.arena);
-        if(!result)
-            return false;
-        outBinary = Move(*result);
-        ok = true;
+        (void)testArena;
+        ok = WritePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, outBinary).has_value();
     }
     return ok;
 }
@@ -272,7 +269,7 @@ b8 WriteCase(in StringView filename, in AssetBytes binary, mut Path outPath){
 }
 
 b8 ReadPreparedInto(in Path path, in b8 includePixels, mut SourceTestArena testArena, mut PreparedFontSource outSource){
-    Expected<PreparedFontSource, StringView> result = ReadPreparedFontSource(path, includePixels, testArena.arena);
+    Expected<PreparedFontSource, StringView> result = ReadPreparedFontSource(testArena.arena, path, includePixels);
     if(!result.has_value())
         return false;
     outSource = result.value();
@@ -280,7 +277,7 @@ b8 ReadPreparedInto(in Path path, in b8 includePixels, mut SourceTestArena testA
 }
 
 b8 CanReadPrepared(in Path path, in b8 includePixels, mut SourceTestArena testArena){
-    return ReadPreparedFontSource(path, includePixels, testArena.arena).has_value();
+    return ReadPreparedFontSource(testArena.arena, path, includePixels).has_value();
 }
 
 void VerifyAssetsFont_SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts(){
@@ -828,7 +825,8 @@ void VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating(
             case 17u: views[0u].pixels = fixture.views[1u].pixels.first(views[0u].pixels.size() + 1u); break;
             default: break;
             }
-            accepted = SerializePreparedFontSource(sfnt, faceIndex, Span<const PreparedFontImageView>(views.data(), groupCount), outputArena.arena).has_value();
+            AssetBytes output(outputArena.arena);
+            accepted = WritePreparedFontSource(sfnt, faceIndex, Span<const PreparedFontImageView>(views.data(), groupCount), output).has_value();
         }
         EXPECT_FALSE(accepted);
         EXPECT_EQ(outputArena.arena.memoryStats().allocationCount, before.allocationCount);

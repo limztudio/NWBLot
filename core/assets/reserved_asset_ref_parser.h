@@ -21,9 +21,9 @@ NWB_ASSETS_BEGIN
 
 class ReservedAssetRefParser{
 public:
-    template<typename AssetT>
+    template<typename AssetT, typename PathArenaT>
     [[nodiscard]] static Expected<AssetRef<AssetT>> ParseText(
-        const Path& nwbFilePath,
+        const ::Path<PathArenaT>& nwbFilePath,
         const AStringView diagnosticPrefix,
         const AStringView fieldLabel,
         const AStringView text,
@@ -45,9 +45,15 @@ public:
         return *ref;
     }
 
-    template<typename AssetT, typename MetadataValue>
+    template<typename AssetT, typename PathArenaT>
+    [[nodiscard]] static Expected<AssetRef<AssetT>> ParseText(const ::Path<PathArenaT>& file, const AStringView prefix, const AStringView field, const AStringView text){
+        Alloc::ScratchArena scratch;
+        return ParseText<AssetT>(file, prefix, field, text, scratch);
+    }
+
+    template<typename AssetT, typename MetadataValue, typename PathArenaT>
     [[nodiscard]] static Expected<AssetRef<AssetT>> ParseValue(
-        const Path& nwbFilePath,
+        const ::Path<PathArenaT>& nwbFilePath,
         const AStringView diagnosticPrefix,
         const AStringView fieldLabel,
         const MetadataValue& value,
@@ -60,6 +66,15 @@ public:
         }
         const AStringView text(value.asString().data(), value.asString().size());
         return ParseText<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, text, scratchArena);
+    }
+
+    template<typename AssetT, typename MetadataValue, typename PathArenaT>
+    [[nodiscard]] static Expected<AssetRef<AssetT>> ParseValue(
+        const ::Path<PathArenaT>& nwbFilePath, const AStringView diagnosticPrefix,
+        const AStringView fieldLabel, const MetadataValue& value, const AStringView nonStringErrorText
+    ){
+        Alloc::ScratchArena scratchArena;
+        return ParseValue<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, value, nonStringErrorText, scratchArena);
     }
 
     template<typename AssetT, typename MetadataValue>

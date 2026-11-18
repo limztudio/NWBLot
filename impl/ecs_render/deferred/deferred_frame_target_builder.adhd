@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/avboit/avboit_system.adhd>
 #include <impl/ecs_render/csg/csg_system.adhd>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
@@ -11,12 +12,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_name("::NWB::Impl::RendererRayTracingSystem"), cpp_header("<impl/ecs_render/raytrace/raytracing_system.adhd.h>")]
-extern class RendererRayTracingSystem{
-    public b8 createCausticTargets(mut DeferredFrameTargets targets);
-    public b8 createSurfelTargets(mut DeferredFrameTargets targets);
-};
 
 [modular]
 class DeferredFrameTargetBuilder : NoCopy{

@@ -284,7 +284,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             break;
 
         if(expr.isStringSubstr && expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-            out.append("([](const auto& __adhd_str, const ::usize __adhd_pos = 0u, const ::usize __adhd_count = ::AStringView::npos)noexcept{ const ::AStringView __adhd_view(__adhd_str.data(), __adhd_str.size()); const ::usize __adhd_clamped = __adhd_pos < __adhd_view.size() ? __adhd_pos : __adhd_view.size(); const ::AStringView __adhd_sub = __adhd_view.substr(__adhd_clamped, __adhd_count); return ::RemoveCVRef_T<decltype(__adhd_str)>(__adhd_sub.data(), __adhd_sub.size(), __adhd_str.get_allocator()); }(");
+            out.append("([](const auto& __adhd_str, const ::usize __adhd_pos = 0u, const ::usize __adhd_count = ::AStringView::npos)").append(lambdaExceptionSpec()).append("{ const ::AStringView __adhd_view(__adhd_str.data(), __adhd_str.size()); const ::usize __adhd_clamped = __adhd_pos < __adhd_view.size() ? __adhd_pos : __adhd_view.size(); const ::AStringView __adhd_sub = __adhd_view.substr(__adhd_clamped, __adhd_count); return ::RemoveCVRef_T<decltype(__adhd_str)>(__adhd_sub.data(), __adhd_sub.size(), __adhd_str.get_allocator()); }(");
             emitExpr(out, *expr.lhs->lhs);
             for(const Expr* arg : expr.arguments){
                 if(!arg)
@@ -328,7 +328,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             if(SimdStorageEmitter(*this).tryEmit(storeCallStr, baseCallee, expr.arguments, "__adhd_tmp")){
                 TypeRef tmpType(m_arena);
                 tmpType.name = expr.lhs->text;
-                out.append("([&]()noexcept{ ");
+                out.append("([&]()").append(lambdaExceptionSpec()).append("{ ");
                 m_typeEmitter.emitTypeCpp(out, tmpType);
                 out.append(" __adhd_tmp{}; ");
                 out.append(storeCallStr.data(), storeCallStr.size());
@@ -383,14 +383,14 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append(omitOuterBinaryParens ? "))" : ")))");
             break;
         }
-        b8 subOptionalClassAssign = false;
+        b8 subWrappedClassAssign = false;
         b8 subAdhdAssign = false;
         if(
             !m_activeTemplateParams.empty()
             && expr.op == TokenType::Equal
             && !expr.isNotNullRebind
-            && !expr.useAdhdOptionalClassAssign
-            && !expr.useAdhdOptionalScratchAssign
+            && !expr.useAdhdWrappedClassAssign
+            && !expr.useAdhdWrappedScratchAssign
             && !expr.useAdhdAssign
             && expr.lhs
             && expr.lhs->kind == ExprKind::ThisMember
@@ -398,21 +398,20 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             for(const FieldDecl* field : m_activeOrderedFields){
                 if(field && field->name == expr.lhs->text && field->usesClassArena && field->type){
                     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(field->type);
-                    const BuiltinGenericTypeInfo* genericInfo = unwrapped ? FindBuiltinGenericType(unwrapped->name) : nullptr;
-                    if(genericInfo && genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)
-                        subOptionalClassAssign = true;
+                    if(unwrapped && IsOptionalOrExpectedGenericType(unwrapped->name))
+                        subWrappedClassAssign = true;
                     else
                         subAdhdAssign = true;
                     break;
                 }
             }
         }
-        if(expr.useAdhdOptionalClassAssign || expr.useAdhdOptionalScratchAssign || subOptionalClassAssign){
+        if(expr.useAdhdWrappedClassAssign || expr.useAdhdWrappedScratchAssign || subWrappedClassAssign){
             const b8 locked = (m_parallelWorkerDepth > 0u);
             if(!omitOuterBinaryParens)
                 out.push_back('(');
-            out.append(locked ? "::AdhdAssignOptionalLocked(__adhd_parallel_arena_mutex, " : "::AdhdAssignOptional(");
-            const MStringView targetArena = (expr.useAdhdOptionalClassAssign || subOptionalClassAssign) ? activeClassArenaExpr() : CodegenSymbols::s_ScratchArenaVar;
+            out.append(locked ? "::AdhdAssignWrappedLocked(__adhd_parallel_arena_mutex, " : "::AdhdAssignWrapped(");
+            const MStringView targetArena = (expr.useAdhdWrappedClassAssign || subWrappedClassAssign) ? activeClassArenaExpr() : CodegenSymbols::s_ScratchArenaVar;
             out.append(targetArena.data(), targetArena.size());
             out.append(", ");
             if(expr.lhs)
@@ -465,6 +464,17 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
         out.push_back(')');
+        break;
+    }
+    case ExprKind::LayoutQuery:{
+        const LayoutQuery& query = s_LayoutQueries[expr.layoutQuery];
+        out.append(query.cppPrefix.data(), query.cppPrefix.size());
+        m_typeEmitter.emitTypeCpp(out, *expr.targetType);
+        out.append(query.cppSuffix.data(), query.cppSuffix.size());
+        if(expr.layoutQuery == LayoutQueryKind::Offset){
+            out.append(expr.text.data(), expr.text.size());
+            out.append("); }()");
+        }
         break;
     }
     case ExprKind::BitCast:{
@@ -578,7 +588,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         }
         out.push_back(']');
         m_typeEmitter.emitParamListCpp(out, expr.lambdaParams, expr.lambdaInjectsCallerArena);
-        out.append("noexcept -> ");
+        out.append(lambdaExceptionSpec()).append(" -> ");
         if(expr.lambdaReturnType)
             m_typeEmitter.emitReturnTypeCpp(out, *expr.lambdaReturnType);
         else

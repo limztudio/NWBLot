@@ -68,7 +68,7 @@ public:
 
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ ++metadataCalls; return count; }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         const StringView value = ComboSource::text(index);
         if(closePopupOnText){
             PopupState& state = *MakeNotNull(Exchange(closePopupOnText, nullptr));
@@ -161,11 +161,11 @@ public:
         return full.findEnabled(start, reverse);
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{ return full.text(index); }
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
 
     [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return full.enabled(index); }
 
-    [[nodiscard]] virtual b8 filter(const AStringView query)override{
+    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{
         ++filterCalls;
         const AStringView previous{ m_query.data(), m_query.size() };
         if(previous != query){
@@ -206,7 +206,7 @@ public:
 public:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
-        m_builder.setEditHost(&m_host);
+        m_builder.setEditHost(m_host);
         m_parent.open();
         m_child.open();
     }
@@ -346,7 +346,7 @@ public:
         return generation;
     }
 
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         observeCallback();
         ++m_metadataCalls;
         if(m_revisionBuilder){
@@ -362,7 +362,7 @@ public:
         return count;
     }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         const StringView value = ComboSource::text(index);
         if(m_textBuilder){
             Builder& builder = *MakeNotNull(Exchange(m_textBuilder, nullptr));
@@ -689,17 +689,17 @@ public:
     }
 
     [[nodiscard]] Optional<PopupScope> findPopupScope(const PopupToken& token)const noexcept{
-        if(const PopupScope* found = m_router.popupScope(token))
-            return *found;
+        if(const auto found = m_router.popupScope(token))
+            return **found;
         return {};
     }
 
     [[nodiscard]] b8 hasPopupScope(const PopupToken& token)const noexcept{
-        return m_router.popupScope(token) != nullptr;
+        return m_router.popupScope(token).has_value();
     }
 
     [[nodiscard]] b8 hasRouterTarget(const WidgetId id)const noexcept{
-        return m_router.findTarget(id) != nullptr;
+        return m_router.findTarget(id).has_value();
     }
 
     void focusBase(){

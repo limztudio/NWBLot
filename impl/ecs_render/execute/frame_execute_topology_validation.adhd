@@ -2,7 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/types.adhd>
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
+
+#include <impl/ecs_render/execute/deferred_frame_topology_validator.adhd>
+#include <impl/ecs_render/execute/execute_internal.adhd>
+#include <impl/ecs_render/execute/frame_diagnostics.adhd>
+#include <impl/ecs_render/shadow/shadow_prepare_packet_validator.adhd>
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,108 +106,73 @@ b8 AreAllSurfelGiPreparedPrefixTasksPresent(in b8 ageFreeValid, in b8 cellHeadCl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+GpuTaskId GraphicsPrefixTaskOrFallback(in GpuTaskId task, in GpuTaskId fallback){
+    if(task.valid())
+        return task;
+    return fallback;
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/execute/deferred_frame_topology_validator.adhd.h>
-#include <impl/ecs_render/execute/execute_internal.adhd.h>
-#include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_timing_state.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/shadow/shadow_prepare_packet_validator.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/global.adhd.h>
-
-#include <core/graphics/gpu_timing_types.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/scheduler.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 DeferredFrameTopologyValidator::validate(
-    const Core::GpuCompiledGraph::ReadView& deferredCompiledPlan,
-    const Core::GpuTaskGraph::DeclarationReadView& deferredTaskGraphView,
-    FrameExecuteTimingState& timing,
-    const Core::GpuPhysicalQueueId primaryGraphicsQueue,
-    const b8 deferredGraphScheduled,
-    const b8 captureLaggedLightingHistory,
-    const b8 hardwareShadowSupported,
-    const b8 hasOpaqueCsgFrameWork,
-    const b8 hasTransparentRenderers,
-    const b8 clearAvboitTargets,
-    const b8 laggedAsyncLightingSchedule,
-    const b8 laggedLightingHistoryWriterWaitPending,
-    const b8 surfelCounterReadbackCompletionValid,
-    DeferredFrameTopologyResult& outResult
-)const noexcept{
-    const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{
-        return deferredCompiledPlan.findTask(task).valid();
-    };
-    ShadowPreparePacketValidator shadowPreparePacketValidator(m_pipeline);
+b8 DeferredFrameTopologyValidator::validate(in GpuCompiledGraphReadView deferredCompiledPlan, in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
+        mut FrameExecuteTimingState timing, in GpuPhysicalQueueId primaryGraphicsQueue,
+        in b8 deferredGraphScheduled, in b8 captureLaggedLightingHistory, in b8 hardwareShadowSupported,
+        in b8 hasOpaqueCsgFrameWork, in b8 hasTransparentRenderers, in b8 clearAvboitTargets,
+        in b8 laggedAsyncLightingSchedule, in b8 laggedLightingHistoryWriterWaitPending,
+        in b8 surfelCounterReadbackCompletionValid, mut DeferredFrameTopologyResult outResult)const{
+    ShadowPreparePacketValidator shadowPreparePacketValidator(this.m_pipeline);
     ShadowPreparePacketValidationResult shadowPreparePacket;
     shadowPreparePacketValidator.validate(deferredCompiledPlan, shadowPreparePacket);
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
-    Array<Core::GpuTaskId, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTasks;
-    GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(m_pipeline);
+    Array<GpuTaskId, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTasks;
+    GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(this.m_pipeline);
     GraphicsPrefixTimingResolutionResult graphicsPrefixTimingResolution;
     graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, timing.graphicsPrefixOwnedTimingTickets, timing.graphicsPrefixTimingTickets, graphicsPrefixTimingTasks, timing.asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
     const b8 graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
     const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
-    ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(m_pipeline);
+    ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(this.m_pipeline);
     ShadowVisibilityMergeValidationResult shadowVisibilityMerge;
     shadowVisibilityMergeValidator.validate(deferredCompiledPlan, shadowVisibilityMerge);
     const b8 shadowVisibilityPreparedTasksMerged = shadowVisibilityMerge.preparedTasksMerged;
     const b8 shadowVisibilityAllLitClearMerged = shadowVisibilityMerge.allLitClearMerged;
     const b8 shadowVisibilityAdaptivePrimitivesMerged = shadowVisibilityMerge.adaptivePrimitivesMerged;
-    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask);
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask);
-    OpaqueEmulationMergeValidator opaqueEmulationMergeValidator(m_pipeline);
+    const Optional<GpuPhysicalQueueInfo> shadowVisibilityQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask);
+    const Optional<GpuPhysicalQueueInfo> graphicsPrefixQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask);
+    OpaqueEmulationMergeValidator opaqueEmulationMergeValidator(this.m_pipeline);
     OpaqueEmulationMergeValidationResult opaqueEmulationMerge;
     opaqueEmulationMergeValidator.validate(deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixTimingBindingsValid, hasOpaqueCsgFrameWork, opaqueEmulationMerge);
-    const Core::GpuPhysicalQueueInfo* const frameTimingBeginQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_deferredFrameTimingBeginTask);
-    const Core::GpuSubmissionPacketId frameTimingBeginPacket = deferredCompiledPlan.packetForTask(m_pipeline.m_deferredFrameTimingBeginTask);
-    const Core::GpuSubmissionPacketRange frameTimingEnvelope = deferredCompiledPlan.packetTimingEnvelopeRange();
-    const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask);
-    const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask);
-    const RendererAvboitTaskGraphValidation avboitValidation = m_pipeline.m_avboitSystem.validateTaskGraphStage(deferredCompiledPlan, clearAvboitTargets, hasTransparentRenderers);
-    const Core::GpuTaskId causticsTask = hardwareShadowSupported ? m_pipeline.m_causticsGraph.m_deferredHardwareCausticsTask : m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask;
+    const Optional<GpuPhysicalQueueInfo> frameTimingBeginQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_deferredFrameTimingBeginTask);
+    const GpuSubmissionPacketId frameTimingBeginPacket = deferredCompiledPlan.packetForTask(this.m_pipeline.m_deferredFrameTimingBeginTask);
+    const GpuSubmissionPacketRange frameTimingEnvelope = deferredCompiledPlan.packetTimingEnvelopeRange();
+    const Optional<GpuPhysicalQueueInfo> shadowPrepareQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask);
+    const Optional<GpuPhysicalQueueInfo> softwareCausticsQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask);
+    const RendererAvboitTaskGraphValidation avboitValidation = this.m_pipeline.m_avboitSystem.validateTaskGraphStage(deferredCompiledPlan, clearAvboitTargets, hasTransparentRenderers);
+    GpuTaskId causticsTask = this.m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask;
+    if(hardwareShadowSupported)
+        causticsTask = this.m_pipeline.m_causticsGraph.m_deferredHardwareCausticsTask;
     // History-selector uploads must share Lighting's acceptance boundary.
-    const b8 laggedLightingHistorySlotsUploadMergedIntoLightingPacket = !m_pipeline.m_deferredLaggedLightingHistorySlotsUploadTask.valid() || deferredCompiledPlan.tasksSharePacket(m_pipeline.m_deferredLightingTask, m_pipeline.m_deferredLaggedLightingHistorySlotsUploadTask);
+    const b8 laggedLightingHistorySlotsUploadMergedIntoLightingPacket = !this.m_pipeline.m_deferredLaggedLightingHistorySlotsUploadTask.valid()
+        || deferredCompiledPlan.tasksSharePacket(this.m_pipeline.m_deferredLightingTask, this.m_pipeline.m_deferredLaggedLightingHistorySlotsUploadTask);
     // Resolve the terminal endpoint through the compiler, not renderer policy.
-    const Core::GpuCompiledPresentEndpoint* const presentationEndpoint = deferredCompiledPlan.presentEndpoint();
-    const Core::GpuTaskId terminalPresentationTask = presentationEndpoint ? presentationEndpoint->producer : Core::GpuTaskId{};
-    const Core::GpuPhysicalQueueInfo* const deferredLightingQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_deferredLightingTask);
-    const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_deferredCompositeTask);
-    const Core::GpuPhysicalQueueInfo* const deferredPresentQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_deferredPresentTask);
-    const Core::GpuPhysicalQueueInfo* const deferredPresentationOverlayQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_deferredPresentationOverlayTask);
-    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue = presentationEndpoint ? deferredCompiledPlan.queueInfo(presentationEndpoint->queue) : nullptr;
-    const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_deferredLaggedLightingHistoryTask);
-    const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue = deferredCompiledPlan.queueInfoForTask(m_pipeline.m_deferredFrameRecoveryTask);
-    SurfelCausticsMergeValidator surfelCausticsMergeValidator(m_pipeline);
+    const Optional<GpuCompiledPresentEndpoint> presentationEndpoint = deferredCompiledPlan.findPresentEndpoint();
+    GpuTaskId terminalPresentationTask;
+    if(presentationEndpoint.has_value())
+        terminalPresentationTask = presentationEndpoint.value().producer;
+    const Optional<GpuPhysicalQueueInfo> deferredLightingQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_deferredLightingTask);
+    const Optional<GpuPhysicalQueueInfo> deferredCompositeQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_deferredCompositeTask);
+    const Optional<GpuPhysicalQueueInfo> deferredPresentQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_deferredPresentTask);
+    const Optional<GpuPhysicalQueueInfo> deferredPresentationOverlayQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_deferredPresentationOverlayTask);
+    Optional<GpuPhysicalQueueInfo> terminalPresentationQueue;
+    if(presentationEndpoint.has_value())
+        terminalPresentationQueue = deferredCompiledPlan.findQueueInfo(presentationEndpoint.value().queue);
+    const Optional<GpuPhysicalQueueInfo> deferredLaggedLightingHistoryQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_deferredLaggedLightingHistoryTask);
+    const Optional<GpuPhysicalQueueInfo> deferredFrameRecoveryQueue = deferredCompiledPlan.findQueueInfoForTask(this.m_pipeline.m_deferredFrameRecoveryTask);
+    SurfelCausticsMergeValidator surfelCausticsMergeValidator(this.m_pipeline);
     SurfelCausticsMergeValidationResult surfelCausticsMerge;
     surfelCausticsMergeValidator.validate(deferredCompiledPlan, causticsTask, terminalPresentationTask, captureLaggedLightingHistory, surfelCausticsMerge);
-    const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue = surfelCausticsMerge.hardwareCausticsQueue;
-    const Core::GpuPhysicalQueueInfo* const surfelGiQueue = surfelCausticsMerge.surfelGiQueue;
-    const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue = surfelCausticsMerge.surfelGiPreparationQueue;
-    const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue = surfelCausticsMerge.surfelGiSnapshotCopyQueue;
-    const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue = surfelCausticsMerge.surfelGiCounterReadbackQueue;
+    const Optional<GpuPhysicalQueueInfo> hardwareCausticsQueue = surfelCausticsMerge.hardwareCausticsQueue;
+    const Optional<GpuPhysicalQueueInfo> surfelGiQueue = surfelCausticsMerge.surfelGiQueue;
+    const Optional<GpuPhysicalQueueInfo> surfelGiPreparationQueue = surfelCausticsMerge.surfelGiPreparationQueue;
+    const Optional<GpuPhysicalQueueInfo> surfelGiSnapshotCopyQueue = surfelCausticsMerge.surfelGiSnapshotCopyQueue;
+    const Optional<GpuPhysicalQueueInfo> surfelGiCounterReadbackQueue = surfelCausticsMerge.surfelGiCounterReadbackQueue;
     const b8 surfelGiOutputClearMergedIntoGiPacket = surfelCausticsMerge.surfelGiOutputClearMergedIntoGiPacket;
     const b8 surfelGiPreparedPrefixMergedIntoGiPacket = surfelCausticsMerge.surfelGiPreparedPrefixMergedIntoGiPacket;
     const b8 surfelGiInitializationLifecycleMergedIntoPreparationPacket = surfelCausticsMerge.surfelGiInitializationLifecycleMergedIntoPreparationPacket;
@@ -211,19 +183,19 @@ b8 DeferredFrameTopologyValidator::validate(
     const b8 laggedLightingHistoryFollowsPresentation = surfelCausticsMerge.laggedLightingHistoryFollowsPresentation;
     if(
         !deferredGraphScheduled
-        || !m_pipeline.m_deferredLightingTaskGraphScheduled
+        || !this.m_pipeline.m_deferredLightingTaskGraphScheduled
         || !IsValidDeferredFrameTimingEnvelopeBegin(
-            m_pipeline.m_deferredFrameTimingBeginTask.valid(),
-            taskIsCompiled(m_pipeline.m_deferredFrameTimingBeginTask),
-            frameTimingBeginQueue && frameTimingBeginQueue->queueClass == Core::CommandQueue::Graphics && frameTimingBeginQueue->id == primaryGraphicsQueue,
+            this.m_pipeline.m_deferredFrameTimingBeginTask.valid(),
+            deferredCompiledPlan.findTask(this.m_pipeline.m_deferredFrameTimingBeginTask).valid(),
+            frameTimingBeginQueue.has_value() && frameTimingBeginQueue.value().queueClass == CommandQueue::Graphics && frameTimingBeginQueue.value().id == primaryGraphicsQueue,
             frameTimingBeginPacket.valid(),
             frameTimingBeginPacket.index,
             frameTimingEnvelope.valid(),
             frameTimingEnvelope.first == frameTimingBeginPacket
         )
-        || !m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask.valid()
-        || !taskIsCompiled(m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask)
-        || deferredCompiledPlan.tasksSharePacket(m_pipeline.m_deferredFrameTimingBeginTask, m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask)
+        || !this.m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask.valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask).valid()
+        || deferredCompiledPlan.tasksSharePacket(this.m_pipeline.m_deferredFrameTimingBeginTask, this.m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask)
         || !IsAcceptedShadowPreparePacketMerges(
             shadowPreparePacket.softwareBvhBuildsMerged,
             shadowPreparePacket.softwareSceneRefitMerged,
@@ -235,133 +207,135 @@ b8 DeferredFrameTopologyValidator::validate(
             shadowPreparePacket.shadowMaterialContextUploadsMerged,
             shadowPreparePacket.sceneBvhUploadsMerged
         )
-        || !shadowPrepareQueue
-        || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
-        || !m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask.valid()
-        || !m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupTask.valid()
-        || !m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixDeferredClearTask.valid()
-        || !m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask.valid()
-        || (hasOpaqueCsgFrameWork && (!m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask.valid() || !m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask.valid() || !m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask.valid()))
-        || !m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask.valid()
-        || !taskIsCompiled(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask)
-        || !taskIsCompiled(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupTask)
-        || !taskIsCompiled(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixDeferredClearTask)
-        || !taskIsCompiled(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask)
+        || !shadowPrepareQueue.has_value()
+        || shadowPrepareQueue.value().queueClass != CommandQueue::Graphics
+        || !this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask.valid()
+        || !this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupTask.valid()
+        || !this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixDeferredClearTask.valid()
+        || !this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask.valid()
+        || (hasOpaqueCsgFrameWork && (!this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask.valid() || !this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask.valid()
+            || !this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask.valid()))
+        || !this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask.valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask).valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupTask).valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixDeferredClearTask).valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask).valid()
         || (hasOpaqueCsgFrameWork && (
-            !deferredCompiledPlan.findTask(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask).valid()
-            || !deferredCompiledPlan.findTask(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask).valid()
-            || !deferredCompiledPlan.findTask(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask).valid()
+            !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask).valid()
+            || !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask).valid()
+            || !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask).valid()
         ))
-        || !taskIsCompiled(m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask)
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask).valid()
         || !graphicsPrefixTimingBindingsValid
         || !IsAcceptedOpaqueEmulationMerges(opaqueEmulationMerge)
-        || !graphicsPrefixQueue
-        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
-        || !m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask.valid()
-        || !taskIsCompiled(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask)
+        || !graphicsPrefixQueue.has_value()
+        || graphicsPrefixQueue.value().queueClass != CommandQueue::Graphics
+        || !this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask.valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask).valid()
         || !shadowVisibilityPreparedTasksMerged
         || !shadowVisibilityAllLitClearMerged
         || !shadowVisibilityAdaptivePrimitivesMerged
-        || !shadowVisibilityQueue
-        || (!hardwareShadowSupported && (!m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask.valid() || !taskIsCompiled(m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask) || !softwareCausticsQueue))
+        || !shadowVisibilityQueue.has_value()
+        || (!hardwareShadowSupported && (!this.m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask.valid() || !deferredCompiledPlan.findTask(this.m_pipeline.m_causticsGraph.m_deferredSoftwareCausticsTask).valid() || !softwareCausticsQueue.has_value()))
         || !IsAcceptedCausticsPacketMerges(
-            m_pipeline.m_causticsGraph.m_deferredCausticIrradianceClearTask.valid(),
-            m_pipeline.m_causticsGraph.m_deferredCausticPhotonTask.valid(),
+            this.m_pipeline.m_causticsGraph.m_deferredCausticIrradianceClearTask.valid(),
+            this.m_pipeline.m_causticsGraph.m_deferredCausticPhotonTask.valid(),
             causticPhotonMergedIntoCausticsPacket,
-            m_pipeline.m_causticsGraph.m_deferredCausticGeometryTask.valid(),
+            this.m_pipeline.m_causticsGraph.m_deferredCausticGeometryTask.valid(),
             causticGeometryMergedIntoCausticsPacket,
-            m_pipeline.m_causticsGraph.m_deferredCausticResolvePrepareTask.valid(),
+            this.m_pipeline.m_causticsGraph.m_deferredCausticResolvePrepareTask.valid(),
             surfelCausticsMerge.causticResolvePrepareMergedIntoCausticsPacket,
             surfelCausticsMerge.causticResolveWaveletsMergedIntoCausticsPacket,
-            m_pipeline.m_causticsGraph.m_deferredCausticResolveUpsampleTask.valid(),
+            this.m_pipeline.m_causticsGraph.m_deferredCausticResolveUpsampleTask.valid(),
             surfelCausticsMerge.causticResolveUpsampleMergedIntoCausticsPacket,
             surfelCausticsMerge.causticIrradianceClearMergedIntoCausticsPacket,
             surfelCausticsMerge.causticAccumulatorBootstrapClearMergedIntoCausticsPacket,
             surfelCausticsMerge.causticAccumulatorDecayMergedIntoCausticsPacket
         )
-        || !m_pipeline.m_surfelGiGraph.m_deferredSurfelGiTask.valid()
-        || !m_pipeline.m_surfelGiGraph.m_deferredSurfelGiIrradianceClearTask.valid()
+        || !this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiTask.valid()
+        || !this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiIrradianceClearTask.valid()
         || !surfelGiOutputClearMergedIntoGiPacket
         || !surfelGiPreparedPrefixMergedIntoGiPacket
         || !surfelGiInitializationLifecycleMergedIntoPreparationPacket
-        || !taskIsCompiled(m_pipeline.m_surfelGiGraph.m_deferredSurfelGiTask)
-        || !surfelGiQueue
-        || (m_pipeline.m_surfelGiGraph.m_deferredSurfelGiSnapshotCopyTask.valid() && (
-            !m_pipeline.m_surfelGiGraph.m_deferredSurfelGiPreparationTask.valid()
-            || !taskIsCompiled(m_pipeline.m_surfelGiGraph.m_deferredSurfelGiPreparationTask)
-            || !surfelGiPreparationQueue
-            || !taskIsCompiled(m_pipeline.m_surfelGiGraph.m_deferredSurfelGiSnapshotCopyTask)
-            || !surfelGiSnapshotCopyQueue
-            || !HasQueueCapabilityMask(static_cast<u8>(surfelGiSnapshotCopyQueue->capabilities), static_cast<u8>(Core::GpuQueueCapability::Transfer))
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiTask).valid()
+        || !surfelGiQueue.has_value()
+        || (this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiSnapshotCopyTask.valid() && (
+            !this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiPreparationTask.valid()
+            || !deferredCompiledPlan.findTask(this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiPreparationTask).valid()
+            || !surfelGiPreparationQueue.has_value()
+            || !deferredCompiledPlan.findTask(this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiSnapshotCopyTask).valid()
+            || !surfelGiSnapshotCopyQueue.has_value()
+            || !HasQueueCapabilityMask(cast<u8>(surfelGiSnapshotCopyQueue.value().capabilities), cast<u8>(GpuQueueCapability::Transfer))
         ))
-        || (m_pipeline.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask.valid() && (
-            !taskIsCompiled(m_pipeline.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask)
-            || !surfelGiCounterReadbackQueue
-            || !HasQueueCapabilityMask(static_cast<u8>(surfelGiCounterReadbackQueue->capabilities), static_cast<u8>(Core::GpuQueueCapability::Transfer))
+        || (this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask.valid() && (
+            !deferredCompiledPlan.findTask(this.m_pipeline.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask).valid()
+            || !surfelGiCounterReadbackQueue.has_value()
+            || !HasQueueCapabilityMask(cast<u8>(surfelGiCounterReadbackQueue.value().capabilities), cast<u8>(GpuQueueCapability::Transfer))
         ))
         || !surfelCounterReadbackFollowsPresentation
         || (hardwareShadowSupported && (
-            !m_pipeline.m_causticsGraph.m_deferredHardwareCausticsTask.valid()
-            || !taskIsCompiled(m_pipeline.m_causticsGraph.m_deferredHardwareCausticsTask)
-            || !hardwareCausticsQueue
-            || !HasQueueCapabilityMask(static_cast<u8>(hardwareCausticsQueue->capabilities), static_cast<u8>(Core::GpuQueueCapability::Compute))
+            !this.m_pipeline.m_causticsGraph.m_deferredHardwareCausticsTask.valid()
+            || !deferredCompiledPlan.findTask(this.m_pipeline.m_causticsGraph.m_deferredHardwareCausticsTask).valid()
+            || !hardwareCausticsQueue.has_value()
+            || !HasQueueCapabilityMask(cast<u8>(hardwareCausticsQueue.value().capabilities), cast<u8>(GpuQueueCapability::Compute))
         ))
         || !avboitValidation.valid()
-        || !m_pipeline.m_deferredLightingTask.valid()
-        || !m_pipeline.m_deferredCompositeTask.valid()
-        || !m_pipeline.m_deferredPresentTask.valid()
-        || !m_pipeline.m_deferredFrameTimingEndTask.valid()
-        || (m_pipeline.m_deferredPresentationOverlayRequired != m_pipeline.m_deferredPresentationOverlayTask.valid())
-        || !m_pipeline.m_deferredFrameRecoveryTask.valid()
-        || (m_pipeline.m_deferredSurfelGiCounterReadbackCompletion.valid() && !surfelCounterReadbackCompletionValid)
+        || !this.m_pipeline.m_deferredLightingTask.valid()
+        || !this.m_pipeline.m_deferredCompositeTask.valid()
+        || !this.m_pipeline.m_deferredPresentTask.valid()
+        || !this.m_pipeline.m_deferredFrameTimingEndTask.valid()
+        || (this.m_pipeline.m_deferredPresentationOverlayRequired != this.m_pipeline.m_deferredPresentationOverlayTask.valid())
+        || !this.m_pipeline.m_deferredFrameRecoveryTask.valid()
+        || (this.m_pipeline.m_deferredSurfelGiCounterReadbackCompletion.valid() && !surfelCounterReadbackCompletionValid)
         || (captureLaggedLightingHistory && (
-            !m_pipeline.m_deferredLaggedLightingHistoryTask.valid()
-            || !taskIsCompiled(m_pipeline.m_deferredLaggedLightingHistoryTask)
-            || !deferredLaggedLightingHistoryQueue
-            || !HasQueueCapabilityMask(static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities), static_cast<u8>(Core::GpuQueueCapability::Transfer))
+            !this.m_pipeline.m_deferredLaggedLightingHistoryTask.valid()
+            || !deferredCompiledPlan.findTask(this.m_pipeline.m_deferredLaggedLightingHistoryTask).valid()
+            || !deferredLaggedLightingHistoryQueue.has_value()
+            || !HasQueueCapabilityMask(cast<u8>(deferredLaggedLightingHistoryQueue.value().capabilities), cast<u8>(GpuQueueCapability::Transfer))
         ))
         || !laggedLightingHistoryFollowsPresentation
-        || (laggedAsyncLightingSchedule && !m_pipeline.m_deferredLightingHistoryReadReadyCompletion.valid())
-        || (laggedLightingHistoryWriterWaitPending && !m_pipeline.m_deferredLightingHistoryWriterDrainCompletion.valid())
-        || !taskIsCompiled(m_pipeline.m_deferredLightingTask)
+        || (laggedAsyncLightingSchedule && !this.m_pipeline.m_deferredLightingHistoryReadReadyCompletion.valid())
+        || (laggedLightingHistoryWriterWaitPending && !this.m_pipeline.m_deferredLightingHistoryWriterDrainCompletion.valid())
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_deferredLightingTask).valid()
         || !laggedLightingHistorySlotsUploadMergedIntoLightingPacket
-        || !taskIsCompiled(m_pipeline.m_deferredCompositeTask)
-        || !taskIsCompiled(m_pipeline.m_deferredPresentTask)
-        || !taskIsCompiled(m_pipeline.m_deferredFrameTimingEndTask)
-        || (m_pipeline.m_deferredPresentationOverlayRequired && !taskIsCompiled(m_pipeline.m_deferredPresentationOverlayTask))
-        || !presentationEndpoint
-        || !presentationEndpoint->valid()
-        || presentationEndpoint->producer != m_pipeline.m_deferredFrameTimingEndTask
-        || !deferredTaskGraphView.validResource(presentationEndpoint->backBuffer)
-        || !taskIsCompiled(m_pipeline.m_deferredFrameRecoveryTask)
-        || !deferredLightingQueue
-        || !deferredCompositeQueue
-        || !deferredPresentQueue
-        || (m_pipeline.m_deferredPresentationOverlayRequired && !deferredPresentationOverlayQueue)
-        || !terminalPresentationQueue
-        || !deferredFrameRecoveryQueue
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_deferredCompositeTask).valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_deferredPresentTask).valid()
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_deferredFrameTimingEndTask).valid()
+        || (this.m_pipeline.m_deferredPresentationOverlayRequired && !deferredCompiledPlan.findTask(this.m_pipeline.m_deferredPresentationOverlayTask).valid())
+        || !presentationEndpoint.has_value()
+        || !presentationEndpoint.value().valid()
+        || presentationEndpoint.value().producer != this.m_pipeline.m_deferredFrameTimingEndTask
+        || !deferredTaskGraphView.validResource(presentationEndpoint.value().backBuffer)
+        || !deferredCompiledPlan.findTask(this.m_pipeline.m_deferredFrameRecoveryTask).valid()
+        || !deferredLightingQueue.has_value()
+        || !deferredCompositeQueue.has_value()
+        || !deferredPresentQueue.has_value()
+        || (this.m_pipeline.m_deferredPresentationOverlayRequired && !deferredPresentationOverlayQueue.has_value())
+        || !terminalPresentationQueue.has_value()
+        || !deferredFrameRecoveryQueue.has_value()
         // Backbuffer writers need an acquired-image contract on the primary queue.
         || !primaryGraphicsQueue.valid()
-        || presentationEndpoint->queue != primaryGraphicsQueue
-        || deferredPresentQueue->id != primaryGraphicsQueue
-        || (m_pipeline.m_deferredPresentationOverlayRequired && deferredPresentationOverlayQueue->id != primaryGraphicsQueue)
-        || terminalPresentationQueue->id != primaryGraphicsQueue
+        || presentationEndpoint.value().queue != primaryGraphicsQueue
+        || deferredPresentQueue.value().id != primaryGraphicsQueue
+        || (this.m_pipeline.m_deferredPresentationOverlayRequired && deferredPresentationOverlayQueue.value().id != primaryGraphicsQueue)
+        || terminalPresentationQueue.value().id != primaryGraphicsQueue
         || (laggedAsyncLightingSchedule && !surfelGiSnapshotCopyAndTimingPacketsAreDistinct)
-        || !HasQueueCapabilityMask(static_cast<u8>(deferredLightingQueue->capabilities), static_cast<u8>(Core::GpuQueueCapability::Compute))
-        || !HasQueueCapabilityMask(static_cast<u8>(deferredCompositeQueue->capabilities), static_cast<u8>(Core::GpuQueueCapability::Compute))
-        || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
-        || (m_pipeline.m_deferredPresentationOverlayRequired && deferredPresentationOverlayQueue->queueClass != Core::CommandQueue::Graphics)
-        || terminalPresentationQueue->queueClass != Core::CommandQueue::Graphics
-        || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
+        || !HasQueueCapabilityMask(cast<u8>(deferredLightingQueue.value().capabilities), cast<u8>(GpuQueueCapability::Compute))
+        || !HasQueueCapabilityMask(cast<u8>(deferredCompositeQueue.value().capabilities), cast<u8>(GpuQueueCapability::Compute))
+        || deferredPresentQueue.value().queueClass != CommandQueue::Graphics
+        || (this.m_pipeline.m_deferredPresentationOverlayRequired && deferredPresentationOverlayQueue.value().queueClass != CommandQueue::Graphics)
+        || terminalPresentationQueue.value().queueClass != CommandQueue::Graphics
+        || deferredFrameRecoveryQueue.value().queueClass != CommandQueue::Graphics
     ){
-        DeferredFrameDiagnostics{}.logRejectedDeferredGraphTopology(
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask).index,
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueFirstWaveletTask).index,
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueResolveTask).index,
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask).index,
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask).index,
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask).index,
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask).index,
+        DeferredFrameDiagnostics diagnostics;
+        diagnostics.logRejectedDeferredGraphTopology(
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask).index,
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueFirstWaveletTask).index,
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueResolveTask).index,
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask).index,
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask).index,
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask).index,
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask).index,
             shadowVisibilityPreparedTasksMerged,
             shadowVisibilityAllLitClearMerged,
             shadowVisibilityAdaptivePrimitivesMerged,
@@ -370,14 +344,14 @@ b8 DeferredFrameTopologyValidator::validate(
             surfelGiInitializationLifecycleMergedIntoPreparationPacket,
             causticPhotonMergedIntoCausticsPacket,
             causticGeometryMergedIntoCausticsPacket,
-            static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask)),
-            static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask)),
-            static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask)),
-            static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask)),
-            static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask)),
-            static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask)),
-            deferredCompiledPlan.packetForTask(m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask).index,
-            m_pipeline.m_deferredLightingTaskGraphDeclared,
+            cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask)),
+            cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask)),
+            cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask)),
+            cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask)),
+            cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask)),
+            cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask)),
+            deferredCompiledPlan.packetForTask(this.m_pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask).index,
+            this.m_pipeline.m_deferredLightingTaskGraphDeclared,
             deferredGraphScheduled
         );
         return false;
@@ -395,26 +369,28 @@ b8 DeferredFrameTopologyValidator::validate(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GraphicsPrefixTimingResolver::resolve(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Span<Core::GpuTimingSubmissionTicket* const> ownedTickets, const Span<Core::GpuTimingSubmissionTicket*> timingTickets, const Span<Core::GpuTaskId> timingTasks, b8& asyncSpansOnePacket, GraphicsPrefixTimingResolutionResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = m_pipeline;
-    outResult = GraphicsPrefixTimingResolutionResult{};
+void GraphicsPrefixTimingResolver::resolve(in GpuCompiledGraphReadView compiledPlan, in Span<GraphicsPrefixTimingTicket> ownedTickets,
+        mut Span<GraphicsPrefixTimingTicket> timingTickets, mut Span<GpuTaskId> timingTasks,
+        mut b8 asyncSpansOnePacket, mut GraphicsPrefixTimingResolutionResult outResult)const{
+    in RendererFramePipeline pipeline = this.m_pipeline;
+    outResult = GraphicsPrefixTimingResolutionResult();
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
-    const Array<Core::GpuTaskId, s_GraphicsPrefixTimingTaskCount> resolvedTasks = {
+    const Array<GpuTaskId, s_GraphicsPrefixTimingTaskCount> resolvedTasks(
         pipeline.m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask,
         pipeline.m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupTask,
         pipeline.m_graphicsPrefixGraph.m_graphicsPrefixDeferredClearTask,
         pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask.valid() ? pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask.valid() ? pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask.valid() ? pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask,
-        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask,
-    };
+        GraphicsPrefixTaskOrFallback(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgReceiverSpanTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask),
+        GraphicsPrefixTaskOrFallback(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask),
+        GraphicsPrefixTaskOrFallback(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask),
+        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixTask
+    );
     if(!IsValidGraphicsPrefixTimingSliceLengths(ownedTickets.size(), timingTickets.size(), timingTasks.size()))
         return;
     for(usize taskIndex = 0u; taskIndex < s_GraphicsPrefixTimingTaskCount; ++taskIndex)
         timingTasks[taskIndex] = resolvedTasks[taskIndex];
     for(usize prefixTaskIndex = 0u; prefixTaskIndex < s_GraphicsPrefixTimingTaskCount; ++prefixTaskIndex){
-        const Core::GpuTaskId task = timingTasks[prefixTaskIndex];
+        const GpuTaskId task = timingTasks[prefixTaskIndex];
         if(!compiledPlan.findTask(task).valid() || (prefixTaskIndex != 0u && !compiledPlan.taskPrecedesOrSharesPacket(timingTasks[prefixTaskIndex - 1u], task))){
             outResult.bindingsValid = false;
             break;
@@ -440,116 +416,122 @@ void GraphicsPrefixTimingResolver::resolve(const Core::GpuCompiledGraph::ReadVie
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = *m_pipeline;
-    outResult = OpaqueEmulationMergeValidationResult{};
-    const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{
-        return compiledPlan.findTask(task).valid();
-    };
-    const Core::GpuPhysicalQueueInfo* const opaqueComputeEmulationQueue = pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask.valid() ? compiledPlan.queueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask) : nullptr;
-    const Core::GpuPhysicalQueueInfo* const opaqueSharedComputeEmulationQueue =
-        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount != 0u
-        && pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
-            ? compiledPlan.queueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u])
-            : nullptr
+b8 OpaqueEmulationMergeValidator::sharedPhasesMerge(in GpuCompiledGraphReadView compiledPlan, in Optional<GpuPhysicalQueueInfo> opaqueSharedComputeEmulationQueue)const{
+    in RendererFramePipeline pipeline = this.m_pipeline;
+    const usize phaseCount = pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount;
+    if(phaseCount == 0u){
+        for(in GpuTaskId task : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
+            if(task.valid())
+                return false;
+        }
+        return true;
+    }
+    if(!IsSupportedSharedComputeEmulationPhaseCount(phaseCount))
+        return false;
+    if(
+        !opaqueSharedComputeEmulationQueue.has_value()
+        || opaqueSharedComputeEmulationQueue.value().queueClass != CommandQueue::Graphics
+        || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u])
+    )
+        return false;
+    for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
+        const GpuTaskId task = pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
+        const Optional<GpuPhysicalQueueInfo> queue = compiledPlan.findQueueInfoForTask(task);
+        if(!task.valid() || !queue.has_value() || queue.value().queueClass != CommandQueue::Graphics || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask, task))
+            return false;
+    }
+    for(usize phaseIndex = phaseCount; phaseIndex < pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks.size(); ++phaseIndex){
+        if(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid())
+            return false;
+    }
+    return
+        compiledPlan.tasksFormContiguousPacketSequence(Span<GpuTaskId>(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks).first(phaseCount))
+        && compiledPlan.taskPrecedesInSamePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u])
     ;
-    const Core::GpuPhysicalQueueInfo* const opaqueCsgReceiverComputeEmulationQueue =
-        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
-            ? compiledPlan.queueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const opaqueCsgIntervalSampleComputeEmulationQueue =
-        pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid()
-            ? compiledPlan.queueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask)
-            : nullptr
-    ;
+}
+
+b8 OpaqueEmulationMergeValidator::intervalSampleMerges(in GpuCompiledGraphReadView compiledPlan, in Optional<GpuPhysicalQueueInfo> opaqueCsgIntervalSampleComputeEmulationQueue)const{
+    in RendererFramePipeline pipeline = this.m_pipeline;
+    if(!pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid())
+        return true;
+    if(
+        !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask.valid()
+        || !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask.valid()
+        || !opaqueCsgIntervalSampleComputeEmulationQueue.has_value()
+        || opaqueCsgIntervalSampleComputeEmulationQueue.value().queueClass != CommandQueue::Graphics
+        || !compiledPlan.taskPrecedesOrSharesPacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask)
+        || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask)
+    )
+        return false;
+    const Array<GpuTaskId, 2u> sequence(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask);
+    return compiledPlan.tasksFormContiguousPacketSequence(Span<GpuTaskId>(sequence));
+}
+
+void OpaqueEmulationMergeValidator::validate(in GpuCompiledGraphReadView compiledPlan,
+        in Span<GpuTaskId> timingTasks,
+        in b8 timingBindingsValid,
+        in b8 hasOpaqueCsgFrameWork,
+        mut OpaqueEmulationMergeValidationResult outResult)const{
+    in RendererFramePipeline pipeline = this.m_pipeline;
+    outResult = OpaqueEmulationMergeValidationResult();
+    Optional<GpuPhysicalQueueInfo> opaqueComputeEmulationQueue;
+    if(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask.valid())
+        opaqueComputeEmulationQueue = compiledPlan.findQueueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask);
+    Optional<GpuPhysicalQueueInfo> opaqueSharedComputeEmulationQueue;
+    if(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount != 0u
+        && pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid())
+        opaqueSharedComputeEmulationQueue = compiledPlan.findQueueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]);
+    Optional<GpuPhysicalQueueInfo> opaqueCsgReceiverComputeEmulationQueue;
+    if(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid())
+        opaqueCsgReceiverComputeEmulationQueue = compiledPlan.findQueueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask);
+    Optional<GpuPhysicalQueueInfo> opaqueCsgIntervalSampleComputeEmulationQueue;
+    if(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid())
+        opaqueCsgIntervalSampleComputeEmulationQueue = compiledPlan.findQueueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask);
     outResult.packetsAreGraphics = timingBindingsValid;
     for(usize prefixTaskIndex = 0u; outResult.packetsAreGraphics && prefixTaskIndex < timingTasks.size(); ++prefixTaskIndex){
-        const Core::GpuPhysicalQueueInfo* const queue = compiledPlan.queueInfoForTask(timingTasks[prefixTaskIndex]);
-        outResult.packetsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
+        const Optional<GpuPhysicalQueueInfo> queue = compiledPlan.findQueueInfoForTask(timingTasks[prefixTaskIndex]);
+        outResult.packetsAreGraphics = queue.has_value() && queue.value().queueClass == CommandQueue::Graphics;
     }
     // The producer shares G-buffer's packet; its boundary stays packet-local.
     outResult.opaqueComputeEmulationMerged =
         !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask.valid()
         || (
-            taskIsCompiled(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask)
+            compiledPlan.findTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask).valid()
             && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueComputeEmulationTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask)
-            && opaqueComputeEmulationQueue
-            && opaqueComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
+            && opaqueComputeEmulationQueue.has_value()
+            && opaqueComputeEmulationQueue.value().queueClass == CommandQueue::Graphics
         )
     ;
     // Shared outputs need exact packet order; keep the G-buffer prelude first.
-    outResult.opaqueSharedComputeEmulationMerged = [&]()noexcept{
-        const usize phaseCount = pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount;
-        if(phaseCount == 0u){
-            for(const Core::GpuTaskId& task : pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
-                if(task.valid())
-                    return false;
-            }
-            return true;
-        }
-        if(!IsSupportedSharedComputeEmulationPhaseCount(phaseCount))
-            return false;
-        if(
-            !opaqueSharedComputeEmulationQueue
-            || opaqueSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u])
-        )
-            return false;
-        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-            const Core::GpuTaskId task = pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
-            const Core::GpuPhysicalQueueInfo* const queue = compiledPlan.queueInfoForTask(task);
-            if(!task.valid() || !queue || queue->queueClass != Core::CommandQueue::Graphics || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask, task))
-                return false;
-        }
-        for(usize phaseIndex = phaseCount; phaseIndex < pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks.size(); ++phaseIndex){
-            if(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid())
-                return false;
-        }
-        return
-            compiledPlan.tasksFormContiguousPacketSequence(Span<const Core::GpuTaskId>(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks.data(), phaseCount))
-            && compiledPlan.taskPrecedesInSamePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u])
-        ;
-    }();
+    outResult.opaqueSharedComputeEmulationMerged = this.sharedPhasesMerge(compiledPlan, opaqueSharedComputeEmulationQueue);
     // Declared producers must share G-buffer's packet for the same handoff.
     outResult.opaqueCsgReceiverComputeEmulationMerged =
         !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
         || (
-            taskIsCompiled(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
+            compiledPlan.findTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask).valid()
             && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask)
-            && opaqueCsgReceiverComputeEmulationQueue
-            && opaqueCsgReceiverComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
+            && opaqueCsgReceiverComputeEmulationQueue.has_value()
+            && opaqueCsgReceiverComputeEmulationQueue.value().queueClass == CommandQueue::Graphics
         )
     ;
     // The producer/raster pair must stay contiguous in one packet.
-    outResult.opaqueCsgIntervalSampleComputeEmulationMerged = [&]()noexcept{
-        if(!pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid())
-            return true;
-        if(
-            !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask.valid()
-            || !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask.valid()
-            || !opaqueCsgIntervalSampleComputeEmulationQueue
-            || opaqueCsgIntervalSampleComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || !compiledPlan.taskPrecedesOrSharesPacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask)
-            || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask)
-        )
-            return false;
-        const Array<Core::GpuTaskId, 2> sequence = { pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask, };
-        return compiledPlan.tasksFormContiguousPacketSequence(sequence);
-    }();
+    outResult.opaqueCsgIntervalSampleComputeEmulationMerged = this.intervalSampleMerges(compiledPlan, opaqueCsgIntervalSampleComputeEmulationQueue);
     // Keep the clear with G-buffer's ticket; a split would rebind ownership.
-    const Core::GpuPhysicalQueueInfo* const csgIntervalClearQueue = pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask.valid() ? compiledPlan.queueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask) : nullptr;
-    outResult.csgIntervalClearBundleMerged = !hasOpaqueCsgFrameWork
-        ? (!pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask.valid() && !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask.valid())
-        : (
+    Optional<GpuPhysicalQueueInfo> csgIntervalClearQueue;
+    if(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask.valid())
+        csgIntervalClearQueue = compiledPlan.findQueueInfoForTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask);
+    if(!hasOpaqueCsgFrameWork)
+        outResult.csgIntervalClearBundleMerged = (!pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask.valid() && !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask.valid());
+    else
+        outResult.csgIntervalClearBundleMerged = (
             pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask.valid()
             && pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask.valid()
-            && taskIsCompiled(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask)
-            && taskIsCompiled(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask)
+            && compiledPlan.findTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask).valid()
+            && compiledPlan.findTask(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask).valid()
             && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask)
             && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixGbufferTask)
-            && csgIntervalClearQueue
-            && csgIntervalClearQueue->queueClass == Core::CommandQueue::Graphics
+            && csgIntervalClearQueue.has_value()
+            && csgIntervalClearQueue.value().queueClass == CommandQueue::Graphics
         )
     ;
 }
@@ -558,14 +540,19 @@ void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadV
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SurfelCausticsMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, b8 captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const noexcept{
-    const RendererFramePipeline& pipeline = *m_pipeline;
-    outResult = SurfelCausticsMergeValidationResult{};
-    outResult.hardwareCausticsQueue = compiledPlan.queueInfoForTask(pipeline.m_causticsGraph.m_deferredHardwareCausticsTask);
-    outResult.surfelGiQueue = compiledPlan.queueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiTask);
-    outResult.surfelGiPreparationQueue = compiledPlan.queueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiPreparationTask);
-    outResult.surfelGiSnapshotCopyQueue = compiledPlan.queueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiSnapshotCopyTask);
-    outResult.surfelGiCounterReadbackQueue = compiledPlan.queueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask);
+void SurfelCausticsMergeValidator::validate(
+    in GpuCompiledGraphReadView compiledPlan,
+    in GpuTaskId causticsTask,
+    in GpuTaskId terminalPresentationTask,
+    in b8 captureLaggedLightingHistory,
+    mut SurfelCausticsMergeValidationResult outResult)const{
+    in RendererFramePipeline pipeline = this.m_pipeline;
+    outResult = SurfelCausticsMergeValidationResult();
+    outResult.hardwareCausticsQueue = compiledPlan.findQueueInfoForTask(pipeline.m_causticsGraph.m_deferredHardwareCausticsTask);
+    outResult.surfelGiQueue = compiledPlan.findQueueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiTask);
+    outResult.surfelGiPreparationQueue = compiledPlan.findQueueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiPreparationTask);
+    outResult.surfelGiSnapshotCopyQueue = compiledPlan.findQueueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiSnapshotCopyTask);
+    outResult.surfelGiCounterReadbackQueue = compiledPlan.findQueueInfoForTask(pipeline.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask);
     // Keep the clear in GI's packet; a split would escape its endpoint.
     outResult.surfelGiOutputClearMergedIntoGiPacket = pipeline.m_surfelGiGraph.m_deferredSurfelGiIrradianceClearTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_surfelGiGraph.m_deferredSurfelGiIrradianceClearTask, pipeline.m_surfelGiGraph.m_deferredSurfelGiTask);
     // Every GI callback must share the semantic packet.
@@ -599,7 +586,7 @@ void SurfelCausticsMergeValidator::validate(const Core::GpuCompiledGraph::ReadVi
     outResult.causticGeometryMergedIntoCausticsPacket = pipeline.m_causticsGraph.m_deferredCausticGeometryTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_causticsGraph.m_deferredCausticGeometryTask, causticsTask);
     outResult.causticResolvePrepareMergedIntoCausticsPacket = pipeline.m_causticsGraph.m_deferredCausticResolvePrepareTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_causticsGraph.m_deferredCausticResolvePrepareTask, causticsTask);
     outResult.causticResolveWaveletsMergedIntoCausticsPacket = true;
-    for(const Core::GpuTaskId waveletTask : pipeline.m_causticsGraph.m_deferredCausticResolveWaveletTasks){
+    for(in GpuTaskId waveletTask : pipeline.m_causticsGraph.m_deferredCausticResolveWaveletTasks){
         if(!waveletTask.valid() || !compiledPlan.tasksSharePacket(waveletTask, causticsTask)){
             outResult.causticResolveWaveletsMergedIntoCausticsPacket = false;
             break;
@@ -618,18 +605,6 @@ void SurfelCausticsMergeValidator::validate(const Core::GpuCompiledGraph::ReadVi
     outResult.laggedLightingHistoryFollowsPresentation = !captureLaggedLightingHistory
         || (compiledPlan.taskPrecedesOrSharesPacket(terminalPresentationTask, pipeline.m_deferredLaggedLightingHistoryTask) && !compiledPlan.tasksSharePacket(terminalPresentationTask, pipeline.m_deferredLaggedLightingHistoryTask))
     ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

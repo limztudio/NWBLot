@@ -2,89 +2,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_mesh/system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
+[cpp_unwind]
+void RendererMeshSystem::pruneRuntimeMeshResources(){
+    if(this.m_meshState.m_meshes.empty())
+        return;
 
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_mesh/runtime/mesh_requests.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Release geometry before its cache entry is erased, in iteration order; prunes every runtime mesh when no MeshSystem is available.
-template<typename MeshesMapT, typename ReleaseMesh>
-void PruneRuntimeMeshResources(MeshesMapT& meshes, const MeshSystem* meshSystem, ReleaseMesh&& releaseMesh, Core::Alloc::ScratchArena& scratchArena){
-    Optional<RuntimeMeshRequestSet> requests;
-    if(meshSystem){
-        usize runtimeMeshCount = 0u;
-        for(const auto& entry : meshes){
+    const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
+    usize runtimeMeshCount = 0u;
+    if(meshSystem.has_value()){
+        for(in auto entry : this.m_meshState.m_meshes){
             if(entry.second.runtimeMesh)
                 ++runtimeMeshCount;
         }
         if(runtimeMeshCount == 0u)
             return;
-        requests.emplace(scratchArena, runtimeMeshCount);
-        for(const auto& entry : meshes){
-            const MeshResources& mesh = entry.second;
+    }
+    RuntimeMeshRequestSet requests(runtimeMeshCount);
+    if(meshSystem.has_value()){
+        for(in auto entry : this.m_meshState.m_meshes){
+            in MeshResources mesh = entry.second;
             if(mesh.runtimeMesh)
-                requests->add(mesh.meshName, mesh.runtimeMeshVersion);
+                requests.add(mesh.meshName, mesh.runtimeMeshVersion);
         }
-        meshSystem->markLiveRuntimeMeshes(*requests);
+        meshSystem.value().markLiveRuntimeMeshes(requests);
     }
-    for(auto it = meshes.begin(); it != meshes.end();){
-        const MeshResources& mesh = it.value();
-        if(!mesh.runtimeMesh){
+
+    auto it = this.m_meshState.m_meshes.begin();
+    while(it != this.m_meshState.m_meshes.end()){
+        mut MeshResources mesh = this.m_meshState.m_meshes.at(it.key());
+        if(!mesh.runtimeMesh || (meshSystem.has_value() && requests.containsLive(mesh.meshName, mesh.runtimeMeshVersion))){
             ++it;
             continue;
         }
-
-        if(requests && requests->containsLive(mesh.meshName, mesh.runtimeMeshVersion)){
-            ++it;
-            continue;
-        }
-
-        releaseMesh(it.value());
-        it = meshes.erase(it);
+        this.releaseMeshGeometryHeapHandles(mesh);
+        it = this.m_meshState.m_meshes.erase(it);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

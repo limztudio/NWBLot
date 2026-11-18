@@ -87,12 +87,12 @@ public:
         return m_builder.prepareImages(Span(&glyph, 1u), Span(&sdf, 1u));
     }
 
-    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels& pixels){
-        return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPixels& pixels){
+        return CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(m_arena), binding, pixels);
     }
 
-    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels){
-        return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPixels&& pixels){
+        return CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(m_arena), binding, pixels);
     }
 
     [[nodiscard]] AssetFactorySdfSample createPageFromTemporaryAtlas(){
@@ -117,7 +117,7 @@ public:
         atlas.setPayload(Move(payload));
         if(!atlas.validatePayload())
             return sample;
-        auto pageResult = CreateSdfAtlasPage(m_arena, atlas, 7u, 123u, 0u);
+        auto pageResult = CreateSdfAtlasPage(::NWB::Core::Alloc::SharedPool(m_arena), atlas, 7u, 123u, 0u);
         if(!pageResult)
             return sample;
         sample.page = Move(*pageResult);
@@ -244,7 +244,7 @@ namespace __hidden_ui_glyph_sdf_tests{
 using PaintImageFixture = ::NWB::UiPaintImageTests::PaintImageFixture;
 using UiPaintOverlayTests = __hidden_ui_paint_overlay_tests::UiPaintOverlayTests;
 using UiPaintSdfAssetFactorySample = __hidden_ui_paint_sdf_tests::AssetFactorySdfSample;
-using UiPaintSdfPixels = ::NWB::Impl::Ui::SdfAtlasPage::Pixels;
+using UiPaintSdfPixels = ::NWB::Impl::Ui::SdfAtlasPixels;
 using UiPaintSdfTests = __hidden_ui_paint_sdf_tests::UiPaintSdfTests;
 using UiPaintDrawRegionFenvSample = __hidden_ui_paint_tests::DrawRegionFenvSample;
 using UiPaintScopedHeldFenv = __hidden_ui_paint_tests::ScopedHeldFenv;

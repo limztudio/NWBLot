@@ -2,83 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
+Expected<GpuGraphResourceId> ImportReflectionGraphTexture(mut GpuTaskGraph graph, in TextureHandle texture, in StringView resourceLabel, in b8 firstWrite){
+    if(firstWrite)
+        return FindOrImportTexture(graph, texture, resourceLabel, ResourceStates::Unknown);
+    return FindOrImportTexture(graph, texture, resourceLabel, ResourceStates::Common);
+}
 
+Expected<GpuGraphResourceId> ImportReflectionTexture(mut GpuTaskGraph graph, in TextureHandle texture, in StringView resourceLabel, in b8 firstWrite){
+    return ImportReflectionGraphTexture(graph, texture, resourceLabel, firstWrite);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+Expected<GpuGraphResourceId> ImportReflectionTexture(mut GpuTaskGraph graph, in TextureHandle texture){
+    return ImportReflectionTexture(graph, texture, "Reflection Output", true);
+}
 
+GpuTaskDesc ReflectionTaskDesc(in Name identity, in StringView label, in borrow GpuTaskId dependency){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    GpuTaskDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
+    if(dependency.valid())
+        desc.setDependency(dependency);
+    return desc;
+}
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<Core::GpuGraphResourceId> ImportReflectionTexture(
-    Core::GpuTaskGraph& graph,
-    const Core::TextureHandle& texture,
-    AStringView resourceLabel = "Reflection Output",
-    b8 firstWrite = true
-);
-[[nodiscard]] Core::GpuTaskDesc ReflectionTaskDesc(Name identity, AStringView label, const Core::GpuTaskId& dependency)noexcept;
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
-    const ReflectionDepthPyramidSnapshot& pyramid,
-    Core::GpuGraphResourceId opaqueDepth,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::GpuGraphResourceId& outDepthPyramid
-);
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::ScratchArena& scratchArena,
-    ReflectionGraphResult& result
-);
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    b8 feedbackReserved,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    ReflectionGraphResult& result
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+GpuTaskTimingMetadata ReflectionPacketTiming(){
+    GpuTaskTimingMetadata timing;
+    timing.policy = GpuTaskTimingPolicy::PacketOnly;
+    return timing;
 }
 
 

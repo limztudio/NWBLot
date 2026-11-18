@@ -97,6 +97,10 @@ void AccelStruct::retireBuildSignatureRole(AccelStructBuildSignatureRole& role)n
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+RayTracingAccelStructDesc Device::makeAccelStructDesc()const noexcept{
+    return RayTracingAccelStructDesc(m_context.objectArena);
+}
+
 Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
     if(!ResourceQueueSharing::IsValid(desc.queueSharing)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create acceleration structure: queue sharing contains unknown bits"));

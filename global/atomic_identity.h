@@ -64,6 +64,12 @@ template<typename ResultT, typename CounterT>
     return value;
 }
 
+template<typename Domain>
+[[nodiscard]] inline u64 AllocateWrappingIdentity()noexcept{
+    static Atomic<u64> s_Counter{ 0u };
+    return NextAtomicWrappingNonzero(s_Counter);
+}
+
 template<typename T>
     requires(IsIntegral_V<T> && !IsSigned_V<T> && !IsSame_V<T, b8>)
 inline void AdvanceWrappingNonzero(T& value)noexcept{

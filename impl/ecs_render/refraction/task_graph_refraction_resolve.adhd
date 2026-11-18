@@ -2,228 +2,162 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/refraction/types.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd>
+#include <impl/ecs_render/refraction/refraction_renderer.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[modular, move_only]
+class RefractionStatisticsReadbackGraphTask{
+    public BufferHandle source;
+    public BufferHandle destination;
+    public GpuGraphResourceId sourceResource;
+    public GpuGraphResourceId destinationResource;
+    public RefractionStatisticsReservation reservation;
+    private in b8 hardwareReady;
+    private b8 hardwareEnabled;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_graph.h>
-#include <core/task/gpu/capture/command_ir.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RefractionClearTileArgumentsGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
-
-
-public:
-    struct Payload{
-        Core::GraphicsRuntime& graphics;
-        Core::BufferHandle destination;
-        Core::GpuGraphResourceId resource;
-    };
-
-
-public:
-    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-};
-
-
-// Diagnostic work stays on the resolve's primary Graphics queue.
-// Shared counter writes and the bounded copy serialize there; accepted readbacks never introduce a renderer wait.
-struct RefractionClearStatisticsGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer, true };
-
-
-public:
-    struct Payload{
-        Core::BufferHandle destination;
-        Core::GpuGraphResourceId resource;
-    };
-
-
-public:
-    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-};
-
-struct RefractionStatisticsReadbackGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer, true };
-
-
-public:
-    struct Payload{
-        Core::BufferHandle source;
-        Core::BufferHandle destination;
-        Core::GpuGraphResourceId sourceResource;
-        Core::GpuGraphResourceId destinationResource;
-        RefractionStatisticsReservation reservation;
-        const b8* hardwarePreparationReady = nullptr;
-        b8 hardwareEnabled = false;
-    };
-
-
-public:
-    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-
-    static void Discarded(Payload& payload)noexcept{
-        payload.reservation.discard();
+    public RefractionStatisticsReadbackGraphTask(in RefractionStatisticsReadbackSnapshot snapshot, in borrow b8 ready, in b8 enabled){
+        this.source = snapshot.counters;
+        this.reservation = StatisticsReservation<RefractionStatistics, RefractionStatisticsOutcome>(snapshot.control, snapshot.metadata);
+        this.hardwareReady = ready;
+        this.hardwareEnabled = enabled;
     }
-};
 
-
-struct RefractionClassifyTilesGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    struct Payload{
-        RendererRayTracingSystem& system;
-        const DeferredFrameTargets& targets;
-        RayTracingRefractionGraphResources resources;
-    };
-
-
-public:
-    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        return payload.system.refraction().recordRefractionTileClassification(commandList, payload.targets, payload.resources);
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Transfer;
+        requirements.requiresPrimaryGraphicsQueue = true;
+        return requirements;
     }
-};
-
-
-struct RefractionResolveGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // The raytracing system and the frame targets are required: the resolve always records against this frame's targets.
-    // Readiness and latches stay optional: screen fallback declares no HW prep; only the traced route publishes diagnostics.
-    struct Payload{
-        RendererRayTracingSystem& system;
-        const DeferredFrameTargets& targets;
-        RayTracingRefractionGraphResources resources;
-        const b8* hardwarePreparationReady = nullptr;
-        b8* dispatchLogged = nullptr;
-        b8* screenFallbackDispatchLogged = nullptr;
-    };
-
-
-public:
-    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
-};
-
-// Diagnostic counter reuse has an explicit physical-queue contract across frame rejection.
-// Keep ordinary resolve scheduling unchanged when diagnostics are disabled.
-struct RefractionDiagnosticResolveGraphTask : RefractionResolveGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute, true };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FrameGraphRefractionResolveInputs{
-    DeferredFrameTargets& targets;
-    const RayTracingSceneGraphResources& sceneResources;
-    const RayTracingRefractionGraphResources& refractionResources;
-    b8 refractionActive = false;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId refractionDepth;
-    Core::GpuGraphResourceId refractionNormalIor;
-    Core::GpuGraphResourceId refractionTintCoverage;
-    Core::GpuGraphResourceId refractionInstance;
-    Core::GpuGraphResourceId refractionResolve;
-    Core::GpuGraphResourceId opaqueColor;
-    Core::GpuGraphResourceId opaqueReflectionRadiance;
-    Core::GpuGraphResourceId meshView;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId avboitAccumColor;
-    Core::GpuGraphResourceId avboitAccumExtinction;
-    Core::GpuGraphResourceId avboitForegroundColor;
-    Core::GpuGraphResourceId avboitForegroundExtinction;
-    Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
-    Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
-    Core::GpuTaskId traceContextUploadTask;
-    Core::GpuTaskId reflectionCompletionTask;
-    Core::GpuTaskId avboitFinalTask;
-    Core::GpuTaskId surfelGiTask;
-    const b8& hardwarePreparationReady;
-    b8& refractionHardwareLogged;
-    b8& refractionScreenLogged;
-};
-
-class FrameGraphRefractionResolve final : NoCopy{
-public:
-    FrameGraphRefractionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_graphics(graphics)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<Core::GpuTaskId> declare(const FrameGraphRefractionResolveInputs& inputs, Core::Alloc::ScratchArena& scratchArena, RayTracingSceneGraphReads& sceneReads);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    Core::GraphicsRuntime& m_graphics;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
+    public void accepted(in QueueSubmissionToken token){ this.reservation.acceptReservation(token, this.hardwareEnabled && this.hardwareReady); }
+    public void discarded(){ this.reservation.discard(); }
 }
 
+class RefractionClassifyTilesGraphTask{
+    private mut RefractionRenderer renderer;
+    private in DeferredFrameTargets targets;
+    private RayTracingRefractionGraphResources resources;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public RefractionClassifyTilesGraphTask(mut RefractionRenderer renderer, in borrow DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources){
+        this.renderer = renderer;
+        this.targets = targets;
+        this.resources = resources;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Compute;
+        return requirements;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        return this.renderer.recordRefractionTileClassification(commands, this.targets, this.resources);
+    }
+}
+
+[modular]
+class RefractionResolveGraphTask{
+    private mut RendererRayTracingSystem system;
+    private in DeferredFrameTargets targets;
+    private RayTracingRefractionGraphResources resources;
+    private in b8 hardwareReady;
+    private mut b8 hardwareLogged;
+    private mut b8 screenLogged;
+    private b8 diagnostics;
+
+    public RefractionResolveGraphTask(mut RendererRayTracingSystem system, in borrow DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources,
+        in borrow b8 ready, mut b8 hardwareLogged, mut b8 screenLogged, in b8 diagnostics){
+        this.system = system;
+        this.targets = targets;
+        this.resources = resources;
+        this.hardwareReady = ready;
+        this.hardwareLogged = hardwareLogged;
+        this.screenLogged = screenLogged;
+        this.diagnostics = diagnostics;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Compute;
+        requirements.requiresPrimaryGraphicsQueue = this.diagnostics;
+        return requirements;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
+    [cpp_unwind]
+    public void accepted(in QueueSubmissionToken token);
+}
+
+class FrameGraphRefractionResolveInputs{
+    public mut DeferredFrameTargets targets;
+    public in RayTracingSceneGraphResources sceneResources;
+    public in RayTracingRefractionGraphResources refractionResources;
+    public b8 refractionActive = false;
+    public GpuGraphResourceId depth;
+    public GpuGraphResourceId worldPosition;
+    public GpuGraphResourceId refractionDepth;
+    public GpuGraphResourceId refractionNormalIor;
+    public GpuGraphResourceId refractionTintCoverage;
+    public GpuGraphResourceId refractionInstance;
+    public GpuGraphResourceId refractionResolve;
+    public GpuGraphResourceId opaqueColor;
+    public GpuGraphResourceId opaqueReflectionRadiance;
+    public GpuGraphResourceId meshView;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuGraphResourceId sceneShading;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId avboitAccumColor;
+    public GpuGraphResourceId avboitAccumExtinction;
+    public GpuGraphResourceId avboitForegroundColor;
+    public GpuGraphResourceId avboitForegroundExtinction;
+    public GpuGraphResourceSetId hardwareTraceGeometrySet;
+    public GpuGraphResourceSetId traceMaterialSampledTextureSet;
+    public GpuTaskId traceContextUploadTask;
+    public GpuTaskId reflectionCompletionTask;
+    public GpuTaskId avboitFinalTask;
+    public GpuTaskId surfelGiTask;
+    public in b8 hardwarePreparationReady;
+    public mut b8 refractionHardwareLogged;
+    public mut b8 refractionScreenLogged;
+
+    public FrameGraphRefractionResolveInputs(
+        mut DeferredFrameTargets targets,
+        in RayTracingSceneGraphResources sceneResources,
+        in RayTracingRefractionGraphResources refractionResources,
+        in b8 hardwarePreparationReady,
+        mut b8 refractionHardwareLogged,
+        mut b8 refractionScreenLogged
+    ){
+        this.targets = targets;
+        this.sceneResources = sceneResources;
+        this.refractionResources = refractionResources;
+        this.hardwarePreparationReady = hardwarePreparationReady;
+        this.refractionHardwareLogged = refractionHardwareLogged;
+        this.refractionScreenLogged = refractionScreenLogged;
+    }
+}
+
+[modular]
+class FrameGraphRefractionResolve : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererRayTracingSystem m_raytracingSystem;
+
+    public FrameGraphRefractionResolve(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererRayTracingSystem system){
+        this.m_graph = graph;
+        this.m_graphics = graphics;
+        this.m_raytracingSystem = system;
+    }
+    [cpp_unwind]
+    public Expected<GpuTaskId> declare(in FrameGraphRefractionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads);
+}
 
 
 b8 IsRefractionHardwareDispatchReady(in b8 hardwareEnabled, in b8 hasPreparationFlag, in b8 preparationReady){
@@ -232,6 +166,75 @@ b8 IsRefractionHardwareDispatchReady(in b8 hardwareEnabled, in b8 hasPreparation
 
 usize ComputeRefractionResolveResourceUseCapacity(in usize inputCount, in usize sceneUseCount, in usize csgUseCount){
     return inputCount + s_RefractionFixedUseCapacity + sceneUseCount + csgUseCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RefractionClearTileArgumentsGraphTask{
+    private mut GraphicsRuntime m_graphics;
+    private BufferHandle m_destination;
+    private GpuGraphResourceId m_resource;
+
+    public RefractionClearTileArgumentsGraphTask(mut GraphicsRuntime graphics, in BufferHandle destination, in GpuGraphResourceId resource){
+        this.m_graphics = graphics;
+        this.m_destination = destination;
+        this.m_resource = resource;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Transfer;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        const GpuGraphResourceId resource = this.m_resource;
+        if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in resource](mut GpuCommandIrCapture capture) -> b8{
+            return capture.captureClearBuffer(context.task, context.packet, context.queue, resource, 0u);
+        }))
+            return false;
+        commandList.endRenderPass();
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRefractionClearTileArguments, this.m_graphics.getDevice(), commandList);
+        commandList.clearBufferUInt(this.m_destination.deref(), 0u);
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Diagnostic counter writes and readback share the resolve's primary graphics queue.
+class RefractionClearStatisticsGraphTask{
+    private BufferHandle m_destination;
+    private GpuGraphResourceId m_resource;
+
+    public RefractionClearStatisticsGraphTask(in BufferHandle destination, in GpuGraphResourceId resource){
+        this.m_destination = destination;
+        this.m_resource = resource;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Transfer;
+        commands.requiresPrimaryGraphicsQueue = true;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        if(!this.m_destination.valid())
+            return false;
+        const GpuGraphResourceId resource = this.m_resource;
+        if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in resource](mut GpuCommandIrCapture capture) -> b8{
+            return capture.captureClearBuffer(context.task, context.packet, context.queue, resource, 0u);
+        }))
+            return false;
+        commandList.endRenderPass();
+        commandList.clearBufferUInt(this.m_destination.deref(), 0u);
+        return !commandList.commandRecordingFailed();
+    }
 }
 
 

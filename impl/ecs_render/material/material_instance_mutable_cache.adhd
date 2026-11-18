@@ -2,55 +2,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/material/material_instance_override_applier.adhd>
+#include <impl/ecs_render/material/material_surface_builder.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
+class MaterialInstanceMutableCache : NoCopy{
+    private HashMap<EntityID, MaterialInstanceMutableCacheEntry> m_entries;
+    private u64 m_componentMutationVersion = 0u;
 
-#include <core/ecs/world.h>
+    [owner_result]
+    private MaterialInstanceMutableCacheEntry emptyEntry()const{
+        return MaterialInstanceMutableCacheEntry();
+    }
 
+    private b8 matches(in MaterialInstanceMutableCacheEntry entry, in MaterialSurfaceInfo surface, in MaterialInstanceComponent instance)const{
+        return MaterialInstanceMutableCacheEntryMatches(entry.materialName, entry.materialInterface, entry.typedLayoutHash, entry.revision,
+            surface.materialName, surface.materialInterface, surface.typedLayoutHash, instance);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public Expected<Span<u8>> prepare(mut World world, in EntityID entity, in MaterialSurfaceInfo surface, in Optional<in MaterialInstanceComponent> instance){
+        this.prune(world);
+        if(!instance.has_value() || instance.value().overrides.empty())
+            return Span<u8>(surface.mutableDefaultTypedBytes);
 
+        const auto stored = this.m_entries.try_emplace(entity, this.emptyEntry());
+        mut MaterialInstanceMutableCacheEntry entry = stored.first.value();
+        if(this.matches(entry, surface, instance.value()))
+            return Span<u8>(entry.mutableTypedBytes);
 
-NWB_IMPL_BEGIN
+        MaterialSurfaceBuilder().copyTypedBytes(surface.mutableDefaultTypedBytes, entry.mutableTypedBytes);
+        if(!MaterialInstanceOverrideApplier().apply(entity.id, surface.materialName, surface.materialInterface, surface.typedLayoutBlocks,
+            surface.typedLayoutFields, instance.value(), entry.mutableTypedBytes)){
+            this.m_entries.erase(stored.first);
+            return MakeUnexpected(Failure());
+        }
+        entry.materialName = surface.materialName;
+        entry.materialInterface = surface.materialInterface;
+        entry.typedLayoutHash = surface.typedLayoutHash;
+        entry.revision = instance.value().revision;
+        return Span<u8>(entry.mutableTypedBytes);
+    }
 
+    public Expected<Span<u8>> find(in EntityID entity, in MaterialSurfaceInfo surface, in Optional<in MaterialInstanceComponent> instance)const{
+        if(!instance.has_value() || instance.value().overrides.empty())
+            return Span<u8>(surface.mutableDefaultTypedBytes);
+        const auto found = this.m_entries.find(entity);
+        if(found == this.m_entries.end() || !this.matches(found.value(), surface, instance.value()))
+            return MakeUnexpected(Failure());
+        return Span<u8>(found.value().mutableTypedBytes);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void prune(mut World world){
+        const u64 version = world.componentMutationVersion<MaterialInstanceComponent>();
+        if(version != this.m_componentMutationVersion){
+            this.m_entries.clear();
+            this.m_componentMutationVersion = version;
+        }
+    }
 
-
-class MaterialInstanceMutableCache final : NoCopy{
-public:
-    explicit MaterialInstanceMutableCache(Core::Alloc::GlobalArena& arena)
-        : m_arena(arena)
-        , m_entries(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
-    {}
-
-    [[nodiscard]] Expected<Span<const u8>> prepare(Core::ECS::World& world, Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance);
-    [[nodiscard]] Expected<Span<const u8>> find(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept;
-    void prune(Core::ECS::World& world)noexcept;
-    void clear()noexcept{ m_entries.clear(); m_componentMutationVersion = 0u; }
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_entries;
-    u64 m_componentMutationVersion = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void clear(){
+        this.m_entries.clear();
+        this.m_componentMutationVersion = 0u;
+    }
 }
 
 

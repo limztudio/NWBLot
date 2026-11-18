@@ -264,6 +264,32 @@ GpuTaskResourceUse ReadWriteTextureUse(
     return result;
 }
 
+Expected<GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(
+    mut GpuTaskGraph graph,
+    in b8 captured,
+    in Span<BufferHandle> outputBuffers,
+    in Name identity,
+    in StringView label
+){
+    if(!captured || outputBuffers.empty())
+        return MakeUnexpected(Failure());
+
+    Vector<GpuGraphResourceId> members = Vector<GpuGraphResourceId>();
+    members.reserve(outputBuffers.size());
+    for(in BufferHandle buffer : outputBuffers){
+        const auto imported = FindOrImportBuffer(graph, buffer, label);
+        if(!imported.has_value() || !imported.value().valid())
+            return MakeUnexpected(Failure());
+        members.push_back(imported.value());
+    }
+    GpuGraphResourceSetDesc desc = GpuGraphResourceSetDesc();
+    desc.setIdentity(identity).setMarkerLabel(label).setMembers(members);
+    const auto importedSet = graph.importResourceSet(desc);
+    if(!importedSet.has_value())
+        return MakeUnexpected(Failure());
+    return importedSet.value();
+}
+
 GpuTaskDesc TaskDesc(in Name identity, in StringView label){
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;

@@ -3,6 +3,16 @@
 
 
 #include <impl/assets_graphics/cook_types.adhd>
+#include <impl/assets_graphics/cook_shader_plan_and_validation.adhd>
+#include <impl/assets_graphics/mesh_subsystem.adhd>
+#include <impl/assets_material/cook.adhd>
+#include <impl/assets_material/material_avboit_shader_generator.adhd>
+#include <impl/assets_csg/shape_module_writer.adhd>
+#include <impl/assets_csg/asset.adhd>
+#include <impl/assets_csg/cook.adhd>
+#include <impl/assets_shader/cook.adhd>
+#include <impl/assets_shader/types.adhd>
+#include <impl/assets_subsystem/cook.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,734 +100,383 @@ ShaderVariantCacheReadStatus ReadCachedShaderVariantBytecode(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+class GraphicsVolumeMetadata{
+    public IncludeMetadataMap includeMetadata;
+    public ShaderEntryVector shaderEntries;
+    public Vector<MaterialBindEntry> materialBindEntries;
+    public Vector<CsgShapeCookEntry> csgShapeEntries;
+    public PreparedShaderPlan preparedPlan;
+    public HashSet<ShaderStageKey> seenShaderIdentityKeys;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_graphics/cook_components.adhd.h>
-#include <impl/assets_graphics/csg_shader_variants.adhd.h>
-#include <impl/assets_shader/cook.adhd.h>
-#include <global/containers.h>
-#include <global/span.h>
-#include <impl/assets_graphics/shader_cook_plan.adhd.h>
-#include <impl/assets_graphics/graphics_component_binary_codec.adhd.h>
-#include <impl/assets_graphics/cook_types.adhd.h>
-#include <impl/assets_graphics/mesh_subsystem.adhd.h>
-#include <impl/assets_csg/asset.adhd.h>
-#include <impl/assets_csg/cook.adhd.h>
-#include <impl/assets_csg/shape_module_writer.adhd.h>
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/assets_material/material_avboit_shader_generator.adhd.h>
-#include <impl/assets_material/material_shadow_dispatch.adhd.h>
-#include <impl/assets_material/types.adhd.h>
-#include <impl/assets_mesh/asset.adhd.h>
-#include <impl/assets_model/asset.adhd.h>
-#include <impl/assets_scene/cook.adhd.h>
-#include <impl/assets_shader/asset.adhd.h>
-#include <impl/assets_shader/shader_define_planner.adhd.h>
-#include <impl/assets_shader/shader_types.adhd.h>
-#include <impl/assets_shader/slang_compiler.adhd.h>
-#include <impl/assets_shader/source_dependencies.adhd.h>
-#include <impl/assets_subsystem/cook.adhd.h>
-#include <core/assets/asset_file_discovery.h>
-#include <core/assets/cook_metadata.h>
-#include <core/assets/paths.h>
-#include <core/assets/reserved_asset_ref_parser.h>
-#include <core/assets/volume/volume_prepare_registry.h>
-#include <core/common/log.h>
-#include <core/graphics/shader_archive.h>
-#include <core/graphics/shader_stage_names.h>
-#include <core/graphics/spirv_entry_point.h>
-#include <global/hash_utils.h>
-#include <global/overflow.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShaderVariantBytecodeCache final{
-public:
-    using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
-
-    [[nodiscard]] static ScratchPath BuildPath(const Path& cacheDirectory, AStringView configurationSafeName, AStringView sourceChecksumHex, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static b8 GetBytecode(const ShaderCook::ShaderEntry& entry, AStringView variantName, const ShaderCook::DefineCombo& defineCombo, Span<const Path> includeDirectories, Span<const Path> dependencies, const Path& sourcePath, const ScratchPath& bytecodeCachePath, b8 compilerInputsHaveBom, Core::Alloc::ScratchArena& scratchArena, Core::GraphicsBytes& outBytecode);
-
-private:
-    [[nodiscard]] static ShaderVariantCacheReadStatus::Enum ReadCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode);
-};
-
-
-using Core::Assets::ScratchArena;
-using Core::Assets::ScratchString;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_shader_volume_writer{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace AssetsGraphicsCookDetail;
-using Core::Assets::CookString;
-using Core::Assets::CookEntryPathHashSet;
-
-using ScratchPath = ::Path<ScratchArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<usize> ReserveShaderIndexRecords(const Span<const PreparedShaderEntry> preparedEntries, Vector<Core::ShaderArchive::Record, ScratchArena>& outShaderIndexRecords){
-    u64 shaderRecordCount = 0;
-    for(const PreparedShaderEntry& preparedEntry : preparedEntries){
-        if(!TryAccumulatePreparedShaderRecordCount(preparedEntry.variantCount, shaderRecordCount))
-            return MakeUnexpected(Failure{});
-    }
-    usize count = 0u;
-    if(!ValidatePreparedShaderRecordCountFitsCapacity(shaderRecordCount, count))
-        return MakeUnexpected(Failure{});
-
-    outShaderIndexRecords.clear();
-    outShaderIndexRecords.reserve(count);
-    return count;
-}
-
-static b8 AppendShaderIndexToManifest(
-    const Span<const Core::ShaderArchive::Record> shaderIndexRecords,
-    ShaderCook::CookArena& cookArena,
-    ScratchArena& scratchArena,
-    Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& inOutManifest,
-    CookEntryPathHashSet& inOutSeenVirtualPathHashes
-){
-    const Name& shaderIndexVirtualPath = Core::ShaderArchive::s_IndexVirtualPathName;
-    if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: duplicate shader archive index virtual path '{}'"), ConvertString(shaderIndexVirtualPath.resolvedText()));
-        return false;
+    [owner_result]
+    private Expected<PreparedShaderPlan> buildPlan(in CookResolvedPaths paths, in Path bindRoot, in Path csgRoot, in Path bxdfRoot, in Path shadowRoot, in Span<MaterialCookEntry> materials){
+        return PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, bxdfRoot, shadowRoot, this.includeMetadata, this.materialBindEntries, materials, this.shaderEntries);
     }
 
-    const auto indexBinary = Core::ShaderArchive::SerializeIndex(shaderIndexRecords, cookArena, scratchArena);
-    if(!indexBinary){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: failed to serialize shader index"));
-        return false;
-    }
-    if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(shaderIndexVirtualPath, *indexBinary, inOutManifest))
+    public b8 prepareShaders(in CookResolvedPaths paths, in Path bindRoot, in Path csgRoot, in Path bxdfRoot, in Path shadowRoot, in Span<MaterialCookEntry> materials){
+        Expected<PreparedShaderPlan> plan = this.buildPlan(paths, bindRoot, csgRoot, bxdfRoot, shadowRoot, materials);
+        if(!plan.has_value())
+            return false;
+        this.preparedPlan.preparedEntries.swap(plan.value().preparedEntries);
+        this.preparedPlan.plannedFileCount = plan.value().plannedFileCount;
+        this.shaderEntries.clear();
         return true;
-
-    NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: failed to append shader index to manifest"));
-    return false;
+    }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsGraphicsCookDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 AppendPreparedShadersToManifest(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const Span<const PreparedShaderEntry> preparedEntries,
-    ShaderCook::CookArena& cookArena,
-    Core::Assets::ScratchArena& scratchArena,
-    Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    Core::Assets::CookEntryPathHashSet& inOutSeenVirtualPathHashes
-){
-    Vector<Core::ShaderArchive::Record, Core::Assets::ScratchArena> shaderIndexRecords{scratchArena};
-    const auto shaderRecordCount = __hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords);
-    if(!shaderRecordCount)
-        return false;
-
-    u64 compilerFingerprint = 0u;
-    if(!preparedEntries.empty()){
-        const auto fingerprint = SlangShaderCompiler::ComputeCompilerFingerprint(cacheDirectory, scratchArena);
-        if(!fingerprint)
-            return false;
-        compilerFingerprint = *fingerprint;
-    }
-
-    Core::GraphicsBytes cookedBytecode{cookArena};
-    Core::GraphicsBytes shaderAssetPayload{cookArena};
-    ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{ cookArena };
-    shaderIndexRecords.clear();
-
-    for(const PreparedShaderEntry& preparedEntry : preparedEntries){
-        const ShaderCook::ShaderEntry& entry = preparedEntry.entry;
-        const auto shaderNameResult = ToName(entry.name);
-        const auto stageNameResult = ToName(entry.archiveStage);
-        const Name shaderName = (shaderNameResult && *shaderNameResult) ? **shaderNameResult : s_NameNone;
-        const Name stageName = (stageNameResult && *stageNameResult) ? **stageNameResult : s_NameNone;
-        if(!ValidateCanonicalPreparedShaderIdentity(shaderName, stageName, AStringView(entry.name), AStringView(entry.archiveStage), AStringView(entry.entryPoint)))
-            return false;
-
-        auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> b8{
-            const Core::Assets::CookString generatedVariantName = ShaderCook::BuildCanonicalVariantName(defineCombo, cookArena, scratchArena);
-
-            const u64 sourceChecksum = ShaderCook::ComputeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
-            ACompactString sourceChecksumHex;
-            AppendHexU64(sourceChecksum, sourceChecksumHex);
-
-            const __hidden_shader_volume_writer::ScratchPath bytecodeCachePath = ShaderVariantBytecodeCache::BuildPath(cacheDirectory, configurationSafeName, sourceChecksumHex.view(), scratchArena);
-            if(!ShaderVariantBytecodeCache::GetBytecode(
-                entry,
-                generatedVariantName,
-                defineCombo,
-                preparedEntry.includeDirectories,
-                preparedEntry.dependencies,
-                preparedEntry.sourcePath,
-                bytecodeCachePath,
-                preparedEntry.compilerInputsHaveBom,
-                scratchArena,
-                cookedBytecode
-            ))
-                return false;
-
-            const Expected<Name> virtualPathResult = Core::ShaderArchive::BuildVirtualPathName(shaderName, generatedVariantName, stageName);
-            if(!virtualPathResult){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"), ConvertString(entry.name), ConvertString(entry.archiveStage), ConvertString(generatedVariantName));
-                return false;
-            }
-            const Name& virtualPath = *virtualPathResult;
-
-            const NameHash virtualPathHash = virtualPath.hash();
-            if(!inOutSeenVirtualPathHashes.insert(virtualPathHash).second){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')"), ConvertString(virtualPath.resolvedText()), ConvertString(entry.name), ConvertString(generatedVariantName));
-                return false;
-            }
-
-            const u64 bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
-            const u64 cookKeyHash = BuildShaderVariantCookKeyHash(virtualPathHash, sourceChecksum, bytecodeChecksum);
-            const ShaderBinaryPayload::AssetPayloadEncodeFailure::Enum payloadFailure = ShaderBinaryPayload::EncodeAssetPayload(AStringView(entry.entryPoint), cookedBytecode, shaderAssetPayload);
-            if(payloadFailure != ShaderBinaryPayload::AssetPayloadEncodeFailure::None){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to package shader payload '{}' (failure {})"), ConvertString(virtualPath.resolvedText()), static_cast<u32>(payloadFailure));
-                return false;
-            }
-            if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(virtualPath, shaderAssetPayload, manifest, cookKeyHash)){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to append shader payload '{}' to manifest"), ConvertString(virtualPath.resolvedText()));
-                return false;
-            }
-
-            Core::ShaderArchive::Record record(cookArena);
-            record.shaderName = shaderName;
-            record.variantName = generatedVariantName;
-            record.stage = stageName;
-            record.sourceChecksum = sourceChecksum;
-            record.bytecodeChecksum = bytecodeChecksum;
-            record.virtualPathHash = virtualPathHash;
-            FOUNDATION_ASSERT(shaderIndexRecords.size() < *shaderRecordCount);
-            shaderIndexRecords.push_back(Move(record));
-            return true;
-        };
-
-        if(!ShaderDefinePlanner(cookArena).expandDefineCombinations(entry.defineValues, scratchArena, defineCombinations)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: variant combination count exceeds runtime limits for entry '{}'"), ConvertString(entry.name));
-            return false;
+b8 AppendUniqueShaderEntry(in Path file, mut ShaderCookEntry entry, mut GraphicsVolumeMetadata metadata){
+    if(entry.name.empty())
+        return true;
+    const Expected<Optional<Name>, NameTextError> shader = ToName(entry.name);
+    const Expected<Optional<Name>, NameTextError> stage = ToName(entry.archiveStage);
+    if(!shader.has_value() || !stage.has_value()){
+        u32 code = 0u;
+        StringView field = "identity";
+        if(!shader.has_value())
+            code = cast<u32>(shader.error());
+        else{
+            code = cast<u32>(stage.error());
+            field = "stage";
         }
-        if(defineCombinations.empty())
-            defineCombinations.push_back(ShaderCook::DefineCombo(cookArena));
-
-        for(const ShaderCook::DefineCombo& defineCombo : defineCombinations){
-            if(!appendShaderVariant(defineCombo))
-                return false;
-
-            if(preparedEntry.supportsCsgClipVariant || preparedEntry.supportsAvboitCsgClipVariant){
-                const auto csgDefineCombo = AssetsGraphicsCsgShaderVariants::BuildClipDefineCombo(AStringView(entry.name), defineCombo, cookArena);
-                if(!csgDefineCombo)
-                    return false;
-
-                if(!appendShaderVariant(*csgDefineCombo))
-                    return false;
-            }
-        }
-    }
-
-    FOUNDATION_ASSERT(shaderIndexRecords.size() == *shaderRecordCount);
-    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(shaderIndexRecords, cookArena, scratchArena, manifest, inOutSeenVirtualPathHashes);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ShaderVariantBytecodeCache::ScratchPath ShaderVariantBytecodeCache::BuildPath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
-    return ScratchPath(scratchArena, BuildShaderVariantBytecodeCachePath(scratchArena, cacheDirectory, configurationSafeName, sourceChecksumHex));
-}
-
-ShaderVariantCacheReadStatus::Enum ShaderVariantBytecodeCache::ReadCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
-    return ReadCachedShaderVariantBytecode(AStringView(entry.name), AStringView(entry.stage), AStringView(entry.entryPoint), bytecodePath, outBytecode);
-}
-
-b8 ShaderVariantBytecodeCache::GetBytecode(
-    const ShaderCook::ShaderEntry& entry,
-    const AStringView variantName,
-    const ShaderCook::DefineCombo& defineCombo,
-    const Span<const Path> includeDirectories,
-    const Span<const Path> dependencies,
-    const Path& sourcePath,
-    const ScratchPath& bytecodeCachePath,
-    const b8 compilerInputsHaveBom,
-    ScratchArena& scratchArena,
-    Core::GraphicsBytes& outBytecode
-){
-    outBytecode.clear();
-
-    const ShaderVariantCacheReadStatus::Enum bytecodeCacheStatus = ReadCached(entry, bytecodeCachePath, outBytecode);
-    if(bytecodeCacheStatus == ShaderVariantCacheReadStatus::Error)
-        return false;
-    if(bytecodeCacheStatus == ShaderVariantCacheReadStatus::Hit)
-        return true;
-
-    HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>> mergedDefines(0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
-    // Two live container sizes cannot overflow usize.
-    mergedDefines.reserve(defineCombo.size() + entry.implicitDefines.size());
-    for(const auto& [defineName, value] : defineCombo)
-        mergedDefines.insert_or_assign(defineName, value);
-    for(const auto& [defineName, value] : entry.implicitDefines)
-        mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
-
-    Vector<ShaderBinaryPayload::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
-    if(!ValidateShaderMergedDefineCount(entry.name, mergedDefines.size()))
-        return false;
-    compileDefines.reserve(mergedDefines.size());
-    for(const auto& [defineName, value] : mergedDefines)
-        compileDefines.push_back(ShaderBinaryPayload::ShaderMacroDefinition{ defineName, value });
-    Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderBinaryPayload::ShaderMacroDefinition& lhs, const ShaderBinaryPayload::ShaderMacroDefinition& rhs)noexcept{
-        return IsBeforeShaderMacroDefinitionName(lhs.name, rhs.name);
-    });
-
-    const ScratchPath cacheParentPath = bytecodeCachePath.parentPath();
-    auto ensureDirectoriesResult = EnsureDirectories(cacheParentPath);
-    if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: failed to create cache directory '{}': {}"), PathToString<tchar>(cacheParentPath), ConvertString(ensureDirectoriesResult.error().message()));
-        return false;
-    }
-
-    const ShaderCook::ShaderCompilerRequest compileRequest = {
-        .shaderName = entry.name,
-        .stage = entry.stage,
-        .entryPoint = entry.entryPoint,
-        .variantName = variantName,
-        .defines = compileDefines,
-        .includeDirectories = includeDirectories,
-        .dependencies = dependencies,
-        .externallyPlannedMacroIncludes = AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes,
-        .sourcePath = sourcePath,
-        .outputPath = bytecodeCachePath,
-        .optimizationLevel = entry.optimizationLevel,
-        .rayQuery = entry.rayQuery,
-        .compilerInputsHaveBom = compilerInputsHaveBom,
-    };
-    return SlangShaderCompiler::CompileVariant(compileRequest, scratchArena, outBytecode);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_volume_prepare{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MaterialBindEntryVector = ShaderCook::CookVector<MaterialBindEntry>;
-
-struct GraphicsVolumeMetadata{
-    ShaderCook shaderCook;
-    AssetsGraphicsCookDetail::IncludeMetadataMap includeMetadata;
-    AssetsGraphicsCookDetail::ShaderEntryVector shaderEntries;
-    MaterialBindEntryVector materialBindEntries;
-    AssetsCsgCook::CsgShapeCookEntryVector csgShapeEntries;
-    AssetsGraphicsCookDetail::PreparedShaderPlan preparedPlan;
-    HashSet<ShaderStageKey, ShaderCook::CookArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>> seenShaderIdentityKeys;
-
-
-public:
-    explicit GraphicsVolumeMetadata(ShaderCook::CookArena& arena)
-        : shaderCook(arena)
-        , includeMetadata(arena)
-        , shaderEntries(arena)
-        , materialBindEntries(arena)
-        , csgShapeEntries(arena)
-        , preparedPlan(arena)
-        , seenShaderIdentityKeys(0, Hasher<ShaderStageKey>(), EqualTo<ShaderStageKey>(), arena)
-    {}
-};
-
-static b8 AppendUniqueShaderEntry(const Path* const nwbFilePath, ShaderCook::ShaderEntry& inOutShaderEntry, GraphicsVolumeMetadata& inOutGraphicsMetadata, AssetsGraphicsCookDetail::ShaderEntryVector& inOutShaderEntries){
-    if(inOutShaderEntry.name.empty())
-        return true;
-
-    const auto shaderName = ToName(inOutShaderEntry.name);
-    const auto stageName = ToName(inOutShaderEntry.archiveStage);
-    if(!shaderName){
-        if(nwbFilePath)
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: invalid shader identity in meta '{}' (failure {})"), PathToString<tchar>(*nwbFilePath), static_cast<u32>(shaderName.error()));
+        if(!file.empty())
+            error("GraphicsCook: invalid shader {} in meta '{}' (failure {})", field, file, code);
         else
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: generated shader name has invalid text (failure {})"), static_cast<u32>(shaderName.error()));
+            error("GraphicsCook: generated shader {} has invalid text (failure {})", field, code);
         return false;
     }
-    if(!stageName){
-        if(nwbFilePath)
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: invalid shader stage in meta '{}' (failure {})"), PathToString<tchar>(*nwbFilePath), static_cast<u32>(stageName.error()));
-        else
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: generated shader stage has invalid text (failure {})"), static_cast<u32>(stageName.error()));
+    if(!TryInsertUniqueShaderIdentityKey(shader.value().value_or(s_NameNone), stage.value().value_or(s_NameNone), metadata.seenShaderIdentityKeys)){
+        String path;
+        if(!file.empty())
+            path.assign(StringView(PathToString(file)));
+        ReportDuplicateShaderIdentity(entry.name, entry.archiveStage, !file.empty(), path);
         return false;
     }
-    if(!TryInsertUniqueShaderIdentityKey(*shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone, inOutGraphicsMetadata.seenShaderIdentityKeys)){
-        Core::Assets::CookString convertedPath(inOutShaderEntries.get_allocator().arena());
-        const AStringView nwbFilePathText = nwbFilePath ? Core::Assets::AssetPathsDetail::NativeTextView(nwbFilePath->native(), convertedPath) : AStringView();
-        ReportDuplicateShaderIdentity(inOutShaderEntry.name, inOutShaderEntry.archiveStage, nwbFilePath != nullptr, nwbFilePathText);
-        return false;
-    }
-
-    inOutShaderEntries.push_back(Move(inOutShaderEntry));
+    AppendOwned<ShaderCookEntry>(metadata.shaderEntries, entry);
     return true;
 }
 
-static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadata(Core::Assets::AssetDocumentMetadataParseContext& context){
-    using namespace Core::Assets;
-
-    if(ShaderAssetTypes::ShaderTypeFromAssetType(context.assetType) != Core::ShaderType::Invalid){
-        GraphicsVolumeMetadata& graphicsMetadata = Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata, context.parsedMetadata.arena);
-        auto shaderEntryResult = graphicsMetadata.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, context.scratchArena);
-        if(!shaderEntryResult)
+[cook_document]
+AssetMetadataParseResult ParseGraphicsDocumentMetadata(mut AssetDocumentMetadataParseContext context){
+    if(ShaderTypeFromAssetType(context.assetType) != ShaderType::Invalid){
+        mut GraphicsVolumeMetadata metadata = GetCookMetadata<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata);
+        Expected<ShaderCookEntry> parsed = ReadShaderMetadata(context.discoveredNwbFile.filePath, context.doc);
+        if(!parsed.has_value())
             return AssetMetadataParseResult::Error;
-        ShaderCook::ShaderEntry& shaderEntry = *shaderEntryResult;
-
-        auto shaderName = AssetPathsDetail::BuildDerivedAssetVirtualPathText(context.discoveredNwbFile.assetRoot, context.discoveredNwbFile.virtualRoot, ::Path<ScratchArena>(context.scratchArena, shaderEntry.source), context.cookArena, context.scratchArena);
-        if(!shaderName)
+        const Expected<String> name = DeriveAssetVirtualPathText(context.discoveredNwbFile.assetRoot, context.discoveredNwbFile.virtualRoot.view(), Path(StringView(parsed.value().source)));
+        if(!name.has_value())
             return AssetMetadataParseResult::Error;
-        shaderEntry.name = Move(*shaderName);
-
-        if(!AppendUniqueShaderEntry(&context.discoveredNwbFile.filePath, shaderEntry, graphicsMetadata, graphicsMetadata.shaderEntries))
+        parsed.value().name.assign(StringView(name.value()));
+        const Path file(context.discoveredNwbFile.filePath);
+        if(!AppendUniqueShaderEntry(file, parsed.value(), metadata))
             return AssetMetadataParseResult::Error;
         return AssetMetadataParseResult::Parsed;
     }
-
     if(context.assetType == s_IncludeAssetTypeName){
-        GraphicsVolumeMetadata& graphicsMetadata = Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata, context.parsedMetadata.arena);
-        auto includeEntryResult = graphicsMetadata.shaderCook.parseIncludeMeta(context.discoveredNwbFile.filePath, context.doc, context.scratchArena);
-        if(!includeEntryResult)
+        mut GraphicsVolumeMetadata metadata = GetCookMetadata<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata);
+        const Expected<ShaderIncludeEntry> parsed = ReadShaderIncludeMetadata(context.discoveredNwbFile.filePath, context.doc);
+        if(!parsed.has_value())
             return AssetMetadataParseResult::Error;
-        ShaderCook::IncludeEntry& includeEntry = *includeEntryResult;
-
-        if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
-            const ::Path<ScratchArena> sourcePath(context.scratchArena, includeEntry.source);
-            auto absSourceResult = AbsolutePath(sourcePath);
-            if(!absSourceResult){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: failed to resolve include metadata source '{}' from '{}': {}")
-                    , ConvertString(includeEntry.source)
-                    , PathToString<tchar>(context.discoveredNwbFile.filePath)
-                    , ConvertString(absSourceResult.error().message())
-                );
+        if(!parsed.value().source.empty()){
+            const Expected<Path, ErrorCode> absolute = AbsolutePath(Path(StringView(parsed.value().source)));
+            if(!absolute.has_value()){
+                error("GraphicsCook: failed to resolve include source '{}' from meta '{}': {}", parsed.value().source, context.discoveredNwbFile.filePath, ErrorCodeMessage(absolute.error()));
                 return AssetMetadataParseResult::Error;
             }
-            const ::Path<ScratchArena> absSource = absSourceResult->lexicallyNormal();
-
-            CookString key = PathToString(context.cookArena, absSource);
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-            CanonicalizeTextInPlace(key);
-#endif
-            if(!graphicsMetadata.includeMetadata.emplace(Move(key), Move(includeEntry)).second){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: duplicate include metadata for source '{}'"), PathToString<tchar>(absSource));
+            const Path path = absolute.value().lexicallyNormal();
+            const String key = NativePathComparisonKey(path);
+            if(metadata.includeMetadata.contains(key)){
+                error("GraphicsCook: duplicate include metadata for source '{}'", path);
                 return AssetMetadataParseResult::Error;
             }
+            mut ShaderIncludeEntry target = GetOrCreateTextRecord<ShaderIncludeEntry>(metadata.includeMetadata, key);
+            target = parsed.value();
         }
-
         return AssetMetadataParseResult::Parsed;
     }
-
     if(context.assetType == CsgShape::AssetTypeName()){
-        GraphicsVolumeMetadata& graphicsMetadata = Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata, context.parsedMetadata.arena);
-        auto csgShapeEntryResult = AssetsCsgCook::ParseCsgShapeCookMetadata(context.discoveredNwbFile.filePath, context.doc, context.cookArena, context.scratchArena);
-        if(!csgShapeEntryResult)
+        mut GraphicsVolumeMetadata metadata = GetCookMetadata<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata);
+        if(!AppendParsedValue<CsgShapeCookEntry>(metadata.csgShapeEntries, ParseCsgShapeCookMetadata(context.discoveredNwbFile.filePath, context.doc)))
             return AssetMetadataParseResult::Error;
-
-        graphicsMetadata.csgShapeEntries.push_back(Move(*csgShapeEntryResult));
         return AssetMetadataParseResult::Parsed;
     }
-
     return AssetMetadataParseResult::Unsupported;
 }
 
-static b8 ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& inOutGraphicsMetadata){
-    const auto bindFiles = Core::Assets::AssetFileDiscovery::Discover(context.resolvedPaths.assetRoots, s_MaterialBindSourceExtensionText, context.arena, context.scratchArena);
-    if(!bindFiles)
+b8 ReadOrCompileShaderVariant(in PreparedShaderEntry prepared, in StringView variant, in ShaderDefineCombo defines, in Path cachePath, mut Vector<u8> bytecode){
+    in ShaderCookEntry entry = prepared.entry;
+    bytecode.clear();
+    const ShaderVariantCacheReadStatus status = ReadCachedShaderVariantBytecode(entry.name, entry.stage, entry.entryPoint, cachePath, bytecode);
+    if(status == ShaderVariantCacheReadStatus::Error)
         return false;
-
-    inOutGraphicsMetadata.materialBindEntries.reserve(bindFiles->size());
-    for(const Core::Assets::DiscoveredNwbFile& discoveredBindFile : *bindFiles){
-        auto bindResult = ParseMaterialBindSource(discoveredBindFile.filePath, context.arena, context.scratchArena);
-        if(!bindResult)
-            return false;
-        MaterialBindEntry& bindEntry = *bindResult;
-
-        auto virtualPath = Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(discoveredBindFile.assetRoot, discoveredBindFile.virtualRoot, discoveredBindFile.filePath, context.arena, context.scratchArena);
-        if(!virtualPath)
-            return false;
-        bindEntry.virtualPath = Move(*virtualPath);
-
-        inOutGraphicsMetadata.materialBindEntries.push_back(Move(bindEntry));
+    if(status == ShaderVariantCacheReadStatus::Hit)
+        return true;
+    ShaderDefineCombo merged;
+    merged.reserve(defines.size() + entry.implicitDefines.size());
+    for(in auto define : defines)
+        merged.insert_or_assign(define.first, define.second);
+    for(in auto define : entry.implicitDefines)
+        merged.insert_or_assign(StringView(define.first), StringView(define.second));
+    if(!ValidateShaderMergedDefineCount(entry.name, merged.size()))
+        return false;
+    Vector<ShaderMacroDefinition> arguments;
+    arguments.reserve(merged.size());
+    for(in auto define : merged){
+        ShaderMacroDefinition macro;
+        macro.name = define.first;
+        macro.value = define.second;
+        arguments.push_back(macro);
     }
-
-    return true;
+    SortSequence<ShaderMacroDefinition>(arguments, lambda[](in ShaderMacroDefinition lhs, in ShaderMacroDefinition rhs) -> b8{ return IsBeforeShaderMacroDefinitionName(lhs.name, rhs.name); });
+    const Path parent = cachePath.parentPath();
+    const Expected<void, ErrorCode> ensured = EnsureDirectories(parent);
+    if(!ensured.has_value()){
+        error("GraphicsCook: failed to create cache directory '{}': {}", parent, ErrorCodeMessage(ensured.error()));
+        return false;
+    }
+    ShaderCompilerRequest request;
+    request.shaderName = entry.name;
+    request.stage = entry.stage;
+    request.entryPoint = entry.entryPoint;
+    request.variantName = variant;
+    request.defines = arguments;
+    request.externallyPlannedMacroIncludes = s_ExternallyPlannedMacroIncludes;
+    request.sourcePath = prepared.sourcePath;
+    request.outputPath = cachePath;
+    request.optimizationLevel = entry.optimizationLevel;
+    request.rayQuery = entry.rayQuery;
+    request.compilerInputsHaveBom = prepared.compilerInputsHaveBom;
+    request.includeDirectories = prepared.includeDirectories;
+    request.dependencies = prepared.dependencies;
+    return CompileSlangShaderVariant(request, bytecode);
 }
 
-static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
-    const GraphicsVolumeMetadata* selectedGraphics = Core::Assets::FindParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata);
-    const Core::Assets::ICookEntryBucket* materialBucket = context.parsedMetadata.entryRegistry.find(Material::AssetTypeName());
-    const usize materialBucketSize = materialBucket ? materialBucket->size() : 0u;
-    // Only selected graphics metadata or materials require generated modules and the shader index.
-    if(ShouldSkipGraphicsVolumePreparation(selectedGraphics != nullptr, materialBucketSize))
-        return true;
+class GraphicsVolumeWriter{
+    private Vector<u8> bytecode;
+    private Vector<u8> payload;
+    private Vector<Record> records;
 
-    GraphicsVolumeMetadata& graphicsMetadata = Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata, context.parsedMetadata.arena);
-    if(!ParseMaterialBindFiles(context, graphicsMetadata))
-        return false;
-    if(!AssetsCsgCook::AssignCsgShapeCookIds(graphicsMetadata.csgShapeEntries, context.scratchArena))
-        return false;
-
-    auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());
-    if(!ValidateMaterialCookRequiresShaderEntries(graphicsMetadata.shaderEntries.size(), materialEntries.size()))
-        return false;
-
-    if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
-        return false;
-
-    auto materialBindIncludeRootResult = EmitMaterialBindIncludes(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, context.arena, context.scratchArena);
-    if(!materialBindIncludeRootResult)
-        return false;
-    const Path& materialBindIncludeRoot = *materialBindIncludeRootResult;
-
-    const auto resolveIncludeVirtualSource = [&context](const AStringView ownerKind, const AStringView ownerName, const AStringView fieldLabel, auto& inOutVirtualSource) -> b8{
-        if(inOutVirtualSource.empty())
-            return true;
-
-        const auto resolvedSource = Core::Assets::ResolveVirtualAssetPath(context.resolvedPaths.assetRoots, AStringView(inOutVirtualSource), context.arena, context.scratchArena);
-        if(!resolvedSource){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsCook: {} '{}' {} '{}' does not resolve against any asset root"), ConvertString(ownerKind), ConvertString(ownerName), ConvertString(fieldLabel), ConvertString(AStringView(inOutVirtualSource)));
+    private b8 appendVariant(in PreparedShaderEntry prepared, in Name shader, in Name stage, in ShaderDefineCombo defines, in u64 fingerprint, mut CookVolumeWriteContext context){
+        in ShaderCookEntry entry = prepared.entry;
+        const String variant = BuildCanonicalShaderVariantName(defines);
+        const u64 sourceChecksum = ComputeShaderSourceChecksum(entry, variant, prepared.dependencyChecksum, fingerprint);
+        String hex;
+        AppendHexU64Text(sourceChecksum, hex);
+        const Path cache = BuildShaderVariantBytecodeCachePath(context.preparation.resolvedPaths.cacheDirectory, context.preparation.configurationSafeName, hex);
+        if(!ReadOrCompileShaderVariant(prepared, variant, defines, cache, this.bytecode))
+            return false;
+        const Expected<Name> path = BuildVirtualPathName(shader, variant, stage);
+        if(!path.has_value()){
+            error("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'", entry.name, entry.archiveStage, variant);
             return false;
         }
-
-#if defined(FOUNDATION_UNICODE)
-        inOutVirtualSource.clear();
-        auto out = BackInserter(inOutVirtualSource);
-        WriteConvertedText<char>(out, resolvedSource->native());
-#else
-        const auto nativeText = resolvedSource->native();
-        inOutVirtualSource.assign(nativeText.data(), nativeText.size());
-#endif
-        Replace(inOutVirtualSource.begin(), inOutVirtualSource.end(), '\\', '/');
+        if(!context.claim(path.value())){
+            error("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')", path.value().resolvedText(), entry.name, variant);
+            return false;
+        }
+        const u64 bytecodeChecksum = UpdateFnv64(s_Fnv64OffsetBasis, Span<u8>(this.bytecode));
+        const u64 cookKey = BuildShaderVariantCookKeyHash(path.value().hash(), sourceChecksum, bytecodeChecksum);
+        const AssetPayloadEncodeFailure failure = EncodeAssetPayload(entry.entryPoint, this.bytecode, this.payload);
+        if(failure != AssetPayloadEncodeFailure::None){
+            error("Failed to package shader payload '{}' (failure {})", path.value().resolvedText(), cast<u32>(failure));
+            return false;
+        }
+        if(!context.appendPayload(path.value(), this.payload, cookKey)){
+            error("Failed to append shader payload '{}' to manifest", path.value().resolvedText());
+            return false;
+        }
+        mut Record record = AppendCookRecord<Record>(context, this.records);
+        record.shaderName = shader;
+        record.variantName.assign(StringView(variant));
+        record.stage = stage;
+        record.sourceChecksum = sourceChecksum;
+        record.bytecodeChecksum = bytecodeChecksum;
+        record.virtualPathHash = path.value().hash();
         return true;
-    };
-
-    // Resolve each CSG eval path to its absolute source (verbatim include, checksum-covered). Runs before shape includes.
-    for(auto& csgShapeEntry : graphicsMetadata.csgShapeEntries){
-        if(!resolveIncludeVirtualSource(s_CsgShapeOwnerKindLabel, csgShapeEntry.shapeName.resolvedText(), s_CsgShapeEvalFieldLabel, csgShapeEntry.evalInclude))
-            return false;
     }
 
-    auto csgShapeIncludeRootResult = AssetsCsgCook::CsgShapeModuleWriter().emit(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.csgShapeEntries, context.scratchArena);
-    if(!csgShapeIncludeRootResult)
-        return false;
-    Path& csgShapeIncludeRoot = *csgShapeIncludeRootResult;
-
-    // Resolve each material bxdf/surface path to its absolute source (verbatim include, checksum-covered).
-    for(auto& materialEntry : materialEntries){
-        const AStringView materialName(materialEntry.virtualPath);
-        if(!resolveIncludeVirtualSource(s_MaterialOwnerKindLabel, materialName, s_MaterialBxdfSourceLabel, materialEntry.bxdfSource))
+    public b8 write(in GraphicsVolumeMetadata metadata, mut CookVolumeWriteContext context){
+        u64 count = 0u;
+        for(in PreparedShaderEntry prepared : metadata.preparedPlan.preparedEntries){
+            if(!TryAccumulatePreparedShaderRecordCount(prepared.variantCount, count))
+                return false;
+        }
+        usize capacity = 0u;
+        if(!ValidatePreparedShaderRecordCountFitsCapacity(count, capacity))
             return false;
-        if(!resolveIncludeVirtualSource(s_MaterialOwnerKindLabel, materialName, s_MaterialSurfaceSourceLabel, materialEntry.surfaceSource))
+        this.records.reserve(capacity);
+        u64 fingerprint = 0u;
+        if(!metadata.preparedPlan.preparedEntries.empty()){
+            const Expected<u64> result = ComputeSlangCompilerFingerprint(context.preparation.resolvedPaths.cacheDirectory);
+            if(!result.has_value())
+                return false;
+            fingerprint = result.value();
+        }
+        for(in PreparedShaderEntry prepared : metadata.preparedPlan.preparedEntries){
+            const Expected<Optional<Name>, NameTextError> shader = ToName(prepared.entry.name);
+            const Expected<Optional<Name>, NameTextError> stage = ToName(prepared.entry.archiveStage);
+            Name shaderName = s_NameNone;
+            Name stageName = s_NameNone;
+            if(shader.has_value())
+                shaderName = shader.value().value_or(s_NameNone);
+            if(stage.has_value())
+                stageName = stage.value().value_or(s_NameNone);
+            if(!ValidateCanonicalPreparedShaderIdentity(shaderName, stageName, prepared.entry.name, prepared.entry.archiveStage, prepared.entry.entryPoint))
+                return false;
+            Expected<Vector<ShaderDefineCombo>> variants = ExpandShaderDefineCombinations(prepared.entry.defineValues);
+            if(!variants.has_value()){
+                error("GraphicsCook: variant combination count exceeds runtime limits for entry '{}'", prepared.entry.name);
+                return false;
+            }
+            if(variants.value().empty())
+                AppendArenaElement<ShaderDefineCombo>(variants.value());
+            for(in ShaderDefineCombo combo : variants.value()){
+                if(!this.appendVariant(prepared, shaderName, stageName, combo, fingerprint, context))
+                    return false;
+                if(prepared.supportsCsgClipVariant || prepared.supportsAvboitCsgClipVariant){
+                    const Expected<ShaderDefineCombo> clip = BuildClipDefineCombo(prepared.entry.name, combo);
+                    if(!clip.has_value() || !this.appendVariant(prepared, shaderName, stageName, clip.value(), fingerprint, context))
+                        return false;
+                }
+            }
+        }
+        assert(this.records.size() == capacity);
+        if(!context.claim(s_IndexVirtualPathName)){
+            error("GraphicsCook: duplicate shader archive index virtual path '{}'", s_IndexVirtualPathName.resolvedText());
             return false;
-    }
-
-    // Assign BXDF ids before building materials; emit dispatch before shader preparation to include it in checksums.
-    if(!AssignMaterialShadingModelIds(materialEntries, context.scratchArena))
-        return false;
-
-    auto deferredBxdfIncludeRootResult = EmitDeferredBxdfDispatchModule(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
-    if(!deferredBxdfIncludeRootResult)
-        return false;
-    const Path& deferredBxdfIncludeRoot = *deferredBxdfIncludeRootResult;
-
-    // Trace dispatch also needs assigned surface ids and must participate in shader dependency checksums.
-    auto shadowSurfaceIncludeRootResult = ShadowSurfaceDispatchGenerator().emit(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena);
-    if(!shadowSurfaceIncludeRootResult)
-        return false;
-    const Path& shadowSurfaceIncludeRoot = *shadowSurfaceIncludeRootResult;
-
-    Name sharedMeshShaderName = s_NameNone;
-    if(const Core::Assets::ICookEntryBucket* const meshSubsystemBucket = context.parsedMetadata.entryRegistry.find(MeshSubsystem::AssetTypeName()); meshSubsystemBucket && meshSubsystemBucket->size() > 0u){
-        const auto& meshSubsystemEntries = context.parsedMetadata.entryRegistry.entries<SubsystemCookEntry<MeshSubsystem>>(MeshSubsystem::AssetTypeName());
-        sharedMeshShaderName = meshSubsystemEntries[0u].subsystem.sharedMs.name();
-    }
-
-    // Generate per-surface G-buffer PS (pixel generated, mesh shared), like authored entries. Before shader prep.
-    auto& materialCookArena = materialEntries.get_allocator().arena();
-    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, sharedMeshShaderName, materialCookArena, context.scratchArena, materialEntries);
-    if(!generatedPixelShadersResult)
-        return false;
-
-    // Generate AVBOIT accumulation from the same surface hook before shader preparation and material validation.
-    auto generatedAvboitAccumulatePixelShadersResult = MaterialAvboitShaderGenerator::EmitAccumulate(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
-    if(!generatedAvboitAccumulatePixelShadersResult)
-        return false;
-
-    // Occupancy, extinction, and accumulation must share the surface hook so renderCoverage agrees across passes.
-    auto generatedAvboitOccupancyPixelShadersResult = MaterialAvboitShaderGenerator::EmitOccupancy(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
-    if(!generatedAvboitOccupancyPixelShadersResult)
-        return false;
-
-    auto generatedAvboitExtinctionPixelShadersResult = MaterialAvboitShaderGenerator::EmitExtinction(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
-    if(!generatedAvboitExtinctionPixelShadersResult)
-        return false;
-
-    usize shaderEntryCapacity = 0u;
-    if(!TryAccumulateGeneratedShaderEntryCapacity(
-        graphicsMetadata.shaderEntries.size(),
-        generatedPixelShadersResult->size(),
-        generatedAvboitAccumulatePixelShadersResult->size(),
-        generatedAvboitOccupancyPixelShadersResult->size(),
-        generatedAvboitExtinctionPixelShadersResult->size(),
-        shaderEntryCapacity
-    ))
-        return false;
-    graphicsMetadata.shaderEntries.reserve(shaderEntryCapacity);
-    graphicsMetadata.seenShaderIdentityKeys.reserve(shaderEntryCapacity);
-
-    auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
-    const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> b8{
-        ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
-        pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
-        pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
-        pixelShaderEntry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage);
-        pixelShaderEntry.archiveStage = pixelShaderEntry.stage;
-        pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(s_EngineGraphicsIncludeRoot, shaderCookArena));
-        pixelShaderEntry.emitMeshComputeShadow = false;
-        return AppendUniqueShaderEntry(nullptr, pixelShaderEntry, graphicsMetadata, graphicsMetadata.shaderEntries);
-    };
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedPixelShadersResult){
-        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+        }
+        in Vector<Record> records = this.records;
+        if(!context.appendEncodedPayload(s_IndexVirtualPathName, lambda[in records](mut BinaryUpdateContext binary) -> b8{
+            if(WriteShaderArchiveIndex(binary, Span<Record>(records)))
+                return true;
+            error("GraphicsCook: failed to serialize shader index");
             return false;
-    }
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedAvboitAccumulatePixelShadersResult){
-        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+        })){
+            error("GraphicsCook: failed to append shader index to manifest");
             return false;
+        }
+        return true;
     }
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedAvboitOccupancyPixelShadersResult){
-        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
-            return false;
+}
+
+b8 ResolveGraphicsIncludeSource(in CookResolvedPaths paths, in StringView ownerKind, in StringView owner, in StringView label, mut String source){
+    if(source.empty())
+        return true;
+    const Expected<Path> path = ResolveCookVirtualAssetPath(paths, source);
+    if(!path.has_value()){
+        error("GraphicsCook: {} '{}' {} '{}' does not resolve against any asset root", ownerKind, owner, label, source);
+        return false;
     }
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedAvboitExtinctionPixelShadersResult){
-        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
-            return false;
+    source.assign(StringView(PathToString(path.value())));
+    for(usize i = 0u; i < source.size(); ++i){
+        if(source[i] == '\\')
+            source[i] = '/';
     }
-
-    auto preparedPlan = AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
-        context.resolvedPaths,
-        materialBindIncludeRoot,
-        csgShapeIncludeRoot,
-        deferredBxdfIncludeRoot,
-        shadowSurfaceIncludeRoot,
-        graphicsMetadata.includeMetadata,
-        graphicsMetadata.materialBindEntries,
-        materialEntries,
-        context.arena,
-        context.scratchArena,
-        graphicsMetadata.shaderEntries
-    );
-    if(!preparedPlan)
-        return false;
-    graphicsMetadata.preparedPlan = Move(*preparedPlan);
-
-    if(!AssetsGraphicsCookDetail::ValidateMaterials(graphicsMetadata.preparedPlan.preparedEntries, materialEntries, context.scratchArena))
-        return false;
-    if(!Core::Assets::AddPlannedFileCount(graphicsMetadata.preparedPlan.plannedFileCount, context.plannedFileCount))
-        return false;
-
-    context.manifestCookers.emplace_back([&context](Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes, Core::Assets::ScratchArena& writeScratchArena){
-        GraphicsVolumeMetadata& metadata = Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata, context.parsedMetadata.arena);
-        return AssetsGraphicsCookDetail::AppendPreparedShadersToManifest(
-            context.resolvedPaths.cacheDirectory,
-            context.configurationSafeName,
-            metadata.preparedPlan.preparedEntries,
-            context.arena,
-            writeScratchArena,
-            manifest,
-            seenVirtualPathHashes
-        );
-    });
     return true;
 }
 
+b8 AppendGeneratedShaderEntries(in Vector<GeneratedMaterialPixelShader> list, mut GraphicsVolumeMetadata metadata){
+    for(in GeneratedMaterialPixelShader shader : list){
+        ShaderCookEntry entry;
+        entry.name.assign(StringView(shader.name));
+        entry.source.assign(StringView(shader.source));
+        entry.stage = ArchiveStageTextFromShaderType(ShaderType::PixelStage);
+        entry.archiveStage = entry.stage;
+        AppendArenaElement<String>(entry.includeRoots);
+        entry.includeRoots[0u].assign(s_EngineGraphicsIncludeRoot);
+        entry.emitMeshComputeShadow = false;
+        if(!AppendUniqueShaderEntry(Path(), entry, metadata))
+            return false;
+    }
+    return true;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 PrepareGraphicsMaterials(mut CookVolumePrepareContext context, mut GraphicsVolumeMetadata metadata, mut Span<MaterialCookEntry> materials){
+    if(!ValidateMaterialCookRequiresShaderEntries(metadata.shaderEntries.size(), materials.size()) || !ValidateMaterialCookInterfaces(metadata.materialBindEntries, materials))
+        return false;
+    const Expected<Path> bindRoot = EmitMaterialBindIncludes(context.resolvedPaths.cacheDirectory, context.configurationSafeName, metadata.materialBindEntries);
+    if(!bindRoot.has_value())
+        return false;
+    for(mut CsgShapeCookEntry shape : metadata.csgShapeEntries){
+        if(!ResolveGraphicsIncludeSource(context.resolvedPaths, s_CsgShapeOwnerKindLabel, shape.shapeName.resolvedText(), s_CsgShapeEvalFieldLabel, shape.evalInclude))
+            return false;
+    }
+    const Expected<Path> csgRoot = CsgShapeModuleWriter().emit(context.resolvedPaths.cacheDirectory, context.configurationSafeName, metadata.csgShapeEntries);
+    if(!csgRoot.has_value())
+        return false;
+    for(mut MaterialCookEntry material : materials){
+        if(!ResolveGraphicsIncludeSource(context.resolvedPaths, s_MaterialOwnerKindLabel, material.virtualPath, s_MaterialBxdfSourceLabel, material.bxdfSource) || !ResolveGraphicsIncludeSource(context.resolvedPaths,
+            s_MaterialOwnerKindLabel, material.virtualPath, s_MaterialSurfaceSourceLabel, material.surfaceSource))
+            return false;
+    }
+    if(!AssignMaterialShadingModelIds(materials))
+        return false;
+    const Expected<Path> bxdfRoot = EmitDeferredBxdfDispatchModule(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materials);
+    if(!bxdfRoot.has_value())
+        return false;
+    const Expected<Path> shadowRoot = EmitShadowSurfaceDispatch(context.resolvedPaths.cacheDirectory, context.configurationSafeName, metadata.materialBindEntries, materials);
+    if(!shadowRoot.has_value())
+        return false;
+    Name sharedMesh = s_NameNone;
+    if(CookBucketSize(context.parsedMetadata, MeshSubsystem::AssetTypeName()) > 0u && !VisitCookEntries<SubsystemCookEntry<MeshSubsystem>>(context.parsedMetadata, MeshSubsystem::AssetTypeName(),
+        lambda[mut sharedMesh](mut Span<SubsystemCookEntry<MeshSubsystem>> entries) -> b8{
+        sharedMesh = entries[0u].asset.sharedMs.name();
+        return true;
+    }))
+        return false;
+    const Expected<Vector<GeneratedMaterialPixelShader>> surface = EmitMaterialPassPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, sharedMesh, MaterialPixelPass::Surface, materials);
+    if(!surface.has_value())
+        return false;
+    const Expected<Vector<GeneratedMaterialPixelShader>> accumulate = EmitMaterialPassPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_NameNone, MaterialPixelPass::Accumulate, materials);
+    if(!accumulate.has_value())
+        return false;
+    const Expected<Vector<GeneratedMaterialPixelShader>> occupancy = EmitMaterialPassPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_NameNone, MaterialPixelPass::Occupancy, materials);
+    if(!occupancy.has_value())
+        return false;
+    const Expected<Vector<GeneratedMaterialPixelShader>> extinction = EmitMaterialPassPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_NameNone, MaterialPixelPass::Extinction, materials);
+    if(!extinction.has_value())
+        return false;
+    usize count = 0u;
+    if(!TryAccumulateGeneratedShaderEntryCapacity(metadata.shaderEntries.size(), surface.value().size(), accumulate.value().size(), occupancy.value().size(), extinction.value().size(), count))
+        return false;
+    metadata.shaderEntries.reserve(count);
+    metadata.seenShaderIdentityKeys.reserve(count);
+    if(!AppendGeneratedShaderEntries(surface.value(), metadata) || !AppendGeneratedShaderEntries(accumulate.value(), metadata) || !AppendGeneratedShaderEntries(occupancy.value(), metadata) || !AppendGeneratedShaderEntries(extinction.value(), metadata))
+        return false;
+    if(!metadata.prepareShaders(context.resolvedPaths, bindRoot.value(), csgRoot.value(), bxdfRoot.value(), shadowRoot.value(), materials))
+        return false;
+    if(!ValidateMaterials(metadata.preparedPlan.preparedEntries, materials) || !AddPlannedFileCount(metadata.preparedPlan.plannedFileCount, context.plannedFileCount))
+        return false;
+    AddCookManifestWriter<GraphicsVolumeWriter>(context, s_GraphicsVolumeMetadataExtensionName, metadata);
+    return true;
+}
 
+[volume_prepare]
+b8 PrepareGraphicsVolumeAssets(mut CookVolumePrepareContext context){
+    if(ShouldSkipGraphicsVolumePreparation(HasCookMetadata<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata), CookBucketSize(context.parsedMetadata, Material::AssetTypeName())))
+        return true;
+    mut GraphicsVolumeMetadata metadata = GetCookMetadata<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata);
+    if(!VisitCookFiles(context, s_MaterialBindSourceExtensionText, lambda[mut metadata](in DiscoveredNwbFile file) -> b8{
+        Expected<MaterialBindEntry> parsed = ParseMaterialBindSource(file.filePath);
+        if(!parsed.has_value())
+            return false;
+        const Expected<String> name = DeriveAssetVirtualPathText(file.assetRoot, file.virtualRoot.view(), file.filePath);
+        if(!name.has_value())
+            return false;
+        parsed.value().virtualPath.assign(StringView(name.value()));
+        return AppendParsedValue<MaterialBindEntry>(metadata.materialBindEntries, parsed);
+    }) || !AssignCsgShapeCookIds(metadata.csgShapeEntries))
+        return false;
+    return VisitCookEntries<MaterialCookEntry>(context.parsedMetadata, Material::AssetTypeName(), lambda[mut context, mut metadata](mut Span<MaterialCookEntry> entries) -> b8{
+        return PrepareGraphicsMaterials(context, metadata, entries);
+    });
+}
 
-static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar S_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
-static Core::Assets::AssetMetadataParserAutoRegistrar S_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_MeshSubsystemNonStandaloneAssetTypeRegistrar(MeshSubsystem::AssetTypeName(), s_MeshSubsystemNonStandaloneKindLabel);
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_IncludeNonStandaloneAssetTypeRegistrar(s_IncludeAssetTypeName, s_IncludeNonStandaloneKindLabel);
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_ShaderNonStandaloneAssetTypeRegistrar(s_ShaderNonStandaloneAssetTypeName, s_ShaderNonStandaloneKindLabel);
-static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar S_ShaderSuffixNonStandaloneRegistrar(s_ShaderFirstTokenSuffixLabel);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cook_setup]
+void RegisterGraphicsCookKinds(){
+    RegisterNonStandaloneAssetType(MeshSubsystem::AssetTypeName(), s_MeshSubsystemNonStandaloneKindLabel);
+    RegisterNonStandaloneAssetType(s_IncludeAssetTypeName, s_IncludeNonStandaloneKindLabel);
+    RegisterNonStandaloneAssetType(s_ShaderNonStandaloneAssetTypeName, s_ShaderNonStandaloneKindLabel);
+    RegisterNonStandaloneFirstTokenSuffix(s_ShaderFirstTokenSuffixLabel);
 }
 
 

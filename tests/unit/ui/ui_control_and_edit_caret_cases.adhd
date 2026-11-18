@@ -152,7 +152,6 @@ using namespace NWB::Impl::Ui;
 constexpr AStringView s_EditBoxSkinPath = "tests/ui/edit_box/skin";
 constexpr AStringView s_EditBoxTexturePath = "tests/ui/edit_box/texture";
 constexpr AStringView s_EditBoxFontPath = "tests/ui/edit_box/font";
-constexpr Name s_FontScratchArenaName = NWB::Tests::UiCases::s_UiCaseNameFontScratch;
 constexpr AStringView s_LatinFontFileName = "latin.font";
 
 using NWB::Tests::UiFixtureText::FixtureShaper;
@@ -173,7 +172,7 @@ public:
         if(!m_view.snapshot(m_model))
             return false;
         auto layout = m_builder.layout({ m_view.displayText() });
-        return layout && m_view.adoptLayout(Move(*layout));
+        return layout && m_view.adoptLayout(*layout);
     }
 
     [[nodiscard]] b8 tryAdoptBuiltLayout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
@@ -183,7 +182,7 @@ public:
         EXPECT_TRUE(layout);
         if(!layout)
             return false;
-        return m_view.adoptLayout(Move(*layout));
+        return m_view.adoptLayout(*layout);
     }
 
     void moveViewTo(EditBoxView& destination)noexcept{
@@ -201,7 +200,7 @@ public:
         paint.begin({ width, height, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
     }
 
-    [[nodiscard]] b8 installBundledLatinFont(Core::Alloc::ScratchArena& scratchArena, Font& font, TextService& service){
+    [[nodiscard]] b8 installBundledLatinFont(Font& font, TextService& service){
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / s_LatinFontFileName;
         auto bytes = Tests::ReadBundledFontBytes(path, m_arena);
         if(!bytes)
@@ -210,12 +209,7 @@ public:
         if(!font.validatePayload())
             return false;
         const FontSource source{ Core::Assets::AssetRef<Font>(s_EditBoxFontPath), font, 1u };
-        return service.setFonts(scratchArena, Span(&source, 1u));
-    }
-
-    [[nodiscard]] b8 installBundledLatinFont(const Name& scratchName, Font& font, TextService& service){
-        Core::Alloc::ScratchArena scratchArena{ scratchName };
-        return installBundledLatinFont(scratchArena, font, service);
+        return service.setFonts(Span(&source, 1u));
     }
 
     [[nodiscard]] b8 place(f32 width = 100.0f, f32 scroll = 0.0f)noexcept{
@@ -273,7 +267,7 @@ using namespace NWB::UiEditCaretTests;
     TextLayout& candidate = *layoutResult;
     if(!self.identityMapping("new"))
         return false;
-    const b8 adopted = self.m_geometry.adoptLayout(Move(candidate), "wrong", self.m_mapping, 3u, EditTextMode::SingleLine);
+    const b8 adopted = self.m_geometry.adoptLayout(candidate, "wrong", self.m_mapping, 3u, EditTextMode::SingleLine);
     EXPECT_FALSE(adopted);
     EXPECT_EQ(candidate.utf8(), "new");
     return !adopted && candidate.utf8() == "new";
@@ -284,7 +278,7 @@ using namespace NWB::UiEditCaretTests;
     EXPECT_TRUE(built);
     if(!built)
         return false;
-    return self.m_geometry.adoptLayout(Move(*built), sourceText, self.m_mapping, committedBytes, mode);
+    return self.m_geometry.adoptLayout(*built, sourceText, self.m_mapping, committedBytes, mode);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 AdoptNonfiniteDerivedGlyphPlacement(EditCaretFixture& self){
@@ -299,7 +293,7 @@ using namespace NWB::UiEditCaretTests;
     const_cast<PlacedGlyph&>(malformed.glyphs()[1u]).position.x = Limit<f32>::s_Infinity;
     if(!self.identityMapping("ab"))
         return false;
-    return self.m_geometry.adoptLayout(Move(malformed), "ab", self.m_mapping, 2u, EditTextMode::SingleLine);
+    return self.m_geometry.adoptLayout(malformed, "ab", self.m_mapping, 2u, EditTextMode::SingleLine);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 AdoptMutatedLineRecord(EditCaretFixture& self, const u32 mutation){
@@ -324,8 +318,9 @@ using namespace NWB::UiEditCaretTests;
     case 11u: line.height = Limit<f32>::s_QuietNaN; break;
     case 12u: line.advance = 11.0f; break;
     case 13u: const_cast<TextLine&>(malformed.lines()[0u]).breakEnd = 1u; break;
+    case 14u: const_cast<TextCluster&>(malformed.clusters().back()).glyphCount = Limit<u32>::s_Max; break;
     }
-    return self.m_geometry.adoptLayout(Move(malformed), "a\nb", self.m_mapping, 3u, EditTextMode::Multiline);
+    return self.m_geometry.adoptLayout(malformed, "a\nb", self.m_mapping, 3u, EditTextMode::Multiline);
 }
 
 FOUNDATION_INLINE void MoveCaretGeometry(EditCaretGeometry& source, EditCaretGeometry& destination)noexcept{
@@ -385,7 +380,6 @@ namespace CoreKey = ::NWB::Core::Key;
 using CoreKeyEnum = ::NWB::Core::Key::Enum;
 
 using ::NWB::Impl::Ui::s_InputMaxControlActions;
-using ::NWB::Tests::UiCases::s_UiCaseNameFontScratch;
 
 [[nodiscard]] FOUNDATION_INLINE f32 UiControlCaretInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
 [[nodiscard]] FOUNDATION_INLINE f32 UiControlCaretQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
@@ -1261,7 +1255,7 @@ void VerifyEditBoxLayoutTests_EmptySelectionRejectsInvalidCaretWidthsAndRestores
 void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRestoresClipping(mut EditBoxLayoutTests self){
     Font font = Font(self.m_arena, s_UiEditBoxFontAssetName);
     TextService service = TextService(self.m_arena);
-    ASSERT_TRUE(self.installBundledLatinFont(s_UiCaseNameFontScratch, font, service));
+    ASSERT_TRUE(self.installBundledLatinFont(font, service));
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("IME", 3u, 3u));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
@@ -1301,7 +1295,7 @@ void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRes
 void VerifyEditBoxLayoutTests_PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales(mut EditBoxLayoutTests self){
     Font font = Font(self.m_arena, s_UiEditBoxFontAssetName);
     TextService service = TextService(self.m_arena);
-    ASSERT_TRUE(self.installBundledLatinFont(s_UiCaseNameFontScratch, font, service));
+    ASSERT_TRUE(self.installBundledLatinFont(font, service));
     ASSERT_TRUE(self.m_model.setText("ffi"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
@@ -1697,7 +1691,7 @@ void VerifyEditCaretFixture_NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeom
 void VerifyEditCaretFixture_MalformedLineRecordsCannotReplaceReadyGeometry(mut EditCaretFixture self){
     ASSERT_TRUE(self.adoptText("base", EditTextMode::SingleLine));
     ASSERT_TRUE(self.identityMapping("a\nb"));
-    for(u32 mutation = 0u; mutation < 14u; ++mutation){
+    for(u32 mutation = 0u; mutation < 15u; ++mutation){
         const ScopedTestTrace trace = ScopedTestTrace(mutation);
         EXPECT_FALSE(UiEditCaretAdoptMutatedLineRecord(self, mutation));
         EXPECT_EQ(self.m_geometry.layout().utf8(), "base");

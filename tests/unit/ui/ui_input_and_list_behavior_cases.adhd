@@ -142,7 +142,8 @@ public:
     }
 
     [[nodiscard]] usize findTargetAddress(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
-        return reinterpret_cast<usize>(m_router.findTarget(id, declarationGeneration));
+        const auto found = m_router.findTarget(id, declarationGeneration);
+        return found ? reinterpret_cast<usize>(found->get()) : 0u;
     }
 
     [[nodiscard]] usize targetEntryAddress(const usize index)const noexcept{
@@ -150,8 +151,8 @@ public:
     }
 
     [[nodiscard]] Optional<HitTarget> findTargetCopy(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
-        if(const HitTarget* found = m_router.findTarget(id, declarationGeneration))
-            return *found;
+        if(const auto found = m_router.findTarget(id, declarationGeneration))
+            return **found;
         return {};
     }
 
@@ -323,11 +324,11 @@ FOUNDATION_INLINE void ExpectUiLayoutRect(const Rect& actual, const Rect& expect
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiListBehaviorReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ListBehavior::Reconcile(state, source);
+    return ::NWB::Impl::Ui::ReconcileListState(state, source);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiListBehaviorApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
-    return ::NWB::Impl::Ui::ListBehavior::Apply(source, options, action, state, result);
+    return ::NWB::Impl::Ui::ApplyListControlAction(source, options, action, state, result);
 }
 
 [[nodiscard]] FOUNDATION_INLINE ControlAction MakeUiListBehaviorAction(const ListState& state, const UiListBehaviorRangeSource& source, const ControlActionKindEnum kind)noexcept{

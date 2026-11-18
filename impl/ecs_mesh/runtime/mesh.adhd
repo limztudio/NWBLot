@@ -2,146 +2,86 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/runtime/types.adhd>
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/ecs_mesh/runtime/mesh_requests.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class RuntimeMeshBuffers{
+    public BufferHandle positionBuffer;
+    public BufferHandle normalBuffer;
+    public BufferHandle tangentBuffer;
+    public BufferHandle uv0Buffer;
+    public BufferHandle colorBuffer;
+    public BufferHandle meshletDescBuffer;
+    public BufferHandle meshletBoundsBuffer;
+    public BufferHandle meshletPositionRefDeltaBuffer;
+    public BufferHandle meshletAttributeRefDeltaBuffer;
+    public BufferHandle meshletLocalVertexRefBuffer;
+    public BufferHandle meshletPrimitiveIndexBuffer;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_mesh/payload_types.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/assets/ref.h>
-#include <core/ecs/entity_id.h>
-#include <core/graphics/api.h>
-
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Mesh;
-class RuntimeMeshRequestSet;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RuntimeMeshBuffers{
-    Core::BufferHandle positionBuffer;
-    Core::BufferHandle normalBuffer;
-    Core::BufferHandle tangentBuffer;
-    Core::BufferHandle uv0Buffer;
-    Core::BufferHandle colorBuffer;
-    Core::BufferHandle meshletDescBuffer;
-    Core::BufferHandle meshletBoundsBuffer;
-    Core::BufferHandle meshletPositionRefDeltaBuffer;
-    Core::BufferHandle meshletAttributeRefDeltaBuffer;
-    Core::BufferHandle meshletLocalVertexRefBuffer;
-    Core::BufferHandle meshletPrimitiveIndexBuffer;
-
-
-public:
-    [[nodiscard]] b8 buffersValid()const noexcept{
-        return
-            positionBuffer != nullptr
-            && normalBuffer != nullptr
-            && tangentBuffer != nullptr
-            && uv0Buffer != nullptr
-            && colorBuffer != nullptr
-            && meshletDescBuffer != nullptr
-            && meshletBoundsBuffer != nullptr
-            && meshletPositionRefDeltaBuffer != nullptr
-            && meshletAttributeRefDeltaBuffer != nullptr
-            && meshletLocalVertexRefBuffer != nullptr
-            && meshletPrimitiveIndexBuffer != nullptr
-        ;
+    public b8 buffersValid()const{
+        return this.positionBuffer.valid()
+            && this.normalBuffer.valid()
+            && this.tangentBuffer.valid()
+            && this.uv0Buffer.valid()
+            && this.colorBuffer.valid()
+            && this.meshletDescBuffer.valid()
+            && this.meshletBoundsBuffer.valid()
+            && this.meshletPositionRefDeltaBuffer.valid()
+            && this.meshletAttributeRefDeltaBuffer.valid()
+            && this.meshletLocalVertexRefBuffer.valid()
+            && this.meshletPrimitiveIndexBuffer.valid();
     }
-    [[nodiscard]] b8 sameBuffers(const RuntimeMeshBuffers& other)const noexcept{
-        return
-            positionBuffer == other.positionBuffer
-            && normalBuffer == other.normalBuffer
-            && tangentBuffer == other.tangentBuffer
-            && uv0Buffer == other.uv0Buffer
-            && colorBuffer == other.colorBuffer
-            && meshletDescBuffer == other.meshletDescBuffer
-            && meshletBoundsBuffer == other.meshletBoundsBuffer
-            && meshletPositionRefDeltaBuffer == other.meshletPositionRefDeltaBuffer
-            && meshletAttributeRefDeltaBuffer == other.meshletAttributeRefDeltaBuffer
-            && meshletLocalVertexRefBuffer == other.meshletLocalVertexRefBuffer
-            && meshletPrimitiveIndexBuffer == other.meshletPrimitiveIndexBuffer
-        ;
+
+    public b8 sameBuffers(in RuntimeMeshBuffers other)const{
+        return this.positionBuffer == other.positionBuffer
+            && this.normalBuffer == other.normalBuffer
+            && this.tangentBuffer == other.tangentBuffer
+            && this.uv0Buffer == other.uv0Buffer
+            && this.colorBuffer == other.colorBuffer
+            && this.meshletDescBuffer == other.meshletDescBuffer
+            && this.meshletBoundsBuffer == other.meshletBoundsBuffer
+            && this.meshletPositionRefDeltaBuffer == other.meshletPositionRefDeltaBuffer
+            && this.meshletAttributeRefDeltaBuffer == other.meshletAttributeRefDeltaBuffer
+            && this.meshletLocalVertexRefBuffer == other.meshletLocalVertexRefBuffer
+            && this.meshletPrimitiveIndexBuffer == other.meshletPrimitiveIndexBuffer;
     }
-};
-
-static_assert(alignof(RuntimeMeshLocalBounds) >= alignof(Float4), "RuntimeMeshLocalBounds must stay SIMD-friendly");
-static_assert(IsStandardLayout_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBounds must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBounds must stay cheap to pass by value");
-
-struct RuntimeMeshDesc : public RuntimeMeshBuffers{
-    RuntimeMeshLocalBounds localBounds;
-    u64 version = 0u;
-    // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
-    u64 geometryContentRevision = 0u;
-    Name meshKey = s_NameNone;
-    Span<const u32> solidTriangleWords;
-    // Optional 32-byte runtime_bounds_constants.h GPU record for this accepted geometryContentRevision; null while pending.
-    Core::BufferHandle localBoundsBuffer;
-    // Optional meshletCount records with the same accepted bounds ABI; each record carries its own VALID proof.
-    Core::BufferHandle meshletLocalBoundsBuffer;
-    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
-    Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
-    Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
-    u32 meshletCount = 0u;
-    // Logical corner count; backing buffer is word-padded, never use its byte size.
-    u32 meshletPrimitiveIndexCount = 0u;
-    b8 dynamicMeshletBoundsFresh = false;
-    b8 dynamicMeshletConesFresh = false;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return
-            entity.valid()
-            && meshKey != s_NameNone
-            && buffersValid()
-            && meshletCount > 0u
-            && meshletPrimitiveIndexCount > 0u
-            && solidTriangleWords.size() == ExpectedMeshletSolidTriangleWordCount(meshletPrimitiveIndexCount)
-            && localBounds.valid()
-        ;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
+class RuntimeMeshDesc{
+    public RuntimeMeshBuffers buffers;
+    public RuntimeMeshLocalBounds localBounds;
+    public u64 version = 0u;
+    // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
+    public u64 geometryContentRevision = 0u;
+    public Name meshKey = s_NameNone;
+    public Span<u32> solidTriangleWords;
+    // Optional 32-byte runtime_bounds_constants.h GPU record for this accepted geometryContentRevision; null while pending.
+    public BufferHandle localBoundsBuffer;
+    // Optional meshletCount records with the same accepted bounds ABI; each record carries its own VALID proof.
+    public BufferHandle meshletLocalBoundsBuffer;
+    public EntityID entity = s_InvalidEntityId;
+    public BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
+    public BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
+    public u32 meshletCount = 0u;
+    // Logical corner count; backing buffer is word-padded, never use its byte size.
+    public u32 meshletPrimitiveIndexCount = 0u;
+    public b8 dynamicMeshletBoundsFresh = false;
+    public b8 dynamicMeshletConesFresh = false;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+    public b8 valid()const{
+        return this.entity.valid()
+            && this.meshKey != s_NameNone
+            && this.buffers.buffersValid()
+            && this.meshletCount > 0u
+            && this.meshletPrimitiveIndexCount > 0u
+            && this.solidTriangleWords.size() == ExpectedMeshletSolidTriangleWordCount(this.meshletPrimitiveIndexCount)
+            && this.localBounds.valid();
+    }
+}
 
 interface IRuntimeMeshProvider{
     Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity);
@@ -169,3 +109,12 @@ interface IRuntimeMeshRegistry{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(align_of<RuntimeMeshLocalBounds>() >= align_of<f32x4>(), "RuntimeMeshLocalBounds must stay SIMD-friendly");
+static_assert(is_standard_layout<RuntimeMeshLocalBounds>(), "RuntimeMeshLocalBounds must stay layout-stable");
+static_assert(is_trivially_copyable<RuntimeMeshLocalBounds>(), "RuntimeMeshLocalBounds must stay cheap to pass by value");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

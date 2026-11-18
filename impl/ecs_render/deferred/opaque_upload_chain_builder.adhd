@@ -2,92 +2,131 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/graph_types.adhd>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
+#include <impl/ecs_render/csg/csg_system.adhd>
+#include <impl/ecs_render/material/instance_typed_ranges.adhd>
+#include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/graph_types.adhd.h>
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/material/material_typed_private.adhd.h>
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+[cpp_unwind]
+b8 DeclareOpaqueMaterialUploads(mut GpuTaskGraph graph, in Span<InstanceGpuData> instances, in Span<u8> bytes, in GpuGraphResourceId instanceBuffer, in GpuGraphResourceId typedBuffer, mut GpuTaskId dependency){
+    const auto instanceBlob = graph.copyUploadElements<InstanceGpuData>(instances);
+    const auto typedBlob = graph.copyUploadBytes<u32>(bytes);
+    if(!instanceBlob.has_value() || !typedBlob.has_value())
+        return false;
+    return AppendImmutableBufferUpload(graph, instanceBlob.value(), instanceBuffer, s_RenderNameRenderGraphicsPrefixMaterialInstancesUpload, "Material Instances Upload", dependency)
+        && AppendImmutableBufferUpload(graph, typedBlob.value(), typedBuffer, s_RenderNameRenderGraphicsPrefixMaterialTypedUpload, "Material Typed Upload", dependency);
+}
 
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererCsgSystem;
-class RendererMaterialSystem;
-
-// Opaque upload chain owns material plus CSG frame buffer uploads feeding G-buffer.
-struct OpaqueUploadChainInputs{
-    DeferredFrameTargets& targets;
-    const MeshFrameBindingSnapshot& frameBindings;
-    const CsgGraphResourceSnapshot& csgResources;
-    MaterialPassDrawItemPartitionsView drawItems{};
-    Span<InstanceGpuData> instanceData;
-    CsgFrameGpuDataView csgFrameData{};
-#if defined(NWB_DEBUG)
-    Span<const MaterialTypedInstanceRanges> materialTypedRanges;
-#endif
-    Span<const u8> materialTypedBytes;
-    Core::GpuGraphResourceId materialInstances;
-    Core::GpuGraphResourceId materialTyped;
-    Core::GpuGraphResourceId csgReceiverRanges;
-    Core::GpuGraphResourceId csgCutters;
-    Core::GpuGraphResourceId csgClipContextSlots;
-    Core::GpuGraphResourceId csgIntervalSampleState;
-    Core::GpuTaskId dependencyTask;
-};
+[cpp_unwind]
+b8 DeclareOpaqueCsgUploads(
+    mut GpuTaskGraph graph, in CsgFrameGpuDataView frame, in CsgClipContextSlots clipSlots, in CsgIntervalSampleStateGpuData intervalState,
+    in GpuGraphResourceId receivers, in GpuGraphResourceId cutters, in GpuGraphResourceId slots, in GpuGraphResourceId samples, mut GpuTaskId dependency
+){
+    const auto receiverBlob = graph.copyUploadElements<CsgReceiverRangeGpuData>(frame.receiverRanges);
+    const auto cutterBlob = graph.copyUploadElements<CsgCutterGpuData>(frame.cutters);
+    const auto clipBlob = graph.copyUploadValue(clipSlots);
+    const auto intervalBlob = graph.copyUploadValue(intervalState);
+    if(!receiverBlob.has_value() || !cutterBlob.has_value() || !clipBlob.has_value() || !intervalBlob.has_value())
+        return false;
+    return AppendImmutableBufferUpload(graph, receiverBlob.value(), receivers, s_RenderNameRenderGraphicsPrefixCsgReceiverRangesUpload, "CSG Receiver Ranges Upload", dependency)
+        && AppendImmutableBufferUpload(graph, cutterBlob.value(), cutters, s_RenderNameRenderGraphicsPrefixCsgCuttersUpload, "CSG Cutters Upload", dependency)
+        && AppendImmutableBufferUpload(graph, clipBlob.value(), slots, s_RenderNameRenderGraphicsPrefixCsgClipContextSlotsUpload, "CSG Clip Context Slots Upload", dependency)
+        && AppendImmutableBufferUpload(graph, intervalBlob.value(), samples, s_RenderNameRenderGraphicsPrefixCsgIntervalSampleStateUpload, "CSG Interval Sample State Upload", dependency);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class OpaqueUploadChainBuilder final : NoCopy{
-public:
-    OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
-        : m_graph(graph)
-        , m_materialSystem(materialSystem)
-        , m_csgSystem(csgSystem)
-    {}
+b8 ValidateAddressableUploadElementCount(in usize count, in usize elementStride){
+    return elementStride != 0u && count <= usize.max / elementStride;
+}
 
 
-public:
-    [[nodiscard]] Expected<OpaqueUploadChainResult> declare(const OpaqueUploadChainInputs& inputs);
+class OpaqueUploadChainInputs{
+    public in DeferredFrameTargets targets;
+    public in MeshFrameBindingSnapshot frameBindings;
+    public in CsgGraphResourceSnapshot csgResources;
+    public CsgFrameGpuDataView csgFrameData;
+    public Span<u8> materialTypedBytes;
+    public Optional<Span<MaterialTypedInstanceRanges>> materialTypedRanges;
+    public GpuGraphResourceId materialInstances;
+    public GpuGraphResourceId materialTyped;
+    public GpuGraphResourceId csgReceiverRanges;
+    public GpuGraphResourceId csgCutters;
+    public GpuGraphResourceId csgClipContextSlots;
+    public GpuGraphResourceId csgIntervalSampleState;
+    public GpuTaskId dependencyTask;
+    public b8 hasOpaqueDrawItems = false;
 
+    public OpaqueUploadChainInputs(in DeferredFrameTargets targets, in MeshFrameBindingSnapshot bindings, in CsgGraphResourceSnapshot resources, in CsgFrameGpuDataView frame){
+        this.targets = targets;
+        this.frameBindings = bindings;
+        this.csgResources = resources;
+        this.csgFrameData = frame;
+    }
+}
 
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererMaterialSystem& m_materialSystem;
-    RendererCsgSystem& m_csgSystem;
-};
+class OpaqueUploadChainBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererMaterialSystem m_materialSystem;
+    private mut RendererCsgSystem m_csgSystem;
 
+    public OpaqueUploadChainBuilder(mut GpuTaskGraph graph, mut RendererMaterialSystem materials, mut RendererCsgSystem csg){
+        this.m_graph = graph;
+        this.m_materialSystem = materials;
+        this.m_csgSystem = csg;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public Expected<OpaqueUploadChainResult> declare(in OpaqueUploadChainInputs inputs, mut Span<InstanceGpuData> instanceData){
+        OpaqueUploadChainResult result;
+        if(!inputs.dependencyTask.valid())
+            return MakeUnexpected(Failure());
+        GpuTaskId dependency = inputs.dependencyTask;
+        if(inputs.hasOpaqueDrawItems){
+            if(!inputs.materialInstances.valid() || !inputs.materialTyped.valid() || !inputs.frameBindings.frameReady(instanceData.size(), inputs.materialTypedBytes.size()))
+                return MakeUnexpected(Failure());
+            this.m_materialSystem.prepareMaterialPassInstanceUploadData(inputs.csgResources, instanceData);
+            if(inputs.materialTypedRanges.has_value()){
+                if(!ValidateAddressableUploadElementCount(instanceData.size(), size_of<InstanceGpuData>()))
+                    return MakeUnexpected(Failure());
+                assert(instanceData.size() == inputs.materialTypedRanges.value().size());
+                ValidateMaterialTypedUploadRanges(inputs.materialTypedRanges.value(), inputs.materialTypedBytes);
+            }
+            if(!DeclareOpaqueMaterialUploads(this.m_graph, instanceData, inputs.materialTypedBytes, inputs.materialInstances, inputs.materialTyped, dependency))
+                return MakeUnexpected(Failure());
+            result.materialDrawBuffersUploaded = true;
+        }
 
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        result.hasCsgFrameGpuWork = inputs.csgFrameData.hasWork();
+        if(result.hasCsgFrameGpuWork){
+            if(!inputs.csgReceiverRanges.valid() || !inputs.csgCutters.valid() || !inputs.csgClipContextSlots.valid() || !inputs.csgIntervalSampleState.valid() || !inputs.csgResources.frameReady(inputs.csgFrameData))
+                return MakeUnexpected(Failure());
+            if(!ValidateAddressableUploadElementCount(inputs.csgFrameData.receiverRanges.size(), size_of<CsgReceiverRangeGpuData>()) || !ValidateAddressableUploadElementCount(inputs.csgFrameData.cutters.size(), size_of<CsgCutterGpuData>()))
+                return MakeUnexpected(Failure());
+            const auto clip = this.m_csgSystem.prepareCsgClipContextSlotData(inputs.targets, inputs.csgFrameData, inputs.csgResources, inputs.frameBindings);
+            if(!clip.has_value())
+                return MakeUnexpected(Failure());
+            const auto state = this.m_csgSystem.prepareCsgIntervalSampleStateData(inputs.targets, inputs.csgFrameData, inputs.csgResources, inputs.frameBindings);
+            if(!state.has_value())
+                return MakeUnexpected(Failure());
+            if(!DeclareOpaqueCsgUploads(this.m_graph, inputs.csgFrameData, clip.value(), state.value(), inputs.csgReceiverRanges, inputs.csgCutters, inputs.csgClipContextSlots, inputs.csgIntervalSampleState, dependency))
+                return MakeUnexpected(Failure());
+            result.csgFrameBuffersUploaded = true;
+        }
+        result.csgUploadTask = dependency;
+        return result;
+    }
 }
 
 

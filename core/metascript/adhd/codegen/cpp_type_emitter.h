@@ -37,9 +37,13 @@ public:
 
 public:
     void setCurrentNamespace(MStringView namespacePath)const noexcept{ m_currentNamespace = namespacePath; }
+    void setLocalNamespace(MStringView namespacePath)const noexcept{ m_localNamespace = namespacePath; }
+    void useCanonicalTemplateArguments()noexcept{ m_canonicalTemplateArguments = true; }
     [[nodiscard]] const SymbolTable& symbols()const noexcept{ return m_symbols; }
     [[nodiscard]] MStringView resolveCrossNamespace(MStringView declNamespace)const noexcept{
-        if(declNamespace.empty() || declNamespace == m_currentNamespace)
+        if(declNamespace.empty())
+            declNamespace = m_localNamespace;
+        if(declNamespace == m_currentNamespace)
             return {};
         return declNamespace;
     }
@@ -50,7 +54,7 @@ public:
     void emitReturnTypeCpp(MString& out, const TypeRef& type)const;
     void emitTypeWithCustomArenaCpp(MString& out, const TypeRef& type, MStringView arenaExpr)const;
     void emitTypeArgListCpp(MString& out, Span<const TypeArg> args)const;
-    void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true)const;
+    void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true, b8 retainsBorrow = false)const;
     void emitParamListCpp(MString& out, Span<const ParamDecl> params, b8 injectCallerArena = false)const;
     void emitTemplateHeaderCpp(MString& out, Span<const TemplateParamDecl> params)const;
     void emitCallableTemplateHeaderCpp(MString& out, const MethodDecl& callable, b8 includeDefaults, MStringView indent = {})const;
@@ -65,6 +69,8 @@ private:
 private:
     const SymbolTable& m_symbols;
     mutable MStringView m_currentNamespace;
+    mutable MStringView m_localNamespace;
+    b8 m_canonicalTemplateArguments = false;
 };
 
 

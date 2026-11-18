@@ -133,7 +133,7 @@ UiTextEditStatus ApplyUiTextEditEvent(
 [modular]
 class UiTextEditSession : NoCopy{
     private mut ITextInputService m_service;
-    private TextInputEvent m_event;
+    private TextInputEvent m_event = TextInputEvent();
     private EditModelSnapshot m_expectedModel;
     private EditModelSnapshot m_publishedModel;
     private UiTextEditOwner m_owner;
@@ -141,7 +141,9 @@ class UiTextEditSession : NoCopy{
     private u64 m_surroundingRevision = 0u;
     private u64 m_lastSequence = 0u;
 
-    public UiTextEditSession(mut ITextInputService service);
+    public UiTextEditSession(mut ITextInputService service){
+        this.m_service = service;
+    }
 
     public ~UiTextEditSession(){
         if(!this.cancel())
@@ -327,41 +329,6 @@ class UiTextEditSession : NoCopy{
     private TextInputAdmission publishSurrounding(in EditModel model){
         return this.publishSurrounding(model, TextInputChangeCause::InputMethod);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiTextEditSession::UiTextEditSession(::ArenaBase& __adhd_mother_arena, Core::ITextInputService& service)noexcept
-    : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
-    , m_event(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_service(::MakeNotNull(&service))
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

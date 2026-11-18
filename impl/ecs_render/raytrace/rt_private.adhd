@@ -3,132 +3,124 @@
 
 
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
+#include <impl/ecs_render/raytrace/scene_bvh_build.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/material/material_typed_private.adhd>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/ecs_render/shared/renderer_push_constants_private.adhd>
+#include <impl/ecs_render/shared/renderer_scene_private.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+#include <impl/assets_graphics/components.adhd>
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/assets_material/asset.adhd>
+#include <impl/assets_shader/loader.adhd>
+#include <impl/ecs_csg/module.adhd>
+#include <impl/ecs_scene/module.adhd>
+#include <impl/ecs_mesh/system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<impl/assets/graphics/bvh/constants.h>"), cpp_name("NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT")]
+extern const u32 s_ShaderRtInstanceMaterialFlagTransparent;
+
+[cpp_header("<impl/assets/graphics/bvh/constants.h>"), cpp_name("NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE")]
+extern const u32 s_ShaderRtInstanceMaterialFlagRefractive;
+
+[cpp_header("<impl/assets/graphics/bvh/constants.h>"), cpp_name("NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW")]
+extern const u32 s_ShaderRtInstanceMaterialFlagCsgShadow;
+
+[cpp_header("<impl/assets/graphics/bvh/constants.h>"), cpp_name("NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTION_ENTRY_CERTIFIED")]
+extern const u32 s_ShaderRtInstanceMaterialFlagRefractionEntryCertified;
+
+[cpp_header("<impl/assets/graphics/bvh/constants.h>"), cpp_name("NWB_RT_SHADOW_BASE_INSTANCE_MASK")]
+extern const u32 s_ShaderRtShadowBaseInstanceMask;
+
+[cpp_header("<impl/assets/graphics/bvh/constants.h>"), cpp_name("NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK")]
+extern const u32 s_ShaderRtShadowTransparentInstanceMask;
+
+[cpp_header("<impl/assets/graphics/raytrace/constants.h>"), cpp_name("NWB_RT_CSG_INSTANCE_MASK")]
+extern const u32 s_ShaderRtCsgInstanceMask;
+
+[cpp_header("<impl/assets/graphics/raytrace/constants.h>"), cpp_name("NWB_RT_REFRACTIVE_INSTANCE_MASK")]
+extern const u32 s_ShaderRtRefractiveInstanceMask;
+
+[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADOW_SLOT_COUNT")]
+extern const u32 s_ShaderSceneShadowSlotCount;
+
+[cpp_header("<impl/assets/graphics/bvh/binding_slots.h>"), cpp_name("NWB_BVH_SORT_GROUP_SIZE")]
+extern const u32 s_ShaderBvhSortGroupSize;
+
+[cpp_header("<impl/assets/graphics/bvh/binding_slots.h>"), cpp_name("NWB_BVH_SORT_PUSH_CONSTANT_WORD_COUNT")]
+extern const u32 s_ShaderBvhSortPushConstantWordCount;
+
+[cpp_header("<impl/assets/graphics/bvh/binding_slots.h>"), cpp_name("NWB_BVH_BUILD_MODE_FULL")]
+extern const u32 s_ShaderBvhBuildModeFull;
+static_assert(size_of<NwbRtInstanceMaterialGpu>() == s_NwbRtInstanceMaterialGpuByteSize, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (9 x uint)");
+static_assert(offset_of<NwbRtInstanceMaterialGpu>(shadingModelId) == size_of<u32>() * 2u);
+static_assert(RtInstanceMaterialFlag::Transparent == s_ShaderRtInstanceMaterialFlagTransparent);
+static_assert(RtInstanceMaterialFlag::Refractive == s_ShaderRtInstanceMaterialFlagRefractive);
+static_assert(RtInstanceMaterialFlag::CsgShadow == s_ShaderRtInstanceMaterialFlagCsgShadow);
+static_assert(RtInstanceMaterialFlag::RefractionEntryCertified == s_ShaderRtInstanceMaterialFlagRefractionEntryCertified);
+static_assert(s_RtShadowBaseInstanceMask == s_ShaderRtShadowBaseInstanceMask);
+static_assert(s_RtShadowTransparentInstanceMask == s_ShaderRtShadowTransparentInstanceMask);
+static_assert(s_RtCsgInstanceMask == s_ShaderRtCsgInstanceMask);
+static_assert(s_RtRefractiveInstanceMask == s_ShaderRtRefractiveInstanceMask);
+static_assert(s_SceneShadowSlotCount == s_ShaderSceneShadowSlotCount);
+static_assert(size_of<RayTraceMaterialContextSlots>() == size_of<u32>() * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
+static_assert(GpuUploadBlobId().generation == 0u && GpuUploadBlobId().index == s_PreparedGraphInvalidIndex);
+static_assert(size_of<NwbBvhNodeGpu>() == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
+static_assert(size_of<SceneSwBvhInstanceGpu>() == size_of<f32x3x4>() + size_of<u32>() * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
+static_assert(s_BvhSortGroupSize == s_ShaderBvhSortGroupSize);
+static_assert(size_of<BvhSortPushConstants>() == size_of<u32>() * s_ShaderBvhSortPushConstantWordCount, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
+static_assert(offset_of<BvhSortPushConstants>(mode) == 12u);
+static_assert(offset_of<BvhSortPushConstants>(keysHeapSlot) == 16u);
+static_assert(offset_of<BvhSortPushConstants>(payloadHeapSlot) == 20u);
+static_assert(is_standard_layout<BvhSortPushConstants>());
+static_assert(is_trivially_copyable<BvhSortPushConstants>());
+static_assert(s_BvhBuildModeFull == s_ShaderBvhBuildModeFull);
+static_assert(size_of<BvhBuildPushConstants>() == 64u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
+static_assert(offset_of<BvhBuildPushConstants>(aabbMin) == 32u);
+static_assert(offset_of<BvhBuildPushConstants>(parentHeapSlot) == 44u);
+static_assert(offset_of<BvhBuildPushConstants>(aabbMax) == 48u);
+static_assert(offset_of<BvhBuildPushConstants>(visitCounterHeapSlot) == 60u);
+static_assert(is_standard_layout<BvhBuildPushConstants>());
+static_assert(is_trivially_copyable<BvhBuildPushConstants>());
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/scene_bvh_build.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/material/material_system.adhd.h>
-#include <impl/ecs_render/material/material_typed_private.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
-#include <impl/ecs_render/shared/renderer_scene_private.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/assets/graphics/raytrace/constants.h>
-#include <impl/assets/graphics/bvh/binding_slots.h>
-#include <impl/assets/graphics/bvh/constants.h>
-#include <impl/assets_graphics/components.adhd.h>
-#include <impl/assets_mesh/asset.adhd.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/assets_shader/loader.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
+class RenderableRayTracingMeshResources{
+    public RenderableMeshDesc resolvedMesh;
+    public MeshRayTracingResourceSnapshot meshResources;
+}
 
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
+[cpp_unwind]
+Expected<RenderableRayTracingMeshResources, RenderableMeshResolution> ResolveRenderableMeshResources(mut MeshSystem meshSystem, mut RendererMeshSystem rendererMeshSystem, in EntityID entity){
+    const auto resolved = meshSystem.resolveRenderableMeshStatus(entity);
+    if(!resolved.has_value())
+        return MakeUnexpected(resolved.error());
+    const auto mesh = rendererMeshSystem.findRenderableRayTracingResourceSnapshot(resolved.value());
+    if(!mesh.has_value())
+        return MakeUnexpected(RenderableMeshResolution::Unavailable);
+    RenderableRayTracingMeshResources result;
+    result.resolvedMesh = resolved.value();
+    result.meshResources = mesh.value();
+    return result;
+}
 
-#include <global/compile.h>
-#include <global/algorithm.h>
-#include <global/not_null.h>
-#include <global/span.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(NwbRtInstanceMaterialGpu) == s_NwbRtInstanceMaterialGpuByteSize, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (9 x uint)");
-static_assert(offsetof(NwbRtInstanceMaterialGpu, shadingModelId) == sizeof(u32) * 2u);
-static_assert(RtInstanceMaterialFlag::Transparent == NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT);
-static_assert(RtInstanceMaterialFlag::Refractive == NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE);
-static_assert(RtInstanceMaterialFlag::CsgShadow == NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW);
-static_assert(RtInstanceMaterialFlag::RefractionEntryCertified == NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTION_ENTRY_CERTIFIED);
-static_assert(s_RtShadowBaseInstanceMask == NWB_RT_SHADOW_BASE_INSTANCE_MASK);
-static_assert(s_RtShadowTransparentInstanceMask == NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK);
-static_assert(s_RtCsgInstanceMask == NWB_RT_CSG_INSTANCE_MASK);
-static_assert(s_RtRefractiveInstanceMask == NWB_RT_REFRACTIVE_INSTANCE_MASK);
-static_assert(s_SceneShadowSlotCount == NWB_SCENE_SHADOW_SLOT_COUNT);
-static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
-static_assert(Core::GpuUploadBlobId{}.generation == 0u && Core::GpuUploadBlobId{}.index == s_PreparedGraphInvalidIndex);
-static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
-static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
-static_assert(s_BvhSortGroupSize == NWB_BVH_SORT_GROUP_SIZE);
-
-static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * NWB_BVH_SORT_PUSH_CONSTANT_WORD_COUNT, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
-static_assert(offsetof(BvhSortPushConstants, mode) == 12u);
-static_assert(offsetof(BvhSortPushConstants, keysHeapSlot) == 16u);
-static_assert(offsetof(BvhSortPushConstants, payloadHeapSlot) == 20u);
-static_assert(IsStandardLayout_V<BvhSortPushConstants>);
-static_assert(IsTriviallyCopyable_V<BvhSortPushConstants>);
-
-static_assert(s_BvhBuildModeFull == NWB_BVH_BUILD_MODE_FULL);
-static_assert(sizeof(BvhBuildPushConstants) == 64u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
-static_assert(offsetof(BvhBuildPushConstants, aabbMin) == 32u);
-static_assert(offsetof(BvhBuildPushConstants, parentHeapSlot) == 44u);
-static_assert(offsetof(BvhBuildPushConstants, aabbMax) == 48u);
-static_assert(offsetof(BvhBuildPushConstants, visitCounterHeapSlot) == 60u);
-static_assert(IsStandardLayout_V<BvhBuildPushConstants>);
-static_assert(IsTriviallyCopyable_V<BvhBuildPushConstants>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Cross-TU ray-tracing helpers.
-namespace RayTracingDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RenderableRayTracingMeshResources{
-    RenderableMeshDesc resolvedMesh;
-    ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
-};
-
-[[nodiscard]] Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, Core::ECS::EntityID entity);
-[[nodiscard]] Core::ComputeState MakeComputePassState(const Core::ComputePipelineHandle& pipeline)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+ComputeState MakeComputePassState(in ComputePipelineHandle pipeline){
+    ComputeState state;
+    if(pipeline.valid())
+        state.setPipeline(pipeline.deref());
+    return state;
 }
 
 

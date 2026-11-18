@@ -1,0 +1,15 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/alloc/shared.h>"), cpp_name("::NWB::Core::Alloc::SharedPool"), cpp_flags(arena_first_ctor)]
+extern class SharedPool{
+    ArenaMemoryStats memoryStats()const;
+    Expected<Shared<T>> make<T>(...)const;
+    // The prepared value's arena must outlive every shared handle.
+    Expected<Shared<T>> makePrepared<T>(mut auto prepared)const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

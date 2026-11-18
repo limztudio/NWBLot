@@ -60,6 +60,18 @@ inline void RequireByteContainer()noexcept{
     return word;
 }
 
+template<typename T>
+    requires IsTriviallyCopyable_V<T>
+[[nodiscard]] inline Span<const u8> PodArrayBytes(const Span<const T> values)noexcept{
+    return { reinterpret_cast<const u8*>(values.data()), values.size_bytes() };
+}
+
+template<typename T>
+    requires IsTriviallyCopyable_V<T>
+[[nodiscard]] inline Span<const u8> PodBytes(const T& value)noexcept{
+    return PodArrayBytes(Span<const T>(AddressOf(value), 1u));
+}
+
 [[nodiscard]] inline b8 BytesMatch(const Span<const u8> lhs, const Span<const u8> rhs)noexcept{
     return lhs.size() == rhs.size() && (rhs.empty() || FOUNDATION_MEMCMP(lhs.data(), rhs.data(), rhs.size()) == 0);
 }
@@ -77,6 +89,31 @@ inline void FillRepeatingBytes(const usize byteCount, const Span<const u8> patte
     }
 }
 
+
+template<typename Container>
+inline void ClearByteOutput(Container& out)noexcept(noexcept(out.clear())){
+    out.clear();
+}
+
+template<typename Container>
+inline void ReserveByteOutput(Container& out, const usize count)noexcept(noexcept(out.reserve(usize(count)))){
+    out.reserve(usize(count));
+}
+
+template<typename Container>
+inline void AppendOutputByte(Container& out, const u8 value)noexcept(noexcept(out.push_back(u8(value)))){
+    out.push_back(u8(value));
+}
+
+template<typename Container>
+[[nodiscard]] inline decltype(auto) ByteOutputSize(Container& out)noexcept(noexcept(out.size())){
+    return out.size();
+}
+
+template<typename Container>
+[[nodiscard]] inline Span<const u8> ByteOutputView(Container& out)noexcept(noexcept(Span<const u8>{out.data(), out.size()})){
+    return {out.data(), out.size()};
+}
 
 template<typename Container>
 [[nodiscard]] inline b8 CanAppendBytes(const Container& outBinary, const usize byteCount)noexcept(IsSame_V<decltype(outBinary.size()), usize> && noexcept(outBinary.size())){
@@ -179,6 +216,9 @@ public:
     [[nodiscard]] b8 empty()const noexcept{ return byteCount == 0u; }
 
     [[nodiscard]] usize size()const noexcept{ return byteCount; }
+
+    [[nodiscard]] b8 hasData()const noexcept{ return bytes != nullptr; }
+    [[nodiscard]] Span<const u8> span()const noexcept{ return { bytes, byteCount }; }
 
     [[nodiscard]] const u8* data()const noexcept{ return bytes; }
 

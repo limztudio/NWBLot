@@ -3,7 +3,7 @@
 
 
 #include <impl/global.adhd>
-#include <impl/assets_font/types.adhd>
+#include <impl/assets_font/prepared_source.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,51 +37,44 @@ class Font{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+b8 ValidateFontSource(in Vector<u8> bytes, in u32 faceIndex){
+    if(!ValidateFontSourceDirectory(bytes, faceIndex))
+        return false;
 
+    FreeTypeFace validator(bytes);
+    const i32 libraryError = validator.createLibrary();
+    if(libraryError != 0){
+        ReportNativeFontFailure(MakeNativeFontFailure(s_FontOpFtNewLibrary, libraryError));
+        return false;
+    }
+    validator.addDefaultModules();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    Expected<void, NativeFontFailure> validation = Expected<void, NativeFontFailure>();
+    Func<64u, void(mut FreeTypeFaceView)> inspect = lambda[mut validation](mut FreeTypeFaceView face) -> void{
+        if(!IsAdmittedStaticScalableFontFace(face.faceCount(), face.glyphCount(), face.unitsPerEm(), face.isSfnt(), face.isScalable(), face.hasMultipleMasters())){
+            validation = MakeUnexpected(MakeNativeFontPolicyFailure(s_FontOpAdmitStaticScalableFace));
+            return;
+        }
+        const i32 charmapError = face.selectUnicodeCharmap();
+        if(charmapError != 0)
+            validation = MakeUnexpected(MakeNativeFontFailure(s_FontOpFtSelectCharmap, charmapError));
+    };
+    const FreeTypeFaceVisitResult visit = validator.visitMemoryFace(bytes, 0, inspect);
+    if(visit.openError != 0)
+        validation = MakeUnexpected(MakeNativeFontFailure(s_FontOpFtNewMemoryFace, visit.openError));
 
-
-#include <global/filesystem.h>
-#include <global/sha256.h>
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// FON2 stores the exact prepared SFNT and compact images; readable atlas mappings remain in paired .nwb metadata.
-[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(BinaryByteView sfnt, u32 faceIndex, Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena);
-
-// Font-only reads retain image directory metadata, with empty pixel arrays, and validate the complete file layout.
-[[nodiscard]] Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, b8 includePixels, Core::Assets::AssetArena& arena);
-[[nodiscard]] Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const ::Path<::ArenaBase>& path, b8 includePixels, Core::Assets::AssetArena& arena);
-
-// Uses the source buffer's caller-owned arena for native validation allocations.
-[[nodiscard]] b8 ValidateFontSourceNative(Span<const u8> bytes, u32 faceIndex, ::ArenaBase& arena);
-template<typename BytesArenaT>
-[[nodiscard]] FOUNDATION_INLINE b8 ValidateFontSource(const Vector<u8, BytesArenaT>& bytes, const u32 faceIndex = 0u){
-    return ValidateFontSourceNative(Span<const u8>(bytes), faceIndex, bytes.get_allocator().arena());
+    const i32 cleanupError = validator.closeLibrary();
+    ReportFontCleanupFailure(s_FontOpFtDoneFace, visit.closeError);
+    ReportFontCleanupFailure(s_FontOpFtDoneLibrary, cleanupError);
+    if(!validation.has_value()){
+        ReportNativeFontFailure(validation.error());
+        return false;
+    }
+    return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 ValidateFontSource(in Vector<u8> bytes){
+    return ValidateFontSource(bytes, 0u);
 }
 
 

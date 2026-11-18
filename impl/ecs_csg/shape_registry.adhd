@@ -2,377 +2,266 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_csg/shape_registry_validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_csg/components.adhd.h>
-#include <impl/ecs_csg/shape_registry_validation.adhd.h>
-#include <impl/assets_csg/shape_id.adhd.h>
+[layout(16)]
+class CsgShapeBounds{
+    public f32x4 minBounds;
+    public f32x4 maxBounds;
+    public b8 finiteBounds;
 
-#include <global/scope_exit.h>
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Call-scoped scratch; retained scene/GPU values use Float storage.
-struct alignas(SIMDVectorSingle) CsgShapeBounds{
-    SIMDVectorSingle minBounds = VectorZero();
-    SIMDVectorSingle maxBounds = VectorZero();
-    b8 finiteBounds = false;
-};
-static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
-
-using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)noexcept;
-using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept;
-
-[[nodiscard]] FOUNDATION_INLINE Expected<CsgShapeBounds> LoadCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
-    const Expected<CsgShapeLocalBounds> bounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds);
-    if(!bounds)
-        return MakeUnexpected(Failure{});
-    if(!bounds->finiteBounds)
-        return CsgShapeBounds{};
-    return CsgShapeBounds{ LoadFloat(bounds->minBounds), LoadFloat(bounds->maxBounds), true };
+    public CsgShapeBounds(){
+        this.minBounds = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.maxBounds = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.finiteBounds = false;
+    }
+    public CsgShapeBounds(in VectorSingle minBounds, in VectorSingle maxBounds, in b8 finiteBounds){
+        this.minBounds = f32x4(minBounds);
+        this.maxBounds = f32x4(maxBounds);
+        this.finiteBounds = finiteBounds;
+    }
 }
 
-template<typename ShapeT>
-[[nodiscard]] Expected<CsgShapeBounds> EvaluateCsgShapeBoundsCallback(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
-    static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
+type CsgShapeBoundsCallback = Func<Expected<CsgShapeBounds>(in MatrixSingle, in Span<u8>)>;
+type CsgShapeSignedDistanceCallback = Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>;
 
-    const ShapeT shape{};
+class CsgShapeTypeDesc{
+    public Name name = s_NameNone;
+    public Name shaderModule = s_NameNone;
+    public String shaderModuleInclude;
+    public u32 parameterByteSize = 0u;
+    public FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> defaultParameterBytes;
+    public Optional<CsgShapeBoundsCallback> boundsCallback;
+    public Optional<CsgShapeSignedDistanceCallback> signedDistanceCallback;
+}
+
+class CsgShapeTypeInfo{
+    public CsgShapeTypeId id = s_InvalidCsgShapeTypeId;
+    public CsgShapeTypeDesc desc;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(align_of<Expected<CsgShapeBounds>>() >= align_of<CsgShapeBounds>());
+static_assert(is_standard_layout<CsgPlaneShapeParameters>(), "CsgPlaneShapeParameters must stay binary-stable");
+static_assert(is_trivially_copyable<CsgPlaneShapeParameters>(), "CsgPlaneShapeParameters must stay byte-copyable");
+static_assert(is_standard_layout<CsgBoxShapeParameters>(), "CsgBoxShapeParameters must stay binary-stable");
+static_assert(is_trivially_copyable<CsgBoxShapeParameters>(), "CsgBoxShapeParameters must stay byte-copyable");
+static_assert(is_standard_layout<CsgSphereShapeParameters>(), "CsgSphereShapeParameters must stay binary-stable");
+static_assert(is_trivially_copyable<CsgSphereShapeParameters>(), "CsgSphereShapeParameters must stay byte-copyable");
+static_assert(is_standard_layout<CsgCapsuleShapeParameters>(), "CsgCapsuleShapeParameters must stay binary-stable");
+static_assert(is_trivially_copyable<CsgCapsuleShapeParameters>(), "CsgCapsuleShapeParameters must stay byte-copyable");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<CsgShapeBounds> EvaluateCsgShapeBounds<ShapeT : ICsgShape>(in MatrixSingle shapeToWorld, in Span<u8> parameterBytes){
+    const ShapeT shape = ShapeT();
     const Expected<CsgShapeLocalBounds> localBounds = ComputeCsgShapeLocalBoundsFromBytes(shape, parameterBytes);
-    if(!localBounds)
-        return MakeUnexpected(Failure{});
-    return LoadCsgShapeWorldBoundsFromLocal(shapeToWorld, *localBounds);
+    if(!localBounds.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<CsgShapeLocalBounds> bounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds.value());
+    if(!bounds.has_value())
+        return MakeUnexpected(Failure());
+    if(!bounds.value().finiteBounds)
+        return CsgShapeBounds();
+    return CsgShapeBounds(LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds), true);
 }
 
-template<typename ShapeT>
-[[nodiscard]] Expected<f32> EvaluateCsgShapeSignedDistanceCallback(const SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept{
-    static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
-
-    const ShapeT shape{};
-    return shape.evaluateSignedDistance(shapePosition, parameters);
-}
-
-struct CsgShapeTypeDesc{
-    using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>;
-
-
-public:
-    Name name = s_NameNone;
-    Name shaderModule = s_NameNone;
-    AString<Core::Alloc::GlobalArena> shaderModuleInclude;
-
-    u32 parameterByteSize = 0u;
-    DefaultParameterByteVector defaultParameterBytes;
-    CsgShapeBoundsCallback boundsCallback = nullptr;
-    CsgShapeSignedDistanceCallback signedDistanceCallback = nullptr;
-
-
-public:
-    explicit CsgShapeTypeDesc(Core::Alloc::GlobalArena& arena)noexcept
-        : shaderModuleInclude(arena)
-    {}
-};
-
-template<typename ShapeT>
-[[nodiscard]] Expected<CsgShapeTypeDesc> MakeCsgShapeTypeDesc(Core::Alloc::GlobalArena& arena, const Name& shaderModule = s_NameNone, const AStringView shaderModuleInclude = {}){
-    static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
-
-    const ShapeT shape{};
-    CsgShapeTypeDesc desc(arena);
+Expected<CsgShapeTypeDesc> MakeCsgShapeTypeDesc<ShapeT : ICsgShape>(in Name shaderModule, in StringView moduleInclude){
+    const ShapeT shape = ShapeT();
+    CsgShapeTypeDesc desc = CsgShapeTypeDesc();
     desc.name = shape.shapeTypeName();
     desc.shaderModule = shaderModule;
-    desc.shaderModuleInclude = shaderModuleInclude;
+    desc.shaderModuleInclude = moduleInclude;
     desc.parameterByteSize = shape.parameterByteSize();
-    const CsgShapeInlineParameters defaults = shape.defaultParameters();
-    const auto packedDefaults = PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults);
-    if(!packedDefaults){
+    const auto defaults = PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, shape.defaultParameters());
+    if(!defaults.has_value()){
         LogCsgShapeInvalidParameterSize(desc.name);
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     }
-    desc.defaultParameterBytes = *packedDefaults;
-    desc.boundsCallback = &EvaluateCsgShapeBoundsCallback<ShapeT>;
-    desc.signedDistanceCallback = &EvaluateCsgShapeSignedDistanceCallback<ShapeT>;
+    desc.defaultParameterBytes = defaults.value();
+    desc.boundsCallback = lambda[](in MatrixSingle shapeToWorld, in Span<u8> bytes) -> Expected<CsgShapeBounds>{
+        return EvaluateCsgShapeBounds<ShapeT>(shapeToWorld, bytes);
+    };
+    desc.signedDistanceCallback = lambda[](in VectorSingle position, in CsgShapeInlineParameters parameters) -> Expected<f32>{
+        const ShapeT evaluator = ShapeT();
+        return evaluator.evaluateSignedDistance(position, parameters);
+    };
     return desc;
 }
 
-struct CsgShapeTypeInfo{
-    CsgShapeTypeId id = s_InvalidCsgShapeTypeId;
-    CsgShapeTypeDesc desc;
-
-
-public:
-    explicit CsgShapeTypeInfo(Core::Alloc::GlobalArena& arena)noexcept
-        : desc(arena)
-    {}
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(IsStandardLayout_V<CsgPlaneShapeParameters>, "CsgPlaneShapeParameters must stay binary-stable");
-static_assert(IsTriviallyCopyable_V<CsgPlaneShapeParameters>, "CsgPlaneShapeParameters must stay byte-copyable");
-static_assert(IsStandardLayout_V<CsgBoxShapeParameters>, "CsgBoxShapeParameters must stay binary-stable");
-static_assert(IsTriviallyCopyable_V<CsgBoxShapeParameters>, "CsgBoxShapeParameters must stay byte-copyable");
-static_assert(IsStandardLayout_V<CsgSphereShapeParameters>, "CsgSphereShapeParameters must stay binary-stable");
-static_assert(IsTriviallyCopyable_V<CsgSphereShapeParameters>, "CsgSphereShapeParameters must stay byte-copyable");
-static_assert(IsStandardLayout_V<CsgCapsuleShapeParameters>, "CsgCapsuleShapeParameters must stay binary-stable");
-static_assert(IsTriviallyCopyable_V<CsgCapsuleShapeParameters>, "CsgCapsuleShapeParameters must stay byte-copyable");
+class CsgShapeRegistry : NoCopy{
+    private Futex m_mutex;
+    private HashMap<CsgShapeTypeId, CsgShapeTypeInfo> m_types;
+    private u64 m_revision = 0u;
 
+    public Expected<CsgShapeTypeId> registerShapeType(in CsgShapeTypeDesc desc, in b8 replaceExisting){
+        if(!ValidateCsgShapeTypeDescFields(desc.name, desc.shaderModule, desc.shaderModuleInclude, desc.parameterByteSize, desc.defaultParameterBytes.size(), desc.boundsCallback.has_value()))
+            return MakeUnexpected(Failure());
+        const Expected<CsgShapeTypeId> canonical = TryResolveCsgShapeRegistryId(desc.name);
+        if(!canonical.has_value())
+            return MakeUnexpected(Failure());
+        const CsgShapeTypeId id = canonical.value();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CsgShapeRegistry final : NoCopy{
-    friend b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry);
-
-
-private:
-    using ShapeVector = Vector<CsgShapeTypeInfo, Core::Alloc::GlobalArena>;
-    using ShapeIdMap = HashMap<Name, CsgShapeTypeId, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
-    using ShapeIndexMap = HashMap<CsgShapeTypeId, usize, Core::Alloc::GlobalArena, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>>;
-
-
-public:
-    explicit CsgShapeRegistry(Core::Alloc::GlobalArena& arena)
-        : m_shapeTypes(arena)
-        , m_shapeTypeIds(0, Hasher<Name>(), EqualTo<Name>(), arena)
-        , m_shapeTypeIndices(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), arena)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<CsgShapeTypeId> registerShapeType(const CsgShapeTypeDesc& desc, const b8 replaceExisting = false){
-        if(!ValidateCsgShapeTypeDescFields(
-            desc.name,
-            desc.shaderModule,
-            AStringView(desc.shaderModuleInclude),
-            desc.parameterByteSize,
-            desc.defaultParameterBytes.size(),
-            desc.boundsCallback != nullptr
-        ))
-            return MakeUnexpected(Failure{});
-
-        const Expected<CsgShapeTypeId> canonicalIdResult = TryResolveCsgShapeRegistryId(desc.name);
-        if(!canonicalIdResult)
-            return MakeUnexpected(Failure{});
-        const CsgShapeTypeId canonicalId = *canonicalIdResult;
-
-        ScopedLock lock(m_mutex);
-
-        const auto found = m_shapeTypeIds.find(desc.name);
-        if(found != m_shapeTypeIds.end()){
-            if(!replaceExisting){
-                LogCsgShapeAlreadyRegistered(desc.name);
-                return MakeUnexpected(Failure{});
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        const auto existing = this.m_types.find(id);
+        const b8 occupied = existing != this.m_types.end();
+        Name conflictingName = s_NameNone;
+        if(occupied){
+            conflictingName = existing.value().desc.name;
+            if(conflictingName == desc.name){
+                if(!replaceExisting){
+                    LogCsgShapeAlreadyRegistered(desc.name);
+                    return MakeUnexpected(Failure());
+                }
+                existing.value() = this.makeEntry(id, desc);
+                ++this.m_revision;
+                return id;
             }
-
-            const CsgShapeTypeId existingId = found.value();
-            const auto foundIndex = m_shapeTypeIndices.find(existingId);
-            FOUNDATION_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
-
-            CsgShapeTypeInfo& shapeType = m_shapeTypes[foundIndex.value()];
-            shapeType.desc = desc;
-            ++m_revision;
-            return existingId;
         }
-
-        const auto foundCanonicalId = m_shapeTypeIndices.find(canonicalId);
-        const b8 hasCanonicalIdCollision = foundCanonicalId != m_shapeTypeIndices.end();
-        const Name conflictingName = hasCanonicalIdCollision ? m_shapeTypes[foundCanonicalId.value()].desc.name : s_NameNone;
-        if(!ValidateCsgShapeRegistryInsertion(desc.name, canonicalId, m_shapeTypes.size(), hasCanonicalIdCollision, conflictingName))
-            return MakeUnexpected(Failure{});
-
-        const CsgShapeTypeId id = canonicalId;
-        CsgShapeTypeInfo shapeType(m_shapeTypes.get_allocator().arena());
-        shapeType.id = id;
-        shapeType.desc = desc;
-        m_shapeTypes.push_back(Move(shapeType));
-        ScopeExit discardShapeType([&]()noexcept{ m_shapeTypes.pop_back(); });
-        const auto [nameEntry, nameInserted] = m_shapeTypeIds.emplace(desc.name, id);
-        if(!nameInserted){
-            FOUNDATION_ASSERT(false);
-            return MakeUnexpected(Failure{});
-        }
-        ScopeExit discardNameEntry([&]()noexcept{ m_shapeTypeIds.erase(nameEntry); });
-        if(!m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u).second){
-            FOUNDATION_ASSERT(false);
-            return MakeUnexpected(Failure{});
-        }
-        discardNameEntry.release();
-        discardShapeType.release();
-        ++m_revision;
+        if(!ValidateCsgShapeRegistryInsertion(desc.name, id, this.m_types.size(), occupied, conflictingName))
+            return MakeUnexpected(Failure());
+        this.m_types.try_emplace(id, this.makeEntry(id, desc));
+        ++this.m_revision;
         return id;
     }
 
-    template<typename ShapeT>
-    [[nodiscard]] Expected<CsgShapeTypeId> registerShape(const b8 replaceExisting = false, const Name& shaderModule = s_NameNone, const AStringView shaderModuleInclude = {}){
-        auto desc = MakeCsgShapeTypeDesc<ShapeT>(m_shapeTypes.get_allocator().arena(), shaderModule, shaderModuleInclude);
-        if(!desc)
-            return MakeUnexpected(Failure{});
-        return registerShapeType(*desc, replaceExisting);
+    public Expected<CsgShapeTypeId> registerShapeType(in CsgShapeTypeDesc desc){
+        return this.registerShapeType(desc, false);
     }
 
+    public Expected<CsgShapeTypeId> registerShape<ShapeT : ICsgShape>(in b8 replaceExisting, in Name module, in StringView moduleInclude){
+        const auto desc = MakeCsgShapeTypeDesc<ShapeT>(module, moduleInclude);
+        if(!desc.has_value())
+            return MakeUnexpected(Failure());
+        return this.registerShapeType(desc.value(), replaceExisting);
+    }
 
-public:
-    [[nodiscard]] CsgShapeTypeId findShapeTypeId(const Name& name)const noexcept{
-        if(!name)
+    public Expected<CsgShapeTypeId> registerShape<ShapeT : ICsgShape>(in b8 replaceExisting){
+        return this.registerShape<ShapeT>(replaceExisting, s_NameNone, "");
+    }
+
+    public Expected<CsgShapeTypeId> registerShape<ShapeT : ICsgShape>(){
+        return this.registerShape<ShapeT>(false);
+    }
+
+    [owner_result]
+    private CsgShapeTypeInfo makeEntry(in CsgShapeTypeId id, in CsgShapeTypeDesc desc)const{
+        CsgShapeTypeInfo item = CsgShapeTypeInfo();
+        item.id = id;
+        item.desc = desc;
+        return item;
+    }
+
+    public CsgShapeTypeId findShapeTypeId(in Name name)const{
+        const Expected<CsgShapeTypeId> id = TryResolveCsgShapeTypeIdFromName(name);
+        if(!id.has_value())
             return s_InvalidCsgShapeTypeId;
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        const auto found = this.m_types.find(id.value());
+        if(found == this.m_types.end() || found.value().desc.name != name)
+            return s_InvalidCsgShapeTypeId;
+        return id.value();
+    }
 
-        ScopedLock lock(m_mutex);
-        const auto found = m_shapeTypeIds.find(name);
-        return found != m_shapeTypeIds.end() ? found.value() : s_InvalidCsgShapeTypeId;
+    [owner_result]
+    public Expected<CsgShapeTypeInfo> findShapeType(in Name name)const{
+        const Expected<CsgShapeTypeId> id = TryResolveCsgShapeTypeIdFromName(name);
+        if(!id.has_value())
+            return MakeUnexpected(Failure());
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        const auto found = this.m_types.find(id.value());
+        if(found == this.m_types.end() || found.value().desc.name != name)
+            return MakeUnexpected(Failure());
+        return found.value();
     }
-    [[nodiscard]] Expected<CsgShapeTypeInfo> findShapeType(const Name& name)const{
-        if(!name)
-            return MakeUnexpected(Failure{});
 
-        ScopedLock lock(m_mutex);
-        const auto found = m_shapeTypeIds.find(name);
-        if(found == m_shapeTypeIds.end())
-            return MakeUnexpected(Failure{});
+    [owner_result]
+    public Expected<CsgShapeTypeInfo> findShapeType(in CsgShapeTypeId id)const{
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        const auto found = this.m_types.find(id);
+        if(found == this.m_types.end())
+            return MakeUnexpected(Failure());
+        return found.value();
+    }
 
-        return shapeTypeById(found.value());
+    public usize shapeTypeCount()const{
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        return this.m_types.size();
     }
-    [[nodiscard]] Expected<CsgShapeTypeInfo> findShapeType(const CsgShapeTypeId typeId)const{
-        ScopedLock lock(m_mutex);
-        return shapeTypeById(typeId);
-    }
-    [[nodiscard]] usize shapeTypeCount()const noexcept{
-        ScopedLock lock(m_mutex);
-        return m_shapeTypes.size();
-    }
-    [[nodiscard]] u64 revision()const noexcept{
-        ScopedLock lock(m_mutex);
-        return m_revision;
-    }
-    [[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>> findShaderModuleInclude(const Name& shaderModule, Core::Alloc::GlobalArena& resultArena)const{
-        if(!shaderModule)
-            return MakeUnexpected(Failure{});
 
-        AString<Core::Alloc::GlobalArena> shaderModuleInclude(resultArena);
+    public u64 revision()const{
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        return this.m_revision;
+    }
+
+    public Expected<String> findShaderModuleInclude(in Name module)const{
+        if(module == s_NameNone)
+            return MakeUnexpected(Failure());
+        String includeText = String();
         b8 found = false;
-        ScopedLock lock(m_mutex);
-        for(const CsgShapeTypeInfo& shapeType : m_shapeTypes){
-            b8 adoptCandidate = false;
-            if(!CanSelectCsgShaderModuleInclude(
-                shaderModule,
-                shapeType.desc.shaderModule,
-                AStringView(shaderModuleInclude),
-                AStringView(shapeType.desc.shaderModuleInclude),
-                found,
-                adoptCandidate
-            ))
-                return MakeUnexpected(Failure{});
-            if(adoptCandidate)
-                shaderModuleInclude = shapeType.desc.shaderModuleInclude;
+        const FutexGuard guard = AcquireFutex(this.m_mutex);
+        for(in auto entry : this.m_types){
+            b8 adopt = false;
+            if(!CanSelectCsgShaderModuleInclude(module, entry.second.desc.shaderModule, includeText, entry.second.desc.shaderModuleInclude, found, adopt))
+                return MakeUnexpected(Failure());
+            if(adopt)
+                includeText = entry.second.desc.shaderModuleInclude;
         }
-
         if(!found)
-            return MakeUnexpected(Failure{});
-        return shaderModuleInclude;
+            return MakeUnexpected(Failure());
+        return includeText;
     }
 
-
-public:
-    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(const Name& name, const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)const{
-        return buildShapeBounds(findShapeTypeId(name), shapeToWorld, parameterBytes);
+    public Expected<CsgShapeBounds> buildShapeBounds(in Name name, in MatrixSingle shapeToWorld, in Span<u8> parameters)const{
+        return this.buildShapeBounds(this.findShapeTypeId(name), shapeToWorld, parameters);
     }
-    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(const CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)const{
-        const auto shapeType = findShapeType(typeId);
-        if(!shapeType)
-            return MakeUnexpected(Failure{});
-        const auto resolvedBytes = TryResolveCsgShapeParameterBytes(
-            shapeType->desc.parameterByteSize,
-            shapeType->desc.defaultParameterBytes,
-            parameterBytes.data() != nullptr,
-            parameterBytes
-        );
-        if(!resolvedBytes)
-            return MakeUnexpected(Failure{});
 
-        auto bounds = shapeType->desc.boundsCallback(shapeToWorld, *resolvedBytes);
-        if(!bounds || (bounds->finiteBounds && !AabbTests::Valid(bounds->minBounds, bounds->maxBounds)))
-            return MakeUnexpected(Failure{});
+    public Expected<CsgShapeBounds> buildShapeBounds(in CsgShapeTypeId id, in MatrixSingle shapeToWorld, in Span<u8> parameters)const{
+        const Expected<CsgShapeTypeInfo> shape = this.findShapeType(id);
+        if(!shape.has_value())
+            return MakeUnexpected(Failure());
+        in CsgShapeTypeDesc desc = shape.value().desc;
+        const auto bytes = TryResolveCsgShapeParameterBytes(desc.parameterByteSize, desc.defaultParameterBytes, HasSpanStorage<u8>(parameters), parameters);
+        if(!bytes.has_value() || !desc.boundsCallback.has_value())
+            return MakeUnexpected(Failure());
+        const auto bounds = desc.boundsCallback.value()(shapeToWorld, bytes.value());
+        if(!bounds.has_value() || (bounds.value().finiteBounds && !AabbValid(LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds))))
+            return MakeUnexpected(Failure());
         return bounds;
     }
-    [[nodiscard]] Expected<f32> evaluateSignedDistance(const CsgShapeTypeId typeId, const SIMDVectorSingle shapePosition, const Span<const u8> parameterBytes)const{
-        const auto shapeType = findShapeType(typeId);
-        if(!shapeType || !shapeType->desc.signedDistanceCallback)
-            return MakeUnexpected(Failure{});
-        const auto resolvedBytes = TryResolveCsgShapeParameterBytes(
-            shapeType->desc.parameterByteSize,
-            shapeType->desc.defaultParameterBytes,
-            parameterBytes.data() != nullptr,
-            parameterBytes
-        );
-        if(!resolvedBytes)
-            return MakeUnexpected(Failure{});
 
-        const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(*resolvedBytes);
-        return shapeType->desc.signedDistanceCallback(shapePosition, parameters);
+    public Expected<f32> evaluateSignedDistance(in CsgShapeTypeId id, in VectorSingle position, in Span<u8> parameters)const{
+        const Expected<CsgShapeTypeInfo> shape = this.findShapeType(id);
+        if(!shape.has_value())
+            return MakeUnexpected(Failure());
+        in CsgShapeTypeDesc desc = shape.value().desc;
+        if(!desc.signedDistanceCallback.has_value())
+            return MakeUnexpected(Failure());
+        const auto bytes = TryResolveCsgShapeParameterBytes(desc.parameterByteSize, desc.defaultParameterBytes, HasSpanStorage<u8>(parameters), parameters);
+        if(!bytes.has_value())
+            return MakeUnexpected(Failure());
+        return desc.signedDistanceCallback.value()(position, ReadCsgShapeInlineParameters(bytes.value()));
     }
-
-
-private:
-    [[nodiscard]] Expected<CsgShapeTypeInfo> shapeTypeById(const CsgShapeTypeId typeId)const{
-        if(!ValidCsgShapeTypeId(typeId))
-            return MakeUnexpected(Failure{});
-
-        const auto foundIndex = m_shapeTypeIndices.find(typeId);
-        if(foundIndex == m_shapeTypeIndices.end())
-            return MakeUnexpected(Failure{});
-
-        return m_shapeTypes[foundIndex.value()];
-    }
-
-
-private:
-    mutable Futex m_mutex;
-    ShapeVector m_shapeTypes;
-    ShapeIdMap m_shapeTypeIds;
-    ShapeIndexMap m_shapeTypeIndices;
-    u64 m_revision = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-FOUNDATION_INLINE b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
-    b8 result = true;
-
-    result = static_cast<b8>(registry.registerShape<CsgBoxShape>(true)) && result;
-    result = static_cast<b8>(registry.registerShape<CsgCapsuleShape>(true)) && result;
-    result = static_cast<b8>(registry.registerShape<CsgPlaneShape>(true)) && result;
-    result = static_cast<b8>(registry.registerShape<CsgSphereShape>(true)) && result;
-
-    return result;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 RegisterBuiltInCsgShapeTypes(mut CsgShapeRegistry registry){
+    b8 result = registry.registerShape<CsgBoxShape>(true).has_value();
+    result = registry.registerShape<CsgCapsuleShape>(true).has_value() && result;
+    result = registry.registerShape<CsgPlaneShape>(true).has_value() && result;
+    return registry.registerShape<CsgSphereShape>(true).has_value() && result;
 }
 
 

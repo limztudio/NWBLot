@@ -15,6 +15,7 @@
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
 #include <impl/ecs_render/shader/shader_system.adhd>
 #include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
+#include <impl/ecs_render/shared/task_graph_draw_snapshots.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,6 +128,28 @@ class RendererAvboitSystem : NoCopy{
         in b8 materialGeometryStatesGraphOwned,
         mut Optional<GpuTimingMeasure> intervalTiming
     );
+    [cpp_unwind]
+    public void renderPreparedGraphPass(
+        mut CommandList commands, mut DeferredFrameTargets targets, in MaterialPipelinePass pass,
+        in TransparentMaterialPassGraphSnapshot snapshot, in CsgGraphResourceSnapshot csg, in MeshFrameBindingSnapshot bindings,
+        in b8 frameOwned, in b8 geometryOwned, in b8 outputOwned, in b8 csgOutputOwned, in b8 reused, in Optional<mut Optional<GpuTimingMeasure>> timing
+    ){
+        if(pass == MaterialPipelinePass::AvboitOccupancy){
+            assert(this.m_avboitState.m_depthWarpPipeline.valid());
+            assert(this.m_avboitState.m_integratePipeline.valid());
+        }
+        FramebufferHandle framebuffer = targets.avboit.lowFramebuffer;
+        if(pass == MaterialPipelinePass::AvboitAccumulate)
+            framebuffer = targets.avboit.accumulationFramebuffer;
+        const auto draws = snapshot.drawItemsView();
+        const auto csgFrame = snapshot.csgFrameDataView();
+        if(timing.has_value())
+            this.renderAvboitMaterialPass(commands, framebuffer, pass, targets.avboit, draws, csgFrame, csg, bindings,
+                snapshot.instanceCount, snapshot.materialTypedByteCount, frameOwned, geometryOwned, outputOwned, csgOutputOwned, reused, timing.value());
+        else
+            this.renderAvboitMaterialPass(commands, framebuffer, pass, targets.avboit, draws, csgFrame, csg, bindings,
+                snapshot.instanceCount, snapshot.materialTypedByteCount, frameOwned, geometryOwned, outputOwned, csgOutputOwned, reused);
+    }
     public void renderAvboitOccupancyPass(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,

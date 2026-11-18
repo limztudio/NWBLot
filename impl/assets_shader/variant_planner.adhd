@@ -1,0 +1,178 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_shader/cook_shader_metadata.adhd>
+#include <impl/assets_shader/shader_source_fingerprint.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type ShaderIncludeMap = HashMap<String, ShaderIncludeEntry>;
+
+String ShaderVariantDiagnosticLabel(in StringView owner, in Optional<Name> stage){
+    String label(owner);
+    if(stage.has_value()){
+        label.append(" [");
+        label.append(stage.value().resolvedText());
+        label.push_back(']');
+    }
+    return label;
+}
+
+b8 CheckShaderVariantSignature(in StringView owner, in Optional<Name> stage, in StringView signature, in ShaderDefineMap defines){
+    if(signature.empty() || (signature == s_ShaderDefaultVariantText && defines.empty()))
+        return true;
+    if(signature == s_ShaderDefaultVariantText || defines.empty()){
+        b8 complete = false;
+        return ValidateVariantSignaturePreamble(ShaderVariantDiagnosticLabel(owner, stage), signature, defines.empty(), complete);
+    }
+    HashSet<StringView> seen;
+    seen.reserve(defines.size());
+    usize cursor = 0u;
+    while(cursor < signature.size()){
+        StringView segment = "";
+        StringView key = "";
+        StringView value = "";
+        VariantSignatureSegmentError failure = VariantSignatureSegmentError::None;
+        if(!TryParseVariantSignatureSegment(signature, cursor, segment, key, value, failure)){
+            ReportVariantSignatureSegmentError(ShaderVariantDiagnosticLabel(owner, stage), signature, failure, segment);
+            return false;
+        }
+        const b8 known = defines.contains(key);
+        b8 found = false;
+        if(known){
+            for(in String candidate : defines.at(key).values){
+                if(candidate == value){
+                    found = true;
+                    break;
+                }
+            }
+        }
+        const b8 unique = known && found && seen.insert(key).second;
+        if(!unique)
+            return ValidateVariantSignatureAssignmentStatus(ShaderVariantDiagnosticLabel(owner, stage), signature, key, value, known, found, unique);
+    }
+    if(seen.size() == defines.size())
+        return true;
+    return ValidateVariantSignatureSeenCount(ShaderVariantDiagnosticLabel(owner, stage), signature, seen.size(), defines.size());
+}
+
+String BuildCanonicalShaderVariantName(in ShaderDefineCombo combo){
+    Vector<ShaderVariantAssignment> assignments;
+    assignments.reserve(combo.size());
+    for(in auto define : combo){
+        ShaderVariantAssignment assignment;
+        assignment.key = define.first;
+        assignment.value = define.second;
+        assignments.push_back(assignment);
+    }
+    String result;
+    const b8 valid = BuildSortedShaderVariantName(assignments, result);
+    assert(valid);
+    return result;
+}
+
+u64 ComputeShaderSourceChecksum(in ShaderCookEntry entry, in StringView signature, in u64 dependency, in u64 compiler){
+    ShaderSourceFingerprint fingerprint;
+    u64 checksum = fingerprint.beginSourceChecksum(entry.name, entry.stage, entry.archiveStage, entry.rayQuery, entry.optimizationLevel, entry.entryPoint, signature);
+    if(entry.implicitDefines.size() <= 1u){
+        for(in auto define : entry.implicitDefines){
+            fingerprint.appendChecksumLine(define.first, checksum);
+            fingerprint.appendChecksumLine(define.second, checksum);
+        }
+    }
+    else{
+        Vector<StringView> keys;
+        keys.reserve(entry.implicitDefines.size());
+        for(in auto define : entry.implicitDefines)
+            keys.push_back(StringView(define.first));
+        SortSequence<StringView>(keys, lambda[](in StringView lhs, in StringView rhs) -> b8{ return lhs < rhs; });
+        for(in StringView key : keys){
+            fingerprint.appendChecksumLine(key, checksum);
+            fingerprint.appendChecksumLine(entry.implicitDefines.at(key), checksum);
+        }
+    }
+    return fingerprint.finalizeSourceChecksum(dependency, compiler, checksum);
+}
+
+void MergeInheritedShaderDefines<Dependencies>(in Dependencies dependencies, in ShaderIncludeMap metadata, mut ShaderCookEntry entry){
+    Vector<String> inherited;
+    inherited.reserve(SequenceSize(dependencies));
+    usize reserveCount = entry.defineValues.size();
+    b8 canReserve = true;
+    for(in auto dependency : dependencies){
+        const String key = NativePathComparisonKey(dependency);
+        if(!metadata.contains(key))
+            continue;
+        inherited.push_back(key);
+        if(!TryAccumulateInheritedShaderDefineReserve(metadata.at(key).defineValues.size(), reserveCount))
+            canReserve = false;
+    }
+    if(ShouldReserveMergedShaderDefines(canReserve, reserveCount, entry.defineValues.size()))
+        entry.defineValues.reserve(reserveCount);
+    for(in String included : inherited){
+        for(in auto define : metadata.at(included).defineValues){
+            if(entry.defineValues.contains(define.first))
+                continue;
+            mut ShaderDefineEntry inserted = GetOrCreateTextRecord<ShaderDefineEntry>(entry.defineValues, define.first);
+            inserted.values = define.second.values;
+        }
+    }
+}
+
+Expected<Vector<ShaderDefineCombo>> ExpandShaderDefineCombinations(in ShaderDefineMap defines){
+    Vector<ShaderDefineCombo> combinations;
+    AppendArenaElement<ShaderDefineCombo>(combinations);
+    Vector<StringView> names;
+    names.reserve(defines.size());
+    for(in auto define : defines)
+        names.push_back(StringView(define.first));
+    SortSequence<StringView>(names, lambda[](in StringView lhs, in StringView rhs) -> b8{ return lhs < rhs; });
+    for(in StringView name : names){
+        in Vector<String> values = defines.at(name).values;
+        if(values.empty()){
+            combinations.clear();
+            return combinations;
+        }
+        if(values.size() == 1u){
+            for(mut ShaderDefineCombo combo : combinations){
+                combo.reserve(defines.size());
+                if(!combo.try_emplace(name, StringView(values[0u])).second){
+                    assert(false);
+                    return MakeUnexpected(Failure());
+                }
+            }
+            continue;
+        }
+        const Expected<usize> count = TryComputeShaderExpandedCombinationCount(combinations.size(), values.size());
+        if(!count.has_value())
+            return MakeUnexpected(Failure());
+        Vector<ShaderDefineCombo> expanded;
+        expanded.reserve(count.value());
+        for(mut ShaderDefineCombo combo : combinations){
+            for(usize index = 0u; index < values.size(); ++index){
+                AppendArenaElement<ShaderDefineCombo>(expanded);
+                mut ShaderDefineCombo next = expanded[expanded.size() - 1u];
+                if(index + 1u == values.size())
+                    next.swap(combo);
+                else{
+                    next.reserve(defines.size());
+                    for(in auto existing : combo)
+                        next.try_emplace(existing.first, existing.second);
+                }
+                if(!next.try_emplace(name, StringView(values[index])).second){
+                    assert(false);
+                    return MakeUnexpected(Failure());
+                }
+            }
+        }
+        combinations.swap(expanded);
+    }
+    return combinations;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

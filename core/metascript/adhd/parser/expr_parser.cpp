@@ -351,6 +351,31 @@ Expr* ExprParser::parsePrimary(){
             return node;
         }
 
+        for(usize index = 0u; index < s_LayoutQueries.size(); ++index){
+            if(tok.text != s_LayoutQueries[index].keyword)
+                continue;
+            m_cursor.advance();
+            if(!m_cursor.expect(TokenType::Less, "expected '<type>' after layout query"))
+                return nullptr;
+            Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
+            node->kind = ExprKind::LayoutQuery;
+            node->span = span;
+            node->layoutQuery = static_cast<LayoutQueryKind::Enum>(index);
+            node->targetType = m_typeParser.parseType(false, false);
+            if(!node->targetType || !m_typeParser.expectClosingAngle() || !m_cursor.expect(TokenType::LeftParen, "expected '(' after layout query type"))
+                return nullptr;
+            if(node->layoutQuery == LayoutQueryKind::Offset){
+                if(!m_cursor.check(TokenType::Identifier)){
+                    m_cursor.error("offset_of requires a field name");
+                    return nullptr;
+                }
+                node->text = m_cursor.current().text;
+                m_cursor.advance();
+            }
+            if(!m_cursor.expect(TokenType::RightParen, "expected ')' after layout query"))
+                return nullptr;
+            return node;
+        }
         ExprKind::Enum castKind = ExprKind::Cast;
         if(TryParseCastKeyword(tok.text, castKind)){
             m_cursor.advance();

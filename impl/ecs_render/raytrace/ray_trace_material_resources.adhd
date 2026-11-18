@@ -2,16 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/shadow/rt_shadow_state.adhd>
 #include <impl/global.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RtSceneBvhState"), cpp_header("<impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>")]
-extern class RtSceneBvhState;
-[cpp_name("::NWB::Impl::RtShadowState"), cpp_header("<impl/ecs_render/shadow/rt_shadow_state.adhd.h>")]
-extern class RtShadowState;
 
 
 [modular]

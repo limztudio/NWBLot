@@ -563,7 +563,7 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
 
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
     GpuTaskTimingKey timingKey = GpuTaskTimingKey();
     timingKey.task = taskIdentity;
     timingKey.variant = timingMetadata.variant;
@@ -574,7 +574,7 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
     for(u64 frameIndex = 5u; frameIndex <= 8u; ++frameIndex)
         ASSERT_TRUE(timingHistory.recordSample(timingKey, queues[0u].id, 0.010, frameIndex));
 
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
@@ -666,9 +666,9 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
 
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena, 1u);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory(1u);
     timingHistory.resetForDeviceGeneration(queues[0u].id.deviceGeneration);
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
     timingPolicy.enabled = true;
     timingPolicy.minimumSampleCount = 1u;
@@ -744,11 +744,11 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     EXPECT_NE(frameThreeAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     // Under-sampled probe frames do not commit the probed route as the incumbent.
-    GpuTaskTimingHistoryStore intervalTimingHistory = GpuTaskTimingHistoryStore(testArena.arena, 2u);
+    GpuTaskTimingHistoryStore intervalTimingHistory = testArena.makeTimingHistory(2u);
     intervalTimingHistory.resetForDeviceGeneration(queues[0u].id.deviceGeneration);
     ASSERT_TRUE(intervalTimingHistory.recordSample(timingKey, queues[0u].id, 0.010, 10u));
     ASSERT_TRUE(intervalTimingHistory.recordNonCommittingSample(timingKey, queues[0u].id, 0.010));
-    GpuTaskTimingHistorySnapshot intervalTimingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot intervalTimingSnapshot = testArena.makeTimingSnapshot();
     intervalTimingHistory.snapshot(intervalTimingSnapshot);
     GpuTaskTimingFeedbackPolicy intervalTimingPolicy = timingPolicy;
     intervalTimingPolicy.minimumSampleCount = 2u;
@@ -822,9 +822,9 @@ void VerifyGpuScoring_IgnoresTimingFeedbackWithoutAnyEnabledRoute(){
     const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
     timingHistory.resetForDeviceGeneration(queue.id.deviceGeneration);
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -928,7 +928,7 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
     GpuTaskTimingKey thirdTimingKey = GpuTaskTimingKey();
     thirdTimingKey.task = thirdIdentity;
     thirdTimingKey.queue = CommandQueue::Graphics;
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
     // A and B each have one measured fast route, so history alone splits them across the auxiliary queues.
     for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex){
         ASSERT_TRUE(timingHistory.recordSample(firstTimingKey, firstAuxiliaryQueue.id, 0.001, frameIndex));
@@ -943,7 +943,7 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
     for(u64 frameIndex = 9u; frameIndex <= 12u; ++frameIndex)
         ASSERT_TRUE(timingHistory.recordSample(thirdTimingKey, queues[0u].id, 0.010, frameIndex));
 
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
@@ -1097,11 +1097,11 @@ void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
         candidateKey = graphicsKey;
     }
 
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena, 1u);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory(1u);
     ASSERT_TRUE(timingHistory.recordSample(candidateKey, candidateQueue.id, 0.001, 1u));
     ASSERT_TRUE(timingHistory.recordSample(incumbentKey, incumbentQueue.id, 0.010, 2u));
 
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -1216,9 +1216,9 @@ void VerifyGpuScoring_CrossClassTimingCalibrationPreservesStaticBaselineAndHonor
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
     timingHistory.resetForDeviceGeneration(queues[0u].id.deviceGeneration);
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
@@ -1389,13 +1389,13 @@ void GpuScoringRunRejectedCrossClassCase(
         candidateKey = computeKey;
     }
 
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
     for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex)
         ASSERT_TRUE(timingHistory.recordSample(candidateKey, queues[candidateQueueIndex].id, 0.001, frameIndex));
     for(u64 frameIndex = 5u; frameIndex <= 8u; ++frameIndex)
         ASSERT_TRUE(timingHistory.recordSample(incumbentKey, queues[incumbentQueueIndex].id, 0.010, frameIndex));
 
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -1493,7 +1493,7 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
 
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
     GpuTaskTimingKey targetTimingKey = GpuTaskTimingKey();
     targetTimingKey.task = targetIdentity;
     targetTimingKey.queue = CommandQueue::Graphics;
@@ -1504,7 +1504,7 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     for(u64 frameIndex = 9u; frameIndex <= 12u; ++frameIndex)
         ASSERT_TRUE(timingHistory.recordSample(targetTimingKey, queues[0u].id, 0.010, frameIndex));
 
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
@@ -1631,13 +1631,13 @@ void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnersh
     GpuTaskTimingKey consumerTimingKey = GpuTaskTimingKey();
     consumerTimingKey.task = consumerIdentity;
     consumerTimingKey.queue = CommandQueue::Graphics;
-    GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
+    GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
     for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex)
         ASSERT_TRUE(timingHistory.recordSample(consumerTimingKey, auxiliaryGraphicsQueue.id, 0.001, frameIndex));
     for(u64 frameIndex = 5u; frameIndex <= 8u; ++frameIndex)
         ASSERT_TRUE(timingHistory.recordSample(consumerTimingKey, queues[0u].id, 0.010, frameIndex));
 
-    GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot timingSnapshot = testArena.makeTimingSnapshot();
     timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 

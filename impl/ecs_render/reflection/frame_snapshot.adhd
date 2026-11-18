@@ -1,0 +1,56 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd>
+#include <impl/ecs_render/reflection/feedback_resources.adhd>
+#include <impl/ecs_render/reflection/frame_parameters.adhd>
+#include <impl/ecs_render/reflection/postprocess_resources.adhd>
+#include <impl/ecs_render/reflection/statistics_readback.adhd>
+#include <impl/ecs_render/reflection/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Copy handles and slots together before declaration. Only parameter values vary per frame.
+class ReflectionFrameSnapshot{
+    public ReflectionFrameParameters parameters;
+    public TextureHandle opaqueRadiance;
+    public TextureHandle glassRadiance;
+    public BufferHandle queue;
+    public BufferHandle counters;
+    public BufferHandle indirectArgs;
+    public BufferHandle frameParameters;
+    public ComputePipelineHandle classifyPipeline;
+    public ComputePipelineHandle buildArgsPipeline;
+    public ComputePipelineHandle hardwarePipeline;
+    public ReflectionDepthPyramidSnapshot depthPyramid;
+    public RayTracingSceneGraphResources scene;
+    public ReflectionStatisticsReadbackSnapshot statistics = ReflectionStatisticsReadbackSnapshot();
+    public ReflectionPostprocessSnapshot postprocess = ReflectionPostprocessSnapshot();
+    public ReflectionFeedbackSnapshot feedback = ReflectionFeedbackSnapshot();
+    public u32 frameParametersSlot = 0u;
+
+    public b8 hasHardwareWork()const{
+        return this.parameters.hardwareEnabled != 0u && this.parameters.maxHardwareRays > 0u;
+    }
+
+    public b8 valid()const{
+        return this.parameters.width > 0u
+            && this.parameters.height > 0u
+            && this.opaqueRadiance.valid()
+            && this.glassRadiance.valid()
+            && this.queue.valid()
+            && this.counters.valid()
+            && this.indirectArgs.valid()
+            && this.frameParameters.valid()
+            && this.classifyPipeline.valid()
+            && this.buildArgsPipeline.valid()
+            && this.depthPyramid.valid();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

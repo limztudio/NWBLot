@@ -43,7 +43,7 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             const MStringView laneType = IntSimdLaneType(simdType);
             const MStringView rawWordType = IntSimdRawWordType(isDouble);
             const MStringView scalarFn = MapBuiltinMathFunction(callee);
-            out.append("([&]()noexcept{ ");
+            out.append("([&]()").append(m_emitter.lambdaExceptionSpec()).append("{ ");
             for(usize i = 0u; i < expr.arguments.size(); ++i){
                 out.append("const ");
                 out.append(regType.data(), regType.size());

@@ -1,0 +1,133 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/avboit/avboit_system.adhd>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd>
+#include <impl/ecs_render/csg/csg_system.adhd>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/material/material_pass_draw_recorder.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TransparentCsgIntervalGraphSnapshot{
+    private MaterialPassDrawItems m_drawItems;
+    public CsgFrameGpuData frameData;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 captured = false;
+
+    public void capture(in MaterialPassDrawItemsView items, in CsgFrameGpuDataView frame, in usize instances, in usize materialBytes){
+        AssignVector(this.m_drawItems.meshDrawItems, items.meshDrawItems);
+        AssignVector(this.m_drawItems.indexedDrawItems, items.indexedDrawItems);
+        AssignVector(this.m_drawItems.computeDrawItems, items.computeDrawItems);
+        AssignVector(this.frameData.receiverRanges, frame.receiverRanges);
+        AssignVector(this.frameData.cutters, frame.cutters);
+        this.frameData.workRegion = frame.workRegion;
+        this.instanceCount = instances;
+        this.materialTypedByteCount = materialBytes;
+        this.captured = true;
+    }
+
+    public MaterialPassDrawItemsView receiverSurfaceDrawItemsView()const{
+        return MaterialPassDrawItemsView(this.m_drawItems);
+    }
+
+    public CsgFrameGpuDataView csgFrameDataView()const{
+        return CsgFrameGpuDataView(this.frameData);
+    }
+}
+
+
+[modular]
+class AvboitPreGraphTaskPayload{
+    public mut RendererAvboitSystem avboitSystem;
+    public mut DeferredFrameTargets targets;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public mut Optional<GpuTimingMeasure> transparentCsgIntervalsTiming;
+    public MeshFrameBindingSnapshot frameBindings;
+    public CsgGraphResourceSnapshot csgResources;
+    public TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
+    public b8 hasTransparentRenderers = false;
+    public b8 transparentCsgStreamsUploaded = false;
+    public b8 transparentCsgMaterialGeometryStatesGraphOwned = false;
+
+    public AvboitPreGraphTaskPayload(
+        mut RendererAvboitSystem avboitSystemIn,
+        mut DeferredFrameTargets targetsIn,
+        mut GpuTimingSubmissionTicket timingTicketIn,
+        mut Optional<GpuTimingMeasure> transparentCsgIntervalsTimingIn
+    ){
+        this.avboitSystem = avboitSystemIn;
+        this.targets = targetsIn;
+        this.timingTicket = timingTicketIn;
+        this.transparentCsgIntervalsTiming = transparentCsgIntervalsTimingIn;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Graphics | GpuQueueCapability::Compute;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const;
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.transparentCsgIntervalsTiming);
+    }
+}
+
+
+enum<u8> TransparentCsgIntervalPass{
+    ReceiverSpan,
+    Combine,
+}
+
+
+[modular]
+class TransparentCsgIntervalRecordInputs{
+    private TransparentCsgIntervalPass m_pass;
+
+    private mut MaterialPassDrawRecorder m_drawRecorder;
+    public mut RendererCsgSystem csgSystem;
+    public mut DeferredFrameTargets targets;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public mut Optional<GpuTimingMeasure> transparentCsgIntervalsTiming;
+    public MeshFrameBindingSnapshot frameBindings;
+    public CsgGraphResourceSnapshot csgResources;
+    public TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
+    public b8 csgFrameBuffersUploaded = false;
+
+    public TransparentCsgIntervalRecordInputs(
+        in TransparentCsgIntervalPass pass,
+        mut MaterialPassDrawRecorder drawRecorder,
+        mut RendererCsgSystem csgSystemIn,
+        mut DeferredFrameTargets targetsIn,
+        mut GpuTimingSubmissionTicket timingTicketIn,
+        mut Optional<GpuTimingMeasure> transparentCsgIntervalsTimingIn
+    ){
+        this.m_pass = pass;
+        this.m_drawRecorder = drawRecorder;
+        this.csgSystem = csgSystemIn;
+        this.targets = targetsIn;
+        this.timingTicket = timingTicketIn;
+        this.transparentCsgIntervalsTiming = transparentCsgIntervalsTimingIn;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const;
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.transparentCsgIntervalsTiming);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -8,6 +8,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class MeshMetadataComponentError<T>{
+    public usize index;
+    public T reason;
+
+    public MeshMetadataComponentError(in usize index, in T reason){
+        this.index = index;
+        this.reason = reason;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidateSourceStreamIndexWithContext(in StringView context, in StringView streamName, in u32 index, in usize streamCount){
     if(cast<usize>(index) < streamCount)
         return true;
@@ -190,6 +204,53 @@ StringView ResolveSkinInfluenceWeightFailureReason(in SkinInfluenceWeightFailure
     if(failure == SkinInfluenceWeightFailure::ZeroTotalWeight)
         return "must contain a positive total";
     return "";
+}
+
+Expected<f32, MetadataF32ValueFailure> ValidateMetadataFiniteF32Value(in MetascriptValue value){
+    if(!value.isNumeric())
+        return ValidateMetadataFiniteF32Number(false, 0.0);
+    return ValidateMetadataFiniteF32Number(true, value.toDouble());
+}
+
+Expected<u32, MetadataU32ValueFailure> ValidateMetadataU32Value(in MetascriptValue value){
+    if(!value.isNumeric())
+        return ValidateMetadataU32Number(false, 0.0);
+    return ValidateMetadataU32Number(true, value.toDouble());
+}
+
+Expected<Array<f32, N>, MeshMetadataComponentError<MetadataF32ValueFailure>> ParseMeshF32Tuple<const usize N>(in MetascriptValue value){
+    const Span<MetascriptValue> components = value.listView();
+    if(!value.isList() || components.size() != N)
+        return MakeUnexpected(MeshMetadataComponentError<MetadataF32ValueFailure>(0u, MetadataF32ValueFailure::WrongComponentCount));
+    Array<f32, N> values;
+    for(usize i = 0u; i < N; ++i){
+        const Expected<f32, MetadataF32ValueFailure> component = ValidateMetadataFiniteF32Value(components[i]);
+        if(!component.has_value())
+            return MakeUnexpected(MeshMetadataComponentError<MetadataF32ValueFailure>(i, component.error()));
+        values[i] = component.value();
+    }
+    return values;
+}
+
+Expected<VertexRefT, MeshMetadataComponentError<MetadataU32ValueFailure>> ParseMeshVertexRef<VertexRefT>(in MetascriptValue value){
+    const Span<MetascriptValue> components = value.listView();
+    if(!value.isList() || components.size() != s_VertexRefComponentCount)
+        return MakeUnexpected(MeshMetadataComponentError<MetadataU32ValueFailure>(0u, MetadataU32ValueFailure::WrongComponentCount));
+    Array<u32, s_VertexRefComponentCount> values;
+    for(usize i = 0u; i < s_VertexRefComponentCount; ++i){
+        const Expected<u32, MetadataU32ValueFailure> component = ValidateMetadataU32Value(components[i]);
+        if(!component.has_value())
+            return MakeUnexpected(MeshMetadataComponentError<MetadataU32ValueFailure>(i, component.error()));
+        values[i] = component.value();
+    }
+
+    VertexRefT ref = VertexRefT();
+    ref.position = values[0u];
+    ref.normal = values[1u];
+    ref.tangent = values[2u];
+    ref.uv0 = values[3u];
+    ref.color = values[4u];
+    return ref;
 }
 
 

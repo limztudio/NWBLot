@@ -29,6 +29,8 @@ if(NWB_BUILD_PIPELINE)
         SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_bind_schema.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_entry.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_shader_*.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/bind.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_private.adhd"

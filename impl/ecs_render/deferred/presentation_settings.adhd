@@ -21,13 +21,9 @@ const StringView s_CausticIrradianceLabel = "Caustic Irradiance";
 const StringView s_SurfelIrradianceLabel = "Surfel Irradiance";
 const Name s_LightingBindlessSlotsName = "render.deferred_lighting.bindless_slots";
 const StringView s_DeferredBindlessSlotsLabel = "Deferred Bindless Slots";
-const usize s_TransparentLaggedLightingDependencyCount = 2u;
-const usize s_TransparentLaggedSelectorDependencyCount = 3u;
-const usize s_OpaqueLaggedSelectorDependencyCount = 2u;
 const usize s_OpaqueProducerResourceSetUseCapacity = 3u;
 const usize s_OpaqueSharedRasterResourceUseCapacity = 9u;
 const usize s_OpaqueSharedResourceSetUseCapacity = 2u;
-const usize s_PresentBaseResourceUseCount = 3u;
 const usize s_PresentMaxResourceUseCount = 4u;
 const usize s_PresentMaxDependencyCount = 4u;
 

@@ -72,9 +72,11 @@ class MaterialPassDrawContext{
     }
 }
 
+type MaterialGeometryHeapHandles = Array<GpuDescriptorHandle, s_MeshInstanceGeometrySlotCount>;
+
 class MaterialPassMeshResourceSnapshot{
     public RuntimeMeshBuffers sourceBuffers;
-    public Array<GpuDescriptorHandle, 12u> geometryHeapHandles;
+    public MaterialGeometryHeapHandles geometryHeapHandles;
     // Retains the same unified generated buffer for both vertex and index consumption.
     public BufferHandle emulationVertexBuffer;
     public ObjectGeometryCacheSnapshot objectGeometryCache;
@@ -88,7 +90,7 @@ class MaterialPassMeshResourceSnapshot{
 
     public MaterialPassMeshResourceSnapshot(){
         this.sourceBuffers = RuntimeMeshBuffers();
-        this.geometryHeapHandles = Array<GpuDescriptorHandle, 12u>();
+        this.geometryHeapHandles = MaterialGeometryHeapHandles();
     }
 
     public b8 valid()const{

@@ -7,6 +7,8 @@
 #include "asset_class_header_emitter.h"
 
 #include "reflection_emitter.h"
+
+#include <global/hash_utils.h>
 #include "simd_constructor_emitter.h"
 
 #include <core/metascript/adhd/ast/operator_semantics.h>
@@ -28,6 +30,14 @@ namespace __hidden_adhd_header_emitter_class{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void EmitRecordAlignment(MString& out, const ClassDecl& decl){
+    if(decl.recordAlignment){
+        out.append("alignas(");
+        AppendUnsignedDecimal(out, decl.recordAlignment);
+        out.append(") ");
+    }
+}
 
 void EmitAccessSpecifier(MString& out, const AccessSpecifier::Enum access, const b8 maybeUnusedPrivate){
 #define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, enumName, cppLabelPrefix, maybeUnusedOnField) \
@@ -81,13 +91,14 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     }
 
     ReflectionEmitter reflectionEmitter(m_symbols, m_typeEmitter);
-    const b8 packClass = decl.isSerialize && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(decl.orderedFields);
+    const b8 packClass = decl.isSerialize && !decl.recordAlignment && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(decl.orderedFields);
 
     if(packClass)
         out.append("#pragma pack(push, 1)\r\n");
 
     m_typeEmitter.emitTemplateHeaderCpp(out, decl.templateParams);
     out.append("class ");
+    __hidden_adhd_header_emitter_class::EmitRecordAlignment(out, decl);
     out.append(decl.name.data(), decl.name.size());
     out.append(" final");
 
@@ -125,6 +136,10 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         }
     }
     out.append("{\r\n");
+    emitClassCppTypeAliases(out, decl);
+    for(const MStringView peer : decl.friendClasses){
+        out.append("    friend class ").append(peer).append(";\r\n");
+    }
     if(isAssetClass){
         out.append("public:\r\n");
         MVector<MStringView> emittedAliases(m_arena);
@@ -217,18 +232,43 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     out.append("\r\n");
 }
 
-void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const{
+void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst, const MStringView localNamespace)const{
     if(!inst.templateDecl || inst.templateDecl->isExtern)
         return;
 
     const ClassDecl& decl = *inst.templateDecl;
+    const MStringView ownerNamespace = decl.cppNamespace.empty() ? localNamespace : decl.cppNamespace;
+    CppTypeEmitter canonical(m_symbols);
+    canonical.setLocalNamespace(localNamespace);
+    canonical.useCanonicalTemplateArguments();
+    MString identity(m_arena);
+    canonical.appendQualifiedName(identity, ownerNamespace, decl.name);
+    canonical.emitTypeArgListCpp(identity, inst.templateArgs);
+    MString guard(m_arena);
+    guard.append("NWB_ADHD_CLASS_SPECIALIZATION_").append(decl.name).append("_");
+    AppendUnsignedDecimal(guard, ComputeFnv64Text(identity));
+    out.append("#ifndef ").append(guard).append("\r\n#define ").append(guard).append("\r\n");
+
+    // Independent importers can instantiate the same class from different namespaces.
+    if(ownerNamespace != localNamespace){
+        if(!localNamespace.empty())
+            out.append("}\r\n");
+        if(!ownerNamespace.empty())
+            out.append("namespace ").append(ownerNamespace).append("{\r\n");
+        m_typeEmitter.setLocalNamespace(localNamespace);
+        m_sourceEmitter.setLocalNamespace(localNamespace);
+        m_typeEmitter.setCurrentNamespace(ownerNamespace);
+        m_sourceEmitter.setCurrentNamespace(ownerNamespace);
+    }
+
     ReflectionEmitter reflectionEmitter(m_symbols, m_typeEmitter);
-    const b8 packClass = decl.isSerialize && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(inst.orderedFields);
+    const b8 packClass = decl.isSerialize && !decl.recordAlignment && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(inst.orderedFields);
 
     if(packClass)
         out.append("#pragma pack(push, 1)\r\n");
 
     out.append("template<>\r\nclass ");
+    __hidden_adhd_header_emitter_class::EmitRecordAlignment(out, decl);
     out.append(decl.name.data(), decl.name.size());
     m_typeEmitter.emitTypeArgListCpp(out, inst.templateArgs);
     out.append(" final");
@@ -246,6 +286,10 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         }
     }
     out.append("{\r\n");
+    emitClassCppTypeAliases(out, decl);
+    for(const MStringView peer : decl.friendClasses){
+        out.append("    friend class ").append(peer).append(";\r\n");
+    }
     if(!decl.componentTypeName.empty()){
         out.append("public:\r\n");
         __hidden_adhd_header_emitter_class::EmitClassRoleDefineMacro(out, ClassRoleKind::Component, decl.componentTypeName, true);
@@ -304,7 +348,17 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     out.append("};\r\n");
     if(packClass)
         out.append("#pragma pack(pop)\r\n");
-    out.append("\r\n");
+    if(ownerNamespace != localNamespace){
+        if(!ownerNamespace.empty())
+            out.append("}\r\n");
+        if(!localNamespace.empty())
+            out.append("namespace ").append(localNamespace).append("{\r\n");
+        m_typeEmitter.setLocalNamespace({});
+        m_sourceEmitter.setLocalNamespace({});
+        m_typeEmitter.setCurrentNamespace(localNamespace);
+        m_sourceEmitter.setCurrentNamespace(localNamespace);
+    }
+    out.append("#endif\r\n\r\n");
 }
 
 void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields, const b8 forceInlineBody, const b8 classNeedsArena)const{
@@ -462,7 +516,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 if(canMove)
                     emitRebindCtor(true);
             }
-            else if(hasNoCopyBase){
+            else if(hasNoCopyBase || decl.isMoveOnly){
                 emitDeletedSpecialMembers(true, true, false);
             }
             if((canCopyAssign || canMoveAssign) && !hasUserAssignOp){
@@ -494,15 +548,8 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                                 out.append(";\r\n");
                                 continue;
                             }
-                            const TypeRef* unwrappedField = m_symbols.unwrapTypeAlias(field->type);
-                            const b8 isOptionalArenaField = unwrappedField
-                                && unwrappedField->refMode == ParamPassingMode::None
-                                && IsOptionalContainerType(unwrappedField->name)
-                                && !unwrappedField->templateArgs.empty()
-                                && unwrappedField->templateArgs[0].type
-                                && layoutAnalyzer.requiresMotherArena(*unwrappedField->templateArgs[0].type);
-                            if(isOptionalArenaField)
-                                out.append("            ::AdhdAssignOptional((*this->__adhd_arena), this->");
+                            if(layoutAnalyzer.isArenaBackedValueWrapper(*field->type))
+                                out.append("            ::AdhdAssignWrapped((*this->__adhd_arena), this->");
                             else
                                 out.append("            ::AdhdAssign(this->");
                             out.append(field->name.data(), field->name.size());
@@ -531,7 +578,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 else
                     emitDeletedSpecialMembers(false, true, true);
             }
-            else if(hasNoCopyBase && !hasUserAssignOp){
+            else if((hasNoCopyBase || decl.isMoveOnly) && !hasUserAssignOp){
                 emitDeletedSpecialMembers(true, true, true);
             }
             if(!decl.methods.empty())
@@ -561,16 +608,23 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 out.append("\r\n");
         }
     }
-    else if(hasNoCopyBase){
+    else if(hasNoCopyBase || decl.isMoveOnly){
         out.append("public:\r\n");
         if(!hasUserConstructor && decl.systemTypeName.empty()){
             out.append("    ");
             out.append(decl.name.data(), decl.name.size());
             out.append("() = default;\r\n");
         }
-        emitDeletedSpecialMembers(true, true, false);
-        if(!hasUserAssignOp)
-            emitDeletedSpecialMembers(true, true, true);
+        const b8 canMove = decl.isMoveOnly && layoutAnalyzer.isClassMoveConstructible(decl, orderedFields);
+        emitDeletedSpecialMembers(true, !canMove, false);
+        if(canMove)
+            out.append("    ").append(decl.name).append("(").append(decl.name).append("&&)noexcept = default;\r\n");
+        if(!hasUserAssignOp){
+            const b8 canMoveAssign = canMove && layoutAnalyzer.isClassMoveAssignable(decl, orderedFields);
+            emitDeletedSpecialMembers(true, !canMoveAssign, true);
+            if(canMoveAssign)
+                out.append("    ").append(decl.name).append("& operator=(").append(decl.name).append("&&)noexcept = default;\r\n");
+        }
         if(!decl.methods.empty())
             out.append("\r\n");
     }
@@ -597,7 +651,45 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
         else{
             out.append(";\r\n");
         }
+        if(method->exportsRvalueOverload){
+            out.append("    ");
+            m_typeEmitter.emitTypeCpp(out, *method->returnType);
+            out.append(" ").append(method->name).append("(");
+            m_typeEmitter.emitTypeCpp(out, *method->params.front().type);
+            out.append("&& value)");
+            if(method->isConst)
+                out.append("const ");
+            out.append("noexcept(noexcept(this->").append(method->name).append("(value))){ return this->").append(method->name).append("(value); }\r\n");
+        }
+        if(method->exportsExplicitBool){
+            out.append("    explicit operator b8()const noexcept(noexcept(this->").append(method->name).append("())){ return this->")
+                .append(method->name).append("(); }\r\n");
+        }
+        if(method->exportsTakingAssignment){
+            MString valueType(out.get_allocator().arena());
+            m_typeEmitter.emitTypeCpp(valueType, *method->params.front().type);
+            out.append("    template<typename __AdhdIncoming>\r\n")
+                .append("        requires (!::IsSame_V<::Decay_T<__AdhdIncoming>, ").append(decl.name)
+                .append("> && ::IsConstructible_V<").append(valueType).append(", __AdhdIncoming&&>)\r\n")
+                .append("    ").append(decl.name).append("& operator=(__AdhdIncoming&& incoming)noexcept(noexcept(").append(valueType)
+                .append("(::Forward<__AdhdIncoming>(incoming))) && noexcept(this->").append(method->name).append("(::DeclVal<")
+                .append(valueType).append("&>()))){\r\n")
+                .append("        ").append(valueType).append(" value(::Forward<__AdhdIncoming>(incoming));\r\n")
+                .append("        this->").append(method->name).append("(value);\r\n        return *this;\r\n    }\r\n");
+        }
     }
+}
+
+void HeaderEmitter::emitClassCppTypeAliases(MString& out, const ClassDecl& decl)const{
+    if(decl.cppTypeAliases.empty())
+        return;
+    out.append("public:\r\n");
+    for(const TypeAliasDecl* alias : decl.cppTypeAliases){
+        out.append("    using ").append(alias->name).append(" = ");
+        m_typeEmitter.emitTypeCpp(out, *alias->aliasedType);
+        out.append(";\r\n");
+    }
+    out.append("private:\r\n");
 }
 
 void HeaderEmitter::emitClassFieldsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields)const{

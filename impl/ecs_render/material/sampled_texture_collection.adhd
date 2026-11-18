@@ -2,153 +2,188 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_sampler/loader.adhd>
+#include <impl/assets_texture/loader.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
+// Cached resources keep the descriptors used by the patched material fields alive.
+class RendererMaterialResourceState : NoCopy{
+    public HashMap<Name, UniquePtr<TextureGpuResource>> textureAssetCache;
+    public HashMap<Name, UniquePtr<SamplerGpuResource>> samplerAssetCache;
+}
 
-#include <impl/ecs_render/shared/frame_types.adhd.h>
+class MaterialTextureIdentity{
+    private Optional<in RhiTexture> m_texture;
 
-#include <global/containers.h>
-#include <global/scope_exit.h>
+    public MaterialTextureIdentity(){}
+    public MaterialTextureIdentity(in borrow TextureHandle texture){
+        if(texture.valid())
+            this.m_texture = Optional<in RhiTexture>(texture.deref());
+    }
+    public usize hash()const{
+        if(this.m_texture.has_value())
+            return HashValue(AddressOf(this.m_texture.value()));
+        return 0u;
+    }
+    public b8 operator==(in MaterialTextureIdentity rhs)const{
+        if(!this.m_texture.has_value())
+            return !rhs.m_texture.has_value();
+        return rhs.m_texture.has_value() && SameAddress(this.m_texture.value(), rhs.m_texture.value());
+    }
+}
 
+// If growing the ordered output fails, the texture must be eligible for a later append.
+class MaterialTextureInsertion : NoCopy{
+    private mut HashSet<MaterialTextureIdentity> m_index;
+    private MaterialTextureIdentity m_key;
+    private b8 m_pending = true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public MaterialTextureInsertion(mut HashSet<MaterialTextureIdentity> index, in MaterialTextureIdentity key){
+        this.m_index = index;
+        this.m_key = key;
+    }
+    public void commit(){ this.m_pending = false; }
+    public ~MaterialTextureInsertion(){
+        if(this.m_pending)
+            this.m_index.erase(this.m_key);
+    }
+}
 
+class MaterialSampledTextureCollector : NoCopy{
+    private mut Vector<TextureHandle> m_textures;
+    private Array<MaterialTextureIdentity, s_SmallInlineIndexCapacity> m_inline;
+    private usize m_inlineCount = 0u;
+    private HashSet<MaterialTextureIdentity> m_index;
+    private b8 m_promoted = false;
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RendererMaterialResourceState;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// One collector owns mutation of its borrowed output during its lifetime.
-template<typename OutputArena>
-class MaterialSampledTextureCollector final : NoCopy{
-private:
-    using TextureIndex = HashSet<Core::Texture*, Core::Alloc::ScratchArena>;
-
-
-public:
-    MaterialSampledTextureCollector(Vector<Core::TextureHandle, OutputArena>& textures, Core::Alloc::ScratchArena& scratchArena)
-        : m_textures(textures)
-        , m_scratchArena(scratchArena)
-    {
-        for(const Core::TextureHandle& texture : m_textures){
-            Core::Texture* const identity = texture.get();
-            if(!m_index){
-                if(containsInline(identity))
-                    continue;
-                if(m_inlineCount < s_SmallInlineIndexCapacity){
-                    m_inlineTextures[m_inlineCount] = identity;
-                    ++m_inlineCount;
-                    continue;
-                }
-                promoteIndex();
-            }
-            m_index->insert(identity);
-        }
+    public MaterialSampledTextureCollector(mut Vector<TextureHandle> textures){
+        this.m_textures = textures;
     }
 
-
-public:
-    void append(const Core::TextureHandle& texture){
-        Core::Texture* const identity = texture.get();
-        if(!m_index){
-            if(containsInline(identity))
-                return;
-            if(m_inlineCount < s_SmallInlineIndexCapacity){
-                m_textures.push_back(texture);
-                m_inlineTextures[m_inlineCount] = identity;
-                ++m_inlineCount;
-                return;
-            }
-        }
-        appendIndexed(texture);
-    }
-
-    void clear()noexcept{
-        if(m_index)
-            m_index->clear();
-        m_inlineCount = 0u;
-        m_textures.clear();
-    }
-
-
-private:
-    [[nodiscard]] b8 containsInline(Core::Texture* identity)const noexcept{
-        for(usize index = 0u; index < m_inlineCount; ++index){
-            if(m_inlineTextures[index] == identity)
+    private b8 containsInline(in MaterialTextureIdentity key)const{
+        for(usize i = 0u; i < this.m_inlineCount; ++i){
+            if(this.m_inline[i] == key)
                 return true;
         }
         return false;
     }
-
-    void appendIndexed(const Core::TextureHandle& texture){
-        if(!m_index)
-            promoteIndex();
-        const auto [found, inserted] = m_index->insert(texture.get());
-        if(!inserted)
-            return;
-        ScopeExit discardIdentity([&]()noexcept{ m_index->erase(found); });
-
-        m_textures.push_back(texture);
-        discardIdentity.release();
+    [cpp_unwind]
+    private void promote(){
+        this.m_index.reserve(s_PromotedInlineIndexCapacity);
+        for(in MaterialTextureIdentity key : this.m_inline)
+            this.m_index.insert(key);
+        this.m_promoted = true;
     }
 
-    void promoteIndex(){
-        FOUNDATION_ASSERT(!m_index && m_inlineCount == s_SmallInlineIndexCapacity);
-        TextureIndex index(s_PromotedInlineIndexCapacity, m_scratchArena);
-        for(Core::Texture* const identity : m_inlineTextures){
-            if(!index.insert(identity).second)
-                TerminateInvariant();
+    [cpp_unwind]
+    public void indexExisting(){
+        for(in TextureHandle texture : this.m_textures){
+            const MaterialTextureIdentity key(texture);
+            if(!this.m_promoted){
+                if(this.containsInline(key))
+                    continue;
+                if(this.m_inlineCount < s_SmallInlineIndexCapacity){
+                    this.m_inline[this.m_inlineCount] = key;
+                    ++this.m_inlineCount;
+                    continue;
+                }
+                this.promote();
+            }
+            this.m_index.insert(key);
         }
-        static_assert(IsNothrowMoveConstructible_V<TextureIndex>);
-        m_index.emplace(Move(index));
     }
 
-
-private:
-    Vector<Core::TextureHandle, OutputArena>& m_textures;
-    Core::Alloc::ScratchArena& m_scratchArena;
-    Array<Core::Texture*, s_SmallInlineIndexCapacity> m_inlineTextures{};
-    usize m_inlineCount = 0u;
-    Optional<TextureIndex> m_index;
-};
-
-
-using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
-
-
-// Rejection preserves the successfully collected prefix.
-[[nodiscard]] b8 AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, const RendererMaterialResourceState& resources, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector);
-[[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedMaterialPassSampledTextures(
-    const MaterialSurfaceInfoMap& materials,
-    const RendererMaterialResourceState& resources,
-    Span<const MaterialPassDrawItemsView> drawItemSets,
-    Core::Alloc::ScratchArena& scratchArena
-);
+    [cpp_unwind]
+    public void append(in borrow TextureHandle texture){
+        const MaterialTextureIdentity key(texture);
+        if(!this.m_promoted){
+            if(this.containsInline(key))
+                return;
+            if(this.m_inlineCount < s_SmallInlineIndexCapacity){
+                this.m_textures.push_back(texture);
+                this.m_inline[this.m_inlineCount] = key;
+                ++this.m_inlineCount;
+                return;
+            }
+            this.promote();
+        }
+        if(!this.m_index.insert(key).second)
+            return;
+        MaterialTextureInsertion inserted(this.m_index, key);
+        this.m_textures.push_back(texture);
+        inserted.commit();
+    }
+    public void clear(){
+        this.m_index.clear();
+        this.m_inlineCount = 0u;
+        this.m_textures.clear();
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+[cpp_unwind]
+void AppendPreparedTextureResource(in TextureGpuResource resource, mut MaterialSampledTextureCollector collector){
+    assert(resource.valid() && resource.sampledImageHeapHandle.descriptorClass() == GpuDescriptorClass::SampledImage);
+    collector.append(resource.texture);
+}
 
+[cpp_unwind]
+b8 AppendPreparedMaterialSurfaceSampledTextures(in MaterialSurfaceInfo materialInfo, in RendererMaterialResourceState resources, mut MaterialSampledTextureCollector collector){
+    if(!materialInfo.resourceReferencesResolved)
+        return false;
+    for(in MaterialResourceReference reference : materialInfo.resourceReferences){
+        switch(reference.resourceKind){
+        case MaterialResourceKind::SampledImage2D:{
+            assert(reference.textureAsset.valid());
+            const auto entry = resources.textureAssetCache.find(reference.textureAsset.name());
+            assert(entry != resources.textureAssetCache.end() && entry.value().valid());
+            AppendPreparedTextureResource(entry.value().deref(), collector);
+            break;
+        }
+        case MaterialResourceKind::Sampler:
+            break;
+        default:
+            assert(false);
+            return false;
+        }
+    }
+    return true;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_unwind]
+b8 AppendPreparedDrawSampledTextures(
+    in HashMap<Name, MaterialSurfaceInfo> materials, in RendererMaterialResourceState resources,
+    in Span<MaterialPassDrawItem> draws, mut MaterialSampledTextureCollector collector
+){
+    for(in MaterialPassDrawItem draw : draws){
+        const auto material = materials.find(draw.pipelineKey.material);
+        if(material == materials.end() || !AppendPreparedMaterialSurfaceSampledTextures(material.value(), resources, collector))
+            return false;
+    }
+    return true;
+}
 
-
+[cpp_unwind]
+Expected<Vector<TextureHandle>> GatherPreparedMaterialPassSampledTextures(
+    in HashMap<Name, MaterialSurfaceInfo> materials, in RendererMaterialResourceState resources, in Span<MaterialPassDrawItemsView> drawItemSets
+){
+    Vector<TextureHandle> textures;
+    MaterialSampledTextureCollector collector(textures);
+    for(in MaterialPassDrawItemsView draws : drawItemSets){
+        if(!AppendPreparedDrawSampledTextures(materials, resources, draws.meshDrawItems, collector)
+            || !AppendPreparedDrawSampledTextures(materials, resources, draws.indexedDrawItems, collector)
+            || !AppendPreparedDrawSampledTextures(materials, resources, draws.computeDrawItems, collector))
+            return MakeUnexpected(Failure());
+    }
+    return textures;
 }
 
 

@@ -2,139 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/text/atlas_types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/text/font.adhd.h>
-#include <impl/ecs_ui/toolkit/text/glyph_page.adhd.h>
-
-#include <global/atomic_identity.h>
-#include <global/containers.h>
-#include <global/hash_utils.h>
-#include <global/termination.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using AtlasGlyph = AtlasGlyphRecord<SharedFontFace>;
-
-struct AtlasPage{
-    SharedFontFace face;
-    GlyphPage::Pixels pixels;
-    SharedGlyphPage published;
-    u32 cursorX = 0u;
-    u32 cursorY = 0u;
-    u32 rowHeight = 0u;
-    b8 dirty = false;
-    u64 generation = 0u;
-
-
-public:
-    AtlasPage(Core::Alloc::GlobalArena& arena, const SharedFontFace& font)
-        : face(font)
-        , pixels(arena)
-    {
-        pixels.resize(static_cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent, 0u);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Only unused padded rectangles are written; page publication copies after a batch of mutations.
-class GlyphAtlas final : NoCopy{
-private:
-    using Placement = GlyphAtlasPlacement;
-
-    struct GlyphKey{
-        SharedFontFace::pointer face = nullptr;
-        u32 glyphId = 0u;
-        u32 pixelSize = 0u;
-    };
-
-    struct GlyphKeyHasher{
-        [[nodiscard]] usize operator()(const GlyphKey& key)const noexcept{
-            usize seed = 0u;
-            ::HashCombine(seed, key.face);
-            ::HashCombine(seed, key.glyphId);
-            ::HashCombine(seed, key.pixelSize);
-            return seed;
-        }
-    };
-
-    struct GlyphKeyEqualTo{
-        [[nodiscard]] b8 operator()(const GlyphKey& lhs, const GlyphKey& rhs)const noexcept{
-            return lhs.face == rhs.face && lhs.glyphId == rhs.glyphId && lhs.pixelSize == rhs.pixelSize;
-        }
-    };
-
-
-private:
-    using GlyphIndex = HashMap<GlyphKey, usize, Core::Alloc::GlobalArena, GlyphKeyHasher, GlyphKeyEqualTo>;
-
-
-private:
-    [[nodiscard]] static u64 NextAtlasIdentity()noexcept;
-
-
-public:
-    explicit GlyphAtlas(Core::Alloc::GlobalArena& arena);
-
-
-public:
-    void reset()noexcept;
-    [[nodiscard]] b8 prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize);
-    [[nodiscard]] const AtlasGlyph* find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const noexcept;
-    [[nodiscard]] Expected<SharedGlyphPage> page(u32 index);
-
-    [[nodiscard]] usize pageCount()const noexcept{ return m_pages.size(); }
-
-    [[nodiscard]] usize glyphCount()const noexcept{ return m_glyphs.size(); }
-
-
-private:
-    [[nodiscard]] static Expected<Placement> TryPlace(u32 cursorX, u32 cursorY, u32 rowHeight, u32 width, u32 height)noexcept;
-    void appendGlyph(AtlasGlyph&& record);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    PaintVector<AtlasGlyph> m_glyphs;
-    GlyphIndex m_index;
-    PaintVector<AtlasPage> m_pages;
-    GlyphBitmap m_bitmap;
-    u64 m_identity = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/ecs_ui/toolkit/text/font.adhd>
+#include <impl/ecs_ui/toolkit/text/glyph_page.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -181,142 +50,157 @@ Expected<GlyphPageBindingRecord<TFont>> TryMakeNextGlyphPageBinding<TFont>(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+type AtlasGlyph = AtlasGlyphRecord<SharedFontFace>;
+
+class GlyphAtlasKey{
+    public SharedFontFace face;
+    public u32 glyphId;
+    public u32 pixelSize;
+
+    public GlyphAtlasKey(in SharedFontFace face, in u32 glyphId, in u32 pixelSize){
+        this.face = face;
+        this.glyphId = glyphId;
+        this.pixelSize = pixelSize;
+    }
+
+    public b8 operator==(in GlyphAtlasKey other)const{
+        return this.face == other.face && this.glyphId == other.glyphId && this.pixelSize == other.pixelSize;
+    }
+
+    public usize hash()const{
+        return HashCombineValue(HashCombineValue(HashValue(this.face), this.glyphId), this.pixelSize);
+    }
+}
+
+class AtlasPage{
+    public SharedFontFace face;
+    public GlyphPagePixels pixels;
+    public SharedGlyphPage published;
+    public u32 cursorX = 0u;
+    public u32 cursorY = 0u;
+    public u32 rowHeight = 0u;
+    public u64 generation = 0u;
+    public b8 dirty = false;
+
+    public AtlasPage(in SharedFontFace face){
+        this.face = face;
+        this.pixels.resize(cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent, 0u);
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_UI_BEGIN
+// Coverage updates occupy unused padded rectangles. Publishing copies a page after its batch.
+class GlyphAtlas : NoCopy{
+    private SharedPool m_pool = SharedPool();
+    private Vector<AtlasGlyph> m_glyphs;
+    private HashMap<GlyphAtlasKey, usize> m_index;
+    private Vector<AtlasPage> m_pages;
+    private GlyphBitmap m_bitmap = GlyphBitmap();
+    private u64 m_identity = AllocateServiceIdentity();
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 GlyphAtlas::NextAtlasIdentity()noexcept{
-    static Atomic<u64> s_NextAtlasIdentity{ 1u };
-    return NextNonWrappingIdentity(s_NextAtlasIdentity);
-}
-
-GlyphAtlas::GlyphAtlas(Core::Alloc::GlobalArena& arena)
-    : m_arena(arena)
-    , m_glyphs(arena)
-    , m_index(arena)
-    , m_pages(arena)
-    , m_bitmap(arena)
-    , m_identity(NextAtlasIdentity())
-{
-    m_glyphs.reserve(s_GlyphAtlasMaxGlyphs);
-    m_pages.reserve(s_GlyphAtlasMaxPages);
-}
-
-void GlyphAtlas::reset()noexcept{
-    m_index.clear();
-    m_glyphs.clear();
-    m_pages.clear();
-    m_identity = NextAtlasIdentity();
-}
-
-b8 GlyphAtlas::prepare(const SharedFontFace& face, const u32 glyphId, const u32 pixelSize){
-    if(!face || !face->valid() || pixelSize == 0u)
-        return false;
-    if(find(face, glyphId, pixelSize))
-        return true;
-    if(m_glyphs.size() >= s_GlyphAtlasMaxGlyphs || !face->rasterize(glyphId, pixelSize, m_bitmap))
-        return false;
-    AtlasGlyph record;
-    record.face = face;
-    record.glyphId = glyphId;
-    record.pixelSize = pixelSize;
-    record.bearingX = m_bitmap.bearingX;
-    record.bearingY = m_bitmap.bearingY;
-    if(m_bitmap.width == 0u || m_bitmap.height == 0u){
-        appendGlyph(Move(record));
-        return true;
+    public GlyphAtlas(){
+        this.m_glyphs.reserve(s_GlyphAtlasMaxGlyphs);
+        this.m_pages.reserve(s_GlyphAtlasMaxPages);
     }
-    if(!CanPackGlyphBitmapExtent(m_bitmap.width, m_bitmap.height))
-        return false;
-    const u32 paddedWidth = m_bitmap.width + s_GlyphAtlasGlyphGutter;
-    const u32 paddedHeight = m_bitmap.height + s_GlyphAtlasGlyphGutter;
-    Placement placement;
-    usize pageIndex = 0u;
-    while(pageIndex < m_pages.size()){
-        const AtlasPage& page = m_pages[pageIndex];
-        if(page.face.get() == face.get()){
-            const auto placed = TryPlace(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight);
-            if(placed){
-                placement = *placed;
-                break;
-            }
-        }
-        ++pageIndex;
+
+    public void reset(){
+        this.m_index.clear();
+        this.m_glyphs.clear();
+        this.m_pages.clear();
+        this.m_identity = AllocateServiceIdentity();
     }
-    if(pageIndex == m_pages.size()){
-        if(m_pages.size() >= s_GlyphAtlasMaxPages)
+
+    public usize pageCount()const{ return this.m_pages.size(); }
+    public usize glyphCount()const{ return this.m_glyphs.size(); }
+
+    public Optional<in AtlasGlyph> find(in SharedFontFace face, in u32 glyphId, in u32 pixelSize)const{
+        const auto found = this.m_index.find(GlyphAtlasKey(face, glyphId, pixelSize));
+        if(found == this.m_index.end())
+            return Optional<in AtlasGlyph>();
+        return Optional<in AtlasGlyph>(this.m_glyphs[found.value()]);
+    }
+
+    private void appendGlyph(in AtlasGlyph record){
+        const GlyphAtlasKey key(record.face, record.glyphId, record.pixelSize);
+        const usize index = this.m_glyphs.size();
+        this.m_glyphs.push_back(record);
+        if(!this.m_index.try_emplace(key, index).second)
+            TerminateInvariant();
+    }
+
+    [cpp_unwind]
+    public b8 prepare(in SharedFontFace face, in u32 glyphId, in u32 pixelSize){
+        if(!face.valid() || !face.deref().valid() || pixelSize == 0u)
             return false;
-        m_pages.emplace_back(m_arena, face);
-        placement = MakeInitialGlyphAtlasPlacement(paddedHeight);
+        if(this.find(face, glyphId, pixelSize).has_value())
+            return true;
+        if(this.m_glyphs.size() >= s_GlyphAtlasMaxGlyphs || !face.deref().rasterize(glyphId, pixelSize, this.m_bitmap))
+            return false;
+        AtlasGlyph record;
+        record.face = face;
+        record.glyphId = glyphId;
+        record.pixelSize = pixelSize;
+        record.bearingX = this.m_bitmap.bearingX;
+        record.bearingY = this.m_bitmap.bearingY;
+        if(this.m_bitmap.width == 0u || this.m_bitmap.height == 0u){
+            this.appendGlyph(record);
+            return true;
+        }
+        if(!CanPackGlyphBitmapExtent(this.m_bitmap.width, this.m_bitmap.height))
+            return false;
+        const u32 paddedWidth = this.m_bitmap.width + s_GlyphAtlasGlyphGutter;
+        const u32 paddedHeight = this.m_bitmap.height + s_GlyphAtlasGlyphGutter;
+        GlyphAtlasPlacement placement;
+        usize pageIndex = 0u;
+        while(pageIndex < this.m_pages.size()){
+            in AtlasPage existing = this.m_pages[pageIndex];
+            if(existing.face == face){
+                const Expected<GlyphAtlasPlacement> placed = TryPlaceGlyphAtlasBitmap(existing.cursorX, existing.cursorY, existing.rowHeight, paddedWidth, paddedHeight);
+                if(placed.has_value()){
+                    placement = placed.value();
+                    break;
+                }
+            }
+            ++pageIndex;
+        }
+        if(pageIndex == this.m_pages.size()){
+            if(this.m_pages.size() >= s_GlyphAtlasMaxPages)
+                return false;
+            this.m_pages.emplace_back(face);
+            placement = MakeInitialGlyphAtlasPlacement(paddedHeight);
+        }
+        mut AtlasPage page = this.m_pages[pageIndex];
+        record.pageIndex = cast<u32>(pageIndex);
+        record.pixels = MakePlacedGlyphAtlasPixelRect(placement.x, placement.y, this.m_bitmap.width, this.m_bitmap.height);
+        CopyGlyphBitmapToAtlasPage(placement.x, placement.y, this.m_bitmap.width, this.m_bitmap.height, this.m_bitmap.pixels, page.pixels);
+        page.cursorX = placement.x + paddedWidth;
+        page.cursorY = placement.y;
+        page.rowHeight = placement.rowHeight;
+        page.dirty = true;
+        this.appendGlyph(record);
+        return true;
     }
-    AtlasPage& page = m_pages[pageIndex];
-    record.pageIndex = static_cast<u32>(pageIndex);
-    record.pixels = MakePlacedGlyphAtlasPixelRect(placement.x, placement.y, m_bitmap.width, m_bitmap.height);
-    CopyGlyphBitmapToAtlasPage(placement.x, placement.y, m_bitmap.width, m_bitmap.height, m_bitmap.pixels, page.pixels);
-    page.cursorX = placement.x + paddedWidth;
-    page.cursorY = placement.y;
-    page.rowHeight = placement.rowHeight;
-    page.dirty = true;
-    appendGlyph(Move(record));
-    return true;
-}
 
-const AtlasGlyph* GlyphAtlas::find(const SharedFontFace& face, const u32 glyphId, const u32 pixelSize)const noexcept{
-    const auto found = m_index.find(GlyphKey{ face.get(), glyphId, pixelSize });
-    return found == m_index.end() ? nullptr : &m_glyphs[found.value()];
-}
-
-Expected<SharedGlyphPage> GlyphAtlas::page(const u32 index){
-    if(index >= m_pages.size())
-        return MakeUnexpected(Failure{});
-    AtlasPage& page = m_pages[index];
-    if(page.dirty){
-        const auto binding = TryMakeNextGlyphPageBinding<Font>(page.face->identity(), page.face->generation(), m_identity, page.generation, index);
-        if(!binding)
-            return MakeUnexpected(Failure{});
-        GlyphPage::Pixels copy(m_arena);
-        copy.assign(page.pixels.begin(), page.pixels.end());
-        auto published = CreateGlyphPage(m_arena, *binding, Move(copy));
-        if(!published)
-            return MakeUnexpected(Failure{});
-        page.published = Move(*published);
-        ++page.generation;
-        page.dirty = false;
+    public Expected<SharedGlyphPage> page(in u32 index){
+        if(index >= this.m_pages.size())
+            return MakeUnexpected(Failure());
+        mut AtlasPage page = this.m_pages[index];
+        if(page.dirty){
+            const Expected<GlyphPageBindingRecord<Font>> binding = TryMakeNextGlyphPageBinding<Font>(page.face.deref().identity(), page.face.deref().generation(), this.m_identity, page.generation, index);
+            if(!binding.has_value())
+                return MakeUnexpected(Failure());
+            Expected<SharedGlyphPage> published = CopyGlyphPage(this.m_pool, binding.value(), Span<u8>(page.pixels));
+            if(!published.has_value())
+                return MakeUnexpected(Failure());
+            page.published = published.value();
+            ++page.generation;
+            page.dirty = false;
+        }
+        return page.published;
     }
-    return page.published;
-}
-
-Expected<GlyphAtlas::Placement> GlyphAtlas::TryPlace(const u32 cursorX, const u32 cursorY, const u32 rowHeight, const u32 width, const u32 height)noexcept{
-    return TryPlaceGlyphAtlasBitmap(cursorX, cursorY, rowHeight, width, height);
-}
-
-void GlyphAtlas::appendGlyph(AtlasGlyph&& record){
-    const GlyphKey key{ record.face.get(), record.glyphId, record.pixelSize };
-    const usize index = m_glyphs.size();
-    m_glyphs.push_back(Move(record));
-    if(!m_index.emplace(key, index).second)
-        TerminateInvariant();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

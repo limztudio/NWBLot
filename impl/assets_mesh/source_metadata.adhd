@@ -1,0 +1,194 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook_types.adhd>
+#include <impl/assets_mesh/stream_validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SourceMeshStreams{
+    public Vector<f32x3u> positions;
+    public Vector<f32x3u> normals;
+    public Vector<f32x4u> tangents;
+    public Vector<f32x2u> uv0;
+    public Vector<f32x4u> colors;
+    public Vector<MeshVertexRef> vertexRefs;
+    public Vector<u32> indices;
+}
+
+const Array<StringView, s_VertexRefComponentCount> s_MeshVertexRefComponentNames(
+    s_VertexRefPositionName, s_VertexRefNormalName, s_VertexRefTangentName, s_VertexRefUvName, s_VertexRefColorName
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+f32x2u MakeMeshFloatVector(in Array<f32, 2u> values){
+    return f32x2u(values[0u], values[1u]);
+}
+
+f32x3u MakeMeshFloatVector(in Array<f32, 3u> values){
+    return f32x3u(values[0u], values[1u], values[2u]);
+}
+
+f32x4u MakeMeshFloatVector(in Array<f32, 4u> values){
+    return f32x4u(values[0u], values[1u], values[2u], values[3u]);
+}
+
+[cpp_unwind]
+b8 FillMeshMetadataFloatListField<Element, const usize N>(in Path file, in MetascriptValue asset, in StringView field, mut Vector<Element> outValues){
+    outValues.clear();
+    const Expected<Span<MetascriptValue>> list = ReadMetadataListField(file, asset, s_MeshMetaText, field);
+    if(!list.has_value())
+        return false;
+    outValues.reserve(list.value().size());
+    for(usize i = 0u; i < list.value().size(); ++i){
+        const Expected<Array<f32, N>, MeshMetadataComponentError<MetadataF32ValueFailure>> tuple = ParseMeshF32Tuple<N>(list.value()[i]);
+        if(!tuple.has_value()){
+            const String label = FormatMeshMetadataIndexedLabel(field, i);
+            if(tuple.error().reason == MetadataF32ValueFailure::WrongComponentCount)
+                error("{} '{}': '{}' must be a {}-component list", s_MeshMetaText, PathToString(file), label, N);
+            else{
+                const String component = FormatMeshMetadataIndexedLabel(label, tuple.error().index);
+                error("{} '{}': '{}' {}", s_MeshMetaText, PathToString(file), component, ResolveMetadataF32ValueFailureReason(tuple.error().reason));
+            }
+            return false;
+        }
+        outValues.push_back(MakeMeshFloatVector(tuple.value()));
+    }
+    if(outValues.empty()){
+        error("{} '{}': '{}' must not be empty", s_MeshMetaText, PathToString(file), field);
+        return false;
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 ParseSourceVertexRefsInto<VertexRef>(in Path file, in MetascriptValue asset, mut Vector<VertexRef> outRefs){
+    outRefs.clear();
+    const Expected<Span<MetascriptValue>> list = ReadMetadataListField(file, asset, s_MeshMetaText, s_MeshVertexRefsFieldNameView);
+    if(!list.has_value())
+        return false;
+    outRefs.reserve(list.value().size());
+    for(usize i = 0u; i < list.value().size(); ++i){
+        const Expected<VertexRef, MeshMetadataComponentError<MetadataU32ValueFailure>> parsed = ParseMeshVertexRef<VertexRef>(list.value()[i]);
+        if(!parsed.has_value()){
+            if(parsed.error().reason == MetadataU32ValueFailure::WrongComponentCount)
+                error("{} '{}': 'vertex_refs[{}]' must contain {} integer stream indices", s_MeshMetaText, PathToString(file), i, s_VertexRefComponentCount);
+            else{
+                const String label = FormatMeshVertexRefComponentLabel(i, s_MeshVertexRefComponentNames[parsed.error().index]);
+                error("{} '{}': '{}' {}", s_MeshMetaText, PathToString(file), label, ResolveMetadataU32ValueFailureReason(parsed.error().reason));
+            }
+            return false;
+        }
+        outRefs.push_back(parsed.value());
+    }
+    if(outRefs.empty()){
+        error("{} '{}': 'vertex_refs' must not be empty", s_MeshMetaText, PathToString(file));
+        return false;
+    }
+    return true;
+}
+
+b8 CountMeshIndexLeaves(in Span<MetascriptValue> values, mut usize count){
+    for(in MetascriptValue value : values){
+        if(value.isList()){
+            if(!CountMeshIndexLeaves(value.listView(), count))
+                return false;
+        }
+        else{
+            if(count == usize.max)
+                return false;
+            ++count;
+        }
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 AppendMeshIndexLeaves(in Path file, in Span<MetascriptValue> values, mut Vector<usize> path, mut Vector<u32> outIndices){
+    for(usize i = 0u; i < values.size(); ++i){
+        in MetascriptValue value = values[i];
+        if(value.isList()){
+            path.push_back(i);
+            if(!AppendMeshIndexLeaves(file, value.listView(), path, outIndices))
+                return false;
+            path.pop_back();
+        }
+        else{
+            const Expected<u32, MetadataU32ValueFailure> index = ValidateMetadataU32Value(value);
+            if(!index.has_value()){
+                String label = s_MeshIndicesFieldNameView;
+                for(in usize parent : path)
+                    label.append(StringFormat("[{}]", parent));
+                label.append(StringFormat("[{}]", i));
+                error("{} '{}': '{}' {}", s_MeshMetaText, PathToString(file), label, ResolveMetadataU32ValueFailureReason(index.error()));
+                return false;
+            }
+            outIndices.push_back(index.value());
+        }
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 ParseMeshSourceIndices(in Path file, in MetascriptValue asset, mut Vector<u32> outIndices){
+    outIndices.clear();
+    const Expected<Span<MetascriptValue>> list = ReadMetadataListField(file, asset, s_MeshMetaText, s_MeshIndicesFieldNameView);
+    if(!list.has_value())
+        return false;
+    usize count = 0u;
+    if(!CountMeshIndexLeaves(list.value(), count)){
+        error("{} '{}': 'indices' scalar count overflows", s_MeshMetaText, PathToString(file));
+        return false;
+    }
+    if(count == 0u){
+        error("{} '{}': 'indices' must not be empty", s_MeshMetaText, PathToString(file));
+        return false;
+    }
+    outIndices.reserve(count);
+    Vector<usize> path;
+    return AppendMeshIndexLeaves(file, list.value(), path, outIndices);
+}
+
+b8 ValidateSourceMeshIndices(in Path file, in Span<u32> indices, in usize vertexRefCount){
+    const StringView reason = ResolveSourceIndexStreamFailureReason(ValidateSourceIndexStreamValues(indices, vertexRefCount));
+    if(reason.empty())
+        return true;
+    error("{} '{}': {}", s_MeshMetaText, PathToString(file), reason);
+    return false;
+}
+
+b8 ValidateSourceVertexRefStreams<VertexRef>(
+    in Path file, in Span<VertexRef> refs, in usize positions, in usize normals, in usize tangents, in usize uv0, in usize colors
+){
+    for(in VertexRef ref : refs){
+        const StringView invalid = FindOutOfRangeVertexRefStreamName(ref.position, ref.normal, ref.tangent, ref.uv0, ref.color, positions, normals, tangents, uv0, colors);
+        if(!invalid.empty()){
+            error("{} '{}': vertex_ref {} index is out of range", s_MeshMetaText, PathToString(file), invalid);
+            return false;
+        }
+    }
+    return true;
+}
+
+[cpp_unwind]
+b8 ReadCommonSourceMeshStreams(in Path file, in MetascriptValue asset, mut SourceMeshStreams streams){
+    return FillMeshMetadataFloatListField<f32x3u, 3u>(file, asset, s_MeshPositionsFieldNameView, streams.positions)
+        && FillMeshMetadataFloatListField<f32x3u, 3u>(file, asset, s_MeshNormalsFieldNameView, streams.normals)
+        && FillMeshMetadataFloatListField<f32x4u, 4u>(file, asset, s_MeshTangentsFieldNameView, streams.tangents)
+        && FillMeshMetadataFloatListField<f32x2u, 2u>(file, asset, s_MeshUv0FieldNameView, streams.uv0)
+        && FillMeshMetadataFloatListField<f32x4u, 4u>(file, asset, s_MeshColorsFieldNameView, streams.colors)
+        && ParseSourceVertexRefsInto<MeshVertexRef>(file, asset, streams.vertexRefs)
+        && ParseMeshSourceIndices(file, asset, streams.indices)
+        && ValidateSourceMeshIndices(file, streams.indices, streams.vertexRefs.size())
+        && ValidateSourceVertexRefStreams<MeshVertexRef>(file, streams.vertexRefs, streams.positions.size(), streams.normals.size(), streams.tangents.size(), streams.uv0.size(), streams.colors.size());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

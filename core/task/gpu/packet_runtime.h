@@ -40,6 +40,11 @@ class GpuCommandIrCapture;
 struct GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
     GpuTimingSubmissionTicket* timingTicket = nullptr;
+
+    void bind(const GpuTaskId id, GpuTimingSubmissionTicket& ticket)noexcept{
+        task = id;
+        timingTicket = &ticket;
+    }
 };
 
 // Pre-submit binding for one task. Admission attaches the hook to its packet; two bindings on one packet are rejected.
@@ -67,6 +72,26 @@ struct GpuTaskGraphTaskRecordedCallback{
 };
 
 
+template<typename Observer>
+[[nodiscard]] GpuTaskGraphTaskRecordedCallback MakeGpuTaskRecordedCallback(const GpuTaskId task, Observer& observer)noexcept{
+    return { task, &observer, [](void* context, const CommandListResourceStateHandoff* state){
+        if(!context)
+            return false;
+        Optional<NotNull<const CommandListResourceStateHandoff*>> recorded;
+        if(state)
+            recorded = MakeNotNull(state);
+        return static_cast<Observer*>(context)->recorded(recorded);
+    } };
+}
+
+template<typename Observer>
+[[nodiscard]] GpuTaskGraphTaskAcceptedCallback MakeGpuTaskAcceptedCallback(const GpuTaskId task, Observer& observer)noexcept{
+    return { task, &observer, [](void* context, const QueueSubmissionToken& token){
+        return context && static_cast<Observer*>(context)->accepted(token);
+    } };
+}
+
+
 // Ordinary-packet prefix in compiler order; an optional terminal task includes its packet. Bindings survive re-splitting.
 struct GpuTaskGraphNormalExecutionDesc{
     GpuTaskId terminalTask;
@@ -83,6 +108,24 @@ struct GpuTaskGraphNormalExecutionDesc{
     usize taskAcceptedCallbackCount = 0u;
     const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr;
     usize taskSubmissionHookCount = 0u;
+
+    void setRecordedCallbacks(const Span<const GpuTaskGraphTaskRecordedCallback> values)noexcept{
+        taskRecordedCallbacks = values.data();
+        taskRecordedCallbackCount = values.size();
+    }
+    void setAcceptedCallbacks(const Span<const GpuTaskGraphTaskAcceptedCallback> values)noexcept{
+        taskAcceptedCallbacks = values.data();
+        taskAcceptedCallbackCount = values.size();
+    }
+    void setReadyFrontierScheduler(CpuTaskScheduler& scheduler)noexcept{ readyFrontierScheduler = &scheduler; }
+    void setSubmissionHooks(const Span<const GpuTaskGraphTaskSubmissionHook> values)noexcept{
+        taskSubmissionHooks = values.data();
+        taskSubmissionHookCount = values.size();
+    }
+    void setTimingTickets(const Span<const GpuTaskGraphTaskTimingTicket> values)noexcept{
+        taskTimingTickets = values.data();
+        taskTimingTicketCount = values.size();
+    }
 };
 
 

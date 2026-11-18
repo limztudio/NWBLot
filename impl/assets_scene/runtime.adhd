@@ -206,214 +206,108 @@ b8 InstantiateSceneLoadedEntity(in Name entityName, in Span<UniquePtr<IComponent
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+register_asset IComponent using AssetCodecRegistration<ComponentAssetCodec>;
+register_asset TransformComponentAsset using TypedComponentAutoRegistrar<TransformComponentAsset>;
+register_asset CameraComponentAsset using TypedComponentAutoRegistrar<CameraComponentAsset>;
+register_asset LightComponentAsset using TypedComponentAutoRegistrar<LightComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_scene/asset.adhd.h>
-#include <core/assets/polymorphic_asset_codec.h>
-
-#include <impl/ecs_scene/camera.adhd.h>
-
-#include <core/assets/auto_registration.h>
-#include <core/assets/binary_payload_io.h>
-
-#include <global/binary.h>
-#include <global/simd/vector.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_scene_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ComponentAssetCodecAutoRegistrar, ComponentAssetCodec);
-NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_TransformComponentAssetAutoRegistrar, TransformComponentAsset);
-NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_CameraComponentAssetAutoRegistrar, CameraComponentAsset);
-NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_LightComponentAssetAutoRegistrar, LightComponentAsset);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_active_scene_subsystems{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_ActiveSceneSubsystemsOwner = FOUNDATION_TEXT("ActiveSceneSubsystems");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
-    return Core::Assets::PolymorphicAssetCodec::DeserializePolymorphicAsset<IComponent, ComponentHeaderBinary, &ComponentHeaderBinary::componentTypeHash>(
-        virtualPath,
-        binary,
-        s_ComponentMagic,
-        s_ComponentLoadBinaryContext,
-        s_ComponentAssetKindLabel,
-        FOUNDATION_TEXT("ComponentAssetCodec::deserialize"),
-        arena
-    );
+void EnqueueSceneSubsystem(in SubsystemRef subsystem, mut HashSet<NameHash> seen, mut Vector<SubsystemRef> pending){
+    if(subsystem.valid() && seen.insert(subsystem.name().hash()).second)
+        pending.push_back(subsystem);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project){
-    auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
-    if(!projectAsset)
+b8 ActiveSceneSubsystems::loadProjectStartScene(in AssetManager assetManager, in ProjectRef project){
+    const auto loaded = LoadTypedAssetSync<ProjectAsset>(assetManager, project.name(), s_ActiveSceneSubsystemsDiagnosticOwner);
+    if(!loaded.has_value())
         return false;
-    return loadScene((*projectAsset)->startScene(), assetManager);
+    return this.loadScene(loaded.value().deref().startScene(), assetManager);
 }
 
-b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetManager& assetManager){
-    auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
-    if(!sceneAssetResult)
+b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetManager){
+    const auto loadedScene = LoadTypedAssetSync<SceneAsset>(assetManager, scene.name(), s_ActiveSceneSubsystemsDiagnosticOwner);
+    if(!loadedScene.has_value())
         return false;
-    const SceneAsset& sceneAsset = **sceneAssetResult;
+    in SceneAsset sceneAsset = loadedScene.value().deref();
+    LoadedSceneContents next;
+    next.scene = scene;
+    next.assets = sceneAsset.assets();
 
-    AssetMap nextSceneAssets(0, Hasher<Name>(), EqualTo<Name>(), m_arena);
-    LoadedSubsystemVector nextLoadedSubsystems(m_arena);
-    LoadedEntityVector nextLoadedEntities(m_arena);
+    HashSet<NameHash> seen;
+    Vector<SubsystemRef> pending;
+    pending.reserve(sceneAsset.subsystems().size());
+    for(in SubsystemRef subsystem : sceneAsset.subsystems())
+        EnqueueSceneSubsystem(subsystem, seen, pending);
 
-    nextSceneAssets.reserve(sceneAsset.assets().size());
-    for(const auto& [nickname, asset] : sceneAsset.assets()){
-        if(!nextSceneAssets.emplace(nickname, asset).second){
-            FOUNDATION_ASSERT(false);
+    next.subsystems.reserve(pending.size());
+    for(usize i = 0u; i < pending.size(); ++i){
+        const Name path = pending[i].name();
+        auto loaded = assetManager.loadSync(ISubsystem::AssetTypeName(), path);
+        if(!loaded.has_value()){
+            LogSceneSubsystemLoadFailed(path);
             return false;
         }
+        auto subsystem = TakeFamilyAsset<ISubsystem>(loaded.value());
+        if(!subsystem.valid()){
+            LogSceneAssetNotSubsystem(path);
+            return false;
+        }
+        for(in UniquePtr<ISubsystem> existing : next.subsystems){
+            if(existing.deref().assetType() == subsystem.deref().assetType()){
+                LogSceneDuplicateSubsystemType(subsystem.deref().assetType(), scene.name());
+                return false;
+            }
+        }
+        for(in SubsystemRef parent : subsystem.deref().parentRefs())
+            EnqueueSceneSubsystem(parent, seen, pending);
+        next.subsystems.push_back(subsystem);
     }
 
-    Core::Alloc::ScratchArena scratchArena(s_ActiveSceneLoadArena);
-    HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    Vector<SubsystemRef, Core::Alloc::ScratchArena> pendingSubsystems(scratchArena);
-    pendingSubsystems.reserve(sceneAsset.subsystems().size());
-
-    const auto enqueueSubsystem = [&](const SubsystemRef& subsystemRef){
-        if(!subsystemRef.valid())
-            return;
-        if(seenSubsystems.insert(subsystemRef.name().hash()).second)
-            pendingSubsystems.push_back(subsystemRef);
-    };
-
-    for(const SubsystemRef& subsystemRef : sceneAsset.subsystems())
-        enqueueSubsystem(subsystemRef);
-
-    nextLoadedSubsystems.reserve(pendingSubsystems.size());
-    for(usize queueIndex = 0u; queueIndex < pendingSubsystems.size(); ++queueIndex){
-        const SubsystemRef currentSubsystem = pendingSubsystems[queueIndex];
-        auto loadedAsset = assetManager.loadSync(ISubsystem::AssetTypeName(), currentSubsystem.name());
-        if(!loadedAsset){
-            LogSceneSubsystemLoadFailed(currentSubsystem.name());
+    next.entities.reserve(sceneAsset.entities().size());
+    for(in EntityRef ref : sceneAsset.entities()){
+        const auto loadedEntity = LoadTypedAssetSync<EntityAsset>(assetManager, ref.name(), s_ActiveSceneSubsystemsDiagnosticOwner);
+        if(!loadedEntity.has_value())
             return false;
-        }
-        const ISubsystem* const subsystemPtr = SubsystemTypeAutoRegistrar::Cast(loadedAsset->get());
-        if(!subsystemPtr){
-            LogSceneAssetNotSubsystem(currentSubsystem.name());
-            return false;
-        }
-        for(const UniquePtr<ISubsystem>& existing : nextLoadedSubsystems){
-            if(existing && existing->assetType() == subsystemPtr->assetType()){
-                LogSceneDuplicateSubsystemType(subsystemPtr->assetType(), scene.name());
+        in EntityAsset entity = loadedEntity.value().deref();
+        next.entities.push_back(LoadedSceneEntity());
+        mut LoadedSceneEntity nextEntity = next.entities.back();
+        nextEntity.entity = ref;
+        nextEntity.components.reserve(entity.components().size());
+        for(in ComponentRef componentRef : entity.components()){
+            auto loaded = assetManager.loadSync(IComponent::AssetTypeName(), componentRef.name());
+            if(!loaded.has_value()){
+                LogSceneComponentLoadFailed(componentRef.name(), ref.name());
                 return false;
             }
-        }
-        for(const SubsystemRef& nestedSubsystem : subsystemPtr->subsystems)
-            enqueueSubsystem(nestedSubsystem);
-
-        nextLoadedSubsystems.push_back(UniquePtr<ISubsystem>(checked_cast<ISubsystem*>(loadedAsset->release())));
-    }
-
-    nextLoadedEntities.reserve(sceneAsset.entities().size());
-    for(const EntityRef& currentEntity : sceneAsset.entities()){
-        auto entityAssetResult = assetManager.loadTypedSync<EntityAsset>(currentEntity.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
-        if(!entityAssetResult)
-            return false;
-        const EntityAsset& entityAsset = **entityAssetResult;
-
-        LoadedComponentVector loadedComponents(m_arena);
-        loadedComponents.reserve(entityAsset.components().size());
-        for(const ComponentRef& currentComponent : entityAsset.components()){
-            auto loadedComponentAsset = assetManager.loadSync(IComponent::AssetTypeName(), currentComponent.name());
-            if(!loadedComponentAsset){
-                LogSceneComponentLoadFailed(currentComponent.name(), currentEntity.name());
+            auto component = TakeFamilyAsset<IComponent>(loaded.value());
+            if(!component.valid()){
+                LogSceneAssetNotComponent(componentRef.name());
                 return false;
             }
-            const IComponent* const componentPtr = ComponentTypeAutoRegistrar::Cast(loadedComponentAsset->get());
-            if(!componentPtr){
-                LogSceneAssetNotComponent(currentComponent.name());
-                return false;
-            }
-            for(const UniquePtr<IComponent>& existing : loadedComponents){
-                if(existing && existing->assetType() == componentPtr->assetType()){
-                    LogSceneDuplicateComponentType(componentPtr->assetType(), currentEntity.name());
+            for(in UniquePtr<IComponent> existing : nextEntity.components){
+                if(existing.deref().assetType() == component.deref().assetType()){
+                    LogSceneDuplicateComponentType(component.deref().assetType(), ref.name());
                     return false;
                 }
             }
-            loadedComponents.push_back(UniquePtr<IComponent>(checked_cast<IComponent*>(loadedComponentAsset->release())));
+            nextEntity.components.push_back(component);
         }
-
-        nextLoadedEntities.emplace_back(currentEntity, Move(loadedComponents));
     }
-
-    m_scene = scene;
-    m_sceneAssets = Move(nextSceneAssets);
-    m_loadedSubsystems = Move(nextLoadedSubsystems);
-    m_loadedEntities = Move(nextLoadedEntities);
+    this.m_contents = next;
     return true;
 }
 
-b8 ActiveSceneSubsystems::instantiateEntities(Core::ECS::World& world)const{
-    if(!ValidateSceneEntityInstantiationReady(valid()))
+b8 ActiveSceneSubsystems::instantiateEntities(mut World world)const{
+    if(!ValidateSceneEntityInstantiationReady(this.valid()))
         return false;
-
-    for(const LoadedEntity& loadedEntity : m_loadedEntities){
-        if(!InstantiateSceneLoadedEntity(loadedEntity.entity.name(), loadedEntity.components, world))
+    for(in LoadedSceneEntity entity : this.m_contents.entities){
+        if(!InstantiateSceneLoadedEntity(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world))
             return false;
     }
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

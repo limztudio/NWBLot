@@ -1,0 +1,45 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/basis_transcoder.h>"), cpp_name("::NWB::Core::BasisTranscodeFormat::Enum")]
+extern enum BasisTranscodeFormat : u8{
+    Bc7,
+    Bc6h,
+    AstcHdr4x4,
+    RgbaHalf
+};
+
+[cpp_header("<core/graphics/basis_transcoder.h>"), cpp_name("::NWB::Core::BasisTranscodeLayout"), cpp_flags(self_defaulted, brace_init)]
+extern class BasisTranscodeLayout{
+    u32 width;
+    u32 height;
+    u32 blockCountX;
+    u32 blockCountY;
+    u32 mipLevel;
+    u32 outputElements;
+    u32 outputRowPitch;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/graphics/basis_transcoder.h>"), cpp_name("::NWB::Core::InitializeBasisTranscoder")]
+extern void InitializeBasisTranscoder();
+
+[cpp_header("<core/graphics/basis_transcoder.h>"), cpp_name("::NWB::Core::TranscodeBasisAstcBlock")]
+extern b8 TranscodeBasisAstcBlock(in Span<u8> source, in usize offset, mut Span<u8> destination, in usize outputOffset);
+
+[cpp_header("<core/graphics/basis_transcoder.h>"), cpp_name("::NWB::Core::UnpackBasisRgbaBlock")]
+extern b8 UnpackBasisRgbaBlock(in Span<u8> source, in usize offset, mut Array<u8, 64> rgba);
+
+[cpp_header("<core/graphics/basis_transcoder.h>"), cpp_name("::NWB::Core::TranscodeBasisImage")]
+extern b8 TranscodeBasisImage(in BasisTranscodeFormat format, in BasisTranscodeLayout layout, in Span<u8> source, mut Span<u8> bytes, in usize offset, in usize count);
+
+[cpp_header("<core/graphics/basis_transcoder.h>"), cpp_name("::NWB::Core::BasisFloatToHalf")]
+extern u16 BasisFloatToHalf(in f32 value);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

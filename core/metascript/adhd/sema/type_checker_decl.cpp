@@ -149,6 +149,7 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
 b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors){
     MethodDecl ifaceScope(m_arena);
     ifaceScope.templateParams = iface.templateParams;
+    MVector<MethodDecl*> inheritedMethods(m_arena);
     b8 ok = checkTemplateParamBounds(iface.templateParams, nullptr, &ifaceScope, errors);
     for(usize i = 0u; i < iface.baseInterfaces.size(); ++i){
         const TypeRef* baseType = iface.baseInterfaces[i];
@@ -170,6 +171,8 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
                 reportError(errors, iface.span, "cyclic interface inheritance is prohibited");
                 ok = false;
             }
+            else
+                m_symbols.collectAllInterfaceMethods(*baseType, inheritedMethods);
         }
         else if(IsNonCopyableBaseInterfaceName(baseName)){
         }
@@ -184,6 +187,25 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
         MethodDecl* m = iface.methods[i];
         if(!m)
             continue;
+        for(const ParamDecl& param : m->params){
+            if(param.retainsBorrow){
+                reportError(errors, param.span, "'in borrow' cannot change an interface contract");
+                ok = false;
+            }
+        }
+        if(m->allowsCppUnwind){
+            if(iface.isExtern || m->isExtern){
+                reportError(errors, m->span, "'[cpp_unwind]' requires an authored interface contract");
+                ok = false;
+            }
+            for(const MethodDecl* base : inheritedMethods){
+                if(!base->allowsCppUnwind && base->name == m->name && base->isConst == m->isConst && TypeComparator(m_symbols).doParamListsMatch(base->params, m->params)){
+                    reportError(errors, m->span, "'[cpp_unwind]' cannot weaken an inherited nonthrowing interface contract");
+                    ok = false;
+                    break;
+                }
+            }
+        }
         if(!iface.isExtern && !m->isExtern){
             if(!m->isOperator && !m->name.empty() && !IsAsciiLower(m->name[0])){
                 reportError(errors, m->span, "member function name must start with a lowercase letter");
@@ -208,6 +230,166 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
     b8 ok = checkTemplateParamBounds(method.templateParams, enclosingClass, &method, errors);
     if(method.returnType && !checkReturnTypeRef(*method.returnType, enclosingClass, &method, method.span, errors))
         ok = false;
+    if(method.exportsRvalueOverload){
+        const MStringView result = method.returnType ? m_symbols.resolveBaseTypeName(method.returnType->name) : MStringView{};
+        if(!enclosingClass || enclosingClass->isExtern || method.isExtern || method.isOverride || method.isStatic || method.isOperator
+            || method.isConstructor || method.isDestructor || !method.templateParams.empty() || method.params.size() != 1u
+            || method.params[0].mode != ParamPassingMode::Mut || !method.params[0].type
+            || m_symbols.resolveRefMode(method.params[0].type) != ParamPassingMode::None
+            || !method.returnType || method.returnsReference || (result != "void" && !BuiltinTypeSemantics::IsScalarType(result) && !m_symbols.findEnum(result))){
+            reportError(errors, method.span, "'[cpp_rvalue_overload]' requires an ordinary instance method with one mutable value and a scalar, enum, or void result");
+            return false;
+        }
+    }
+    if(method.exportsExplicitBool || method.exportsTakingAssignment){
+        if(!enclosingClass || enclosingClass->isExtern || method.isExtern || method.isOverride || method.isStatic || method.isOperator
+            || method.isConstructor || method.isDestructor || !method.templateParams.empty() || method.returnsReference || !method.returnType){
+            reportError(errors, method.span, "C++ operator exports require an ordinary non-template instance method");
+            return false;
+        }
+        const MStringView result = m_symbols.resolveBaseTypeName(method.returnType->name);
+        if(method.exportsExplicitBool && (!method.isConst || !method.params.empty() || result != "b8")){
+            reportError(errors, method.span, "'[cpp_explicit_bool]' requires a const parameterless method returning b8");
+            return false;
+        }
+        if(method.exportsTakingAssignment && (method.isConst || method.params.size() != 1u || method.params[0].mode != ParamPassingMode::Mut
+            || !method.params[0].type || m_symbols.resolveRefMode(method.params[0].type) != ParamPassingMode::None
+            || m_symbols.resolveBaseTypeName(method.params[0].type->name) == enclosingClass->name || result != "void")){
+            reportError(errors, method.span, "'[cpp_take_assignment]' requires a mutable instance method taking one mutable value of another type and returning void");
+            return false;
+        }
+        for(const MethodDecl* other : enclosingClass->methods){
+            if(other == &method)
+                break;
+            if(other && ((method.exportsExplicitBool && other->exportsExplicitBool) || (method.exportsTakingAssignment && other->exportsTakingAssignment))){
+                reportError(errors, method.span, "the class already exports this C++ operator");
+                return false;
+            }
+        }
+    }
+    if(method.returnsFromOwnerArena){
+        TypeRef ownerType(m_arena);
+        if(enclosingClass)
+            ownerType.name = enclosingClass->name;
+        const TypeLayoutAnalyzer layout(m_symbols);
+        if(!enclosingClass || method.isConstructor || method.isDestructor || method.isOverride || method.isStatic || method.isOperator
+            || !(enclosingClass->isArenaOwner || layout.isNonRootMotherArenaType(ownerType))
+            || !method.returnType || !layout.requiresMotherArena(*method.returnType)){
+            reportError(errors, method.span, "'[owner_result]' requires an arena-backed result and an instance method with a mother arena");
+            return false;
+        }
+    }
+    if(method.allowsCppUnwind){
+        if(method.isOperator || method.assetCookRole != AssetCookRole::None){
+            reportError(errors, method.span, "'[cpp_unwind]' requires an ordinary function or method without an imposed C++ contract");
+            return false;
+        }
+        if(enclosingClass && (method.isConstructor || method.isDestructor)){
+            if(!enclosingClass->assetTypeName.empty() || !enclosingClass->systemTypeName.empty()
+                || !enclosingClass->subsystemTypeName.empty() || !enclosingClass->componentTypeName.empty()){
+                reportError(errors, method.span, "'[cpp_unwind]' cannot change a registered class construction or destruction contract");
+                return false;
+            }
+            if(method.isDestructor){
+                for(const TypeRef* base : enclosingClass->implementedInterfaces){
+                    if(base && !IsNonCopyableBaseInterfaceName(m_symbols.resolveBaseTypeName(base->name))){
+                        reportError(errors, method.span, "'[cpp_unwind]' cannot weaken an inherited destructor contract");
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    if(!method.pairedSidecar.empty()){
+        const Stmt* extension = m_symbols.findGlobalConstant(method.pairedSidecar);
+        const auto* exported = extension ? nullptr : FindBuiltinGlobalConstant(method.pairedSidecar);
+        if(exported)
+            recordRequiredHeader(exported->requiredHeader);
+        if(enclosingClass || !method.hasBody || method.isExtern || !method.ownerClassName.empty()
+            || ((!extension || !extension->varType || extension->varType->name != "StringView") && (!exported || exported->adhdTypeName != "StringView"))){
+            reportError(errors, method.span, "'[cook_sidecar]' requires a free function definition and a StringView extension constant");
+            return false;
+        }
+    }
+    if(method.assetCookRole != AssetCookRole::None){
+        if(enclosingClass || !method.ownerClassName.empty() || method.isExtern || !method.hasBody || !method.templateParams.empty() || !method.returnType){
+            reportError(errors, method.span, "an asset cook role requires a non-template free function definition");
+            return false;
+        }
+        if(method.assetCookRole == AssetCookRole::DocumentParser || method.assetCookRole == AssetCookRole::VolumePrepare){
+            const b8 document = method.assetCookRole == AssetCookRole::DocumentParser;
+            if(method.returnType->name != (document ? "AssetMetadataParseResult" : "b8") || method.params.size() != 1u || method.params[0].mode != ParamPassingMode::Mut
+                || method.params[0].type->name != (document ? "AssetDocumentMetadataParseContext" : "CookVolumePrepareContext")){
+                reportError(errors, method.span, "a cook callback must match its registry context and return type");
+                return false;
+            }
+        }
+        else if(method.assetCookRole == AssetCookRole::Setup){
+            if(method.returnType->name != "void" || !method.params.empty()){
+                reportError(errors, method.span, "'[cook_setup]' requires a void function with no parameters");
+                return false;
+            }
+        }
+        else if(method.assetCookRole != AssetCookRole::Entry && method.returnType->name != "b8"){
+            reportError(errors, method.span, "asset writers and cook registrars must return b8");
+            return false;
+        }
+        if(method.assetCookRole == AssetCookRole::Entry){
+            const TypeRef* result = method.returnType;
+            const ClassDecl* asset = (result->name == "Expected" && result->templateArgs.size() == 1u) ? m_symbols.findClass(result->templateArgs.front().constantOrTypeName()) : nullptr;
+            const AssetTypeAnalyzer assetTypes(m_symbols);
+            if(!asset || asset->assetTypeName.empty() || !assetTypes.findAssetLoadBinaryMethod(*asset) || (method.cookCodec.empty() && assetTypes.findImplementedAssetInterface(*asset))
+                || method.params.size() != 1u || !m_symbols.findClass(m_symbols.resolveBaseTypeName(method.params[0].type->name))){
+                reportError(errors, method.span, "'[cook_entry]' requires an entry parameter and must return Expected<Asset> for an auto-generated asset codec");
+                return false;
+            }
+            if(!method.cookCodec.empty()){
+                TypeRef alias(m_arena);
+                alias.name = method.cookCodec;
+                const TypeRef* codec = m_symbols.unwrapTypeAlias(&alias);
+                if(!codec || codec->name != "FamilyMemberAssetCodec" || codec->templateArgs.size() != 3u || codec->templateArgs[1].constantOrTypeName() != asset->name){
+                    reportError(errors, method.span, "'[cook_entry]' codec must be a visible family member codec alias for the built asset");
+                    return false;
+                }
+            }
+            const MethodDecl* reader = assetTypes.findCookEntryReader(method.cookValueReader, method.cookAcceptsValue);
+            const Stmt* diagnostic = m_symbols.findGlobalConstant(method.cookDiagnosticPrefix);
+            if(!diagnostic || !diagnostic->varType || diagnostic->varType->name != "StringView"){
+                reportError(errors, method.span, "'[cook_entry]' requires a StringView diagnostic prefix constant");
+                return false;
+            }
+            if(!reader || reader->isExtern || !reader->returnType || reader->returnType->name != "Expected" || reader->returnType->templateArgs.size() != 1u
+                || reader->returnType->templateArgs.front().constantOrTypeName() != method.params[0].type->name){
+                reportError(errors, method.span, "'[cook_entry]' requires a visible typed value reader returning Expected<Entry> and taking (in Name, in Path, in MetascriptValue) and optionally in CpuTaskScheduler, or a document_only reader taking (in Path, in StringView, in Path, in MetascriptDocument)");
+                return false;
+            }
+        }
+        else if(method.assetCookRole == AssetCookRole::GatherMerge){
+            if(method.params.size() != 3u
+                || method.params[0].mode != ParamPassingMode::In || method.params[0].type->name != "Name"
+                || method.params[1].mode != ParamPassingMode::In || method.params[1].type->name != "BinaryByteView"
+                || method.params[2].mode != ParamPassingMode::Mut || method.params[2].type->name != "BinaryUpdateContext"){
+                reportError(errors, method.span, "'[gather_merge]' requires (in Name, in BinaryByteView, mut BinaryUpdateContext)");
+                return false;
+            }
+        }
+        else if(method.assetCookRole == AssetCookRole::Writer){
+            const ClassDecl* asset = method.params.empty() ? nullptr : m_symbols.findClass(m_symbols.resolveBaseTypeName(method.params.front().type->name));
+            const TypeRef* bytes = method.params.size() == 2u ? method.params[1].type : nullptr;
+            const AssetTypeAnalyzer assetTypes(m_symbols);
+            if(!asset || asset->assetTypeName.empty() || !assetTypes.findAssetLoadBinaryMethod(*asset) || assetTypes.findImplementedAssetInterface(*asset)
+                || !bytes || method.params[0].mode != ParamPassingMode::In || method.params[1].mode != ParamPassingMode::Mut
+                || bytes->name != "Vector" || bytes->templateArgs.size() != 1u || bytes->templateArgs[0].constantOrTypeName() != "u8"){
+                reportError(errors, method.span, "'[asset_writer]' requires (in Asset, mut Vector<u8>) for an asset with an auto-generated codec");
+                return false;
+            }
+        }
+        else if(method.assetCookRole == AssetCookRole::Registrar && (method.params.size() != 1u || method.params[0].mode != ParamPassingMode::Mut
+            || (method.params[0].type->name != "CookEntryRegistry" && method.params[0].type->name != "CookDependencyRegistry"))){
+            reportError(errors, method.span, "'[cook_registrar]' requires a mutable cook entry or dependency registry");
+            return false;
+        }
+    }
     if(method.isOperator && !method.isExtern){
         if(!method.templateParams.empty()){
             reportError(errors, method.span, "operator overload cannot declare template parameters");
@@ -227,6 +409,26 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
     }
     for(usize pIdx = 0u; pIdx < method.params.size(); ++pIdx){
         const ParamDecl& p = method.params[pIdx];
+        if(p.forwardsArgument || p.copiesArgument){
+            b8 typeParameter = false;
+            for(const TemplateParamDecl& param : method.templateParams){
+                if(!param.constValueType && p.type && p.type->name == param.name && p.type->templateArgs.empty())
+                    typeParameter = true;
+            }
+            if(method.returnsReference || (method.returnType && IsBorrowViewType(method.returnType->name))){
+                reportError(errors, p.span, "a generic function with a forwarded or copied parameter cannot return a reference or borrowed view");
+                return false;
+            }
+            if((!typeParameter && !(p.copiesArgument && p.type && BuiltinTypeSemantics::IsIntegerScalarType(p.type->name)))
+                || method.templateParams.empty() || enclosingClass || !method.ownerClassName.empty() || !method.hasBody){
+                reportError(errors, p.span, "'mut forward' requires an unwrapped type parameter, and 'mut copy' requires a type parameter or integer on a generic free function definition");
+                return false;
+            }
+        }
+        if(p.retainsBorrow && (method.isOverride || method.isOperator || method.assetCookRole != AssetCookRole::None)){
+            reportError(errors, p.span, "'in borrow' cannot change an imposed callable contract");
+            ok = false;
+        }
         if(p.type){
             if(!checkTypeRef(*p.type, enclosingClass, &method, errors))
                 ok = false;
@@ -264,6 +466,33 @@ b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const Fi
 
 b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
     b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
+    for(const TypeAliasDecl* alias : classDecl.cppTypeAliases){
+        const MStringView name = alias->name;
+        b8 collides = name == classDecl.name || name == alias->aliasedType->name || SymbolTable::FindClassField(classDecl, name)
+            || FindTemplateParam(&classDecl, nullptr, name) || BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(name);
+        for(const MethodDecl* method : classDecl.methods)
+            collides |= method && method->name == name;
+        for(const TypeAliasDecl* previous : classDecl.cppTypeAliases){
+            if(previous == alias)
+                break;
+            collides |= previous->name == name;
+        }
+        if(collides){
+            reportError(errors, alias->span, "C++ nested alias must have a distinct member name");
+            ok = false;
+        }
+        if(!checkTypeRef(*alias->aliasedType, &classDecl, nullptr, errors))
+            ok = false;
+        recordBuiltinTypeHeader(alias->aliasedType->name);
+    }
+    for(const MStringView peer : classDecl.friendClasses){
+        const ClassDecl* known = m_symbols.findClass(peer);
+        if(BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(peer) || (m_symbols.hasTypeSymbol(peer) && (!known || !known->templateParams.empty()))){
+            reportError(errors, classDecl.span, "a friend must name a non-template peer class");
+            ok = false;
+        }
+    }
+
 
     if(classDecl.isArenaOwner && classDecl.isSerialize){
         reportError(errors, classDecl.span, "'[arena]' class cannot be marked '[serialize]' (binary-serialized structs cannot own an arena)");
@@ -426,6 +655,10 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             }
             else{
                 matchedOverrideImpls.push_back(impl);
+                if(impl->allowsCppUnwind && !req->allowsCppUnwind){
+                    reportError(errors, impl->span, "'[cpp_unwind]' cannot weaken a nonthrowing interface contract");
+                    ok = false;
+                }
                 if(!impl->isOverride){
                     reportError(errors, impl->span, "method implementing an interface contract must be explicitly marked 'override'");
                     ok = false;
@@ -472,6 +705,25 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     matchesInterface = true;
                     break;
                 }
+            }
+            b8 sdkAllowsUnwind = false;
+            for(const TypeRef* baseType : classDecl.implementedInterfaces){
+                if(!baseType)
+                    continue;
+                const auto* signature = FindBuiltinReceiverSignature(m_symbols.resolveBaseTypeName(baseType->name), m->name);
+                if(!signature || signature->arity != m->params.size())
+                    continue;
+                if(m->allowsCppUnwind && !signature->allowsCppUnwind){
+                    reportError(errors, m->span, "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+                    ok = false;
+                }
+                sdkAllowsUnwind |= signature->allowsCppUnwind;
+                for(usize pi = 0u; pi < m->params.size(); ++pi)
+                    m->params[pi].cppConstReference |= (signature->cppConstReferenceMask & (1u << pi)) != 0u;
+            }
+            if(m->allowsCppUnwind && !matchesInterface && !sdkAllowsUnwind){
+                reportError(errors, m->span, "'[cpp_unwind]' on an override requires an authored interface contract");
+                ok = false;
             }
             if(!matchesInterface && !classDecl.systemTypeName.empty()){
                 const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);

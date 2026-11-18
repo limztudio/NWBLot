@@ -1,0 +1,134 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/gpu/push_constants.adhd>
+#include <impl/assets_font_atlas/types.adhd>
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_ATTRIBUTE_COUNT")]
+extern const u32 s_ShaderUiVertexAttributeCount;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_BUFFER_INDEX")]
+extern const u32 s_ShaderUiVertexBufferIndex;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_POSITION_LOCATION")]
+extern const u32 s_ShaderUiVertexPositionLocation;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_UV_LOCATION")]
+extern const u32 s_ShaderUiVertexUvLocation;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_COLOR_LOCATION")]
+extern const u32 s_ShaderUiVertexColorLocation;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_POSITION_BYTE_OFFSET")]
+extern const u32 s_ShaderUiVertexPositionByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_UV_BYTE_OFFSET")]
+extern const u32 s_ShaderUiVertexUvByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_COLOR_BYTE_OFFSET")]
+extern const u32 s_ShaderUiVertexColorByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_BYTE_SIZE")]
+extern const u32 s_ShaderUiVertexByteSize;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_COLOR_TARGET_LOCATION")]
+extern const u32 s_ShaderUiColorTargetLocation;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_INVALID_HEAP_SLOT")]
+extern const u32 s_ShaderUiInvalidHeapSlot;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_SOLID")]
+extern const u32 s_ShaderUiMaterialSolid;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_SKIN")]
+extern const u32 s_ShaderUiMaterialSkin;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_GLYPH")]
+extern const u32 s_ShaderUiMaterialGlyph;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_SDF_GLYPH")]
+extern const u32 s_ShaderUiMaterialSdfGlyph;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_IMAGE")]
+extern const u32 s_ShaderUiMaterialImage;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8")]
+extern const u32 s_ShaderUiSdfDistanceEncodingFreetypeU8;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_PRESENTATION_SDR")]
+extern const u32 s_ShaderUiPresentationSdr;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_PRESENTATION_HDR10")]
+extern const u32 s_ShaderUiPresentationHdr10;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_BYTE_SIZE")]
+extern const u32 s_ShaderUiPushConstantsByteSize;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SCALE_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsScaleByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_TRANSLATE_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsTranslateByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsTextureSlotByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsSamplerSlotByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_MATERIAL_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsMaterialByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsSdfChannelByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsSdfSpreadByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsSdfEncodingByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/output_push_constants.h>"), cpp_name("NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE")]
+extern const u32 s_ShaderUiOutputPushConstantsByteSize;
+
+[cpp_header("<impl/assets/graphics/ui/output_push_constants.h>"), cpp_name("NWB_UI_OUTPUT_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET")]
+extern const u32 s_ShaderUiOutputPushConstantsTextureSlotByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/output_push_constants.h>"), cpp_name("NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET")]
+extern const u32 s_ShaderUiOutputPushConstantsSamplerSlotByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/output_push_constants.h>"), cpp_name("NWB_UI_OUTPUT_PUSH_CONSTANTS_PRESENTATION_MODE_BYTE_OFFSET")]
+extern const u32 s_ShaderUiOutputPushConstantsPresentationModeByteOffset;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(size_of<Vertex>() == s_ShaderUiVertexByteSize, "UI shader ABI requires NWB_UI_VERTEX_BYTE_SIZE");
+static_assert(offset_of<Vertex>(position) == s_ShaderUiVertexPositionByteOffset, "UI shader ABI requires NWB_UI_VERTEX_POSITION_BYTE_OFFSET");
+static_assert(offset_of<Vertex>(texCoord) == s_ShaderUiVertexUvByteOffset, "UI shader ABI requires NWB_UI_VERTEX_UV_BYTE_OFFSET");
+static_assert(offset_of<Vertex>(color) == s_ShaderUiVertexColorByteOffset, "UI shader ABI requires NWB_UI_VERTEX_COLOR_BYTE_OFFSET");
+static_assert(size_of<GpuPaintPushConstants>() == s_ShaderUiPushConstantsByteSize, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_BYTE_SIZE");
+static_assert(offset_of<GpuPaintPushConstants>(scale) == s_ShaderUiPushConstantsScaleByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SCALE_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(translate) == s_ShaderUiPushConstantsTranslateByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_TRANSLATE_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(textureSlot) == s_ShaderUiPushConstantsTextureSlotByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(samplerSlot) == s_ShaderUiPushConstantsSamplerSlotByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(material) == s_ShaderUiPushConstantsMaterialByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_MATERIAL_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(sdfChannel) == s_ShaderUiPushConstantsSdfChannelByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(sdfSpreadPixels) == s_ShaderUiPushConstantsSdfSpreadByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(sdfDistanceEncoding) == s_ShaderUiPushConstantsSdfEncodingByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET");
+static_assert(size_of<GpuOutputPushConstants>() == s_ShaderUiOutputPushConstantsByteSize, "UI shader ABI requires NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE");
+static_assert(offset_of<GpuOutputPushConstants>(textureSlot) == s_ShaderUiOutputPushConstantsTextureSlotByteOffset, "UI shader ABI requires NWB_UI_OUTPUT_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET");
+static_assert(offset_of<GpuOutputPushConstants>(samplerSlot) == s_ShaderUiOutputPushConstantsSamplerSlotByteOffset, "UI shader ABI requires NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET");
+static_assert(offset_of<GpuOutputPushConstants>(presentationMode) == s_ShaderUiOutputPushConstantsPresentationModeByteOffset, "UI shader ABI requires NWB_UI_OUTPUT_PUSH_CONSTANTS_PRESENTATION_MODE_BYTE_OFFSET");
+static_assert(cast<u32>(PaintMaterial::Solid) == s_ShaderUiMaterialSolid, "UI shader ABI requires NWB_UI_MATERIAL_SOLID");
+static_assert(cast<u32>(PaintMaterial::Skin) == s_ShaderUiMaterialSkin, "UI shader ABI requires NWB_UI_MATERIAL_SKIN");
+static_assert(cast<u32>(PaintMaterial::Glyph) == s_ShaderUiMaterialGlyph, "UI shader ABI requires NWB_UI_MATERIAL_GLYPH");
+static_assert(cast<u32>(PaintMaterial::SdfGlyph) == s_ShaderUiMaterialSdfGlyph, "UI shader ABI requires NWB_UI_MATERIAL_SDF_GLYPH");
+static_assert(cast<u32>(PaintMaterial::Image) == s_ShaderUiMaterialImage, "UI shader ABI requires NWB_UI_MATERIAL_IMAGE");
+static_assert(s_FontAtlasDistanceEncoding == s_ShaderUiSdfDistanceEncodingFreetypeU8, "UI shader ABI requires NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

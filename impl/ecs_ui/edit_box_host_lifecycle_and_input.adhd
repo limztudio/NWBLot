@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/edit_types.adhd>
+#include <impl/ecs_ui/edit_box_host.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,513 +54,467 @@ b8 ResolveNextUiEditCompositionState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/edit_box_host.adhd.h>
-#include <impl/ecs_ui/edit_geometry.adhd.h>
-#include <impl/ecs_ui/layer_system.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-
-#include <global/scope_exit.h>
-#include <global/simplemath.h>
-#include <global/termination.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard)
-    : m_arena(arena)
-    , m_context(context)
-    , m_textInput(textInput)
-    , m_clipboardService(clipboard)
-    , m_session(arena, textInput)
-    , m_clipboard(arena, clipboard)
-    , m_primary(arena, clipboard)
-    , m_publications(arena, clipboard)
-    , m_entries(arena)
-    , m_events(arena)
-{
-    m_entries.reserve(s_UiEditBoxMaxEntries);
-    m_events.reserve(Ui::s_InputMaxEvents);
-}
-
-Ui::EditBoxResult UiEditBoxHost::editNavigated(
-    const Ui::WidgetState& widget,
-    const Ui::EditBoxOptions& options,
-    const Ui::PopupToken& popup,
-    Ui::EditModel& model,
-    Ui::EditNavigationState& navigation,
-    Ui::IEditNavigationResolver& resolver,
-    Ui::IEditActionSink& actions
+EditBoxResult UiEditBoxHost::editNavigated(
+    in WidgetState widget,
+    in EditBoxOptions options,
+    in PopupToken popup,
+    mut EditModel model,
+    mut EditNavigationState navigation,
+    mut IEditNavigationResolver resolver,
+    mut IEditActionSink actions
 ){
-    NavigationBorrow borrowed{ navigation, resolver };
-    return editBorrowed(widget, options, popup, model, &actions, &borrowed);
+    UiEditNavigationBorrow borrowed(navigation, resolver);
+    return this.editBorrowed(widget, options, popup, model, Optional<mut IEditActionSink>(actions), Optional<mut UiEditNavigationBorrow>(borrowed));
 }
 
-b8 UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
-    if(rejectBorrowedMutation())
+b8 UiEditBoxHost::publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions options){
+    if(this.rejectBorrowedMutation())
         return false;
-    Entry* entry = find(widget.id);
-    if(!entry || entry->owner.declarationGeneration != widget.declarationGeneration || entry->popup != m_context.popupToken() || !view.ready())
+    auto entry = this.findEntry(widget.id);
+    if(!entry.has_value() || entry.value().owner.declarationGeneration != widget.declarationGeneration || entry.value().popup != this.m_context.popupToken() || !view.ready())
         return false;
     UiEditGeometry().publish(
-        entry->popup,
+        entry.value().popup,
         placement,
         view.caretStops(),
         view.caretGeometry().lines(),
         view.textMode(),
         options,
-        m_generation,
-        entry->expected.m_expectedRevision,
-        entry->expected.m_expectedExternalRevision,
-        entry->owner.modelGeneration,
-        entry->candidate
+        this.m_generation,
+        entry.value().expected.m_expectedRevision,
+        entry.value().expected.m_expectedExternalRevision,
+        entry.value().owner.modelGeneration,
+        entry.value().candidate
     );
     return true;
 }
 
-void UiEditBoxHost::beginFrame(const u64 generation, const Ui::DisplayMetrics& display){
-    if(rejectBorrowedMutation())
+void UiEditBoxHost::beginFrame(in u64 generation, in DisplayMetrics display){
+    if(this.rejectBorrowedMutation())
         return;
-    drainPublications();
-    collectNative();
-    m_generation = generation;
-    m_display = display;
+    this.drainPublications();
+    this.collectNative();
+    this.m_generation = generation;
+    this.m_display = display;
 }
 
 void UiEditBoxHost::finishFrame(){
-    if(rejectBorrowedMutation())
+    if(this.rejectBorrowedMutation())
         return;
-    for(usize index = m_entries.size(); index > 0u; --index){
-        const auto& entry = m_entries[index - 1u];
-        if(entry.seen == m_generation)
+    for(usize index = this.m_entries.size(); index > 0u; --index){
+        in auto entry = this.m_entries[index - 1u];
+        if(entry.seen == this.m_generation)
             continue;
-        if(HasPendingUiEditOwnerTransfer(entry.owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
-            cancelTransfers();
-        discard(entry.owner);
-        m_entries.erase(m_entries.begin() + static_cast<isize>(index - 1u));
+        if(HasPendingUiEditOwnerTransfer(entry.owner, this.m_session.owner(), this.m_clipboard.pending(), this.m_clipboardOwner, this.m_primary.pending(), this.m_primaryOwner))
+            this.cancelTransfers();
+        this.discard(entry.owner);
+        this.m_entries.erase(this.m_entries.begin() + cast<isize>(index - 1u));
     }
-    synchronizeFocus();
+    this.synchronizeFocus();
 }
 
-void UiEditBoxHost::commitFrame(const u64 generation){
-    if(rejectBorrowedMutation())
+void UiEditBoxHost::commitFrame(in u64 generation){
+    if(this.rejectBorrowedMutation())
         return;
-    if(m_context.input().layoutGeneration() != generation)
+    if(this.m_context.input().layoutGeneration() != generation)
         return;
-    for(auto& entry : m_entries)
+    for(mut auto entry : this.m_entries)
         UiEditGeometry().commit(generation, entry.candidate, entry.displayed);
-    if(m_session.token().valid()){
-        const Entry* entry = find(m_session.owner().widget);
-        if(entry && entry->owner == m_session.owner() && entry->displayed.generation == generation){
-            const auto status = m_textInput.updateCaret(m_session.token(), nativeCaret(entry->displayed));
-            if(status != Core::TextInputAdmission::Accepted && !m_session.cancel())
+    if(this.m_session.token().valid()){
+        const auto entry = this.findEntry(this.m_session.owner().widget);
+        if(entry.has_value() && entry.value().owner == this.m_session.owner() && entry.value().displayed.generation == generation){
+            const auto status = this.m_textInput.updateCaret(this.m_session.token(), this.nativeCaret(entry.value().displayed));
+            if(status != TextInputAdmission::Accepted && !this.m_session.cancel())
                 TerminateInvariant();
         }
     }
-    synchronizeFocus();
+    this.synchronizeFocus();
 }
 
 void UiEditBoxHost::collectNative(){
-    if(rejectBorrowedMutation())
+    if(this.rejectBorrowedMutation())
         return;
-    for(usize index = 0u; m_session.token().valid() && index <= Core::s_TextInputMaxEvents; ++index){
-        Event event(m_arena);
-        const auto poll = m_session.pollOwned(event.native);
-        if(poll == Core::TextInputPollResult::Pending)
+    for(usize index = 0u; this.m_session.token().valid() && index <= s_TextInputMaxEvents; ++index){
+        UiEditBoxEvent event = this.makeEvent();
+        const auto poll = this.m_session.pollOwned(event.native);
+        if(poll == TextInputPollResult::Pending)
             return;
-        if(poll != Core::TextInputPollResult::Event){
-            discard(m_session.owner());
-            if(!m_session.cancel())
+        if(poll != TextInputPollResult::Event){
+            this.discard(this.m_session.owner());
+            if(!this.m_session.cancel())
                 TerminateInvariant();
             return;
         }
-        if(index == Core::s_TextInputMaxEvents || event.native.token != m_session.token() || event.native.sequence <= m_lastNativeSequence){
-            reset();
+        if(index == s_TextInputMaxEvents || event.native.token != this.m_session.token() || event.native.sequence <= this.m_lastNativeSequence){
+            this.reset();
             return;
         }
-        m_lastNativeSequence = event.native.sequence;
-        m_clickTracker.cancel();
-        event.owner = m_session.owner();
-        const Entry* entry = find(event.owner.widget);
-        event.focusGeneration = entry && entry->owner == event.owner ? entry->focusGeneration : 0u;
+        this.m_lastNativeSequence = event.native.sequence;
+        this.m_clickTracker.cancel();
+        event.owner = this.m_session.owner();
+        const auto entry = this.findEntry(event.owner.widget);
+        if(entry.has_value() && entry.value().owner == event.owner)
+            event.focusGeneration = entry.value().focusGeneration;
         event.kind = UiEditBoxEventKind::Native;
-        event.surroundingRevision = m_session.surroundingRevision();
-        event.surroundingModelRevision = m_nativePublished.revision;
-        event.surroundingSelectionGeneration = m_nativePublished.selectionGeneration;
-        event.geometryExternalRevision = m_nativePublished.externalRevision;
-        event.surroundingAnchor = m_nativePublished.anchor;
-        event.surroundingCaret = m_nativePublished.caret;
-        if(event.native.kind == Core::TextInputEventKind::Preedit && !event.native.text.empty())
-            m_context.input().cancelSubmitCommands(event.owner.widget);
-        if(!append(Move(event)))
+        event.surroundingRevision = this.m_session.surroundingRevision();
+        event.surroundingModelRevision = this.m_nativePublished.revision;
+        event.surroundingSelectionGeneration = this.m_nativePublished.selectionGeneration;
+        event.geometryExternalRevision = this.m_nativePublished.externalRevision;
+        event.surroundingAnchor = this.m_nativePublished.anchor;
+        event.surroundingCaret = this.m_nativePublished.caret;
+        if(event.native.kind == TextInputEventKind::Preedit && !event.native.text.empty())
+            this.m_context.input().cancelSubmitCommands(event.owner.widget);
+        if(!this.append(event))
             return;
     }
 }
 
-b8 UiEditBoxHost::prepareSubmit(const Ui::InputEvent& event)noexcept{
-    if(rejectBorrowedMutation() || !m_context.input().canSubmitCommand(event))
+b8 UiEditBoxHost::prepareSubmit(in InputEvent event){
+    if(this.rejectBorrowedMutation() || !this.m_context.input().canSubmitCommand(event))
         return false;
-    const Entry* entry = find(m_context.input().focus());
-    if(!entry || !hasTextFocus())
+    const auto entry = this.findEntry(this.m_context.input().focus());
+    if(!entry.has_value() || !this.hasTextFocus())
         return false;
-    const Ui::InputCommandIntent intent{ event.command, event.extend, event.edit };
-    if(Ui::TranslateEditCommand(intent, false, entry->displayed.textMode).command != Ui::EditCommand::Submit)
+    InputCommandIntent intent;
+    intent.command = event.command;
+    intent.extend = event.extend;
+    intent.edit = event.edit;
+    if(TranslateEditCommand(intent, false, entry.value().displayed.textMode).command != EditCommand::Submit)
         return false;
-    if(compositionActive(*entry)){
-        m_context.input().cancelSubmitCommands(entry->widget.id);
+    if(this.compositionActive(entry.value())){
+        this.m_context.input().cancelSubmitCommands(entry.value().widget.id);
         return false;
     }
     return true;
 }
 
-void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture, const b8 submit){
-    if(rejectBorrowedMutation())
+void UiEditBoxHost::input(in InputEvent input, in WidgetId previousCapture, in b8 submit){
+    if(this.rejectBorrowedMutation())
         return;
-    const b8 selectionRelease = input.type == Ui::InputEventType::PrimaryUp && input.source == m_selectionSource;
-    ScopeExit finishSelection([this, selectionRelease]()noexcept{
-        if(selectionRelease){
-            m_activeSelectionSequence = 0u;
-            m_selectionSource = {};
-        }
-    });
+    const b8 selectionRelease = input.type == InputEventType::PrimaryUp && input.source == this.m_selectionSource;
+    UiEditSelectionRelease finishSelection(this.m_activeSelectionSequence, this.m_selectionSource, selectionRelease);
 
-    if(input.type == Ui::InputEventType::FocusLost){
-        reset();
+    if(input.type == InputEventType::FocusLost){
+        this.reset();
         return;
     }
-    synchronizeFocus();
-    if(input.type == Ui::InputEventType::PointerMove && m_activeSelectionSequence != 0u && input.source == m_selectionSource)
-        m_clickTracker.move(input.position);
-    if(input.type == Ui::InputEventType::PointerCaptureLost){
-        if(m_activeSelectionSequence == 0u || input.source != m_selectionSource)
+    this.synchronizeFocus();
+    if(input.type == InputEventType::PointerMove && this.m_activeSelectionSequence != 0u && input.source == this.m_selectionSource)
+        this.m_clickTracker.move(input.position);
+    if(input.type == InputEventType::PointerCaptureLost){
+        if(this.m_activeSelectionSequence == 0u || input.source != this.m_selectionSource)
             return;
-        m_clickTracker.cancel();
-        for(auto& entry : m_entries){
+        this.m_clickTracker.cancel();
+        for(mut auto entry : this.m_entries){
             entry.dragging = false;
             entry.wordDragging = false;
         }
-        for(usize index = m_events.size(); index > 0u; --index){
-            const Event& event = m_events[index - 1u];
-            if(event.kind == UiEditBoxEventKind::Selection && event.selectionSequence == m_activeSelectionSequence && event.selectionSource == input.source)
-                m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
+        for(usize index = this.m_events.size(); index > 0u; --index){
+            in UiEditBoxEvent event = this.m_events[index - 1u];
+            if(event.kind == UiEditBoxEventKind::Selection && event.selectionSequence == this.m_activeSelectionSequence && event.selectionSource == input.source)
+                this.m_events.erase(this.m_events.begin() + cast<isize>(index - 1u));
         }
-        m_activeSelectionSequence = 0u;
-        m_selectionSource = {};
+        this.m_activeSelectionSequence = 0u;
+        this.m_selectionSource = InputSource();
         return;
     }
-    if(input.type == Ui::InputEventType::CommandDown || input.type == Ui::InputEventType::CommandUp){
-        m_clickTracker.cancel();
-        Entry* entry = find(m_context.input().focus());
-        const b8 released = input.type == Ui::InputEventType::CommandUp;
-        if(!input.edit || !entry || !hasTextFocus() || (released ? !submit : !m_context.input().canEditCommand(input)))
+    if(input.type == InputEventType::CommandDown || input.type == InputEventType::CommandUp){
+        this.m_clickTracker.cancel();
+        auto entry = this.findEntry(this.m_context.input().focus());
+        const b8 released = input.type == InputEventType::CommandUp;
+        if(!input.edit || !entry.has_value() || !this.hasTextFocus() || ((released && !submit) || (!released && !this.m_context.input().canEditCommand(input))))
             return;
-        Event event(m_arena);
-        event.owner = entry->owner;
-        event.focusGeneration = entry->focusGeneration;
+        UiEditBoxEvent event = this.makeEvent();
+        event.owner = entry.value().owner;
+        event.focusGeneration = entry.value().focusGeneration;
         if(released)
-            event.command.command = Ui::EditCommand::Submit;
+            event.command.command = EditCommand::Submit;
         else{
-            const Ui::InputCommandIntent intent{ input.command, input.extend, input.edit };
-            event.command = Ui::TranslateEditCommand(intent, input.repeat, entry->displayed.textMode);
-            if(event.command.command == Ui::EditCommand::Submit){
-                if(compositionActive(*entry))
-                    m_context.input().cancelSubmitCommands(entry->widget.id);
+            InputCommandIntent intent;
+            intent.command = input.command;
+            intent.extend = input.extend;
+            intent.edit = input.edit;
+            event.command = TranslateEditCommand(intent, input.repeat, entry.value().displayed.textMode);
+            if(event.command.command == EditCommand::Submit){
+                if(this.compositionActive(entry.value()))
+                    this.m_context.input().cancelSubmitCommands(entry.value().widget.id);
                 return;
             }
-            const auto navigationDirection = Ui::TryTranslateEditNavigation(intent);
+            const auto navigationDirection = TryTranslateEditNavigation(intent);
             event.navigation = navigationDirection.has_value();
-            if(navigationDirection){
-                event.navigationDirection = *navigationDirection;
-                if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
+            if(navigationDirection.has_value()){
+                event.navigationDirection = navigationDirection.value();
+                if(entry.value().navigationInstanceGeneration == 0u || entry.value().displayed.textMode != EditTextMode::Multiline)
                     return;
-                event.navigationViewportHeight = entry->displayed.placement.content.height;
+                event.navigationViewportHeight = entry.value().displayed.placement.content.height;
             }
-            else if(event.command.command == Ui::EditCommand::None)
+            else if(event.command.command == EditCommand::None)
                 return;
         }
-        if(!append(Move(event)))
+        if(!this.append(event))
             return;
     }
-    else if((input.type == Ui::InputEventType::PrimaryDown || input.type == Ui::InputEventType::PrimaryUp || input.type == Ui::InputEventType::PointerMove) && (input.type != Ui::InputEventType::PointerMove || previousCapture.valid())){
-        if(input.type == Ui::InputEventType::PrimaryDown){
-            m_activeSelectionSequence = AdvanceUiEditSelectionSequence(m_selectionSequence);
-            m_selectionSource = input.source;
+    else if((input.type == InputEventType::PrimaryDown || input.type == InputEventType::PrimaryUp || input.type == InputEventType::PointerMove) && (input.type != InputEventType::PointerMove || previousCapture.valid())){
+        if(input.type == InputEventType::PrimaryDown){
+            this.m_activeSelectionSequence = AdvanceUiEditSelectionSequence(this.m_selectionSequence);
+            this.m_selectionSource = input.source;
         }
-        else if(m_activeSelectionSequence == 0u || input.source != m_selectionSource)
+        else if(this.m_activeSelectionSequence == 0u || input.source != this.m_selectionSource)
             return;
-        const Ui::WidgetId target = input.type == Ui::InputEventType::PrimaryDown ? m_context.input().focus() : previousCapture;
-        if(input.type == Ui::InputEventType::PrimaryDown && m_context.input().capture() != target){
-            m_clickTracker.cancel();
-            return;
-        }
-        Entry* entry = find(target);
-        if(!entry){
-            m_clickTracker.cancel();
+        WidgetId target = previousCapture;
+        if(input.type == InputEventType::PrimaryDown)
+            target = this.m_context.input().focus();
+        if(input.type == InputEventType::PrimaryDown && this.m_context.input().capture() != target){
+            this.m_clickTracker.cancel();
             return;
         }
-        const auto byte = UiEditGeometry().hitCaret(entry->displayed, entry->owner, entry->popup, input.position);
-        if(!byte){
-            m_clickTracker.cancel();
+        auto entry = this.findEntry(target);
+        if(!entry.has_value()){
+            this.m_clickTracker.cancel();
             return;
         }
-        const auto wordByte = UiEditGeometry().hitWord(entry->displayed, entry->owner, entry->popup, input.position);
-        if(!wordByte){
-            m_clickTracker.cancel();
+        const auto byte = UiEditGeometry().hitCaret(entry.value().displayed, entry.value().owner, entry.value().popup, input.position);
+        if(!byte.has_value()){
+            this.m_clickTracker.cancel();
             return;
         }
-        Event event(m_arena);
-        event.owner = entry->owner;
-        event.focusGeneration = entry->focusGeneration;
+        const auto wordByte = UiEditGeometry().hitWord(entry.value().displayed, entry.value().owner, entry.value().popup, input.position);
+        if(!wordByte.has_value()){
+            this.m_clickTracker.cancel();
+            return;
+        }
+        UiEditBoxEvent event = this.makeEvent();
+        event.owner = entry.value().owner;
+        event.focusGeneration = entry.value().focusGeneration;
         event.kind = UiEditBoxEventKind::Selection;
-        event.selectionSequence = m_activeSelectionSequence;
-        event.selectionSource = m_selectionSource;
-        event.position = *byte;
-        event.wordPosition = *wordByte;
-        event.geometryRevision = entry->displayed.revision;
-        event.geometryExternalRevision = entry->displayed.externalRevision;
+        event.selectionSequence = this.m_activeSelectionSequence;
+        event.selectionSource = this.m_selectionSource;
+        event.position = byte.value();
+        event.wordPosition = wordByte.value();
+        event.geometryRevision = entry.value().displayed.revision;
+        event.geometryExternalRevision = entry.value().displayed.externalRevision;
         event.extend = input.extend;
-        event.dragging = input.type != Ui::InputEventType::PrimaryDown;
-        event.completed = input.type == Ui::InputEventType::PrimaryUp;
-        if(input.type == Ui::InputEventType::PrimaryDown){
-            const u64 clickTimestampMs = input.hoverCapable ? input.timestampMs : 0u;
-            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, clickTimestampMs, input.extend) == UiEditClickKind::Word;
+        event.dragging = input.type != InputEventType::PrimaryDown;
+        event.completed = input.type == InputEventType::PrimaryUp;
+        if(input.type == InputEventType::PrimaryDown){
+            u64 clickTimestampMs = 0u;
+            if(input.hoverCapable)
+                clickTimestampMs = input.timestampMs;
+            event.wordSelect = this.m_clickTracker.press(entry.value().owner, entry.value().popup, entry.value().displayed.revision, entry.value().displayed.externalRevision, input.position, clickTimestampMs, input.extend) == UiEditClickKind::Word;
         }
-        else if(input.type == Ui::InputEventType::PrimaryUp)
-            m_clickTracker.release(entry->owner);
-        if(!append(Move(event)))
+        else if(input.type == InputEventType::PrimaryUp)
+            this.m_clickTracker.release(entry.value().owner);
+        if(!this.append(event))
             return;
     }
-    else if(input.type == Ui::InputEventType::PointerLeave || input.type == Ui::InputEventType::SecondaryDown)
-        m_clickTracker.cancel();
-    synchronizeFocus();
+    else if(input.type == InputEventType::PointerLeave || input.type == InputEventType::SecondaryDown)
+        this.m_clickTracker.cancel();
+    this.synchronizeFocus();
 }
 
-b8 UiEditBoxHost::character(const u32 unicode){
-    if(rejectBorrowedMutation())
+b8 UiEditBoxHost::character(in u32 unicode){
+    if(this.rejectBorrowedMutation())
         return false;
-    synchronizeFocus();
-    if(!hasTextFocus())
+    this.synchronizeFocus();
+    if(!this.hasTextFocus())
         return false;
-    if(m_session.token().valid())
+    if(this.m_session.token().valid())
         return true;
     if(!IsTextInputCodePoint(unicode))
         return true;
-    const Entry& entry = *MakeNotNull(find(m_context.input().focus()));
-    Event event(m_arena);
+    in UiEditBoxEntry entry = this.findEntry(this.m_context.input().focus()).value();
+    UiEditBoxEvent event = this.makeEvent();
     event.kind = UiEditBoxEventKind::Character;
     event.owner = entry.owner;
     event.focusGeneration = entry.focusGeneration;
-    Array<char, s_Utf8MaxSequenceBytes> bytes{};
-    const auto count = EncodeUtf8CodePoint(unicode, bytes);
-    if(!count)
+    if(!EncodeUtf8CodePoint(unicode, event.native.text))
         return true;
-    event.native.text.assign(bytes.data(), *count);
-    m_clickTracker.cancel();
-    if(!append(Move(event)))
+    this.m_clickTracker.cancel();
+    if(!this.append(event))
         return true;
     return true;
 }
 
-b8 UiEditBoxHost::pastePrimary(const Ui::Point position){
-    if(rejectBorrowedMutation())
+b8 UiEditBoxHost::pastePrimary(in Point position){
+    if(this.rejectBorrowedMutation())
         return false;
-    synchronizeFocus();
-    const Ui::WidgetId target = m_context.input().hitTest(position);
-    Entry* entry = find(target);
-    if(!entry || !hasTextFocus() || m_context.input().focus() != target)
+    this.synchronizeFocus();
+    const WidgetId target = this.m_context.input().hitTest(position);
+    auto entry = this.findEntry(target);
+    if(!entry.has_value() || !this.hasTextFocus() || this.m_context.input().focus() != target)
         return false;
-    m_clickTracker.cancel();
-    Event event(m_arena);
-    event.owner = entry->owner;
-    event.focusGeneration = entry->focusGeneration;
+    this.m_clickTracker.cancel();
+    UiEditBoxEvent event = this.makeEvent();
+    event.owner = entry.value().owner;
+    event.focusGeneration = entry.value().focusGeneration;
     event.kind = UiEditBoxEventKind::PastePrimary;
-    return append(Move(event));
+    return this.append(event);
 }
 
-b8 UiEditBoxHost::hasTextFocus()const noexcept{
-    return focusedTextEntry() != nullptr;
+b8 UiEditBoxHost::hasTextFocus()const{
+    return this.focusedTextEntry().has_value();
 }
 
-b8 UiEditBoxHost::wantsTextInput()const noexcept{
-    if(!m_context.input().windowFocused())
+b8 UiEditBoxHost::wantsTextInput()const{
+    if(!this.m_context.input().windowFocused())
         return false;
-    const Entry* entry = focusedTextEntry();
-    return entry && !entry->displayed.options.readOnly;
+    const auto entry = this.focusedTextEntry();
+    return entry.has_value() && !entry.value().displayed.options.readOnly;
 }
 
-b8 UiEditBoxHost::takeClipboardFailure()noexcept{
-    if(rejectBorrowedMutation())
+b8 UiEditBoxHost::takeClipboardFailure(){
+    if(this.rejectBorrowedMutation())
         return false;
-    const b8 failed = m_clipboardFailure;
-    m_clipboardFailure = false;
+    const b8 failed = this.m_clipboardFailure;
+    this.m_clipboardFailure = false;
     return failed;
 }
 
 void UiEditBoxHost::synchronizeFocus(){
-    if(rejectBorrowedMutation())
+    if(this.rejectBorrowedMutation())
         return;
-    const Entry* entry = focusedTextEntry();
-    const b8 focused = entry != nullptr;
-    m_clickTracker.retainFocus(focused ? entry->owner : UiTextEditOwner{});
-    for(auto& candidate : m_entries){
-        const b8 active = focused && candidate.owner == entry->owner;
+    const auto entry = this.focusedTextEntry();
+    const b8 focused = entry.has_value();
+    UiTextEditOwner focusedOwner;
+    if(focused)
+        focusedOwner = entry.value().owner;
+    this.m_clickTracker.retainFocus(focusedOwner);
+    for(mut auto candidate : this.m_entries){
+        const b8 active = focused && candidate.owner == entry.value().owner;
         if(candidate.actionCapable){
             if(active && !candidate.focused){
                 candidate.focused = true;
-                candidate.focusGeneration = nextFocusGeneration();
+                candidate.focusGeneration = this.nextFocusGeneration();
                 if(candidate.navigationInstanceGeneration != 0u){
-                    Event event(m_arena);
+                    UiEditBoxEvent event = this.makeEvent();
                     event.owner = candidate.owner;
                     event.focusGeneration = candidate.focusGeneration;
                     event.kind = UiEditBoxEventKind::Focus;
-                    if(!append(Move(event)))
+                    if(!this.append(event))
                         return;
                 }
             }
             else if(!active && candidate.focused){
-                Event event(m_arena);
+                UiEditBoxEvent event = this.makeEvent();
                 event.owner = candidate.owner;
                 event.focusGeneration = candidate.focusGeneration;
                 event.kind = UiEditBoxEventKind::Blur;
                 candidate.focused = false;
-                if(!append(Move(event)))
+                if(!this.append(event))
                     return;
             }
         }
         if(active)
             continue;
         if(!candidate.actionCapable)
-            discard(candidate.owner);
+            this.discard(candidate.owner);
         candidate.dragging = false;
         candidate.wordDragging = false;
     }
-    if(ShouldCancelUnfocusedUiEditTransfers(focused, focused ? entry->owner : UiTextEditOwner{}, m_session.token().valid(), m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
-        cancelTransfers();
+    if(ShouldCancelUnfocusedUiEditTransfers(focused, focusedOwner, this.m_session.token().valid(), this.m_session.owner(), this.m_clipboard.pending(), this.m_clipboardOwner, this.m_primary.pending(), this.m_primaryOwner))
+        this.cancelTransfers();
 }
 
 void UiEditBoxHost::reset(){
-    if(rejectBorrowedMutation())
+    if(this.rejectBorrowedMutation())
         return;
-    cancelTransfers();
-    m_clickTracker.cancel();
-    m_activeSelectionSequence = 0u;
-    m_selectionSource = {};
-    m_entries.clear();
-    m_events.clear();
-    m_queuedTextBytes = 0u;
-    m_context.input().clearFocus();
+    this.cancelTransfers();
+    this.m_clickTracker.cancel();
+    this.m_activeSelectionSequence = 0u;
+    this.m_selectionSource = InputSource();
+    this.m_entries.clear();
+    this.m_events.clear();
+    this.m_queuedTextBytes = 0u;
+    this.m_context.input().clearFocus();
 }
 
-template<typename HostT>
-static auto* FindEditBoxEntry(HostT& entries, const Ui::WidgetId widget)noexcept{
-    for(auto& entry : entries){
-        if(entry.widget.id == widget)
-            return &entry;
+Optional<mut UiEditBoxEntry> UiEditBoxHost::findEntry(in WidgetId widget){
+    for(usize index = 0u; index < this.m_entries.size(); ++index){
+        if(this.m_entries[index].widget.id == widget)
+            return Optional<mut UiEditBoxEntry>(this.m_entries[index]);
     }
-    return static_cast<decltype(&entries[0])>(nullptr);
+    return Optional<mut UiEditBoxEntry>();
 }
 
-UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)noexcept{
-    return FindEditBoxEntry(m_entries, widget);
+Optional<in UiEditBoxEntry> UiEditBoxHost::findConstEntry(in WidgetId widget)const{
+    for(usize index = 0u; index < this.m_entries.size(); ++index){
+        if(this.m_entries[index].widget.id == widget)
+            return Optional<in UiEditBoxEntry>(this.m_entries[index]);
+    }
+    return Optional<in UiEditBoxEntry>();
 }
 
-const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const noexcept{
-    return FindEditBoxEntry(m_entries, widget);
+Optional<in UiEditBoxEntry> UiEditBoxHost::focusedTextEntry()const{
+    const auto entry = this.findConstEntry(this.m_context.input().focus());
+    if(!entry.has_value() || !UiEditGeometry().focusedReady(entry.value().displayed, entry.value().owner, entry.value().popup))
+        return Optional<in UiEditBoxEntry>();
+    const auto target = this.m_context.input().findTarget(entry.value().widget.id, entry.value().owner.declarationGeneration);
+    if(target.has_value() && target.value().enabled && target.value().textEditable && target.value().popup == entry.value().popup)
+        return entry;
+    return Optional<in UiEditBoxEntry>();
 }
 
-const UiEditBoxHost::Entry* UiEditBoxHost::focusedTextEntry()const noexcept{
-    const Entry* entry = find(m_context.input().focus());
-    if(!entry || !UiEditGeometry().focusedReady(entry->displayed, entry->owner, entry->popup))
-        return nullptr;
-    const Ui::HitTarget* target = m_context.input().findTarget(entry->widget.id, entry->owner.declarationGeneration);
-    return target && target->enabled && target->textEditable && target->popup == entry->popup ? entry : nullptr;
-}
-
-b8 UiEditBoxHost::append(Event&& event){
-    if(!CanAppendUiEditBoxEvent(m_events.size(), Ui::s_InputMaxEvents, event.native.text.size(), m_queuedTextBytes, Core::s_TextInputMaxQueuedTextBytes)){
-        reset();
+b8 UiEditBoxHost::append(mut UiEditBoxEvent event){
+    if(!CanAppendUiEditBoxEvent(this.m_events.size(), s_InputMaxEvents, event.native.text.size(), this.m_queuedTextBytes, s_TextInputMaxQueuedTextBytes)){
+        this.reset();
         return false;
     }
-    m_queuedTextBytes += event.native.text.size();
-    m_events.push_back(Move(event));
+    this.m_queuedTextBytes += event.native.text.size();
+    this.m_events.emplace_back();
+    MoveInto<UiEditBoxEvent>(this.m_events[this.m_events.size() - 1u], event);
     return true;
 }
 
-b8 UiEditBoxHost::compositionActive(const Entry& entry)const noexcept{
+b8 UiEditBoxHost::compositionActive(in UiEditBoxEntry entry)const{
     b8 composing = entry.expected.m_expectedComposition.active;
-    for(const Event& event : m_events){
+    for(in UiEditBoxEvent event : this.m_events){
         if(event.owner != entry.owner || event.focusGeneration != entry.focusGeneration)
             continue;
         composing = ResolveNextUiEditCompositionState(
             composing,
             event.kind,
-            static_cast<u8>(event.native.kind),
-            static_cast<u8>(Core::TextInputEventKind::Preedit),
-            static_cast<u8>(Core::TextInputEventKind::Cancelled),
-            static_cast<u8>(Core::TextInputEventKind::Commit),
+            cast<u8>(event.native.kind),
+            cast<u8>(TextInputEventKind::Preedit),
+            cast<u8>(TextInputEventKind::Cancelled),
+            cast<u8>(TextInputEventKind::Commit),
             event.native.text.empty(),
-            event.command.command == Ui::EditCommand::Cancel
+            event.command.command == EditCommand::Cancel
         );
     }
     return composing;
 }
 
-void UiEditBoxHost::discard(const UiTextEditOwner& owner)noexcept{
-    for(usize index = m_events.size(); index > 0u; --index){
-        if(m_events[index - 1u].owner == owner){
-            m_queuedTextBytes -= m_events[index - 1u].native.text.size();
-            m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
+void UiEditBoxHost::discard(in UiTextEditOwner owner){
+    for(usize index = this.m_events.size(); index > 0u; --index){
+        if(this.m_events[index - 1u].owner == owner){
+            this.m_queuedTextBytes -= this.m_events[index - 1u].native.text.size();
+            this.m_events.erase(this.m_events.begin() + cast<isize>(index - 1u));
         }
     }
 }
 
-b8 UiEditBoxHost::rejectBorrowedMutation()noexcept{
-    if(!m_borrowed)
+b8 UiEditBoxHost::rejectBorrowedMutation(){
+    if(!this.m_borrowed)
         return false;
-    m_borrowRejected = true;
+    this.m_borrowRejected = true;
     return true;
 }
 
-u64 UiEditBoxHost::nextFocusGeneration()noexcept{
-    return AdvanceUiEditFocusGeneration(m_focusGeneration);
+u64 UiEditBoxHost::nextFocusGeneration(){
+    return AdvanceUiEditFocusGeneration(this.m_focusGeneration);
 }
 
 void UiEditBoxHost::cancelTransfers(){
-    const b8 text = m_session.cancel();
-    const b8 clipboard = m_clipboard.cancel();
-    const b8 primary = m_primary.cancel();
+    const b8 text = this.m_session.cancel();
+    const b8 clipboard = this.m_clipboard.cancel();
+    const b8 primary = this.m_primary.cancel();
     if(!text || !clipboard || !primary)
         TerminateInvariant();
 }
 
 void UiEditBoxHost::drainPublications(){
-    const auto completion = m_publications.drain();
-    m_clipboardFailure |= completion.failed != 0u || completion.status == UiClipboardPublicationStatus::WrongThread;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    const auto completion = this.m_publications.drain();
+    this.m_clipboardFailure |= completion.failed != 0u || completion.status == UiClipboardPublicationStatus::WrongThread;
 }
 
 

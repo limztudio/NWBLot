@@ -2,163 +2,360 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/caustic/rt_caustic_state.adhd>
+#include <impl/ecs_render/gi/rt_surfel_gi_state.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/refraction/rt_refraction_state.adhd>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_state.adhd>
+#include <impl/ecs_render/shadow/rt_shadow_state.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/caustic/rt_caustic_state.adhd.h>
-#include <impl/ecs_render/gi/rt_surfel_gi_state.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/refraction/rt_refraction_state.adhd.h>
-#include <impl/ecs_render/shadow/hardware_transparent_shadow_state.adhd.h>
-#include <impl/ecs_render/shadow/rt_shadow_state.adhd.h>
-
-#include <core/graphics/rhi/device.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Feature-state bases preserve existing m_* access.
-
-struct RtSceneBvhState{
-    usize m_tlasMaxInstances = 0u;
+class RtSceneBvhState{
+    public usize m_tlasMaxInstances = 0u;
     // Runtime meshes invalidate static-scene reuse because their BVHs can update in place.
-    u64 m_tlasStaticSceneHash = 0u;
-    u64 m_sceneSwBvhStaticSceneHash = 0u;
-    usize m_bvhSortCapacity = 0u;
-    usize m_bvhBuildCapacity = 0u;
-    usize m_sceneBvhNodeCapacity = 0u;
-    usize m_sceneInstanceCapacity = 0u;
+    public u64 m_tlasStaticSceneHash = 0u;
+    public u64 m_sceneSwBvhStaticSceneHash = 0u;
+    public usize m_bvhSortCapacity = 0u;
+    public usize m_bvhBuildCapacity = 0u;
+    public usize m_sceneBvhNodeCapacity = 0u;
+    public usize m_sceneInstanceCapacity = 0u;
 
-    Core::RayTracingAccelStructHandle m_tlas;
-    Core::BindingLayoutHandle m_bvhSortBindingLayout;
-    Core::ShaderHandle m_bvhSortShader;
-    Core::ComputePipelineHandle m_bvhSortPipeline;
-    Core::BufferHandle m_bvhSortKeysBuffer;
-    Core::BufferHandle m_bvhSortPayloadBuffer;
-    Core::BindingLayoutHandle m_bvhBuildBindingLayout;
-    Core::ShaderHandle m_bvhMortonShader;
-    Core::ComputePipelineHandle m_bvhMortonPipeline;
-    Core::ShaderHandle m_bvhTopologyShader;
-    Core::ComputePipelineHandle m_bvhTopologyPipeline;
-    Core::ShaderHandle m_bvhFitShader;
-    Core::ComputePipelineHandle m_bvhFitPipeline;
-    Core::BufferHandle m_bvhVisitCounterBuffer;
-    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built binned-SAH scene/instance BVH (TLAS-analog), uploaded when inputs change
-    Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + reserved ABI word + BVH leaf cost
-    Core::BufferHandle m_rayTraceMaterialContextSlotsBuffer;
+    public RayTracingAccelStructHandle m_tlas;
+    public BindingLayoutHandle m_bvhSortBindingLayout;
+    public ShaderHandle m_bvhSortShader;
+    public ComputePipelineHandle m_bvhSortPipeline;
+    public BufferHandle m_bvhSortKeysBuffer;
+    public BufferHandle m_bvhSortPayloadBuffer;
+    public BindingLayoutHandle m_bvhBuildBindingLayout;
+    public ShaderHandle m_bvhMortonShader;
+    public ComputePipelineHandle m_bvhMortonPipeline;
+    public ShaderHandle m_bvhTopologyShader;
+    public ComputePipelineHandle m_bvhTopologyPipeline;
+    public ShaderHandle m_bvhFitShader;
+    public ComputePipelineHandle m_bvhFitPipeline;
+    public BufferHandle m_bvhVisitCounterBuffer;
+    public BufferHandle m_sceneBvhNodeBuffer;  // CPU-built binned-SAH scene/instance BVH (TLAS-analog), uploaded when inputs change
+    public BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + reserved ABI word + BVH leaf cost
+    public BufferHandle m_rayTraceMaterialContextSlotsBuffer;
     // Current CSG ray geometry is independent of retained light-space capture generations.
-    Core::BufferHandle m_csgTraceContextBuffer;
+    public BufferHandle m_csgTraceContextBuffer;
 
     // Replacement TLASs get fresh handles so recorded work retains the old generation.
-    Core::GpuDescriptorHandle m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    u32 m_tlasInstanceCount = 0u;
-    u32 m_sceneBvhInstanceCount = 0u;
+    public GpuDescriptorHandle m_csgTraceContextHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle m_tlasHeapHandle = GpuDescriptorHandleInvalid();
+    public u32 m_tlasInstanceCount = 0u;
+    public u32 m_sceneBvhInstanceCount = 0u;
     // Capacity replacement gives sort buffers fresh heap generations.
-    Core::GpuDescriptorHandle m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    public GpuDescriptorHandle m_bvhSortKeysHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle m_bvhSortPayloadHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle m_bvhVisitCounterHeapHandle = GpuDescriptorHandleInvalid();
     // Global StorageBuffer heap views selected by the common trace-context slot cbuffer for SW shadow, GI, and caustics.
-    Core::GpuDescriptorHandle m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    public GpuDescriptorHandle m_sceneBvhNodeHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle m_sceneInstanceHeapHandle = GpuDescriptorHandleInvalid();
     // One context-slot descriptor shared by all ray-tracing effects.
-    Core::GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    public GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = GpuDescriptorHandleInvalid();
 
-    b8 m_tlasStaticSceneHashValid = false;
-    b8 m_sceneSwBvhStaticSceneHashValid = false;
+    public b8 m_tlasStaticSceneHashValid = false;
+    public b8 m_sceneSwBvhStaticSceneHashValid = false;
     // A new backing generation stays Common until accepted Shadow Preparation publishes its final state.
-    b8 m_tlasBackingFresh = false;
+    public b8 m_tlasBackingFresh = false;
     // The selected tracing backend prepares transparency only when the scene requires it.
-    b8 m_sceneHasTransparentOccluder = false;
-    b8 m_capabilityLogged = false;
-    b8 m_bvhSortPipelineFailed = false;
-    b8 m_bvhBuildPipelineFailed = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState{
-public:
-    // RtShadowState needs the renderer arena for its persistent tables.
-    explicit RendererRayTracingState(Core::Alloc::GlobalArena& arena)
-        : RtShadowState(arena)
-    {}
-
-
-public:
-    [[nodiscard]] RayTracingFrameCpuStateSnapshot captureFrameCpuState()const noexcept;
-    void restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    void restoreSurfelGiPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    void restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    void invalidateResources()noexcept;
-
-
-public:
-    HardwareTransparentShadowState m_hardwareTransparentShadow;
-    RtRefractionState m_refraction;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 m_sceneHasTransparentOccluder = false;
+    public b8 m_capabilityLogged = false;
+    public b8 m_bvhSortPipelineFailed = false;
+    public b8 m_bvhBuildPipelineFailed = false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::RendererRayTracingState")]
-extern class RendererRayTracingState{
-    usize m_tlasMaxInstances;
-    u64 m_tlasStaticSceneHash;
-    u64 m_sceneSwBvhStaticSceneHash;
-    usize m_sceneBvhNodeCapacity;
-    usize m_sceneInstanceCapacity;
-    RayTracingAccelStructHandle m_tlas;
-    BufferHandle m_sceneBvhNodeBuffer;
-    BufferHandle m_sceneInstanceBuffer;
-    GpuDescriptorHandle m_tlasHeapHandle;
-    u32 m_sceneBvhInstanceCount;
-    GpuDescriptorHandle m_sceneBvhNodeHeapHandle;
-    GpuDescriptorHandle m_sceneInstanceHeapHandle;
-    b8 m_tlasStaticSceneHashValid;
-    b8 m_sceneSwBvhStaticSceneHashValid;
-    b8 m_tlasBackingFresh;
-    u64 m_hwShadowMaterialContextHash;
-    u64 m_swShadowMaterialContextHash;
-    usize m_shadowInstanceMaterialCapacity;
-    usize m_shadowInstanceCapacity;
-    usize m_shadowMaterialTypedCapacity;
-    BufferHandle m_shadowInstanceMaterialBuffer;
-    BufferHandle m_shadowInstanceBuffer;
-    BufferHandle m_shadowMaterialTypedBuffer;
-    GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle;
-    GpuDescriptorHandle m_shadowInstanceHeapHandle;
-    GpuDescriptorHandle m_shadowMaterialTypedHeapHandle;
-    b8 m_hwShadowMaterialContextHashValid;
-    b8 m_swShadowMaterialContextHashValid;
+class RendererRayTracingState : NoCopy{
+    public RtSceneBvhState sceneBvh;
+    public RtShadowState shadow;
+    public RtSoftShadowState softShadow;
+    public RtCausticState caustics;
+    public RtSurfelGiState surfelGi;
+    public HardwareTransparentShadowState m_hardwareTransparentShadow;
+    public RtRefractionState m_refraction;
+
+    public RendererRayTracingState(){}
+
+    public RayTracingFrameCpuStateSnapshot captureFrameCpuState()const{
+        RayTracingFrameCpuStateSnapshot snapshot;
+        snapshot.surfelCountReadbackSubmissionToken = this.surfelGi.m_surfelCountReadbackSubmissionToken;
+        snapshot.softShadowFrameIndex = this.softShadow.m_softShadowFrameIndex;
+        snapshot.surfelFrameIndex = this.surfelGi.m_surfelFrameIndex;
+        snapshot.surfelCountReadbackFrame = this.surfelGi.m_surfelCountReadbackFrame;
+        snapshot.softShadowSlotMask = this.softShadow.m_softShadowSlotMask;
+        snapshot.causticLightCount = this.caustics.m_causticLightCount;
+        snapshot.swShadowDispatchLogged = this.shadow.m_swShadowDispatchLogged;
+        snapshot.causticAccumulatorInitialized = this.caustics.m_causticAccumulatorInitialized;
+        snapshot.swCausticDispatchLogged = this.caustics.m_swCausticDispatchLogged;
+        snapshot.hwCausticDispatchLogged = this.caustics.m_hwCausticDispatchLogged;
+        snapshot.causticEmissionGateLogged = this.caustics.m_causticEmissionGateLogged;
+        snapshot.surfelSeeded = this.surfelGi.m_surfelSeeded;
+        return snapshot;
+    }
+
+    public void restoreShadowPacketCpuState(in RayTracingFrameCpuStateSnapshot snapshot){
+        this.softShadow.m_softShadowFrameIndex = snapshot.softShadowFrameIndex;
+        this.shadow.m_swShadowDispatchLogged = snapshot.swShadowDispatchLogged;
+    }
+
+    public void restoreCausticPacketCpuState(in RayTracingFrameCpuStateSnapshot snapshot){
+        this.caustics.m_causticAccumulatorInitialized = snapshot.causticAccumulatorInitialized;
+        this.caustics.m_swCausticDispatchLogged = snapshot.swCausticDispatchLogged;
+        this.caustics.m_hwCausticDispatchLogged = snapshot.hwCausticDispatchLogged;
+        this.caustics.m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
+    }
+
+    public void restoreSurfelGiPacketCpuState(in RayTracingFrameCpuStateSnapshot snapshot){
+        this.surfelGi.m_surfelFrameIndex = snapshot.surfelFrameIndex;
+        this.surfelGi.m_surfelSeeded = snapshot.surfelSeeded;
+        this.surfelGi.m_surfelCountReadbackFrame = snapshot.surfelCountReadbackFrame;
+        this.surfelGi.m_surfelCountReadbackSubmissionToken = snapshot.surfelCountReadbackSubmissionToken;
+    }
+
+    public void restorePreparedLightingCpuState(in RayTracingFrameCpuStateSnapshot snapshot){
+        this.softShadow.m_softShadowSlotMask = snapshot.softShadowSlotMask;
+        this.caustics.m_causticLightCount = snapshot.causticLightCount;
+        this.caustics.m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
+    }
+
+    public void invalidateResources(){
+        this.m_hardwareTransparentShadow = HardwareTransparentShadowState();
+        this.m_refraction.invalidateResources();
+        // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
+        this.sceneBvh.m_tlas.reset();
+        this.sceneBvh.m_tlasBackingFresh = false;
+        this.sceneBvh.m_tlasHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_tlasMaxInstances = 0u;
+        this.sceneBvh.m_tlasInstanceCount = 0u;
+        this.sceneBvh.m_tlasStaticSceneHash = 0u;
+        this.sceneBvh.m_sceneSwBvhStaticSceneHash = 0u;
+        this.sceneBvh.m_tlasStaticSceneHashValid = false;
+        this.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
+        this.shadow.m_hwShadowMaterialContextHash = 0u;
+        this.shadow.m_swShadowMaterialContextHash = 0u;
+        this.shadow.m_hwShadowMaterialContextHashValid = false;
+        this.shadow.m_swShadowMaterialContextHashValid = false;
+        this.shadow.m_shadowShader.reset();
+        this.shadow.m_shadowPipeline.reset();
+        this.shadow.m_shadowBindingLayout.reset();
+        this.softShadow.m_shadowSoftShader.reset();
+        this.softShadow.m_shadowSoftPipeline.reset();
+        this.shadow.m_shadowMeshCount = 0u;
+        this.shadow.m_shadowMeshIndexBuffers.clear();
+        this.shadow.m_shadowMeshAttributeBuffers.clear();
+        this.shadow.m_shadowMeshPositionBuffers.clear();
+        this.shadow.m_shadowMeshIndexHandles.clear();
+        this.shadow.m_shadowMeshAttributeHandles.clear();
+        this.shadow.m_shadowMeshPositionHandles.clear();
+        this.shadow.m_shadowInstanceMaterialBuffer.reset();
+        this.shadow.m_shadowInstanceMaterialHeapHandle = GpuDescriptorHandleInvalid();
+        this.shadow.m_shadowInstanceMaterialCapacity = 0u;
+        this.shadow.m_shadowInstanceBuffer.reset();
+        this.shadow.m_shadowMaterialTypedBuffer.reset();
+        this.shadow.m_shadowInstanceHeapHandle = GpuDescriptorHandleInvalid();
+        this.shadow.m_shadowMaterialTypedHeapHandle = GpuDescriptorHandleInvalid();
+        this.shadow.m_shadowInstanceCapacity = 0u;
+        this.shadow.m_shadowMaterialTypedCapacity = 0u;
+        this.sceneBvh.m_bvhSortBindingLayout.reset();
+        this.sceneBvh.m_bvhSortShader.reset();
+        this.sceneBvh.m_bvhSortPipeline.reset();
+        this.sceneBvh.m_bvhSortKeysBuffer.reset();
+        this.sceneBvh.m_bvhSortPayloadBuffer.reset();
+        this.sceneBvh.m_bvhSortKeysHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_bvhSortPayloadHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_bvhSortCapacity = 0u;
+        this.sceneBvh.m_bvhBuildBindingLayout.reset();
+        this.sceneBvh.m_bvhMortonShader.reset();
+        this.sceneBvh.m_bvhMortonPipeline.reset();
+        this.sceneBvh.m_bvhTopologyShader.reset();
+        this.sceneBvh.m_bvhTopologyPipeline.reset();
+        this.sceneBvh.m_bvhFitShader.reset();
+        this.sceneBvh.m_bvhFitPipeline.reset();
+        this.sceneBvh.m_bvhVisitCounterBuffer.reset();
+        this.sceneBvh.m_bvhVisitCounterHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_bvhBuildCapacity = 0u;
+        this.sceneBvh.m_sceneBvhNodeBuffer.reset();
+        this.sceneBvh.m_sceneInstanceBuffer.reset();
+        this.sceneBvh.m_sceneBvhNodeHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_sceneInstanceHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_rayTraceMaterialContextSlotsBuffer.reset();
+        this.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_csgTraceContextBuffer.reset();
+        this.sceneBvh.m_csgTraceContextHeapHandle = GpuDescriptorHandleInvalid();
+        for(mut QueueSubmissionToken token : this.shadow.m_rayTraceContextReadSubmissionTokens)
+            token = QueueSubmissionToken();
+        this.sceneBvh.m_sceneBvhNodeCapacity = 0u;
+        this.sceneBvh.m_sceneInstanceCapacity = 0u;
+        this.sceneBvh.m_sceneBvhInstanceCount = 0u;
+        this.caustics.m_causticEmissionTargets.reset();
+        this.caustics.m_causticRefractiveInstanceCount = 0u;
+        this.caustics.m_causticLightCount = 0u;
+        this.caustics.m_causticTargetBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.caustics.m_causticTargetBoundsMax = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.caustics.m_causticEmissionGateLogged = false;
+        this.shadow.m_swShadowBindingLayout.reset();
+        this.shadow.m_swShadowOpaquePrepassShader.reset();
+        this.shadow.m_swShadowOpaquePrepassPipeline.reset();
+        this.shadow.m_swShadowSoftOpaqueShader.reset();
+        this.shadow.m_swShadowSoftOpaquePipeline.reset();
+        this.shadow.m_swShadowTransparentCoarseShader.reset();
+        this.shadow.m_swShadowTransparentCoarsePipeline.reset();
+        this.shadow.m_swShadowTransparentResolveShader.reset();
+        this.shadow.m_swShadowTransparentResolvePipeline.reset();
+        this.shadow.m_swShadowTransparentClassifyShader.reset();
+        this.shadow.m_swShadowTransparentClassifyPipeline.reset();
+        this.shadow.m_swShadowTransparentBuildArgsShader.reset();
+        this.shadow.m_swShadowTransparentBuildArgsPipeline.reset();
+        this.shadow.m_swShadowTransparentIndirectShader.reset();
+        this.shadow.m_swShadowTransparentIndirectPipeline.reset();
+        this.shadow.m_swShadowMeshCount = 0u;
+        this.shadow.m_swShadowMeshNodeBuffers.clear();
+        this.shadow.m_swShadowMeshPositionBuffers.clear();
+        this.shadow.m_swShadowMeshIndexBuffers.clear();
+        this.shadow.m_swShadowMeshAttributeBuffers.clear();
+        this.shadow.m_swShadowMeshNodeHandles.clear();
+        this.shadow.m_swShadowMeshPositionHandles.clear();
+        this.shadow.m_swShadowMeshIndexHandles.clear();
+        this.shadow.m_swShadowMeshAttributeHandles.clear();
+        // Drop pinned handle caches so teardown leaves no dangling handles.
+        this.shadow.m_hwMeshHeapHandleCache.clear();
+        this.shadow.m_swMeshHeapHandleCache.clear();
+        this.shadow.m_softwareTransparentSampling = SoftwareTransparentSamplingState();
+        this.softShadow.m_softShadowFrameIndex = 0u;
+        this.softShadow.m_softShadowSlotMask = 0u;
+        this.shadow.m_softShadowResolve = SoftShadowResolveState();
+        this.softShadow.m_shadowGeometryDownsampleBindingLayout.reset();
+        this.softShadow.m_shadowGeometryDownsampleShader.reset();
+        this.softShadow.m_shadowGeometryDownsamplePipeline.reset();
+        this.softShadow.m_shadowGeometryDownsamplePipelineFailed = false;
+        this.softShadow.m_softShadowReady = false;
+        this.softShadow.m_prevWorldToClip = f32x4x4(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        this.softShadow.m_prevWorldToClipValid = false;
+        this.softShadow.m_softShadowHistoryFrontIsA = 1u;
+        this.softShadow.m_softShadowTemporalSeeded = false;
+        this.softShadow.m_softShadowTemporalHistoryAdvancePending = false;
+        this.softShadow.m_softShadowTemporalReady = false;
+        this.softShadow.m_shadowReprojectMergeBindingLayout.reset();
+        this.softShadow.m_shadowReprojectMergeShader.reset();
+        this.softShadow.m_shadowReprojectMergePipeline.reset();
+        this.softShadow.m_shadowReprojectMergePipelineFailed = false;
+        this.softShadow.m_softTransparentReady = false;
+        this.softShadow.m_softTransparentTemporalReady = false;
+        this.softShadow.m_transparentShadowSamplingHistory.reset();
+        this.shadow.m_swShadowEdgeCounterBuffer.reset();
+        this.shadow.m_swShadowEdgeCounterHeapHandle = GpuDescriptorHandleInvalid();
+        this.shadow.m_swShadowEdgeListBuffer.reset();
+        this.shadow.m_swShadowEdgeListHeapHandle = GpuDescriptorHandleInvalid();
+        this.shadow.m_swShadowEdgeListCapacity = 0u;
+        this.shadow.m_swShadowIndirectArgsBuffer.reset();
+        this.shadow.m_swShadowIndirectArgsHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_sceneHasTransparentOccluder = false;
+        this.caustics.m_swCausticBindingLayout.reset();
+        this.caustics.m_swCausticShader.reset();
+        this.caustics.m_swCausticPipeline.reset();
+        this.caustics.m_swCausticCsgShader.reset();
+        this.caustics.m_swCausticCsgPipeline.reset();
+        this.caustics.m_hwCausticBindingLayout.reset();
+        this.caustics.m_hwCausticPipeline.reset();
+        this.caustics.m_hwCausticShaderTable.reset();
+        this.caustics.m_hwCausticCsgPipeline.reset();
+        this.caustics.m_hwCausticCsgShaderTable.reset();
+        this.caustics.m_causticResolve = CausticResolveState();
+        this.caustics.m_causticGeometryDownsampleBindingLayout.reset();
+        this.caustics.m_causticGeometryDownsampleShader.reset();
+        this.caustics.m_causticGeometryDownsamplePipeline.reset();
+        this.caustics.m_causticGeometryDownsamplePipelineFailed = false;
+        this.caustics.m_causticAccumulatorDecayBindingLayout.reset();
+        this.caustics.m_causticAccumulatorDecayShader.reset();
+        this.caustics.m_causticAccumulatorDecayPipeline.reset();
+        this.caustics.m_causticAccumulatorDecayPipelineFailed = false;
+        // Accumulator target is recreated on invalidation; re-seed the EMA.
+        this.caustics.m_causticAccumulatorInitialized = false;
+        // Surfel buffers live on this state; resize keeps convergence, invalidate re-seeds.
+        this.surfelGi.m_surfelHeapBindingLayout.reset();
+        this.surfelGi.m_surfelSpawnShader.reset();
+        this.surfelGi.m_surfelSpawnPipeline.reset();
+        this.surfelGi.m_surfelAgeFreeShader.reset();
+        this.surfelGi.m_surfelAgeFreePipeline.reset();
+        this.surfelGi.m_surfelHashBuildShader.reset();
+        this.surfelGi.m_surfelHashBuildPipeline.reset();
+        this.surfelGi.m_surfelTraceShader.reset();
+        this.surfelGi.m_surfelTracePipeline.reset();
+        this.surfelGi.m_surfelTraceCsgShader.reset();
+        this.surfelGi.m_surfelTraceCsgPipeline.reset();
+        this.surfelGi.m_surfelResolveShader.reset();
+        this.surfelGi.m_surfelResolvePipeline.reset();
+        this.surfelGi.m_surfelUpsampleShader.reset();
+        this.surfelGi.m_surfelUpsamplePipeline.reset();
+        this.surfelGi.m_surfelTraceBuildArgsShader.reset();
+        this.surfelGi.m_surfelTraceBuildArgsPipeline.reset();
+        this.surfelGi.m_surfelTraceHwShader.reset();
+        this.surfelGi.m_surfelTraceHwPipeline.reset();
+        this.surfelGi.m_surfelTraceCsgHwShader.reset();
+        this.surfelGi.m_surfelTraceCsgHwPipeline.reset();
+        this.surfelGi.m_surfelUseHwTrace = false;
+        this.surfelGi.m_surfelUseCsgTrace = false;
+        this.surfelGi.m_surfelPoolBuffer.reset();
+        this.surfelGi.m_surfelGuidePoolBuffer.reset();
+        this.surfelGi.m_surfelCellHeadBuffer.reset();
+        this.surfelGi.m_surfelCounterBuffer.reset();
+        this.surfelGi.m_surfelTraceIndirectArgsBuffer.reset();
+        this.surfelGi.m_surfelFreeListBuffer.reset();
+        this.surfelGi.m_surfelPoolSnapshotBuffer.reset();
+        this.surfelGi.m_surfelCellHeadSnapshotBuffer.reset();
+        this.surfelGi.m_surfelCounterReadback.reset();
+        this.surfelGi.m_surfelConstants.reset();
+        this.surfelGi.m_surfelConstantsHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelPoolHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelGuidePoolHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelCellHeadHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelCounterHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelTraceIndirectArgsHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelFreeListHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelPoolSnapshotHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelCellHeadSnapshotHeapHandle = GpuDescriptorHandleInvalid();
+        this.surfelGi.m_surfelTraceGeometryFailureFlags = 0u;
+        this.surfelGi.m_surfelPoolCapacity = s_ShaderSurfelPoolCapacity;
+        this.surfelGi.m_surfelHashCellCount = s_ShaderSurfelHashCellCount;
+        this.surfelGi.m_surfelFrameIndex = 0u;
+        this.surfelGi.m_surfelCountReadbackFrame = 0u;
+        this.surfelGi.m_surfelCountReadbackSubmissionToken = QueueSubmissionToken();
+        this.surfelGi.m_surfelSeeded = false;
+        this.surfelGi.m_surfelResourcesNeedClear = false;
+        this.surfelGi.m_surfelResourcesClearPending = false;
+        this.surfelGi.m_surfelEnabled = false;
+        this.surfelGi.m_surfelSpawnPipelineFailed = false;
+        this.surfelGi.m_surfelAgeFreePipelineFailed = false;
+        this.surfelGi.m_surfelHashBuildPipelineFailed = false;
+        this.surfelGi.m_surfelTracePipelineFailed = false;
+        this.surfelGi.m_surfelTraceHwPipelineFailed = false;
+        this.surfelGi.m_surfelTraceCsgPipelineFailed = false;
+        this.surfelGi.m_surfelTraceCsgHwPipelineFailed = false;
+        this.surfelGi.m_surfelResolvePipelineFailed = false;
+        this.surfelGi.m_surfelResolveDispatchLogged = false;
+        this.surfelGi.m_surfelUpsamplePipelineFailed = false;
+        this.surfelGi.m_surfelTraceBuildArgsPipelineFailed = false;
+        this.shadow.m_shadowPipelineFailed = false;
+        this.softShadow.m_shadowSoftPipelineFailed = false;
+        this.sceneBvh.m_bvhSortPipelineFailed = false;
+        this.sceneBvh.m_bvhBuildPipelineFailed = false;
+        this.shadow.m_swShadowPipelineFailed = false;
+        this.shadow.m_swShadowDispatchLogged = false;
+        this.caustics.m_swCausticPipelineFailed = false;
+        this.caustics.m_swCausticCsgPipelineFailed = false;
+        this.caustics.m_swCausticDispatchLogged = false;
+        this.caustics.m_hwCausticPipelineFailed = false;
+        this.caustics.m_hwCausticCsgPipelineFailed = false;
+        this.caustics.m_hwCausticDispatchLogged = false;
+    }
 }
 
 

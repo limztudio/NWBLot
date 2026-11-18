@@ -5,6 +5,12 @@
 [cpp_header("<core/assets/reserved_asset_ref_parser.h>"), cpp_name("::NWB::Core::Assets::ReservedAssetRefParser"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class ReservedAssetRefParser;
 
+[cpp_header("<core/assets/reserved_asset_ref_parser.h>"), cpp_name("::NWB::Core::Assets::ReservedAssetRefParser::ParseText")]
+extern Expected<AssetRef<T>> ParseReservedAssetRefText<T>(in Path file, in StringView prefix, in StringView field, in StringView text);
+
+[cpp_header("<core/assets/reserved_asset_ref_parser.h>"), cpp_name("::NWB::Core::Assets::ReservedAssetRefParser::ParseValue")]
+extern Expected<AssetRef<T>> ParseReservedAssetRefValue<T>(in Path file, in StringView prefix, in StringView field, in MetascriptValue value, in StringView nonStringError);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

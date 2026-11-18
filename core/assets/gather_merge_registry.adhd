@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/common/binary_update.h>"), cpp_name("::NWB::Core::BinaryUpdateContext"), cpp_flags(no_copy, no_assign)]
+extern class BinaryUpdateContext{
+    BinaryByteView current()const;
+};
+
+
 [cpp_header("<core/assets/gather_merge_registry.h>"), cpp_name("::NWB::Core::Assets::AssetGatherMergeAutoRegistrar"), cpp_flags(small_value, binary_serializable)]
 extern class AssetGatherMergeAutoRegistrar;
 

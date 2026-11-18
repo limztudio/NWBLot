@@ -26,7 +26,7 @@ const usize s_FixedShapeSourceBytes = s_CsgFixedShapeSourceTemplate.size() + 2u 
 
 
 class CsgShapeModuleSource{
-    public Expected<String> buildDefaultPath(in Name shaderModule, in StringView safeModuleName){
+    public Expected<String> buildDefaultPath(in Name shaderModule, in StringView safeModuleName)const{
         if(shaderModule == s_NameNone || safeModuleName.empty())
             return MakeUnexpected(Failure());
 
@@ -39,12 +39,12 @@ class CsgShapeModuleSource{
         return include;
     }
 
-    public void begin(mut String outSource){
+    public void begin(mut String outSource)const{
         outSource.clear();
         outSource.append(s_CsgModuleSourceHeader);
     }
 
-    public void appendEval(in CsgShapeTypeId shapeTypeId, in StringView evalInclude, mut String inOutSource){
+    public void appendEval(in CsgShapeTypeId shapeTypeId, in StringView evalInclude, mut String inOutSource)const{
         inOutSource.append(s_CsgDefineDirective);
         inOutSource.append(s_CsgEvalShapeIdDefineName);
         inOutSource.push_back(' ');
@@ -58,7 +58,7 @@ class CsgShapeModuleSource{
         inOutSource.append(s_CsgUndefDirectiveEnd);
     }
 
-    private void appendDecimal(in u32 value, mut String inOutText){
+    private void appendDecimal(in u32 value, mut String inOutText)const{
         if(value == 0u){
             inOutText.push_back('0');
             return;

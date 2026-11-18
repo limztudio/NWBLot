@@ -346,7 +346,8 @@ using DeferredFrameTargets = Impl::DeferredFrameTargets;
 using OpaqueSoftShadowResolveOptions = Impl::OpaqueSoftShadowResolveOptions;
 using TransparentSoftShadowResolveOptions = Impl::TransparentSoftShadowResolveOptions;
 using SoftShadowResolveDispatch = Impl::SoftShadowResolveDispatch;
-using SoftShadowResolveDispatchBuilder = Impl::SoftShadowResolveDispatchBuilder;
+using Impl::BuildOpaqueSoftShadowDispatch;
+using Impl::BuildTransparentSoftShadowDispatch;
 namespace SoftShadowOpaqueResolvePhase = Impl::SoftShadowOpaqueResolvePhase;
 namespace SoftShadowUpsampleFold = Impl::SoftShadowUpsampleFold;
 using Impl::CanCombineSoftShadowWavelets;
@@ -779,22 +780,6 @@ void VerifyShadowVisibilityMergeValidator_CombinedTemporalRejectsEveryRemainingP
         ASSERT_TRUE(fixture.build(true, true, stage, true, true));
         EXPECT_FALSE(fixture.sharesPacket(fixture.tasks));
     }
-}
-
-SoftShadowResolveDispatch BuildOpaqueSoftShadowDispatch(
-    in OpaqueSoftShadowResolveOptions options,
-    in RendererRayTracingState state,
-    mut DeferredFrameTargets targets
-){
-    return SoftShadowResolveDispatchBuilder::Opaque(options, state, targets);
-}
-
-SoftShadowResolveDispatch BuildTransparentSoftShadowDispatch(
-    in TransparentSoftShadowResolveOptions options,
-    in RendererRayTracingState state,
-    mut DeferredFrameTargets targets
-){
-    return SoftShadowResolveDispatchBuilder::Transparent(options, state, targets);
 }
 
 void VerifySoftShadowResolveDispatchBuilder_AlternatingHistoryUsesTheNewMomentsAndGraphOwnedBoundaries(){

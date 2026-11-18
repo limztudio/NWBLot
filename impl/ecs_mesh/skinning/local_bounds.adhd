@@ -4,86 +4,50 @@
 
 #include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
 #include <impl/ecs_mesh/skinning/runtime_instance.adhd>
+#include <impl/ecs_mesh/skinning/timing_names.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class MeshSkinningLocalBoundsTask{
+    private mut GraphicsRuntime m_graphics;
+    private mut GpuTimingSubmissionTicket m_ticket;
+    private Span<MeshSkinningLocalBoundsDispatch> m_dispatches;
 
+    public MeshSkinningLocalBoundsTask(mut GraphicsRuntime graphics, mut GpuTimingSubmissionTicket ticket, in Span<MeshSkinningLocalBoundsDispatch> dispatches){
+        this.m_graphics = graphics;
+        this.m_ticket = ticket;
+        this.m_dispatches = dispatches;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        return commands;
+    }
 
-
-#include <impl/global.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_desc.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-struct GpuTaskRecordContext;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MeshSkinningLocalBoundsTask{
-    struct Payload{
-        Core::GraphicsRuntime& graphics;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Span<const MeshSkinningLocalBoundsDispatch> dispatches;
-
-
-    public:
-        Payload(Core::GraphicsRuntime& inGraphics, Core::GpuTimingSubmissionTicket& inTimingTicket, const Span<const MeshSkinningLocalBoundsDispatch> inDispatches)noexcept
-            : graphics(inGraphics)
-            , timingTicket(inTimingTicket)
-            , dispatches(inDispatches)
-        {}
-    };
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        if(this.m_dispatches.empty() || !this.m_graphics.getDevice().getDescriptorHeap().isInitialized())
+            return false;
+        GpuTimingTicketRecordingScope recording(this.m_ticket);
+        for(in MeshSkinningLocalBoundsDispatch plan : this.m_dispatches){
+            const Optional<mut ComputePipeline> pipeline = context.declarations.borrowComputePipeline(plan.localBoundsPipeline);
+            if(!pipeline.has_value() || !context.declarations.borrowBuffer(plan.bindlessResourceSlotsResource).has_value()
+                || !context.declarations.borrowBuffer(plan.meshletLocalBoundsResource).has_value() || !context.declarations.borrowBuffer(plan.localBoundsResource).has_value())
+                return false;
+            ComputeState state;
+            state.setPipeline(pipeline.value());
+            commands.setComputeState(state);
+            this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commands, pipeline.value());
+            const MeshletBoundsPushConstants push = MakeMeshletBoundsPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
+            commands.setPushConstants(push);
+            GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshSkinningLocalBounds, this.m_graphics.getDevice(), commands);
+            commands.dispatch(1u, 1u, 1u);
+        }
+        return true;
+    }
 }
 
 

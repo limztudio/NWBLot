@@ -1,0 +1,44 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext"), cpp_flags(no_assign)]
+extern class CookVolumePrepareContext{
+    CookResolvedPaths resolvedPaths;
+    String configurationSafeName;
+    ParsedAssetMetadata parsedMetadata;
+    u64 plannedFileCount;
+};
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::CookVolumeWriteContext"), cpp_flags(no_assign)]
+extern class CookVolumeWriteContext{
+    CookVolumePrepareContext preparation;
+    b8 claim(in Name path);
+    b8 appendPayload(in Name path, in Span<u8> bytes, in u64 cookKey);
+    b8 appendEncodedPayload(in Name path, in Func<64u, b8(mut BinaryUpdateContext)> encoder);
+};
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AppendCookRecord")]
+extern mut T AppendCookRecord<T>(mut CookVolumeWriteContext context, mut Vector<T> records);
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::GetCookMetadata")]
+extern mut T GetCookMetadata<T>(in Name name, mut ParsedAssetMetadata parsed);
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::HasCookMetadata")]
+extern b8 HasCookMetadata<T>(in Name name, in ParsedAssetMetadata parsed);
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::CookBucketSize")]
+extern usize CookBucketSize(in ParsedAssetMetadata parsed, in Name type);
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::VisitCookEntries")]
+extern b8 VisitCookEntries<T>(mut ParsedAssetMetadata parsed, in Name type, in Func<64u, b8(mut Span<T>)> visitor);
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::VisitCookFiles")]
+extern b8 VisitCookFiles(mut CookVolumePrepareContext context, in StringView extension, in Func<64u, b8(in DiscoveredNwbFile)> visitor);
+
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AddCookManifestWriter")]
+extern void AddCookManifestWriter<Writer>(mut CookVolumePrepareContext context, in Name extension, in auto metadata);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

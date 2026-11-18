@@ -1,0 +1,184 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_texture/loader.adhd>
+#include <impl/ecs_ui/toolkit/gpu/sampled_texture_resources.adhd>
+#include <impl/ecs_ui/toolkit/paint.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type GpuVersion<T> = Shared<T>;
+
+class GpuPageVersion<TPage> : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    public TPage m_page;
+    public TextureHandle m_texture;
+    public GpuDescriptorHandle m_sampledImage;
+    public QueueSubmissionToken m_readinessToken;
+
+    public GpuPageVersion(mut GraphicsRuntime graphics, in TPage page){
+        this.m_graphics = graphics;
+        this.m_page = page;
+    }
+    public ~GpuPageVersion(){ FreeGpuDescriptor(this.m_graphics, this.m_sampledImage); }
+}
+
+type GpuGlyphVersion = GpuPageVersion<SharedGlyphPage>;
+type GpuSdfAtlasVersion = GpuPageVersion<SharedSdfAtlasPage>;
+
+class GpuTextureImageVersion : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    public SharedImageSource m_source;
+    public TextureGpuResource m_texture;
+
+    public GpuTextureImageVersion(mut GraphicsRuntime graphics, in SharedImageSource source){
+        this.m_graphics = graphics;
+        this.m_source = source;
+    }
+    public ~GpuTextureImageVersion(){ ReleaseTextureGpuResource(this.m_graphics, this.m_texture); }
+}
+
+class GpuSkinVersion : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    public SkinBinding m_binding;
+    public TextureGpuResource m_texture;
+
+    public GpuSkinVersion(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
+    public ~GpuSkinVersion(){ ReleaseTextureGpuResource(this.m_graphics, this.m_texture); }
+}
+
+class GpuTargetVersion : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    public TextureHandle m_color;
+    public FramebufferHandle m_framebuffer;
+    public GpuDescriptorHandle m_sampledImage;
+    public QueueSubmissionToken m_readinessToken;
+
+    public GpuTargetVersion(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
+    public ~GpuTargetVersion(){ FreeGpuDescriptor(this.m_graphics, this.m_sampledImage); }
+}
+
+class GpuSharedResources : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    public ShaderHandle m_vertexShader;
+    public ShaderHandle m_pixelShader;
+    public ShaderHandle m_outputVertexShader;
+    public ShaderHandle m_outputPixelShader;
+    public InputLayoutHandle m_inputLayout;
+    public BindingLayoutHandle m_layout;
+    public BindingLayoutHandle m_outputLayout;
+    public GraphicsPipelineHandle m_pipeline;
+    public GraphicsPipelineHandle m_outputPipeline;
+    public SamplerHandle m_sampler;
+    public GpuDescriptorHandle m_samplerDescriptor;
+
+    public GpuSharedResources(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
+    public ~GpuSharedResources(){ FreeGpuDescriptor(this.m_graphics, this.m_samplerDescriptor); }
+    public mut GraphicsRuntime graphics(){ return this.m_graphics; }
+}
+
+
+class GpuTargetReadyTask{
+    public GpuVersion<GpuTargetVersion> target;
+    public GpuGraphResourceId color;
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        requirements.requiresPrimaryGraphicsQueue = true;
+        return requirements;
+    }
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        in RhiTexture expected = this.target.deref().m_color.deref();
+        return VisitGpuTaskTexture(context.declarations, this.color, lambda[in expected](mut RhiTexture texture) -> b8{ return SameAddress(texture, expected); })
+            && !commands.commandRecordingFailed();
+    }
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareGpuTargetInitialization(in GpuVersion<GpuTargetVersion> target, mut GpuTaskGraph graph){
+    GpuGraphResourceDesc colorDesc;
+    colorDesc.setIdentity(s_GpuTargetInitTextureName);
+    colorDesc.setMarkerLabel(s_GpuTargetInitMarkerLabel);
+    colorDesc.setType(GpuGraphResourceType::Texture);
+    colorDesc.setInitialState(ResourceStates::Unknown);
+    colorDesc.setExternalFinalState(ResourceStates::ShaderResource);
+    const Expected<GpuGraphResourceId> color = graph.importTexture(target.deref().m_color, colorDesc);
+    if(!color.has_value())
+        return MakeUnexpected(Failure());
+
+    GpuTaskDesc clearTask;
+    clearTask.setIdentity(s_GpuTargetInitClearTaskName);
+    clearTask.setMarkerLabel(s_GpuTargetInitClearMarkerLabel);
+    GpuClearTextureTaskDesc clear;
+    clear.destination = color.value();
+    clear.valueType = GpuClearTextureTaskValueType::Float;
+    const Expected<GpuTaskId> cleared = graph.addClearTextureTask(clearTask, clear);
+    if(!cleared.has_value())
+        return MakeUnexpected(Failure());
+
+    Array<GpuTaskResourceUse, 1u> uses;
+    uses[0u].resource = color.value();
+    uses[0u].requiredState = ResourceStates::ShaderResource;
+    uses[0u].access = GpuTaskResourceAccess::Read;
+    Array<GpuTaskId, 1u> dependencies;
+    dependencies[0u] = cleared.value();
+    GpuTaskDesc ready;
+    ready.setIdentity(s_GpuTargetInitReadyTaskName);
+    ready.setMarkerLabel(s_GpuTargetInitReadyMarkerLabel);
+    ready.setDependencies(Span<GpuTaskId>(dependencies));
+    ready.setResourceUses(Span<GpuTaskResourceUse>(uses));
+    GpuTargetReadyTask payload;
+    payload.target = target;
+    payload.color = color.value();
+    return graph.addPayloadTask(ready, payload);
+}
+
+[cpp_unwind]
+Expected<GpuVersion<GpuTargetVersion>> CreateGpuTarget(in SharedPool versions, mut GraphicsRuntime graphics, in u32 width, in u32 height){
+    const Expected<GpuVersion<GpuTargetVersion>> created = versions.make<GpuTargetVersion>(graphics);
+    if(!created.has_value())
+        return MakeUnexpected(created.error());
+    GpuVersion<GpuTargetVersion> target = created.value();
+    TextureDesc description;
+    description.setName(s_GpuLayerTextureName);
+    description.setWidth(width);
+    description.setHeight(height);
+    description.setFormat(Format::RGBA16_FLOAT);
+    description.setIsRenderTarget(true);
+    description.setInitialState(ResourceStates::ShaderResource);
+    description.setKeepInitialState(true);
+    description.setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
+    mut Device device = graphics.getDevice();
+    const Expected<TextureHandle> color = device.createTexture(description);
+    if(!color.has_value())
+        return MakeUnexpected(Failure());
+    target.deref().m_color = color.value();
+    FramebufferDesc framebufferDesc;
+    framebufferDesc.addColorAttachment(target.deref().m_color.deref());
+    const Expected<FramebufferHandle> framebuffer = device.createFramebuffer(framebufferDesc);
+    if(!framebuffer.has_value())
+        return MakeUnexpected(Failure());
+    target.deref().m_framebuffer = framebuffer.value();
+    const GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    if(!queue.valid())
+        return MakeUnexpected(Failure());
+    // Transition the fresh image before publishing its sampled view.
+    const Expected<QueueSubmissionToken> submitted = graphics.standaloneGraph().submitStandaloneTaskGraph(
+        lambda[in target](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{ return DeclareGpuTargetInitialization(target, graph); }, queue);
+    if(!submitted.has_value())
+        return MakeUnexpected(submitted.error());
+    target.deref().m_readinessToken = submitted.value();
+    if(!submitted.value().valid() || !submitted.value().hasPhysicalQueueIdentity())
+        return MakeUnexpected(Failure());
+    if(!PrepareGpuSampledTextureDescriptor(graphics, target.deref().m_color, Format::RGBA16_FLOAT, target.deref().m_sampledImage))
+        return MakeUnexpected(Failure());
+    return target;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

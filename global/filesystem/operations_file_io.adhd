@@ -2,6 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::BinaryInputStream"), cpp_flags(no_copy, no_assign)]
+extern class BinaryInputStream{
+    b8 isOpen()const;
+    i64 seekEnd();
+    b8 seekBegin();
+    b8 readBytes(mut Span<u8> bytes);
+    Expected<usize> readChunk(mut Span<u8> destination);
+    b8 verifyEnd();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_name("::SizedFileCreateFailure"), cpp_flags(self_defaulted, brace_init)]
 extern class SizedFileCreateFailure{
     ErrorCode code;
@@ -35,6 +49,14 @@ extern b8 WriteBinaryFile(in Path a0, in auto a1);
 
 [cpp_name("::WriteTextFile")]
 extern b8 WriteTextFile(in Path a0, in StringView a1);
+
+
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::BinaryOutputStream"), cpp_flags(no_copy, no_assign)]
+extern class BinaryOutputStream{
+    b8 isOpen()const;
+    void writeText(in StringView text);
+    b8 close();
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -23,6 +23,12 @@ extern u8 ClassifyFloatGrammar(in StringView a0);
 [cpp_name("::ClassifyIntegerGrammar")]
 extern u8 ClassifyIntegerGrammar(in StringView a0);
 
+[cpp_name("::FormatF64Into"), cpp_header("<global/compact_string.h>")]
+extern Expected<void, ErrorCode> FormatF64Into(in f64 value, mut CompactString output);
+
+[cpp_name("::FormatI64Into"), cpp_header("<global/compact_string.h>")]
+extern Expected<void, ErrorCode> FormatI64Into(in i64 value, mut CompactString output);
+
 [cpp_name("::FormatHex64A"), cpp_flags(scratch_arena)]
 extern String FormatHex64A(in isize a0);
 
@@ -91,6 +97,10 @@ extern const u8 s_NumericGrammarIncomplete;
 extern const u8 s_NumericGrammarInvalid;
 [cpp_name("::s_UsizeDecimalDigitCount")]
 extern const usize s_UsizeDecimalDigitCount;
+
+
+[cpp_header("<global/numeric_text.h>"), cpp_name("::AppendHexU64")]
+extern void AppendHexU64Text(in u64 value, mut String output);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

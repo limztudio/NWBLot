@@ -1,0 +1,78 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("::FT_BBox"), cpp_flags(self_defaulted)]
+extern class FreeTypeOutlineBox{
+    i64 xMin;
+    i64 yMin;
+    i64 xMax;
+    i64 yMax;
+};
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("::NWB::Core::FreeTypeBitmapView"), cpp_flags(self_defaulted, borrow_view)]
+extern class FreeTypeBitmapView{
+    Span<u8> pixels;
+    u32 width;
+    u32 rows;
+    i32 pitch;
+    i32 left;
+    i32 top;
+    b8 grayscale;
+};
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("::NWB::Core::FreeTypeFaceVisitResult"), cpp_flags(self_defaulted)]
+extern class FreeTypeFaceVisitResult{
+    i32 openError;
+    i32 closeError;
+};
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("FT_LOAD_NO_SCALE")]
+extern const i32 s_FreeTypeLoadNoScale;
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("FT_LOAD_NO_HINTING")]
+extern const i32 s_FreeTypeLoadNoHinting;
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("FT_LOAD_NO_BITMAP")]
+extern const i32 s_FreeTypeLoadNoBitmap;
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("FT_LOAD_NO_AUTOHINT")]
+extern const i32 s_FreeTypeLoadNoAutohint;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("::NWB::Core::FreeTypeFaceView"), cpp_flags(no_copy, no_assign, abstract)]
+extern class FreeTypeFaceView{
+    i64 faceCount()const;
+    i64 glyphCount()const;
+    u32 unitsPerEm()const;
+    b8 isSfnt()const;
+    b8 isScalable()const;
+    b8 hasMultipleMasters()const;
+    b8 isTricky()const;
+    i32 selectUnicodeCharmap();
+    i32 setPixelSizes(in u32 width, in u32 height);
+    i32 loadGlyph(in u32 glyph, in i32 flags);
+    i32 renderNormal();
+    b8 hasOutline()const;
+    i32 outlinePointCount()const;
+    FreeTypeOutlineBox outlineControlBox()const;
+    FreeTypeBitmapView bitmap()const;
+};
+
+[cpp_header("<core/font/freetype.h>"), cpp_name("::NWB::Core::FreeTypeFace"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+extern class FreeTypeFace{
+    i32 createLibrary();
+    void addDefaultModules();
+    i32 open(in FontFileBytes bytes, in i64 index);
+    mut FreeTypeFaceView view();
+    FreeTypeFaceVisitResult visitMemoryFace(in Span<u8> bytes, in i64 index, in Func<64u, void(mut FreeTypeFaceView)> visitor);
+    i32 closeFace();
+    i32 closeLibrary();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

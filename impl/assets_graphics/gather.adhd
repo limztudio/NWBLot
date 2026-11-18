@@ -2,45 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-
-#include <core/assets/module.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 MergeGatheredGraphicsAsset(const Name& virtualPath, Span<const u8> incomingPayload, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 ValidateGatheredShaderRecordIdentity(in b8 hasExpectedPath, in Name expectedPath, in NameHash recordVirtualPathHash){
     if(hasExpectedPath && expectedPath.hash() == recordVirtualPathHash)
         return true;
@@ -152,87 +113,18 @@ b8 MergeShaderArchiveIndexRecords(in Span<Record> incomingRecords, mut Vector<Re
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-#include <core/assets/gather_merge_registry.h>
-#include <core/graphics/shader_archive.h>
-#include <core/common/log.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_graphics_gather{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 MergeGatheredGraphicsAssetImpl(const Name& virtualPath, const Span<const u8> incomingPayload, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
-    (void)scratchArena;
-    if(virtualPath != Core::ShaderArchive::s_IndexVirtualPathName)
-        return false;
-    if(!incomingPayload.empty() && incomingPayload.data() == nullptr)
+[gather_merge]
+b8 MergeGatheredGraphicsAsset(in Name virtualPath, in BinaryByteView incoming, mut BinaryUpdateContext context){
+    if(virtualPath != s_IndexVirtualPathName || (!incoming.empty() && !incoming.hasData()))
         return false;
 
-    Core::Assets::AssetArena& arena = existingPayload.get_allocator().arena();
-    auto parsedRecords = Core::ShaderArchive::DeserializeIndex(arena, { existingPayload.data(), existingPayload.size() });
-    if(!parsedRecords)
+    auto existing = ReadShaderArchiveIndex(context, context.current());
+    if(!existing.has_value())
         return false;
-    auto parsedIncomingRecords = Core::ShaderArchive::DeserializeIndex(arena, { incomingPayload.data(), incomingPayload.size() });
-    if(!parsedIncomingRecords)
+    const auto additions = ReadShaderArchiveIndex(context, incoming);
+    if(!additions.has_value() || !MergeShaderArchiveIndexRecords(Span<Record>(additions.value()), existing.value()))
         return false;
-    auto& records = *parsedRecords;
-    if(!MergeShaderArchiveIndexRecords(*parsedIncomingRecords, records))
-        return false;
-
-    auto merged = Core::ShaderArchive::SerializeIndex(records, arena, scratchArena);
-    if(!merged)
-        return false;
-    existingPayload = Move(*merged);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const Span<const u8> incomingPayload, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
-    return __hidden_graphics_gather::MergeGatheredGraphicsAssetImpl(virtualPath, incomingPayload, scratchArena, existingPayload);
-}
-
-static Core::Assets::AssetGatherMergeAutoRegistrar s_GraphicsGatherMergeRegistrar(&MergeGatheredGraphicsAsset);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    return WriteShaderArchiveIndex(context, Span<Record>(existing.value()));
 }
 
 

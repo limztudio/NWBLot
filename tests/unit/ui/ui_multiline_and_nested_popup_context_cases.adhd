@@ -109,7 +109,7 @@ public:
     }
 
     [[nodiscard]] b8 adoptBuiltLayout(Expected<TextLayout, TextLayoutStatus::Enum>& layout){
-        return m_view.adoptLayout(Move(*layout));
+        return m_view.adoptLayout(*layout);
     }
 };
 

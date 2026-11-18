@@ -2,162 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_subsystem/types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_subsystem/asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/assets/cook_dependency_registry.h>
-#include <core/assets/cook_entry_registry.h>
-#include <core/assets/cook_metadata.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename SubsystemT>
-struct SubsystemCookEntry{
-    Name virtualPath = s_NameNone;
-    SubsystemT subsystem;
-
-
-public:
-    explicit SubsystemCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : subsystem(arena)
-    {}
-    SubsystemCookEntry(Core::Assets::AssetArena& arena, const Name& inVirtualPath)noexcept
-        : virtualPath(inVirtualPath)
-        , subsystem(arena, inVirtualPath)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsSubsystemCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem);
-
-template<typename SubsystemT>
-[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SubsystemDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-
-    SubsystemCookEntry<SubsystemT> entry(arena, virtualPath);
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SubsystemDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(!ParseSubsystemCookMetadata(nwbFilePath, asset, scratchArena, entry.subsystem))
-        return MakeUnexpected(Failure{});
-
-    return entry;
-}
-
-template<typename SubsystemT>
-[[nodiscard]] Expected<SubsystemT> BuildSubsystemAsset(SubsystemCookEntry<SubsystemT>& entry, Core::Assets::AssetArena&, Core::Alloc::ScratchArena&){
-    SubsystemT asset = Move(entry.subsystem);
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
-}
-
-template<typename SubsystemT>
-[[nodiscard]] b8 ExtractSubsystemDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto subsystemEntry = Core::Assets::ParseCookDependencyEntry<SubsystemCookEntry<SubsystemT>, &ParseSubsystemCookMetadata<SubsystemT>>(context, s_SubsystemDiagnosticPrefix);
-    if(!subsystemEntry)
-        return false;
-
-    const SubsystemT& subsystem = subsystemEntry->subsystem;
-    for(const ISubsystem::SubsystemRef& subsystemRef : subsystem.subsystems){
-        if(!collector.addAssetDependency(subsystemRef.name(), ISubsystem::AssetTypeName()))
-            return false;
-    }
-    const usize fieldCount = subsystem.fieldCount();
-    for(usize fieldIndex = 0u; fieldIndex < fieldCount; ++fieldIndex){
-        const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(fieldIndex);
-        const usize valueCount = subsystem.fieldValueCount(fieldIndex);
-        for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex){
-            if(!collector.addAssetDependency(subsystem.fieldValue(fieldIndex, elementIndex), descriptor.expectedAssetType))
-                return false;
-        }
-    }
-    return true;
-}
-
-template<typename SubsystemT>
-[[nodiscard]] b8 RegisterSubsystemCookEntry(Core::Assets::CookEntryRegistry& registry){
-    Core::Assets::RegisterCompositeRootAssetType(SubsystemT::AssetTypeName());
-    return Core::Assets::RegisterDocumentValueCookEntry<SubsystemCookEntry<SubsystemT>, SubsystemT, TypedSubsystemAssetCodec<SubsystemT>>(
-        s_SubsystemAssetKindLabel,
-        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return Core::Assets::ParseCookMetadataDocument<SubsystemCookEntry<SubsystemT>, &ParseSubsystemCookMetadata<SubsystemT>>(assetRoot, virtualRoot, nwbFilePath, doc, s_SubsystemDiagnosticPrefix, context.cookArena, context.scratchArena);
-        },
-        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-            return ParseSubsystemCookMetadata<SubsystemT>(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-        },
-        &BuildSubsystemAsset<SubsystemT>,
-        true,
-        registry
-    );
-}
-
-template<typename SubsystemT>
-[[nodiscard]] b8 RegisterSubsystemCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    Core::Assets::RegisterCompositeRootAssetType(SubsystemT::AssetTypeName());
-    return registry.registerType(SubsystemT::AssetTypeName(), &ExtractSubsystemDependencies<SubsystemT>, ISubsystem::AssetTypeName());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/assets_subsystem/asset.adhd>
+#include <impl/assets_subsystem/subsystem_binary_codec.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -255,192 +101,122 @@ b8 ValidateUniqueSubsystemArrayFieldEntry(in Path nwbFilePath, in StringView fie
     return false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/assets/polymorphic_asset_codec.h>
-
-#include <impl/assets_subsystem/subsystem_binary_codec.adhd.h>
-
-#include <core/assets/binary_payload_io.h>
-#include <core/assets/cook_metadata.h>
-#include <core/assets/reserved_asset_ref_parser.h>
-#include <core/common/log.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    return Core::Assets::PolymorphicAssetCodec::SerializePolymorphicAsset<ISubsystem, &SubsystemAssetSerialization::Serialize>(asset, s_SubsystemSerializeContext, outBinary);
+b8 ReadSubsystemParents(in Path file, in MetascriptValue value, mut ISubsystem subsystem){
+    if(!ValidateSubsystemSubsystemsFieldIsList(file, value.isList()))
+        return false;
+    const Span<MetascriptValue> parents = value.listView();
+    subsystem.editParentRefs().reserve(parents.size());
+    for(in MetascriptValue parent : parents){
+        const Expected<AssetRef<ISubsystem>> ref = ParseReservedAssetRefValue<ISubsystem>(
+            file, s_SubsystemDiagnosticPrefix, s_SubsystemSubsystemsFieldName, parent, s_SubsystemStringValueRequirement
+        );
+        if(!ref.has_value() || !ValidateNotSelfSubsystemReference(file, subsystem.virtualPath(), ref.value().name()))
+            return false;
+        subsystem.editParentRefs().push_back(ref.value());
+    }
+    DeduplicateSubsystemRefs(subsystem.editParentRefs());
+    return true;
 }
 
-b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary){
-    Core::Alloc::ScratchArena scratchArena(s_SubsystemSerializeArena);
-    if(!subsystem.validatePayload())
+b8 ReadSubsystemAssetField(
+    in Path file, in MetascriptValue value, in usize index, in SubsystemFieldValueDescriptor descriptor, mut ISubsystem subsystem
+){
+    subsystem.clearFieldValues(index);
+    if(!descriptor.isArray){
+        const Expected<AssetRef<IAsset>> ref = ParseReservedAssetRefValue<IAsset>(
+            file, s_SubsystemDiagnosticPrefix, descriptor.fieldName, value, s_SubsystemStringValueRequirement
+        );
+        if(!ref.has_value())
+            return false;
+        subsystem.appendFieldValue(index, ref.value().name());
+        return true;
+    }
+    if(!ValidateNonEmptySubsystemArrayField(file, descriptor.fieldName, value.isList() && !value.listView().empty()))
         return false;
 
-    const usize fieldCount = subsystem.fieldCount();
-    Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    subsystemHashes.reserve(subsystem.subsystems.size());
-    fieldCounts.reserve(fieldCount);
-
-    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems)
-        subsystemHashes.push_back(ref.name().hash());
-
-    usize totalAssetCount = 0u;
-    for(usize i = 0u; i < fieldCount; ++i){
-        const usize valueCount = subsystem.fieldValueCount(i);
-        fieldCounts.push_back(static_cast<u64>(valueCount));
-        totalAssetCount += valueCount;
+    for(in MetascriptValue item : value.listView()){
+        const Expected<AssetRef<IAsset>> ref = ParseReservedAssetRefValue<IAsset>(
+            file, s_SubsystemDiagnosticPrefix, descriptor.fieldName, item, s_SubsystemStringValueRequirement
+        );
+        if(!ref.has_value())
+            return false;
+        const Name name = ref.value().name();
+        const usize count = subsystem.fieldValueCount(index);
+        for(usize prev = 0u; prev < count; ++prev){
+            if(subsystem.fieldValue(index, prev) == name)
+                return ValidateUniqueSubsystemArrayFieldEntry(file, descriptor.fieldName, name, true);
+        }
+        subsystem.appendFieldValue(index, name);
     }
-
-    assetHashes.reserve(totalAssetCount);
-    for(usize i = 0u; i < fieldCount; ++i){
-        const usize valueCount = subsystem.fieldValueCount(i);
-        for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex)
-            assetHashes.push_back(subsystem.fieldValue(i, elementIndex).hash());
-    }
-
-    return SubsystemBinaryCodec().serialize(subsystem.assetType().hash(), subsystemHashes, fieldCounts, assetHashes, outBinary);
+    return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_subsystem_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core::Metascript;
-
-[[nodiscard]] static b8 ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){
+b8 ParseSubsystemMetadataFields(in Path file, in MetascriptValue asset, mut ISubsystem subsystem){
     const usize count = subsystem.fieldCount();
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SubsystemDiagnosticPrefix, [&subsystem, count](const AStringView fieldName)noexcept{
-        if(IsReservedSubsystemFieldName(fieldName))
+    if(!ValidateMetadataAssetFields(file, asset, s_SubsystemDiagnosticPrefix, lambda[mut subsystem, in count](in StringView field) -> b8{
+        if(IsReservedSubsystemFieldName(field))
             return true;
         for(usize i = 0u; i < count; ++i){
-            if(fieldName == subsystem.fieldDescriptor(i).fieldName)
+            if(field == subsystem.fieldDescriptor(i).fieldName)
                 return true;
         }
         return false;
-    });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem){
-    using namespace __hidden_subsystem_cook;
-
-    if(!ValidateSubsystemMetadataFields(outSubsystem, nwbFilePath, asset))
+    }))
         return false;
 
-    outSubsystem.subsystems.clear();
-    if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemSubsystemsFieldName)){
-        if(!ValidateSubsystemSubsystemsFieldIsList(nwbFilePath, subsystemsValue->isList()))
+    subsystem.editParentRefs().clear();
+    b8 valid = true;
+    asset.visitField(s_SubsystemSubsystemsFieldName, lambda[in file, mut subsystem, mut valid](in MetascriptValue value) -> void{
+        valid = ReadSubsystemParents(file, value, subsystem);
+    });
+    if(!valid)
+        return false;
+
+    for(usize i = 0u; i < count; ++i){
+        const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
+        const b8 found = asset.visitField(descriptor.fieldName, lambda[in file, in i, in descriptor, mut subsystem, mut valid](in MetascriptValue value) -> void{
+            valid = ReadSubsystemAssetField(file, value, i, descriptor, subsystem);
+        });
+        if(!ValidateRequiredSubsystemFieldPresent(file, descriptor.fieldName, subsystem.assetType(), found) || !valid)
             return false;
-        outSubsystem.subsystems.reserve(subsystemsValue->asList().size());
-        for(const Core::Metascript::Value& itemValue : subsystemsValue->asList()){
-            const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<ISubsystem>(nwbFilePath, s_SubsystemDiagnosticPrefix, s_SubsystemSubsystemsFieldName, itemValue, s_SubsystemStringValueRequirement, scratchArena);
-            if(!parsedRef)
-                return false;
-            if(!ValidateNotSelfSubsystemReference(nwbFilePath, outSubsystem.virtualPath(), parsedRef->name()))
-                return false;
-            outSubsystem.subsystems.push_back(*parsedRef);
-        }
-        DeduplicateSubsystemRefs(outSubsystem.subsystems);
+    }
+    return subsystem.validatePayload();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SubsystemCookPolicy{
+    public StringView prefix()const{ return s_SubsystemDiagnosticPrefix; }
+    public StringView kind()const{ return s_SubsystemAssetKindLabel; }
+    public void registerType(in Name assetType)const{ RegisterCompositeRootAssetType(assetType); }
+
+    public b8 read(in Path file, in MetascriptValue value, mut ISubsystem subsystem)const{
+        return ParseSubsystemMetadataFields(file, value, subsystem);
     }
 
-    const usize count = outSubsystem.fieldCount();
-    for(usize i = 0u; i < count; ++i){
-        const SubsystemFieldValueDescriptor descriptor = outSubsystem.fieldDescriptor(i);
-        const Core::Metascript::Value* const fieldValue = asset.findField(descriptor.fieldName);
-        if(!ValidateRequiredSubsystemFieldPresent(nwbFilePath, descriptor.fieldName, outSubsystem.assetType(), fieldValue != nullptr))
-            return false;
-        outSubsystem.clearFieldValues(i);
-        if(descriptor.isArray){
-            if(!ValidateNonEmptySubsystemArrayField(nwbFilePath, descriptor.fieldName, fieldValue->isList() && !fieldValue->asList().empty()))
+    public b8 validate(in ISubsystem subsystem)const{ return subsystem.validatePayload(); }
+
+    public b8 collect(in ISubsystem subsystem, mut ICookDependencyCollector collector)const{
+        for(in AssetRef<ISubsystem> ref : subsystem.parentRefs()){
+            if(!collector.addAssetDependency(ref.name(), ISubsystem::AssetTypeName()))
                 return false;
-            for(const Core::Metascript::Value& itemValue : fieldValue->asList()){
-                const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, itemValue, s_SubsystemStringValueRequirement, scratchArena);
-                if(!parsedRef)
+        }
+        for(usize i = 0u; i < subsystem.fieldCount(); ++i){
+            const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
+            const usize count = subsystem.fieldValueCount(i);
+            for(usize element = 0u; element < count; ++element){
+                if(!collector.addAssetDependency(subsystem.fieldValue(i, element), descriptor.expectedAssetType))
                     return false;
-                const usize existingCount = outSubsystem.fieldValueCount(i);
-                b8 isDuplicate = false;
-                for(usize prevIndex = 0u; prevIndex < existingCount; ++prevIndex){
-                    if(outSubsystem.fieldValue(i, prevIndex) == parsedRef->name()){
-                        isDuplicate = true;
-                        break;
-                    }
-                }
-                if(!ValidateUniqueSubsystemArrayFieldEntry(nwbFilePath, descriptor.fieldName, parsedRef->name(), isDuplicate))
-                    return false;
-                outSubsystem.appendFieldValue(i, parsedRef->name());
             }
         }
-        else{
-            const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, *fieldValue, s_SubsystemStringValueRequirement, scratchArena);
-            if(!parsedRef)
-                return false;
-            outSubsystem.appendFieldValue(i, parsedRef->name());
-        }
+        return true;
     }
-
-    return outSubsystem.validatePayload();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+type SubsystemCookEntry<T> = PreparedAssetCookEntry<T>;
+type SubsystemCookRegistration<T> = FamilyCookRegistration<ISubsystem, T, TypedSubsystemAssetCodec<T>, SubsystemCookPolicy>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

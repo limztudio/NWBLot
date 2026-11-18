@@ -2,61 +2,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/mesh/mesh_view_state_policy.adhd>
+#include <impl/ecs_scene/camera.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <core/ecs/world.h>
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_VIEW_FLOAT_COUNT")]
+extern const u32 s_ShaderMeshViewFloatCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+static_assert(size_of<MeshViewGpuData>() == size_of<f32>() * s_ShaderMeshViewFloatCount, "MeshViewGpuData layout must match the mesh shaders");
+static_assert(align_of<MeshViewGpuData>() >= align_of<f32x4>(), "MeshViewGpuData must stay SIMD-aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
+MeshViewGpuData ResolveMeshViewState(in f32 fallbackAspectRatio, mut World world){
+    MatrixSingle viewBasis = BuildDefaultSceneViewBasis();
+    CameraProjection projection = StoreDefaultCameraProjection(fallbackAspectRatio);
 
+    const SceneCameraView cameraView = ResolveSceneCameraView(world, fallbackAspectRatio);
+    if(cameraView.valid()){
+        viewBasis = BuildSceneViewBasis(LoadFloat(cameraView.components.value().transform.position), LoadFloat(cameraView.components.value().transform.rotation));
+        projection = cameraView.projection;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT, "MeshViewGpuData layout must match the mesh shaders");
-static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] MeshViewGpuData ResolveMeshViewState(f32 fallbackAspectRatio, Core::ECS::World& world)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    return MeshViewStatePolicy().build(
+        viewBasis[0u],
+        viewBasis[1u],
+        viewBasis[2u],
+        viewBasis[3u],
+        LoadFloat(projection.projectionParams),
+        projection.tanHalfVerticalFov,
+        projection.aspectRatio,
+        projection.nearPlane,
+        projection.farPlane
+    );
 }
 
 

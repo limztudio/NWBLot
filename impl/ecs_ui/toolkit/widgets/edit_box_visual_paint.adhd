@@ -27,6 +27,8 @@ Expected<UiSkinRegion> TryResolveEditBoxBackgroundRegion(in UiSkin skin, in Edit
 b8 ValidateEditCaretClusterGlyphs(in Span<TextCluster> clusters, in Span<PlacedGlyph> glyphs){
     usize nextGlyph = 0u;
     for(in TextCluster cluster : clusters){
+        if(cluster.glyphCount > glyphs.size() - nextGlyph)
+            return false;
         for(u32 i = 0u; i < cluster.glyphCount; ++i){
             const PlacedGlyph glyph = glyphs[nextGlyph];
             ++nextGlyph;
@@ -34,7 +36,7 @@ b8 ValidateEditCaretClusterGlyphs(in Span<TextCluster> clusters, in Span<PlacedG
                 return false;
         }
     }
-    return true;
+    return nextGlyph == glyphs.size();
 }
 
 b8 PaintEditBoxViewVisual(

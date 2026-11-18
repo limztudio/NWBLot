@@ -3,631 +3,326 @@
 
 
 #include <impl/ecs_render/shadow/rt_shadow_prepare_internal_types.adhd>
+#include <impl/ecs_render/shadow/rt_shadow_visibility_targets_and_recorders.adhd>
+#include <impl/assets_graphics/shadow_subsystem.adhd>
+#include <impl/ecs_render/kernel/task_graph_float_clear_tasks.adhd>
+#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.adhd>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_state.adhd>
+#include <impl/ecs_render/shadow/light_space_capture_identity_builder.adhd>
+#include <impl/ecs_render/shadow/light_space_csg.adhd>
+#include <impl/ecs_render/shadow/light_space_csg_context_packer.adhd>
+#include <impl/ecs_render/shadow/light_space_plan.adhd>
+#include <impl/ecs_render/shadow/light_space_resource_set.adhd>
+#include <impl/ecs_render/shadow/light_space_scene_gather.adhd>
+#include <impl/ecs_render/shadow/light_space_settings.adhd>
+#include <impl/ecs_render/shadow/light_space_shadow.adhd>
+#include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd>
+#include <impl/ecs_render/shadow/quality_settings.adhd>
+#include <impl/ecs_render/shadow/shadow_pipeline_set.adhd>
+#include <impl/ecs_render/shadow/shadow_visibility_graph_coordinator.adhd>
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd>
+#include <impl/ecs_render/shadow/shadow_visibility_target_builder.adhd>
+#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd>
+#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd>
+#include <impl/ecs_render/shadow/task_graph_light_space_shadow.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
-#include <impl/assets_graphics/shadow_subsystem.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_float_clear_tasks.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_scene_identity_builder.adhd.h>
-#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.adhd.h>
-#include <impl/ecs_render/shadow/hardware_transparent_shadow_state.adhd.h>
-#include <impl/ecs_render/shadow/light_space_capture_identity_builder.adhd.h>
-#include <impl/ecs_render/shadow/light_space_csg.adhd.h>
-#include <impl/ecs_render/shadow/light_space_csg_context_packer.adhd.h>
-#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
-#include <impl/ecs_render/shadow/light_space_resource_set.adhd.h>
-#include <impl/ecs_render/shadow/light_space_scene_gather.adhd.h>
-#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
-#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
-#include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
-#include <impl/ecs_render/shadow/shadow_pipeline_set.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_graph_coordinator.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_target_builder.adhd.h>
-#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd.h>
-#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd.h>
-#include <impl/ecs_render/shadow/task_graph_light_space_shadow.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SoftShadowSplitResourceInputs{
-    const DeferredFrameTargets& targets;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
-    const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan;
-    const RayTracingSceneGraphReads& hardwareSceneReads;
-    Span<const Core::GpuGraphResourceId> hardwareTransparentScratch{};
-    SoftShadowSplitRoute route;
-    Span<const Core::GpuGraphResourceId> traceGeometryResources{};
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId normal;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId shadowVisibility;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId materialContextSlots;
-    Core::GpuGraphResourceId sceneGeometryDomain;
-    Core::GpuGraphResourceId sceneTlas;
-};
-
-// Per-callback resource declarations of the prepared soft-transparent shadow route.
-struct SoftShadowSplitResourceUses{
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaque;
-    Array<Core::GpuTaskResourceUse, s_MaxOpaqueFirstWaveletUses> opaqueFirstWavelet{};
-    usize opaqueFirstWaveletCount = 0u;
-    Array<Core::GpuTaskResourceUse, s_MaxOpaqueResolveUses> opaqueResolve{};
-    usize opaqueResolveCount = 0u;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTrace;
-    Array<Core::GpuTaskResourceUse, s_MaxTransparentTemporalMergeUses> transparentTemporalMerge{};
-    usize transparentTemporalMergeCount = 0u;
-    Array<Core::GpuTaskResourceUse, s_MaxTransparentFirstWaveletUses> transparentFirstWavelet{};
-    usize transparentFirstWaveletCount = 0u;
-    Array<Core::GpuTaskResourceUse, s_MaxTransparentFoldUses> transparentFold{};
-    usize transparentFoldCount = 0u;
-    b8 graphOwnsTransparentTemporalMergeEntryStates = false;
-
-
-public:
-    explicit SoftShadowSplitResourceUses(Core::Alloc::ScratchArena& scratchArena)noexcept
-        : opaque(scratchArena)
-        , transparentTrace(scratchArena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Re-imports the soft-shadow targets under their shared graph identities and declares each split callback's exact states.
-class SoftShadowSplitResourceUseBuilder final : NoCopy{
-public:
-    explicit SoftShadowSplitResourceUseBuilder(Core::GpuTaskGraph& graph)noexcept
-        : m_graph(graph)
-    {}
-
-
-public:
-    [[nodiscard]] b8 build(const SoftShadowSplitResourceInputs& inputs, SoftShadowSplitResourceUses& uses);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SoftShadowSplitTaskChainInputs{
-    DeferredFrameTargets& targets;
-    const DeferredLightingGraphResources& deferredLightingResources;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
-    const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan;
-    const b8& shadowPrepared;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& asyncTiming;
-    Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
-    Optional<Core::GpuTimingMeasure>& opaqueResolveTiming;
-    Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-    b8& opaqueProduced;
-    b8& transparentTraceProduced;
-    u32& opaqueFrameIndex;
-    SoftShadowSplitRoute route;
-    Span<const Core::GpuGraphResourceId> traceGeometryResources{};
-    Span<const Core::GpuTaskResourceSetUse> traceResourceSetUses{};
-    Core::GpuTaskResourceSetUse traceGeometrySetUse{};
-    Span<const Core::GpuTaskExternalStateSource> stateSources{};
-    Span<const Core::GpuExternalCompletionId> historyWriterDrainDependencies{};
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId materialContextSlots;
-    Core::GpuTaskId prefixTask;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Prepared soft-transparent route: light-space maps, opaque producer with wavelet/resolve, transparent trace, merge, wavelet, fold.
-// Tasks declared before a failure stay in `tasks`.
-class SoftShadowSplitTaskChainBuilder final : NoCopy{
-private:
-    using LightSpaceShadowMaps = SoftShadowLightSpaceMaps;
-
-
-public:
-    SoftShadowSplitTaskChainBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_graphics(graphics)
-        , m_arena(arena)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declare(const SoftShadowSplitTaskChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks);
-
-
-private:
-    // Adds the map, cap, and CSG bound reads to the opaque producer and transparent trace.
-    [[nodiscard]] Expected<LightSpaceShadowMaps> declareLightSpaceShadowMaps(
-        const SoftShadowSplitTaskChainInputs& inputs,
-        Core::Alloc::ScratchArena& scratchArena,
-        SoftShadowSplitResourceUses& uses
-    );
-    [[nodiscard]] b8 declareOpaqueTasks(
-        const SoftShadowSplitTaskChainInputs& inputs,
-        const SoftShadowSplitResourceUses& uses,
-        const Core::GpuTaskId& shadowTraceDependency,
-        const Core::GpuTaskSchedulingHint& tailScheduling,
-        SoftShadowSplitTasks& tasks
-    );
-    [[nodiscard]] b8 declareTransparentTasks(
-        const SoftShadowSplitTaskChainInputs& inputs,
-        const SoftShadowSplitResourceUses& uses,
-        const Core::GpuTaskSchedulingHint& tailScheduling,
-        Core::GpuGraphResourceId csgShadowContext,
-        Core::Alloc::ScratchArena& scratchArena,
-        SoftShadowSplitTasks& tasks
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    Core::GraphicsRuntime& m_graphics;
-    Core::Alloc::GlobalArena& m_arena;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShadowVisibilityResourceInputs{
-    const DeferredFrameTargets& deferredTargets;
-    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
-    const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan;
-    const RayTracingSceneGraphReads& hardwareSceneReads;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId normal;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId shadowVisibility;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId materialContextSlots;
-    Span<const Core::GpuGraphResourceId> traceGeometryResources;
-    b8 traceGeometryStatesGraphOwned;
-    b8 splitSoftTransparentFold;
-    b8 graphOwnsOpaqueTemporalMergeEntryStates;
-    b8 softShadowHistoryReadable;
-    b8 opaqueHistoryFrontIsA;
-    b8 hardwareTransparentTrace;
-    b8 adaptiveCompact;
-};
-
-struct ShadowVisibilityResourcePlan{
-    Core::GpuGraphResourceId sceneGeometryDomain;
-    Core::GpuGraphResourceId sceneTlas;
-    Array<Core::GpuGraphResourceId, s_HwTransparentScratchBufferCount> hardwareTransparentScratch{};
-    Core::GpuGraphResourceId adaptiveEdgeCounter;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses;
-
-
-public:
-    explicit ShadowVisibilityResourcePlan(Core::Alloc::ScratchArena& scratchArena)noexcept
-        : resourceUses(scratchArena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShadowVisibilityResourcePlanner final : NoCopy{
-public:
-    ShadowVisibilityResourcePlanner(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] b8 prepare(const ShadowVisibilityResourceInputs& inputs, ShadowVisibilityResourcePlan& result);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShadowReprojectMergeHeapResources{
-    Core::Texture* softTrace = nullptr;
-    Core::Texture* historyIn = nullptr;
-    Core::Texture* momentsIn = nullptr;
-    Core::Texture* historyOut = nullptr;
-    Core::Texture* momentsOut = nullptr;
-    u32 softTraceSlot = 0u;
-    u32 historyInSlot = 0u;
-    u32 momentsInSlot = 0u;
-    u32 historyOutStorageSlot = 0u;
-    u32 momentsOutStorageSlot = 0u;
-};
-
-
-class SoftShadowTemporalMergeRecorder final : NoCopy{
-public:
-    SoftShadowTemporalMergeRecorder(
-        const RendererRayTracingState& state, u32 slotRangeCount, u32 halfWidth, u32 halfHeight, u32 groupsX, u32 groupsY, b8 historyReadable,
-        Core::CommandList& commandList, DeferredFrameTargets& targets, Core::GpuDescriptorHeap& heap
-    )noexcept;
-
-
-public:
-    void record(const ShadowReprojectMergeHeapResources& resources, b8 graphOwnsSoftTraceInputState, b8 graphOwnsMergeCurrentGeometryEntryState, b8 graphOwnsMergeStaticReadEntryStates, b8 graphOwnsMergeTemporalEntryStates)const;
-
-
-private:
-    const RendererRayTracingState& m_state;
-    Core::CommandList& m_commandList;
-    DeferredFrameTargets& m_targets;
-    Core::GpuDescriptorHeap& m_heap;
-    u32 m_slotRangeCount;
-    u32 m_halfWidth;
-    u32 m_halfHeight;
-    u32 m_groupsX;
-    u32 m_groupsY;
-    b8 m_historyReadable;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SoftwareAdaptiveShadowRecorder final{
-public:
-    static void Record(const GraphOwnedAdaptiveShadowPlan* plan, const RendererRayTracingState& state, Core::CommandList& commandList, DeferredFrameTargets& targets, Core::GpuDescriptorHeap& heap);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SoftwareTransparentShadowTraceRecorder final{
-public:
-    static void Record(const SoftwareTransparentShadowTraceInputs& inputs, const RendererRayTracingState& state, Core::CommandList& commandList, DeferredFrameTargets& targets, Core::GpuDescriptorHeap& heap);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RayTracingShadowVisibilityTaskDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Both opaque resolve callbacks share one all-lit fallback: clear visibility, realign UAV state, retire timing.
-template<typename PayloadT>
-FOUNDATION_INLINE void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
-    payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
-    // Skipped transparent callbacks still declare this output as UAV. Realign the tracker after the typed fallback clear.
-    commandList.setTextureState(payload.targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
-    payload.opaqueProduced = false;
-    if(payload.asyncTiming.has_value()){
-        payload.asyncTiming.value().discardTiming();
-        payload.asyncTiming.reset();
+class SoftShadowSplitResourceInputs{
+    public in DeferredFrameTargets targets;
+    public in RayTracingDeferredGraphResourceSnapshot rayTracingResources;
+    public in RayTracingShadowVisibilityGraphPlanSnapshot rayTracingPlan;
+    public in RayTracingSceneGraphReads hardwareSceneReads;
+    public Span<GpuGraphResourceId> hardwareTransparentScratch;
+    public SoftShadowSplitRoute route;
+    public Span<GpuGraphResourceId> traceGeometryResources;
+    public GpuGraphResourceId worldPosition;
+    public GpuGraphResourceId normal;
+    public GpuGraphResourceId depth;
+    public GpuGraphResourceId shadowVisibility;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuGraphResourceId sceneShading;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId materialContextSlots;
+    public GpuGraphResourceId sceneGeometryDomain;
+    public GpuGraphResourceId sceneTlas;
+
+    public SoftShadowSplitResourceInputs(
+        in borrow DeferredFrameTargets targets,
+        in borrow RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in borrow RayTracingShadowVisibilityGraphPlanSnapshot rayTracingPlan,
+        in borrow RayTracingSceneGraphReads hardwareSceneReads,
+        in Span<GpuGraphResourceId> hardwareTransparentScratch,
+        in SoftShadowSplitRoute route,
+        in Span<GpuGraphResourceId> traceGeometryResources,
+        in GpuGraphResourceId worldPosition,
+        in GpuGraphResourceId normal,
+        in GpuGraphResourceId depth,
+        in GpuGraphResourceId shadowVisibility,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuGraphResourceId sceneShading,
+        in GpuGraphResourceId lights,
+        in GpuGraphResourceId materialContextSlots,
+        in GpuGraphResourceId sceneGeometryDomain,
+        in GpuGraphResourceId sceneTlas
+    ){
+        this.targets = targets;
+        this.rayTracingResources = rayTracingResources;
+        this.rayTracingPlan = rayTracingPlan;
+        this.hardwareSceneReads = hardwareSceneReads;
+        this.hardwareTransparentScratch = hardwareTransparentScratch;
+        this.route = route;
+        this.traceGeometryResources = traceGeometryResources;
+        this.worldPosition = worldPosition;
+        this.normal = normal;
+        this.depth = depth;
+        this.shadowVisibility = shadowVisibility;
+        this.currentBindlessSlots = currentBindlessSlots;
+        this.sceneShading = sceneShading;
+        this.lights = lights;
+        this.materialContextSlots = materialContextSlots;
+        this.sceneGeometryDomain = sceneGeometryDomain;
+        this.sceneTlas = sceneTlas;
     }
-    if(payload.shadowVisibilityTiming.has_value()){
-        payload.shadowVisibilityTiming.value().discardTiming();
-        payload.shadowVisibilityTiming.reset();
-    }
-    payload.opaqueResolveTiming.value().discardTiming();
-    payload.opaqueResolveTiming.reset();
 }
 
-template<typename PayloadT>
-FOUNDATION_INLINE void DiscardOpaqueSoftShadowResolve(PayloadT& payload)noexcept{
-    payload.opaqueProduced = false;
-    Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
-    Core::DiscardGpuTimingMeasure(&payload.shadowVisibilityTiming);
-    Core::DiscardGpuTimingMeasure(&payload.opaqueResolveTiming);
+class SoftShadowSplitResourceUses{
+    public Vector<GpuTaskResourceUse> opaque;
+    public Array<GpuTaskResourceUse, s_MaxOpaqueFirstWaveletUses> opaqueFirstWavelet;
+    public usize opaqueFirstWaveletCount = 0u;
+    public Array<GpuTaskResourceUse, s_MaxOpaqueResolveUses> opaqueResolve;
+    public usize opaqueResolveCount = 0u;
+    public Vector<GpuTaskResourceUse> transparentTrace;
+    public Array<GpuTaskResourceUse, s_MaxTransparentTemporalMergeUses> transparentTemporalMerge;
+    public usize transparentTemporalMergeCount = 0u;
+    public Array<GpuTaskResourceUse, s_MaxTransparentFirstWaveletUses> transparentFirstWavelet;
+    public usize transparentFirstWaveletCount = 0u;
+    public Array<GpuTaskResourceUse, s_MaxTransparentFoldUses> transparentFold;
+    public usize transparentFoldCount = 0u;
+    public b8 graphOwnsTransparentTemporalMergeEntryStates = false;
 }
 
-template<typename PayloadT>
-FOUNDATION_INLINE void DiscardTransparentSoftShadowResolve(PayloadT& payload)noexcept{
-    payload.transparentTraceProduced = false;
-    Core::DiscardGpuTimingMeasure(&payload.transparentResolveTiming);
+class SoftShadowSplitTaskChainInputs{
+    public mut DeferredFrameTargets targets;
+    public in DeferredLightingGraphResources deferredLightingResources;
+    public in RayTracingDeferredGraphResourceSnapshot rayTracingResources;
+    public in RayTracingShadowVisibilityGraphPlanSnapshot rayTracingPlan;
+    public in b8 shadowPrepared;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public mut Optional<GpuTimingMeasure> asyncTiming;
+    public mut Optional<GpuTimingMeasure> shadowVisibilityTiming;
+    public mut Optional<GpuTimingMeasure> opaqueResolveTiming;
+    public mut Optional<GpuTimingMeasure> transparentResolveTiming;
+    public mut b8 opaqueProduced;
+    public mut b8 transparentTraceProduced;
+    public mut u32 opaqueFrameIndex;
+    public SoftShadowSplitRoute route;
+    public Span<GpuGraphResourceId> traceGeometryResources;
+    public Span<GpuTaskResourceSetUse> traceResourceSetUses;
+    public GpuTaskResourceSetUse traceGeometrySetUse;
+    public Span<GpuTaskExternalStateSource> stateSources;
+    public Span<GpuExternalCompletionId> historyWriterDrainDependencies;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuGraphResourceId sceneShading;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId materialContextSlots;
+    public GpuTaskId prefixTask;
+
+    public SoftShadowSplitTaskChainInputs(
+        mut DeferredFrameTargets targets,
+        in borrow DeferredLightingGraphResources deferredLightingResources,
+        in borrow RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in borrow RayTracingShadowVisibilityGraphPlanSnapshot rayTracingPlan,
+        in borrow b8 shadowPrepared,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming,
+        mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+        mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+        mut Optional<GpuTimingMeasure> transparentResolveTiming,
+        mut b8 opaqueProduced,
+        mut b8 transparentTraceProduced,
+        mut u32 opaqueFrameIndex,
+        in SoftShadowSplitRoute route,
+        in Span<GpuGraphResourceId> traceGeometryResources,
+        in Span<GpuTaskResourceSetUse> traceResourceSetUses,
+        in GpuTaskResourceSetUse traceGeometrySetUse,
+        in Span<GpuTaskExternalStateSource> stateSources,
+        in Span<GpuExternalCompletionId> historyWriterDrainDependencies,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuGraphResourceId sceneShading,
+        in GpuGraphResourceId lights,
+        in GpuGraphResourceId materialContextSlots,
+        in GpuTaskId prefixTask
+    ){
+        this.targets = targets;
+        this.deferredLightingResources = deferredLightingResources;
+        this.rayTracingResources = rayTracingResources;
+        this.rayTracingPlan = rayTracingPlan;
+        this.shadowPrepared = shadowPrepared;
+        this.timingTicket = timingTicket;
+        this.asyncTiming = asyncTiming;
+        this.shadowVisibilityTiming = shadowVisibilityTiming;
+        this.opaqueResolveTiming = opaqueResolveTiming;
+        this.transparentResolveTiming = transparentResolveTiming;
+        this.opaqueProduced = opaqueProduced;
+        this.transparentTraceProduced = transparentTraceProduced;
+        this.opaqueFrameIndex = opaqueFrameIndex;
+        this.route = route;
+        this.traceGeometryResources = traceGeometryResources;
+        this.traceResourceSetUses = traceResourceSetUses;
+        this.traceGeometrySetUse = traceGeometrySetUse;
+        this.stateSources = stateSources;
+        this.historyWriterDrainDependencies = historyWriterDrainDependencies;
+        this.currentBindlessSlots = currentBindlessSlots;
+        this.sceneShading = sceneShading;
+        this.lights = lights;
+        this.materialContextSlots = materialContextSlots;
+        this.prefixTask = prefixTask;
+    }
 }
 
+class ShadowVisibilityResourceInputs{
+    public in DeferredFrameTargets deferredTargets;
+    public in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources;
+    public in RayTracingDeferredGraphResourceSnapshot rayTracingResources;
+    public in RayTracingShadowVisibilityGraphPlanSnapshot rayTracingPlan;
+    public in RayTracingSceneGraphReads hardwareSceneReads;
+    public GpuGraphResourceId worldPosition;
+    public GpuGraphResourceId normal;
+    public GpuGraphResourceId depth;
+    public GpuGraphResourceId shadowVisibility;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuGraphResourceId sceneShading;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId materialContextSlots;
+    public Span<GpuGraphResourceId> traceGeometryResources;
+    public b8 traceGeometryStatesGraphOwned;
+    public b8 splitSoftTransparentFold;
+    public b8 graphOwnsOpaqueTemporalMergeEntryStates;
+    public b8 softShadowHistoryReadable;
+    public b8 opaqueHistoryFrontIsA;
+    public b8 hardwareTransparentTrace;
+    public b8 adaptiveCompact;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// A prepared frame records production, resolve, trace, fold in one packet. Shared state is stack-owned; never survives retry.
-struct ShadowVisibilityOpaqueGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // All bindings are required: opaque producer always records against this frame's ticket and brackets the shared async/shadow timing.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        b8 hardwareShadowSupported = false;
-        b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
-        LightSpaceShadowSnapshot lightSpace;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
-        const b8& prepared;
-        b8& opaqueProduced;
-        u32& opaqueFrameIndex;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    static void Discarded(Payload& payload)noexcept;
-};
-
-
-// The opaque producer leaves the trace and current geometry scratch in their declared states.
-// This adjacent task owns their sampled entry before temporal merge and, unless fused later, the first wavelet.
-// Its tail retains dynamic ping-pong and upsample work, while the terminal transparent fold remains the output/acceptance owner.
-struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // All bindings are required: first wavelet always brackets the opaque-resolve timing against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
-        Optional<Core::GpuTimingMeasure>& opaqueResolveTiming;
-        b8& opaqueProduced;
-        const u32& opaqueFrameIndex;
-        b8 hardwareShadowSupported = false;
-        b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
-        b8 deferUpsample = false;
-        b8 deferWavelet = false;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload)noexcept{
-        DiscardOpaqueSoftShadowResolve(payload);
+    public ShadowVisibilityResourceInputs(
+        in borrow DeferredFrameTargets deferredTargets,
+        in borrow RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
+        in borrow RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in borrow RayTracingShadowVisibilityGraphPlanSnapshot rayTracingPlan,
+        in borrow RayTracingSceneGraphReads hardwareSceneReads,
+        in GpuGraphResourceId worldPosition,
+        in GpuGraphResourceId normal,
+        in GpuGraphResourceId depth,
+        in GpuGraphResourceId shadowVisibility,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuGraphResourceId sceneShading,
+        in GpuGraphResourceId lights,
+        in GpuGraphResourceId materialContextSlots,
+        in Span<GpuGraphResourceId> traceGeometryResources,
+        in b8 traceGeometryStatesGraphOwned,
+        in b8 splitSoftTransparentFold,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 softShadowHistoryReadable,
+        in b8 opaqueHistoryFrontIsA,
+        in b8 hardwareTransparentTrace,
+        in b8 adaptiveCompact
+    ){
+        this.deferredTargets = deferredTargets;
+        this.rayTracingShadowResources = rayTracingShadowResources;
+        this.rayTracingResources = rayTracingResources;
+        this.rayTracingPlan = rayTracingPlan;
+        this.hardwareSceneReads = hardwareSceneReads;
+        this.worldPosition = worldPosition;
+        this.normal = normal;
+        this.depth = depth;
+        this.shadowVisibility = shadowVisibility;
+        this.currentBindlessSlots = currentBindlessSlots;
+        this.sceneShading = sceneShading;
+        this.lights = lights;
+        this.materialContextSlots = materialContextSlots;
+        this.traceGeometryResources = traceGeometryResources;
+        this.traceGeometryStatesGraphOwned = traceGeometryStatesGraphOwned;
+        this.splitSoftTransparentFold = splitSoftTransparentFold;
+        this.graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
+        this.softShadowHistoryReadable = softShadowHistoryReadable;
+        this.opaqueHistoryFrontIsA = opaqueHistoryFrontIsA;
+        this.hardwareTransparentTrace = hardwareTransparentTrace;
+        this.adaptiveCompact = adaptiveCompact;
     }
-};
+}
 
+class ShadowVisibilityResourcePlan{
+    public GpuGraphResourceId sceneGeometryDomain;
+    public GpuGraphResourceId sceneTlas;
+    public Array<GpuGraphResourceId, s_HwTransparentScratchBufferCount> hardwareTransparentScratch;
+    public GpuGraphResourceId adaptiveEdgeCounter;
+    public Vector<GpuTaskResourceUse> resourceUses;
+}
 
-struct ShadowVisibilityOpaqueResolveTailGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+[modular]
+class SoftShadowSplitResourceUseBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
 
-
-public:
-    // All bindings are required: resolve tail always closes the opaque-resolve timing against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
-        Optional<Core::GpuTimingMeasure>& opaqueResolveTiming;
-        b8& opaqueProduced;
-        const u32& opaqueFrameIndex;
-        b8 hardwareShadowSupported = false;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload)noexcept{
-        DiscardOpaqueSoftShadowResolve(payload);
+    public SoftShadowSplitResourceUseBuilder(mut GpuTaskGraph graph){
+        this.m_graph = graph;
     }
-};
 
+    [cpp_unwind]
+    public b8 build(in SoftShadowSplitResourceInputs inputs, mut SoftShadowSplitResourceUses uses);
+}
 
-// The prepared path keeps trace and resolve apart so the graph lowers transparent output from UAV to shader-read.
-struct ShadowTransparentSoftTraceGraphTask{
-    // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer };
+[modular]
+class SoftShadowSplitTaskChainBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut GraphicsRuntime m_graphics;
+    private mut RendererRayTracingSystem m_raytracingSystem;
 
-
-public:
-    // All bindings are required: transparent trace always records against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        LightSpaceShadowSnapshot lightSpace;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        const b8& opaqueProduced;
-        const u32& opaqueFrameIndex;
-        b8& transparentTraceProduced;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload)noexcept{
-        payload.transparentTraceProduced = false;
+    public SoftShadowSplitTaskChainBuilder(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererRayTracingSystem raytracingSystem){
+        this.m_graph = graph;
+        this.m_graphics = graphics;
+        this.m_raytracingSystem = raytracingSystem;
     }
-};
 
+    [cpp_unwind]
+    public b8 declare(in SoftShadowSplitTaskChainInputs inputs, mut SoftShadowSplitResourceUses uses, mut SoftShadowSplitTasks tasks);
 
-// The transparent trace publishes half-res RGB visibility. On temporal frames it freezes the history pair, publishes the next pair, starts resolve.
-struct ShadowTransparentSoftTemporalMergeGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+    [cpp_unwind]
+    private Expected<SoftShadowLightSpaceMaps> declareLightSpaceShadowMaps(in SoftShadowSplitTaskChainInputs inputs, mut SoftShadowSplitResourceUses uses);
 
+    [cpp_unwind]
+    private b8 declareOpaqueTasks(
+        in SoftShadowSplitTaskChainInputs inputs,
+        in SoftShadowSplitResourceUses uses,
+        in borrow GpuTaskId shadowTraceDependency,
+        in GpuTaskSchedulingHint tailScheduling,
+        mut SoftShadowSplitTasks tasks
+    );
 
-public:
-    // All bindings are required: temporal merge always brackets the transparent-resolve timing against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-        const b8& opaqueProduced;
-        b8& transparentTraceProduced;
-        const u32& opaqueFrameIndex;
-        b8 graphOwnsTransparentTemporalMergeEntryStates = false;
-        b8 combinedTemporal = false;
-        b8 hardwareShadowSupported = false;
-    };
+    [cpp_unwind]
+    private b8 declareTransparentTasks(
+        in SoftShadowSplitTaskChainInputs inputs,
+        in SoftShadowSplitResourceUses uses,
+        in GpuTaskSchedulingHint tailScheduling,
+        in GpuGraphResourceId csgShadowContext,
+        mut SoftShadowSplitTasks tasks
+    );
+}
 
+[modular]
+class ShadowVisibilityResourcePlanner : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererRayTracingSystem m_raytracingSystem;
 
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload)noexcept{
-        DiscardTransparentSoftShadowResolve(payload);
+    public ShadowVisibilityResourcePlanner(mut GpuTaskGraph graph, mut RendererRayTracingSystem raytracingSystem){
+        this.m_graph = graph;
+        this.m_raytracingSystem = raytracingSystem;
     }
-};
 
-
-// Trace or merge publishes the first wavelet input. The terminal fold keeps the final upsample plus output/acceptance.
-struct ShadowTransparentSoftFirstWaveletGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // All bindings are required: first wavelet always brackets the transparent-resolve timing against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-        const b8& opaqueProduced;
-        b8& transparentTraceProduced;
-        const u32& opaqueFrameIndex;
-        b8 graphOwnsTransparentWaveletInputBoundary = false;
-        b8 startsTransparentResolveTiming = true;
-        b8 combinedWavelet = false;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload)noexcept{
-        DiscardTransparentSoftShadowResolve(payload);
-    }
-};
-
-
-struct ShadowTransparentSoftFoldGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // All bindings are required: terminal fold always closes the shared async/shadow/resolve timing against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
-        Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-        const b8& opaqueProduced;
-        b8& transparentTraceProduced;
-        const u32& opaqueFrameIndex;
-        b8 combinedUpsample = false;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    static void Discarded(Payload& payload)noexcept;
-};
-
-
-// Shadow visibility owns its graph task; pipeline composes the caustics successor.
-struct ShadowVisibilityGraphTask{
-    // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer };
-
-
-public:
-    // All bindings are required: visibility always records against this frame's bindings.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        const b8& prepared;
-        GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
-        b8 hardwareShadowSupported = false;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload)noexcept{
-        payload.raytracingSystem.discardSoftShadowTemporalHistory();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public b8 prepare(in ShadowVisibilityResourceInputs inputs, mut ShadowVisibilityResourcePlan result);
 }
 
 
@@ -638,26 +333,6 @@ usize ResolveShadowTraceGeometryReserveCount(in usize baseCapacity, in b8 traceG
     if(traceGeometryStatesGraphOwned)
         return baseCapacity;
     return baseCapacity + traceGeometryCount;
-}
-
-u32 EncodeShadowHistoryValidFlag(in b8 historyReadable){
-    if(historyReadable)
-        return 1u;
-    return 0u;
-}
-
-b8 CanUseSoftwareTransparentSamplingHistory(
-    in SoftwareTransparentShadowTraceInputs inputs,
-    in b8 softTransparentTemporalReady,
-    in b8 samplingHistoryUsable
-){
-    return inputs.temporalHistoryReadable && softTransparentTemporalReady && samplingHistoryUsable;
-}
-
-usize SelectSoftwareTransparentSamplingPipelineIndex(in b8 samplingHistoryUsable){
-    if(samplingHistoryUsable)
-        return 1u;
-    return 0u;
 }
 
 

@@ -2,81 +2,297 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
+
+#include <impl/ecs_render/kernel/task_graph_barrier_task.adhd>
+#include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/material/task_graph_resource_sets.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+const StringView s_ObjectGeometryCacheLabel = "Object Geometry Cache";
+const StringView s_ObjectGeometryDecodeMarkerLabel = "Object Geometry Decode";
+const StringView s_ObjectGeometryReadyMarkerLabel = "Object Geometry Ready";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+class ObjectGeometryDecodeIdentity{
+    public Name meshKey = s_NameNone;
+    public u64 sourceRevision = 0u;
+    public u32 meshletCount = 0u;
+    public u32 indexByteOffset = 0u;
+    public u32 indexCount = 0u;
+    public b8 runtimeMesh = false;
+    public b8 requiresDecode = false;
+    public b8 initialized = false;
+
+    public b8 matches(in ObjectGeometryDecodeIdentity other)const{
+        return this.meshKey == other.meshKey
+            && this.runtimeMesh == other.runtimeMesh
+            && this.meshletCount == other.meshletCount
+            && this.sourceRevision == other.sourceRevision
+            && this.requiresDecode == other.requiresDecode
+            && this.initialized == other.initialized
+            && this.indexByteOffset == other.indexByteOffset
+            && this.indexCount == other.indexCount;
+    }
+}
+
+u64 ComputeObjectGeometryInstanceByteOffset(in u32 instanceIndex, in usize instanceByteStride){
+    return cast<u64>(instanceIndex) * cast<u64>(instanceByteStride);
+}
+
+Expected<Name> FormatObjectGeometryDecodeIdentity(in usize entryIndex){
+    CompactString text = CompactString("render.object_geometry.decode_");
+    AppendUnsignedU64Text(text, cast<u64>(entryIndex));
+    return ParseName(text.view());
+}
+
+Expected<Name> FormatObjectGeometryReadyIdentity(in usize phaseIndex){
+    CompactString text = CompactString("render.object_geometry.ready_");
+    AppendUnsignedU64Text(text, cast<u64>(phaseIndex));
+    return ParseName(text.view());
+}
+
+ObjectGeometryDecodeIdentity MakeDecodeIdentity(in MaterialPassDrawItem item){
+    in ObjectGeometryCacheSnapshot cache = item.meshResources.objectGeometryCache;
+    ObjectGeometryDecodeIdentity identity;
+    identity.meshKey = item.meshKey;
+    identity.sourceRevision = cache.sourceRevision;
+    identity.meshletCount = item.meshResources.meshletCount;
+    identity.indexByteOffset = cache.indexByteOffset;
+    identity.indexCount = cache.indexCount;
+    identity.runtimeMesh = item.meshResources.runtimeMesh;
+    identity.requiresDecode = cache.requiresDecode;
+    identity.initialized = cache.initialized;
+    return identity;
+}
+
+b8 SameDecode(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
+    in ObjectGeometryCacheSnapshot leftCache = left.meshResources.objectGeometryCache;
+    in ObjectGeometryCacheSnapshot rightCache = right.meshResources.objectGeometryCache;
+    if(
+        !MakeDecodeIdentity(left).matches(MakeDecodeIdentity(right))
+        || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
+        || leftCache.decoderPipeline != rightCache.decoderPipeline
+    )
+        return false;
+    if(!left.meshResources.sourceBuffers.sameBuffers(right.meshResources.sourceBuffers))
+        return false;
+    for(usize index = 0u; index < LengthOf(left.meshResources.geometryHeapHandles); ++index){
+        if(left.meshResources.geometryHeapHandles[index] != right.meshResources.geometryHeapHandles[index])
+            return false;
+    }
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMaterialSystem;
-class RendererMeshSystem;
+class ObjectGeometryDecodeGraphTask{
+    public mut RendererMaterialSystem materialSystem;
+    public mut RendererMeshSystem meshSystem;
+    public MaterialPassDrawItem draw;
+    public MeshFrameBindingSnapshot frameBindings;
+    public GraphicsPrefixTimingTicket timingTicket;
+    public Optional<in GraphicsPrefixTimingTicket> rebindableTimingTicket;
 
-// One declaration-local registry deduplicates immutable object vertices and indices across every material raster phase.
-class ObjectGeometryCacheGraph final : NoCopy{
-private:
-    struct Entry{
-        MaterialPassDrawItem draw;
-        Core::GpuGraphResourceId resource;
-        Core::GpuTaskId producer;
-    };
-
-
-public:
-    ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)noexcept
-        : m_graph(graph)
-        , m_materialSystem(materialSystem)
-        , m_meshSystem(meshSystem)
-        , m_entries(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 prepare(
-        Span<const MaterialPassDrawItem> draws,
-        const MeshFrameBindingSnapshot& frameBindings,
-        Core::Alloc::ScratchArena& scratchArena,
-        Core::GpuTaskId& dependency,
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& rasterUses,
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr,
-        Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererMaterialSystem& m_materialSystem;
-    RendererMeshSystem& m_meshSystem;
-    Vector<Entry, Core::Alloc::ScratchArena> m_entries;
-    usize m_phaseCount = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
+    public ObjectGeometryDecodeGraphTask(mut RendererMaterialSystem materials, mut RendererMeshSystem meshes, in MaterialPassDrawItem draw, in MeshFrameBindingSnapshot bindings){
+        this.materialSystem = materials;
+        this.meshSystem = meshes;
+        this.draw = draw;
+        this.frameBindings = bindings;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Compute;
+        return requirements;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext recordContext)const{
+        GraphicsPrefixTimingTicket ticket = this.timingTicket;
+        if(this.rebindableTimingTicket.has_value())
+            ticket = this.rebindableTimingTicket.value();
+        Optional<GpuTimingTicketRecordingScope> timing;
+        if(ticket.has_value())
+            timing.emplace(ticket.value());
+        commands.endRenderPass();
+        const ViewportState viewport = ViewportState();
+        MaterialPassDrawContext context(commands, viewport, this.frameBindings, MaterialPipelinePass::Opaque, true, true, true);
+        if(!this.materialSystem.recordObjectGeometryDecode(context, this.draw))
+            return false;
+        commands.setBufferState(this.draw.meshResources.objectGeometryCache.buffer.deref(), s_ObjectGeometryRasterState);
+        commands.commitBarriers();
+        return true;
+    }
+    public void accepted(in QueueSubmissionToken token){
+        if(!this.meshSystem.confirmObjectGeometryCache(this.draw.meshKey, this.draw.meshResources.sourceBuffers, this.draw.meshResources.objectGeometryCache, this.draw.meshResources.runtimeMesh))
+            return;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ObjectGeometryGraphEntry{
+    public MaterialPassDrawItem draw;
+    public GpuGraphResourceId resource;
+    public GpuTaskId producer;
+}
+
+// All material raster phases share this registry for the lifetime of one graph declaration.
+class ObjectGeometryCacheGraph : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererMaterialSystem m_materialSystem;
+    private mut RendererMeshSystem m_meshSystem;
+    private Vector<ObjectGeometryGraphEntry> m_entries;
+    private usize m_phaseCount = 0u;
+
+    public ObjectGeometryCacheGraph(mut GpuTaskGraph graph, mut RendererMaterialSystem materials, mut RendererMeshSystem meshes){
+        this.m_graph = graph;
+        this.m_materialSystem = materials;
+        this.m_meshSystem = meshes;
+    }
+
+    [cpp_unwind]
+    private Expected<GpuTaskId> declareDecode(
+        in Span<MaterialPassDrawItem> draw, in MeshFrameBindingSnapshot bindings,
+        in GpuGraphResourceId resource, in borrow GpuTaskId dependency,
+        in GraphicsPrefixTimingTicket ticket, in Optional<in GraphicsPrefixTimingTicket> rebindable
+    ){
+        const MaterialPassDrawItemsView drawSet(Span<MaterialPassDrawItem>(), Span<MaterialPassDrawItem>(), draw);
+        const Array<MaterialPassDrawItemsView, 1u> sets(drawSet);
+        Expected<Vector<GpuTaskResourceUse>> gathered = GatherPreparedMaterialGeometryUses(sets, this.m_graph);
+        if(!gathered.has_value())
+            return MakeUnexpected(Failure());
+        GpuGraphResourceId instances;
+        {
+            const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(this.m_graph);
+            if(!declarations.valid())
+                return MakeUnexpected(Failure());
+            instances = declarations.findImportedBuffer(bindings.instanceBuffer);
+        }
+        if(!instances.valid())
+            return MakeUnexpected(Failure());
+        gathered.value().reserve(gathered.value().size() + s_DecodeExtraResourceUseCount);
+        const usize stride = size_of<InstanceGpuData>();
+        gathered.value().push_back(ReadBufferUse(instances, BufferRange(ComputeObjectGeometryInstanceByteOffset(draw[0u].instanceIndex, stride), stride)));
+        gathered.value().push_back(WriteUse(resource, ResourceStates::UnorderedAccess));
+        gathered.value().push_back(ReadUse(resource, s_ObjectGeometryRasterState));
+        const Expected<Name> identity = FormatObjectGeometryDecodeIdentity(this.m_entries.size());
+        if(!identity.has_value())
+            return MakeUnexpected(Failure());
+        GpuTaskDesc desc = TaskDesc(identity.value(), s_ObjectGeometryDecodeMarkerLabel);
+        desc.setDependency(dependency).setResourceUses(gathered.value());
+        ObjectGeometryDecodeGraphTask decode(this.m_materialSystem, this.m_meshSystem, draw[0u], bindings);
+        decode.timingTicket = ticket;
+        decode.rebindableTimingTicket = rebindable;
+        return this.m_graph.addPreparedPayloadTask(desc, decode);
+    }
+
+    [cpp_unwind]
+    public b8 prepare(
+        in Span<MaterialPassDrawItem> draws, in MeshFrameBindingSnapshot bindings, mut GpuTaskId dependency,
+        mut Vector<GpuTaskResourceUse> rasterUses, in GraphicsPrefixTimingTicket ticket, in Optional<in GraphicsPrefixTimingTicket> rebindable
+    ){
+        Vector<GpuTaskResourceUse> cacheReads;
+        Vector<GpuTaskId> producers;
+        cacheReads.reserve(draws.size());
+        producers.reserve(draws.size() + 1u);
+        for(usize i = 0u; i < draws.size(); ++i){
+            in MaterialPassDrawItem draw = draws[i];
+            in ObjectGeometryCacheSnapshot cache = draw.meshResources.objectGeometryCache;
+            if(!draw.pipelineResources.indexedPipeline.valid() || !draw.pipelineResources.objectGeometryDecodePipeline.valid()
+                || !cache.valid() || draw.pipelineResources.objectGeometryDecodePipeline != cache.decoderPipeline
+                || !bindings.bindingValid() || draw.instanceIndex >= bindings.instanceBufferCapacity)
+                return false;
+            usize entryIndex = 0u;
+            while(entryIndex < this.m_entries.size()){
+                in MaterialPassDrawItem previous = this.m_entries[entryIndex].draw;
+                if(previous.meshResources.objectGeometryCache.buffer == cache.buffer){
+                    if(!SameDecode(previous, draw))
+                        return false;
+                    break;
+                }
+                ++entryIndex;
+            }
+            if(entryIndex == this.m_entries.size()){
+                GpuGraphResourceDesc desc = BufferResourceDesc(cache.buffer.deref().getCreationDescription().debugName, s_ObjectGeometryCacheLabel);
+                ResourceStates initial = ResourceStates::Common;
+                if(cache.initialized)
+                    initial = s_ObjectGeometryRasterState;
+                desc.setInitialState(initial).setExternalFinalState(s_ObjectGeometryRasterState);
+                const Expected<GpuGraphResourceId> imported = this.m_graph.importBuffer(cache.buffer, desc);
+                if(!imported.has_value())
+                    return false;
+                ObjectGeometryGraphEntry entry;
+                entry.draw = draw;
+                entry.resource = imported.value();
+                if(cache.requiresDecode){
+                    const auto producer = this.declareDecode(draws.subspan(i, 1u), bindings, entry.resource, dependency, ticket, rebindable);
+                    if(!producer.has_value())
+                        return false;
+                    entry.producer = producer.value();
+                    dependency = entry.producer;
+                }
+                this.m_entries.push_back(entry);
+            }
+            in ObjectGeometryGraphEntry retained = this.m_entries[entryIndex];
+            b8 alreadyRead = false;
+            for(in GpuTaskResourceUse use : cacheReads){
+                if(use.resource == retained.resource){
+                    alreadyRead = true;
+                    break;
+                }
+            }
+            if(!alreadyRead){
+                cacheReads.push_back(ReadUse(retained.resource, s_ObjectGeometryRasterState));
+                if(retained.producer.valid())
+                    producers.push_back(retained.producer);
+            }
+        }
+        if(cacheReads.empty())
+            return true;
+        for(in GpuTaskResourceUse use : cacheReads)
+            rasterUses.push_back(use);
+        // A read-only cache needs no phase task when this frame produced no writes.
+        if(producers.empty())
+            return true;
+        if(!dependency.valid())
+            return false;
+        b8 containsDependency = false;
+        for(in GpuTaskId producer : producers){
+            if(producer == dependency){
+                containsDependency = true;
+                break;
+            }
+        }
+        if(!containsDependency)
+            producers.push_back(dependency);
+        const Expected<Name> identity = FormatObjectGeometryReadyIdentity(this.m_phaseCount);
+        ++this.m_phaseCount;
+        if(!identity.has_value()){
+            dependency = GpuTaskId();
+            return false;
+        }
+        GpuTaskDesc ready = TaskDesc(identity.value(), s_ObjectGeometryReadyMarkerLabel);
+        ready.setDependencies(producers).setResourceUses(cacheReads);
+        const auto result = this.m_graph.addPayloadTask(ready, BarrierOnlyGraphTask());
+        if(!result.has_value()){
+            dependency = GpuTaskId();
+            return false;
+        }
+        dependency = result.value();
+        return true;
+    }
 }
 
 

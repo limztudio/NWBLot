@@ -2,279 +2,591 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/builder_scope.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/builder_scope.adhd.h>
+// Transient declarations shape text, arrange each scope, then publish paint and hit targets in order.
+[modular, friend(ListLayoutPreparer)]
+class Builder : NoCopy{
+    private mut Context m_context;
+    private mut PaintBuilder m_paint;
+    private mut TextService m_text;
+    private BuilderScopeFrame m_scopeFrame;
+    private Optional<mut BuilderScopeFrame> m_scope;
+    private Array<ArenaObjectSlot<BuilderScopeFrame>, s_MaxNestedPopupFrames> m_popupFrames;
+    private usize m_popupFrameCount = 0u;
+    private Optional<in UiSkin> m_skin;
+    private WidgetStyle m_style;
+    private String m_textLanguage;
+    private u32 m_textScriptTag = s_TextDefaultScriptTag;
+    private f32 m_skinDefaultFontSize = s_TextDefaultFontSize;
+    private EditBoxStyle m_editStyle;
+    private ScrollbarStyle m_scrollbarStyle;
+    private PopupStyle m_popupStyle;
+    private ListStyle m_listStyle;
+    private RadioGroupStyle m_radioGroupStyle;
+    private SliderStyle m_sliderStyle;
+    private ProgressStyle m_progressStyle;
+    private ComboStyle m_comboStyle;
+    private TooltipStyle m_tooltipStyle;
+    private Optional<mut IEditBoxHost> m_editHost;
+    private f32 m_deltaSeconds = 0.0f;
+    private b8 m_pointerBusy = false;
+    private b8 m_declaring = false;
+    private b8 m_finalizing = false;
 
+    [cpp_unwind]
+    public Builder(mut Context context, mut PaintBuilder paint, mut TextService text){
+        this.m_context = context;
+        this.m_paint = paint;
+        this.m_text = text;
+        this.m_textLanguage.assign(s_TextDefaultLanguage);
+        this.m_scope = Optional<mut BuilderScopeFrame>(this.m_scopeFrame);
+        for(usize index = 0u; index < s_MaxNestedPopupFrames; ++index){
+            if(!this.m_popupFrames[index].tryEmplace())
+                break;
+        }
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void setEditHost(mut IEditBoxHost host){
+        if(this.declarationBlocked())
+            this.m_context.fail();
+        else
+            this.m_editHost = Optional<mut IEditBoxHost>(host);
+    }
 
+    public void clearEditHost(){
+        if(this.declarationBlocked())
+            this.m_context.fail();
+        else
+            this.m_editHost.reset();
+    }
 
-NWB_IMPL_UI_BEGIN
+    [owner_result]
+    private BuilderItem makeItem()const{ return BuilderItem(); }
 
+    [owner_result]
+    private BuilderListFrame makeListFrame()const{ return BuilderListFrame(); }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [owner_result]
+    private BuilderTooltipFrame makeTooltipFrame()const{ return BuilderTooltipFrame(); }
 
+    [owner_result]
+    private RadioGroupFrame makeRadioGroupFrame(in borrow IListDataSource source, mut RadioGroupState state)const{
+        return RadioGroupFrame(source, state);
+    }
 
-// Transient declarations shape text, arrange a panel, then freeze paint and hit targets in the same order.
-class Builder final : NoCopy{
-    friend class ListLayoutPreparer;
-    friend class TooltipCoordinator;
-    friend class ContextMenuCoordinator;
-    friend class ComboCoordinator;
-    friend class EditBoxCoordinator;
-    friend class TextAreaCoordinator;
-    friend class NumericEditCoordinator;
-    friend class ListCoordinator;
-private:
-    using Item = BuilderScopeFrame::Item;
-    using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
-    using NumericEditFrame = BuilderScopeFrame::NumericEditFrame;
-    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
-    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ListRow = BuilderScopeFrame::ListRow;
-    using ComboFrame = BuilderScopeFrame::ComboFrame;
-    using TooltipFrame = BuilderScopeFrame::TooltipFrame;
-    using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
+    private void checkStyleAccess(){
+        if(this.declarationBlocked())
+            this.m_context.fail();
+    }
 
+    [cpp_unwind]
+    public b8 beginPanel(in StringView stableKey, in Rect bounds){ return this.beginPanel(stableKey, bounds, LayoutDirection::Column); }
+    [cpp_unwind]
+    public b8 beginPanel(in StringView stableKey, in Rect bounds, in LayoutDirection direction);
 
-public:
-    Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text);
+    [cpp_unwind]
+    public b8 endPanel();
 
-
-public:
-    [[nodiscard]] b8 beginPanel(AStringView stableKey, const Rect& bounds, LayoutDirection::Enum direction = LayoutDirection::Column);
-    [[nodiscard]] b8 endPanel();
     // Returns content visibility.
     // A collapsed window still opens a scope and requires endWindow().
     // The borrowed WindowState must remain alive through that matching endWindow().
-    [[nodiscard]] b8 beginWindow(AStringView stableKey, StringView title, WindowState& state, const WindowOptions& options = {});
-    [[nodiscard]] b8 endWindow();
+    [cpp_unwind]
+    public b8 beginWindow(in StringView stableKey, in StringView title, mut WindowState state){ return this.beginWindow(stableKey, title, state, WindowOptions()); }
+    [cpp_unwind]
+    public b8 beginWindow(in StringView stableKey, in StringView title, mut WindowState state, in WindowOptions options);
+
+    // Returns content visibility.
+    [cpp_unwind]
+    public b8 endWindow();
+
     // Popups begin after a balanced panel/window or within another popup. Only a visible begin requires endPopup().
-    [[nodiscard]] b8 beginPopup(AStringView stableKey, PopupState& state, const PopupOptions& options = {});
-    [[nodiscard]] b8 endPopup();
-    [[nodiscard]] b8 beginRow(const AStringView stableKey, const ContainerOptions& options = {}){ return beginContainer(stableKey, LayoutDirection::Row, options); }
-    [[nodiscard]] b8 beginColumn(const AStringView stableKey, const ContainerOptions& options = {}){ return beginContainer(stableKey, LayoutDirection::Column, options); }
-    [[nodiscard]] b8 endContainer()noexcept;
-    [[nodiscard]] b8 label(const AStringView stableKey, const StringView text, const WidgetOptions& options = {}){ return addItem(stableKey, text, WidgetKind::Label, options).has_value(); }
+    [cpp_unwind]
+    public b8 beginPopup(in StringView stableKey, mut PopupState state){ return this.beginPopup(stableKey, state, PopupOptions()); }
+    [cpp_unwind]
+    public b8 beginPopup(in StringView stableKey, mut PopupState state, in PopupOptions options);
+
+    [cpp_unwind]
+    public b8 endPopup();
+
+    [cpp_unwind]
+    public b8 beginRow(in StringView stableKey){ return this.beginRow(stableKey, ContainerOptions()); }
+    [cpp_unwind]
+    public b8 beginRow(in StringView stableKey, in ContainerOptions options){ return this.beginContainer(stableKey, LayoutDirection::Row, options); }
+
+    [cpp_unwind]
+    public b8 beginColumn(in StringView stableKey){ return this.beginColumn(stableKey, ContainerOptions()); }
+    [cpp_unwind]
+    public b8 beginColumn(in StringView stableKey, in ContainerOptions options){ return this.beginContainer(stableKey, LayoutDirection::Column, options); }
+
+    public b8 endContainer();
+
+    [cpp_unwind]
+    public b8 label(in StringView stableKey, in StringView text){ return this.label(stableKey, text, WidgetOptions()); }
+    [cpp_unwind]
+    public b8 label(in StringView stableKey, in StringView text, in WidgetOptions options){ return this.addItem(stableKey, text, WidgetKind::Label, options).has_value(); }
+
     // Return one action at most per declaration. Disabled controls discard stale activation and remain pointer barriers.
-    b8 button(AStringView stableKey, StringView text, const WidgetOptions& options = {});
-    [[nodiscard]] b8 checkbox(AStringView stableKey, StringView text, b8& checked, const WidgetOptions& options = {});
-    [[nodiscard]] b8 selectable(AStringView stableKey, StringView text, b8 selected, const WidgetOptions& options = {});
+    [cpp_unwind]
+    public b8 button(in StringView stableKey, in StringView text){ return this.button(stableKey, text, WidgetOptions()); }
+    [cpp_unwind]
+    public b8 button(in StringView stableKey, in StringView text, in WidgetOptions options);
+
+    [cpp_unwind]
+    public b8 checkbox(in StringView stableKey, in StringView text, mut b8 checked){ return this.checkbox(stableKey, text, checked, WidgetOptions()); }
+    [cpp_unwind]
+    public b8 checkbox(in StringView stableKey, in StringView text, mut b8 checked, in WidgetOptions options);
+
+    [cpp_unwind]
+    public b8 selectable(in StringView stableKey, in StringView text, in b8 selected){ return this.selectable(stableKey, text, selected, WidgetOptions()); }
+    [cpp_unwind]
+    public b8 selectable(in StringView stableKey, in StringView text, in b8 selected, in WidgetOptions options);
+
     // Borrowed through the matching endPanel/endWindow/endPopup; explicit state/source changes must wait until that scope ends.
     // Only visible rows are borrowed and shaped; stable keys must be unique and lookup/search efficient.
-    [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options = {});
+    [cpp_unwind]
+    public ListResult virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state){ return this.virtualList(stableKey, source, state, ListOptions()); }
+    [cpp_unwind]
+    public ListResult virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, in ListOptions options);
+
     // The complete bounded group borrows source/state through the enclosing scope or outermost popup end.
-    [[nodiscard]] RadioGroupResult radioGroup(AStringView stableKey, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options = {});
+    [cpp_unwind]
+    public RadioGroupResult radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state){ return this.radioGroup(stableKey, source, state, RadioGroupOptions()); }
+    [cpp_unwind]
+    public RadioGroupResult radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options);
+
     // Values and results become available after the successful enclosing scope or outermost popup end.
-    [[nodiscard]] b8 slider(AStringView stableKey, SliderState& state, const SliderOptions& options = {});
+    [cpp_unwind]
+    public b8 slider(in StringView stableKey, mut SliderState state){ return this.slider(stableKey, state, SliderOptions()); }
+    [cpp_unwind]
+    public b8 slider(in StringView stableKey, mut SliderState state, in SliderOptions options);
+
     // A passive declaration copies its finite fraction and resolved skin style.
-    [[nodiscard]] b8 progress(AStringView stableKey, f64 fraction, const ProgressOptions& options = {});
+    [cpp_unwind]
+    public b8 progress(in StringView stableKey, in f64 fraction){ return this.progress(stableKey, fraction, ProgressOptions()); }
+    [cpp_unwind]
+    public b8 progress(in StringView stableKey, in f64 fraction, in ProgressOptions options);
+
     // Copies an authored skin region and its sizing/tint policy; default dimensions use its natural extent.
-    [[nodiscard]] b8 image(AStringView stableKey, const Name& regionName, const ImageOptions& options = {});
-    // Retains an immutable engine texture source and copied options; natural size is its texel extent in logical units.
-    [[nodiscard]] b8 image(AStringView stableKey, const SharedImageSource& source, const ImageOptions& options = {});
+    [cpp_unwind]
+    public b8 image(in StringView stableKey, in Name regionName){ return this.image(stableKey, regionName, ImageOptions()); }
+    [cpp_unwind]
+    public b8 image(in StringView stableKey, in Name regionName, in ImageOptions options);
+
+    // Copies an authored skin region and its sizing/tint policy; default dimensions use its natural extent.
+    [cpp_unwind]
+    public b8 image(in StringView stableKey, in SharedImageSource source){ return this.image(stableKey, source, ImageOptions()); }
+    [cpp_unwind]
+    public b8 image(in StringView stableKey, in SharedImageSource source, in ImageOptions options);
+
     // Image and texture-image declarations share one frame publisher.
-    [[nodiscard]] b8 publishImageFrame(const WidgetState& widget, ImageFrame&& frame);
+    [cpp_unwind]
+    public b8 publishImageFrame(in WidgetState widget, mut ImageFrame frame);
+
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
-    [[nodiscard]] ComboResult comboBox(const AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {}){ return declareCombo(stableKey, source, options, nullptr, state); }
-    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options = {});
+    [cpp_unwind]
+    public ComboResult comboBox(in StringView stableKey, in borrow IListDataSource source, mut ComboState state){ return this.comboBox(stableKey, source, state, ComboOptions()); }
+    [cpp_unwind]
+    public ComboResult comboBox(in StringView stableKey, in borrow IListDataSource source, mut ComboState state, in ComboOptions options){ return this.declareCombo(stableKey, source, options, Optional<in SearchComboOptions>(), state); }
+
+    [cpp_unwind]
+    public SearchComboResult searchComboBox(in StringView stableKey, mut ISearchableListDataSource source, mut SearchComboState state){ return this.searchComboBox(stableKey, source, state, SearchComboOptions()); }
+    [cpp_unwind]
+    public SearchComboResult searchComboBox(in StringView stableKey, mut ISearchableListDataSource source, mut SearchComboState state, in SearchComboOptions options);
+
     // Attach to a preceding item in this same container. Models are borrowed until the enclosing scope ends.
-    [[nodiscard]] b8 tooltip(AStringView stableKey, AStringView anchorKey, StringView text, TooltipState& state, const TooltipOptions& options = {});
-    [[nodiscard]] ContextMenuResult contextMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options = {});
-    [[nodiscard]] b8 separator(AStringView stableKey, const SeparatorOptions& options = {});
-    [[nodiscard]] EditBoxResult editBox(const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {}){ return declareEditBox(stableKey, options, model, state); }
+    [cpp_unwind]
+    public b8 tooltip(in StringView stableKey, in StringView anchorKey, in StringView text, mut TooltipState state){ return this.tooltip(stableKey, anchorKey, text, state, TooltipOptions()); }
+    [cpp_unwind]
+    public b8 tooltip(in StringView stableKey, in StringView anchorKey, in StringView text, mut TooltipState state, in TooltipOptions options);
+
+    [cpp_unwind]
+    public ContextMenuResult contextMenu(in StringView stableKey, in StringView anchorKey, in borrow IListDataSource source, mut ContextMenuState state){ return this.contextMenu(stableKey, anchorKey, source, state, ContextMenuOptions()); }
+    [cpp_unwind]
+    public ContextMenuResult contextMenu(in StringView stableKey, in StringView anchorKey, in borrow IListDataSource source, mut ContextMenuState state, in ContextMenuOptions options);
+
+    [cpp_unwind]
+    public b8 separator(in StringView stableKey){ return this.separator(stableKey, SeparatorOptions()); }
+    [cpp_unwind]
+    public b8 separator(in StringView stableKey, in SeparatorOptions options);
+
+    [cpp_unwind]
+    public EditBoxResult editBox(in StringView stableKey, mut EditModel model, mut EditBoxState state){ return this.editBox(stableKey, model, state, EditBoxOptions()); }
+    [cpp_unwind]
+    public EditBoxResult editBox(in StringView stableKey, mut EditModel model, mut EditBoxState state, in EditBoxOptions options){ return this.declareEditBox(stableKey, options, model, state); }
+
     // Multiline model and viewport remain lent through the enclosing scope or outermost popup end.
-    [[nodiscard]] EditBoxResult textArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options = {});
+    [cpp_unwind]
+    public EditBoxResult textArea(in StringView stableKey, mut EditModel model, mut TextAreaState state){ return this.textArea(stableKey, model, state, TextAreaOptions()); }
+    [cpp_unwind]
+    public EditBoxResult textArea(in StringView stableKey, mut EditModel model, mut TextAreaState state, in TextAreaOptions options);
+
     // Numeric model and editor state remain lent through the enclosing scope or outermost user popup end.
-    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options = {});
-    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options = {});
-    [[nodiscard]] b8 balanced()const noexcept{ return !declarationBlocked() && !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
-    void reset()noexcept;
+    [cpp_unwind]
+    public NumericEditBoxResult integerEdit(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state){ return this.integerEdit(stableKey, model, state, IntegerEditOptions()); }
+    [cpp_unwind]
+    public NumericEditBoxResult integerEdit(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerEditOptions options);
+
+    [cpp_unwind]
+    public NumericEditBoxResult floatEdit(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state){ return this.floatEdit(stableKey, model, state, FloatEditOptions()); }
+    [cpp_unwind]
+    public NumericEditBoxResult floatEdit(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state, in FloatEditOptions options);
+
+    public b8 balanced()const{ return !this.declarationBlocked() && !this.m_scope.value().m_panelActive && !this.m_scope.value().m_windowActive && !this.m_scope.value().m_popupState.has_value(); }
+
+    public void reset();
+
     // Observe accepted input without retaining target pointers across frame publication.
-    [[nodiscard]] const InputRouter& input()const noexcept{ return m_context.input(); }
+    public in InputRouter input()const{ return this.m_context.input(); }
 
-    [[nodiscard]] b8 failed()const noexcept{ return m_context.failed(); }
-    void setSkin(const UiSkin& skin)noexcept;
+    public b8 failed()const{ return this.m_context.failed(); }
+
+    public void setSkin(in borrow UiSkin skin);
+
     // One explicit left-to-right script/language policy applies to every widget declaration and its deferred paint.
-    [[nodiscard]] b8 setTextShaping(u32 scriptTag, StringView language);
-    [[nodiscard]] WidgetStyle& style()noexcept{ return accessStyle(m_style); }
-    [[nodiscard]] ScrollbarStyle& scrollbarStyle()noexcept{ return accessStyle(m_scrollbarStyle); }
-    [[nodiscard]] EditBoxStyle& editStyle()noexcept{ return accessStyle(m_editStyle); }
-    [[nodiscard]] PopupStyle& popupStyle()noexcept{ return accessStyle(m_popupStyle); }
-    [[nodiscard]] ListStyle& listStyle()noexcept{ return accessStyle(m_listStyle); }
-    [[nodiscard]] RadioGroupStyle& radioGroupStyle()noexcept{ return accessStyle(m_radioGroupStyle); }
-    [[nodiscard]] SliderStyle& sliderStyle()noexcept{ return accessStyle(m_sliderStyle); }
-    [[nodiscard]] ProgressStyle& progressStyle()noexcept{ return accessStyle(m_progressStyle); }
-    [[nodiscard]] ComboStyle& comboStyle()noexcept{ return accessStyle(m_comboStyle); }
-    [[nodiscard]] TooltipStyle& tooltipStyle()noexcept{ return accessStyle(m_tooltipStyle); }
-    void setEditHost(IEditBoxHost* const host)noexcept{
-        if(declarationBlocked())
-            m_context.fail();
-        else
-            m_editHost = host;
+    [cpp_unwind]
+    public b8 setTextShaping(in u32 scriptTag, in StringView language);
+
+    public mut WidgetStyle style(){
+        this.checkStyleAccess();
+        return this.m_style;
     }
-    void setDeltaSeconds(const f32 delta)noexcept{
-        if(declarationBlocked())
-            m_context.fail();
-        else
-            m_deltaSeconds = delta;
+
+    public mut ScrollbarStyle scrollbarStyle(){
+        this.checkStyleAccess();
+        return this.m_scrollbarStyle;
     }
-    void setPointerBusy(const b8 busy)noexcept{
-        if(declarationBlocked())
-            m_context.fail();
-        else
-            m_pointerBusy = busy;
+
+    public mut EditBoxStyle editStyle(){
+        this.checkStyleAccess();
+        return this.m_editStyle;
     }
+
+    public mut PopupStyle popupStyle(){
+        this.checkStyleAccess();
+        return this.m_popupStyle;
+    }
+
+    public mut ListStyle listStyle(){
+        this.checkStyleAccess();
+        return this.m_listStyle;
+    }
+
+    public mut RadioGroupStyle radioGroupStyle(){
+        this.checkStyleAccess();
+        return this.m_radioGroupStyle;
+    }
+
+    public mut SliderStyle sliderStyle(){
+        this.checkStyleAccess();
+        return this.m_sliderStyle;
+    }
+
+    public mut ProgressStyle progressStyle(){
+        this.checkStyleAccess();
+        return this.m_progressStyle;
+    }
+
+    public mut ComboStyle comboStyle(){
+        this.checkStyleAccess();
+        return this.m_comboStyle;
+    }
+
+    public mut TooltipStyle tooltipStyle(){
+        this.checkStyleAccess();
+        return this.m_tooltipStyle;
+    }
+
+    public void setDeltaSeconds(in f32 delta){
+        if(this.declarationBlocked())
+            this.m_context.fail();
+        else
+            this.m_deltaSeconds = delta;
+    }
+
+    public void setPointerBusy(in b8 busy){
+        if(this.declarationBlocked())
+            this.m_context.fail();
+        else
+            this.m_pointerBusy = busy;
+    }
+
     // Valid while a window scope is open, including a collapsed window.
-    [[nodiscard]] const WindowMetrics& windowMetrics()const noexcept{ return m_scope->m_window.metrics; }
+    public in WindowMetrics windowMetrics()const{ return this.m_scope.value().m_window.metrics; }
 
+    private b8 declarationBlocked()const{ return this.m_finalizing || this.m_declaring; }
 
-private:
-    template<typename StyleT>
-    [[nodiscard]] StyleT& accessStyle(StyleT& target)noexcept{
-        if(declarationBlocked())
-            m_context.fail();
-        return target;
+    private b8 panelDeclarationBlocked()const{ return this.declarationBlocked() || !this.m_scope.value().m_panelActive || (this.m_scope.value().m_windowActive && this.m_scope.value().m_window.state.value().collapsed) || this.m_context.failed(); }
+
+    private b8 itemDeclarationBlocked()const{ return this.panelDeclarationBlocked() || this.m_scope.value().m_items.size() >= s_LayoutMaxNodes; }
+
+    private ShapeRequest textShapeRequest(in StringView text, in f32 fontSize)const{
+        ShapeRequest request;
+        request.text = text;
+        request.language = StringView(this.m_textLanguage);
+        request.fontSize = fontSize;
+        request.scriptTag = this.m_textScriptTag;
+        return request;
     }
-    [[nodiscard]] b8 declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
-    [[nodiscard]] b8 panelDeclarationBlocked()const noexcept{ return declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed(); }
-    [[nodiscard]] b8 itemDeclarationBlocked()const noexcept{ return panelDeclarationBlocked() || m_scope->m_items.size() >= s_LayoutMaxNodes; }
-    [[nodiscard]] ShapeRequest textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
-        return { text, StringView(m_textLanguage.data(), m_textLanguage.size()), fontSize, m_textScriptTag, TextDirection::LeftToRight };
-    }
-    [[nodiscard]] b8 beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
-    [[nodiscard]] Expected<NotNull<Item*>> addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
-    [[nodiscard]] b8 addItemNode(const LayoutNodeDesc& description, Item& item);
-    [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
-    [[nodiscard]] Insets resolveRegionsPadding(const Insets& initial, Span<const Name> names, const Name& fallback)const noexcept;
-    void loadButtonMetrics(Point& size, Insets& padding)const noexcept;
-    [[nodiscard]] b8 paintPanel();
-    [[nodiscard]] b8 paintWindow();
-    [[nodiscard]] b8 paintWindowTitle();
-    [[nodiscard]] b8 paintWindowResize();
-    [[nodiscard]] b8 paintItems();
-    [[nodiscard]] b8 paintItem(const Item& item, const LayoutBox& box);
-    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr, FloatEditFrame* floatFrame = nullptr);
-    [[nodiscard]] b8 paintTextArea(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 textAreaMatches(const TextAreaFrame& frame)const noexcept;
-    [[nodiscard]] b8 numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept;
-    template<typename EditFrameT>
-    [[nodiscard]] b8 numericEditFrameMatches(const EditFrameT& frame)const noexcept{
-        return frame.model && frame.model->revision() == frame.revision && numericDraftMatches(frame, frame.model->draft());
-    }
-    [[nodiscard]] b8 numericEditMatches(const Item& item)const noexcept;
-    [[nodiscard]] b8 numericStateAvailable(const EditBoxState& state)const noexcept;
-    [[nodiscard]] Point loadEditMinimumSize()const noexcept;
-    [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
-    [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
-    [[nodiscard]] b8 paintSelectable(const Item& item, const LayoutBox& box);
-    [[nodiscard]] const UiSkinRegion* prepareListFrame(
-        const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token,
-        u64 rowCount, b8 focusOnCommit, WidgetId commandFocus, ListFrame& outFrame
-    );
-    [[nodiscard]] b8 paintList(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintRadioGroup(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
-    [[nodiscard]] b8 radioGroupMatches(const RadioGroupFrame& frame)const;
-    [[nodiscard]] b8 prepareRadioGroup(RadioGroupFrame& frame);
-    [[nodiscard]] b8 prepareSlider(SliderFrame& frame)noexcept;
-    [[nodiscard]] b8 paintSlider(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintProgress(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintImage(const Item& item, const LayoutBox& box);
+
+    [cpp_unwind]
+    private b8 beginContainer(in StringView stableKey, in LayoutDirection direction, in ContainerOptions options);
+
+    [cpp_unwind]
+    private Expected<mut BuilderItem> addItem(in StringView stableKey, in StringView text, in WidgetKind kind, in WidgetOptions options);
+
+    [cpp_unwind]
+    private b8 addItemNode(in LayoutNodeDesc description, mut BuilderItem item);
+
+    private Optional<in UiSkinRegion> region(in Name preferred, in Name fallback)const;
+
+    private Insets resolveRegionsPadding(in Insets initial, in Span<Name> names, in Name fallback)const;
+
+    private void loadButtonMetrics(mut Point size, mut Insets padding)const;
+
+    [cpp_unwind]
+    private b8 paintPanel();
+
+    [cpp_unwind]
+    private b8 paintWindow();
+
+    [cpp_unwind]
+    private b8 paintWindowTitle();
+
+    [cpp_unwind]
+    private b8 paintWindowResize();
+
+    [cpp_unwind]
+    private b8 paintItems();
+
+    [cpp_unwind]
+    private b8 paintItem(in BuilderItem item, in LayoutBox box);
+
+    [cpp_unwind]
+    private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state){ return this.declareEditBox(stableKey, options, model, state,
+        Optional<mut IEditActionSink>(), Optional<mut BuilderIntegerEditFrame>(), Optional<mut BuilderFloatEditFrame>()); }
+    [cpp_unwind]
+    private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions){ return this.declareEditBox(stableKey,
+        options, model, state, actions, Optional<mut BuilderIntegerEditFrame>(), Optional<mut BuilderFloatEditFrame>()); }
+    [cpp_unwind]
+    private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions,
+        in Optional<mut BuilderIntegerEditFrame> integerFrame){ return this.declareEditBox(stableKey, options, model, state, actions, integerFrame, Optional<mut BuilderFloatEditFrame>()); }
+    [cpp_unwind]
+    private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions,
+        in Optional<mut BuilderIntegerEditFrame> integerFrame, in Optional<mut BuilderFloatEditFrame> floatFrame);
+
+    [cpp_unwind]
+    private b8 paintTextArea(in BuilderItem item, in LayoutBox box);
+
+    private b8 textAreaAvailable(in EditModel model, in TextAreaState state);
+    private void snapshotTextArea(mut BuilderTextAreaFrame frame);
+    [cpp_unwind]
+    private b8 applyTextAreaScrollInput(in BuilderItem item, in BuilderTextAreaFrame frame, in ControlToken token);
+    [cpp_unwind]
+    private b8 paintTextAreaScrollbars(in BuilderItem item, in ScrollViewportPlacement placement, in Rect clip, in ControlToken token);
+    [cpp_unwind]
+    private b8 paintTextAreaScrollbarAxis(in BuilderItem item, in ScrollbarPlacement bar, in Rect clip, in ControlToken token, in b8 horizontal, in u32 beforeAction, in u32 afterAction, in StringView beforeKey, in StringView afterKey, in StringView thumbKey);
+
+    private b8 textAreaMatches(in BuilderTextAreaFrame frame)const;
+
+    private b8 numericEditMatches(in BuilderItem item)const;
+
+    private b8 numericStateAvailable(in EditBoxState state)const;
+
+    private Point loadEditMinimumSize()const;
+
+    [cpp_unwind]
+    private b8 prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item);
+
+    [cpp_unwind]
+    private b8 paintEditBox(in BuilderItem item, in LayoutBox box){ return this.paintEditBox(item, box, Optional<in HitTarget>()); }
+    [cpp_unwind]
+    private b8 paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in HitTarget> navigation);
+
+    [cpp_unwind]
+    private b8 paintSelectable(in BuilderItem item, in LayoutBox box);
+
+    [cpp_unwind]
+    private b8 prepareListMetrics(mut BuilderListFrame frame);
+    [cpp_unwind]
+    private b8 paintListRows(in BuilderItem item, in BuilderListFrame frame, in ScrollPlacement placement);
+
+    [cpp_unwind]
+    private Optional<in UiSkinRegion> prepareListFrame(in borrow IListDataSource source, mut ListState state, in ListOptions options, in ControlToken token, in u64 rowCount, in b8 focusOnCommit, in WidgetId commandFocus, mut BuilderListFrame outFrame);
+
+    [cpp_unwind]
+    private b8 paintList(in BuilderItem item, in LayoutBox box);
+
+    [cpp_unwind]
+    private b8 paintRadioGroup(in BuilderItem item, in LayoutBox box);
+
+    private b8 radioGroupStateMatches(in RadioGroupFrame frame)const{ return this.popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
+
+    [cpp_unwind]
+    private b8 radioGroupMatches(in RadioGroupFrame frame)const;
+
+    [cpp_unwind]
+    private b8 prepareRadioGroup(mut RadioGroupFrame frame);
+
+    private b8 prepareSlider(mut SliderFrame frame);
+
+    [cpp_unwind]
+    private b8 paintSlider(in BuilderItem item, in LayoutBox box);
+
+    [cpp_unwind]
+    private b8 paintProgress(in BuilderItem item, in LayoutBox box);
+
+    [cpp_unwind]
+    private b8 paintImage(in BuilderItem item, in LayoutBox box);
+
     // Image and progress paints share one clip-pop plus hit-target tail.
-    [[nodiscard]] b8 finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, b8 painted);
-    [[nodiscard]] b8 applySliderInput(SliderFrame& frame, const SliderPlacement& placement, b8 interactive);
-    [[nodiscard]] b8 sliderMatches(const SliderFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
-    void publishSliderResults(b8 valid)noexcept;
+    [cpp_unwind]
+    private b8 finishClipPaint(in BuilderItem item, in Rect bounds, in Rect clip, in b8 painted);
 
-    [[nodiscard]] ComboResult declareCombo(
-        AStringView stableKey, const IListDataSource& source,
-        const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state,
-        SearchComboState* search = nullptr, ISearchableListDataSource* searchSource = nullptr
-    );
-    [[nodiscard]] b8 paintCombo(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintCombos();
-    [[nodiscard]] b8 comboStateMatches(const ComboFrame& frame)const noexcept;
-    [[nodiscard]] b8 comboMatches(const ComboFrame& frame)const;
-    [[nodiscard]] Item* annotationAnchor(AStringView stableKey)noexcept;
-    [[nodiscard]] b8 paintDeferred(){ return paintDeferredContents() && validateDeferredSources() && validateDeferredStates(); }
-    [[nodiscard]] b8 paintDeferredContents(){ return paintContextMenus() && paintCombos() && paintTooltips(); }
-    [[nodiscard]] b8 validateDeferredSources()const;
-    [[nodiscard]] b8 validateDeferredStates()const noexcept;
-    void releaseDeferredLoans()noexcept;
-    [[nodiscard]] b8 listStateMatches(const ListFrame& frame)const noexcept{
-        return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
+    [cpp_unwind]
+    private b8 applySliderInput(mut SliderFrame frame, in SliderPlacement placement, in b8 interactive);
+
+    private b8 sliderMatches(in SliderFrame frame)const{ return this.popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
+
+    private void publishSliderResults(in b8 valid);
+
+    // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
+    // Internal popup/list scopes reserve declaration order and emit after their containing layout.
+    [cpp_unwind]
+    private ComboResult declareCombo(in StringView stableKey, in borrow IListDataSource source, in ComboOptions options, in Optional<in SearchComboOptions> searchOptions,
+        mut ComboState state){ return this.declareCombo(stableKey, source, options, searchOptions, state, Optional<mut SearchComboState>(), Optional<mut ISearchableListDataSource>()); }
+    [cpp_unwind]
+    private ComboResult declareCombo(in StringView stableKey, in borrow IListDataSource source, in ComboOptions options, in Optional<in SearchComboOptions> searchOptions, mut ComboState state,
+        in Optional<mut SearchComboState> search){ return this.declareCombo(stableKey, source, options, searchOptions, state, search, Optional<mut ISearchableListDataSource>()); }
+    [cpp_unwind]
+    private ComboResult declareCombo(in StringView stableKey, in borrow IListDataSource source, in ComboOptions options, in Optional<in SearchComboOptions> searchOptions, mut ComboState state,
+        in Optional<mut SearchComboState> search, in Optional<mut ISearchableListDataSource> searchSource);
+
+    [cpp_unwind]
+    private b8 paintCombo(in BuilderItem item, in LayoutBox box);
+
+    [cpp_unwind]
+    private b8 paintCombos();
+
+    [cpp_unwind]
+    private b8 paintComboPopup(mut BuilderComboFrame frame);
+    [cpp_unwind]
+    private b8 applyComboInput(in WidgetState field, mut BuilderComboFrame frame, mut ComboResult result);
+    [cpp_unwind]
+    private b8 applyComboListInput(mut BuilderComboFrame frame, mut ComboResult result);
+    [cpp_unwind]
+    private b8 prepareComboSearch(in WidgetState field, mut BuilderComboFrame frame);
+    private void snapshotComboQuery(mut BuilderComboFrame frame);
+    [cpp_unwind]
+    private b8 paintComboQuery(mut BuilderComboFrame frame, mut LayoutBox content);
+
+    private b8 comboStateMatches(in BuilderComboFrame frame)const;
+
+    [cpp_unwind]
+    private b8 comboMatches(in BuilderComboFrame frame)const;
+
+    private Expected<usize> annotationAnchorIndex(in StringView stableKey)const{
+        const auto id = TryMakeWidgetId(this.m_context.scopeId(), stableKey);
+        if(id.has_value()){
+            in Vector<BuilderItem> items = this.m_scope.value().m_items;
+            for(usize index = 0u; index < items.size(); ++index){
+                if(items[index].state.id == id.value() && items[index].state.kind != WidgetKind::Separator)
+                    return index;
+            }
+        }
+        return MakeUnexpected(Failure());
     }
-    [[nodiscard]] b8 listMatches(const ListFrame& frame)const;
-    [[nodiscard]] b8 paintTooltips();
-    [[nodiscard]] b8 contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept;
-    [[nodiscard]] b8 contextMenuMatches(const ContextMenuFrame& frame)const;
-    [[nodiscard]] b8 paintContextMenus();
-    [[nodiscard]] b8 paintPopup();
-    [[nodiscard]] b8 synchronizePopup()noexcept;
-    [[nodiscard]] b8 popupFrameVisible(const BuilderScopeFrame& frame)const noexcept{
-        return frame.m_popupState && frame.m_popupState->isOpen() && frame.m_popupState->instanceGeneration() == frame.m_popupToken.instanceGeneration && frame.m_popupState->openGeneration() == frame.m_popupToken.openGeneration;
+
+    [cpp_unwind]
+    private b8 paintDeferred(){ return this.paintDeferredContents() && this.validateDeferredSources() && this.validateDeferredStates(); }
+
+    [cpp_unwind]
+    private b8 paintDeferredContents(){ return this.paintContextMenus() && this.paintCombos() && this.paintTooltips(); }
+
+    [cpp_unwind]
+    private b8 validateDeferredSources()const;
+
+    private b8 validateDeferredStates()const;
+
+    private void releaseDeferredLoans();
+
+    private b8 listStateMatches(in BuilderListFrame frame)const{ return this.m_scope.value().listStateMatches(this.m_context, frame); }
+
+    [cpp_unwind]
+    private b8 listMatches(in BuilderListFrame frame)const{ return this.m_scope.value().listMatches(this.m_context, frame); }
+
+    [cpp_unwind]
+    private b8 paintTooltips();
+
+    [cpp_unwind]
+    private b8 prepareContextMenu(mut BuilderContextMenuFrame frame, mut ContextMenuResult result);
+    [cpp_unwind]
+    private b8 applyContextMenuInput(mut BuilderContextMenuFrame frame, mut ContextMenuResult result);
+    private void snapshotContextMenu(mut BuilderContextMenuFrame frame);
+    [cpp_unwind]
+    private b8 paintContextMenuPopup(mut BuilderContextMenuFrame frame);
+
+    private b8 contextMenuStateMatches(in BuilderContextMenuFrame frame)const;
+
+    [cpp_unwind]
+    private b8 contextMenuMatches(in BuilderContextMenuFrame frame)const;
+
+    [cpp_unwind]
+    private b8 paintContextMenus();
+
+    [cpp_unwind]
+    private b8 paintPopup();
+
+    private b8 synchronizePopup();
+
+    private b8 popupFrameVisible(in BuilderScopeFrame frame)const{ return frame.popupVisible(); }
+
+    private b8 popupAncestorsVisible()const{ return this.m_scope.value().popupAncestorsVisible(this.m_context); }
+
+    [cpp_unwind]
+    private b8 finishPopupFamily();
+
+    private in BuilderScopeFrame readPopupFrameAt(in usize index)const{
+        if(index == 0u)
+            return this.m_scopeFrame;
+        return this.m_popupFrames[index - 1u].read();
     }
-    [[nodiscard]] b8 popupAncestorsVisible()const noexcept;
-    [[nodiscard]] b8 finishPopupFamily();
-    [[nodiscard]] b8 paintPopupFamily(BuilderScopeFrame& frame);
-    [[nodiscard]] b8 validatePopupFamily();
-    void releasePopupFamily()noexcept;
-    [[nodiscard]] b8 reserveCompoundPopup(const WidgetState& widget, const PopupToken& token);
-    [[nodiscard]] Rect visibleClip(const Rect& clip)const noexcept{
-        const DisplayMetrics& display = m_paint.displayMetrics();
-        return IntersectUiRectsBounds({ 0.0f, 0.0f, display.logicalWidth, display.logicalHeight }, clip);
+
+    private mut BuilderScopeFrame popupFrameAt(in usize index){
+        if(index == 0u)
+            return this.m_scopeFrame;
+        return this.m_popupFrames[index - 1u].value();
     }
 
+    [cpp_unwind]
+    private b8 paintPopupFamily(mut BuilderScopeFrame frame);
 
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Context& m_context;
-    PaintBuilder& m_paint;
-    TextService& m_text;
-    BuilderScopeFrame m_scopeFrame;
-    NotNull<BuilderScopeFrame*> m_scope;
-    PaintVector<Core::GlobalUniquePtr<BuilderScopeFrame>> m_popupFrames;
-    usize m_popupFrameCount = 0u;
-    const UiSkin* m_skin = nullptr;
-    WidgetStyle m_style;
-    AString<Core::Alloc::GlobalArena> m_textLanguage;
-    u32 m_textScriptTag = s_TextDefaultScriptTag;
-    f32 m_skinDefaultFontSize = s_TextDefaultFontSize;
-    EditBoxStyle m_editStyle;
-    ScrollbarStyle m_scrollbarStyle;
-    PopupStyle m_popupStyle;
-    ListStyle m_listStyle;
-    RadioGroupStyle m_radioGroupStyle;
-    SliderStyle m_sliderStyle;
-    ProgressStyle m_progressStyle;
-    ComboStyle m_comboStyle;
-    TooltipStyle m_tooltipStyle;
-    IEditBoxHost* m_editHost = nullptr;
-    f32 m_deltaSeconds = 0.0f;
-    b8 m_pointerBusy = false;
-    b8 m_declaring = false;
-    b8 m_finalizing = false;
-};
+    [cpp_unwind]
+    private b8 validatePopupFamily();
 
+    private void releasePopupFamily();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    private b8 reserveCompoundPopup(in WidgetState widget, in PopupToken token);
 
+    private Rect visibleClip(in Rect clip)const{
+        in DisplayMetrics display = this.m_paint.displayMetrics();
+        return IntersectUiRectsBounds(Rect(0.0f, 0.0f, display.logicalWidth, display.logicalHeight), clip);
+    }
 
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private b8 numericEditFrameMatches(in BuilderIntegerEditFrame frame)const{
+        return frame.model.has_value() && frame.model.value().revision() == frame.revision && this.popupAncestorsVisible() && frame.state.has_value()
+            && frame.model.value().draft().matchesStamp(frame.draftStamp) && frame.state.value().matchesStamp(frame.draftStamp, frame.focused);
+    }
+    private b8 numericEditFrameMatches(in BuilderFloatEditFrame frame)const{
+        return frame.model.has_value() && frame.model.value().revision() == frame.revision && this.popupAncestorsVisible() && frame.state.has_value()
+            && frame.model.value().draft().matchesStamp(frame.draftStamp) && frame.state.value().matchesStamp(frame.draftStamp, frame.focused);
+    }
 }
 
 

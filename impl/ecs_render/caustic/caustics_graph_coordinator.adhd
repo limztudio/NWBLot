@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/caustic/caustic_resolve_state.adhd>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd>
@@ -10,60 +12,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class CausticsGraphContext{
+    public mut RendererMeshSystem mesh;
+    public mut RendererRayTracingSystem rayTracing;
+    public mut GpuTaskGraph graph;
+    public mut GpuPersistentResourceStateCache causticsComputeState;
+    public mut GpuPersistentResourceStateCache irradianceReturnState;
+    public GpuTaskId shadowVisibilityTask;
+    public in b8 shadowPrepared;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/persistent_state.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMeshSystem;
-class RendererRayTracingSystem;
-
-
-struct CausticsGraphContext{
-    RendererMeshSystem& mesh;
-    RendererRayTracingSystem& rayTracing;
-    Core::GpuTaskGraph& graph;
-    Core::GpuPersistentResourceStateCache& causticsComputeState;
-    Core::GpuPersistentResourceStateCache& irradianceReturnState;
-    Core::GpuTaskId shadowVisibilityTask;
-    // Graph callbacks observe the pipeline-owned preparation result after declaration.
-    const b8& shadowPrepared;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public CausticsGraphContext(
+        mut RendererMeshSystem mesh,
+        mut RendererRayTracingSystem rayTracing,
+        mut GpuTaskGraph graph,
+        mut GpuPersistentResourceStateCache causticsComputeState,
+        mut GpuPersistentResourceStateCache irradianceReturnState,
+        in GpuTaskId shadowVisibilityTask,
+        in borrow b8 shadowPrepared
+    ){
+        this.mesh = mesh;
+        this.rayTracing = rayTracing;
+        this.graph = graph;
+        this.causticsComputeState = causticsComputeState;
+        this.irradianceReturnState = irradianceReturnState;
+        this.shadowVisibilityTask = shadowVisibilityTask;
+        this.shadowPrepared = shadowPrepared;
+    }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::CausticsGraphContext")]
-extern class CausticsGraphContext;
 
 [modular]
 class CausticsGraphCoordinator : NoCopy{

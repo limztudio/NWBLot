@@ -213,6 +213,58 @@ template<typename ArenaT>
     return stream.gcount() == 0 && stream.eof() && !stream.bad();
 }
 
+class BinaryInputStream final : NoCopy{
+public:
+    template<typename ArenaT>
+    explicit BinaryInputStream(const Path<ArenaT>& path) : m_stream(path, InputFileStream::binary){}
+
+    [[nodiscard]] b8 isOpen()const{ return m_stream.is_open(); }
+    [[nodiscard]] i64 seekEnd(){
+        m_stream.seekg(0, InputFileStream::end);
+        if(!m_stream)
+            return -1;
+        return static_cast<i64>(m_stream.tellg());
+    }
+    [[nodiscard]] b8 seekBegin(){
+        m_stream.seekg(0, InputFileStream::beg);
+        return static_cast<b8>(m_stream);
+    }
+    [[nodiscard]] b8 readBytes(const Span<u8> bytes){
+        return bytes.empty() || ReadStreamExact(m_stream, MakeNotNull(static_cast<void*>(bytes.data())), bytes.size());
+    }
+    [[nodiscard]] Expected<usize> readChunk(const Span<u8> destination){
+        if(!CanRepresentStreamSize(static_cast<u64>(destination.size())))
+            return MakeUnexpected(Failure{});
+        m_stream.read(reinterpret_cast<char*>(destination.data()), static_cast<StreamSize>(destination.size()));
+        if(m_stream.bad() || (!m_stream.good() && !m_stream.eof()))
+            return MakeUnexpected(Failure{});
+        return static_cast<usize>(m_stream.gcount());
+    }
+    [[nodiscard]] b8 verifyEnd(){ return VerifyStreamAtEnd(m_stream); }
+
+
+private:
+    InputFileStream m_stream;
+};
+
+
+class BinaryOutputStream final : NoCopy{
+public:
+    template<typename ArenaT>
+    explicit BinaryOutputStream(const Path<ArenaT>& path) : m_stream(path, OutputFileStream::binary | OutputFileStream::trunc){}
+
+    [[nodiscard]] b8 isOpen()const{ return m_stream.is_open(); }
+    void writeText(const AStringView text){
+        if(!text.empty())
+            m_stream.write(text.data(), static_cast<StreamSize>(text.size()));
+    }
+    [[nodiscard]] b8 close(){ m_stream.close(); return m_stream.good(); }
+
+private:
+    OutputFileStream m_stream;
+};
+
+
 template<typename ArenaT>
 [[nodiscard]] inline b8 VerifyBinaryFileBytes(const Path<ArenaT>& path, const void* const expected, const usize count){
     InputFileStream stream(path, InputFileStream::binary);

@@ -5,6 +5,7 @@
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/ecs_ui/toolkit/edit/model.adhd>
 #include <impl/ecs_ui/toolkit/paint_primitives.adhd>
+#include <impl/ecs_ui/toolkit/text/shaper.adhd>
 #include <tests/performance/ui_input/name_cases.adhd>
 
 
@@ -47,7 +48,7 @@ using namespace NWB::Impl::Ui;
 namespace ClipboardChannel = NWB::Core::ClipboardChannel;
 namespace ClipboardOperation = NWB::Core::ClipboardOperation;
 namespace ClipboardStatus = NWB::Core::ClipboardStatus;
-using TextLayoutStatusEnum = TextLayoutStatus::Enum;
+
 using HitTargetVector = InputVector<HitTarget>;
 
 [[nodiscard]] FOUNDATION_INLINE GlobalArena& BenchmarkFallbackArena()noexcept{
@@ -231,10 +232,6 @@ private:
     InputRouter m_value;
 };
 
-[[nodiscard]] FOUNDATION_INLINE ShapedRun CreateBenchmarkShapedRun()noexcept{
-    return ShapedRun(ActiveBenchmarkArena());
-}
-
 [[nodiscard]] FOUNDATION_INLINE EditBoxView CreateBenchmarkEditBoxView()noexcept{
     return EditBoxView(ActiveBenchmarkArena());
 }
@@ -253,7 +250,7 @@ FOUNDATION_INLINE void WriteUiBenchmarkStdout(const AStringView text){
 
 FOUNDATION_INLINE b8 AdoptBuiltTextLayout(TextLayoutBuilder& layoutBuilder, const ShapeRequest& request, EditBoxView& view){
     auto layout = layoutBuilder.layout(request);
-    return layout && view.adoptLayout(Move(*layout));
+    return layout && view.adoptLayout(*layout);
 }
 
 FOUNDATION_INLINE b8 TryDeclareEditBoxWidget(Context& context, const AStringView id, WidgetState& outWidget){
@@ -265,8 +262,8 @@ FOUNDATION_INLINE b8 TryDeclareEditBoxWidget(Context& context, const AStringView
 }
 
 FOUNDATION_INLINE b8 HasCommittedTargetWithWidth(const Context& context, const WidgetId id, const u64 declarationGeneration, const f32 expectedWidth){
-    const HitTarget* const target = context.input().findTarget(id, declarationGeneration);
-    return target != nullptr && target->rectangle.width == expectedWidth;
+    const auto target = context.input().findTarget(id, declarationGeneration);
+    return target && (*target)->rectangle.width == expectedWidth;
 }
 };
 
@@ -451,8 +448,8 @@ class BenchmarkShaper : ITextShaper{
     public BenchmarkShaper(){
     }
 
-    public Expected<ShapedRun, TextLayoutStatusEnum> shape(in ShapeRequest request)override{
-        ShapedRun run = CreateBenchmarkShapedRun();
+    public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
+        ShapedRun run;
         run.metrics.ascender = 8.0f;
         run.metrics.descender = 2.0f;
         run.metrics.lineGap = 2.0f;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_scene/components.adhd>
+#include <impl/assets_scene/component_asset_binary_codec.adhd>
 #include <impl/assets_scene/scene_assets.adhd>
 #include <impl/assets_subsystem/asset.adhd>
 
@@ -104,182 +104,69 @@ class SceneAsset{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ActiveSceneSubsystems"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class ActiveSceneSubsystems{
-    b8 loadProjectStartScene(...);
-    b8 loadScene(...);
-    b8 instantiateEntities(...)const;
-    b8 valid(...)const;
-    in SceneRef scene(...)const;
-    usize subsystemCount(...)const;
-};
+type ProjectRef = AssetRef<ProjectAsset>;
+type LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>>;
+type LoadedComponentVector = Vector<UniquePtr<IComponent>>;
 
-[cpp_name("::NWB::Impl::ActiveSceneSubsystemsConstPtr"), cpp_flags(self_defaulted, small_value, brace_init)]
-extern class ActiveSceneSubsystemsConstPtr;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_scene/components.adhd.h>
-#include <impl/assets_scene/scene_assets.adhd.h>
-#include <impl/assets_subsystem/asset.adhd.h>
-
-#include <core/assets/manager.h>
-#include <core/assets/ref.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class EntityAsset;
-class ProjectAsset;
-class SceneAsset;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_ProjectAssetKindLabel = FOUNDATION_TEXT("project");
-inline constexpr TStringView s_ProjectLoadBinaryContext = FOUNDATION_TEXT("ProjectAsset::loadBinary");
-#if defined(NWB_COOK)
-inline constexpr TStringView s_ProjectSerializeContext = FOUNDATION_TEXT("ProjectAssetCodec::serialize");
-#endif
-
-inline constexpr TStringView s_ComponentLoadBinaryContext = FOUNDATION_TEXT("IComponent::loadBinary");
-#if defined(NWB_COOK)
-inline constexpr TStringView s_ComponentSerializeContext = FOUNDATION_TEXT("ComponentAssetCodec::serialize");
-#endif
-
-inline constexpr TStringView s_EntityAssetKindLabel = FOUNDATION_TEXT("entity");
-inline constexpr TStringView s_EntityLoadBinaryContext = FOUNDATION_TEXT("EntityAsset::loadBinary");
-#if defined(NWB_COOK)
-inline constexpr TStringView s_EntitySerializeContext = FOUNDATION_TEXT("EntityAssetCodec::serialize");
-#endif
-inline constexpr TStringView s_EntityComponentsPayloadLabel = FOUNDATION_TEXT("entity components");
-
-inline constexpr TStringView s_SceneAssetKindLabel = FOUNDATION_TEXT("scene");
-inline constexpr TStringView s_SceneLoadBinaryContext = FOUNDATION_TEXT("SceneAsset::loadBinary");
-#if defined(NWB_COOK)
-inline constexpr TStringView s_SceneSerializeContext = FOUNDATION_TEXT("SceneAssetCodec::serialize");
-#endif
-inline constexpr TStringView s_SceneSubsystemsPayloadLabel = FOUNDATION_TEXT("scene subsystems");
-inline constexpr TStringView s_SceneEntitiesPayloadLabel = FOUNDATION_TEXT("scene entities");
-inline constexpr TStringView s_SceneAssetsPayloadLabel = FOUNDATION_TEXT("scene referenced assets");
-
-inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_DefaultProjectVirtualPathText);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ActiveSceneSubsystems final{
-public:
-    using ProjectRef = Core::Assets::AssetRef<ProjectAsset>;
-    using SceneRef = Core::Assets::AssetRef<SceneAsset>;
-    using SubsystemRef = ISubsystem::SubsystemRef;
-    using EntityRef = Core::Assets::AssetRef<EntityAsset>;
-    using ComponentRef = Core::Assets::AssetRef<IComponent>;
-    using AssetMap = HashMap<Name, Core::Assets::AssetRef<Core::Assets::IAsset>, ::ArenaBase>;
-    using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, ::ArenaBase>;
-    using LoadedComponentVector = Vector<UniquePtr<IComponent>, ::ArenaBase>;
-
-
-public:
-    struct LoadedEntity{
-        EntityRef entity;
-        LoadedComponentVector components;
-
-
-    public:
-        LoadedEntity(const EntityRef& inEntity, LoadedComponentVector&& inComponents)noexcept
-            : entity(inEntity)
-            , components(Move(inComponents))
-        {}
-    };
-
-    using LoadedEntityVector = Vector<LoadedEntity, ::ArenaBase>;
-
-
-public:
-    explicit ActiveSceneSubsystems(::ArenaBase& arena)noexcept
-        : m_arena(arena)
-        , m_sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena)
-        , m_loadedSubsystems(arena)
-        , m_loadedEntities(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = s_DefaultProjectRef);
-    [[nodiscard]] b8 loadScene(const SceneRef& scene, Core::Assets::AssetManager& assetManager);
-    [[nodiscard]] b8 instantiateEntities(Core::ECS::World& world)const;
-
-    [[nodiscard]] b8 valid()const noexcept{ return m_scene.valid() && !m_loadedSubsystems.empty(); }
-    [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }
-    [[nodiscard]] usize subsystemCount()const noexcept{ return m_loadedSubsystems.size(); }
-
-    template<typename SubsystemT>
-    [[nodiscard]] const SubsystemT* findSubsystem()const noexcept{
-        for(const UniquePtr<ISubsystem>& loaded : m_loadedSubsystems){
-            if(loaded && loaded->assetType() == SubsystemT::AssetTypeName())
-                return checked_cast<const SubsystemT*>(loaded.get());
-        }
-        return nullptr;
-    }
-
-    template<typename SubsystemT>
-    [[nodiscard]] b8 hasSubsystem()const noexcept{
-        return findSubsystem<SubsystemT>() != nullptr;
-    }
-
-    template<typename TAsset = Core::Assets::IAsset>
-    [[nodiscard]] Core::Assets::AssetRef<TAsset> findSceneAsset(const Name& nickname)const noexcept{
-        if(!nickname)
-            return {};
-        const auto found = m_sceneAssets.find(nickname);
-        if(found == m_sceneAssets.end())
-            return {};
-        Core::Assets::AssetRef<TAsset> result;
-        result.virtualPath = found.value().name();
-        return result;
-    }
-
-
-private:
-    ::ArenaBase& m_arena;
-    SceneRef m_scene;
-    AssetMap m_sceneAssets;
-    LoadedSubsystemVector m_loadedSubsystems;
-    LoadedEntityVector m_loadedEntities;
-};
-
-using ActiveSceneSubsystemsConstPtr = const ActiveSceneSubsystems*;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[move_only]
+class LoadedSceneEntity{
+    public EntityRef entity;
+    public LoadedComponentVector components;
 }
+
+[move_only]
+class LoadedSceneContents{
+    public SceneRef scene;
+    public AssetMap assets;
+    public LoadedSubsystemVector subsystems;
+    public Vector<LoadedSceneEntity> entities;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[modular, move_only]
+class ActiveSceneSubsystems{
+    private LoadedSceneContents m_contents;
+
+    public b8 loadProjectStartScene(in AssetManager assetManager, in ProjectRef project);
+    public b8 loadProjectStartScene(in AssetManager assetManager){
+        return this.loadProjectStartScene(assetManager, ProjectRef(s_DefaultProjectVirtualPath));
+    }
+    public b8 loadScene(in SceneRef scene, in AssetManager assetManager);
+    public b8 instantiateEntities(mut World world)const;
+
+    public b8 valid()const{ return this.m_contents.scene.valid() && !this.m_contents.subsystems.empty(); }
+    public in SceneRef scene()const{ return this.m_contents.scene; }
+    public usize subsystemCount()const{ return this.m_contents.subsystems.size(); }
+
+    public Optional<in SubsystemT> findSubsystem<SubsystemT>()const{
+        for(in UniquePtr<ISubsystem> loaded : this.m_contents.subsystems){
+            if(loaded.valid()){
+                const auto typed = BorrowTypedAsset<SubsystemT>(loaded.deref());
+                if(typed.has_value())
+                    return typed;
+            }
+        }
+        return Optional<in SubsystemT>();
+    }
+
+    public b8 hasSubsystem<SubsystemT>()const{
+        return this.findSubsystem<SubsystemT>().has_value();
+    }
+
+    public AssetRef<T> findSceneAsset<T>(in Name nickname)const{
+        const auto found = this.m_contents.assets.find(nickname);
+        if(nickname == s_NameNone || found == this.m_contents.assets.end())
+            return AssetRef<T>();
+        return AssetRef<T>(found.value().name());
+    }
+
+    public SceneAssetRef findSceneAsset(in Name nickname)const{ return this.findSceneAsset<IAsset>(nickname); }
+}
+
+type ActiveSceneSubsystemsRef = Optional<in ActiveSceneSubsystems>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const i64 s_AdmittedFontFaceCount = 1;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class PreparedFontImageGroup{
     public Sha256Digest sha256 = Sha256Digest();
     public Vector<u8> pixels;
@@ -26,6 +32,36 @@ class PreparedFontSource{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 IsAdmittedStaticScalableFontFace(
+    in i64 faceCount,
+    in i64 glyphCount,
+    in u32 unitsPerEm,
+    in b8 isSfnt,
+    in b8 isScalable,
+    in b8 hasMultipleMasters
+){
+    return
+        faceCount == s_AdmittedFontFaceCount
+        && glyphCount > 0
+        && unitsPerEm != 0u
+        && isSfnt
+        && isScalable
+        && !hasMultipleMasters
+    ;
+}
+
+void ReportFontCleanupFailure(in StringView operation, in i32 errorCode){
+    if(errorCode == 0)
+        return;
+    const DiagnosticEventText diagnostic = MakeDiagnosticEventText(s_NativeCleanupFailedFormat, errorCode);
+    DiagnosticEventRecord event = DiagnosticEventRecord();
+    event.event = s_WarningEventName;
+    event.category = s_NativeValidationCategory;
+    event.expression = operation;
+    event.message = diagnostic.view();
+    CaptureDiagnosticEventAtCallSite(event);
+}
 
 NativeFontFailure MakeNativeFontFailure(in StringView operation, in i32 nativeError){
     NativeFontFailure failure;

@@ -141,8 +141,8 @@ struct ScenarioCleanup final : NoCopy{
         const auto bounds = Impl::ComputeOpticalWorldBounds(MatrixTranslation(300.0f, 400.0f, 500.0f), VectorZero(), VectorZero());
         if(!bounds)
             return MakeUnexpected(Failure{});
-        minimum = bounds->minimum;
-        maximum = bounds->maximum;
+        minimum = LoadFloat(bounds->minimum);
+        maximum = LoadFloat(bounds->maximum);
         for(u32 axis = 0u; axis < 3u; ++axis){
             data.source[axis] = VectorGetIntByIndex(minimum, axis);
             data.source[4u + axis] = VectorGetIntByIndex(maximum, axis);
@@ -180,8 +180,8 @@ struct ScenarioCleanup final : NoCopy{
                 data.expected[flags] |= NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
         }
         if(valid){
-            minimum = VectorMin(minimum, bounds->minimum);
-            maximum = VectorMax(maximum, bounds->maximum);
+            minimum = VectorMin(minimum, LoadFloat(bounds->minimum));
+            maximum = VectorMax(maximum, LoadFloat(bounds->maximum));
         }
         else
             complete = false;
@@ -273,13 +273,13 @@ Expected<void> RunOpticalBoundsRuntimeProbe(const ActiveSceneSubsystems& scene, 
     auto& graphics = context.graphics;
     auto& device = graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
-    const Impl::TransparentSubsystem* transparent = scene.findSubsystem<Impl::TransparentSubsystem>();
-    if(!transparent || !transparent->opticalBoundsFinalizeCs.valid()){
+    const auto transparent = scene.findSubsystem<Impl::TransparentSubsystem>();
+    if(!transparent || !(*transparent)->opticalBoundsFinalizeCs.valid()){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("OpticalBoundsProbe: production shader is unavailable"));
         return MakeUnexpected(Failure{});
     }
     Core::ShaderHandle shader;
-    if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(transparent->opticalBoundsFinalizeCs.name(), Core::ShaderArchive::s_DefaultVariant, Name("tests/optical_bounds/shader"), FOUNDATION_TEXT("OpticalBoundsProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader))
+    if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>((*transparent)->opticalBoundsFinalizeCs.name(), Core::ShaderArchive::s_DefaultVariant, Name("tests/optical_bounds/shader"), "OpticalBoundsProbe", graphics, context.assetManager, context.shaderPathResolver, {}, shader))
         return MakeUnexpected(Failure{});
     Core::BindingLayoutDesc layoutDescription(context.objectArena);
     layoutDescription.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES));

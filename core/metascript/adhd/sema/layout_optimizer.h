@@ -22,7 +22,7 @@ class LayoutOptimizer final{
 
 
 private:
-    static void SortAndPackFields(b8 isSerialize, b8 packSerialize, usize headerPointerCount, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept;
+    static void SortAndPackFields(b8 keepFieldOrder, b8 packSerialize, usize minimumAlignment, usize headerPointerCount, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept;
 
 
 public:
@@ -41,7 +41,7 @@ public:
 private:
     void markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& field, const ClassDecl& classDecl, b8& inOutNeedsClassArena)const noexcept;
     [[nodiscard]] b8 computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors);
-    void finalizeClassFieldLayouts(b8 isSerialize, b8 hasVtablePointer, b8 hasMotherArenaPointer, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)const noexcept;
+    void finalizeClassFieldLayouts(const ClassDecl& decl, b8 hasVtablePointer, b8 hasMotherArenaPointer, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)const noexcept;
 
 
 private:

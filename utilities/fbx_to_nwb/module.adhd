@@ -59,14 +59,14 @@ static_assert(IsTriviallyCopyable_V<SourceVertexRef>);
 static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
 
 struct SourceMeshStreams{
-    UtilityVector<Vec3> positions;
-    UtilityVector<Vec3> normals;
-    UtilityVector<Vec4> tangents;
-    UtilityVector<Vec2> uv0;
-    UtilityVector<Vec4> colors;
+    ::Vector<Vec3, Core::Alloc::GlobalArena> positions{QueryUtilityGlobalArena<s_UtilityArena>()};
+    ::Vector<Vec3, Core::Alloc::GlobalArena> normals{QueryUtilityGlobalArena<s_UtilityArena>()};
+    ::Vector<Vec4, Core::Alloc::GlobalArena> tangents{QueryUtilityGlobalArena<s_UtilityArena>()};
+    ::Vector<Vec2, Core::Alloc::GlobalArena> uv0{QueryUtilityGlobalArena<s_UtilityArena>()};
+    ::Vector<Vec4, Core::Alloc::GlobalArena> colors{QueryUtilityGlobalArena<s_UtilityArena>()};
     UtilityVector<MeshSkinInfluence> skin;
-    UtilityVector<SourceVertexRef> vertexRefs;
-    UtilityVector<u32> indices;
+    ::Vector<SourceVertexRef, Core::Alloc::GlobalArena> vertexRefs{QueryUtilityGlobalArena<s_UtilityArena>()};
+    ::Vector<u32, Core::Alloc::GlobalArena> indices{QueryUtilityGlobalArena<s_UtilityArena>()};
 };
 
 
@@ -301,7 +301,8 @@ native{
 
 #include <utilities/fbx_to_nwb/skin.adhd.h>
 #include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd.h>
-#include <impl/assets_mesh/cook_metadata.adhd.h>
+#include <impl/assets_mesh/source_metadata.adhd.h>
+#include <impl/assets_mesh/skin_cook.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -908,8 +909,8 @@ static void AppendSkinBodyToString(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename Value, typename Lookup>
-[[nodiscard]] static Expected<u32> InternSourceValue(const Value& value, const AStringView streamName, UtilityVector<Value>& inOutStream, Lookup& inOutLookup){
+template<typename Value, typename Stream, typename Lookup>
+[[nodiscard]] static Expected<u32> InternSourceValue(const Value& value, const AStringView streamName, Stream& inOutStream, Lookup& inOutLookup){
     auto found = inOutLookup.find(value);
     if(found != inOutLookup.end())
         return found.value();
@@ -1408,7 +1409,7 @@ struct SkinReference{
 
 [[nodiscard]] static b8 ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' is not a map"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': '{}' is not a map"), ConvertString(Impl::s_MeshMetaKindText), PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
         return false;
     }
 
@@ -1417,16 +1418,15 @@ struct SkinReference{
         if(Impl::IsAllowedMeshAssetField(fieldName))
             continue;
 
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), ConvertString(Impl::s_MeshMetaKindText), PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
         return false;
     }
     return true;
 }
 
 [[nodiscard]] static b8 ValidateRefreshMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
-    if(!Impl::MeshCookSourceStreams::ValidateSourceVertexRefStreams(
+    if(!Impl::ValidateSourceVertexRefStreams(
         nwbFilePath,
-        Impl::s_MeshMetaKind,
         Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()),
         mesh.positions.size(),
         mesh.normals.size(),
@@ -1437,13 +1437,12 @@ struct SkinReference{
         return false;
 
     if(!ValidatePlainRefreshMeshNoSkin(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()))){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), ConvertString(Impl::s_MeshMetaKindText), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    return Impl::MeshCookSourceStreams::ValidateSourceIndexStream(
+    return Impl::ValidateSourceMeshIndices(
         nwbFilePath,
-        Impl::s_MeshMetaKind,
         Span<const u32>(mesh.indices.data(), mesh.indices.size()),
         mesh.vertexRefs.size()
     );
@@ -1456,23 +1455,23 @@ struct SkinReference{
     return outInfluences;
 }
 
-[[nodiscard]] static Expected<SourceMeshStreams> ParseMeshValue(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static Expected<SourceMeshStreams> ParseMeshValue(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!ValidateMeshAssetFields(nwbFilePath, meshVariableName, asset))
         return MakeUnexpected(Failure{});
     SourceMeshStreams mesh;
-    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshPositionsFieldNameView, scratchArena, mesh.positions))
+    if(!Impl::FillMeshMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshPositionsFieldNameView, mesh.positions))
         return MakeUnexpected(Failure{});
-    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshNormalsFieldNameView, scratchArena, mesh.normals))
+    if(!Impl::FillMeshMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshNormalsFieldNameView, mesh.normals))
         return MakeUnexpected(Failure{});
-    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshTangentsFieldNameView, scratchArena, mesh.tangents))
+    if(!Impl::FillMeshMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshTangentsFieldNameView, mesh.tangents))
         return MakeUnexpected(Failure{});
-    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec2, s_Vector2ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshUv0FieldNameView, scratchArena, mesh.uv0))
+    if(!Impl::FillMeshMetadataFloatListField<Vec2, s_Vector2ComponentCount>(nwbFilePath, asset, Impl::s_MeshUv0FieldNameView, mesh.uv0))
         return MakeUnexpected(Failure{});
-    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshColorsFieldNameView, scratchArena, mesh.colors))
+    if(!Impl::FillMeshMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshColorsFieldNameView, mesh.colors))
         return MakeUnexpected(Failure{});
-    if(!Impl::MeshCookSourceStreams::ParseSourceVertexRefsInto(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.vertexRefs))
+    if(!Impl::ParseSourceVertexRefsInto<SourceVertexRef>(nwbFilePath, asset, mesh.vertexRefs))
         return MakeUnexpected(Failure{});
-    if(!Impl::MeshIndexMetadataParser::Parse(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.indices))
+    if(!Impl::ParseMeshSourceIndices(nwbFilePath, asset, mesh.indices))
         return MakeUnexpected(Failure{});
     if(!ValidateRefreshMesh(nwbFilePath, mesh))
         return MakeUnexpected(Failure{});
@@ -2182,7 +2181,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
             return MakeUnexpected(Failure{});
         }
 
-        auto meshResult = ParseMeshValue(inputPath, meshVariableName, *meshValue, scratchArena);
+        auto meshResult = ParseMeshValue(inputPath, meshVariableName, *meshValue);
         if(!meshResult)
             return MakeUnexpected(Failure{});
         SourceMeshStreams& mesh = *meshResult;

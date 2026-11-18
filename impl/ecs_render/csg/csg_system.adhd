@@ -2,7 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_csg/shape_registry.adhd>
+#include <impl/ecs_render/material/material_surface_lookup.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
 #include <impl/ecs_csg/frame_state.adhd>
+#include <impl/ecs_scene/component_types.adhd>
 #include <impl/ecs_render/csg/clip_bounds.adhd>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd>
 #include <impl/ecs_render/csg/renderer_csg_state.adhd>
@@ -15,57 +19,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Scene{
-    class TransformComponent;
-};
-
-class MeshFrameBindingSnapshot;
-class CsgShapeRegistry;
-class IMaterialSurfaceLookup;
-class RendererMeshSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::Scene::TransformComponent")]
-extern class SceneTransformComponent;
-[cpp_name("::NWB::Impl::CsgShapeRegistry")]
-extern class CsgShapeRegistry;
-[cpp_name("::NWB::Impl::IMaterialSurfaceLookup")]
-extern class IMaterialSurfaceLookup;
-[cpp_name("::NWB::Impl::RendererMeshSystem")]
-extern class RendererMeshSystem{
-    public MeshViewBufferSnapshot meshViewBufferSnapshot()const;
-};
-[cpp_name("::NWB::Impl::CsgFrameReceiverLookup")]
-extern class CsgFrameReceiverLookup;
 
 [modular]
 class RendererCsgSystem : NoCopy{
@@ -142,7 +95,7 @@ class RendererCsgSystem : NoCopy{
         in CsgFrameReceiverLookup receiverLookup,
         in CsgReceiverDrawState receiverDrawState,
         in CsgReceiverCpuBounds receiverBounds,
-        in SceneTransformComponent transform
+        in TransformComponent transform
     )const;
     public Expected<CsgReceiverRangeGpuData> appendCsgReceiverClipData(
         in CsgFrameReceiverLookup receiverLookup,
@@ -156,7 +109,7 @@ class RendererCsgSystem : NoCopy{
         in CsgFrameReceiverLookup receiverLookup,
         in CsgReceiverDrawState receiverDrawState,
         in CsgReceiverCpuBounds receiverBounds,
-        in SceneTransformComponent transform,
+        in TransformComponent transform,
         in u32 frameWidth,
         in u32 frameHeight,
         mut CsgFrameGpuData csgFrameData
@@ -174,7 +127,7 @@ class RendererCsgSystem : NoCopy{
         in CsgFrameReceiverLookup receiverLookup,
         in CsgReceiverDrawState receiverDrawState,
         in CsgReceiverCpuBounds receiverBounds,
-        in SceneTransformComponent transform,
+        in TransformComponent transform,
         in u32 frameWidth,
         in u32 frameHeight,
         in MeshViewGpuData csgWorkRegionMeshViewState,

@@ -7,6 +7,7 @@
 #include <impl/ecs_mesh/runtime/mesh.adhd>
 #include <impl/ecs_mesh/skinning/deformation_state.adhd>
 #include <impl/ecs_mesh/skinning/joint_palette_validation.adhd>
+#include <impl/ecs_mesh/skinning/runtime_cache_types.adhd>
 #include <impl/ecs_skeleton/components.adhd>
 
 
@@ -136,6 +137,52 @@ class MeshSkinningRuntimeInstance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(in EntityID entity, in RuntimeMeshHandle runtimeMesh, in MeshSkinningRuntimeInstance instance){
+    const Expected<SkinnedRuntimeMeshIdentity> identity = TryResolveSkinnedRuntimeMeshIdentity(
+        entity, runtimeMesh, instance.entity, instance.dirtyFlags, instance.sourceName, instance.handle.value, instance.editRevision
+    );
+    if(!identity.has_value())
+        return MakeUnexpected(Failure());
+    assert(instance.valid(), "runtime mesh instance must be ready");
+    assert(instance.meshlets.size() <= cast<usize>(u32.max), "meshlet count must fit in the runtime descriptor");
+    assert(instance.meshletPrimitiveIndices.size() <= cast<usize>(u32.max), "primitive index count must fit in the runtime descriptor");
+    assert(identity.value().meshKey != s_NameNone, "runtime mesh identity must have a key");
+    return identity.value();
+}
+
+Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(
+    in EntityID entity,
+    in RuntimeMeshHandle runtimeMesh,
+    in MeshSkinningRuntimeInstance instance,
+    in b8 boundsFresh,
+    in b8 conesFresh
+){
+    const Expected<SkinnedRuntimeMeshIdentity> identity = ResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance);
+    if(!identity.has_value())
+        return MakeUnexpected(Failure());
+
+    RuntimeMeshDesc mesh;
+    mesh.meshKey = identity.value().meshKey;
+    mesh.version = identity.value().version;
+    mesh.entity = entity;
+    mesh.geometryContentRevision = instance.deformationState.contentRevision();
+    if(mesh.geometryContentRevision != 0u){
+        mesh.localBoundsBuffer = instance.localBoundsBuffer;
+        mesh.meshletLocalBoundsBuffer = instance.meshletLocalBoundsBuffer;
+    }
+    mesh.buffers = instance.runtimeMeshBuffers();
+    mesh.triangleIndexBuffer = instance.triangleIndexBuffer;
+    mesh.attributeBuffer = instance.attributeBuffer;
+    mesh.solidTriangleWords = instance.solidTriangleWords;
+    mesh.localBounds = instance.localBounds;
+    mesh.meshletCount = cast<u32>(instance.meshlets.size());
+    mesh.meshletPrimitiveIndexCount = cast<u32>(instance.meshletPrimitiveIndices.size());
+    mesh.dynamicMeshletBoundsFresh = boundsFresh;
+    mesh.dynamicMeshletConesFresh = conesFresh;
+    assert(mesh.valid(), "published runtime mesh must be valid");
+    return mesh;
+}
+
 MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(in MeshSkinningRuntimeInstance instance){
     MeshSkinningResourceBuffers buffers = MeshSkinningResourceBuffers();
     buffers[0u] = instance.restPositionBuffer;
@@ -166,6 +213,13 @@ class RuntimeSkinPayloadScratch{
     public Vector<SkeletonJointMatrix> jointMatrices;
     public usize skinInfluenceCount = 0u;
     public u32 resolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+
+    public void reset(in u32 skinningMode){
+        this.skinInfluenceCount = 0u;
+        this.jointMatrices.clear();
+        this.poseJoints.clear();
+        this.resolvedSkinningMode = skinningMode;
+    }
 
     public b8 hasActiveSkin()const{
         return this.skinInfluenceCount != 0u && !this.jointMatrices.empty();
@@ -204,10 +258,7 @@ b8 PopulateRuntimeSkinPayloadFromPose(
     in SkeletonPoseComponent skeletonPose,
     mut RuntimeSkinPayloadScratch payload
 ){
-    payload.skinInfluenceCount = 0u;
-    payload.jointMatrices.clear();
-    payload.poseJoints.clear();
-    payload.resolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+    payload.reset(cast<u32>(SkeletonSkinningMode::LinearBlend));
 
     const Expected<u32> skinningMode = TryBuildStoredJointPaletteVectorFromSkeletonPose(skeletonPose, payload.poseJoints);
     if(!skinningMode.has_value()){
@@ -230,10 +281,7 @@ b8 PopulateRuntimeSkinPayloadFromPalette(
     in SkeletonJointPaletteComponent jointPalette,
     mut RuntimeSkinPayloadScratch payload
 ){
-    payload.skinInfluenceCount = 0u;
-    payload.jointMatrices.clear();
-    payload.poseJoints.clear();
-    payload.resolvedSkinningMode = jointPalette.skinningMode;
+    payload.reset(jointPalette.skinningMode);
 
     if(!BuildMeshSkinningJointPalette(instance, jointPalette.joints, payload.resolvedSkinningMode, payload.jointMatrices))
         return false;

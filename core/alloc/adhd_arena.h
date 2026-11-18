@@ -15,8 +15,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename Key, typename Value, typename Arena>
+using AdhdHashMap = HashMap<Key, Value, Arena,
+    Conditional_T<IsSame_V<Key, AString<::ArenaBase>>, Hasher<AStringView>, Hasher<Key>>,
+    Conditional_T<IsSame_V<Key, AString<::ArenaBase>>, EqualTo<>, EqualTo<Key>>>;
+
 template<typename TargetT, typename SrcT>
 [[nodiscard]] FOUNDATION_INLINE TargetT AdhdRebindConstruct(::ArenaBase& targetArena, SrcT&& src);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename Map>
+[[nodiscard]] inline T& AdhdGetOrCreateTextRecord(Map& map, const AStringView name){
+    if(const auto found = map.find(name); found != map.end())
+        return found.value();
+    auto& arena = map.get_allocator().arena();
+    typename Map::key_type key(name, arena);
+    return map.try_emplace(Move(key), arena).first.value();
+}
+
+template<typename T, typename MapT, typename K>
+[[nodiscard]] b8 TryEmplaceOwned(MapT& destination, const K& key, T& value){
+    return destination.try_emplace(key, Move(value)).second;
+}
+
+template<typename T, typename ArenaT>
+[[nodiscard]] b8 TryCopyVector(Vector<T, ArenaT>& destination, const Span<const T> source){
+    if(source.size() > destination.max_size())
+        return false;
+    try{
+        destination.assign(source.begin(), source.end());
+        return true;
+    }
+    catch(const AllocationException&){
+        return false;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,17 +196,14 @@ template<typename TargetT, typename SrcT>
     }
     else if constexpr(AdhdArenaDetail::IsStdExpected<TargetT>::value){
         using ValT = typename AdhdArenaDetail::IsStdExpected<TargetT>::Value;
+        using ErrT = typename TargetT::error_type;
         using SrcRaw = RemoveCVRef_T<SrcT>;
         if constexpr(AdhdArenaDetail::IsStdUnexpected<SrcRaw>::value){
-            return TargetT(Forward<SrcT>(src));
+            return TargetT(std::unexpect, AdhdRebindConstruct<ErrT>(targetArena, Forward<SrcT>(src).error()));
         }
         else if constexpr(AdhdArenaDetail::IsStdExpected<SrcRaw>::value){
-            if(!src.has_value()){
-                if constexpr(IsLValueReference_V<SrcT>)
-                    return MakeUnexpected(src.error());
-                else
-                    return MakeUnexpected(Move(src.error()));
-            }
+            if(!src.has_value())
+                return TargetT(std::unexpect, AdhdRebindConstruct<ErrT>(targetArena, Forward<SrcT>(src).error()));
             if constexpr(!IsSame_V<ValT, void>){
                 if constexpr(IsLValueReference_V<SrcT>)
                     return TargetT(std::in_place, AdhdRebindConstruct<ValT>(targetArena, *src));
@@ -344,6 +377,28 @@ FOUNDATION_INLINE LhsT& AdhdAssign(LhsT& lhs, RhsT&& rhs){
     }
 }
 
+template<typename T, typename Sequence>
+    requires(IsSame_V<T, typename Sequence::value_type>)
+inline void AdhdAppendOwned(Sequence& values, T& source){
+    values.push_back(AdhdRebindConstruct<T>(values.get_allocator().arena(), Move(source)));
+}
+
+template<typename T, typename Sequence, typename Error>
+    requires(IsSame_V<T, typename Sequence::value_type>)
+[[nodiscard]] inline b8 AdhdAppendParsedValue(Sequence& values, Expected<T, Error> parsed){
+    if(!parsed)
+        return false;
+    values.push_back(AdhdRebindConstruct<T>(values.get_allocator().arena(), Move(*parsed)));
+    return true;
+}
+
+template<typename T>
+    requires (!IsCopyConstructible_V<T> && IsAssignable_V<T&, T&&>)
+FOUNDATION_INLINE void AdhdMoveInto(T& destination, T& source){
+    if(&destination != &source)
+        AdhdAssign(destination, Move(source));
+}
+
 template<typename LhsT, typename RhsT>
 FOUNDATION_INLINE LhsT& AdhdAssignLocked(::Futex& mutex, LhsT& lhs, RhsT&& rhs){
     const ::NothrowScopedLock lock(mutex);
@@ -351,7 +406,7 @@ FOUNDATION_INLINE LhsT& AdhdAssignLocked(::Futex& mutex, LhsT& lhs, RhsT&& rhs){
 }
 
 template<typename InnerT, typename RhsT>
-FOUNDATION_INLINE Optional<InnerT>& AdhdAssignOptional(::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
+FOUNDATION_INLINE Optional<InnerT>& AdhdAssignWrapped(::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
     using RhsRaw = RemoveCVRef_T<RhsT>;
     if constexpr(IsSame_V<RhsRaw, std::nullopt_t>){
         lhs.reset();
@@ -389,10 +444,21 @@ FOUNDATION_INLINE Optional<InnerT>& AdhdAssignOptional(::ArenaBase& targetArena,
     }
 }
 
-template<typename InnerT, typename RhsT>
-FOUNDATION_INLINE Optional<InnerT>& AdhdAssignOptionalLocked(::Futex& mutex, ::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
+template<typename ValueT, typename ErrorT, typename RhsT>
+FOUNDATION_INLINE Expected<ValueT, ErrorT>& AdhdAssignWrapped(::ArenaBase& targetArena, Expected<ValueT, ErrorT>& lhs, RhsT&& rhs){
+    using TargetT = Expected<ValueT, ErrorT>;
+    if constexpr(IsSame_V<TargetT, RemoveCVRef_T<RhsT>>){
+        if(&lhs == &rhs)
+            return lhs;
+    }
+    lhs = AdhdRebindConstruct<TargetT>(targetArena, Forward<RhsT>(rhs));
+    return lhs;
+}
+
+template<typename LhsT, typename RhsT>
+FOUNDATION_INLINE LhsT& AdhdAssignWrappedLocked(::Futex& mutex, ::ArenaBase& targetArena, LhsT& lhs, RhsT&& rhs){
     const ::NothrowScopedLock lock(mutex);
-    return AdhdAssignOptional(targetArena, lhs, Forward<RhsT>(rhs));
+    return AdhdAssignWrapped(targetArena, lhs, Forward<RhsT>(rhs));
 }
 
 template<typename MapT, typename KeyT>

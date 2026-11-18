@@ -2,111 +2,148 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/graph_types.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/deferred/presentation_settings.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
+#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd>
+#include <impl/ecs_render/mesh/object_geometry_cache.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/graph_types.adhd.h>
-#include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd.h>
-#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+b8 IsSharedComputeEmulationRasterPhase(in usize phaseIndex, in usize phasesPerDraw){
+    return phaseIndex % phasesPerDraw != 0u;
+}
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+usize ResolveSharedComputeEmulationDrawIndex(in usize phaseIndex, in usize phasesPerDraw){
+    return phaseIndex / phasesPerDraw;
+}
 
+b8 IsFinalSharedComputeEmulationPhase(in usize phaseIndex, in usize phaseCount){
+    return phaseIndex + 1u == phaseCount;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class OpaqueSharedComputeEmulationChainInputs{
+    public in DeferredFrameTargets targets;
+    public in DeferredGraphResourceImportResult resources;
+    public in MeshFrameBindingSnapshot frameBindings;
+    public in RegularSharedComputeEmulationGraphPlan plan;
+    public Span<GpuTaskResourceUse> objectGeometryReads;
+    public in GraphicsPrefixTimingTicket timingTicket;
+    public in b8 meshViewSetupReady;
+    public in b8 sceneShadingSetupReady;
+    public mut Optional<GpuTimingMeasure> sharedComputeEmulationTiming;
+    public GpuTaskResourceSetUse materialGeometrySetUse;
+    public GpuTaskResourceSetUse materialSampledTextureSetUse;
+    public BufferRange materialInstanceRange;
+    public BufferRange materialTypedRange;
+    public GpuGraphResourceId sharedOutput;
+    public GpuTaskId gbufferTask;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 materialDrawBuffersUploaded = false;
+    public b8 materialFrameStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned = false;
 
+    public OpaqueSharedComputeEmulationChainInputs(in DeferredFrameTargets targets, in DeferredGraphResourceImportResult resources,
+        in MeshFrameBindingSnapshot frameBindings, in RegularSharedComputeEmulationGraphPlan plan, in GraphicsPrefixTimingTicket timingTicket,
+        in b8 meshViewSetupReady, in b8 sceneShadingSetupReady, mut Optional<GpuTimingMeasure> sharedComputeEmulationTiming){
+        this.targets = targets;
+        this.resources = resources;
+        this.frameBindings = frameBindings;
+        this.plan = plan;
+        this.timingTicket = timingTicket;
+        this.meshViewSetupReady = meshViewSetupReady;
+        this.sceneShadingSetupReady = sceneShadingSetupReady;
+        this.sharedComputeEmulationTiming = sharedComputeEmulationTiming;
+    }
+}
 
-NWB_IMPL_BEGIN
+// Each draw generates and then rasterizes the shared vertex output.
+class OpaqueSharedComputeEmulationChainBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererMaterialSystem m_materialSystem;
+    public OpaqueSharedComputeEmulationChainBuilder(mut GpuTaskGraph graph, mut RendererMaterialSystem materialSystem){
+        this.m_graph = graph;
+        this.m_materialSystem = materialSystem;
+    }
 
+    private Expected<GpuTaskId> declarePhase(mut OpaqueSharedComputeEmulationChainInputs inputs, in Name identity, in StringView markerLabel,
+        in borrow GpuTaskId dependency, in SharedComputeEmulationPhase phase, in usize drawIndex, in b8 finishTiming,
+        in Span<GpuTaskResourceUse> resourceUses, in Span<GpuTaskResourceSetUse> resourceSetUses){
+        GpuTaskDesc desc;
+        MakeSharedComputeEmulationPhaseTaskDesc(identity, markerLabel, dependency, resourceUses, resourceSetUses, desc);
+        OpaqueRegularSharedComputeEmulationGraphTask payload(this.m_materialSystem, inputs.targets, inputs.timingTicket, inputs.meshViewSetupReady,
+            inputs.sceneShadingSetupReady, inputs.sharedComputeEmulationTiming, inputs.frameBindings);
+        payload.plan = inputs.plan;
+        payload.drawIndex = drawIndex;
+        payload.instanceCount = inputs.instanceCount;
+        payload.materialTypedByteCount = inputs.materialTypedByteCount;
+        payload.materialDrawBuffersUploaded = inputs.materialDrawBuffersUploaded;
+        payload.materialFrameStatesGraphOwned = inputs.materialFrameStatesGraphOwned;
+        payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
+        payload.finishTiming = finishTiming;
+        payload.phase = phase;
+        return this.m_graph.addPreparedPayloadTask(desc, payload);
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public Expected<OpaqueSharedComputeEmulationChainResult> declare(mut OpaqueSharedComputeEmulationChainInputs inputs, mut Span<GpuTaskId> tasks){
+        const Array<GpuTaskResourceUse, 4u> generateResourceUses(
+            ReadUse(inputs.resources.meshView, ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
+            ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
+            WriteUse(inputs.sharedOutput, ResourceStates::UnorderedAccess)
+        );
 
+        Vector<GpuTaskResourceUse> rasterResourceUses;
+        rasterResourceUses.reserve(inputs.objectGeometryReads.size() + s_OpaqueSharedRasterResourceUseCapacity);
+        for(in GpuTaskResourceUse use : inputs.objectGeometryReads)
+            rasterResourceUses.push_back(use);
+        rasterResourceUses.push_back(ReadUse(inputs.resources.meshView, ResourceStates::ConstantBuffer));
+        rasterResourceUses.push_back(ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange));
+        rasterResourceUses.push_back(ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange));
+        rasterResourceUses.push_back(ReadUse(inputs.sharedOutput, s_ObjectGeometryRasterState));
+        rasterResourceUses.push_back(ReadWriteUse(inputs.resources.albedo, ResourceStates::RenderTarget));
+        rasterResourceUses.push_back(ReadWriteUse(inputs.resources.normal, ResourceStates::RenderTarget));
+        rasterResourceUses.push_back(ReadWriteUse(inputs.resources.worldPosition, ResourceStates::RenderTarget));
+        rasterResourceUses.push_back(ReadWriteUse(inputs.resources.specularRoughness, ResourceStates::RenderTarget));
+        rasterResourceUses.push_back(ReadWriteUse(inputs.resources.depth, ResourceStates::DepthWrite));
 
-class RendererMaterialSystem;
-class DeferredGraphResourceImportResult;
+        FixedVector<GpuTaskResourceSetUse, s_OpaqueSharedResourceSetUseCapacity> resourceSetUses;
+        resourceSetUses.push_back(inputs.materialGeometrySetUse);
+        if(inputs.materialSampledTextureSetUse.resourceSet.valid())
+            resourceSetUses.push_back(inputs.materialSampledTextureSetUse);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct OpaqueSharedComputeEmulationChainInputs{
-    DeferredFrameTargets& targets;
-    const DeferredGraphResourceImportResult& resources;
-    const MeshFrameBindingSnapshot& frameBindings;
-    const RegularSharedComputeEmulationGraphPlan& plan;
-    Span<const Core::GpuTaskResourceUse> objectGeometryReads;
-    Core::GpuTimingSubmissionTicket*& timingTicket;
-    const b8& meshViewSetupReady;
-    const b8& sceneShadingSetupReady;
-    Optional<Core::GpuTimingMeasure>& sharedComputeEmulationTiming;
-    Core::GpuTaskResourceSetUse materialGeometrySetUse{};
-    Core::GpuTaskResourceSetUse materialSampledTextureSetUse{};
-    Core::BufferRange materialInstanceRange{};
-    Core::BufferRange materialTypedRange{};
-    Core::GpuGraphResourceId sharedOutput;
-    Core::GpuTaskId gbufferTask;
-    usize instanceCount = 0u;
-    usize materialTypedByteCount = 0u;
-    b8 materialDrawBuffersUploaded = false;
-    b8 materialFrameStatesGraphOwned = false;
-    b8 materialGeometryStatesGraphOwned = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Two to five regular opaque draws share one generated-vertex output, so each draw gets an explicit generate then raster phase after the G-buffer.
-// The immediate chain keeps every Common -> UAV -> vertex/index state step with the graph, not the material callback.
-class OpaqueSharedComputeEmulationChainBuilder final : NoCopy{
-public:
-    OpaqueSharedComputeEmulationChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem)noexcept
-        : m_graph(graph)
-        , m_materialSystem(materialSystem)
-    {}
-
-
-public:
-    // Writes each declared phase task into `tasks` in order.
-    [[nodiscard]] Expected<OpaqueSharedComputeEmulationChainResult> declare(const OpaqueSharedComputeEmulationChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, Span<Core::GpuTaskId> tasks);
-
-
-private:
-    [[nodiscard]] Expected<Core::GpuTaskId> declarePhase(
-        const OpaqueSharedComputeEmulationChainInputs& inputs,
-        const Name& identity,
-        AStringView markerLabel,
-        const Core::GpuTaskId& dependency,
-        SharedComputeEmulationPhase::Enum phase,
-        usize drawIndex,
-        b8 finishTiming,
-        Span<const Core::GpuTaskResourceUse> resourceUses,
-        Span<const Core::GpuTaskResourceSetUse> resourceSetUses
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererMaterialSystem& m_materialSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        const SharedComputeEmulationPhaseTable sharedPhases = OpaqueSharedComputeEmulationPhases();
+        const usize phaseCount = SharedComputeEmulationPhaseCountForDrawCount(inputs.plan.drawCount);
+        if(!IsSupportedSharedComputeEmulationPhaseCount(phaseCount) || phaseCount > tasks.size()){
+            warning("RendererSystem: invalid shared opaque compute-emulation phase count");
+            return MakeUnexpected(Failure());
+        }
+        GpuTaskId dependency = inputs.gbufferTask;
+        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
+            SharedComputeEmulationPhase phase = SharedComputeEmulationPhase::Generate;
+            Span<GpuTaskResourceUse> uses = generateResourceUses;
+            if(IsSharedComputeEmulationRasterPhase(phaseIndex, s_SharedComputeEmulationPhasesPerDraw)){
+                phase = SharedComputeEmulationPhase::Raster;
+                uses = rasterResourceUses;
+            }
+            const auto phaseTask = this.declarePhase(inputs, sharedPhases.identities[phaseIndex], sharedPhases.markers[phaseIndex], dependency, phase,
+                ResolveSharedComputeEmulationDrawIndex(phaseIndex, s_SharedComputeEmulationPhasesPerDraw), IsFinalSharedComputeEmulationPhase(phaseIndex, phaseCount),
+                uses, resourceSetUses);
+            if(!phaseTask.has_value()){
+                tasks[phaseIndex] = GpuTaskId();
+                warning("RendererSystem: could not declare shared opaque compute-emulation phase");
+                return MakeUnexpected(Failure());
+            }
+            dependency = phaseTask.value();
+            tasks[phaseIndex] = dependency;
+        }
+        return OpaqueSharedComputeEmulationChainResult(dependency, phaseCount);
+    }
 }
 
 

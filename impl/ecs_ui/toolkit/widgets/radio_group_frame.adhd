@@ -2,70 +2,43 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/text/layout.adhd>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout.adhd.h>
+[move_only, friend(Builder)]
+class RadioGroupLabel{
+    private TextLayout text;
+    private Rect bounds;
 
+    public RadioGroupLabel(mut TextLayout layout, in Rect bounds){
+        this.bounds = bounds;
+        MoveInto<TextLayout>(this.text, layout);
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// The source and state are borrowed for the lifetime of the enclosing scope.
+[move_only, friend(Builder)]
+class RadioGroupFrame : NoCopy{
+    private in IListDataSource m_source;
+    private mut RadioGroupState m_state;
+    private Vector<RadioGroupLabel> m_labels;
+    private RadioGroupChoices m_choices;
+    private RadioGroupSnapshot m_snapshot;
+    private RadioGroupOptions m_options;
+    private b8 m_focusOnCommit = false;
+    private RadioGroupStyle m_style;
+    private RadioGroupMetrics m_metrics;
+    private WidgetStyle m_widgetStyle;
+    private ControlToken m_token;
 
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Required source and state loans end when the owning scope destroys this transient frame.
-class RadioGroupFrame final : NoCopy{
-    friend class Builder;
-
-
-private:
-    struct Label{
-        TextLayout text;
-        Rect bounds;
-    };
-
-
-public:
-    RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state)noexcept
-        : m_source(source)
-        , m_state(state)
-        , m_labels(arena)
-    {}
-
-
-private:
-    const IListDataSource& m_source;
-    RadioGroupState& m_state;
-    PaintVector<Label> m_labels;
-    RadioGroupChoices m_choices;
-    RadioGroupSnapshot m_snapshot;
-    RadioGroupOptions m_options;
-    b8 m_focusOnCommit = false;
-    RadioGroupStyle m_style;
-    RadioGroupMetrics m_metrics;
-    WidgetStyle m_widgetStyle;
-    ControlToken m_token;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public RadioGroupFrame(in IListDataSource source, mut RadioGroupState state){
+        this.m_source = source;
+        this.m_state = state;
+    }
 }
 
 

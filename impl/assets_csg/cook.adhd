@@ -2,112 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_csg/shape_id.adhd>
+#include <impl/assets_csg/shape_module_source.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-
-#include <core/assets/global.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsCsgCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Core::Assets::CookArena;
-using Core::Assets::CookString;
-using Core::Assets::CookVector;
-using Core::Assets::ScratchArena;
-
-struct CsgShapeCookEntry{
-    Name shapeName = s_NameNone;
-    Name shaderModule = s_NameNone;
-    u32 shapeTypeId = 0u;
-    CookString evalInclude;
-    CookString moduleInclude;
-
-
-public:
-    explicit CsgShapeCookEntry(CookArena& arena)noexcept
-        : evalInclude(arena)
-        , moduleInclude(arena)
-    {}
-};
-
-using CsgShapeCookEntryVector = CookVector<CsgShapeCookEntry>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, const Core::Metascript::Document& doc, CookArena& cookArena, ScratchArena& scratchArena);
-
-[[nodiscard]] b8 AssignCsgShapeCookIds(Span<CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CsgShapeModuleWriter final{
-public:
-    [[nodiscard]] Expected<Path> emit(const Path& cacheDirectory, AStringView configurationSafeName, Span<const CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena)const;
-
-
-private:
-    [[nodiscard]] static b8 WriteModuleInclude(Span<const CsgShapeCookEntry> csgShapeEntries, Name shaderModule, AStringView moduleInclude, const Path& includeRoot, ScratchArena& scratchArena, CookString& source);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class CsgShapeCookEntry{
+    public Name shapeName = s_NameNone;
+    public Name shaderModule = s_NameNone;
+    public u32 shapeTypeId = 0u;
+    public String evalInclude;
+    public String moduleInclude;
 }
+
+type CsgShapeCookEntryVector = Vector<CsgShapeCookEntry>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,226 +120,58 @@ b8 ValidateCsgReservedVirtualRootPath(in Path nwbFilePath, in StringView fieldNa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_csg/shape_module_writer.adhd.h>
-
-#include <core/assets/cook_paths.h>
-#include <core/common/log.h>
-
-#include <global/allocation_size.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsCsgCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Core::Assets::ScratchString;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, const Core::Metascript::Document& doc, CookArena& cookArena, ScratchArena& scratchArena){
-    CsgShapeCookEntry entry(cookArena);
-
-    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_CsgShapeMetaDiagnosticPrefix);
-    if(!assetValue)
-        return MakeUnexpected(assetValue.error());
-    const Core::Metascript::Value& asset = **assetValue;
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, &IsAllowedCsgShapeAssetField))
-        return MakeUnexpected(Failure{});
-
-    auto shapeNameResult = Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_CsgShapeField, true);
-    if(!shapeNameResult)
-        return MakeUnexpected(Failure{});
-    entry.shapeName = *shapeNameResult;
-    auto shaderModuleResult = Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_CsgModuleField, true);
-    if(!shaderModuleResult)
-        return MakeUnexpected(Failure{});
-    entry.shaderModule = *shaderModuleResult;
-    const auto evalInclude = ParseCsgStringField(nwbFilePath, asset, s_CsgEvalField, true);
-    if(!evalInclude)
-        return MakeUnexpected(Failure{});
-    entry.evalInclude = *evalInclude;
-    const auto moduleInclude = ParseCsgStringField(nwbFilePath, asset, s_CsgModuleIncludeField, false);
-    if(!moduleInclude)
-        return MakeUnexpected(Failure{});
-    entry.moduleInclude = *moduleInclude;
+b8 ReadCsgShapeMetadata(in Path file, in MetascriptValue asset, mut CsgShapeCookEntry entry){
+    if(!ValidateMetadataAssetFields(file, asset, s_CsgShapeMetaDiagnosticPrefix, IsAllowedCsgShapeAssetField))
+        return false;
+    const auto shape = ReadMetadataNameField(file, asset, s_CsgShapeMetaDiagnosticPrefix, s_CsgShapeField, true);
+    const auto module = ReadMetadataNameField(file, asset, s_CsgShapeMetaDiagnosticPrefix, s_CsgModuleField, true);
+    if(!shape.has_value() || !module.has_value())
+        return false;
+    entry.shapeName = shape.value();
+    entry.shaderModule = module.value();
+    const auto eval = ParseCsgStringField(file, asset, s_CsgEvalField, true);
+    const auto moduleInclude = ParseCsgStringField(file, asset, s_CsgModuleIncludeField, false);
+    if(!eval.has_value() || !moduleInclude.has_value())
+        return false;
+    entry.evalInclude = eval.value();
+    entry.moduleInclude = moduleInclude.value();
     if(entry.moduleInclude.empty()){
-        const AString<ScratchArena> safeModuleName = BuildCanonicalSafeCacheName(scratchArena, entry.shaderModule.resolvedText());
-        auto generatedInclude = CsgShapeModuleSource().buildDefaultPath(scratchArena, entry.shaderModule, AStringView(safeModuleName));
-        if(!generatedInclude){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(entry.shaderModule.resolvedText()));
-            return MakeUnexpected(Failure{});
+        const String safeModuleName = BuildCanonicalSafeCacheName(entry.shaderModule.resolvedText());
+        const auto generated = CsgShapeModuleSource().buildDefaultPath(entry.shaderModule, safeModuleName);
+        if(!generated.has_value()){
+            error("CSG shape meta '{}': failed to build generated module include for '{}'", file, entry.shaderModule.resolvedText());
+            return false;
         }
-        entry.moduleInclude.assign(AStringView(*generatedInclude));
+        entry.moduleInclude = generated.value();
     }
-    if(!ValidateCsgIncludePathValue(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude)))
-        return MakeUnexpected(Failure{});
-    if(!ValidateCsgIncludePathValue(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude)))
-        return MakeUnexpected(Failure{});
-    if(!ValidateCsgSlangIncludeExtension(nwbFilePath, s_CsgEvalField, HasCsgSlangIncludeExtension(AStringView(entry.evalInclude))))
-        return MakeUnexpected(Failure{});
-    if(!ValidateCsgSlangIncludeExtension(nwbFilePath, s_CsgModuleIncludeField, HasCsgSlangIncludeExtension(AStringView(entry.moduleInclude))))
-        return MakeUnexpected(Failure{});
-    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude)))
-        return MakeUnexpected(Failure{});
-    if(!ValidateCsgReservedVirtualRootPath(nwbFilePath, s_CsgModuleIncludeField, AStringView(entry.moduleInclude)))
-        return MakeUnexpected(Failure{});
+    return ValidateCsgIncludePathValue(file, s_CsgEvalField, entry.evalInclude)
+        && ValidateCsgIncludePathValue(file, s_CsgModuleIncludeField, entry.moduleInclude)
+        && ValidateCsgSlangIncludeExtension(file, s_CsgEvalField, HasCsgSlangIncludeExtension(entry.evalInclude))
+        && ValidateCsgSlangIncludeExtension(file, s_CsgModuleIncludeField, HasCsgSlangIncludeExtension(entry.moduleInclude))
+        && ValidateCsgReservedVirtualRootPath(file, s_CsgEvalField, entry.evalInclude)
+        && ValidateCsgReservedVirtualRootPath(file, s_CsgModuleIncludeField, entry.moduleInclude);
+}
+
+Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(in Path file, in MetascriptDocument doc){
+    CsgShapeCookEntry entry;
+    if(!VisitMetadataAssetMap(file, doc, s_CsgShapeMetaDiagnosticPrefix, lambda[in file, mut entry](in MetascriptValue value) -> b8{
+        return ReadCsgShapeMetadata(file, value, entry);
+    }))
+        return MakeUnexpected(Failure());
     return entry;
 }
 
-b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchArena&){
-    Sort(csgShapeEntries.begin(), csgShapeEntries.end(), [](const CsgShapeCookEntry& lhs, const CsgShapeCookEntry& rhs){
+b8 AssignCsgShapeCookIds(mut CsgShapeCookEntryVector entries){
+    SortSequence<CsgShapeCookEntry>(entries, lambda[](in CsgShapeCookEntry lhs, in CsgShapeCookEntry rhs) -> b8{
         return IsBeforeCsgShapeCookName(lhs.shapeName, rhs.shapeName);
     });
-
-    CookArena shapeIdArena{Name(NWB::Impl::s_CsgShapeCookIdArenaName)};
-    HashMap<CsgShapeTypeId, Name, CookArena> shapeIdNames(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), shapeIdArena);
-    shapeIdNames.reserve(csgShapeEntries.size());
-
-    for(usize index = 0u; index < csgShapeEntries.size(); ++index){
-        CsgShapeCookEntry& entry = csgShapeEntries[index];
-        if(!ResolveAndCheckCsgShapeTypeIdCollision(index, entry.shapeName, shapeIdNames, entry.shapeTypeId))
+    HashMap<CsgShapeTypeId, Name> names;
+    names.reserve(entries.size());
+    for(usize index = 0u; index < entries.size(); ++index){
+        if(!ResolveAndCheckCsgShapeTypeIdCollision(index, entries[index].shapeName, names, entries[index].shapeTypeId))
             return false;
     }
-
     return true;
-}
-
-Expected<Path> CsgShapeModuleWriter::emit(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena)const{
-    Path includeRoot = cacheDirectory / configurationSafeName / s_GeneratedIncludeCacheDirectory;
-    if(csgShapeEntries.empty()){
-        if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, s_CsgShapeIncludeGenerationLabel))
-            return MakeUnexpected(Failure{});
-        if(!WriteEmptyDefaultCsgModuleInclude(includeRoot))
-            return MakeUnexpected(Failure{});
-        return includeRoot;
-    }
-
-    HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> seenShapeNames(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    seenShapeNames.reserve(csgShapeEntries.size());
-    for(const CsgShapeCookEntry& entry : csgShapeEntries){
-        if(!ValidateUniqueCsgShapeName(seenShapeNames.insert(entry.shapeName.hash()).second, entry.shapeName))
-            return MakeUnexpected(Failure{});
-    }
-
-    HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> validatedModules(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    validatedModules.reserve(csgShapeEntries.size());
-
-    using GeneratedIncludeOwnerMap = HashMap<ScratchString, Name, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
-    GeneratedIncludeOwnerMap generatedIncludeOwners(0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena);
-    generatedIncludeOwners.reserve(csgShapeEntries.size());
-
-    usize moduleSourceCapacity = 0u;
-
-    // Preflight every output path before clearing or writing the generated include tree.
-    // A later module must never be able to overwrite a generated include emitted for an earlier, unrelated module.
-    for(const CsgShapeCookEntry& moduleEntry : csgShapeEntries){
-        if(!validatedModules.insert(moduleEntry.shaderModule.hash()).second)
-            continue;
-
-        usize sourceBytes = s_CsgModuleSourceHeader.size();
-        for(const CsgShapeCookEntry& entry : csgShapeEntries){
-            if(entry.shaderModule != moduleEntry.shaderModule)
-                continue;
-
-            sourceBytes = AddSize(sourceBytes, AddSize(s_FixedShapeSourceBytes, entry.evalInclude.size()));
-            if(!ValidateCsgModuleIncludeConsistency(moduleEntry.shaderModule, AStringView(moduleEntry.moduleInclude), AStringView(entry.moduleInclude)))
-                return MakeUnexpected(Failure{});
-        }
-
-        moduleSourceCapacity = Max(moduleSourceCapacity, sourceBytes);
-
-        ScratchString canonicalModuleInclude(moduleEntry.moduleInclude, scratchArena);
-        CanonicalizeTextInPlace(canonicalModuleInclude);
-        const auto generatedIncludeOwner = generatedIncludeOwners.try_emplace(Move(canonicalModuleInclude), moduleEntry.shaderModule);
-        if(!ValidateSharedCsgGeneratedIncludeOwner(
-            generatedIncludeOwner.second,
-            generatedIncludeOwner.first.value(),
-            moduleEntry.shaderModule,
-            AStringView(moduleEntry.moduleInclude)
-        ))
-            return MakeUnexpected(Failure{});
-    }
-
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, s_CsgShapeIncludeGenerationLabel))
-        return MakeUnexpected(Failure{});
-
-    HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> emittedModules(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    emittedModules.reserve(csgShapeEntries.size());
-
-    CookString source(csgShapeEntries[0u].evalInclude.get_allocator().arena());
-    source.reserve(moduleSourceCapacity);
-    for(const CsgShapeCookEntry& moduleEntry : csgShapeEntries){
-        if(!emittedModules.insert(moduleEntry.shaderModule.hash()).second)
-            continue;
-
-        if(!WriteModuleInclude(csgShapeEntries, moduleEntry.shaderModule, moduleEntry.moduleInclude, includeRoot, scratchArena, source))
-            return MakeUnexpected(Failure{});
-    }
-
-    return includeRoot;
-}
-
-b8 CsgShapeModuleWriter::WriteModuleInclude(const Span<const CsgShapeCookEntry> csgShapeEntries, const Name shaderModule, const AStringView moduleInclude, const Path& includeRoot, ScratchArena& scratchArena, CookString& source){
-    CsgShapeModuleSource().begin(source);
-
-    for(const CsgShapeCookEntry& entry : csgShapeEntries){
-        if(entry.shaderModule != shaderModule)
-            continue;
-        CsgShapeModuleSource().appendEval(entry.shapeTypeId, AStringView(entry.evalInclude), source);
-    }
-
-    return WriteCsgGeneratedIncludeFile(ResolveCsgModuleOutputPath(scratchArena, includeRoot, moduleInclude), AStringView(source));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

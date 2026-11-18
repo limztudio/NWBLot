@@ -171,6 +171,21 @@ namespace __hidden_gpu_task_graph_telemetry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 GpuTaskGraphQueueAssignmentTelemetryTracker::updateForFrameGraph(
+    const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments,
+    const GpuCompiledGraph::ReadView& compiledPlan, const GpuGraphSubmissionTransaction& transaction, Telemetry::FrameGraphBuilder& builder
+){
+    return update(declarations, assignments, compiledPlan, transaction, builder.scratchArena());
+}
+
+b8 GpuTaskGraphDeclarationReadView::appendAcceptedFrameGraphTelemetry(
+    const GpuTaskGraphAnalysis& analysis, Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphQueueAssignments& assignments,
+    const GpuCompiledGraph::ReadView& compiledPlan, const GpuTaskGraphQueueAssignmentTelemetryTracker& telemetry
+)const{
+    const GpuTaskGraphTelemetryOptions options{ &assignments, &compiledPlan, &telemetry };
+    return appendFrameGraphTelemetry(analysis, builder.scratchArena(), builder, options);
+}
+
 b8 GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphTelemetryOptions& options)const{
     if(!m_graph)
         return false;

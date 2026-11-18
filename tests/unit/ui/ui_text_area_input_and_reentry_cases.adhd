@@ -153,7 +153,7 @@ public:
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ ++metadataCalls; return generation; }
 
-    [[nodiscard]] virtual u64 revision()const override{
+    [[nodiscard]] virtual u64 revision()const noexcept override{
         ++metadataCalls;
         if(metadataHook){
             Function<void()> hook = Move(metadataHook);
@@ -166,7 +166,7 @@ public:
 
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ ++metadataCalls; return count; }
 
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         const StringView value = ComboSource::text(index);
         if(rowHook){
             Function<void()> hook = Move(rowHook);
@@ -285,7 +285,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
+    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
         const StringView value = ComboSource::text(index);
         if(rowHook){
             Function<void()> hook = Move(rowHook);
@@ -1893,8 +1893,6 @@ NWB_ADHD_GTEST_F(UiTextAreaReentryTests, HostLoanNestedDeclarationRejectsBeforeA
 NWB_ADHD_GTEST_F(UiTextAreaReentryTests, PublicationResetRejectsBeforeLaterAreaPublication, VerifyUiTextAreaReentryTests_PublicationResetRejectsBeforeLaterAreaPublication)
 NWB_ADHD_GTEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPublication, VerifyUiTextAreaReentryTests_ChildRowScopeReentryRejectsBeforeSiblingAreaPublication)
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

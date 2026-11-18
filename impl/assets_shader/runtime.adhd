@@ -120,81 +120,20 @@ b8 CallableShader::loadBinary(in Span<u8> binary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_shader/asset.adhd.h>
-
-#include <core/assets/auto_registration.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_shader_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#define NWB_REGISTER_SHADER_ASSET_CODEC(Type) NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_##Type##AssetCodecAutoRegistrar, ShaderAssetCodec<Type>);
-NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
-#undef NWB_REGISTER_SHADER_ASSET_CODEC
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Core::ShaderType::Enum ShaderAssetTypes::ShaderTypeFromAssetType(const Name& assetType)noexcept{
-#define NWB_SHADER_ASSET_TYPE_MATCH(Type) if(assetType == Type::AssetTypeName()) return s_StageForShader<Type>;
-    NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_SHADER_ASSET_TYPE_MATCH)
-#undef NWB_SHADER_ASSET_TYPE_MATCH
-    return Core::ShaderType::Invalid;
-}
-
-Core::ShaderType::Enum ShaderAssetTypes::ShaderTypeFromAssetTypeText(const AStringView assetType)noexcept{
-#define NWB_SHADER_ASSET_TYPE_TEXT_MATCH(Type) if(assetType == Type::s_AssetTypeText) return s_StageForShader<Type>;
-    NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_SHADER_ASSET_TYPE_TEXT_MATCH)
-#undef NWB_SHADER_ASSET_TYPE_TEXT_MATCH
-    return Core::ShaderType::Invalid;
-}
-
-const Name& ShaderAssetTypes::AssetTypeNameFromShaderType(const Core::ShaderType::Enum shaderType)noexcept{
-    switch(shaderType){
-#define NWB_SHADER_ASSET_TYPE_CASE(Type) case s_StageForShader<Type>: return Type::AssetTypeName();
-        NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_SHADER_ASSET_TYPE_CASE)
-#undef NWB_SHADER_ASSET_TYPE_CASE
-        default: return s_NameNone;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+register_asset VertexShader using AssetCodecRegistration<ShaderAssetCodec<VertexShader>>;
+register_asset HullShader using AssetCodecRegistration<ShaderAssetCodec<HullShader>>;
+register_asset DomainShader using AssetCodecRegistration<ShaderAssetCodec<DomainShader>>;
+register_asset GeometryShader using AssetCodecRegistration<ShaderAssetCodec<GeometryShader>>;
+register_asset PixelShader using AssetCodecRegistration<ShaderAssetCodec<PixelShader>>;
+register_asset ComputeShader using AssetCodecRegistration<ShaderAssetCodec<ComputeShader>>;
+register_asset AmplificationShader using AssetCodecRegistration<ShaderAssetCodec<AmplificationShader>>;
+register_asset MeshShader using AssetCodecRegistration<ShaderAssetCodec<MeshShader>>;
+register_asset RayGenerationShader using AssetCodecRegistration<ShaderAssetCodec<RayGenerationShader>>;
+register_asset AnyHitShader using AssetCodecRegistration<ShaderAssetCodec<AnyHitShader>>;
+register_asset ClosestHitShader using AssetCodecRegistration<ShaderAssetCodec<ClosestHitShader>>;
+register_asset MissShader using AssetCodecRegistration<ShaderAssetCodec<MissShader>>;
+register_asset IntersectionShader using AssetCodecRegistration<ShaderAssetCodec<IntersectionShader>>;
+register_asset CallableShader using AssetCodecRegistration<ShaderAssetCodec<CallableShader>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

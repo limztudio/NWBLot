@@ -134,6 +134,12 @@ struct GpuTaskGraphQueueAssignmentOptions{
     // The history stays an immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     u64 timingFrameIndex = 0u;
+
+
+public:
+    void clearTimingHistory()noexcept{ timingHistory = nullptr; }
+    void setTimingHistory(const GpuTaskTimingHistorySnapshot& snapshot)noexcept{ timingHistory = &snapshot; }
+    void setTimingHistory(const GpuTaskTimingHistorySnapshot&&) = delete;
 };
 
 // Optional timing-envelope anchors for one normal-execution packet (both omitted = off; partial = invalid).

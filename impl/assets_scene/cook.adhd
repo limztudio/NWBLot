@@ -11,176 +11,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_scene/asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/assets/cook_dependency_registry.h>
-#include <core/assets/cook_entry_registry.h>
-#include <core/assets/cook_metadata.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ComponentT>
-struct TypedComponentCookEntry{
-    Name virtualPath = s_NameNone;
-    ComponentT component;
-
-
-public:
-    explicit TypedComponentCookEntry(Core::Assets::AssetArena&)noexcept{}
-};
-
-using TransformComponentCookEntry = TypedComponentCookEntry<Scene::TransformComponent>;
-using CameraComponentCookEntry = TypedComponentCookEntry<Scene::CameraComponent>;
-using LightComponentCookEntry = TypedComponentCookEntry<Scene::LightComponent>;
-
-struct EntityCookEntry{
-    Name virtualPath = s_NameNone;
-    EntityAsset::ComponentRefVector components;
-
-
-public:
-    explicit EntityCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : components(arena)
-    {}
-};
-
-struct ProjectCookEntry{
-    Name virtualPath = s_NameNone;
-    ProjectAsset::SceneRef startScene;
-
-
-public:
-    explicit ProjectCookEntry(Core::Assets::AssetArena&)noexcept{}
-};
-
-struct SceneCookEntry{
-    Name virtualPath = s_NameNone;
-    SceneAsset::SubsystemRefVector subsystems;
-    SceneAsset::EntityRefVector entities;
-    SceneAsset::AssetMap assets;
-
-
-public:
-    explicit SceneCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : subsystems(arena)
-        , entities(arena)
-        , assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace SceneAssetCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename AssetT, typename EntryT>
-[[nodiscard]] FOUNDATION_INLINE Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
-    AssetT asset(arena, entry.virtualPath);
-    asset.component = entry.component;
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
+class TypedComponentCookEntry<T>{
+    public Name virtualPath = s_NameNone;
+    public T component;
 }
 
-template<
-    typename EntryT,
-    typename AssetT,
-    Core::Assets::ParseMetadataValueFn<EntryT> ParseValFn,
-    const AStringView& DiagnosticPrefix,
-    typename CodecT = TypedComponentAssetCodec<AssetT>
->
-[[nodiscard]] FOUNDATION_INLINE b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(
-        s_ComponentAssetKindLabel,
-        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return Core::Assets::ParseCookMetadataDocument<EntryT, ParseValFn>(assetRoot, virtualRoot, nwbFilePath, doc, DiagnosticPrefix, context.cookArena, context.scratchArena);
-        },
-        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-            return ParseValFn(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-        },
-        [](EntryT& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-            return BuildComponentAssetFromEntry<AssetT>(entry, arena);
-        },
-        true,
-        registry
-    );
+type TransformComponentCookEntry = TypedComponentCookEntry<TransformComponent>;
+type CameraComponentCookEntry = TypedComponentCookEntry<CameraComponent>;
+type LightComponentCookEntry = TypedComponentCookEntry<LightComponent>;
+
+class EntityCookEntry{
+    public Name virtualPath = s_NameNone;
+    public ComponentRefVector components;
 }
 
-template<typename EntryT, Core::Assets::ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] FOUNDATION_INLINE b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
-    return Core::Assets::ParseCookDependencyEntry<EntryT, ParseValFn>(context, DiagnosticPrefix).has_value();
+class ProjectCookEntry{
+    public Name virtualPath = s_NameNone;
+    public SceneRef startScene;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SceneComponentMetadataParser final{
-public:
-    [[nodiscard]] static Expected<TransformComponentCookEntry> ParseTransform(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<CameraComponentCookEntry> ParseCamera(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<LightComponentCookEntry> ParseLight(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-};
-
-[[nodiscard]] Expected<EntityCookEntry> ParseEntityCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<EntityAsset> BuildEntityAsset(EntityCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-[[nodiscard]] Expected<ProjectCookEntry> ParseProjectCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<ProjectAsset> BuildProjectAsset(ProjectCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&);
-
-[[nodiscard]] Expected<SceneCookEntry> ParseSceneCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<SceneAsset> BuildSceneAsset(SceneCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class SceneCookEntry{
+    public Name virtualPath = s_NameNone;
+    public SubsystemRefVector subsystems;
+    public EntityRefVector entities;
+    public AssetMap assets;
 }
 
 
@@ -232,28 +86,21 @@ b8 ValidateSceneAssetNicknameUnique(in b8 inserted, in StringView nicknameView, 
     return false;
 }
 
-b8 SerializeComponentAsset(in IComponent component, mut Vector<u8> outBinary){
-    if(!component.validatePayload())
-        return false;
-    Vector<u8> payload;
-    if(!component.serializeComponentPayload(payload))
-        return false;
-    ComponentAssetBinaryCodec().packEnvelope(component.assetType().hash(), payload, outBinary);
-    return true;
-}
-
+[asset_writer]
 b8 SerializeEntityAsset(in EntityAsset entity, mut Vector<u8> outBinary){
     if(!entity.validatePayload())
         return false;
     return SceneAssetBinaryCodec().serializeEntity(Span<ComponentRef>(entity.components()), outBinary);
 }
 
+[asset_writer]
 b8 SerializeProjectAsset(in ProjectAsset project, mut Vector<u8> outBinary){
     if(!project.validatePayload())
         return false;
     return SceneAssetBinaryCodec().serializeProject(project.startScene().name().hash(), outBinary);
 }
 
+[asset_writer]
 b8 SerializeSceneAsset(in SceneAsset scene, mut Vector<u8> outBinary){
     if(!scene.validatePayload())
         return false;
@@ -298,324 +145,155 @@ Expected<SceneAsset> BuildSceneAssetFromContents(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+Expected<AssetT> BuildComponentAssetFromEntry<AssetT : IComponent, EntryT>(in EntryT entry){
+    AssetT asset(entry.virtualPath);
+    asset.component = entry.component;
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure());
+    return asset;
+}
+
+Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    TransformComponentCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_TransformDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_TransformDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(value.isMap() && !ParseTransformComponentData(file, value, entry.component))
+        return MakeUnexpected(Failure());
+    if(!BuildComponentAssetFromEntry<TransformComponentAsset, TransformComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    CameraComponentCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_CameraDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_CameraDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(value.isMap() && !ParseCameraComponentData(file, value, entry.component))
+        return MakeUnexpected(Failure());
+    if(!BuildComponentAssetFromEntry<CameraComponentAsset, CameraComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    LightComponentCookEntry entry;
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_LightDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_LightDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(value.isMap() && !ParseLightComponentData(file, value, entry.component))
+        return MakeUnexpected(Failure());
+    if(!BuildComponentAssetFromEntry<LightComponentAsset, LightComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/assets/polymorphic_asset_codec.h>
-#include <core/assets/reserved_asset_ref_parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_scene_cook_metadata{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core::Metascript;
-
-[[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(const Path& nwbFilePath, const AStringView filePathText, const Value& mapValue, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    if(!ValidateSceneAssetsFieldIsMap(mapValue.isMap(), filePathText))
-        return MakeUnexpected(Failure{});
-
-    const auto& map = mapValue.asMap();
-    SceneAsset::AssetMap assets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    assets.reserve(map.size());
-    for(const auto& [nicknameKey, assetValue] : map){
-        const AStringView nicknameView(nicknameKey.data(), nicknameKey.size());
-        if(!ValidateSceneAssetNicknameSyntax(nicknameView, filePathText))
-            return MakeUnexpected(Failure{});
-        const auto nickname = Name::FromText(nicknameView);
-        if(!ValidateSceneAssetNicknameResolved(nickname.has_value() && static_cast<b8>(*nickname), nicknameView, filePathText))
-            return MakeUnexpected(Failure{});
-        const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, assetValue, "entries must be strings", scratchArena);
-        if(!parsedRef)
-            return MakeUnexpected(Failure{});
-        if(!ValidateSceneAssetNicknameUnique(assets.emplace(*nickname, *parsedRef).second, nicknameView, filePathText))
-            return MakeUnexpected(Failure{});
+Expected<Vector<AssetRef<T>>> ReadSceneRefList<T>(in Path file, in StringView prefix, in StringView field, in MetascriptValue value){
+    if(!value.isList()){
+        error("{} '{}': field '{}' must be a list", prefix, file, field);
+        return MakeUnexpected(Failure());
     }
+    Vector<AssetRef<T>> refs;
+    const Span<MetascriptValue> items = value.listView();
+    refs.reserve(items.size());
+    for(in MetascriptValue item : items){
+        const auto parsed = ParseReservedAssetRefValue<T>(file, prefix, field, item, "entries must be strings");
+        if(!parsed.has_value())
+            return MakeUnexpected(Failure());
+        refs.push_back(parsed.value());
+    }
+    return refs;
+}
+
+Expected<AssetMap> ReadSceneAssetsMap(in Path file, in MetascriptValue value){
+    const String fileText = PathToString(file);
+    if(!ValidateSceneAssetsFieldIsMap(value.isMap(), fileText))
+        return MakeUnexpected(Failure());
+    AssetMap assets;
+    if(!value.forEachMapEntry(lambda[in file, in fileText, mut assets](in StringView key, in MetascriptValue item) -> b8{
+        if(!ValidateSceneAssetNicknameSyntax(key, fileText))
+            return false;
+        const Expected<Name> name = ParseName(key);
+        if(!ValidateSceneAssetNicknameResolved(name.has_value() && name.value() != s_NameNone, key, fileText))
+            return false;
+        const auto parsed = ParseReservedAssetRefValue<IAsset>(file, s_SceneDiagnosticPrefix, key, item, "entries must be strings");
+        if(!parsed.has_value())
+            return false;
+        return ValidateSceneAssetNicknameUnique(assets.emplace(name.value(), parsed.value()).second, key, fileText);
+    }))
+        return MakeUnexpected(Failure());
     return assets;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, s_EntitySerializeContext))
-        return false;
-
-    const EntityAsset& entity = *MakeNotNull(checked_cast<const EntityAsset*>(&asset));
-    return SerializeEntityAsset(entity, outBinary);
-}
-
-b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, s_ProjectSerializeContext))
-        return false;
-
-    const ProjectAsset& project = *MakeNotNull(checked_cast<const ProjectAsset*>(&asset));
-    return SerializeProjectAsset(project, outBinary);
-}
-
-b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, s_SceneSerializeContext))
-        return false;
-
-    const SceneAsset& scene = *MakeNotNull(checked_cast<const SceneAsset*>(&asset));
-    return SerializeSceneAsset(scene, outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    return Core::Assets::PolymorphicAssetCodec::SerializePolymorphicAsset<IComponent, &ComponentAssetSerialization::Serialize>(asset, s_ComponentSerializeContext, outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ComponentAssetSerialization{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
-    return SerializeComponentAsset(component, outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename EntryT, typename AssetT, const AStringView& DiagnosticPrefix, typename ParseComponentFn>
-[[nodiscard]] static Expected<EntryT> ParseTypedComponentCookEntry(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    ParseComponentFn&& parseComponent
-){
-    EntryT entry(arena);
-    if(!ValidateOptionalSceneMetadataMap(nwbFilePath, asset, DiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, DiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(asset.isMap() && !parseComponent(nwbFilePath, asset, entry.component))
-        return MakeUnexpected(Failure{});
-    if(!SceneAssetCook::BuildComponentAssetFromEntry<AssetT>(entry, arena))
-        return MakeUnexpected(Failure{});
+Expected<EntityCookEntry> ParseEntityCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    EntityCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_EntityDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_EntityDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!ValidateMetadataAssetFields(file, value, s_EntityDiagnosticPrefix, IsAllowedEntityAssetField))
+        return MakeUnexpected(Failure());
+    const Optional<in MetascriptValue> components = value.borrowField(s_EntityComponentsField);
+    if(!ValidateRequiredSceneMetadataField(components.has_value(), s_EntityDiagnosticPrefix, PathToString(file), s_EntityComponentsField))
+        return MakeUnexpected(Failure());
+    const auto refs = ReadSceneRefList<IComponent>(file, s_EntityDiagnosticPrefix, s_EntityComponentsField, components.value());
+    if(!refs.has_value())
+        return MakeUnexpected(Failure());
+    entry.components = refs.value();
+    if(!BuildEntityAssetFromComponents(path, entry.components).has_value())
+        return MakeUnexpected(Failure());
     return entry;
 }
 
-Expected<TransformComponentCookEntry> SceneComponentMetadataParser::ParseTransform(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return ParseTypedComponentCookEntry<TransformComponentCookEntry, TransformComponentAsset, s_TransformDiagnosticPrefix>(
-        virtualPath,
-        nwbFilePath,
-        asset,
-        arena,
-        [](const Path& path, const Core::Metascript::Value& value, Scene::TransformComponent& outComponent){
-            return ParseTransformComponentData(path, value, outComponent);
-        }
-    );
-}
-
-Expected<CameraComponentCookEntry> SceneComponentMetadataParser::ParseCamera(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return ParseTypedComponentCookEntry<CameraComponentCookEntry, CameraComponentAsset, s_CameraDiagnosticPrefix>(
-        virtualPath,
-        nwbFilePath,
-        asset,
-        arena,
-        [](const Path& path, const Core::Metascript::Value& value, Scene::CameraComponent& outComponent){
-            return ParseCameraComponentData(path, value, outComponent);
-        }
-    );
-}
-
-Expected<LightComponentCookEntry> SceneComponentMetadataParser::ParseLight(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return ParseTypedComponentCookEntry<LightComponentCookEntry, LightComponentAsset, s_LightDiagnosticPrefix>(
-        virtualPath,
-        nwbFilePath,
-        asset,
-        arena,
-        [](const Path& path, const Core::Metascript::Value& value, Scene::LightComponent& outComponent){
-            return ParseLightComponentData(path, value, outComponent);
-        }
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_scene_cook_metadata;
-
-    EntityCookEntry entry(arena);
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_EntityDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_EntityDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_EntityDiagnosticPrefix, &IsAllowedEntityAssetField))
-        return MakeUnexpected(Failure{});
-
-    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
-    const Core::Metascript::Value* componentsValue = asset.findField(s_EntityComponentsField);
-    if(!ValidateRequiredSceneMetadataField(componentsValue != nullptr, s_EntityDiagnosticPrefix, filePathText, s_EntityComponentsField))
-        return MakeUnexpected(Failure{});
-    auto components = Core::Assets::ReservedAssetRefParser::ParseList<IComponent>(nwbFilePath, s_EntityDiagnosticPrefix, *componentsValue, s_EntityComponentsField, arena, scratchArena);
-    if(!components)
-        return MakeUnexpected(Failure{});
-
-    EntityAsset candidate(arena, entry.virtualPath);
-    candidate.setComponents(Move(*components));
-    if(!candidate.validatePayload())
-        return MakeUnexpected(Failure{});
-    entry.components = candidate.takeComponents(arena);
-
+Expected<ProjectCookEntry> ParseProjectCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    ProjectCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_ProjectDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_ProjectDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!ValidateMetadataAssetFields(file, value, s_ProjectDiagnosticPrefix, IsAllowedProjectAssetField))
+        return MakeUnexpected(Failure());
+    const auto text = ReadMetadataStringField(file, value, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, true);
+    if(!text.has_value())
+        return MakeUnexpected(Failure());
+    const auto ref = ParseReservedAssetRefText<SceneAsset>(file, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, text.value().text);
+    if(!ref.has_value())
+        return MakeUnexpected(Failure());
+    entry.startScene = ref.value();
+    if(!BuildProjectAssetFromStartScene(path, entry.startScene).has_value())
+        return MakeUnexpected(Failure());
     return entry;
 }
 
-Expected<EntityAsset> BuildEntityAsset(EntityCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return BuildEntityAssetFromComponents(arena, entry.virtualPath, entry.components);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<ProjectCookEntry> ParseProjectCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_scene_cook_metadata;
-
-    ProjectCookEntry entry(arena);
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ProjectDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ProjectDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ProjectDiagnosticPrefix, &IsAllowedProjectAssetField))
-        return MakeUnexpected(Failure{});
-
-    const auto startSceneField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, true);
-    if(!startSceneField)
-        return MakeUnexpected(Failure{});
-    const auto startSceneRef = Core::Assets::ReservedAssetRefParser::ParseText<SceneAsset>(nwbFilePath, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, startSceneField->text, scratchArena);
-    if(!startSceneRef)
-        return MakeUnexpected(Failure{});
-    entry.startScene = *startSceneRef;
-
-    ProjectAsset candidate(arena, entry.virtualPath);
-    candidate.setStartScene(entry.startScene);
-    if(!candidate.validatePayload())
-        return MakeUnexpected(Failure{});
-
-    return entry;
-}
-
-Expected<ProjectAsset> BuildProjectAsset(ProjectCookEntry& entry, Core::Assets::AssetArena&, Core::Alloc::ScratchArena&){
-    return BuildProjectAssetFromStartScene(entry.virtualPath, entry.startScene);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_scene_cook_metadata;
-
-    SceneCookEntry entry(arena);
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SceneDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SceneDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, &IsAllowedSceneAssetField))
-        return MakeUnexpected(Failure{});
-
-    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
-    const Core::Metascript::Value* subsystemsValue = asset.findField(s_SceneSubsystemsField);
-    if(!ValidateRequiredSceneMetadataField(subsystemsValue != nullptr, s_SceneDiagnosticPrefix, filePathText, s_SceneSubsystemsField))
-        return MakeUnexpected(Failure{});
-    auto subsystems = Core::Assets::ReservedAssetRefParser::ParseList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SceneSubsystemsField, arena, scratchArena);
-    if(!subsystems)
-        return MakeUnexpected(Failure{});
-    DeduplicateSubsystemRefs(*subsystems);
-    entry.subsystems.assign(subsystems->begin(), subsystems->end());
-
-    if(const Core::Metascript::Value* entitiesValue = asset.findField(s_SceneEntitiesField)){
-        auto entities = Core::Assets::ReservedAssetRefParser::ParseList<EntityAsset>(nwbFilePath, s_SceneDiagnosticPrefix, *entitiesValue, s_SceneEntitiesField, arena, scratchArena);
-        if(!entities)
-            return MakeUnexpected(Failure{});
-        entry.entities.assign(entities->begin(), entities->end());
+Expected<SceneCookEntry> ParseSceneCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    SceneCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_SceneDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_SceneDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!ValidateMetadataAssetFields(file, value, s_SceneDiagnosticPrefix, IsAllowedSceneAssetField))
+        return MakeUnexpected(Failure());
+    const Optional<in MetascriptValue> subsystems = value.borrowField(s_SceneSubsystemsField);
+    if(!ValidateRequiredSceneMetadataField(subsystems.has_value(), s_SceneDiagnosticPrefix, PathToString(file), s_SceneSubsystemsField))
+        return MakeUnexpected(Failure());
+    const auto refs = ReadSceneRefList<ISubsystem>(file, s_SceneDiagnosticPrefix, s_SceneSubsystemsField, subsystems.value());
+    if(!refs.has_value())
+        return MakeUnexpected(Failure());
+    entry.subsystems = refs.value();
+    DeduplicateSubsystemRefs(entry.subsystems);
+    const Optional<in MetascriptValue> entities = value.borrowField(s_SceneEntitiesField);
+    if(entities.has_value()){
+        const auto entityRefs = ReadSceneRefList<EntityAsset>(file, s_SceneDiagnosticPrefix, s_SceneEntitiesField, entities.value());
+        if(!entityRefs.has_value())
+            return MakeUnexpected(Failure());
+        entry.entities = entityRefs.value();
     }
-
-    if(const Core::Metascript::Value* assetsValue = asset.findField(s_SceneAssetsField)){
-        auto assets = ParseAssetsMap(nwbFilePath, filePathText, *assetsValue, arena, scratchArena);
-        if(!assets)
-            return MakeUnexpected(Failure{});
-        entry.assets = Move(*assets);
+    const Optional<in MetascriptValue> assets = value.borrowField(s_SceneAssetsField);
+    if(assets.has_value()){
+        const auto map = ReadSceneAssetsMap(file, assets.value());
+        if(!map.has_value())
+            return MakeUnexpected(Failure());
+        entry.assets = map.value();
     }
-
-    SceneAsset candidate(arena, entry.virtualPath);
-    candidate.setContents(Move(entry.subsystems), Move(entry.assets), Move(entry.entities));
-    if(!candidate.validatePayload())
-        return MakeUnexpected(Failure{});
-    candidate.takeContents(entry.subsystems, entry.assets, entry.entities);
-
+    if(!BuildSceneAssetFromContents(path, entry.subsystems, entry.assets, entry.entities).has_value())
+        return MakeUnexpected(Failure());
     return entry;
-}
-
-Expected<SceneAsset> BuildSceneAsset(SceneCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return BuildSceneAssetFromContents(arena, entry.virtualPath, entry.subsystems, entry.assets, entry.entities);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

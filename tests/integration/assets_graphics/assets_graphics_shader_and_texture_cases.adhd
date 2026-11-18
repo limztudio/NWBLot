@@ -317,8 +317,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefaultVariantAlias(){
     EXPECT_TRUE(WriteTextFile(includeSourcePath, ""));
 
     GraphicsScratchArena scratch = GraphicsScratchArena(s_ShaderScratchArena);
-    ShaderCook shaderCook(testArena.arena);
-    EXPECT_FALSE(CanParseIncludeEntryFile(includeMetaPath, testArena, scratch, shaderCook));
+    EXPECT_FALSE(CanParseIncludeEntryFile(includeMetaPath, testArena, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field 'default_variant'"));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -335,7 +334,6 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField()
 
     const GraphicsTestPath metadataPath = JoinGraphicsPath(root, "shader.nwb");
     ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "[numthreads(1, 1, 1)] void main(){}\n"));
-    ShaderCook shaderCook(testArena.arena);
     const StringView validMetadata = "compute_shader asset;\nasset.entry_point = \"main\";\n";
 
     Vector<StringView> retiredMetadata = Vector<StringView>();
@@ -348,11 +346,11 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsRetiredGenericTypeAndStageField()
     for(in StringView metadata : retiredMetadata){
         const ScopedTestTrace trace(metadata);
         ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
-        ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
+        ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
         ASSERT_TRUE(WriteTextFile(metadataPath, metadata));
-        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
+        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
         ASSERT_TRUE(WriteTextFile(metadataPath, validMetadata));
-        EXPECT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
+        EXPECT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     }
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -386,14 +384,13 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
     cases.push_back(ShaderRayQueryMetadataCase("asset.emit_mesh_compute_shadow = 0;\n", false));
     cases.push_back(ShaderRayQueryMetadataCase("asset.emit_mesh_compute_shadow = 1;\n", false));
 
-    ShaderCook shaderCook(testArena.arena);
     for(in ShaderRayQueryMetadataCase testCase : cases){
         const ScopedTestTrace trace(testCase.m_fields);
         TestAString metadata = TestAString();
         metadata.append("compute_shader asset;\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.m_fields);
         ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
-        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook), testCase.m_accepted);
+        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratch), testCase.m_accepted);
     }
 
     Vector<StringView> shaderAssetTypes = Vector<StringView>();
@@ -406,10 +403,10 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsObsoleteProfilesAndInvalidConditi
         metadata.append(shaderAssetType);
         metadata.append(" asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n");
         ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
-        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
+        EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     }
     ASSERT_TRUE(WriteTextFile(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
-    ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
+    ASSERT_TRUE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
@@ -437,7 +434,6 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
     validIncludeMetadata.append("include asset;\n");
     validIncludeMetadata.append(realDefines);
 
-    ShaderCook shaderCook(testArena.arena);
     ShaderCookShaderEntry shaderEntry(testArena.arena);
     ShaderCookIncludeEntry includeEntry(testArena.arena);
 
@@ -457,7 +453,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             const ScopedTestTrace traceRetired(retiredValue);
             ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(validShaderMetadata)));
             {
-                Expected<ShaderCookShaderEntry> metadataResult5 = ParseTestShaderEntryFile(shaderPath, testArena, scratch, shaderCook);
+                Expected<ShaderCookShaderEntry> metadataResult5 = ParseTestShaderEntryFile(shaderPath, testArena, scratch);
                 ASSERT_TRUE(metadataResult5.has_value());
                 shaderEntry = metadataResult5.value();
             }
@@ -471,7 +467,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             obsoleteShaderMetadata.append(retiredValue);
             obsoleteShaderMetadata.append("\"] };\n");
             ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(obsoleteShaderMetadata)));
-            EXPECT_FALSE(CanParseShaderEntryFile(shaderPath, testArena, scratch, shaderCook));
+            EXPECT_FALSE(CanParseShaderEntryFile(shaderPath, testArena, scratch));
             EXPECT_FALSE(shaderEntry.defineValues.empty());
 
             TestAString expectedDiagnostic = TestAString();
@@ -482,7 +478,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
 
             ASSERT_TRUE(WriteTextFile(shaderPath, ViewTestString(validShaderMetadata)));
             {
-                Expected<ShaderCookShaderEntry> metadataResult4 = ParseTestShaderEntryFile(shaderPath, testArena, scratch, shaderCook);
+                Expected<ShaderCookShaderEntry> metadataResult4 = ParseTestShaderEntryFile(shaderPath, testArena, scratch);
                 ASSERT_TRUE(metadataResult4.has_value());
                 shaderEntry = metadataResult4.value();
             }
@@ -496,7 +492,7 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
 
             ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(validIncludeMetadata)));
             {
-                Expected<ShaderCookIncludeEntry> metadataResult3 = ParseTestIncludeEntryFile(includePath, testArena, scratch, shaderCook);
+                Expected<ShaderCookIncludeEntry> metadataResult3 = ParseTestIncludeEntryFile(includePath, testArena, scratch);
                 ASSERT_TRUE(metadataResult3.has_value());
                 includeEntry = metadataResult3.value();
             }
@@ -509,12 +505,12 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsEngineTransportDefinesAndRecovers
             obsoleteIncludeMetadata.append(retiredValue);
             obsoleteIncludeMetadata.append("\"] };\n");
             ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(obsoleteIncludeMetadata)));
-            EXPECT_FALSE(CanParseIncludeEntryFile(includePath, testArena, scratch, shaderCook));
+            EXPECT_FALSE(CanParseIncludeEntryFile(includePath, testArena, scratch));
             EXPECT_FALSE(includeEntry.defineValues.empty());
 
             ASSERT_TRUE(WriteTextFile(includePath, ViewTestString(validIncludeMetadata)));
             {
-                Expected<ShaderCookIncludeEntry> metadataResult2 = ParseTestIncludeEntryFile(includePath, testArena, scratch, shaderCook);
+                Expected<ShaderCookIncludeEntry> metadataResult2 = ParseTestIncludeEntryFile(includePath, testArena, scratch);
                 ASSERT_TRUE(metadataResult2.has_value());
                 includeEntry = metadataResult2.value();
             }
@@ -536,8 +532,7 @@ void VerifyAssetsGraphics_InvalidShaderDefineNamePrecedesInvalidValueShape(){
     const GraphicsTestPath metadataPath = JoinGraphicsPath(root, "shader.nwb");
     ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
     ASSERT_TRUE(WriteTextFile(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
-    ShaderCook shaderCook(testArena.arena);
-    EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
+    EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
     EXPECT_TRUE(SawCapturedError(logger, "must be an ASCII shader identifier"));
     EXPECT_FALSE(SawCapturedError(logger, "values must be a list of strings"));
     EXPECT_TRUE(RemoveAllIfExists(root));
@@ -565,7 +560,6 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
     invalidDefinesList.push_back("\"PROJECT_QUALITY\": [\" 1\"]");
     invalidDefinesList.push_back("\"PROJECT_QUALITY\": [\"1 \"]");
 
-    ShaderCook shaderCook(testArena.arena);
     ShaderCookShaderEntry shaderEntry(testArena.arena);
     ShaderCookIncludeEntry includeEntry(testArena.arena);
 
@@ -590,13 +584,13 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
             const ScopedTestTrace traceDefines(invalidDefines);
             ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(validMetadata)));
             if(isInclude){
-                Expected<ShaderCookIncludeEntry> parsedValid = ParseTestIncludeEntryFile(metadataPath, testArena, scratch, shaderCook);
+                Expected<ShaderCookIncludeEntry> parsedValid = ParseTestIncludeEntryFile(metadataPath, testArena, scratch);
                 ASSERT_TRUE(parsedValid.has_value());
                 includeEntry = parsedValid.value();
                 ASSERT_FALSE(includeEntry.defineValues.empty());
             }
             else{
-                Expected<ShaderCookShaderEntry> parsedValid = ParseTestShaderEntryFile(metadataPath, testArena, scratch, shaderCook);
+                Expected<ShaderCookShaderEntry> parsedValid = ParseTestShaderEntryFile(metadataPath, testArena, scratch);
                 ASSERT_TRUE(parsedValid.has_value());
                 shaderEntry = parsedValid.value();
                 ASSERT_FALSE(shaderEntry.defineValues.empty());
@@ -609,23 +603,23 @@ void VerifyAssetsGraphics_ShaderMetadataRejectsDefinesThatCannotRoundTripVariant
             invalidMetadata.append(" };\n");
             ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(invalidMetadata)));
             if(isInclude){
-                EXPECT_FALSE(CanParseIncludeEntryFile(metadataPath, testArena, scratch, shaderCook));
+                EXPECT_FALSE(CanParseIncludeEntryFile(metadataPath, testArena, scratch));
                 EXPECT_FALSE(includeEntry.defineValues.empty());
             }
             else{
-                EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch, shaderCook));
+                EXPECT_FALSE(CanParseShaderEntryFile(metadataPath, testArena, scratch));
                 EXPECT_FALSE(shaderEntry.defineValues.empty());
             }
 
             ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(validMetadata)));
             if(isInclude){
-                Expected<ShaderCookIncludeEntry> parsedRecovered = ParseTestIncludeEntryFile(metadataPath, testArena, scratch, shaderCook);
+                Expected<ShaderCookIncludeEntry> parsedRecovered = ParseTestIncludeEntryFile(metadataPath, testArena, scratch);
                 ASSERT_TRUE(parsedRecovered.has_value());
                 includeEntry = parsedRecovered.value();
                 EXPECT_TRUE(ValidateIncludeEntryVariantSignature("project/define_probe", "PROJECT_QUALITY=1", includeEntry, scratch));
             }
             else{
-                Expected<ShaderCookShaderEntry> parsedRecovered = ParseTestShaderEntryFile(metadataPath, testArena, scratch, shaderCook);
+                Expected<ShaderCookShaderEntry> parsedRecovered = ParseTestShaderEntryFile(metadataPath, testArena, scratch);
                 ASSERT_TRUE(parsedRecovered.has_value());
                 shaderEntry = parsedRecovered.value();
                 EXPECT_TRUE(ValidateShaderEntryVariantSignature("project/define_probe", "PROJECT_QUALITY=1", shaderEntry, scratch));

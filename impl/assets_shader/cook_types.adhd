@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 StringView ShaderOptimizationLevelText(in ShaderOptimizationLevel optimizationLevel){
     if(optimizationLevel == ShaderOptimizationLevel::None)
         return s_ShaderNoneOptText;
@@ -173,6 +172,37 @@ b8 TryParseVariantSignatureSegment(
     outDefineName = defineName;
     outDefineValue = defineValue;
     outError = VariantSignatureSegmentError::None;
+    return true;
+}
+
+class ShaderVariantAssignment{
+    public StringView key = "";
+    public StringView value = "";
+}
+
+b8 BuildSortedShaderVariantName(mut Vector<ShaderVariantAssignment> assignments, mut String result){
+    if(assignments.empty()){
+        result.assign(s_ShaderDefaultVariantText);
+        return true;
+    }
+    SortSequence<ShaderVariantAssignment>(assignments, lambda[](in ShaderVariantAssignment lhs, in ShaderVariantAssignment rhs) -> b8{
+        return lhs.key < rhs.key;
+    });
+    usize bytes = assignments.size() - 1u;
+    for(usize index = 0u; index < assignments.size(); ++index){
+        if(index > 0u && assignments[index - 1u].key == assignments[index].key)
+            return false;
+        bytes += assignments[index].key.size() + assignments[index].value.size() + 1u;
+    }
+    result.clear();
+    result.reserve(bytes);
+    for(usize index = 0u; index < assignments.size(); ++index){
+        if(index > 0u)
+            result.push_back(';');
+        result.append(assignments[index].key);
+        result.push_back('=');
+        result.append(assignments[index].value);
+    }
     return true;
 }
 

@@ -1,18 +1,17 @@
 # CPU text foundation
 
 `nwb_ui_text` owns font versions, shaping, multiline label layout, cluster hit testing,
-and native grayscale coverage plus optional baked SDF atlas images. It depends publicly
-on `nwb_ui` and `nwb_assets_font_atlas`, and privately on the pinned FreeType and HarfBuzz
-targets. Its public headers contain no native font, graphics, ECS, ImGui, clipboard,
-or IME types.
+and grayscale coverage plus optional baked SDF atlas images. Its public dependencies
+include `nwb_ui`, `nwb_assets_font_atlas`, and the Core FreeType and HarfBuzz bindings.
 
 Construct `TextService` with the UI owner's `Core::Alloc::GlobalArena`. That arena must
 outlive the service, every returned layout, every published glyph page, and submitted
 paint snapshots. Call `setFonts()` on the owning UI thread with an ordered primary and
 fallback list of matching loaded `Font` assets, typed `AssetRef<Font>` identities,
-nonzero source generations, and optional `FontAtlas` pointers. The service copies font
-bytes before native faces borrow them. FreeType allocations use the supplied arena; native font and shaping owners use
-RAII. Layout glyphs retain strong references to the exact CPU font versions needed for
+nonzero source generations, and optional borrowed `FontAtlas` references. The service
+copies the immutable font bytes once for FreeType and HarfBuzz. Each shared font face
+retains the pool that owns its storage and FreeType allocations. Layout glyphs retain
+strong references to the exact CPU font versions needed for
 later rasterization. An asset reference alone does not retain loaded font data.
 
 `setFonts()` is failure atomic. A successful call advances `generation()` and starts a
@@ -177,11 +176,10 @@ loaded:
 Core::Alloc::GlobalArena uiArena(Name("runtime/ui"));
 Ui::TextService text(uiArena);
 const Ui::FontSource fonts[]{
-    { latinRef, latinFont, latinGeneration, &latinAtlas },
-    { koreanRef, koreanFont, koreanGeneration, &koreanAtlas },
+    { latinRef, latinFont, latinGeneration, latinAtlas },
+    { koreanRef, koreanFont, koreanGeneration, koreanAtlas },
 };
-Core::Alloc::ScratchArena setupScratch(Name("runtime/ui/setup"));
-if(!text.setFonts(setupScratch, fonts, 2u))
+if(!text.setFonts(fonts))
     return false;
 
 Ui::ShapeRequest request{ "Hello, custom UI" };

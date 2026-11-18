@@ -125,6 +125,7 @@ extern class BufferDesc{
 
 [cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
 extern class BufferHandle{
+    usize identity()const;
     b8 valid(...)const;
     u32 reset(...);
     mut Buffer deref(...)const;
@@ -232,6 +233,7 @@ extern class TextureDesc{
 
 [cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
 extern class TextureHandle{
+    usize identity()const;
     b8 valid(...)const;
     u32 reset(...);
     mut RhiTexture deref(...)const;

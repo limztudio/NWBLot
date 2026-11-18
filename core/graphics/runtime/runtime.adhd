@@ -5,6 +5,7 @@
 [cpp_header("<core/graphics/runtime/runtime.h>"), cpp_name("::NWB::Core::GraphicsRuntime"), cpp_flags(no_copy, no_assign)]
 extern class GraphicsRuntime{
     AcquiredPresentationFrame acquiredPresentationFrame(...)const;
+    mut GraphicsAllocator allocator()const;
     void addRenderPassToBack(...);
     b8 backBufferResized(...);
     Expected<SwapChainTransitionTicket> backBufferResizing(...);
@@ -57,7 +58,9 @@ extern class GraphicsRuntime{
     FramebufferPtr getFramebuffer(...)const;
     TexturePtr getBackBuffer(...)const;
     void setWindowTitle(...);
+    Optional<mut IGpuTaskGraphPresentationContributor> borrowTaskGraphPresentationContributor()const;
     void setTaskGraphPresentationContributor(...);
+    Optional<mut IGpuTaskGraphOutputLayerContributor> borrowTaskGraphOutputLayerContributor()const;
     void setTaskGraphOutputLayerContributor(...);
     Expected<Vector<AdapterInfo>> enumerateAdapters(...);
 };

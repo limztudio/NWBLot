@@ -14,6 +14,10 @@ nwb_target_adhd_sources(nwb_assets_graphics
     NAMESPACE "NWB::Impl"
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/runtime_components.adhd"
+)
+nwb_target_adhd_sources(nwb_assets_graphics
+    NAMESPACE "NWB::Impl::AssetsGraphicsBindless"
+    SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/bindless/runtime_abi.adhd"
 )
 target_link_libraries(nwb_assets_graphics PUBLIC

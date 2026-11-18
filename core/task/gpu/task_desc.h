@@ -30,6 +30,10 @@ struct GpuTaskExternalStateSource{
     // This predicate is evaluated after queue assignment and never constrains routing.
     // kCount keeps the snapshot applicable to every consumer queue class.
     CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::kCount;
+
+    [[nodiscard]] b8 hasState()const noexcept{ return states != nullptr; }
+    void setState(const CommandListResourceStateHandoff& source)noexcept{ states = &source; }
+    void setState(const CommandListResourceStateHandoff&&) = delete;
 };
 
 // Task payloads live in graph-owned memory; these static thunks let the recorder invoke them with no per-task callable alloc.
@@ -298,6 +302,9 @@ public:
         return *this;
     }
 
+    constexpr GpuTaskDesc& setDependency(const GpuTaskId& value)noexcept{ return setDependencies({ &value, 1u }); }
+    GpuTaskDesc& setDependency(const GpuTaskId&&) = delete;
+
     constexpr GpuTaskDesc& setExternalDependencies(const Span<const GpuExternalCompletionId> values)noexcept{
         externalDependencies = values.data();
         externalDependencyCount = values.size();
@@ -384,6 +391,8 @@ struct GpuUploadBufferTaskDesc{
     ResourceStates::Mask finalState = ResourceStates::CopyDest;
     // Lifecycle output. Storage must outlive late recording; written only after submission accepts.
     QueueSubmissionToken* acceptedToken = nullptr;
+
+    void publishAcceptedToken(QueueSubmissionToken& token)noexcept{ acceptedToken = &token; }
 };
 
 struct GpuUploadTextureTaskDesc{
@@ -431,6 +440,27 @@ struct GpuClearTextureTaskRecordHooks{
     GpuTaskCommandRequirements commands = {};
 };
 
+template<typename State>
+[[nodiscard]] GpuClearTextureTaskRecordHooks MakeGpuClearTextureTaskRecordHooks(State& state, const b8 beforeClear, const b8 afterClear)noexcept{
+    GpuClearTextureTaskRecordHooks hooks;
+    hooks.context = &state;
+    if(beforeClear){
+        hooks.beforeClear = [](void* rawState, CommandList& commands, const GpuTaskRecordContext& context){
+            return rawState && static_cast<State*>(rawState)->beforeClear(commands, context);
+        };
+    }
+    if(afterClear){
+        hooks.afterClear = [](void* rawState, CommandList& commands, const GpuTaskRecordContext& context){
+            return rawState && static_cast<State*>(rawState)->afterClear(commands, context);
+        };
+    }
+    hooks.discarded = [](void* rawState){
+        if(rawState)
+            static_cast<State*>(rawState)->discarded();
+    };
+    return hooks;
+}
+
 struct GpuClearTextureTaskDesc{
     QueueSubmissionToken* acceptedToken = nullptr;
     GpuGraphResourceId destination;
@@ -445,6 +475,8 @@ struct GpuClearTextureTaskDesc{
     Color floatValue{};
     UIntColor uintValue{};
     IntColor intValue{};
+
+    void publishAcceptedToken(QueueSubmissionToken& token)noexcept{ acceptedToken = &token; }
 };
 static constexpr usize s_GpuClearTextureTaskDescByteSize = 136u;
 static_assert(sizeof(GpuClearTextureTaskDesc) == s_GpuClearTextureTaskDescByteSize, "GpuClearTextureTaskDesc should keep its compact runtime layout");

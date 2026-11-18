@@ -60,15 +60,18 @@ void PopulateBakedFontTables(Span<const u8> bytes, Core::Alloc::GlobalArena& are
 [[nodiscard]] FOUNDATION_INLINE b8 FontFaceHasBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return static_cast<b8>(face->bakedAtlas()); }
 [[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SharedBakedFontAtlas& FontFaceBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas(); }
 [[nodiscard]] FOUNDATION_INLINE u32 FontFaceBakedUnitsPerEm(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas()->unitsPerEm(); }
-[[nodiscard]] FOUNDATION_INLINE Impl::FontAtlasGlyph FontFaceBakedGlyph(const Impl::Ui::SharedFontFace& face, const u32 glyphId)noexcept{ return *face->bakedAtlas()->glyph(glyphId); }
+[[nodiscard]] FOUNDATION_INLINE Impl::FontAtlasGlyph FontFaceBakedGlyph(const Impl::Ui::SharedFontFace& face, const u32 glyphId)noexcept{ return face->bakedAtlas()->glyph(glyphId); }
 [[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SharedSdfAtlasPage& FontFaceBakedPage(const Impl::Ui::SharedFontFace& face, const u32 group)noexcept{ return face->bakedAtlas()->page(group); }
 [[nodiscard]] FOUNDATION_INLINE b8 FontFaceRasterize(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize, Impl::Ui::GlyphBitmap& bitmap){ return face->rasterize(glyphId, pixelSize, bitmap); }
 [[nodiscard]] FOUNDATION_INLINE Expected<Impl::Ui::Rect> FontFaceRasterBounds(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize){ return face->rasterBounds(glyphId, pixelSize); }
-[[nodiscard]] FOUNDATION_INLINE b8 HasAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return atlas.find(face, glyphId, size) != nullptr; }
-[[nodiscard]] FOUNDATION_INLINE usize AtlasGlyphSlotId(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return reinterpret_cast<usize>(atlas.find(face, glyphId, size)); }
+[[nodiscard]] FOUNDATION_INLINE b8 HasAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return atlas.find(face, glyphId, size).has_value(); }
+[[nodiscard]] FOUNDATION_INLINE usize AtlasGlyphSlotId(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{
+    const auto slot = atlas.find(face, glyphId, size);
+    return slot ? reinterpret_cast<usize>(slot->get()) : 0u;
+}
 [[nodiscard]] FOUNDATION_INLINE Expected<Impl::Ui::AtlasGlyph> TryFindAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{
-    const Impl::Ui::AtlasGlyph* found = atlas.find(face, glyphId, size);
-    return found ? Expected<Impl::Ui::AtlasGlyph>(*found) : MakeUnexpected(Failure{});
+    const auto found = atlas.find(face, glyphId, size);
+    return found ? Expected<Impl::Ui::AtlasGlyph>(**found) : MakeUnexpected(Failure{});
 }
 
 
@@ -148,7 +151,6 @@ using namespace Impl::Ui;
 inline constexpr AStringView s_TestSkinPath = "tests/ui/skin";
 inline constexpr AStringView s_TestLatinFontPath = "tests/ui/fonts/latin";
 inline constexpr AStringView s_TestKoreanFontPath = "tests/ui/fonts/korean";
-inline constexpr Name s_FontScratchArenaName = NWB::Tests::UiCases::s_UiCaseNameFontScratch;
 
 [[nodiscard]] Point Center(const Rect& bounds)noexcept;
 void ExpectRectExact(const Rect& actual, const Rect& expected);
@@ -227,7 +229,7 @@ inline constexpr AStringView s_ChildPopupKey = "child";
 using SkinPaintSample = ::__hidden_ui_glyph_sdf_tests::UiFixtureSkinPaintSample;
 
 [[nodiscard]] b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, StringView filename, Font& font);
-[[nodiscard]] b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
+[[nodiscard]] b8 InstallLatinFixtureFont(Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -259,8 +261,8 @@ public:
         const HitTarget* found = target(widget);
         return found ? Expected<HitTarget>(*found) : MakeUnexpected(Failure{});
     }
-    void setEditHost(IEditBoxHost& host)noexcept{ m_builder.setEditHost(&host); }
-    void clearEditHost()noexcept{ m_builder.setEditHost(nullptr); }
+    void setEditHost(IEditBoxHost& host)noexcept{ m_builder.setEditHost(host); }
+    void clearEditHost()noexcept{ m_builder.clearEditHost(); }
     [[nodiscard]] InputRoutingResult send(const InputEvent& event);
     void click(const Point& point);
     void drag(const Point& origin, const Point& destination);
@@ -324,7 +326,6 @@ using ::NWB::UiFixtureSupport::TryFindAtlasGlyph;
 using ::NWB::UiWidgetTests::s_TestSkinPath;
 using ::NWB::UiWidgetTests::s_TestLatinFontPath;
 using ::NWB::UiWidgetTests::s_TestKoreanFontPath;
-using ::NWB::UiWidgetTests::s_FontScratchArenaName;
 using ::UiTestSupport::NativeInput;
 };
 
@@ -523,7 +524,7 @@ Expected<SharedImageSource> MakeSeededImage(const StringView path, const u8 seed
         return MakeUnexpected(Failure{});
     Texture texture(arena, *textureName);
     texture.setPayload(width, height, Move(mips), Move(bytes), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
-    return MakeImageSource(arena, texture);
+    return MakeImageSource(Core::Alloc::SharedPool(arena), texture);
 }
 
 
@@ -657,11 +658,11 @@ b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, const StringView file
     return font.validatePayload();
 }
 
-b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
+b8 InstallLatinFixtureFont(Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
     if(!LoadBundledFixtureFont(arena, "latin.font", font))
         return false;
     const FontSource source{ Core::Assets::AssetRef<Font>(font.virtualPath()), font, 1u };
-    return text.setFonts(scratchArena, Span(&source, 1u));
+    return text.setFonts(Span(&source, 1u));
 }
 
 
@@ -683,8 +684,7 @@ WidgetFixture::WidgetFixture()
 {}
 
 void WidgetFixture::SetUp(){
-    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
-    ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text));
+    ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
     configureSkin();
     ASSERT_TRUE(m_skin.validatePayload());
     m_builder.setSkin(m_skin);
@@ -761,7 +761,6 @@ Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& sna
 }
 
 b8 WidgetFixture::installKoreanFallback(){
-    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     Font korean(m_arena, Name(s_TestKoreanFontPath));
     if(!LoadBundledFixtureFont(m_arena, "korean.font", korean))
         return false;
@@ -769,7 +768,7 @@ b8 WidgetFixture::installKoreanFallback(){
         FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u },
         FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), korean, 1u },
     };
-    return m_text.setFonts(fontScratchArena, sources);
+    return m_text.setFonts(sources);
 }
 
 Expected<Rect> WidgetFixture::skinQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{

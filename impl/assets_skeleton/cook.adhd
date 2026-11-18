@@ -9,85 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SkeletonCookEntry{
-    Name virtualPath = s_NameNone;
-    Core::Assets::AssetVector<SkeletonCookJoint> joints;
-
-
-public:
-    explicit SkeletonCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : joints(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsSkeletonCookDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<SkeletonJointMatrix> ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, AStringView metaKind, AStringView label);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class SkeletonCookEntry{
+    public Name virtualPath = s_NameNone;
+    public Vector<SkeletonCookJoint> joints;
 }
 
 
@@ -102,6 +26,7 @@ b8 ValidateSkeletonJointEntryMap(in b8 isMap, in Path nwbFilePath, in usize join
     return false;
 }
 
+[asset_writer]
 b8 SerializeSkeletonAsset(in Skeleton skeleton, mut Vector<u8> outBinary){
     if(!skeleton.validatePayload())
         return false;
@@ -247,95 +172,31 @@ Expected<Skeleton> BuildSkeletonAssetFromCookJoints(in Name virtualPath, in Span
     return asset;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/assets/binary_payload_io.h>
-#include <core/assets/cook_metadata.h>
-
-#include <global/algorithm.h>
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<SkeletonJointMatrix> AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView metaKind, const AStringView label){
-    return ParseSkeletonJointMatrix(nwbFilePath, value, metaKind, label);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("SkeletonAssetCodec::serialize")))
-        return false;
-
-    const Skeleton& skeleton = *MakeNotNull(checked_cast<const Skeleton*>(&asset));
-    return SerializeSkeletonAsset(skeleton, outBinary);
-}
-
-Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    SkeletonCookEntry entry(arena);
-
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SkeletonMetaDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-
-    const auto parsedJoints = ParseSkeletonCookJoints(scratchArena, nwbFilePath, asset);
-    if(!parsedJoints)
-        return MakeUnexpected(Failure{});
-    AssignVector(entry.joints, *parsedJoints);
-
-    if(!BuildSkeletonAsset(entry, arena, scratchArena))
-        return MakeUnexpected(Failure{});
+Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    SkeletonCookEntry entry;
+    if(!AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SkeletonMetaDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    const Expected<Vector<SkeletonCookJoint>> parsedJoints = ParseSkeletonCookJoints(nwbFilePath, asset);
+    if(!parsedJoints.has_value())
+        return MakeUnexpected(Failure());
+    entry.joints = parsedJoints.value();
+    if(!BuildSkeletonAssetFromCookJoints(entry.virtualPath, entry.joints).has_value())
+        return MakeUnexpected(Failure());
     return entry;
 }
 
-Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<SkeletonCookEntry, &ParseSkeletonCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_SkeletonMetaDiagnosticPrefix, arena, scratchArena);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<SkeletonCookEntry>(root, virtualRoot, file, document, s_SkeletonMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<SkeletonCookEntry>{
+        return ParseSkeletonCookMetadata(path, file, value);
+    });
 }
 
-Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return BuildSkeletonAssetFromCookJoints(arena, skeletonEntry.virtualPath, skeletonEntry.joints);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<Skeleton> BuildSkeletonAsset(in SkeletonCookEntry entry){
+    return BuildSkeletonAssetFromCookJoints(entry.virtualPath, entry.joints);
 }
 
 

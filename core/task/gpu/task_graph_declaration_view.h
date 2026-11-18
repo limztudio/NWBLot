@@ -104,6 +104,8 @@ struct GpuTaskGraphResourceSetView{
     AStringView markerLabel;
     const GpuGraphResourceId* members = nullptr;
     usize memberCount = 0u;
+
+    [[nodiscard]] Span<const GpuGraphResourceId> memberSpan()const noexcept{ return { members, memberCount }; }
 };
 
 struct GpuTaskGraphPipelineView{
@@ -208,11 +210,39 @@ public:
     [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
+    [[nodiscard]] Optional<NotNull<Texture*>> borrowTexture(const GpuGraphResourceId& id)const & noexcept{
+        if(Texture* resource = textureForResource(id))
+            return MakeNotNull(resource);
+        return {};
+    }
+    [[nodiscard]] Optional<NotNull<Texture*>> borrowTexture(const GpuGraphResourceId&)const && = delete;
+    [[nodiscard]] Optional<NotNull<GraphicsPipeline*>> borrowGraphicsPipeline(const GpuGraphPipelineId& id)const & noexcept{
+        if(GraphicsPipeline* resource = graphicsPipelineFor(id))
+            return MakeNotNull(resource);
+        return {};
+    }
+    [[nodiscard]] Optional<NotNull<GraphicsPipeline*>> borrowGraphicsPipeline(const GpuGraphPipelineId&)const && = delete;
+    [[nodiscard]] Optional<NotNull<ComputePipeline*>> borrowComputePipeline(const GpuGraphPipelineId& id)const & noexcept{
+        if(ComputePipeline* pipeline = computePipelineFor(id))
+            return MakeNotNull(pipeline);
+        return {};
+    }
+    [[nodiscard]] Optional<NotNull<ComputePipeline*>> borrowComputePipeline(const GpuGraphPipelineId&)const && = delete;
+    [[nodiscard]] Optional<NotNull<Buffer*>> borrowBuffer(const GpuGraphResourceId& id)const & noexcept{
+        if(Buffer* buffer = bufferForResource(id))
+            return MakeNotNull(buffer);
+        return {};
+    }
+    [[nodiscard]] Optional<NotNull<Buffer*>> borrowBuffer(const GpuGraphResourceId&)const && = delete;
     [[nodiscard]] GpuGraphResourceId findImportedTexture(const TextureHandle& texture)const noexcept;
     [[nodiscard]] GpuGraphResourceId findImportedBuffer(const BufferHandle& buffer)const noexcept;
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const & noexcept;
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const && = delete;
 
+    [[nodiscard]] b8 appendAcceptedFrameGraphTelemetry(
+        const GpuTaskGraphAnalysis& analysis, Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphQueueAssignments& assignments,
+        const GpuCompiledGraph::ReadView& compiledPlan, const GpuTaskGraphQueueAssignmentTelemetryTracker& telemetry
+    )const;
     [[nodiscard]] b8 appendFrameGraphTelemetry(const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphTelemetryOptions& options = {})const;
 
 
@@ -223,6 +253,16 @@ private:
 private:
     const GpuTaskGraph* m_graph = nullptr;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Visit>
+[[nodiscard]] b8 VisitGpuTaskTexture(const GpuTaskGraphDeclarationReadView& declarations, const GpuGraphResourceId& resource, Visit&& visit){
+    Texture* const texture = declarations.textureForResource(resource);
+    return texture && visit(*texture);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

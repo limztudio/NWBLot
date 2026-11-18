@@ -26,6 +26,26 @@ namespace GpuGraphTaskContract{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Member tasks use the same graph-owned payload and optional lifecycle thunks as static task contracts.
+template<typename PayloadT>
+struct MemberTask{
+    using Payload = PayloadT;
+
+    [[nodiscard]] static GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept(noexcept(payload.commandRequirements())) requires requires{ payload.commandRequirements(); }{
+        return payload.commandRequirements();
+    }
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept(noexcept(payload.record(commandList, context))) requires requires{ payload.record(commandList, context); }{
+        return payload.record(commandList, context);
+    }
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept(noexcept(payload.accepted(token))) requires requires{ payload.accepted(token); }{
+        payload.accepted(token);
+    }
+    static void Discarded(Payload& payload)noexcept(noexcept(payload.discarded())) requires requires{ payload.discarded(); }{
+        payload.discarded();
+    }
+};
+
+
 template<typename TaskT>
 concept RecordApi = requires{
     static_cast<b8 (*)(const typename TaskT::Payload&, CommandList&, const GpuTaskRecordContext&)>(&TaskT::Record);

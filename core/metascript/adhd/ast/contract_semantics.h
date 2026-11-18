@@ -76,11 +76,13 @@ struct AssetCodecContractInfo{
 
 struct SubsystemContractInfo{
     MStringView assetArenaCppType;
-    MStringView typedSubsystemBase;
-    MStringView assetRefVectorTemplate;
+    MStringView typedAssetBase;
+    MStringView familyType;
+    MStringView assetVectorTemplate;
     MStringView assetRefTemplate;
-    MStringView fieldDescTemplate;
-    MStringView makeFieldDescTemplate;
+    MStringView descriptorType;
+    MStringView loadFunction;
+    MStringView validateFunction;
 };
 
 struct NamespacePreambleInfo{
@@ -127,8 +129,8 @@ private:
     };
 
     inline static constexpr auto s_SubsystemContracts = Array{
-    #define NWB_ADHD_EXPORT_SUBSYSTEM_CONTRACT(assetArenaCppType, typedSubsystemBase, assetRefVectorTemplate, assetRefTemplate, fieldDescTemplate, makeFieldDescTemplate) \
-        SubsystemContractInfo{ assetArenaCppType, typedSubsystemBase, assetRefVectorTemplate, assetRefTemplate, fieldDescTemplate, makeFieldDescTemplate },
+    #define NWB_ADHD_EXPORT_SUBSYSTEM_CONTRACT(assetArenaCppType, typedAssetBase, familyType, assetVectorTemplate, assetRefTemplate, descriptorType, loadFunction, validateFunction) \
+        SubsystemContractInfo{ assetArenaCppType, typedAssetBase, familyType, assetVectorTemplate, assetRefTemplate, descriptorType, loadFunction, validateFunction },
     #include "../export_contracts.h"
     #undef NWB_ADHD_EXPORT_SUBSYSTEM_CONTRACT
     };

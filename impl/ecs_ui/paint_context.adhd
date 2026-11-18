@@ -2,73 +2,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
-
-#include <core/ecs/entity_id.h>
-#include <core/os/clipboard.h>
-#include <core/os/text_input.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class World;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/paint.adhd>
+#include <impl/ecs_ui/toolkit/text/service.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class UiPaintContext{
-public:
-    Core::ECS::World& world;
-    Core::IClipboardService& clipboard;
-    Core::ITextInputService& textInput;
-    Ui::PaintBuilder& paint;
-    Ui::TextService& text;
-    const Ui::DisplayMetrics& display;
-    Ui::Builder& ui;
-    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
-    f32 deltaSeconds = 0.0f;
-};
+    public mut World world;
+    public mut IClipboardService clipboard;
+    public mut ITextInputService textInput;
+    public mut PaintBuilder paint;
+    public mut TextService text;
+    public in DisplayMetrics display;
+    public mut Builder ui;
+    public EntityID entity = s_InvalidEntityId;
+    public f32 deltaSeconds = 0.0f;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public UiPaintContext(mut World world, mut IClipboardService clipboard, mut ITextInputService textInput, mut PaintBuilder paint, mut TextService text, in DisplayMetrics display, mut Builder ui){
+        this.world = world;
+        this.clipboard = clipboard;
+        this.textInput = textInput;
+        this.paint = paint;
+        this.text = text;
+        this.display = display;
+        this.ui = ui;
+    }
 }
 
 

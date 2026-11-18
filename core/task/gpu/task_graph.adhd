@@ -8,11 +8,18 @@ extern class GpuTaskGraph{
     Expected<GpuTaskId> addClearTextureRectUIntTask(...);
     Expected<GpuTaskId> addClearTextureTask(...);
     Expected<GpuTaskId> addCopyBufferTask(...);
+    Expected<GpuTaskId> addCopyBufferRegions(in GpuTaskDesc desc, in Span<GpuCopyBufferTaskRegion> regions);
     Expected<GpuTaskId> addCopyTextureTask(...);
+    Expected<GpuTaskId> addCopyTextureRegions(in GpuTaskDesc desc, in Span<GpuCopyTextureTaskRegion> regions, mut QueueSubmissionToken acceptedToken);
+    Expected<GpuTaskId> addPayloadTask(in GpuTaskDesc desc, in auto payload);
+    Expected<GpuTaskId> addPreparedPayloadTask(in GpuTaskDesc desc, mut auto payload);
     Expected<GpuTaskId> addResolveTextureTask(...);
     Expected<GpuTaskId> addTask(...);
     Expected<GpuTaskId> addUploadBufferTask(...);
     Expected<GpuTaskId> addUploadTextureTask(...);
+    Expected<GpuUploadBlobId> copyUploadElements<T>(in Span<T> elements);
+    Expected<GpuUploadBlobId> copyUploadValue(in auto value);
+    Expected<GpuUploadBlobId> copyUploadBytes<AlignmentT>(in Span<u8> bytes);
     b8 declarePresentEndpoint(...);
     Expected<GpuGraphResourceVersionId> declareResourceVersion(...);
     Expected<GpuGraphResourceId> importAccelStruct(...);

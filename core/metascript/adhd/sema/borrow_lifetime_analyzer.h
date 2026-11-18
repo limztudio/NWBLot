@@ -23,7 +23,8 @@ public:
         : m_checker(checker)
     {}
 
-    [[nodiscard]] b8 isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] b8 isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, b8 requireObject = false)const noexcept;
+    [[nodiscard]] const ScopedVarInfo* localReferenceOwner(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& expr, Span<const ScopedVarInfo> scope, b8 takingAddress = false)const noexcept;
     [[nodiscard]] b8 borrowsTemporaryStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] b8 borrowsLocalStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, MStringView* outOwnerName = nullptr, usize* outOwnerScopeIndex = nullptr)const noexcept;
 

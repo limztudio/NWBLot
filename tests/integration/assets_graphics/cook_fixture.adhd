@@ -23,13 +23,15 @@ native{
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets_csg/cook.adhd.h>
+#include <impl/assets_scene/component_asset_binary_codec.adhd.h>
 #include <impl/assets_csg/shape_module_writer.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_scene/component_binary.adhd.h>
 #include <impl/assets_graphics/cook_types.adhd.h>
 #include <impl/assets_graphics/csg_shader_variants.adhd.h>
 #include <impl/assets_graphics/gather.adhd.h>
-#include <impl/assets_graphics/shader_cook_plan.adhd.h>
+#include <core/assets/gather_merge_registry.h>
+#include <impl/assets_graphics/cook_shader_plan_and_validation.adhd.h>
 #include <impl/assets_material/cook.adhd.h>
 #include <impl/assets_material/cook_private.adhd.h>
 #include <impl/assets_material/cook_types.adhd.h>
@@ -258,17 +260,17 @@ public:
 };
 
 template<typename EntryT>
-Expected<EntryT> ParseShaderMetadataFile(const Path& metadataPath, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena, NWB::Impl::ShaderCook& shaderCook){
+Expected<EntryT> ParseShaderMetadataFile(const Path& metadataPath, TestArena& testArena, NWB::Core::Alloc::ScratchArena&){
     NWB::Core::Metascript::Document document(testArena.arena);
-    NWB::Impl::ShaderCook::CookString source(testArena.arena);
+    NWB::Core::Assets::CookString source(testArena.arena);
     if(!NWB::Core::Assets::ParseMetadataDocumentText(metadataPath, "Meta", [&document](const AStringView text){ return document.parse(text); }, source, document))
         return MakeUnexpected(Failure{});
 
-    if constexpr(IsSame_V<EntryT, NWB::Impl::ShaderCook::ShaderEntry>)
-        return shaderCook.parseShaderMeta(metadataPath, document, scratchArena);
+    if constexpr(IsSame_V<EntryT, NWB::Impl::ShaderCookEntry>)
+        return NWB::Impl::ReadShaderMetadata(testArena.arena, metadataPath, document);
     else{
-        static_assert(IsSame_V<EntryT, NWB::Impl::ShaderCook::IncludeEntry>);
-        return shaderCook.parseIncludeMeta(metadataPath, document, scratchArena);
+        static_assert(IsSame_V<EntryT, NWB::Impl::ShaderIncludeEntry>);
+        return NWB::Impl::ReadShaderIncludeMetadata(testArena.arena, metadataPath, document);
     }
 }
 
@@ -872,8 +874,8 @@ public:
     Pipeline::AssetBuilder::AssetBuildOptions m_options{ m_testArena.arena, m_cpuScheduler };
 };
 
-FOUNDATION_INLINE void AppendCsgShapeCookEntry(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, NWB::Impl::AssetsCsgCook::CookArena& arena, NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& outEntries){
-    NWB::Impl::AssetsCsgCook::CsgShapeCookEntry entry(arena);
+FOUNDATION_INLINE void AppendCsgShapeCookEntry(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, NWB::Core::Assets::CookArena& arena, NWB::Impl::CsgShapeCookEntryVector& outEntries){
+    NWB::Impl::CsgShapeCookEntry entry(arena);
     entry.shapeName = shapeName;
     entry.shaderModule = shaderModule;
     entry.evalInclude.assign("project/csg/tests/eval.slangi");
@@ -881,8 +883,16 @@ FOUNDATION_INLINE void AppendCsgShapeCookEntry(const Name shapeName, const Name 
     outEntries.push_back(Move(entry));
 }
 
-[[nodiscard]] FOUNDATION_INLINE NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& entries, const Name shapeName)noexcept{
-    for(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntry& entry : entries){
+[[nodiscard]] inline Expected<GraphicsTestPath> EmitTestCsgModuleRoot(const NWB::Impl::CsgShapeModuleWriter& writer, const GraphicsTestPath& directory, const AStringView configuration, const NWB::Impl::CsgShapeCookEntryVector& entries){
+    auto& arena = directory.arena();
+    auto root = writer.emit(arena, directory, configuration, entries);
+    if(!root)
+        return MakeUnexpected(root.error());
+    return GraphicsTestPath(arena, *root);
+}
+
+[[nodiscard]] FOUNDATION_INLINE NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(const NWB::Impl::CsgShapeCookEntryVector& entries, const Name shapeName)noexcept{
+    for(const NWB::Impl::CsgShapeCookEntry& entry : entries){
         if(entry.shapeName == shapeName)
             return entry.shapeTypeId;
     }
@@ -1028,24 +1038,24 @@ using ResolvedAssetRootVector = NWB::Core::Assets::CookVector<NWB::Core::Assets:
 using AssetRootResolutionError = NWB::Core::Assets::AssetRootResolutionError;
 using AssetRootDuplicatePolicyEnum = NWB::Core::Assets::AssetRootDuplicatePolicy::Enum;
 using ResolvedCookPaths = NWB::Core::Assets::ResolvedCookPaths;
-using IncludeMetadataMap = NWB::Impl::AssetsGraphicsCookDetail::IncludeMetadataMap;
-using PreparedShaderEntry = NWB::Impl::AssetsGraphicsCookDetail::PreparedShaderEntry;
-using PreparedShaderPlan = NWB::Impl::AssetsGraphicsCookDetail::PreparedShaderPlan;
-using CsgShapeCookEntry = NWB::Impl::AssetsCsgCook::CsgShapeCookEntry;
-using CsgShapeCookEntryVector = NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector;
-using CsgShapeModuleWriter = NWB::Impl::AssetsCsgCook::CsgShapeModuleWriter;
+using IncludeMetadataMap = NWB::Impl::IncludeMetadataMap;
+using PreparedShaderEntry = NWB::Impl::PreparedShaderEntry;
+using PreparedShaderPlan = NWB::Impl::PreparedShaderPlan;
+using CsgShapeCookEntry = NWB::Impl::CsgShapeCookEntry;
+using CsgShapeCookEntryVector = NWB::Impl::CsgShapeCookEntryVector;
+using CsgShapeModuleWriter = NWB::Impl::CsgShapeModuleWriter;
 using CsgShapeTypeId = NWB::Impl::CsgShapeTypeId;
 using CsgShapeTypeDesc = NWB::Impl::CsgShapeTypeDesc;
 using CsgShapeTypeInfo = NWB::Impl::CsgShapeTypeInfo;
 using CsgShapeRegistry = NWB::Impl::CsgShapeRegistry;
-using GlobalArenaString = ::AString<NWB::Core::Alloc::GlobalArena>;
+using GlobalArenaString = ::AString<::ArenaBase>;
 using ShaderArchiveRecordVector = NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>;
 using GraphicsBytes = NWB::Core::GraphicsBytes;
 using GraphicsWordVector = NWB::Core::GraphicsVector<u32>;
 using MaterialCookEntry = NWB::Impl::MaterialCookEntry;
-using MaterialCookEntryVector = NWB::Impl::MaterialCookVector<NWB::Impl::MaterialCookEntry>;
-using MaterialAvboitShaderGenerator = NWB::Impl::MaterialAvboitShaderGenerator;
-using GeneratedMaterialPixelShaderVector = NWB::Impl::MaterialCookVector<NWB::Impl::GeneratedMaterialPixelShader>;
+using MaterialCookEntryVector = Vector<NWB::Impl::MaterialCookEntry, ::ArenaBase>;
+namespace MaterialPixelPass = NWB::Impl::MaterialPixelPass;
+using GeneratedMaterialPixelShaderVector = Vector<NWB::Impl::GeneratedMaterialPixelShader, ::ArenaBase>;
 using PixelShaderAsset = NWB::Impl::PixelShader;
 using ComputeShaderAsset = NWB::Impl::ComputeShader;
 using PixelShaderAssetCodec = NWB::Impl::PixelShaderAssetCodec;
@@ -1070,8 +1080,8 @@ using Core::ShaderArchive::BuildVirtualPathName;
 using Core::ShaderArchive::FindVirtualPath;
 using Core::ShaderArchive::SerializeIndex;
 using Core::ShaderArchive::s_DefaultVariant;
-using Impl::AssetsCsgCook::AssignCsgShapeCookIds;
-using Impl::AssetsCsgCook::ParseCsgShapeCookMetadata;
+using Impl::AssignCsgShapeCookIds;
+using Impl::ParseCsgShapeCookMetadata;
 using Impl::IsUnpaddedRendererOpticalVolumeGroup;
 using Impl::ParseSamplerCookMetadata;
 using Impl::ShaderBinaryPayload::EncodeAssetPayload;
@@ -1221,15 +1231,15 @@ FOUNDATION_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDi
     return static_cast<const NWB::Impl::RendererComponentAsset*>(loadedAsset->get())->component;
 }
 
-FOUNDATION_INLINE void InsertEvaluatorDefineImpl(TestArena& testArena, NWB::Impl::ShaderCook::CookMap<NWB::Impl::ShaderCook::CookString, NWB::Impl::ShaderCook::DefineEntry>& defines, const AStringView name, const InitializerList<AStringView> values){
-    NWB::Impl::ShaderCook::DefineEntry definition(testArena.arena);
+FOUNDATION_INLINE void InsertEvaluatorDefineImpl(TestArena& testArena, NWB::Impl::ShaderDefineMap& defines, const AStringView name, const InitializerList<AStringView> values){
+    NWB::Impl::ShaderDefineEntry definition(testArena.arena);
     for(const AStringView value : values)
         definition.values.emplace_back(value, testArena.arena);
-    ASSERT_TRUE(defines.emplace(NWB::Impl::ShaderCook::CookString(name, testArena.arena), Move(definition)).second);
+    ASSERT_TRUE(defines.emplace(NWB::Core::Assets::CookString(name, testArena.arena), Move(definition)).second);
 }
 
 FOUNDATION_INLINE void InsertEvaluatorIncludeMetadataImpl(TestArena& testArena, const Path& path, const AStringView option, const InitializerList<AStringView> values, const AStringView authoredDefine, IncludeMetadataMap& includeMetadata){
-    NWB::Impl::ShaderCook::IncludeEntry entry(testArena.arena);
+    NWB::Impl::ShaderIncludeEntry entry(testArena.arena);
     InsertEvaluatorDefineImpl(testArena, entry.defineValues, option, values);
     InsertEvaluatorDefineImpl(testArena, entry.defineValues, authoredDefine, { "inherited" });
     auto key = PathToString(testArena.arena, path);
@@ -1257,12 +1267,11 @@ FOUNDATION_INLINE void InsertEvaluatorIncludeMetadata2Impl(TestArena& testArena,
     const AStringView authoredDefine,
     const u32 mode
 ){
-    namespace Plan = Impl::AssetsGraphicsCookDetail;
-    using ShaderCook = Impl::ShaderCook;
-    ShaderCook::CookVector<Impl::MaterialBindEntry> materialBinds(testArena.arena);
-    ShaderCook::CookVector<Impl::MaterialCookEntry> materials(testArena.arena);
+    namespace Plan = Impl;
+    NWB::Core::Assets::CookVector<Impl::MaterialBindEntry> materialBinds(testArena.arena);
+    NWB::Core::Assets::CookVector<Impl::MaterialCookEntry> materials(testArena.arena);
     Plan::ShaderEntryVector entries(testArena.arena);
-    ShaderCook::ShaderEntry entry(testArena.arena);
+    NWB::Impl::ShaderCookEntry entry(testArena.arena);
     entry.name = "project/shaders/dependency_plan";
     entry.source = "shader.slang";
     entry.stage = s_ShaderStagePs;
@@ -1274,14 +1283,14 @@ FOUNDATION_INLINE void InsertEvaluatorIncludeMetadata2Impl(TestArena& testArena,
         InsertEvaluatorDefineImpl(testArena, entry.defineValues, Impl::s_CsgProjectEvaluatorModuleDefineName, { "\"first.slangi\"", "\"second.slangi\"" });
     entries.push_back(Move(entry));
     const Path emptyPath(testArena.arena);
-    return Plan::PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, materialBinds, materials, testArena.arena, scratchArena, entries);
+    return Plan::PrepareShaderEntriesForCook(testArena.arena, paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, materialBinds, materials, entries);
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 HasPreparedShaderDefine(const PreparedShaderEntry& entry, const AStringView name)noexcept{
     return entry.entry.defineValues.find(name) != entry.entry.defineValues.end();
 }
 
-[[nodiscard]] FOUNDATION_INLINE const NWB::Impl::ShaderCook::CookVector<NWB::Impl::ShaderCook::CookString>& GetPreparedShaderDefineValues(const PreparedShaderEntry& entry, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const auto& GetPreparedShaderDefineValues(const PreparedShaderEntry& entry, const AStringView name)noexcept{
     return entry.entry.defineValues.find(name).value().values;
 }
 
@@ -1293,6 +1302,10 @@ template<typename StringT>
 [[nodiscard]] FOUNDATION_INLINE Expected<Name> DeriveIndexedTestName(const Name& baseName, const u32 index){
     Array<char, 32u> indexText = {};
     return DeriveName(baseName, FormatDecimal(index, indexText));
+}
+
+[[nodiscard]] FOUNDATION_INLINE Expected<GlobalArenaString> FindRegistryShaderModuleIncludeForArena(const CsgShapeRegistry& registry, const Name module, TestArena& owner){
+    return registry.findShaderModuleInclude(owner.arena, module);
 }
 
 FOUNDATION_INLINE void AppendByteToShapeModuleIncludeImpl(CsgShapeTypeDesc& desc, const u8 byte){
@@ -1343,7 +1356,7 @@ FOUNDATION_INLINE void AppendZeroU32ToAssetBytesImpl(AssetBytes& bytes){
 }
 
 FOUNDATION_INLINE void EnableGraphicsGatherMergeImpl(AssetGatherOptions& options)noexcept{
-    options.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
+    options.mergePayloads = &NWB::Core::Assets::InvokeAssetGatherMerge<&NWB::Impl::MergeGatheredGraphicsAsset>;
 }
 
 FOUNDATION_INLINE void AppendGatherInputPathImpl(TestArena& testArena, const Path& inputPath, AssetGatherOptions& options){
@@ -1384,10 +1397,6 @@ FOUNDATION_INLINE void CorruptBytecodeMagicImpl(AssetBytes& bytes){
 FOUNDATION_INLINE void CorruptBytecodeTailZeroWordsImpl(const AssetBytes& originalBytes, AssetBytes& corrupted){
     corrupted.assign(originalBytes.begin(), originalBytes.end());
     corrupted.resize(originalBytes.size() + sizeof(u32), 0u);
-}
-
-FOUNDATION_INLINE void CopyAssetBytesImpl(const Span<const u8> source, AssetBytes& dest){
-    dest.assign(source.begin(), source.end());
 }
 
 
@@ -1432,8 +1441,8 @@ static_assert(!noexcept(AppendUnderscoreSeparatedPascalIdentifier({}, "Value", D
 using MaterialAsset = NWB::Impl::Material;
 using MaterialAssetCodec = NWB::Impl::MaterialAssetCodec;
 using MaterialBindEntry = NWB::Impl::MaterialBindEntry;
-using MaterialBindEntryVector = NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry>;
-using MaterialShaderCookEntryVector = NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry>;
+using MaterialBindEntryVector = NWB::Core::Assets::CookVector<NWB::Impl::MaterialBindEntry>;
+using MaterialShaderCookEntryVector = NWB::Core::Assets::CookVector<NWB::Impl::MaterialCookEntry>;
 using MaterialBindTypedLayoutCache = NWB::Impl::MaterialBindTypedLayoutCache;
 using MeshAsset = NWB::Impl::Mesh;
 using MeshAssetCodec = NWB::Impl::MeshAssetCodec;
@@ -1444,11 +1453,10 @@ using MeshletPositionRefVector = NWB::Core::Assets::AssetVector<NWB::Impl::Meshl
 using MeshletAttributeRefVector = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletAttributeStreamRef>;
 using MeshletDescVector = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>;
 using ScratchU32Vector = ::Vector<u32, ::ArenaBase>;
-using ShaderCook = NWB::Impl::ShaderCook;
-using ShaderCookShaderEntry = NWB::Impl::ShaderCook::ShaderEntry;
-using ShaderCookIncludeEntry = NWB::Impl::ShaderCook::IncludeEntry;
-using ShaderCookPathVector = NWB::Impl::ShaderCook::CookVector<::Path<NWB::Core::Alloc::GlobalArena>>;
-using ShaderCookString = NWB::Impl::ShaderCook::CookString;
+using ShaderCookShaderEntry = NWB::Impl::ShaderCookEntry;
+using ShaderCookIncludeEntry = NWB::Impl::ShaderIncludeEntry;
+using ShaderCookPathVector = NWB::Core::Assets::CookVector<::Path<NWB::Core::Alloc::GlobalArena>>;
+using ShaderCookString = NWB::Core::Assets::CookString;
 using SkeletonAsset = NWB::Impl::Skeleton;
 using SkeletonAssetCodec = NWB::Impl::SkeletonAssetCodec;
 using TextureAsset = NWB::Impl::Texture;
@@ -1542,18 +1550,18 @@ inline constexpr FormatEnum s_FormatRgba16Float = NWB::Core::Format::RGBA16_FLOA
     return static_cast<u32>(NWB::Impl::MaterialParameterValueType::f32);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(const AStringView metaText, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(const AStringView metaText, TestArena& testArena){
     NWB::Core::Metascript::Document doc(testArena.arena);
     if(!doc.parse(metaText))
         return MakeUnexpected(Failure{});
 
     const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_AssetsDirectory;
     const Path nwbFilePath = assetRoot / s_MaterialsDirectory / "test_material.nwb";
-    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_ProjectVirtualRoot, nwbFilePath, doc, testArena.arena, scratchArena);
+    return NWB::Impl::ParseMaterialCookMetadata(testArena.arena, assetRoot, s_ProjectVirtualRoot, nwbFilePath, doc);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringView bindText, const AStringView materialText, const AStringView caseName, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
-    auto materialEntryResult = ParseMaterialEntryFromMetaText(materialText, testArena, scratchArena);
+    auto materialEntryResult = ParseMaterialEntryFromMetaText(materialText, testArena);
     if(!materialEntryResult)
         return MakeUnexpected(Failure{});
 
@@ -1567,12 +1575,12 @@ inline constexpr FormatEnum s_FormatRgba16Float = NWB::Core::Format::RGBA16_FLOA
         NWB::Impl::MaterialBindEntry& bindEntry = *bindEntryResult;
         bindEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
 
-        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
+        NWB::Core::Assets::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
         bindEntries.push_back(Move(bindEntry));
-        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
+        NWB::Core::Assets::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
         materialEntries.push_back(Move(*materialEntryResult));
-        if(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena))
-            built = NWB::Impl::BuildMaterialAsset(materialEntries[0u], testArena.arena);
+        if(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries))
+            built = NWB::Impl::BuildMaterialAsset(testArena.arena, materialEntries[0u]);
     }
 
     if(!bindRoot.empty()){
@@ -2190,7 +2198,7 @@ public:
     }
 
     [[nodiscard]] b8 parse(){
-        auto result = Impl::ParseModelCookMetadata(Name(s_AssetCaseTestsModelCookMetadataModel), path, asset, outputArena, scratchArena);
+        auto result = Impl::ParseModelCookMetadata(outputArena, Name(s_AssetCaseTestsModelCookMetadataModel), path, asset);
         if(!result)
             return false;
         entry = Move(*result);
@@ -2323,11 +2331,11 @@ public:
     }
 
     [[nodiscard]] b8 canBuild(){
-        return NWB::Impl::BuildSkeletonAsset(entry, arena, scratchArena).has_value();
+        return NWB::Impl::BuildSkeletonAsset(arena, entry).has_value();
     }
 
     [[nodiscard]] b8 buildIntoSkeleton(){
-        auto built = NWB::Impl::BuildSkeletonAsset(entry, arena, scratchArena);
+        auto built = NWB::Impl::BuildSkeletonAsset(arena, entry);
         if(!built)
             return false;
         skeleton = Move(*built);
@@ -2429,26 +2437,21 @@ FOUNDATION_INLINE void SetStandardTestTexturePayloadImpl(TestArena& testArena, c
     return AssetBytes(source.begin(), source.begin() + count, testArena.arena);
 }
 
-FOUNDATION_INLINE void AssignAssetBytesPrefixImpl(const AssetBytes& source, const usize count, AssetBytes& dest){
-    dest.assign(source.begin(), source.begin() + count);
-}
-
-FOUNDATION_INLINE void AppendAssetBytesImpl(const AssetBytes& extra, AssetBytes& dest){
-    dest.insert(dest.end(), extra.begin(), extra.end());
-}
-
 [[nodiscard]] FOUNDATION_INLINE b8 AssetByteRangeEqualsImpl(const AssetBytes& haystack, const usize offset, const AssetBytes& needle)noexcept{
     if(offset > haystack.size() || needle.size() > haystack.size() - offset)
         return false;
     return FOUNDATION_MEMCMP(haystack.data() + offset, needle.data(), needle.size()) == 0;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 GatherShaderDependenciesImpl(const Path& sourcePath, const ShaderCookPathVector& includeDirectories, ScratchArena& scratchArena, ShaderCookPathVector& outDependencies){
-    return Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, outDependencies);
+[[nodiscard]] FOUNDATION_INLINE b8 GatherShaderDependenciesImpl(const Path& sourcePath, const ShaderCookPathVector& includeDirectories, ScratchArena&, ShaderCookPathVector& outDependencies){
+    return Impl::GatherShaderSourceDependencies(sourcePath, includeDirectories, {}, outDependencies);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<u64> ComputeSingleAliasShaderDependencyChecksumImpl(const ShaderCookPathVector& dependencies, const ShaderCookPathVector& includeDirectories, const Path& aliasRoot, const AStringView aliasName, ScratchArena& scratchArena){
-    const auto result = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { aliasRoot, aliasName } }, scratchArena);
+    Impl::ShaderChecksumRoots roots(scratchArena);
+    if(!roots.append(aliasRoot, aliasName))
+        return MakeUnexpected(Failure{});
+    const auto result = Impl::ComputeShaderDependencyChecksum(dependencies, includeDirectories, roots);
     if(!result)
         return MakeUnexpected(Failure{});
     return result->checksum;
@@ -2468,12 +2471,12 @@ FOUNDATION_INLINE void AppendAssetBytesImpl(const AssetBytes& extra, AssetBytes&
     return true;
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 ValidateShaderEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookShaderEntry& entry, ScratchArena& scratchArena){
-    return Impl::ShaderCook::ValidateVariantSignature(assetName, signature, entry.defineValues, scratchArena);
+[[nodiscard]] FOUNDATION_INLINE b8 ValidateShaderEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookShaderEntry& entry, ScratchArena&){
+    return Impl::CheckShaderVariantSignature(assetName, Optional<Name>{}, signature, entry.defineValues);
 }
 
-[[nodiscard]] FOUNDATION_INLINE b8 ValidateIncludeEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookIncludeEntry& entry, ScratchArena& scratchArena){
-    return Impl::ShaderCook::ValidateVariantSignature(assetName, signature, entry.defineValues, scratchArena);
+[[nodiscard]] FOUNDATION_INLINE b8 ValidateIncludeEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookIncludeEntry& entry, ScratchArena&){
+    return Impl::CheckShaderVariantSignature(assetName, Optional<Name>{}, signature, entry.defineValues);
 }
 
 template<typename RootArenaT, typename SourceArenaT>
@@ -2663,20 +2666,20 @@ CsgShapeTypeDesc MakeCsgCookTestShapeDesc(in Name shapeName, in Name shaderModul
 }
 
 b8 AssignTestCsgShapeCookIds(mut CsgShapeCookEntryVector entries, mut GraphicsScratchArena scratch){
-    return AssignCsgShapeCookIds(entries, scratch.scratchArena);
+    return AssignCsgShapeCookIds(entries);
 }
 
 Expected<CsgShapeCookEntry> ParseTestCsgShapeMetadata(in GraphicsTestPath nwbFilePath, in MetaDocument doc, mut TestArena testArena, mut GraphicsScratchArena scratch){
-    return ParseCsgShapeCookMetadata(nwbFilePath, doc, testArena.arena, scratch.scratchArena);
+    return ParseCsgShapeCookMetadata(testArena.arena, nwbFilePath, doc);
 }
 
 Expected<GraphicsTestPath> EmitTestCsgShapeModules(in GraphicsTestPath cacheDirectory, in StringView configurationSafeName, in CsgShapeCookEntryVector entries, mut GraphicsScratchArena scratch){
     const CsgShapeModuleWriter writer = CsgShapeModuleWriter();
-    return writer.emit(cacheDirectory, configurationSafeName, entries, scratch.scratchArena);
+    return EmitTestCsgModuleRoot(writer, cacheDirectory, configurationSafeName, entries);
 }
 
 Expected<GlobalArenaString> FindRegistryShaderModuleInclude(in CsgShapeRegistry registry, in Name shaderModule, mut TestArena testArena){
-    return registry.findShaderModuleInclude(shaderModule, testArena.arena);
+    return FindRegistryShaderModuleIncludeForArena(registry, shaderModule, testArena);
 }
 
 void AppendByteToShapeModuleInclude(mut CsgShapeTypeDesc desc, in u8 byte){
@@ -2708,15 +2711,15 @@ Expected<u64> FindTestShaderSourceChecksum(in ShaderArchiveRecordVector records,
 }
 
 b8 EmitAvboitAccumulateShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut GraphicsScratchArena scratch, mut MaterialCookEntryVector entries){
-    return MaterialAvboitShaderGenerator::EmitAccumulate(cacheDirectory, configName, testArena.arena, scratch.scratchArena, entries).has_value();
+    return EmitMaterialPassPixelShaders(testArena.arena, cacheDirectory, configName, s_NameNone, MaterialPixelPass::Accumulate, entries).has_value();
 }
 
 b8 EmitAvboitOccupancyShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut GraphicsScratchArena scratch, mut MaterialCookEntryVector entries){
-    return MaterialAvboitShaderGenerator::EmitOccupancy(cacheDirectory, configName, testArena.arena, scratch.scratchArena, entries).has_value();
+    return EmitMaterialPassPixelShaders(testArena.arena, cacheDirectory, configName, s_NameNone, MaterialPixelPass::Occupancy, entries).has_value();
 }
 
 b8 EmitAvboitExtinctionShaders(in GraphicsTestPath cacheDirectory, in StringView configName, mut TestArena testArena, mut GraphicsScratchArena scratch, mut MaterialCookEntryVector entries){
-    return MaterialAvboitShaderGenerator::EmitExtinction(cacheDirectory, configName, testArena.arena, scratch.scratchArena, entries).has_value();
+    return EmitMaterialPassPixelShaders(testArena.arena, cacheDirectory, configName, s_NameNone, MaterialPixelPass::Extinction, entries).has_value();
 }
 
 b8 ParseTestSamplerCookMetadata(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath metadataPath, in MetaDocument document){
@@ -2795,8 +2798,8 @@ void CorruptBytecodeTailZeroWords(in AssetBytes originalBytes, mut AssetBytes co
     CorruptBytecodeTailZeroWordsImpl(originalBytes, corrupted);
 }
 
-void CopyAssetBytes(in Span<u8> source, mut AssetBytes dest){
-    CopyAssetBytesImpl(source, dest);
+void CopyAssetBytes(in Span<u8> source, mut Vector<u8> dest){
+    AssignTriviallyCopyableVector(dest, source);
 }
 
 u32x4 PackF32x3MaterialTypedValueMeta(in StringView key){
@@ -2804,7 +2807,7 @@ u32x4 PackF32x3MaterialTypedValueMeta(in StringView key){
 }
 
 b8 CanParseMaterialMeta(in StringView metaText, mut TestArena testArena, mut GraphicsScratchArena scratch){
-    return ParseMaterialEntryFromMetaText(metaText, testArena, scratch.scratchArena).has_value();
+    return ParseMaterialEntryFromMetaText(metaText, testArena).has_value();
 }
 
 Expected<MaterialAsset> BuildTestMaterialFromBindAndMeta(in StringView bindText, in StringView materialText, in StringView caseName, mut TestArena testArena, mut GraphicsScratchArena scratch){
@@ -2832,7 +2835,7 @@ void AppendMaterialInterfaceTestEntry(mut TestArena testArena, in StringView mat
 }
 
 b8 ValidateTestMaterialCookInterfaces(in MaterialBindEntryVector bindEntries, mut MaterialShaderCookEntryVector materialEntries, mut GraphicsScratchArena scratch){
-    return ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratch.scratchArena);
+    return ValidateMaterialCookInterfaces(bindEntries, materialEntries);
 }
 
 Expected<MaterialBindEntry> ParseTestMaterialBindFromText(in StringView bindText, in GraphicsTestPath root, mut TestArena testArena, mut GraphicsScratchArena scratch){
@@ -2844,11 +2847,11 @@ void SetMaterialBindEntryVirtualPath(mut MaterialBindEntry entry, in StringView 
 }
 
 b8 CanBuildMaterialBindIncludeSource(in MaterialBindEntry entry, mut TestArena testArena, mut GraphicsScratchArena scratch){
-    return BuildMaterialBindIncludeSource(entry, testArena.arena, scratch.scratchArena).has_value();
+    return BuildMaterialBindIncludeSource(testArena.arena, entry).has_value();
 }
 
 b8 CanFindOrBuildMaterialBindTypedLayout(in Name cacheInterface, in MaterialBindEntry entry, mut GraphicsScratchArena scratch, mut MaterialBindTypedLayoutCache layoutCache){
-    return FindOrBuildMaterialBindTypedLayout(cacheInterface, entry, scratch.scratchArena, layoutCache).has_value();
+    return FindOrBuildMaterialBindTypedLayout(cacheInterface, entry, layoutCache).has_value();
 }
 
 b8 CookMaterialBindIntegration(in StringView bindText, in StringView materialText, in CookCase cookCase, mut TestArena testArena){
@@ -2927,20 +2930,20 @@ Expected<ScratchU32Vector> BuildTestMeshletTriangleIndices(in MeshAsset mesh, mu
     return BuildMeshletTriangleIndices(scratch.scratchArena, mesh);
 }
 
-Expected<ShaderCookShaderEntry> ParseTestShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
-    return ParseShaderMetadataFile<ShaderCookShaderEntry>(metadataPath, testArena, scratch.scratchArena, shaderCook);
+Expected<ShaderCookShaderEntry> ParseTestShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return ParseShaderMetadataFile<ShaderCookShaderEntry>(metadataPath, testArena, scratch.scratchArena);
 }
 
-Expected<ShaderCookIncludeEntry> ParseTestIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
-    return ParseShaderMetadataFile<ShaderCookIncludeEntry>(metadataPath, testArena, scratch.scratchArena, shaderCook);
+Expected<ShaderCookIncludeEntry> ParseTestIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return ParseShaderMetadataFile<ShaderCookIncludeEntry>(metadataPath, testArena, scratch.scratchArena);
 }
 
-b8 CanParseShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
-    return ParseTestShaderEntryFile(metadataPath, testArena, scratch, shaderCook).has_value();
+b8 CanParseShaderEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return ParseTestShaderEntryFile(metadataPath, testArena, scratch).has_value();
 }
 
-b8 CanParseIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch, mut ShaderCook shaderCook){
-    return ParseTestIncludeEntryFile(metadataPath, testArena, scratch, shaderCook).has_value();
+b8 CanParseIncludeEntryFile(in GraphicsTestPath metadataPath, mut TestArena testArena, mut GraphicsScratchArena scratch){
+    return ParseTestIncludeEntryFile(metadataPath, testArena, scratch).has_value();
 }
 
 b8 GatherShaderDependencies(in GraphicsTestPath sourcePath, in ShaderCookPathVector includeDirectories, mut GraphicsScratchArena scratch, mut ShaderCookPathVector outDependencies){
@@ -2999,12 +3002,12 @@ AssetBytes CopyAssetBytesPrefix(in AssetBytes source, in usize count, mut TestAr
     return CopyAssetBytesPrefixImpl(source, count, testArena);
 }
 
-void AssignAssetBytesPrefix(in AssetBytes source, in usize count, mut AssetBytes dest){
-    AssignAssetBytesPrefixImpl(source, count, dest);
+void AssignAssetBytesPrefix(in Span<u8> source, in usize count, mut Vector<u8> dest){
+    AssignTriviallyCopyableVector(dest, source.first(count));
 }
 
-void AppendAssetBytes(in AssetBytes extra, mut AssetBytes dest){
-    AppendAssetBytesImpl(extra, dest);
+void AppendAssetBytes(in Span<u8> extra, mut Vector<u8> dest){
+    AppendTriviallyCopyableVector(dest, extra);
 }
 
 b8 AssetByteRangeEquals(in AssetBytes haystack, in usize offset, in AssetBytes needle){
@@ -3024,11 +3027,11 @@ b8 CanDeserializeTextureAsset(in TextureAssetCodec codec, in Name virtualPath, i
 }
 
 Expected<TextureCookEntry> ParseTestTextureCookMetadata(in GraphicsTestPath assetRoot, in StringView virtualRoot, in GraphicsTestPath metadataPath, in MetaDocument document, mut TestArena testArena, mut GraphicsScratchArena scratch){
-    return ParseTextureCookMetadata(assetRoot, virtualRoot, metadataPath, document, testArena.arena, scratch.scratchArena);
+    return ParseTextureCookMetadata(testArena.arena, assetRoot, virtualRoot, metadataPath, document);
 }
 
 Expected<TextureAsset> BuildTestTextureAsset(in TextureCookEntry entry, mut TestArena testArena){
-    return BuildTextureAsset(entry, testArena.arena);
+    return BuildTextureAsset(testArena.arena, entry);
 }
 
 usize TestArenaUsedBytes(in TestArena testArena){
@@ -3295,7 +3298,7 @@ b8 CookPreparedGraphicsAssetRoots(
     gatherOptions.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
     gatherOptions.outputDirectory = PathToString(testArena.arena, outputDirectory);
     gatherOptions.configuration = s_TestsConfiguration.data();
-    gatherOptions.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
+    gatherOptions.mergePayloads = &NWB::Core::Assets::InvokeAssetGatherMerge<&NWB::Impl::MergeGatheredGraphicsAsset>;
     NWB::Core::Alloc::ScratchArena scratchArena(s_GatherScratchArena);
     return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
 }

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/shadow/shadow_material_context_policy.adhd>
+#include <impl/ecs_render/material/sampled_texture_collection.adhd>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
@@ -17,15 +18,15 @@ b8 IsPreparedShadowMaterialStorageReady(
     in usize instanceCount,
     in usize materialTypedByteCount
 ){
-    return state.m_shadowInstanceMaterialBuffer.valid()
-        && state.m_shadowInstanceBuffer.valid()
-        && state.m_shadowMaterialTypedBuffer.valid()
-        && state.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
-        && state.m_shadowInstanceCapacity >= instanceCount
-        && state.m_shadowMaterialTypedCapacity >= materialTypedByteCount
-        && IsDescriptorClass(state.m_shadowInstanceMaterialHeapHandle, GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.m_shadowInstanceHeapHandle, GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.m_shadowMaterialTypedHeapHandle, GpuDescriptorClass::StorageBuffer)
+    return state.shadow.m_shadowInstanceMaterialBuffer.valid()
+        && state.shadow.m_shadowInstanceBuffer.valid()
+        && state.shadow.m_shadowMaterialTypedBuffer.valid()
+        && state.shadow.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
+        && state.shadow.m_shadowInstanceCapacity >= instanceCount
+        && state.shadow.m_shadowMaterialTypedCapacity >= materialTypedByteCount
+        && IsDescriptorClass(state.shadow.m_shadowInstanceMaterialHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.shadow.m_shadowInstanceHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.shadow.m_shadowMaterialTypedHeapHandle, GpuDescriptorClass::StorageBuffer)
     ;
 }
 
@@ -44,89 +45,44 @@ b8 HasPreparedShadowMaterialContextBuffers(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class PendingShadowTextureReset : NoCopy{
+    private mut MaterialSampledTextureCollector m_collector;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/material/sampled_texture_collection.adhd.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-
-#include <core/task/gpu/task_graph.h>
-
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Names check sequentially; a missing name preserves the published prefix.
-[[nodiscard]] b8 MergePreparedShadowMaterialSampledTextures(Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector);
-
-
-// Materials validate into reused storage before textures enter the output.
-class ShadowMaterialSampledTextureCollector final : NoCopy{
-private:
-    struct PendingTextures{
-        Vector<Core::TextureHandle, Core::Alloc::ScratchArena> textures;
-        MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector;
-
-
-    public:
-        explicit PendingTextures(Core::Alloc::ScratchArena& scratchArena)noexcept
-            : textures(scratchArena)
-            , collector(textures, scratchArena)
-        {}
-    };
-
-
-public:
-    ShadowMaterialSampledTextureCollector(Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures, Core::Alloc::ScratchArena& scratchArena)
-        : m_output(textures, scratchArena)
-        , m_scratchArena(scratchArena)
-    {}
-
-
-public:
-    template<typename ResolveSurface>
-    [[nodiscard]] b8 collect(const MaterialSurfaceInfo& materialInfo, ResolveSurface&& resolveSurface){
-        if(!m_pending)
-            m_pending.emplace(m_scratchArena);
-        ScopeExit clearPending([&]()noexcept{ m_pending->collector.clear(); });
-
-        if(!resolveSurface(materialInfo, m_pending->collector))
-            return false;
-        return MergePreparedShadowMaterialSampledTextures(m_pending->textures, m_output);
+    public PendingShadowTextureReset(mut MaterialSampledTextureCollector collector){
+        this.m_collector = collector;
     }
+    public ~PendingShadowTextureReset(){
+        this.m_collector.clear();
+    }
+}
 
+class ShadowMaterialSampledTextureCollector : NoCopy{
+    private MaterialSampledTextureCollector m_output;
+    private mut Vector<TextureHandle> m_pendingTextures;
+    private MaterialSampledTextureCollector m_pending;
 
-private:
-    MaterialSampledTextureCollector<Core::Alloc::GlobalArena> m_output;
-    Core::Alloc::ScratchArena& m_scratchArena;
-    Optional<PendingTextures> m_pending;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public ShadowMaterialSampledTextureCollector(mut Vector<TextureHandle> textures, mut Vector<TextureHandle> pending){
+        this.m_output = MaterialSampledTextureCollector(textures);
+        this.m_pendingTextures = pending;
+        this.m_pending = MaterialSampledTextureCollector(pending);
+    }
+    [cpp_unwind]
+    public void indexExisting(){
+        this.m_output.indexExisting();
+    }
+    [cpp_unwind]
+    public b8 collect(in MaterialSurfaceInfo material, in RendererMaterialResourceState resources){
+        PendingShadowTextureReset reset(this.m_pending);
+        if(!AppendPreparedMaterialSurfaceSampledTextures(material, resources, this.m_pending))
+            return false;
+        // Check names in order so a rejected texture preserves the published prefix.
+        for(in TextureHandle texture : this.m_pendingTextures){
+            if(!texture.valid() || texture.deref().getCreationDescription().name == s_NameNone)
+                return false;
+            this.m_output.append(texture);
+        }
+        return true;
+    }
 }
 
 
@@ -201,20 +157,20 @@ class PreparedShadowMaterialContext : NoCopy{
             this.m_route,
             this.m_hash,
             this.m_static,
-            state.m_hwShadowMaterialContextHash,
-            state.m_hwShadowMaterialContextHashValid,
-            state.m_swShadowMaterialContextHash,
-            state.m_swShadowMaterialContextHashValid
+            state.shadow.m_hwShadowMaterialContextHash,
+            state.shadow.m_hwShadowMaterialContextHashValid,
+            state.shadow.m_swShadowMaterialContextHash,
+            state.shadow.m_swShadowMaterialContextHashValid
         );
     }
 
     public b8 storageMatches(in RendererRayTracingState state)const{
-        return state.m_shadowInstanceMaterialBuffer == this.m_instanceMaterialBuffer
-            && state.m_shadowInstanceBuffer == this.m_instanceBuffer
-            && state.m_shadowMaterialTypedBuffer == this.m_materialTypedBuffer
-            && state.m_shadowInstanceMaterialHeapHandle == this.m_instanceMaterialHeapHandle
-            && state.m_shadowInstanceHeapHandle == this.m_instanceHeapHandle
-            && state.m_shadowMaterialTypedHeapHandle == this.m_materialTypedHeapHandle;
+        return state.shadow.m_shadowInstanceMaterialBuffer == this.m_instanceMaterialBuffer
+            && state.shadow.m_shadowInstanceBuffer == this.m_instanceBuffer
+            && state.shadow.m_shadowMaterialTypedBuffer == this.m_materialTypedBuffer
+            && state.shadow.m_shadowInstanceMaterialHeapHandle == this.m_instanceMaterialHeapHandle
+            && state.shadow.m_shadowInstanceHeapHandle == this.m_instanceHeapHandle
+            && state.shadow.m_shadowMaterialTypedHeapHandle == this.m_materialTypedHeapHandle;
     }
     public b8 softwareSnapshotCovers(in usize sceneInstanceCount)const{
         return ShadowMaterialContextPolicy().softwareSnapshotCovers(this.m_ready, this.m_route, this.m_instanceMaterialCount, this.m_instanceCount, sceneInstanceCount);
@@ -224,10 +180,10 @@ class PreparedShadowMaterialContext : NoCopy{
         return ShadowMaterialContextPolicy().softwareSnapshotAccepted(
             this.m_uploadRequired,
             this.m_static,
-            state.m_swShadowMaterialContextHashValid,
-            state.m_swShadowMaterialContextHash,
+            state.shadow.m_swShadowMaterialContextHashValid,
+            state.shadow.m_swShadowMaterialContextHash,
             this.m_hash,
-            state.m_sceneBvhInstanceCount,
+            state.sceneBvh.m_sceneBvhInstanceCount,
             this.m_instanceCount
         );
     }
@@ -236,18 +192,18 @@ class PreparedShadowMaterialContext : NoCopy{
     public PreparedShadowMaterialContextRoute route()const{ return this.m_route; }
 
     private void captureStorage(in RendererRayTracingState state, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount){
-        this.m_instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
-        this.m_instanceBuffer = state.m_shadowInstanceBuffer;
-        this.m_materialTypedBuffer = state.m_shadowMaterialTypedBuffer;
-        this.m_instanceMaterialHeapHandle = state.m_shadowInstanceMaterialHeapHandle;
-        this.m_instanceHeapHandle = state.m_shadowInstanceHeapHandle;
-        this.m_materialTypedHeapHandle = state.m_shadowMaterialTypedHeapHandle;
+        this.m_instanceMaterialBuffer = state.shadow.m_shadowInstanceMaterialBuffer;
+        this.m_instanceBuffer = state.shadow.m_shadowInstanceBuffer;
+        this.m_materialTypedBuffer = state.shadow.m_shadowMaterialTypedBuffer;
+        this.m_instanceMaterialHeapHandle = state.shadow.m_shadowInstanceMaterialHeapHandle;
+        this.m_instanceHeapHandle = state.shadow.m_shadowInstanceHeapHandle;
+        this.m_materialTypedHeapHandle = state.shadow.m_shadowMaterialTypedHeapHandle;
         this.m_instanceMaterialCount = instanceMaterialCount;
         this.m_instanceCount = instanceCount;
         this.m_materialTypedUploadBytes = materialTypedByteCount;
-        this.m_instanceMaterialCapacity = state.m_shadowInstanceMaterialCapacity;
-        this.m_instanceCapacity = state.m_shadowInstanceCapacity;
-        this.m_materialTypedCapacity = state.m_shadowMaterialTypedCapacity;
+        this.m_instanceMaterialCapacity = state.shadow.m_shadowInstanceMaterialCapacity;
+        this.m_instanceCapacity = state.shadow.m_shadowInstanceCapacity;
+        this.m_materialTypedCapacity = state.shadow.m_shadowMaterialTypedCapacity;
         this.m_hash = hash;
     }
 }

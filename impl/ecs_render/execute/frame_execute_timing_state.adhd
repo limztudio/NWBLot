@@ -3,229 +3,161 @@
 
 
 #include <impl/ecs_render/execute/types.adhd>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/renderer_frame_pipeline.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+// Prefix stages share tickets when they occupy the same submission packet.
+[ordered]
+class FrameExecuteTimingState : NoCopy{
+    public GpuTimingSubmissionTicket shadowPrepareTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixMeshViewSetupTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixSceneShadingSetupTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixDeferredClearTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixGbufferTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixCsgReceiverSpanTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixCsgIntervalCombineTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixCsgIntervalSampleTimingTicket;
+    public GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket;
+    public Array<GraphicsPrefixTimingTicket, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTickets;
+    public Array<GraphicsPrefixTimingTicket, s_GraphicsPrefixTimingTaskCount> graphicsPrefixOwnedTimingTickets;
+    public b8 asyncPrefixTimingSpansOnePacket = true;
+    public Optional<GpuTimingMeasure> asyncPrefixTiming;
+    public Optional<GpuTimingMeasure> deferredClearTiming;
+    public GraphClearTimingRecordState deferredClearTimingState;
+    public Optional<GpuTimingMeasure> opaqueCsgIntervalClearTiming;
+    public GraphClearTimingRecordState opaqueCsgIntervalClearTimingState;
+    public Optional<GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
+    public Optional<GpuTimingMeasure> opaqueCsgIntervalSampleComputeEmulationTiming;
+    public GpuTimingSubmissionTicket shadowVisibilityTimingTicket;
+    public Optional<GpuTimingMeasure> shadowVisibilityAsyncTiming;
+    public Optional<GpuTimingMeasure> shadowVisibilityTiming;
+    public Optional<GpuTimingMeasure> opaqueSoftResolveTiming;
+    public Optional<GpuTimingMeasure> transparentSoftResolveTiming;
+    public GpuTimingSubmissionTicket softwareCausticsTimingTicket;
+    public GpuTimingSubmissionTicket surfelGiTimingTicket;
+    public Optional<GpuTimingMeasure> surfelGiAsyncTiming;
+    public GpuTimingSubmissionTicket hardwareCausticsTimingTicket;
+    public Optional<GpuTimingMeasure> causticPhotonTiming;
+    public Optional<GpuTimingMeasure> causticResolveTiming;
+    public GpuTimingSubmissionTicket avboitPreTimingTicket;
+    public GpuTimingSubmissionTicket avboitDepthWarpTimingTicket;
+    public GpuTimingSubmissionTicket avboitExtinctionTimingTicket;
+    public GpuTimingSubmissionTicket avboitIntegrationTimingTicket;
+    public GpuTimingSubmissionTicket avboitAccumulationTimingTicket;
+    public Optional<GpuTimingMeasure> avboitClearTiming;
+    public GraphClearTimingRecordState avboitClearTimingState;
+    public Optional<GpuTimingMeasure> transparentCsgIntervalClearTiming;
+    public GraphClearTimingRecordState transparentCsgIntervalClearTimingState;
+    public Optional<GpuTimingMeasure> transparentCsgIntervalsTiming;
+    public Optional<GpuTimingMeasure> avboitOccupancyComputeEmulationTiming;
+    public Optional<GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
+    public Optional<GpuTimingMeasure> avboitAccumulationComputeEmulationTiming;
+    public GpuTimingSubmissionTicket deferredLightingTimingTicket;
+    public GpuTimingSubmissionTicket deferredCompositeTimingTicket;
+    public GpuTimingSubmissionTicket deferredPresentTimingTicket;
+    public GpuTimingFrameTransaction frameTimingTransaction;
+    public Optional<GpuTimingMeasure> asyncFinalTiming;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/execute/types.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_clear_timing.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/packet_runtime.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-class RendererAvboitTaskGraphValidation;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// GPU timing tickets, measures, and clear-timing bindings for one deferred frame. Members point at each other, so the state stays in place.
-struct FrameExecuteTimingState final : NoCopy{
-    // Prefix stages start separate; shared packets rebind to one ticket.
-    Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixMeshViewSetupTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixSceneShadingSetupTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixDeferredClearTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixGbufferTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixCsgReceiverSpanTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalCombineTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalSampleTimingTicket;
-    Core::GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket;
-    Array<Core::GpuTimingSubmissionTicket*, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTickets;
-    Array<Core::GpuTimingSubmissionTicket*, s_GraphicsPrefixTimingTaskCount> graphicsPrefixOwnedTimingTickets;
-    // AsyncPrefix is valid only when the endpoints share one submission.
-    b8 asyncPrefixTimingSpansOnePacket = true;
-    Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
-    Optional<Core::GpuTimingMeasure> deferredClearTiming;
-    GraphClearTimingRecordState deferredClearTimingState;
-    Optional<Core::GpuTimingMeasure> opaqueCsgIntervalClearTiming;
-    GraphClearTimingRecordState opaqueCsgIntervalClearTimingState;
-    // Keep this measurement alive like CSG intervals.
-    Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
-    // Interval-sample compute/raster may span two callbacks.
-    Optional<Core::GpuTimingMeasure> opaqueCsgIntervalSampleComputeEmulationTiming;
-    Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket;
-    // The terminal fold still closes the Shadow Visibility range.
-    Optional<Core::GpuTimingMeasure> shadowVisibilityAsyncTiming;
-    Optional<Core::GpuTimingMeasure> shadowVisibilityTiming;
-    Optional<Core::GpuTimingMeasure> opaqueSoftResolveTiming;
-    Optional<Core::GpuTimingMeasure> transparentSoftResolveTiming;
-    Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket;
-    Core::GpuTimingSubmissionTicket surfelGiTimingTicket;
-    // Age/free opens it; the GI callback closes it.
-    Optional<Core::GpuTimingMeasure> surfelGiAsyncTiming;
-    Core::GpuTimingSubmissionTicket hardwareCausticsTimingTicket;
-    // Decay opens it; the photon producer closes it.
-    Optional<Core::GpuTimingMeasure> causticPhotonTiming;
-    // Downsample opens it; wavelet resolve closes it.
-    Optional<Core::GpuTimingMeasure> causticResolveTiming;
-    Core::GpuTimingSubmissionTicket avboitPreTimingTicket;
-    Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket;
-    Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket;
-    Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket;
-    Core::GpuTimingSubmissionTicket avboitAccumulationTimingTicket;
-    Optional<Core::GpuTimingMeasure> avboitClearTiming;
-    GraphClearTimingRecordState avboitClearTimingState;
-    Optional<Core::GpuTimingMeasure> transparentCsgIntervalClearTiming;
-    GraphClearTimingRecordState transparentCsgIntervalClearTimingState;
-    // Pre opens it; Combine closes it.
-    Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
-    // Producer opens these; the raster consumer closes them.
-    Optional<Core::GpuTimingMeasure> avboitOccupancyComputeEmulationTiming;
-    Optional<Core::GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
-    Optional<Core::GpuTimingMeasure> avboitAccumulationComputeEmulationTiming;
-    Core::GpuTimingSubmissionTicket deferredLightingTimingTicket;
-    Core::GpuTimingSubmissionTicket deferredCompositeTimingTicket;
-    Core::GpuTimingSubmissionTicket deferredPresentTimingTicket;
-    // Publish the endpoint only after Present accepts.
-    Core::GpuTimingFrameTransaction frameTimingTransaction;
-    Optional<Core::GpuTimingMeasure> asyncFinalTiming;
-
-
-public:
-    explicit FrameExecuteTimingState(Core::GraphicsRuntime& graphics)noexcept
-        : shadowPrepareTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixMeshViewSetupTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixSceneShadingSetupTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixDeferredClearTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixGbufferTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixCsgReceiverSpanTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixCsgIntervalCombineTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixCsgIntervalSampleTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixNormalizeTimingTicket(graphics.gpuTiming())
-        , graphicsPrefixTimingTickets{
-            &graphicsPrefixMeshViewSetupTimingTicket,
-            &graphicsPrefixSceneShadingSetupTimingTicket,
-            &graphicsPrefixDeferredClearTimingTicket,
-            &graphicsPrefixGbufferTimingTicket,
-            &graphicsPrefixCsgReceiverSpanTimingTicket,
-            &graphicsPrefixCsgIntervalCombineTimingTicket,
-            &graphicsPrefixCsgIntervalSampleTimingTicket,
-            &graphicsPrefixNormalizeTimingTicket,
-        }
-        , graphicsPrefixOwnedTimingTickets{
-            &graphicsPrefixMeshViewSetupTimingTicket,
-            &graphicsPrefixSceneShadingSetupTimingTicket,
-            &graphicsPrefixDeferredClearTimingTicket,
-            &graphicsPrefixGbufferTimingTicket,
-            &graphicsPrefixCsgReceiverSpanTimingTicket,
-            &graphicsPrefixCsgIntervalCombineTimingTicket,
-            &graphicsPrefixCsgIntervalSampleTimingTicket,
-            &graphicsPrefixNormalizeTimingTicket,
-        }
-        , deferredClearTimingState{
-            .graphics = &graphics,
-            .timing = &deferredClearTiming,
-            .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(DeferredGraphicsPrefixTimingSlot::DeferredClear)],
-            .scope = s_TimingScopeDeferredClear,
-        }
-        , opaqueCsgIntervalClearTimingState{
-            .graphics = &graphics,
-            .timing = &opaqueCsgIntervalClearTiming,
-            .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(DeferredGraphicsPrefixTimingSlot::Gbuffer)],
-            .scope = s_TimingScopeCsgIntervalClear,
-        }
-        , shadowVisibilityTimingTicket(graphics.gpuTiming())
-        , softwareCausticsTimingTicket(graphics.gpuTiming())
-        , surfelGiTimingTicket(graphics.gpuTiming())
-        , hardwareCausticsTimingTicket(graphics.gpuTiming())
-        , avboitPreTimingTicket(graphics.gpuTiming())
-        , avboitDepthWarpTimingTicket(graphics.gpuTiming())
-        , avboitExtinctionTimingTicket(graphics.gpuTiming())
-        , avboitIntegrationTimingTicket(graphics.gpuTiming())
-        , avboitAccumulationTimingTicket(graphics.gpuTiming())
-        , avboitClearTimingState{ .graphics = &graphics, .timing = &avboitClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = s_TimingScopeAvboitClear, }
-        , transparentCsgIntervalClearTimingState{ .graphics = &graphics, .timing = &transparentCsgIntervalClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = s_TimingScopeCsgIntervalClear, }
-        , deferredLightingTimingTicket(graphics.gpuTiming())
-        , deferredCompositeTimingTicket(graphics.gpuTiming())
-        , deferredPresentTimingTicket(graphics.gpuTiming())
-        , frameTimingTransaction(graphics.gpuTiming())
-    {}
-
-
-public:
-    FOUNDATION_INLINE void discardGraphicsPrefixTickets(){
-        for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
-            timingTicket->discard();
+    public FrameExecuteTimingState(mut GraphicsRuntime graphics){
+        this.shadowPrepareTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixMeshViewSetupTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixSceneShadingSetupTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixDeferredClearTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixGbufferTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixCsgReceiverSpanTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixCsgIntervalCombineTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixCsgIntervalSampleTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.graphicsPrefixNormalizeTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.deferredClearTimingState = GraphClearTimingRecordState(graphics, this.deferredClearTiming, this.graphicsPrefixTimingTickets[cast<usize>(DeferredGraphicsPrefixTimingSlot::DeferredClear)], s_TimingScopeDeferredClear);
+        this.opaqueCsgIntervalClearTimingState = GraphClearTimingRecordState(graphics, this.opaqueCsgIntervalClearTiming, this.graphicsPrefixTimingTickets[cast<usize>(DeferredGraphicsPrefixTimingSlot::Gbuffer)], s_TimingScopeCsgIntervalClear);
+        this.shadowVisibilityTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.softwareCausticsTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.surfelGiTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.hardwareCausticsTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.avboitPreTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.avboitDepthWarpTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.avboitExtinctionTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.avboitIntegrationTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.avboitAccumulationTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.avboitClearTimingState = GraphClearTimingRecordState(graphics, this.avboitClearTiming, this.avboitPreTimingTicket, s_TimingScopeAvboitClear);
+        this.transparentCsgIntervalClearTimingState = GraphClearTimingRecordState(graphics, this.transparentCsgIntervalClearTiming, this.avboitPreTimingTicket, s_TimingScopeCsgIntervalClear);
+        this.deferredLightingTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.deferredCompositeTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.deferredPresentTimingTicket = GpuTimingSubmissionTicket(graphics.gpuTiming());
+        this.frameTimingTransaction = GpuTimingFrameTransaction(graphics.gpuTiming());
+        this.graphicsPrefixOwnedTimingTickets[0u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixMeshViewSetupTimingTicket);
+        this.graphicsPrefixOwnedTimingTickets[1u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixSceneShadingSetupTimingTicket);
+        this.graphicsPrefixOwnedTimingTickets[2u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixDeferredClearTimingTicket);
+        this.graphicsPrefixOwnedTimingTickets[3u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixGbufferTimingTicket);
+        this.graphicsPrefixOwnedTimingTickets[4u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixCsgReceiverSpanTimingTicket);
+        this.graphicsPrefixOwnedTimingTickets[5u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixCsgIntervalCombineTimingTicket);
+        this.graphicsPrefixOwnedTimingTickets[6u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixCsgIntervalSampleTimingTicket);
+        this.graphicsPrefixOwnedTimingTickets[7u] = Optional<mut GpuTimingSubmissionTicket>(this.graphicsPrefixNormalizeTimingTicket);
+        this.graphicsPrefixTimingTickets = this.graphicsPrefixOwnedTimingTickets;
     }
 
-    FOUNDATION_INLINE void discardTickets(){
-        shadowPrepareTimingTicket.discard();
-        discardGraphicsPrefixTickets();
-        shadowVisibilityTimingTicket.discard();
-        hardwareCausticsTimingTicket.discard();
-        softwareCausticsTimingTicket.discard();
-        surfelGiTimingTicket.discard();
-        avboitPreTimingTicket.discard();
-        avboitDepthWarpTimingTicket.discard();
-        avboitExtinctionTimingTicket.discard();
-        avboitIntegrationTimingTicket.discard();
-        avboitAccumulationTimingTicket.discard();
-        deferredLightingTimingTicket.discard();
-        deferredCompositeTimingTicket.discard();
-        deferredPresentTimingTicket.discard();
+    [cpp_unwind]
+    public void discardGraphicsPrefixTickets(){
+        for(in GraphicsPrefixTimingTicket timingTicket : this.graphicsPrefixOwnedTimingTickets)
+            timingTicket.value().discard();
     }
 
-    // Drops every open measure, the frame transaction, and all tickets.
-    FOUNDATION_INLINE void discardAll(){
-        Core::DiscardGpuTimingMeasure(&asyncPrefixTiming);
-        Core::DiscardGpuTimingMeasure(&deferredClearTiming);
-        Core::DiscardGpuTimingMeasure(&asyncFinalTiming);
-        Core::DiscardGpuTimingMeasure(&causticPhotonTiming);
-        Core::DiscardGpuTimingMeasure(&causticResolveTiming);
-        Core::DiscardGpuTimingMeasure(&transparentCsgIntervalsTiming);
-        Core::DiscardGpuTimingMeasure(&avboitOccupancyComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&avboitExtinctionComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&avboitAccumulationComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&opaqueRegularSharedComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&opaqueCsgIntervalSampleComputeEmulationTiming);
-        frameTimingTransaction.discard();
-        discardTickets();
+    [cpp_unwind]
+    public void discardTickets(){
+        this.shadowPrepareTimingTicket.discard();
+        this.discardGraphicsPrefixTickets();
+        this.shadowVisibilityTimingTicket.discard();
+        this.hardwareCausticsTimingTicket.discard();
+        this.softwareCausticsTimingTicket.discard();
+        this.surfelGiTimingTicket.discard();
+        this.avboitPreTimingTicket.discard();
+        this.avboitDepthWarpTimingTicket.discard();
+        this.avboitExtinctionTimingTicket.discard();
+        this.avboitIntegrationTimingTicket.discard();
+        this.avboitAccumulationTimingTicket.discard();
+        this.deferredLightingTimingTicket.discard();
+        this.deferredCompositeTimingTicket.discard();
+        this.deferredPresentTimingTicket.discard();
     }
 
-    // Binds each normal-execution task to its ticket; prefix tasks that share a packet use the first task's ticket. Returns the binding count.
-    [[nodiscard]] FOUNDATION_INLINE Expected<usize> bindNormalTimingTickets(
-        const RendererFramePipeline& renderer,
-        const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        const Span<const Core::GpuTaskId> graphicsPrefixTimingTasks,
-        const usize graphicsPrefixUniquePacketCount,
-        const RendererAvboitTaskGraphValidation& avboitValidation,
-        const b8 hardwareShadowSupported,
-        const Span<Core::GpuTaskGraphTaskTimingTicket> tickets
-    ){
+    [cpp_unwind]
+    public void discardAll(){
+        DiscardGpuTimingMeasure(this.asyncPrefixTiming);
+        DiscardGpuTimingMeasure(this.deferredClearTiming);
+        DiscardGpuTimingMeasure(this.asyncFinalTiming);
+        DiscardGpuTimingMeasure(this.causticPhotonTiming);
+        DiscardGpuTimingMeasure(this.causticResolveTiming);
+        DiscardGpuTimingMeasure(this.transparentCsgIntervalsTiming);
+        DiscardGpuTimingMeasure(this.avboitOccupancyComputeEmulationTiming);
+        DiscardGpuTimingMeasure(this.avboitExtinctionComputeEmulationTiming);
+        DiscardGpuTimingMeasure(this.avboitAccumulationComputeEmulationTiming);
+        DiscardGpuTimingMeasure(this.opaqueRegularSharedComputeEmulationTiming);
+        DiscardGpuTimingMeasure(this.opaqueCsgIntervalSampleComputeEmulationTiming);
+        this.frameTimingTransaction.discard();
+        this.discardTickets();
+    }
+
+    [cpp_unwind]
+    public Expected<usize> bindNormalTimingTickets(in RendererFramePipeline renderer, in GpuCompiledGraphReadView compiledPlan,
+        in Span<GpuTaskId> graphicsPrefixTimingTasks, in usize graphicsPrefixUniquePacketCount,
+        in RendererAvboitTaskGraphValidation avboitValidation, in b8 hardwareShadowSupported, mut Span<GpuTaskGraphTaskTimingTicket> tickets){
         if(!HasExpectedGraphicsPrefixTimingTaskCount(graphicsPrefixTimingTasks.size()))
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
         usize ticketCount = 0u;
-        const auto appendTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept -> b8 {
+        Func<64u, b8(in GpuTaskId, mut GpuTimingSubmissionTicket)> appendTicket = lambda[mut tickets, mut ticketCount](in GpuTaskId task, mut GpuTimingSubmissionTicket timingTicket) -> b8 {
             if(!task.valid() || ticketCount >= tickets.size())
                 return false;
-            tickets[ticketCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
+            tickets[ticketCount++].bind(task, timingTicket);
             return true;
         };
-        b8 ready = appendTicket(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
+        b8 ready = appendTicket(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, this.shadowPrepareTimingTicket);
         for(usize prefixTaskIndex = 0u; ready && prefixTaskIndex < s_GraphicsPrefixTimingTaskCount; ++prefixTaskIndex){
-            const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
+            const GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
             b8 packetAlreadyTimed = false;
             for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
                 if(compiledPlan.tasksSharePacket(task, graphicsPrefixTimingTasks[earlierTaskIndex])){
@@ -235,47 +167,39 @@ public:
             }
             if(packetAlreadyTimed)
                 continue;
-            if(!compiledPlan.findTask(task).valid() || !graphicsPrefixTimingTickets[prefixTaskIndex]){
+            if(!compiledPlan.findTask(task).valid() || !this.graphicsPrefixTimingTickets[prefixTaskIndex].has_value()){
                 ready = false;
                 break;
             }
-            ready = appendTicket(task, *graphicsPrefixTimingTickets[prefixTaskIndex]);
+            ready = appendTicket(task, this.graphicsPrefixTimingTickets[prefixTaskIndex].value());
         }
         ready = ready
             && MatchesBoundGraphicsPrefixPacketCount(ticketCount, graphicsPrefixUniquePacketCount)
-            && appendTicket(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, shadowVisibilityTimingTicket)
-            && appendTicket(hardwareShadowSupported ? renderer.m_causticsGraph.m_deferredHardwareCausticsTask : renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket)
-            && appendTicket(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, surfelGiTimingTicket)
-        ;
-        RendererAvboitTaskGraphTimingTickets avboitTimingTickets{
-            avboitPreTimingTicket,
-            avboitDepthWarpTimingTicket,
-            avboitExtinctionTimingTicket,
-            avboitIntegrationTimingTicket,
-            avboitAccumulationTimingTicket
-        };
+            && appendTicket(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, this.shadowVisibilityTimingTicket);
+        if(ready){
+            if(hardwareShadowSupported)
+                ready = appendTicket(renderer.m_causticsGraph.m_deferredHardwareCausticsTask, this.hardwareCausticsTimingTicket);
+            else
+                ready = appendTicket(renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, this.softwareCausticsTimingTicket);
+        }
+        ready = ready && appendTicket(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, this.surfelGiTimingTicket);
+        RendererAvboitTaskGraphTimingTickets avboitTimingTickets(
+            this.avboitPreTimingTicket,
+            this.avboitDepthWarpTimingTicket,
+            this.avboitExtinctionTimingTicket,
+            this.avboitIntegrationTimingTicket,
+            this.avboitAccumulationTimingTicket
+        );
         ready = ready
-            && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, ticketCount, tickets.size(), InplaceFunction<64u, b8(Core::GpuTaskId, Core::GpuTimingSubmissionTicket&)>(appendTicket))
-            && appendTicket(renderer.m_deferredLightingTask, deferredLightingTimingTicket)
-            && appendTicket(renderer.m_deferredCompositeTask, deferredCompositeTimingTicket)
-            && appendTicket(renderer.m_deferredPresentTask, deferredPresentTimingTicket)
+            && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, ticketCount, tickets.size(), appendTicket)
+            && appendTicket(renderer.m_deferredLightingTask, this.deferredLightingTimingTicket)
+            && appendTicket(renderer.m_deferredCompositeTask, this.deferredCompositeTimingTicket)
+            && appendTicket(renderer.m_deferredPresentTask, this.deferredPresentTimingTicket)
         ;
         if(!ready)
-            return MakeUnexpected(Failure{});
+            return MakeUnexpected(Failure());
         return ticketCount;
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -79,7 +79,7 @@ FOUNDATION_INLINE void ExpectRefractionDiagnosticCountersMatch(const RefractionS
 }
 
 struct ReflectionStatsContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionStatisticsControl> inner;
+    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionStatisticsState> inner;
     Core::GpuTaskGraph graph{ inner.arena };
 
 
@@ -102,7 +102,9 @@ public:
         inner.control->accept(key, token, hardwareReady);
     }
     void acceptWithFeedback(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionFeedbackOutcome& feedback){
-        inner.control->accept(key, token, hardwareReady, nullptr, &feedback);
+        ReflectionStatisticsOutcome outcome;
+        outcome.feedback = feedback;
+        inner.control->accept(key, token, hardwareReady, outcome);
     }
     void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters){
         inner.control->complete(key, token, counters);
@@ -116,7 +118,7 @@ public:
 };
 
 struct RefractionStatsContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<RefractionStatisticsControl> inner;
+    ReflectionStatisticsTestHelpers::StatisticsContext<RefractionStatisticsState> inner;
 
 
 public:
@@ -138,7 +140,7 @@ public:
 };
 
 struct ReflectionFeedbackControlContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionFeedbackControl> inner;
+    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionFeedbackState> inner;
     Core::GpuTaskGraph graph{ inner.arena };
 
 
@@ -159,7 +161,7 @@ public:
 };
 
 struct ReflectionHistoryControlContext{
-    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionHistoryControl> inner;
+    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionHistoryState> inner;
     Core::GpuTaskGraph graph{ inner.arena };
 
 
@@ -249,7 +251,7 @@ using ReflectionFeedbackExtent = Impl::ReflectionFeedbackExtent;
 using ReflectionFeedbackState = Impl::ReflectionFeedbackState;
 using ReflectionFeedbackPlan = Impl::ReflectionFeedbackPlan;
 using ReflectionFeedbackOutcome = Impl::ReflectionFeedbackOutcome;
-using ReflectionFeedbackControl = Impl::ReflectionFeedbackControl;
+using ReflectionFeedbackState = Impl::ReflectionFeedbackState;
 using ReflectionFeedbackReservation = Impl::ReflectionFeedbackReservation;
 namespace ReflectionFeedbackResetReason = Impl::ReflectionFeedbackResetReason;
 using Impl::TryComputeReflectionFeedbackExtent;
@@ -259,7 +261,7 @@ using ReflectionFeedbackControlContext = EcsGraphicsReflectionRefractionDetail::
 using ReflectionHistoryState = Impl::ReflectionHistoryState;
 using ReflectionHistoryPlan = Impl::ReflectionHistoryPlan;
 using ReflectionHistoryOutcome = Impl::ReflectionHistoryOutcome;
-using ReflectionHistoryControl = Impl::ReflectionHistoryControl;
+using ReflectionHistoryState = Impl::ReflectionHistoryState;
 using ReflectionHistoryReservation = Impl::ReflectionHistoryReservation;
 using ReflectionHistoryControlContext = EcsGraphicsReflectionRefractionDetail::ReflectionHistoryControlContext;
 namespace ReflectionHistoryResetReason = Impl::ReflectionHistoryResetReason;

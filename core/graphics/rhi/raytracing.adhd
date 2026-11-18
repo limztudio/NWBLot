@@ -119,6 +119,7 @@ extern class RayTracingAccelStructDesc{
 
 [cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingAccelStructHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
 extern class RayTracingAccelStructHandle{
+    usize identity()const;
     b8 valid(...)const;
     u32 reset(...);
     mut RayTracingAccelStruct deref(...)const;
@@ -201,9 +202,9 @@ extern class RayTracingGeometryDesc{
     RayTracingGeometryFlags flags;
     RayTracingGeometryType geometryType;
     b8 useTransform;
-    RayTracingGeometryDesc setFlags(...);
-    RayTracingGeometryDesc setTransform(...);
-    RayTracingGeometryDesc setTriangles(...);
+    mut RayTracingGeometryDesc setFlags(...);
+    mut RayTracingGeometryDesc setTransform(...);
+    mut RayTracingGeometryDesc setTriangles(...);
 };
 
 [cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingGeometryLss"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
@@ -257,11 +258,13 @@ extern class RayTracingGeometryTriangles{
     Format indexFormat;
     Format vertexFormat;
     Format ommIndexFormat;
-    RayTracingGeometryTriangles setIndexCount(...);
-    RayTracingGeometryTriangles setIndexFormat(...);
-    RayTracingGeometryTriangles setVertexCount(...);
-    RayTracingGeometryTriangles setVertexFormat(...);
-    RayTracingGeometryTriangles setVertexStride(...);
+    mut RayTracingGeometryTriangles setIndexBuffer(mut Buffer buffer);
+    mut RayTracingGeometryTriangles setVertexBuffer(mut Buffer buffer);
+    mut RayTracingGeometryTriangles setIndexCount(...);
+    mut RayTracingGeometryTriangles setIndexFormat(...);
+    mut RayTracingGeometryTriangles setVertexCount(...);
+    mut RayTracingGeometryTriangles setVertexFormat(...);
+    mut RayTracingGeometryTriangles setVertexStride(...);
 };
 
 [cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingInstanceDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
@@ -271,10 +274,12 @@ extern class RayTracingInstanceDesc{
     u32 instanceMask;
     u32 instanceContributionToHitGroupIndex;
     RayTracingInstanceFlags flags;
-    RayTracingInstanceDesc setFlags(...);
-    RayTracingInstanceDesc setInstanceID(...);
-    RayTracingInstanceDesc setInstanceMask(...);
-    RayTracingInstanceDesc setTransform(...);
+    usize bottomLevelIdentity()const;
+    mut RayTracingInstanceDesc setBottomLevelAS(mut RayTracingAccelStruct accelStruct);
+    mut RayTracingInstanceDesc setFlags(...);
+    mut RayTracingInstanceDesc setInstanceID(...);
+    mut RayTracingInstanceDesc setInstanceMask(...);
+    mut RayTracingInstanceDesc setTransform(...);
 };
 
 [cpp_header("<core/graphics/rhi/raytracing.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromapDesc")]

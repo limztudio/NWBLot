@@ -261,8 +261,8 @@ void SpawnManySmokeRootsIfEnabled(mut World world){
         lastRoot.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext& paintContext){
             const Core::ECS::EntityID id = paintContext.entity;
             NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root beyond target limit painted"));
-            paintContext.world.destroyEntity(id);
-            if(paintContext.world.entity(id).alive())
+            paintContext.world->destroyEntity(id);
+            if(paintContext.world->entity(id).alive())
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: root removal during paint failed"));
             else
                 NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root removed during paint"));

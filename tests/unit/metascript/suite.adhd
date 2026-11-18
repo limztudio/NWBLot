@@ -1061,6 +1061,10 @@ void VerifyAdhdCompiler_EnforcesMutCallSiteAndParallelConcurrencySafety(){
 
     CompileResult safeParRes = CompileResult(arena.arena);
     EXPECT_TRUE(Compile(s_SuiteSafeParallelVectorSource, "impl/test_par_good.adhd", arena.arena, safeParRes));
+    CompileResult borrowed = CompileResult(arena.arena);
+    EXPECT_TRUE(Compile("class Held{ public mut u32 value; public Held(mut u32 v){ this.value = v; } } class Task{ public Held held; public Task(mut u32 v){ this.held = Held(v); } public void record()const{ this.held.value = 4u; } }", "impl/nested_mutable_borrow.adhd", arena.arena, borrowed));
+    ExpectCompileFails(arena, "class Held{ public in u32 value; public Held(in u32 v){ this.value = v; } } void Bad(in Held h){ h.value = 4u; }", "impl/nested_read_only_borrow.adhd");
+    ExpectCompileFails(arena, "class Held{ public u32 value = 0u; } class Task{ public Held held; public void bad()const{ this.held.value = 4u; } }", "impl/nested_owned_field.adhd");
 }
 
 void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttributeConflicts(){
@@ -1071,6 +1075,27 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFails(arena, s_SuitePartialCtorInitSource, "impl/bad_partial_ctor.adhd");
     ExpectCompileFails(arena, s_SuiteCallNonFuncFieldSource, "impl/bad_call_field.adhd");
     ExpectCompileFails(arena, "[inline]\r\nvoid BadInlineAttr() {}\r\n", "impl/bad_inline_attr.adhd");
+    ExpectCompileFailsWithMessage(arena, "void Bad(mut GpuTaskDesc desc){ desc.setDependency(GpuTaskId()); }", "impl/bad_retained_sdk_temporary.adhd", "retained reference requires a stable lvalue");
+    ExpectCompileFailsWithMessage(arena, "class View{ private in u32 v; public View(in u32 n){ this.v = n; } } View Bad(){ return View(7u); }", "impl/bad_retained_temporary.adhd", "retained reference requires a stable lvalue");
+    ExpectCompileFailsWithMessage(arena, "class View{ private in u32 v; public View(in u32 n){ this.v = n; } } View Bad(in u32 n){ return View(n); }", "impl/bad_retained_copy.adhd", "a retained reference cannot bind to a copied parameter; declare the parameter as 'in borrow'");
+    ExpectCompileFailsWithMessage(arena, "void Bad(mut Optional<in u32> count){ count.value() = 7u; }", "impl/bad_optional_read_only.adhd", "cannot mutate 'in' parameter or read-only borrow");
+    ExpectCompileFailsWithMessage(arena, "Optional<in u32> Bad(){ return Optional<in u32>(7u); }", "impl/bad_optional_temporary.adhd", "a stored reference requires an lvalue with an enclosing lifetime");
+    ExpectCompileFailsWithMessage(arena, "Expected<mut u32> Bad(in borrow u32 n){ return Expected<mut u32>(n); }", "impl/bad_expected_mutable.adhd", "a stored mutable reference requires a mutable lvalue");
+    ExpectCompileFailsWithMessage(arena, "Expected<in u32> Bad(in u32 n){ return Expected<in u32>(n); }", "impl/bad_expected_copied_param.adhd", "cannot return a stored reference to parameter copies or stack-local storage");
+    ExpectCompileFailsWithMessage(arena, "Optional<in u32> Bad(){ u32 n = 7u; Optional<in u32> copy(n); return copy; }", "impl/bad_optional_local.adhd", "cannot return a stored reference to parameter copies or stack-local storage");
+    ExpectCompileFailsWithMessage(arena, "void Bad(mut Optional<in u32> outValue){ u32 n = 7u; outValue = Optional<in u32>(n); }", "impl/bad_optional_assignment.adhd", "cannot assign a stored reference into a longer-lived target");
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] extern void Foreign();", "impl/bad_unwind_extern.adhd", "'[cpp_unwind]' takes no arguments and may appear once on an ADHD function or method");
+    ExpectCompileFailsWithMessage(arena, "interface IObserver{ void observe(); } class Owner : IObserver{ public void observe()override{} [cpp_unwind] public ~Owner(){} }", "impl/bad_unwind_dtor.adhd", "'[cpp_unwind]' cannot weaken an inherited destructor contract");
+    ExpectCompileFailsWithMessage(arena, "[arena, component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "'[cpp_unwind]' cannot change a registered class construction or destruction contract");
+    ExpectCompileFailsWithMessage(arena, "[friend(Writer)] class Vault{ private u32 key = 1u; } class Reader{ public u32 read(in Vault vault)const{ return vault.key; } }", "impl/bad_friend_access.adhd", "cannot access 'private' or 'protected' field outside of its declaring class");
+    ExpectCompileFailsWithMessage(arena, "[friend(Box)] class Vault{} class Box<T>{}", "impl/bad_friend_template.adhd", "a friend must name a non-template peer class");
+    ExpectCompileFailsWithMessage(arena, "[move_only] class Secret{} class A{ public Secret v; } class B{ public A a; } class C{ public B b; } class D{ public C c; } class E{ public D d; } void Bad(in E source){ E copy = source; }", "impl/bad_deep_move_only_copy.adhd", "cannot copy a non-copyable type");
+    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{ public u32 index = 0u; } u32 Bad(in Payload value){ Payload copy = value; return copy.index; }", "impl/bad_move_only_copy.adhd", "cannot copy a non-copyable type");
+    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{} void Bad(mut Payload outValue, mut u32 count){ MoveInto<Payload>(outValue, count); }", "impl/bad_move_source_type.adhd", "argument type does not match the explicit type parameter");
+    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{} void Bad(mut Payload outValue){ MoveInto<Payload>(outValue, Payload()); }", "impl/bad_move_source_temporary.adhd", "a mutable type parameter requires a mutable lvalue");
+    ExpectCompileFailsWithMessage(arena, "interface Receiver{ void record(); } class Task : Receiver{ [cpp_unwind] public void record()override{} }", "impl/bad_unwind_interface.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing interface contract");
+    ExpectCompileFailsWithMessage(arena, "interface Base{ void record(); } interface Sub : Base{ [cpp_unwind] void record(); }", "impl/bad_unwind_derived_interface.adhd", "'[cpp_unwind]' cannot weaken an inherited nonthrowing interface contract");
+    ExpectCompileFailsWithMessage(arena, "void Call(); [cpp_unwind] void Call(){}", "impl/bad_unwind_decl.adhd", "free function declarations must agree on '[cpp_unwind]'");
     ExpectCompileFails(arena, "[noinline]\r\nvoid BadNoInlineAttr() {}\r\n", "impl/bad_noinline_attr.adhd");
     ExpectCompileFails(arena, "inline void BadInlineKeyword() {}\r\n", "impl/bad_inline_kw.adhd");
     ExpectCompileFails(arena, "noinline void BadNoInlineKeyword() {}\r\n", "impl/bad_noinline_kw.adhd");

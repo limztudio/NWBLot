@@ -279,6 +279,10 @@ public:
 
     pointer get()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
 
+    [[nodiscard]] usize identity()const noexcept(noexcept(this->get())){
+        return reinterpret_cast<usize>(this->get());
+    }
+
     [[nodiscard]] b8 valid()const noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((m_pair.first() != pointer())))){ return (m_pair.first() != pointer()); }
 
     [[nodiscard]] typename AddLValueReference<T>::type deref()const noexcept(IsPointer_V<pointer>){

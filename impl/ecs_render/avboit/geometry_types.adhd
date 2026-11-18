@@ -3,9 +3,10 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
+#include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 #include <impl/ecs_render/shared/statistics_types.adhd>
-#include <impl/ecs_render/material/renderer_draw_types.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +28,62 @@ class AvboitGeometryPreparationInputs{
 }
 
 
+class AvboitComputeEmulationOutputs{
+    public GpuGraphResourceSetId computeEmulationOutputSet = GpuGraphResourceSetId();
+    public GpuGraphResourceId sharedComputeEmulationOutput = GpuGraphResourceId();
+    public b8 computeEmulationOutputStatesGraphOwned = false;
+    public b8 sharedComputeEmulationOutputStatesGraphOwned = false;
+}
+
+
+class FrameGraphAvboitMaterialUploadResult{
+    public GpuTaskId uploadTask;
+    public GpuGraphResourceSetId materialGeometrySet;
+    public GpuGraphResourceSetId materialSampledTextureSet;
+    public GpuTaskId reusedGeometryProducer;
+    public RegularSharedComputeEmulationGraphPlan sharedComputeEmulationPlan;
+    public usize sharedComputeEmulationInstanceCount = 0u;
+    public usize sharedComputeEmulationMaterialTypedByteCount = 0u;
+    public b8 streamsUploaded = false;
+    public b8 csgStreamsUploaded = false;
+    public b8 regularComputeEmulationPlanCaptured = false;
+    public b8 producesReusableGeometry = false;
+    public b8 csgComputeEmulationPlanCaptured = false;
+    public b8 sharedComputeEmulationPlanCaptured = false;
+}
+
 class AvboitGeometryPreparationResult{
     public AvboitGeometryResourceSetId materialGeometrySet = AvboitGeometryResourceSetId();
     public AvboitGeometryResourceSetId materialSampledTextureSet = AvboitGeometryResourceSetId();
     public b8 geometryOwned = false;
     public b8 sampledTexturesCollected = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanPublishAvboitReusableGeometryProducer(in b8 captured, in b8 taskValid){
+    return captured && taskValid;
+}
+
+// Reuse is local to one declared graph and requires a published producer.
+[modular]
+class AvboitGeneratedGeometryReuse : NoCopy{
+    private Vector<MaterialPassDrawItem> m_draws;
+    private Vector<InstanceGpuData> m_instances;
+    private MeshFrameBindingSnapshot m_frameBindings;
+    private Array<u8, s_MeshViewGpuDataBytes> m_viewBytes;
+    private GpuTaskId m_producer;
+    private b8 m_captured = false;
+
+    public void reset();
+    [cpp_unwind]
+    public b8 capture(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot frameBindings, in MeshViewGpuData view, in MaterialPipelinePass pass);
+    [cpp_unwind]
+    public b8 matches(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot frameBindings, in MeshViewGpuData view, in MaterialPipelinePass pass);
+    public b8 publishProducer(in GpuTaskId task);
+    public GpuTaskId producerTask()const{ return this.m_producer; }
 }
 
 

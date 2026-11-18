@@ -268,14 +268,41 @@ public:
     // Adds a buffer copy. The helper derives requirements and uses from its regions and retains the buffers. Caller passes no uses.
     [[nodiscard]] Expected<GpuTaskId> addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
 
+    [[nodiscard]] Expected<GpuTaskId> addCopyBufferRegions(const GpuTaskDesc& desc, const Span<const GpuCopyBufferTaskRegion> regions){
+        return addCopyBufferTask(desc, { .regions = regions.data(), .regionCount = regions.size() });
+    }
+
     // Adds a texture copy. The helper derives requirements and uses from its regions and retains the textures. Caller passes no uses.
     [[nodiscard]] Expected<GpuTaskId> addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
+
+    [[nodiscard]] Expected<GpuTaskId> addCopyTextureRegions(const GpuTaskDesc& desc, const Span<const GpuCopyTextureTaskRegion> regions, QueueSubmissionToken& acceptedToken){
+        return addCopyTextureTask(desc, { .regions = regions.data(), .regionCount = regions.size(), .acceptedToken = &acceptedToken });
+    }
 
     // Adds a texture resolve. The helper derives Graphics requirements and uses, retaining the textures. Caller passes no uses.
     [[nodiscard]] Expected<GpuTaskId> addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
 
     // Copies caller bytes into graph-owned storage aligned to `alignment`, a nonzero power of two.
     [[nodiscard]] Expected<GpuUploadBlobId> copyUploadData(const void* data, usize byteSize, usize alignment = alignof(u8));
+
+    template<typename T>
+    [[nodiscard]] Expected<GpuUploadBlobId> copyUploadElements(const Span<const T> elements){
+        static_assert(IsTriviallyCopyable_V<T>, "GPU upload elements must be trivially copyable");
+        if(elements.size() > Limit<usize>::s_Max / sizeof(T))
+            return MakeUnexpected(Failure{});
+        return copyUploadData(elements.data(), elements.size() * sizeof(T), alignof(T));
+    }
+
+    template<typename T>
+    [[nodiscard]] Expected<GpuUploadBlobId> copyUploadValue(const T& value){
+        return copyUploadElements<T>({ &value, 1u });
+    }
+
+    // The caller may hold serialized bytes whose required upload alignment comes from the GPU element type.
+    template<typename AlignmentT>
+    [[nodiscard]] Expected<GpuUploadBlobId> copyUploadBytes(Span<const u8> bytes){
+        return copyUploadData(bytes.data(), bytes.size(), alignof(AlignmentT));
+    }
 
     // Adds graph-owned buffer/texture uploads.
     // Ordered uses expose the native CopyDest write and optional final transition; preflight and later packets observe the complete state contract.
@@ -300,7 +327,13 @@ public:
         if(!mutation.valid())
             return MakeUnexpected(Failure{});
 
-        Payload* const payloadObject = NewArenaObject<Payload>(m_arena, Move(payload));
+        // Retained container storage must survive the caller's declaration scratch arena.
+        Payload* const payloadObject = [&](){
+            if constexpr(::LeadingArenaConstructible<Payload> && IsConstructible_V<Payload, GraphicsArena&, Payload&&>)
+                return NewArenaObject<Payload>(m_arena, m_arena, Move(payload));
+            else
+                return NewArenaObject<Payload>(m_arena, Move(payload));
+        }();
         if(!payloadObject)
             return MakeUnexpected(Failure{});
         ProvisionalPayloadOwner<Payload> storedPayload(m_arena, payloadObject);
@@ -323,6 +356,17 @@ public:
         else
             discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyTaskPayload<Payload>);
         return task;
+    }
+
+    template<typename Payload>
+    [[nodiscard]] Expected<GpuTaskId> addPayloadTask(const GpuTaskDesc& desc, Payload&& payload) requires (!IsLValueReference<Payload>::value){
+        return addTask<GpuGraphTaskContract::MemberTask<Payload>>(desc, Move(payload));
+    }
+
+    // Takes a populated payload after acquiring the same mutation scope as an inline payload.
+    template<typename Payload>
+    [[nodiscard]] Expected<GpuTaskId> addPreparedPayloadTask(const GpuTaskDesc& desc, Payload& payload) requires (!IsConst_V<Payload>){
+        return addPayloadTask(desc, Move(payload));
     }
 
     template<typename TaskT>

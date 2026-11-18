@@ -3,80 +3,45 @@
 
 
 #include <impl/ecs_render/csg/renderer_csg_types.adhd>
+#include <impl/ecs_csg/frame_state.adhd>
+#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd>
+#include <impl/ecs_render/csg/cutter_gpu_data.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_RANGE_BYTES")]
+extern const u32 s_ShaderCsgRayRangeBytes;
 
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_CUTTER_BYTES")]
+extern const u32 s_ShaderCsgRayCutterBytes;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_SHAPE_UNSUPPORTED")]
+extern const u32 s_ShaderCsgRayShapeUnsupported;
 
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_SHAPE_PLANE")]
+extern const u32 s_ShaderCsgRayShapePlane;
 
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_SHAPE_BOX")]
+extern const u32 s_ShaderCsgRayShapeBox;
 
-#include <impl/assets/graphics/csg/ray_constants.h>
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_SHAPE_SPHERE")]
+extern const u32 s_ShaderCsgRayShapeSphere;
 
-#include <global/span.h>
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_SHAPE_CAPSULE")]
+extern const u32 s_ShaderCsgRayShapeCapsule;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class World;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(CsgShadowReceiverRangeGpu) == NWB_CSG_RAY_RANGE_BYTES);
-static_assert(offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset) == sizeof(u32) * 3u);
-static_assert(IsStandardLayout_V<CsgShadowReceiverRangeGpu>);
-static_assert(IsTriviallyCopyable_V<CsgShadowReceiverRangeGpu>);
-static_assert(sizeof(CsgCutterGpuData) == NWB_CSG_RAY_CUTTER_BYTES);
-static_assert(s_CsgRayShapeUnsupported == NWB_CSG_RAY_SHAPE_UNSUPPORTED);
-static_assert(s_CsgRayShapePlane == NWB_CSG_RAY_SHAPE_PLANE);
-static_assert(s_CsgRayShapeBox == NWB_CSG_RAY_SHAPE_BOX);
-static_assert(s_CsgRayShapeSphere == NWB_CSG_RAY_SHAPE_SPHERE);
-static_assert(s_CsgRayShapeCapsule == NWB_CSG_RAY_SHAPE_CAPSULE);
-
-class CsgShapeRegistry;
-class CsgShadowSnapshot;
-
-// Receiver order must match the shadow instance table; an empty CSG scene leaves both vectors empty.
-[[nodiscard]] b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+static_assert(size_of<CsgShadowReceiverRangeGpu>() == s_ShaderCsgRayRangeBytes);
+static_assert(offset_of<CsgShadowReceiverRangeGpu>(solidTriangleWordOffset) == size_of<u32>() * 3u);
+static_assert(is_standard_layout<CsgShadowReceiverRangeGpu>());
+static_assert(is_trivially_copyable<CsgShadowReceiverRangeGpu>());
+static_assert(size_of<CsgCutterGpuData>() == s_ShaderCsgRayCutterBytes);
+static_assert(s_CsgRayShapeUnsupported == s_ShaderCsgRayShapeUnsupported);
+static_assert(s_CsgRayShapePlane == s_ShaderCsgRayShapePlane);
+static_assert(s_CsgRayShapeBox == s_ShaderCsgRayShapeBox);
+static_assert(s_CsgRayShapeSphere == s_ShaderCsgRayShapeSphere);
+static_assert(s_CsgRayShapeCapsule == s_ShaderCsgRayShapeCapsule);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,6 +54,122 @@ class CsgShadowSnapshot{
     public u64 identity = 0u;
     public u64 contentIdentity = 0u;
     public b8 hasCsg = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize AccumulateShadowCutterCapacity(in usize currentCapacity, in u32 drawStateCutterCount){
+    const usize clampedCount = Min(cast<usize>(drawStateCutterCount), cast<usize>(s_CsgRayMaxCutters));
+    if(currentCapacity > usize.max - clampedCount)
+        return usize.max;
+    return currentCapacity + clampedCount;
+}
+
+b8 HasActiveShadowCsgRange(in CsgShadowReceiverRangeGpu range){
+    return (range.flags & s_CsgRayReceiverActive) != 0u;
+}
+
+void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDrawState drawState, in CsgFrameReceiverLookup receiverLookup, in CsgShapeRegistry shapeRegistry, mut CsgShadowSnapshot snapshot, mut CsgShadowReceiverRangeGpu range){
+    const VectorSingle receiverMin = VectorSingle(receiver.worldMin);
+    const VectorSingle receiverMax = VectorSingle(receiver.worldMax);
+    const b8 boundsCanCull = receiver.boundsValid && AabbValid(receiverMin, receiverMax);
+    range.firstCutter = cast<u32>(snapshot.cutters.size());
+    for(in auto record : receiverLookup.receiverCutters(drawState)){
+        assert(record.has_value());
+        if(!record.has_value())
+            continue;
+        in CsgCutterComponent cutter = record.value().cutter;
+        const auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
+        if(!shapeType.has_value())
+            continue;
+        const auto parameters = TryResolveCsgCutterParameterBytes(shapeType.value().desc.parameterByteSize, shapeType.value().desc.defaultParameterBytes, cutter.parameterBytes);
+        if(!parameters.has_value())
+            continue;
+
+        const MatrixSingle shapeToWorld = MatrixSingle(cutter.shapeToWorld);
+        const auto bounds = shapeRegistry.buildShapeBounds(shapeType.value().id, shapeToWorld, parameters.value());
+        if(!bounds.has_value())
+            continue;
+        if(boundsCanCull && bounds.value().finiteBounds && !AabbIntersects(receiverMin, receiverMax, LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds)))
+            continue;
+
+        const MatrixSingle worldToShape = MatrixSingle(cutter.worldToShape);
+        CsgSnapshotIdentityBuilder().updateShadowCutterSnapshotHashes(
+            record.value().entity,
+            cutter.shapeType,
+            worldToShape,
+            shapeToWorld,
+            parameters.value(),
+            snapshot.contentIdentity,
+            snapshot.identity
+        );
+        AppendShadowCutterRecord(
+            shapeType.value().desc.shaderModule != s_NameNone,
+            shapeType.value().desc.name,
+            worldToShape,
+            shapeToWorld,
+            parameters.value(),
+            range,
+            snapshot.cutters
+        );
+    }
+    FinalizeShadowReceiverCuttersRange(range, snapshot.cutters);
+}
+
+b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowReceiverInput> receivers, mut World world, mut CsgShadowSnapshot outSnapshot){
+    outSnapshot.receiverRanges.clear();
+    outSnapshot.cutters.clear();
+    outSnapshot.identity = 0u;
+    outSnapshot.contentIdentity = 0u;
+    outSnapshot.hasCsg = false;
+    const usize receiverCount = receivers.size();
+    if(receiverCount > cast<usize>(u32.max))
+        return false;
+    if(receiverCount == 0u || !HasCsgFrameCandidates(world))
+        return true;
+
+    const CsgFrameReceiverLookup receiverLookup(world);
+    if(receiverLookup.empty())
+        return true;
+    Vector<CsgReceiverDrawState> drawStates;
+    drawStates.resize(receiverCount);
+    b8 hasReceiver = false;
+    usize cutterCapacity = 0u;
+    for(usize index = 0u; index < receiverCount; ++index){
+        const auto drawState = receiverLookup.resolveReceiverDrawState(receivers[index].entity, receivers[index].receiverPass);
+        if(!drawState.has_value())
+            continue;
+        drawStates[index] = drawState.value();
+        hasReceiver = true;
+        cutterCapacity = AccumulateShadowCutterCapacity(cutterCapacity, drawStates[index].cutterCount);
+    }
+    if(!hasReceiver)
+        return true;
+    if(cutterCapacity > cast<usize>(u32.max))
+        return false;
+
+    outSnapshot.receiverRanges.resize(receiverCount);
+    outSnapshot.cutters.reserve(cutterCapacity);
+    CsgSnapshotIdentityBuilder().initializeShadowCutterSnapshotHashes(shapeRegistry.revision(), receiverCount, outSnapshot.contentIdentity, outSnapshot.identity);
+    for(usize index = 0u; index < receiverCount; ++index){
+        in CsgShadowReceiverInput receiver = receivers[index];
+        CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotHeaderHashes(receiver, drawStates[index].active, outSnapshot.contentIdentity, outSnapshot.identity);
+        mut CsgShadowReceiverRangeGpu range = outSnapshot.receiverRanges[index];
+        range = CsgShadowReceiverRangeGpu();
+        if(drawStates[index].active){
+            AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range);
+            outSnapshot.hasCsg = outSnapshot.hasCsg || HasActiveShadowCsgRange(range);
+        }
+        CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotRangeHashes(range, outSnapshot.contentIdentity, outSnapshot.identity);
+    }
+    if(!outSnapshot.hasCsg){
+        outSnapshot.receiverRanges.clear();
+        outSnapshot.identity = 0u;
+        outSnapshot.contentIdentity = 0u;
+    }
+    return true;
 }
 
 

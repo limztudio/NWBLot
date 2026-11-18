@@ -2,6 +2,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/caustic_activity_resources.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/optics/optical_scene_resources.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd>
+#include <impl/ecs_render/raytrace/prepared_scene_sw_bvh_traversal.adhd>
+#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.adhd>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd>
+#include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/raytrace/rt_private.adhd>
+#include <impl/ecs_render/raytrace/software_scene_refit.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
+#include <impl/ecs_render/refraction/refraction_renderer.adhd>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.adhd>
+#include <impl/ecs_render/shadow/light_space_resource_set.adhd>
+#include <impl/ecs_render/shadow/shadow_pipeline_set.adhd>
+#include <impl/ecs_render/shadow/shadow_trace_geometry.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
 #include <impl/ecs_render/raytrace/raytrace_internal.adhd>
 
 
@@ -74,549 +95,497 @@ b8 AreSurfelSplitGraphPipelinesReady(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/caustic/caustic_activity_resources.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_sw_bvh_traversal.adhd.h>
-#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.adhd.h>
-#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
-#include <impl/ecs_render/raytrace/raytrace_internal.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_diagnostics.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/raytrace/software_scene_refit.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/refraction/refraction_renderer.adhd.h>
-#include <impl/ecs_render/shadow/hardware_transparent_shadow_resources.adhd.h>
-#include <impl/ecs_render/shadow/light_space_resource_set.adhd.h>
-#include <impl/ecs_render/shadow/shadow_pipeline_set.adhd.h>
-#include <impl/ecs_render/shadow/shadow_trace_geometry.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/graphics/api.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/simdmath.h>
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena){
-    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene({});
-    m_lightSpaceShadow.m_captureHistory.beginFrame();
-    m_lightSpaceShadow.m_captureSceneTrusted = false;
-    m_lightSpaceShadow.m_sceneBuffers.clear();
-    m_lightSpaceShadow.m_sceneTextures.clear();
-    m_lightSpaceShadow.m_snapshot.captureTicket = {};
-    m_lightSpaceShadow.m_snapshot.ready = false;
-    m_lightSpaceShadow.m_resourcesPrepared = false;
-    m_lightSpaceShadow.m_sceneEligible = false;
-    m_lightSpaceShadow.m_casters.clear();
+[cpp_unwind]
+b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFrameTargets targets){
+    RayTraceMaterialResources materialResources(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
+        this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.prepareScene(RayTracingSceneContentStamp());
+    this.m_lightSpaceShadow.m_captureHistory.beginFrame();
+    this.m_lightSpaceShadow.m_captureSceneTrusted = false;
+    this.m_lightSpaceShadow.m_sceneBuffers.clear();
+    this.m_lightSpaceShadow.m_sceneTextures.clear();
+    this.m_lightSpaceShadow.m_snapshot.captureTicket = LightSpaceCaptureTicket();
+    this.m_lightSpaceShadow.m_snapshot.ready = false;
+    this.m_lightSpaceShadow.m_resourcesPrepared = false;
+    this.m_lightSpaceShadow.m_sceneEligible = false;
+    this.m_lightSpaceShadow.m_casters.clear();
     // A new frame replaces the previous preflight plan, but does not invalidate retained acceleration data.
     // Full invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
-    m_shadowVisibilityPreparedTargets = nullptr;
-    m_preparedSceneContentStamp = {};
-    m_hardwareOpticalScene.resetPrepared();
-    m_softwareOpticalScene.resetPrepared();
-    m_shadowVisibilityResourcesPreflighted = false;
-    m_shadowVisibilityHardwareSupported = false;
-    m_opticalCausticReaderAdmitted = false;
-    m_shadowVisibilityTraceResourcesPreflighted = false;
-    m_shadowVisibilityBackendPipelinePreflighted = false;
-    clearPreparedShadowTraceMaterialSampledTextures();
-    clearPreparedShadowMaterialContext();
-    clearPreparedSceneBvh();
-    m_preparedSceneTlas.clear();
-    clearPreparedMeshBlasBuilds();
-    clearPreparedMeshSwBvhBuilds();
+    this.m_shadowVisibilityPreparedTargets.reset();
+    this.m_preparedSceneContentStamp = RayTracingSceneContentStamp();
+    this.m_hardwareOpticalScene.resetPrepared();
+    this.m_softwareOpticalScene.resetPrepared();
+    this.m_shadowVisibilityResourcesPreflighted = false;
+    this.m_shadowVisibilityHardwareSupported = false;
+    this.m_opticalCausticReaderAdmitted = false;
+    this.m_shadowVisibilityTraceResourcesPreflighted = false;
+    this.m_shadowVisibilityBackendPipelinePreflighted = false;
+    this.clearPreparedShadowTraceMaterialSampledTextures();
+    this.clearPreparedShadowMaterialContext();
+    this.clearPreparedSceneBvh();
+    this.m_preparedSceneTlas.clear();
+    this.clearPreparedMeshBlasBuilds();
+    this.clearPreparedMeshSwBvhBuilds();
     // Surfel GI consumes the scene below per frame. Never reuse the prior frame's selection after an empty/rejected preflight.
-    m_rayTracingState.m_hardwareTransparentShadow.m_ready = false;
-    m_rayTracingState.m_softTransparentReady = false;
-    m_rayTracingState.m_softTransparentTemporalReady = false;
-    m_rayTracingState.m_surfelEnabled = false;
-    m_rayTracingState.m_surfelUseHwTrace = false;
+    this.m_rayTracingState.m_hardwareTransparentShadow.m_ready = false;
+    this.m_rayTracingState.softShadow.m_softTransparentReady = false;
+    this.m_rayTracingState.softShadow.m_softTransparentTemporalReady = false;
+    this.m_rayTracingState.surfelGi.m_surfelEnabled = false;
+    this.m_rayTracingState.surfelGi.m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
         return false;
     // The material-context selector is a global heap entry. Set it before gathering; the graph imports the backing handle.
-    if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsBuffer())
+    if(!materialResources.ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
     // Caustic target storage is selected before graph compilation. Uploading the gathered payload remains in the graph-owned preparation packet.
-    if(!prepareCausticEmissionTargetResources(scratchArena))
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: caustic emission-target gather failed"));
+    if(!this.prepareCausticEmissionTargetResources())
+        warning("RendererSystem: caustic emission-target gather failed");
 
-    ShadowPipelineSet shadowPipelines(m_graphics, m_shaderSystem, m_rayTracingState, m_rayTracingState);
-    m_shadowVisibilityHardwareSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
-    if(m_shadowVisibilityHardwareSupported){
-        if(!preparePendingMeshBlasResources(scratchArena)){
-            if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+    ShadowPipelineSet shadowPipelines(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.shadow, this.m_rayTracingState.softShadow);
+    this.m_shadowVisibilityHardwareSupported = this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) && this.m_graphics.queryFeatureSupport(Feature::RayQuery);
+    if(this.m_shadowVisibilityHardwareSupported){
+        if(!this.preparePendingMeshBlasResources()){
+            if(!materialResources.ensureRayTraceMaterialContextSlotsHeapHandle())
                 return false;
-            m_shadowVisibilityPreparedTargets = &targets;
-            m_shadowVisibilityResourcesPreflighted = true;
+            this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
+            this.m_shadowVisibilityResourcesPreflighted = true;
             return true;
         }
 
-        const b8 sceneReady = prepareSceneTlasResources(scratchArena);
+        const b8 sceneReady = this.prepareSceneTlasResources();
         if(!sceneReady){
-            if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+            if(!materialResources.ensureRayTraceMaterialContextSlotsHeapHandle())
                 return false;
-            m_shadowVisibilityPreparedTargets = &targets;
-            m_shadowVisibilityResourcesPreflighted = true;
+            this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
+            this.m_shadowVisibilityResourcesPreflighted = true;
             return true;
         }
-        if(!ensureCsgTraceContextResources())
+        if(!this.ensureCsgTraceContextResources())
             return false;
 
         // Hardware shadows and optical effects share one immutable TLAS/material context.
-        if(!capturePreparedMeshBlasBuilds(scratchArena)){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
-            m_preparedSceneTlas.clear();
+        if(!this.capturePreparedMeshBlasBuilds()){
+            warning("RendererSystem: could not freeze hardware BLAS build plan");
+            this.m_preparedSceneTlas.clear();
             return false;
         }
-        m_shadowVisibilityTraceResourcesPreflighted = true;
+        this.m_shadowVisibilityTraceResourcesPreflighted = true;
         const b8 backendReady = shadowPipelines.ensureShadowPipeline();
-        m_shadowVisibilityBackendPipelinePreflighted = backendReady;
+        this.m_shadowVisibilityBackendPipelinePreflighted = backendReady;
 
         // HW opaque shadow shares the SW half-res denoise chain: jittered trace, temporal merge, a-trous resolve, upsample.
-        // The HW trace writes shadowSoftHalfA; the shared block denoises through the same m_softShadow* state as SW.
-        // Non-fatal: a failure leaves m_softShadowReady false and the HW render falls back to the full-res 1-spp trace.
-        m_rayTracingState.m_softShadowReady = backendReady && shadowPipelines.ensureShadowSoftPipeline() && shadowPipelines.ensureShadowGeometryDownsamplePipeline() && shadowPipelines.ensureSoftShadowResolvePipeline();
-        if(backendReady && !m_rayTracingState.m_softShadowReady)
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: HW soft opaque shadow resource preparation failed; HW shadows fall back to the full-res trace this frame"));
+        // The HW trace writes shadowSoftHalfA; the shared block denoises through the same this.m_softShadow* state as SW.
+        // Non-fatal: a failure leaves this.m_softShadowReady false and the HW render falls back to the full-res 1-spp trace.
+        this.m_rayTracingState.softShadow.m_softShadowReady = backendReady && shadowPipelines.ensureShadowSoftPipeline() && shadowPipelines.ensureShadowGeometryDownsamplePipeline() && shadowPipelines.ensureSoftShadowResolvePipeline();
+        if(backendReady && !this.m_rayTracingState.softShadow.m_softShadowReady)
+            warning("RendererSystem: HW soft opaque shadow resource preparation failed; HW shadows fall back to the full-res trace this frame");
 
         // Soft opaque shadow TEMPORAL accumulation (shared reproject-merge): same as the SW branch.
-        // Non-fatal: a failure leaves m_softShadowTemporalReady false and the soft path feeds the raw trace straight into the a-trous.
-        m_rayTracingState.m_softShadowTemporalReady = m_rayTracingState.m_softShadowReady && shadowPipelines.ensureShadowReprojectMergePipeline();
-        if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
+        // Non-fatal: a failure leaves this.m_softShadowTemporalReady false and the soft path feeds the raw trace straight into the a-trous.
+        this.m_rayTracingState.softShadow.m_softShadowTemporalReady = this.m_rayTracingState.softShadow.m_softShadowReady && shadowPipelines.ensureShadowReprojectMergePipeline();
+        if(this.m_rayTracingState.softShadow.m_softShadowReady && !this.m_rayTracingState.softShadow.m_softShadowTemporalReady)
+            warning("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame");
 
         // Hardware transparent tracing retains the same half-resolution denoise and multiplicative resolve.
         // Its bounded gather and hardware overflow route never prepare a second software acceleration structure.
-        HardwareTransparentShadowResources transparentResources(m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
-        m_rayTracingState.m_softTransparentReady = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && transparentResources.prepareHardwareTransparentShadowResources(targets) && shadowPipelines.ensureSoftTransparentResolvePipeline();
-        if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && !m_rayTracingState.m_softTransparentReady)
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame"));
+        HardwareTransparentShadowResources transparentResources(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.m_hardwareTransparentShadow);
+        this.m_rayTracingState.softShadow.m_softTransparentReady = this.m_rayTracingState.softShadow.m_softShadowReady && this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder
+            && transparentResources.prepareHardwareTransparentShadowResources(targets) && shadowPipelines.ensureSoftTransparentResolvePipeline();
+        if(this.m_rayTracingState.softShadow.m_softShadowReady && this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder && !this.m_rayTracingState.softShadow.m_softTransparentReady)
+            warning("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame");
 
-        m_rayTracingState.m_softTransparentTemporalReady = ResolveSoftTransparentTemporalReady(m_rayTracingState.m_softTransparentReady, m_rayTracingState.m_softShadowTemporalReady);
+        this.m_rayTracingState.softShadow.m_softTransparentTemporalReady = ResolveSoftTransparentTemporalReady(this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowTemporalReady);
 
         shadowPipelines.prepareSoftCombinedResolvePipelines();
 
         // Build HW caustic resources with the shadow ones. Non-fatal to shadows: failure leaves a black caustic buffer.
-        if(!prepareHwCausticResources(targets))
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
+        if(!this.prepareHwCausticResources(targets))
+            warning("RendererSystem: hardware caustic producer resource preparation failed");
 
         // Hardware surfel GI reuses the TLAS, per-mesh geometry, and instance records built for shadows and caustics.
         // Gated on the HW shadow backend being ready + a non-empty TLAS.
         // Non-fatal: a failure leaves GI off this frame (lighting uses hemiAmbient).
-        if(CanEnableSurfelSceneTrace(backendReady, m_rayTracingState.m_tlasInstanceCount, m_rayTracingState.m_shadowMeshCount)){
-            m_rayTracingState.m_surfelEnabled = true;
-            m_rayTracingState.m_surfelUseHwTrace = true;
-            if(!prepareSurfelResources(targets))
-                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: HW surfel GI resource preparation failed"));
+        if(CanEnableSurfelSceneTrace(backendReady, this.m_rayTracingState.sceneBvh.m_tlasInstanceCount, this.m_rayTracingState.shadow.m_shadowMeshCount)){
+            this.m_rayTracingState.surfelGi.m_surfelEnabled = true;
+            this.m_rayTracingState.surfelGi.m_surfelUseHwTrace = true;
+            if(!this.prepareSurfelResources(targets))
+                warning("RendererSystem: HW surfel GI resource preparation failed");
         }
 
-        if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+        if(!materialResources.ensureRayTraceMaterialContextSlotsHeapHandle())
             return false;
-        m_shadowVisibilityPreparedTargets = &targets;
-        preflightLightSpaceShadowResources();
-        if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG shadow map preparation failed"));
+        this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
+        this.preflightLightSpaceShadowResources();
+        if(this.m_lightSpaceShadow.m_csgRequired && !this.m_lightSpaceShadow.m_resourcesPrepared){
+            error("RendererSystem: CSG shadow map preparation failed");
             return false;
         }
-        m_shadowVisibilityResourcesPreflighted = true;
+        this.m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
 
     // No HW ray tracing: build/refit per-mesh software BVHs from skinned geometry, then the per-frame scene BVH.
-    const b8 meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
+    const b8 meshResourcesReady = this.preparePendingMeshSwBvhResources();
     if(!meshResourcesReady)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
-    if(!meshResourcesReady || !prepareSceneSwBvhResources(scratchArena)){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: software shadow scene BVH build failed"));
-        m_shadowVisibilityPreparedTargets = &targets;
-        m_shadowVisibilityResourcesPreflighted = true;
+        warning("RendererSystem: software shadow BVH resource preparation failed");
+    if(!meshResourcesReady || !this.prepareSceneSwBvhResources()){
+        warning("RendererSystem: software shadow scene BVH build failed");
+        this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
+        this.m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
-    if(!ensureCsgTraceContextResources())
+    if(!this.ensureCsgTraceContextResources())
         return false;
 
     // Enable surfel GI on the SW path once the scene BVH is resident; pool resources live on state so resize never resets them.
-    if(CanEnableSurfelSceneTrace(true, m_rayTracingState.m_sceneBvhInstanceCount, m_rayTracingState.m_swShadowMeshCount)){
-        m_rayTracingState.m_surfelEnabled = true;
-        m_rayTracingState.m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH
-        if(!prepareSurfelResources(targets))
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: surfel GI resource preparation failed"));
+    if(CanEnableSurfelSceneTrace(true, this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount, this.m_rayTracingState.shadow.m_swShadowMeshCount)){
+        this.m_rayTracingState.surfelGi.m_surfelEnabled = true;
+        this.m_rayTracingState.surfelGi.m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH
+        if(!this.prepareSurfelResources(targets))
+            warning("RendererSystem: surfel GI resource preparation failed");
     }
 
-    if(m_rayTracingState.m_sceneBvhInstanceCount == 0u){
-        if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+    if(this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount == 0u){
+        if(!materialResources.ensureRayTraceMaterialContextSlotsHeapHandle())
             return false;
-        m_shadowVisibilityPreparedTargets = &targets;
-        m_shadowVisibilityResourcesPreflighted = true;
+        this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
+        this.m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
     // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal hardware fallback.
-    if(!capturePreparedMeshSwBvhBuilds(scratchArena)){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
+    if(!this.capturePreparedMeshSwBvhBuilds()){
+        warning("RendererSystem: could not freeze software BVH mesh build plan");
         return false;
     }
-    m_shadowVisibilityTraceResourcesPreflighted = true;
+    this.m_shadowVisibilityTraceResourcesPreflighted = true;
 
     const b8 backendReady = shadowPipelines.ensureSwShadowPipeline();
-    m_shadowVisibilityBackendPipelinePreflighted = backendReady;
+    this.m_shadowVisibilityBackendPipelinePreflighted = backendReady;
 
     // Soft opaque shadow: downsample + a-trous pipelines denoise half-res trace; non-fatal.
-    m_rayTracingState.m_softShadowReady = backendReady && shadowPipelines.ensureShadowGeometryDownsamplePipeline() && shadowPipelines.ensureSoftShadowResolvePipeline();
-    if(backendReady && !m_rayTracingState.m_softShadowReady)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
+    this.m_rayTracingState.softShadow.m_softShadowReady = backendReady && shadowPipelines.ensureShadowGeometryDownsamplePipeline() && shadowPipelines.ensureSoftShadowResolvePipeline();
+    if(backendReady && !this.m_rayTracingState.softShadow.m_softShadowReady)
+        warning("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame");
 
     // Temporal accumulation: reproject-merge plus SOFT_HALF variants; falls back to spatial.
-    m_rayTracingState.m_softShadowTemporalReady = m_rayTracingState.m_softShadowReady && shadowPipelines.ensureShadowReprojectMergePipeline();
-    if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
+    this.m_rayTracingState.softShadow.m_softShadowTemporalReady = this.m_rayTracingState.softShadow.m_softShadowReady && shadowPipelines.ensureShadowReprojectMergePipeline();
+    if(this.m_rayTracingState.softShadow.m_softShadowReady && !this.m_rayTracingState.softShadow.m_softShadowTemporalReady)
+        warning("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame");
 
     // Colored transparent shadow: RGB resolve gated on opaque path; falls back to coarse/adaptive.
-    m_rayTracingState.m_softTransparentReady = m_rayTracingState.m_softShadowReady && shadowPipelines.ensureSoftTransparentResolvePipeline();
-    if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softTransparentReady)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: soft transparent shadow resource preparation failed; colored shadows fall back to the hard-ish path this frame"));
+    this.m_rayTracingState.softShadow.m_softTransparentReady = this.m_rayTracingState.softShadow.m_softShadowReady && shadowPipelines.ensureSoftTransparentResolvePipeline();
+    if(this.m_rayTracingState.softShadow.m_softShadowReady && !this.m_rayTracingState.softShadow.m_softTransparentReady)
+        warning("RendererSystem: soft transparent shadow resource preparation failed; colored shadows fall back to the hard-ish path this frame");
 
-    m_rayTracingState.m_softTransparentTemporalReady = ResolveSoftTransparentTemporalReady(m_rayTracingState.m_softTransparentReady, m_rayTracingState.m_softShadowTemporalReady);
+    this.m_rayTracingState.softShadow.m_softTransparentTemporalReady = ResolveSoftTransparentTemporalReady(this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowTemporalReady);
 
     shadowPipelines.prepareSoftCombinedResolvePipelines();
 
     // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH + per-mesh geometry).
     // Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
-    if(!prepareGpuBvhCausticResources(targets))
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: software caustic producer resource preparation failed"));
+    if(!this.prepareGpuBvhCausticResources(targets))
+        warning("RendererSystem: software caustic producer resource preparation failed");
 
-    if(!RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle())
+    if(!materialResources.ensureRayTraceMaterialContextSlotsHeapHandle())
         return false;
-    m_shadowVisibilityPreparedTargets = &targets;
-    preflightLightSpaceShadowResources();
-    if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG shadow map preparation failed"));
+    this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
+    this.preflightLightSpaceShadowResources();
+    if(this.m_lightSpaceShadow.m_csgRequired && !this.m_lightSpaceShadow.m_resourcesPrepared){
+        error("RendererSystem: CSG shadow map preparation failed");
         return false;
     }
-    m_shadowVisibilityResourcesPreflighted = true;
+    this.m_shadowVisibilityResourcesPreflighted = true;
     return true;
 }
 
+[cpp_unwind]
 Expected<b8> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const b8 sceneTlasBuildGraphOwned,
-    const b8 meshBlasBuildsGraphOwned,
-    const b8 meshBlasGeometryBuildInputStatesGraphOwned,
-    const b8 meshSwBvhBuildsGraphOwned,
-    const b8 preparedMeshSwBvhBuildsRecordedByGraph
-){
-    if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
-        return MakeUnexpected(Failure{});
+        mut CommandList commandList, mut DeferredFrameTargets targets, in b8 sceneTlasBuildGraphOwned, in b8 meshBlasBuildsGraphOwned,
+        in b8 meshBlasGeometryBuildInputStatesGraphOwned, in b8 meshSwBvhBuildsGraphOwned, in b8 preparedMeshSwBvhBuildsRecordedByGraph
+    ){
+    if(!this.m_shadowVisibilityResourcesPreflighted || (!this.m_shadowVisibilityPreparedTargets.has_value() || !SameAddress(this.m_shadowVisibilityPreparedTargets.value(), targets)))
+        return MakeUnexpected(Failure());
 
     // A non-fatal preflight miss disables tracing this frame; no capacity retry, the graph already froze its imports.
-    if(!m_shadowVisibilityTraceResourcesPreflighted)
+    if(!this.m_shadowVisibilityTraceResourcesPreflighted)
         return false;
 
-    if(m_shadowVisibilityHardwareSupported){
-        if(meshBlasBuildsGraphOwned && !recordPreparedMeshBlasBuilds(commandList, meshBlasGeometryBuildInputStatesGraphOwned))
-            return MakeUnexpected(Failure{});
-        if(sceneTlasBuildGraphOwned && !m_preparedSceneTlas.record(m_rayTracingState, commandList))
-            return MakeUnexpected(Failure{});
-        return m_shadowVisibilityBackendPipelinePreflighted;
+    if(this.m_shadowVisibilityHardwareSupported){
+        if(meshBlasBuildsGraphOwned && !this.recordPreparedMeshBlasBuilds(commandList, meshBlasGeometryBuildInputStatesGraphOwned))
+            return MakeUnexpected(Failure());
+        if(sceneTlasBuildGraphOwned && !this.m_preparedSceneTlas.record(this.m_rayTracingState, commandList))
+            return MakeUnexpected(Failure());
+        return this.m_shadowVisibilityBackendPipelinePreflighted;
     }
 
-    if(!CanCompleteSoftwareMeshBuildsAtRecord(m_preparedMeshSwBvhBuildPlanFrozen, meshSwBvhBuildsGraphOwned, preparedMeshSwBvhBuildsRecordedByGraph)){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: software shadow mesh builds have no frozen graph completion"));
-        return MakeUnexpected(Failure{});
+    if(!CanCompleteSoftwareMeshBuildsAtRecord(this.m_preparedMeshSwBvhBuildPlanFrozen, meshSwBvhBuildsGraphOwned, preparedMeshSwBvhBuildsRecordedByGraph)){
+        warning("RendererSystem: software shadow mesh builds have no frozen graph completion");
+        return MakeUnexpected(Failure());
     }
     // Pure software frames have no opaque-HW fallback. Uploads and cache reuse keep their traversal snapshot; recording checks that plan.
     // A missing or stale plan rejects the packet.
-    if(!m_preparedSceneSwBvhTraversal.ready()){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: software shadow scene has no frozen preflight traversal"));
-        return MakeUnexpected(Failure{});
+    if(!this.m_preparedSceneSwBvhTraversal.ready()){
+        warning("RendererSystem: software shadow scene has no frozen preflight traversal");
+        return MakeUnexpected(Failure());
     }
-    if(!m_preparedSceneSwBvhTraversal.record())
-        return MakeUnexpected(Failure{});
-    if(m_rayTracingState.m_sceneBvhInstanceCount == 0u){
-        m_rayTracingState.m_surfelEnabled = false;
-        m_rayTracingState.m_surfelUseHwTrace = false;
+    if(!this.recordPreparedSceneSwBvhTraversal())
+        return MakeUnexpected(Failure());
+    if(this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount == 0u){
+        this.m_rayTracingState.surfelGi.m_surfelEnabled = false;
+        this.m_rayTracingState.surfelGi.m_surfelUseHwTrace = false;
         return false;
     }
 
-    return m_shadowVisibilityBackendPipelinePreflighted;
+    return this.m_shadowVisibilityBackendPipelinePreflighted;
 }
 
-void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexcept{
-    invalidateLightSpaceShadowCapture();
-    m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
-    m_preparedShadowTraceGeometryBuffers.clear();
-    clearPreparedShadowTraceMaterialSampledTextures();
-    m_preparedCausticEmissionTargetBytes.clear();
-    clearPreparedShadowMaterialContext();
-    clearPreparedSceneBvh();
-    m_preparedSceneTlas.clear();
-    clearPreparedMeshBlasBuilds();
-    clearPreparedMeshSwBvhBuilds();
-    m_shadowVisibilityPreparedTargets = nullptr;
-    m_preparedSceneContentStamp = {};
-    m_hardwareOpticalScene.resetPrepared();
-    m_softwareOpticalScene.resetPrepared();
-    m_shadowVisibilityResourcesPreflighted = false;
-    m_shadowVisibilityHardwareSupported = false;
-    m_opticalCausticReaderAdmitted = false;
-    m_shadowVisibilityTraceResourcesPreflighted = false;
-    m_shadowVisibilityBackendPipelinePreflighted = false;
+void RendererRayTracingSystem::discardPreflightShadowVisibilityResources(){
+    this.invalidateLightSpaceShadowCapture();
+    this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.discard();
+    this.m_preparedShadowTraceGeometryBuffers.clear();
+    this.clearPreparedShadowTraceMaterialSampledTextures();
+    this.m_preparedCausticEmissionTargetBytes.clear();
+    this.clearPreparedShadowMaterialContext();
+    this.clearPreparedSceneBvh();
+    this.m_preparedSceneTlas.clear();
+    this.clearPreparedMeshBlasBuilds();
+    this.clearPreparedMeshSwBvhBuilds();
+    this.m_shadowVisibilityPreparedTargets.reset();
+    this.m_preparedSceneContentStamp = RayTracingSceneContentStamp();
+    this.m_hardwareOpticalScene.resetPrepared();
+    this.m_softwareOpticalScene.resetPrepared();
+    this.m_shadowVisibilityResourcesPreflighted = false;
+    this.m_shadowVisibilityHardwareSupported = false;
+    this.m_opticalCausticReaderAdmitted = false;
+    this.m_shadowVisibilityTraceResourcesPreflighted = false;
+    this.m_shadowVisibilityBackendPipelinePreflighted = false;
 
     // A rejected prep packet may have grown storage without uploading it; keep allocs, drop semantic caches, rebuild next preflight.
-    m_rayTracingState.m_tlasStaticSceneHashValid = false;
-    m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-    m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
-    m_rayTracingState.m_swShadowMaterialContextHashValid = false;
-    m_rayTracingState.m_surfelEnabled = false;
-    m_rayTracingState.m_surfelUseHwTrace = false;
+    this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid = false;
+    this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
+    this.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid = false;
+    this.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid = false;
+    this.m_rayTracingState.surfelGi.m_surfelEnabled = false;
+    this.m_rayTracingState.surfelGi.m_surfelUseHwTrace = false;
 
     // Flags update optimistically. If the packet never submits, keep retained structures rebuildable for later frames.
-    m_meshSystem.discardRayTracingBuildState();
+    this.m_meshSystem.discardRayTracingBuildState();
 }
 
-b8 RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena){
-    m_preparedShadowTraceGeometryBuffers.clear();
-    if(!m_shadowVisibilityResourcesPreflighted)
+[cpp_unwind]
+b8 RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
+        this.m_preparedShadowTraceGeometryBuffers.clear();
+    if(!this.m_shadowVisibilityResourcesPreflighted)
         return false;
 
-    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
-    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    MeshRayTracingResourceSnapshotVector meshes;
+    this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);
 
-    const ShadowTraceGeometryBackendSelection backendSelection = ResolveShadowTraceGeometryBackendSelection(m_shadowVisibilityHardwareSupported, m_shadowVisibilityTraceResourcesPreflighted);
+    const ShadowTraceGeometryBackendSelection backendSelection = ResolveShadowTraceGeometryBackendSelection(this.m_shadowVisibilityHardwareSupported, this.m_shadowVisibilityTraceResourcesPreflighted);
     // Raw tables are populated by preflight. Only the selected backend contributes trace geometry.
-    const ShadowTraceGeometrySelection selection{
-        .hardwarePositions = m_rayTracingState.m_shadowMeshPositionBuffers,
-        .hardwareIndices = m_rayTracingState.m_shadowMeshIndexBuffers,
-        .hardwareAttributes = m_rayTracingState.m_shadowMeshAttributeBuffers,
-        .softwareNodes = m_rayTracingState.m_swShadowMeshNodeBuffers,
-        .softwarePositions = m_rayTracingState.m_swShadowMeshPositionBuffers,
-        .softwareIndices = m_rayTracingState.m_swShadowMeshIndexBuffers,
-        .softwareAttributes = m_rayTracingState.m_swShadowMeshAttributeBuffers,
-        .includeHardware = backendSelection.includeHardware,
-        .includeSoftware = backendSelection.includeSoftware,
-    };
-    return FreezePreparedShadowTraceGeometryBuffers(meshes, selection, scratchArena, m_acceptedShadowTraceGeometryBuffers, m_preparedShadowTraceGeometryBuffers);
+    ShadowTraceGeometrySelection selection;
+    selection.hardwarePositions = this.m_rayTracingState.shadow.m_shadowMeshPositionBuffers;
+    selection.hardwareIndices = this.m_rayTracingState.shadow.m_shadowMeshIndexBuffers;
+    selection.hardwareAttributes = this.m_rayTracingState.shadow.m_shadowMeshAttributeBuffers;
+    selection.softwareNodes = this.m_rayTracingState.shadow.m_swShadowMeshNodeBuffers;
+    selection.softwarePositions = this.m_rayTracingState.shadow.m_swShadowMeshPositionBuffers;
+    selection.softwareIndices = this.m_rayTracingState.shadow.m_swShadowMeshIndexBuffers;
+    selection.softwareAttributes = this.m_rayTracingState.shadow.m_swShadowMeshAttributeBuffers;
+    selection.includeHardware = backendSelection.includeHardware;
+    selection.includeSoftware = backendSelection.includeSoftware;
+    return FreezePreparedShadowTraceGeometryBuffers(meshes, selection, this.m_acceptedShadowTraceGeometryBuffers, this.m_preparedShadowTraceGeometryBuffers);
 }
 
-void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept{
-    for(PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
-        if(resource.buffer && resource.normalizationPending){
-            FOUNDATION_ASSERT(m_acceptedShadowTraceGeometryBuffers.size() < m_acceptedShadowTraceGeometryBuffers.capacity());
-            m_acceptedShadowTraceGeometryBuffers.push_back(resource.buffer);
+void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization(){
+    for(mut PreparedShadowTraceGeometryBuffer resource : this.m_preparedShadowTraceGeometryBuffers){
+        if(resource.buffer.valid() && resource.normalizationPending){
+            assert(this.m_acceptedShadowTraceGeometryBuffers.size() < this.m_acceptedShadowTraceGeometryBuffers.capacity());
+            this.m_acceptedShadowTraceGeometryBuffers.push_back(resource.buffer);
             resource.normalizationPending = false;
         }
     }
 }
 
-void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noexcept{
-    m_preparedShadowTraceGeometryBuffers.clear();
-    m_acceptedShadowTraceGeometryBuffers.clear();
-    clearPreparedShadowTraceMaterialSampledTextures();
+void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers(){
+    this.m_preparedShadowTraceGeometryBuffers.clear();
+    this.m_acceptedShadowTraceGeometryBuffers.clear();
+    this.clearPreparedShadowTraceMaterialSampledTextures();
 }
 
-void RendererRayTracingSystem::confirmPreparedSceneBvhUploads()noexcept{
-    if(m_preparedSceneBvh.publishAcceptedUpload(m_rayTracingState))
-        clearPreparedSceneBvh();
+void RendererRayTracingSystem::confirmPreparedSceneBvhUploads(){
+    if(this.m_preparedSceneBvh.publishAcceptedUpload(this.m_rayTracingState))
+        this.clearPreparedSceneBvh();
 }
 
-Core::ResourceStates::Mask RendererRayTracingSystem::sceneTlasBackingInitialState()const noexcept{
-    const auto& state = m_rayTracingState;
-    return state.m_tlasBackingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
+ResourceStates RendererRayTracingSystem::sceneTlasBackingInitialState()const{
+    in RendererRayTracingState state = this.m_rayTracingState;
+    if(state.sceneBvh.m_tlasBackingFresh)
+        return ResourceStates::Common;
+    return ResourceStates::Unknown;
 }
 
-b8 RendererRayTracingSystem::capturePreparedSceneBvh(const b8 staticScene, const u64 staticSceneHash, const Span<const NwbBvhNodeGpu> nodes, const Span<const SceneSwBvhInstanceGpu> instances){
-    clearPreparedSceneBvh();
-    return m_preparedSceneBvh.capture(m_rayTracingState, staticScene, staticSceneHash, nodes, instances);
+[cpp_unwind]
+b8 RendererRayTracingSystem::capturePreparedSceneBvh(in b8 staticScene, in u64 staticSceneHash, in Span<NwbBvhNodeGpu> nodes, in Span<SceneSwBvhInstanceGpu> instances){
+    this.clearPreparedSceneBvh();
+    return this.m_preparedSceneBvh.capture(this.m_rayTracingState, staticScene, staticSceneHash, nodes, instances);
 }
 
-b8 RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount)noexcept{
-    clearPreparedSceneBvh();
-    return m_preparedSceneBvh.captureCacheReuse(m_rayTracingState, staticSceneHash, instanceCount);
+b8 RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(in u64 staticSceneHash, in u32 instanceCount){
+    this.clearPreparedSceneBvh();
+    return this.m_preparedSceneBvh.captureCacheReuse(this.m_rayTracingState, staticSceneHash, instanceCount);
 }
 
-void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
-    m_preparedSceneSwBvhRefit.reset();
-    m_preparedSceneSwBvhTraversal.clear();
-    m_preparedSceneBvh.clear();
+void RendererRayTracingSystem::clearPreparedSceneBvh(){
+    this.m_preparedSceneSwBvhRefit.reset();
+    this.m_preparedSceneSwBvhTraversal.clear();
+    this.m_preparedSceneBvh.clear();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
 void RendererRayTracingSystem::invalidateResources(){
-    SoftwareBvhBuilder bvh(m_arena, m_graphics, m_shaderSystem, m_rayTracingState);
-    discardPreflightShadowVisibilityResources();
-    invalidatePreparedShadowTraceGeometryBuffers();
-    m_hardwareOpticalScene.invalidate();
-    m_softwareOpticalScene.invalidate();
-    m_preparedSceneSwBvhRefit.reset();
-    m_sceneSwBvhRefit.invalidate();
-    releaseSceneTlasHeapHandle();
-    releaseCausticEmissionTargetHeapHandle();
-    CausticActivityResources activity(m_graphics, m_rayTracingState.m_causticResolve.m_activity);
+    RayTraceMaterialResources materialResources(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
+    SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
+    this.discardPreflightShadowVisibilityResources();
+    this.invalidatePreparedShadowTraceGeometryBuffers();
+    this.m_hardwareOpticalScene.invalidate();
+    this.m_softwareOpticalScene.invalidate();
+    this.m_preparedSceneSwBvhRefit.reset();
+    this.m_sceneSwBvhRefit.invalidate();
+    this.releaseSceneTlasHeapHandle();
+    this.releaseCausticEmissionTargetHeapHandle();
+    CausticActivityResources activity(this.m_graphics, this.m_rayTracingState.caustics.m_causticResolve.m_activity);
     activity.releaseCausticResolveActivity();
-    RayTraceMaterialResources(m_graphics, m_rayTracingState, m_rayTracingState).releaseRayTraceMaterialContextHeapHandles();
+    materialResources.releaseRayTraceMaterialContextHeapHandles();
     bvh.releaseSwBvhScratchHeapHandles();
-    releaseSurfelGiHeapHandles();
-    HardwareTransparentShadowResources transparentResources(m_graphics, m_shaderSystem, m_rayTracingState.m_hardwareTransparentShadow);
+    this.releaseSurfelGiHeapHandles();
+    HardwareTransparentShadowResources transparentResources(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.m_hardwareTransparentShadow);
     transparentResources.releaseHardwareTransparentShadowResources();
-    LightSpaceResourceSet resources(m_graphics, m_shaderSystem, m_lightSpaceShadow, m_shadowVisibilityHardwareSupported);
+    LightSpaceResourceSet resources(this.m_graphics, this.m_shaderSystem, this.m_lightSpaceShadow, this.m_shadowVisibilityHardwareSupported);
     resources.releaseLightSpaceShadowResources();
-    m_refraction.invalidateResources();
-    m_rayTracingState.invalidateResources();
+    this.m_refraction.invalidateResources();
+    this.m_rayTracingState.invalidateResources();
 }
 
+[cpp_unwind]
 void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
-        RetireDescriptor(heap, m_rayTracingState.m_tlasHeapHandle);
+        RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
         return;
     }
-    m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    this.m_rayTracingState.sceneBvh.m_tlasHeapHandle = GpuDescriptorHandleInvalid();
 }
 
-RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLightingClassificationInput()const noexcept{
-    return { .refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount, };
+RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLightingClassificationInput()const{
+    RayTracingLightingClassificationInput result;
+    result.refractiveInstanceCount = this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount;
+    return result;
 }
 
-void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const Span<const SceneLightGpuData> lights){
-    m_rayTracingState.m_causticLightCount = classification.causticLightCount;
-    RayTracingDiagnostics().unsupportedCausticVolumes(
-        m_shadowVisibilityTraceResourcesPreflighted,
+[cpp_unwind]
+void RendererRayTracingSystem::publishPreparedLightingClassification(in RayTracingLightingClassification classification, in Span<SceneLightGpuData> lights){
+    RayTracingDiagnostics diagnostics;
+    this.m_rayTracingState.caustics.m_causticLightCount = classification.causticLightCount;
+    diagnostics.unsupportedCausticVolumes(
+        this.m_shadowVisibilityTraceResourcesPreflighted,
         classification.causticLightCount,
-        m_unsupportedCausticVolumeCount,
-        m_unsupportedCausticVolumeHash,
-        m_firstUnsupportedCausticVolumeEntity,
-        m_unsupportedCausticVolumeReported,
-        m_reportedUnsupportedCausticVolumeHash
+        this.m_unsupportedCausticVolumeCount,
+        this.m_unsupportedCausticVolumeHash,
+        this.m_firstUnsupportedCausticVolumeEntity,
+        this.m_unsupportedCausticVolumeReported,
+        this.m_reportedUnsupportedCausticVolumeHash
     );
-    m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
-    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights);
-    prepareLightSpaceShadows(lights);
+    this.m_rayTracingState.softShadow.m_softShadowSlotMask = classification.softShadowSlotMask;
+    this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.prepareLighting(lights);
+    this.prepareLightSpaceShadows(lights);
 
     // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds and diagnostic latch.
     // A successful prefix publication leaves the latch set across optional graph-build retries; final declaration failure restores the earlier snapshot.
-    RayTracingDiagnostics().causticEmissionGate(
+    diagnostics.causticEmissionGate(
         classification.causticLightCount,
-        m_rayTracingState.m_causticRefractiveInstanceCount,
-        LoadFloat(m_rayTracingState.m_causticTargetBoundsMin),
-        LoadFloat(m_rayTracingState.m_causticTargetBoundsMax),
+        this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount,
+        LoadFloat(this.m_rayTracingState.caustics.m_causticTargetBoundsMin),
+        LoadFloat(this.m_rayTracingState.caustics.m_causticTargetBoundsMax),
         lights,
-        m_rayTracingState.m_causticEmissionGateLogged
+        this.m_rayTracingState.caustics.m_causticEmissionGateLogged
     );
 }
 
-RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const noexcept{
+RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const{
     RayTracingShadowPreparationResourceSnapshot snapshot;
-    snapshot.sceneTlas = m_rayTracingState.m_tlas;
-    snapshot.sceneTlasBackingBuffer = m_rayTracingState.m_tlas ? m_rayTracingState.m_tlas->getBackingBufferHandle() : nullptr;
-    snapshot.bvhSortKeysBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortKeysBuffer;
-    snapshot.bvhSortPayloadBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortPayloadBuffer;
-    snapshot.bvhVisitCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhVisitCounterBuffer;
-    snapshot.swShadowEdgeCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeCounterBuffer;
-    snapshot.swShadowEdgeListBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeListBuffer;
-    snapshot.swShadowIndirectArgsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowIndirectArgsBuffer;
+    snapshot.sceneTlas = this.m_rayTracingState.sceneBvh.m_tlas;
+    if(this.m_rayTracingState.sceneBvh.m_tlas.valid())
+        snapshot.sceneTlasBackingBuffer = this.m_rayTracingState.sceneBvh.m_tlas.deref().getBackingBufferHandle();
+    if(!this.m_shadowVisibilityHardwareSupported){
+        snapshot.bvhSortKeysBuffer = this.m_rayTracingState.sceneBvh.m_bvhSortKeysBuffer;
+        snapshot.bvhSortPayloadBuffer = this.m_rayTracingState.sceneBvh.m_bvhSortPayloadBuffer;
+        snapshot.bvhVisitCounterBuffer = this.m_rayTracingState.sceneBvh.m_bvhVisitCounterBuffer;
+        snapshot.swShadowEdgeCounterBuffer = this.m_rayTracingState.shadow.m_swShadowEdgeCounterBuffer;
+        snapshot.swShadowEdgeListBuffer = this.m_rayTracingState.shadow.m_swShadowEdgeListBuffer;
+        snapshot.swShadowIndirectArgsBuffer = this.m_rayTracingState.shadow.m_swShadowIndirectArgsBuffer;
+    }
     return snapshot;
 }
 
-RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
-    const auto& state = m_rayTracingState;
-    const b8 hasCsgTrace = m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const{
+    in RendererRayTracingState state = this.m_rayTracingState;
+    const b8 hasCsgTrace = this.m_shadowVisibilityTraceResourcesPreflighted && this.m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     usize contextReadTokenCount = 0u;
-    for(const auto& token : state.m_rayTraceContextReadSubmissionTokens){
+    for(in QueueSubmissionToken token : state.shadow.m_rayTraceContextReadSubmissionTokens){
         if(token.valid()){
-            contextReadTokenCount = state.m_rayTraceContextReadSubmissionTokens.size();
+            contextReadTokenCount = state.shadow.m_rayTraceContextReadSubmissionTokens.size();
             break;
         }
     }
     RayTracingDeferredGraphResourceSnapshot snapshot;
-    snapshot.materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer;
-    snapshot.csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr;
-    snapshot.rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u
-        ? Span<const Core::QueueSubmissionToken>(state.m_rayTraceContextReadSubmissionTokens.data(), contextReadTokenCount)
-        : Span<const Core::QueueSubmissionToken>{};
-    snapshot.csgTraceBoundsBuffers = hasCsgTrace ? Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds) : Span<const Core::BufferHandle>{};
-    snapshot.shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
-    snapshot.shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer;
-    snapshot.shadowInstanceBuffer = state.m_shadowInstanceBuffer;
-    snapshot.causticEmissionTargetBuffer = state.m_causticEmissionTargets.buffer;
-    snapshot.surfelFrameConstantsBuffer = state.m_surfelConstants;
+    snapshot.materialContextSlotsBuffer = state.sceneBvh.m_rayTraceMaterialContextSlotsBuffer;
+    if(hasCsgTrace)
+        snapshot.csgTraceContextBuffer = state.sceneBvh.m_csgTraceContextBuffer;
+    if(contextReadTokenCount != 0u)
+        snapshot.rayTraceContextReadSubmissionTokens = Span<QueueSubmissionToken>(state.shadow.m_rayTraceContextReadSubmissionTokens).first(contextReadTokenCount);
+    if(hasCsgTrace)
+        snapshot.csgTraceBoundsBuffers = Span<BufferHandle>(this.m_lightSpaceShadow.m_csg.dynamicBounds);
+    snapshot.shadowInstanceMaterialBuffer = state.shadow.m_shadowInstanceMaterialBuffer;
+    snapshot.shadowMaterialTypedBuffer = state.shadow.m_shadowMaterialTypedBuffer;
+    snapshot.shadowInstanceBuffer = state.shadow.m_shadowInstanceBuffer;
+    snapshot.causticEmissionTargetBuffer = state.caustics.m_causticEmissionTargets.buffer;
+    snapshot.surfelFrameConstantsBuffer = state.surfelGi.m_surfelConstants;
     snapshot.hardwareTransparentCrossingsBuffer = state.m_hardwareTransparentShadow.m_crossingsBuffer;
     snapshot.hardwareTransparentOverflowListBuffer = state.m_hardwareTransparentShadow.m_overflowListBuffer;
     snapshot.hardwareTransparentOverflowArgsBuffer = state.m_hardwareTransparentShadow.m_overflowArgsBuffer;
-    snapshot.sceneBvhNodeBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneBvhNodeBuffer;
-    snapshot.sceneInstanceBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneInstanceBuffer;
-    snapshot.sceneTlas = state.m_tlas;
-    snapshot.causticAccumulatorInitialized = state.m_causticAccumulatorInitialized;
-    snapshot.surfelUsesHardwareTrace = state.m_surfelUseHwTrace;
+    if(!this.m_shadowVisibilityHardwareSupported){
+        snapshot.sceneBvhNodeBuffer = state.sceneBvh.m_sceneBvhNodeBuffer;
+        snapshot.sceneInstanceBuffer = state.sceneBvh.m_sceneInstanceBuffer;
+    }
+    snapshot.sceneTlas = state.sceneBvh.m_tlas;
+    snapshot.causticAccumulatorInitialized = state.caustics.m_causticAccumulatorInitialized;
+    snapshot.surfelUsesHardwareTrace = state.surfelGi.m_surfelUseHwTrace;
     snapshot.surfelSplitGraphPipelinesReady = AreSurfelSplitGraphPipelinesReady(
-        static_cast<b8>(state.m_surfelAgeFreePipeline),
-        static_cast<b8>(state.m_surfelHashBuildPipeline),
-        static_cast<b8>(state.m_surfelSpawnPipeline),
-        state.m_surfelUseHwTrace,
-        state.m_surfelUseCsgTrace,
-        static_cast<b8>(state.m_surfelTraceCsgHwPipeline),
-        static_cast<b8>(state.m_surfelTraceHwPipeline),
-        static_cast<b8>(state.m_surfelTraceCsgPipeline),
-        static_cast<b8>(state.m_surfelTracePipeline),
-        static_cast<b8>(state.m_surfelResolvePipeline),
-        static_cast<b8>(state.m_surfelUpsamplePipeline),
-        static_cast<b8>(state.m_surfelTraceBuildArgsPipeline)
+        state.surfelGi.m_surfelAgeFreePipeline.valid(),
+        state.surfelGi.m_surfelHashBuildPipeline.valid(),
+        state.surfelGi.m_surfelSpawnPipeline.valid(),
+        state.surfelGi.m_surfelUseHwTrace,
+        state.surfelGi.m_surfelUseCsgTrace,
+        state.surfelGi.m_surfelTraceCsgHwPipeline.valid(),
+        state.surfelGi.m_surfelTraceHwPipeline.valid(),
+        state.surfelGi.m_surfelTraceCsgPipeline.valid(),
+        state.surfelGi.m_surfelTracePipeline.valid(),
+        state.surfelGi.m_surfelResolvePipeline.valid(),
+        state.surfelGi.m_surfelUpsamplePipeline.valid(),
+        state.surfelGi.m_surfelTraceBuildArgsPipeline.valid()
     );
     return snapshot;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
 void RendererRayTracingSystem::logCapabilityOnce(){
-    RayTracingDiagnostics().rayTracingCapability(
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct),
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline),
-        m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
-        m_rayTracingState.m_capabilityLogged
+    RayTracingDiagnostics diagnostics;
+    diagnostics.rayTracingCapability(
+        this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct),
+        this.m_graphics.queryFeatureSupport(Feature::RayTracingPipeline),
+        this.m_graphics.queryFeatureSupport(Feature::RayQuery),
+        this.m_rayTracingState.sceneBvh.m_capabilityLogged
     );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

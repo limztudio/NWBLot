@@ -2,108 +2,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/execute/types.adhd>
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
+#include <impl/ecs_render/renderer_frame_pipeline.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
+[modular]
+class GraphicsPrefixTimingResolver : NoCopy{
+    private in RendererFramePipeline m_pipeline;
 
-#include <core/graphics/gpu_timing_types.h>
-#include <core/task/gpu/compiled_graph.h>
+    public GraphicsPrefixTimingResolver(in RendererFramePipeline pipeline){
+        this.m_pipeline = pipeline;
+    }
 
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsPrefixTimingResolver final : NoCopy{
-public:
-    explicit GraphicsPrefixTimingResolver(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void resolve(
-        const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        Span<Core::GpuTimingSubmissionTicket* const> ownedTickets,
-        Span<Core::GpuTimingSubmissionTicket*> timingTickets,
-        Span<Core::GpuTaskId> timingTasks,
-        b8& asyncSpansOnePacket,
-        GraphicsPrefixTimingResolutionResult& outResult
-    )const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Surfel-GI plus caustics merge validation owns packet-merge checks for GI tasks.
-struct SurfelCausticsMergeValidationResult{
-    const Core::GpuPhysicalQueueInfo* hardwareCausticsQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiPreparationQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiSnapshotCopyQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiCounterReadbackQueue = nullptr;
-    b8 surfelGiOutputClearMergedIntoGiPacket = false;
-    b8 surfelGiPreparedPrefixMergedIntoGiPacket = false;
-    b8 surfelGiInitializationLifecycleMergedIntoPreparationPacket = false;
-    b8 causticPhotonMergedIntoCausticsPacket = false;
-    b8 causticGeometryMergedIntoCausticsPacket = false;
-    b8 causticResolvePrepareMergedIntoCausticsPacket = false;
-    b8 causticResolveWaveletsMergedIntoCausticsPacket = false;
-    b8 causticResolveUpsampleMergedIntoCausticsPacket = false;
-    b8 causticIrradianceClearMergedIntoCausticsPacket = false;
-    b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
-    b8 causticAccumulatorDecayMergedIntoCausticsPacket = false;
-    b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = false;
-    b8 surfelCounterReadbackFollowsPresentation = false;
-    b8 laggedLightingHistoryFollowsPresentation = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void resolve(in GpuCompiledGraphReadView compiledPlan, in Span<GraphicsPrefixTimingTicket> ownedTickets,
+        mut Span<GraphicsPrefixTimingTicket> timingTickets, mut Span<GpuTaskId> timingTasks,
+        mut b8 asyncSpansOnePacket, mut GraphicsPrefixTimingResolutionResult outResult)const;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/execute/types.adhd>
-
-[cpp_name("::NWB::Impl::RendererFramePipeline")]
-extern class RendererFramePipeline;
-[cpp_name("::NWB::Impl::SurfelCausticsMergeValidationResult")]
-extern class SurfelCausticsMergeValidationResult;
+class SurfelCausticsMergeValidationResult{
+    public Optional<GpuPhysicalQueueInfo> hardwareCausticsQueue;
+    public Optional<GpuPhysicalQueueInfo> surfelGiQueue;
+    public Optional<GpuPhysicalQueueInfo> surfelGiPreparationQueue;
+    public Optional<GpuPhysicalQueueInfo> surfelGiSnapshotCopyQueue;
+    public Optional<GpuPhysicalQueueInfo> surfelGiCounterReadbackQueue;
+    public b8 surfelGiOutputClearMergedIntoGiPacket = false;
+    public b8 surfelGiPreparedPrefixMergedIntoGiPacket = false;
+    public b8 surfelGiInitializationLifecycleMergedIntoPreparationPacket = false;
+    public b8 causticPhotonMergedIntoCausticsPacket = false;
+    public b8 causticGeometryMergedIntoCausticsPacket = false;
+    public b8 causticResolvePrepareMergedIntoCausticsPacket = false;
+    public b8 causticResolveWaveletsMergedIntoCausticsPacket = false;
+    public b8 causticResolveUpsampleMergedIntoCausticsPacket = false;
+    public b8 causticIrradianceClearMergedIntoCausticsPacket = false;
+    public b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
+    public b8 causticAccumulatorDecayMergedIntoCausticsPacket = false;
+    public b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = false;
+    public b8 surfelCounterReadbackFollowsPresentation = false;
+    public b8 laggedLightingHistoryFollowsPresentation = false;
+}
 
 [modular]
 class OpaqueEmulationMergeValidator : NoCopy{
@@ -112,6 +52,10 @@ class OpaqueEmulationMergeValidator : NoCopy{
     public OpaqueEmulationMergeValidator(in RendererFramePipeline pipeline){
         this.m_pipeline = pipeline;
     }
+
+    private b8 sharedPhasesMerge(in GpuCompiledGraphReadView compiledPlan, in Optional<GpuPhysicalQueueInfo> opaqueSharedComputeEmulationQueue)const;
+
+    private b8 intervalSampleMerges(in GpuCompiledGraphReadView compiledPlan, in Optional<GpuPhysicalQueueInfo> opaqueCsgIntervalSampleComputeEmulationQueue)const;
 
     public void validate(
         in GpuCompiledGraphReadView compiledPlan,

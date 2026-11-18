@@ -49,7 +49,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel& model)override{
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel& model)noexcept override{
         ++loans;
         EditBoxResult result;
         result.valid = model.setText("borrowed");
@@ -57,7 +57,7 @@ public:
         return result;
     }
 
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken&, EditModel& model)override{ return edit(widget, options, model); }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken&, EditModel& model)noexcept override{ return edit(widget, options, model); }
 
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
 
@@ -93,11 +93,11 @@ public:
     }
 
     void useEditHost(IEditBoxHost& host)noexcept{
-        m_builder.setEditHost(&host);
+        m_builder.setEditHost(host);
     }
 
     void clearEditHost()noexcept{
-        m_builder.setEditHost(nullptr);
+        m_builder.clearEditHost();
     }
 };
 

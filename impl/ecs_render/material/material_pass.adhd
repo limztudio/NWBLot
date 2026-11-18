@@ -405,110 +405,56 @@ b8 MaterialPassDrawRecorder::prepareMaterialPassResourceBindingsImpl(in Span<Mat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+#include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/assets_graphics/mesh_subsystem.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
 
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexPositionOffset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexNormalOffset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexTangentOffset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexUv0Offset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexColorOffset;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/material/material_internal.adhd.h>
-#include <impl/ecs_render/material/material_pass_draw_recorder.adhd.h>
-#include <impl/ecs_render/material/material_system.adhd.h>
-#include <impl/ecs_render/material/renderer_material_state.adhd.h>
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
-#include <impl/assets/graphics/mesh/object_geometry_constants.h>
-#include <impl/assets_graphics/mesh_subsystem.adhd.h>
-#include <impl/assets_shader/asset.adhd.h>
-
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/shader_archive.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_material_pass{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass)noexcept{
+GpuTimingScopeDefinition MaterialPassGpuTimingScope(in MaterialPipelinePass pass){
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy: return s_TimingScopeAvboitOccupancy;
     case MaterialPipelinePass::AvboitExtinction: return s_TimingScopeAvboitExtinction;
     case MaterialPipelinePass::AvboitAccumulate: return s_TimingScopeAvboitAccumulate;
-    default: return s_NoneGpuTimingScope;
+    default: return GpuTimingScopeDefinition();
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererMaterialSystem::renderPreparedMaterialPass(
-    Core::CommandList& commandList,
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const AvboitFrameTargets* const avboitTargets,
-    const MaterialPassDrawItemPartitionsView& drawItems,
-    const CsgFrameGpuDataView& csgFrameData,
-    const CsgGraphResourceSnapshot& csgResources,
-    const MeshFrameBindingSnapshot& frameBindings,
-    const usize instanceCount,
-    const usize materialTypedByteCount,
-    const b8 materialFrameStatesGraphOwned,
-    const b8 materialGeometryStatesGraphOwned,
-    const b8 emulationOutputEntryStateGraphOwned,
-    const b8 csgEmulationOutputEntryStateGraphOwned,
-    const b8 emulationOutputReused,
-    Optional<Core::GpuTimingMeasure>* const emulationOutputTiming
-){
-    const auto discardEmulationOutputTiming = [emulationOutputTiming](){
-        if(!emulationOutputTiming || !emulationOutputTiming->has_value())
+void RendererMaterialSystem::recordPreparedMaterialPass(mut CommandList commands, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
+        in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources,
+        in MeshFrameBindingSnapshot frameBindings, in usize instanceCount, in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned,
+        in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
+        in b8 emulationOutputReused, in Optional<mut Optional<GpuTimingMeasure>> emulationOutputTiming){
+    auto discardEmulationOutputTiming = lambda[in emulationOutputTiming]() -> void{
+        if(!emulationOutputTiming.has_value() || !emulationOutputTiming.value().has_value())
             return;
-        emulationOutputTiming->value().discardTiming();
-        emulationOutputTiming->reset();
+        emulationOutputTiming.value().value().discardTiming();
+        emulationOutputTiming.value().reset();
     };
-    const b8 avboitTargetsValid = avboitTargets && avboitTargets->valid();
-    if(!CanPrepareMaterialPassTargets(framebuffer != nullptr, pass, avboitTargetsValid) || drawItems.empty()){
+    const b8 avboitTargetsValid = avboitTargets.valid();
+    if(!CanPrepareMaterialPassTargets(framebuffer.valid(), pass, avboitTargetsValid) || drawItems.empty()){
         discardEmulationOutputTiming();
         return;
     }
 
-    commandList.endRenderPass();
+    commands.endRenderPass();
 
     // Fresh producers open split timing. Reused regular output has a separate, already-validated graph producer.
     if(IsRejectedReusedEmulationOutputHandoff(emulationOutputReused, emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned))
         return;
     const b8 splitEmulationTiming = UsesSplitEmulationTiming(emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned, emulationOutputReused);
-    if(splitEmulationTiming && (!emulationOutputTiming || !emulationOutputTiming->has_value()))
+    if(splitEmulationTiming && (!emulationOutputTiming.has_value() || !emulationOutputTiming.value().has_value()))
         return;
 
     // Declaration froze ordering and published bytes; keep this consumer side-effect free.
@@ -516,23 +462,23 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         discardEmulationOutputTiming();
         return;
     }
-    const b8 regularDrawResourcesReady = m_drawRecorder.materialPassDrawResourcesReady(drawItems.regular, frameBindings);
+    const b8 regularDrawResourcesReady = this.m_drawRecorder.materialPassDrawResourcesReady(drawItems.regular, frameBindings);
     // Active handoff covers every regular draw; reject on late resource disagreement.
     if(emulationOutputEntryStateGraphOwned && !regularDrawResourcesReady){
         discardEmulationOutputTiming();
         return;
     }
     const b8 csgResourcesReady = csgResources.frameReady(csgFrameData);
-    const b8 csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || m_drawRecorder.materialPassDrawResourcesReady(drawItems.csg, frameBindings));
+    const b8 csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || this.m_drawRecorder.materialPassDrawResourcesReady(drawItems.csg, frameBindings));
     if(csgEmulationOutputEntryStateGraphOwned && !csgDrawResourcesReady){
         discardEmulationOutputTiming();
         return;
     }
 
-    Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+    ViewportState viewportState;
+    viewportState.addViewportAndScissorRect(framebuffer.deref().getFramebufferInfo().getViewport());
     MaterialPassDrawContext regularDrawContext(
-        commandList,
+        commands,
         viewportState,
         frameBindings,
         pass,
@@ -541,11 +487,10 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         emulationOutputEntryStateGraphOwned
     );
     regularDrawContext.setFramebuffer(framebuffer);
-    if(avboitTargets)
-        regularDrawContext.setAvboitTargets(*avboitTargets);
+    regularDrawContext.setAvboitTargets(avboitTargets);
     // CSG opts in only via its own frozen producer; keep it separate from the regular flag.
     MaterialPassDrawContext csgDrawContext(
-        commandList,
+        commands,
         viewportState,
         frameBindings,
         pass,
@@ -554,252 +499,139 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         csgEmulationOutputEntryStateGraphOwned
     );
     csgDrawContext.setFramebuffer(framebuffer).setCsgResources(csgResources);
-    if(avboitTargets)
-        csgDrawContext.setAvboitTargets(*avboitTargets);
-    const auto recordPreparedDraws = [&](){
+    csgDrawContext.setAvboitTargets(avboitTargets);
+    auto recordPreparedDraws = lambda[mut this, in regularDrawResourcesReady, in csgDrawResourcesReady, mut regularDrawContext, mut csgDrawContext, in drawItems]() -> void{
         if(regularDrawResourcesReady)
-            m_drawRecorder.renderMaterialPassDrawItems(regularDrawContext, drawItems.regular);
+            this.m_drawRecorder.renderMaterialPassDrawItems(regularDrawContext, drawItems.regular);
         if(csgDrawResourcesReady)
-            m_drawRecorder.renderMaterialPassDrawItems(csgDrawContext, drawItems.csg);
+            this.m_drawRecorder.renderMaterialPassDrawItems(csgDrawContext, drawItems.csg);
     };
     if(splitEmulationTiming){
         recordPreparedDraws();
-        emulationOutputTiming->value().finishTiming(commandList);
-        emulationOutputTiming->reset();
+        emulationOutputTiming.value().value().finishTiming(commands);
+        emulationOutputTiming.value().reset();
     }
     else{
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), __hidden_material_pass::MaterialPassGpuTimingScope(pass), m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), MaterialPassGpuTimingScope(pass), this.m_graphics.getDevice(), commands);
 
         recordPreparedDraws();
     }
 }
 
-void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
-    Core::CommandList& commandList,
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const AvboitFrameTargets& avboitTargets,
-    const MaterialPassDrawItemPartitionsView& drawItems,
-    const CsgFrameGpuDataView& csgFrameData,
-    const CsgGraphResourceSnapshot& csgResources,
-    const MeshFrameBindingSnapshot& frameBindings,
-    const usize instanceCount,
-    const usize materialTypedByteCount,
-    const b8 materialFrameStatesGraphOwned,
-    const b8 materialGeometryStatesGraphOwned,
-    const b8 emulationOutputEntryStateGraphOwned,
-    const b8 csgEmulationOutputEntryStateGraphOwned,
-    const b8 emulationOutputReused
-){
-    renderPreparedMaterialPass(
-        commandList,
-        framebuffer,
-        pass,
-        &avboitTargets,
-        drawItems,
-        csgFrameData,
-        csgResources,
-        frameBindings,
-        instanceCount,
-        materialTypedByteCount,
-        materialFrameStatesGraphOwned,
-        materialGeometryStatesGraphOwned,
-        emulationOutputEntryStateGraphOwned,
-        csgEmulationOutputEntryStateGraphOwned,
-        emulationOutputReused,
-        nullptr
-    );
+void RendererMaterialSystem::renderPreparedAvboitMaterialPass(mut CommandList commandList, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
+    in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources, in MeshFrameBindingSnapshot frameBindings, in usize instanceCount,
+    in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned, in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned, in b8 emulationOutputReused){
+    this.recordPreparedMaterialPass(commandList, framebuffer, pass, avboitTargets, drawItems, csgFrameData, csgResources,
+        frameBindings, instanceCount, materialTypedByteCount, materialFrameStatesGraphOwned, materialGeometryStatesGraphOwned, emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned,
+            emulationOutputReused, Optional<mut Optional<GpuTimingMeasure>>());
 }
 
-void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
-    Core::CommandList& commandList,
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const AvboitFrameTargets& avboitTargets,
-    const MaterialPassDrawItemPartitionsView& drawItems,
-    const CsgFrameGpuDataView& csgFrameData,
-    const CsgGraphResourceSnapshot& csgResources,
-    const MeshFrameBindingSnapshot& frameBindings,
-    const usize instanceCount,
-    const usize materialTypedByteCount,
-    const b8 materialFrameStatesGraphOwned,
-    const b8 materialGeometryStatesGraphOwned,
-    const b8 emulationOutputEntryStateGraphOwned,
-    const b8 csgEmulationOutputEntryStateGraphOwned,
-    const b8 emulationOutputReused,
-    Optional<Core::GpuTimingMeasure>& emulationOutputTiming
-){
-    renderPreparedMaterialPass(
-        commandList,
-        framebuffer,
-        pass,
-        &avboitTargets,
-        drawItems,
-        csgFrameData,
-        csgResources,
-        frameBindings,
-        instanceCount,
-        materialTypedByteCount,
-        materialFrameStatesGraphOwned,
-        materialGeometryStatesGraphOwned,
-        emulationOutputEntryStateGraphOwned,
-        csgEmulationOutputEntryStateGraphOwned,
-        emulationOutputReused,
-        &emulationOutputTiming
-    );
+void RendererMaterialSystem::renderPreparedAvboitMaterialPass(mut CommandList commandList, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
+    in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources, in MeshFrameBindingSnapshot frameBindings, in usize instanceCount,
+    in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned, in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
+    in b8 emulationOutputReused, mut Optional<GpuTimingMeasure> emulationOutputTiming){
+    this.recordPreparedMaterialPass(commandList, framebuffer, pass, avboitTargets, drawItems, csgFrameData, csgResources,
+        frameBindings, instanceCount, materialTypedByteCount, materialFrameStatesGraphOwned, materialGeometryStatesGraphOwned, emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned,
+            emulationOutputReused, Optional<mut Optional<GpuTimingMeasure>>(emulationOutputTiming));
 }
 
-b8 RendererMaterialSystem::prepareMaterialPassResources(
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const b8 transparent,
-    const CsgFrameState& csgFrameState
-){
-    Core::Alloc::ScratchArena scratchArena;
-    return prepareMaterialPassResources(scratchArena, framebuffer, pass, transparent, csgFrameState, nullptr);
+b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState){
+    return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, false);
 }
 
-b8 RendererMaterialSystem::prepareMaterialPassResources(
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const b8 transparent,
-    const CsgFrameState& csgFrameState,
-    const AvboitFrameTargets& avboitTargets
-){
-    Core::Alloc::ScratchArena scratchArena;
-    return prepareMaterialPassResources(scratchArena, framebuffer, pass, transparent, csgFrameState, &avboitTargets);
+b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in AvboitFrameTargets avboitTargets){
+    return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, avboitTargets.valid());
 }
 
-b8 RendererMaterialSystem::prepareMaterialPassResources(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const b8 transparent,
-    const CsgFrameState& csgFrameState
-){
-    return prepareMaterialPassResources(scratchArena, framebuffer, pass, transparent, csgFrameState, nullptr);
-}
-
-b8 RendererMaterialSystem::prepareMaterialPassResources(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const b8 transparent,
-    const CsgFrameState& csgFrameState,
-    const AvboitFrameTargets& avboitTargets
-){
-    return prepareMaterialPassResources(scratchArena, framebuffer, pass, transparent, csgFrameState, &avboitTargets);
-}
-
-b8 RendererMaterialSystem::prepareMaterialPassResources(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::FramebufferHandle& framebuffer,
-    const MaterialPipelinePass::Enum pass,
-    const b8 transparent,
-    const CsgFrameState& csgFrameState,
-    const AvboitFrameTargets* avboitTargets
-){
-    const b8 avboitTargetsValid = avboitTargets && avboitTargets->valid();
-    if(!CanPrepareMaterialPassTargets(framebuffer != nullptr, pass, avboitTargetsValid))
+b8 RendererMaterialSystem::prepareMaterialPassResourcesImpl(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in b8 avboitTargetsValid){
+    if(!CanPrepareMaterialPassTargets(framebuffer.valid(), pass, avboitTargetsValid))
         return false;
 
-    MaterialPassDrawItemPartitions drawItems{scratchArena};
-    InstanceGpuDataVector instanceData{scratchArena};
-    CsgFrameGpuData csgFrameData{scratchArena};
-#if defined(NWB_DEBUG)
-    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
-#endif
-    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
+    MaterialPassDrawItemPartitions drawItems;
+    InstanceGpuDataVector instanceData;
+    CsgFrameGpuData csgFrameData;
+    MaterialTypedInstanceRangeVector materialTypedRanges;
+    MaterialTypedByteDataVector materialTypedBytes;
 
-    gatherMaterialPassDrawItems(
-        framebuffer.get(),
+    this.gatherMaterialPassDrawItems(
+        framebuffer,
         pass,
         transparent,
         csgFrameState,
         RendererResourceLookupMode::CreateMissing,
-        nullptr,
+        Optional<in MeshViewGpuData>(),
         drawItems,
         instanceData,
         csgFrameData,
-#if defined(NWB_DEBUG)
         materialTypedRanges,
-#endif
         materialTypedBytes
     );
     if(drawItems.empty())
         return true;
 
-    const b8 drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
-    const b8 regularDrawResourcesReady = m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.regular);
-    const b8 csgDrawResourcesReady = drawItems.csg.empty() || m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.csg);
-    const b8 csgReceiverSurfaceDrawResourcesReady = drawItems.csgReceiverSurface.empty() || m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface);
+    const b8 drawBuffersReady = this.prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
+    const b8 regularDrawResourcesReady = this.m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.regular);
+    const b8 csgDrawResourcesReady = drawItems.csg.empty() || this.m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.csg);
+    const b8 csgReceiverSurfaceDrawResourcesReady = drawItems.csgReceiverSurface.empty() || this.m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface);
 
     return drawBuffersReady && regularDrawResourcesReady && csgDrawResourcesReady && csgReceiverSurfaceDrawResourcesReady;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(const CsgGraphResourceSnapshot& csgResources, const Span<InstanceGpuData> instanceData)noexcept{
-    // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
-    const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
-    for(InstanceGpuData& instance : instanceData)
-        instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(in CsgGraphResourceSnapshot csgResources, mut Span<InstanceGpuData> instanceData){
+    const auto slot = csgResources.findClipContextHeapSlot();
+    for(mut InstanceGpuData instance : instanceData)
+        instance.geometryHeapSlots[s_MeshInstanceCsgContextHeapSlot] = slot.value_or(0u);
 }
 
 void RendererMaterialSystem::invalidateResources(){
-    releaseMaterialResourceReferences();
-    m_materialState.invalidateResources();
+    this.releaseMaterialResourceReferences();
+    this.m_materialState.invalidateResources();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelineResources& resources){
-    if(!prepareMeshComputeBindingLayout())
+b8 RendererMaterialSystem::createObjectGeometryPipelineResources(mut MaterialPipelineResources resources){
+    if(!this.prepareMeshComputeBindingLayout())
         return false;
-    auto& device = m_graphics.getDevice();
+    mut Device device = this.m_graphics.getDevice();
     // A single fixed engine decoder defines cache contents independently of the selected material or raster pass.
-    if(!m_materialState.m_objectGeometryDecodePipeline){
-        if(!m_shaderSystem.loadShader<ComputeShader, MeshSubsystem>(SubsystemAssetSelector<MeshSubsystem, ComputeShader>([](const MeshSubsystem& s){ return s.objectDecodeCs; }), Core::ShaderArchive::s_DefaultVariant, s_ObjectGeometryDecodeDebugName, m_materialState.m_objectGeometryDecodeShader))
+    if(!this.m_materialState.m_objectGeometryDecodePipeline.valid()){
+        if(!this.m_shaderSystem.loadShader<ComputeShader, MeshSubsystem>(lambda[](in MeshSubsystem s) -> AssetRef<ComputeShader>{ return s.objectDecodeCs; }, s_ShaderArchiveDefaultVariant,
+            s_ObjectGeometryDecodeDebugName, this.m_materialState.m_objectGeometryDecodeShader))
             return false;
-        if(!CreateHeapComputePipeline(device, m_materialState.m_objectGeometryDecodeShader, m_materialState.m_computeBindingLayout, false, m_materialState.m_objectGeometryDecodePipeline))
+        if(!CreateHeapComputePipeline(device, this.m_materialState.m_objectGeometryDecodeShader, this.m_materialState.m_computeBindingLayout, false, this.m_materialState.m_objectGeometryDecodePipeline))
             return false;
     }
-    if(!m_shaderSystem.loadShader<VertexShader, MeshSubsystem>(SubsystemAssetSelector<MeshSubsystem, VertexShader>([](const MeshSubsystem& s){ return s.objectVs; }), Core::ShaderArchive::s_DefaultVariant, s_ObjectGeometryVsDebugName, resources.objectGeometryVertexShader))
+    if(!this.m_shaderSystem.loadShader<VertexShader, MeshSubsystem>(lambda[](in MeshSubsystem s) -> AssetRef<VertexShader>{ return s.objectVs; }, s_ShaderArchiveDefaultVariant, s_ObjectGeometryVsDebugName, resources.objectGeometryVertexShader))
         return false;
-    if(!m_materialState.m_objectGeometryInputLayout){
-        Array<Core::VertexAttributeDesc, s_ObjectGeometryVertexAttributeCount> attributes{};
-        const Array<Core::Format::Enum, 5u> formats = { Core::Format::RGBA32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RG32_FLOAT, Core::Format::RGBA16_FLOAT, };
-        const Array<u32, 5u> offsets = { NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET, };
-        const Array<Name, 5u> names = { s_VertexAttributePositionName, s_VertexAttributeNormalName, s_VertexAttributeTangentName, s_VertexAttributeTexCoordName, s_VertexAttributeColorName };
-        for(u32 index = 0u; index < attributes.size(); ++index)
-            attributes[index].setFormat(formats[index]).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsets[index]).setElementStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setName(names[index]);
-        auto objectGeometryInputLayoutResult = device.createInputLayout(attributes.data(), static_cast<u32>(attributes.size()), resources.objectGeometryVertexShader.get());
-        if(objectGeometryInputLayoutResult)
-            m_materialState.m_objectGeometryInputLayout = Move(*objectGeometryInputLayoutResult);
+    if(!this.m_materialState.m_objectGeometryInputLayout.valid()){
+        Array<VertexAttributeDesc, s_ObjectGeometryVertexAttributeCount> attributes;
+        const Array<Format, 5u> formats(Format::RGBA32_FLOAT, Format::RGBA16_FLOAT, Format::RGBA16_FLOAT, Format::RG32_FLOAT, Format::RGBA16_FLOAT);
+        const Array<u32, 5u> offsets(s_ObjectVertexPositionOffset, s_ObjectVertexNormalOffset, s_ObjectVertexTangentOffset, s_ObjectVertexUv0Offset, s_ObjectVertexColorOffset);
+        const Array<Name, 5u> names(s_VertexAttributePositionName, s_VertexAttributeNormalName, s_VertexAttributeTangentName, s_VertexAttributeTexCoordName, s_VertexAttributeColorName);
+        for(u32 index = 0u; index < LengthOf(attributes); ++index)
+            attributes[index].setFormat(formats[index]).setBufferIndex(s_MeshEmulationVertexBufferIndex).setOffset(offsets[index]).setElementStride(cast<u32>(s_MeshObjectVertexByteSize)).setName(names[index]);
+        auto objectGeometryInputLayoutResult = device.createInputLayout(attributes, resources.objectGeometryVertexShader.deref());
+        if(objectGeometryInputLayoutResult.has_value())
+            this.m_materialState.m_objectGeometryInputLayout = objectGeometryInputLayoutResult.value();
         else
-            m_materialState.m_objectGeometryInputLayout.reset();
-        if(!objectGeometryInputLayoutResult)
+            this.m_materialState.m_objectGeometryInputLayout.reset();
+        if(!objectGeometryInputLayoutResult.has_value())
             return false;
     }
-    resources.objectGeometryDecodePipeline = m_materialState.m_objectGeometryDecodePipeline;
+    resources.objectGeometryDecodePipeline = this.m_materialState.m_objectGeometryDecodePipeline;
     return true;
 }
 
-b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem){
-    const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-    const auto& cache = mesh.objectGeometryCache;
-    const Core::ComputePipelineHandle& pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
-    if(!pipeline || pipeline != cache.decoderPipeline || !cache.valid() || !m_drawRecorder.materialPassDrawResourcesReady(mesh, context.frameBindings))
+b8 RendererMaterialSystem::recordObjectGeometryDecode(in MaterialPassDrawContext context, in MaterialPassDrawItem drawItem){
+    in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+    in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
+    in ComputePipelineHandle pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
+    if(!pipeline.valid() || pipeline != cache.decoderPipeline || !cache.valid() || !this.m_drawRecorder.materialPassDrawResourcesReady(mesh, context.frameBindings))
         return false;
-    Core::CommandList& commandList = *context.commandList;
-    Core::ComputeState state;
-    state.setPipeline(pipeline.get());
+    mut CommandList commandList = context.commandList;
+    ComputeState state;
+    state.setPipeline(pipeline.deref());
     commandList.setComputeState(state);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline.get());
+    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref());
     const MeshFrameHeapSlots slots = ResolveMeshFrameHeapSlots(context.frameBindings, cache.heapHandle.slot());
     const ShaderDrivenPushConstants meshPush = BuildShaderDrivenPushConstants(
         mesh.meshletCount,
@@ -809,26 +641,16 @@ b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawCont
         slots,
         0u
     );
-    const MeshComputePushConstants push{ .mesh = meshPush, .generatedIndexByteOffset = cache.indexByteOffset, };
-    commandList.setPushConstants(&push, sizeof(push));
+    MeshComputePushConstants push;
+    push.mesh = meshPush;
+    push.generatedIndexByteOffset = cache.indexByteOffset;
+    commandList.setPushConstants(push);
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, m_graphics.getDevice(), commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, this.m_graphics.getDevice(), commandList);
 
         commandList.dispatch(ComputeObjectGeometryDecodeGroupCount(mesh.meshletCount));
     }
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

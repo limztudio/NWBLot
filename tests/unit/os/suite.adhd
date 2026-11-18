@@ -1523,6 +1523,33 @@ NWB_ADHD_GTEST(TextInputText, BoundariesUseBytesForBmpAndSupplementaryScalars, V
 NWB_ADHD_GTEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins, VerifyTextInputText_CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins)
 NWB_ADHD_GTEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength, VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength)
 
+[source]
+native{
+TEST(TextInput, QueuedPayloadKeepsItsDestinationArenaWhenMoved){
+    using namespace ::NWB::Core;
+    Alloc::GlobalArena destination(Name("tests/os/queued_text"));
+    TextInputEvent queued(destination);
+    {
+        Alloc::ScratchArena transient(Name("tests/os/incoming_text"));
+        TextInputEvent incoming(transient);
+        incoming.text.assign(1024u, 'a');
+        incoming.sequence = 9u;
+        incoming.kind = TextInputEventKind::Preedit;
+        incoming.caretVisible = false;
+        queued = Move(incoming);
+        EXPECT_EQ(queued.text.get_allocator().arenaPtr(), &destination);
+    }
+    const char* const payload = queued.text.data();
+    TextInputEvent delivered(destination, Move(queued));
+    EXPECT_EQ(delivered.text.data(), payload);
+    EXPECT_EQ(delivered.text.size(), 1024u);
+    EXPECT_EQ(delivered.text.back(), 'a');
+    EXPECT_EQ(delivered.sequence, 9u);
+    EXPECT_EQ(delivered.kind, TextInputEventKind::Preedit);
+    EXPECT_FALSE(delivered.caretVisible);
+}
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

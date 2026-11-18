@@ -2,103 +2,97 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/context.adhd>
+#include "list.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/id.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
+type ListInputMatches = Func<64u, b8()>;
+type ListInputApplyAction = Func<64u, ListActionOutcome(in ControlAction)>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_UI_BEGIN
+class ListInput{
+    private mut Context m_context;
 
+    public ListInput(mut Context context){
+        this.m_context = context;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private Expected<PointerGesture> nextGesture(in WidgetState rows, in WidgetId thumb, in b8 enabled, in b8 inPopup){
+        if(inPopup)
+            return this.m_context.input().consumePointerGesture(thumb, rows.declarationGeneration);
+        return this.m_context.takePartPointerGesture(rows, thumb, enabled);
+    }
 
+    private Expected<ControlAction> nextAction(in WidgetState rows, in ControlToken token, in b8 enabled, in b8 inPopup){
+        if(inPopup)
+            return this.m_context.input().consumeControlAction(rows.id, rows.declarationGeneration, token);
+        return this.m_context.takeControlAction(rows, enabled, token);
+    }
 
-class ListInput final{
-public:
-    explicit ListInput(Context& context)noexcept
-        : m_context(context)
-    {}
+    private b8 validGesture(in Expected<PointerGesture> gesture, in ControlToken token, in b8 inPopup, in PopupToken popup)const{
+        return gesture.has_value() && gesture.value().control == token && (!inPopup || gesture.value().popup == popup);
+    }
 
+    private b8 validAction(in Expected<ControlAction> action, in b8 inPopup, in PopupToken popup)const{
+        return action.has_value() && (!inPopup || action.value().popup == popup);
+    }
 
-public:
-    template<typename MatchF, typename ApplyActionF>
-    [[nodiscard]] b8 consume(const WidgetState& rows, const ControlToken& token, const b8 enabled, const PopupToken* const popup, ListState& state, MatchF&& matches, ApplyActionF&& applyAction){
-        const auto thumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollbar);
-        if(!thumb)
+    private b8 consumeQueued(
+        in WidgetState rows,
+        in ControlToken token,
+        in b8 enabled,
+        in b8 inPopup,
+        in PopupToken popup,
+        mut ListState state,
+        in ListInputMatches matches,
+        in ListInputApplyAction applyAction
+    ){
+        const Expected<WidgetId> thumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollbar);
+        if(!thumb.has_value())
             return false;
-        const auto nextGesture = [&](){
-            return popup ? m_context.input().consumePointerGesture(*thumb, rows.declarationGeneration) : m_context.takePartPointerGesture(rows, *thumb, enabled);
-        };
-        const auto validGesture = [&](const Expected<PointerGesture>& gesture)noexcept{
-            return gesture && gesture->control == token && (!popup || gesture->popup == *popup);
-        };
-        const auto nextAction = [&](){
-            return popup ? m_context.input().consumeControlAction(rows.id, rows.declarationGeneration, token) : m_context.takeControlAction(rows, enabled, token);
-        };
-        const auto validAction = [&](const Expected<ControlAction>& action)noexcept{
-            return action && (!popup || action->popup == *popup);
-        };
-        auto gesture = nextGesture();
-        b8 haveGesture = validGesture(gesture);
-        auto action = nextAction();
-        b8 haveAction = validAction(action);
+        Expected<PointerGesture> gesture = this.nextGesture(rows, thumb.value(), enabled, inPopup);
+        b8 haveGesture = this.validGesture(gesture, token, inPopup, popup);
+        Expected<ControlAction> action = this.nextAction(rows, token, enabled, inPopup);
+        b8 haveAction = this.validAction(action, inPopup, popup);
         while(haveGesture || haveAction){
             if(!matches())
                 return false;
-            if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
-                if(!ApplyGesture(state, *gesture))
+            if(haveGesture && (!haveAction || gesture.value().updateSequence < action.value().id.sequence)){
+                const Expected<f64> offset = TryComputeListGestureScrollOffset(gesture.value());
+                if(!offset.has_value())
                     return false;
-                gesture = nextGesture();
-                haveGesture = validGesture(gesture);
+                state.m_ensureCursor = false;
+                if(!state.m_scroll.setOffset(offset.value()))
+                    return false;
+                gesture = this.nextGesture(rows, thumb.value(), enabled, inPopup);
+                haveGesture = this.validGesture(gesture, token, inPopup, popup);
             }
             else{
-                const ListActionOutcome::Enum outcome = applyAction(*action);
+                const ListActionOutcome outcome = applyAction(action.value());
                 if(outcome == ListActionOutcome::Failed)
                     return false;
                 if(outcome == ListActionOutcome::Stop)
                     return true;
-                action = nextAction();
-                haveAction = validAction(action);
+                action = this.nextAction(rows, token, enabled, inPopup);
+                haveAction = this.validAction(action, inPopup, popup);
             }
         }
         return matches();
     }
 
-
-private:
-    [[nodiscard]] static b8 ApplyGesture(ListState& state, const PointerGesture& gesture)noexcept{
-        const Expected<f64> offset = TryComputeListGestureScrollOffset(gesture);
-        if(!offset)
-            return false;
-        state.m_ensureCursor = false;
-        return state.m_scroll.setOffset(*offset);
+    public b8 consume(in WidgetState rows, in ControlToken token, in b8 enabled, mut ListState state, in ListInputMatches matches, in ListInputApplyAction applyAction){
+        return this.consumeQueued(rows, token, enabled, false, PopupToken(), state, matches, applyAction);
     }
 
-
-private:
-    Context& m_context;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 consume(in WidgetState rows, in ControlToken token, in b8 enabled, in PopupToken popup, mut ListState state, in ListInputMatches matches, in ListInputApplyAction applyAction){
+        return this.consumeQueued(rows, token, enabled, true, popup, state, matches, applyAction);
+    }
 }
 
 

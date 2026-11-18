@@ -16,5 +16,9 @@ extern enum ProcessSignal : u32{
 extern u32 CurrentProcessId();
 
 
+[cpp_header("<global/process.h>"), cpp_name("::NextProcessSequence")]
+extern u64 NextProcessSequence();
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -2,73 +2,122 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_graphics/cook_types.adhd>
+#include <impl/assets_material/cook_entry.adhd>
+#include <impl/assets_shader/cook_shader_metadata.adhd>
+#include <impl/ecs_render/material/pipeline_enums.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
+const Array<StringView, 1u> s_ExternallyPlannedMacroIncludes(s_CsgProjectEvaluatorModuleDefineName);
+
+b8 ValidateInsertedCsgClipImplicitDefine(in b8 inserted, in StringView defineName, in StringView entryName){
+    if(inserted)
+        return true;
+
+    error("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'", defineName, entryName);
+    return false;
+}
+
+void InsertCsgClipShaderStageKey(in Name shaderName, in Name stageName, mut HashSet<ShaderStageKey> inOutShaderKeys){
+    if(shaderName == s_NameNone || stageName == s_NameNone)
+        return;
+    const ShaderStageKey key(shaderName, stageName);
+    if(inOutShaderKeys.contains(key))
+        return;
+    inOutShaderKeys.insert(key);
+}
+
+Expected<b8, NameTextError> SupportsCsgClipShaderVariant(in HashSet<ShaderStageKey> shaderKeys, in StringView shaderNameText, in StringView archiveStageText){
+    const Expected<Optional<Name>, NameTextError> shaderName = ToName(shaderNameText);
+    const Expected<Optional<Name>, NameTextError> stageName = ToName(archiveStageText);
+    if(!shaderName.has_value())
+        return MakeUnexpected(shaderName.error());
+    if(!stageName.has_value())
+        return MakeUnexpected(stageName.error());
+
+    Name resolvedShaderName = s_NameNone;
+    if(shaderName.value().has_value())
+        resolvedShaderName = shaderName.value().value();
+    Name resolvedStageName = s_NameNone;
+    if(stageName.value().has_value())
+        resolvedStageName = stageName.value().value();
+    const ShaderStageKey shaderKey(resolvedShaderName, resolvedStageName);
+    return shaderKeys.contains(shaderKey);
+}
+
+b8 PopulateCsgClipDefineCombo(
+    in StringView entryName,
+    in HashMap<StringView, StringView> sourceCombo,
+    mut HashMap<StringView, StringView> outCombo
+){
+    const Expected<usize> capacity = TryComputeCsgClipDefineCapacity(entryName, sourceCombo.size());
+    if(!capacity.has_value())
+        return false;
+
+    outCombo.clear();
+    outCombo.reserve(capacity.value());
+    for(in auto entry : sourceCombo){
+        if(!outCombo.try_emplace(entry.first, entry.second).second){
+            assert(false);
+            return false;
+        }
+    }
+
+    if(!ValidateInsertedCsgClipImplicitDefine(outCombo.try_emplace(s_CsgIntervalSampleEnabledImplicitDefineName, s_IntervalSampleEnabledImplicitDefineValue).second, s_CsgIntervalSampleEnabledImplicitDefineName, entryName))
+        return false;
+
+    return ValidateInsertedCsgClipImplicitDefine(outCombo.try_emplace(s_CsgClipImplicitDefineName, s_EnabledImplicitDefineValue).second, s_CsgClipImplicitDefineName, entryName);
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void CollectMaterialStageClipShaderKeys(in Span<MaterialCookEntry> materials, in ShaderType stage, mut HashSet<ShaderStageKey> keys){
+    const Name stageName = ArchiveStageNameFromShaderType(stage);
+    for(in MaterialCookEntry material : materials){
+        if(material.stageShaders.contains(stage))
+            InsertCsgClipShaderStageKey(material.stageShaders.at(stage).name(), stageName, keys);
+    }
+}
 
+HashSet<ShaderStageKey> CollectMaterialClipShaderKeys(in Span<MaterialCookEntry> materials){
+    HashSet<ShaderStageKey> keys;
+    keys.reserve(materials.size());
+    CollectMaterialStageClipShaderKeys(materials, ShaderType::PixelStage, keys);
+    CollectMaterialStageClipShaderKeys(materials, ShaderType::MeshStage, keys);
+    return keys;
+}
 
-#include <impl/assets_graphics/cook_types.adhd.h>
-#include <impl/assets_material/cook.adhd.h>
-#include <impl/assets_shader/cook.adhd.h>
+Expected<HashSet<ShaderStageKey>, NameTextError> CollectAvboitClipShaderKeys(in Span<MaterialCookEntry> materials){
+    HashSet<ShaderStageKey> keys;
+    keys.reserve(materials.size());
+    CollectMaterialStageClipShaderKeys(materials, ShaderType::MeshStage, keys);
+    const Name stage = ArchiveStageNameFromShaderType(ShaderType::PixelStage);
+    for(in MaterialCookEntry material : materials){
+        const Array<StringView, 3u> names(StringView(material.avboitAccumulatePixelShaderName), StringView(material.avboitOccupancyPixelShaderName), StringView(material.avboitExtinctionPixelShaderName));
+        for(in StringView text : names){
+            if(text.empty())
+                continue;
+            const Expected<Optional<Name>, NameTextError> name = ToName(text);
+            if(!name.has_value())
+                return MakeUnexpected(name.error());
+            if(name.value().has_value())
+                InsertCsgClipShaderStageKey(name.value().value(), stage, keys);
+        }
+    }
+    return keys;
+}
 
+Expected<b8, NameTextError> SupportsClipVariant(in HashSet<ShaderStageKey> keys, in ShaderCookEntry entry){
+    return SupportsCsgClipShaderVariant(keys, entry.name, entry.archiveStage);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsGraphicsCsgShaderVariants{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ShaderStageKeySet = HashSet<ShaderStageKey, Core::Alloc::ScratchArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Array<AStringView, 1u> s_ExternallyPlannedMacroIncludes = { s_CsgProjectEvaluatorModuleDefineName };
-[[nodiscard]] ShaderStageKeySet CollectMaterialClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
-[[nodiscard]] Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(AStringView entryName, const ShaderCook::DefineCombo& sourceCombo, ShaderCook::CookArena& cookArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<ShaderDefineCombo> BuildClipDefineCombo(in StringView entryName, in ShaderDefineCombo source){
+    ShaderDefineCombo combo;
+    if(!PopulateCsgClipDefineCombo(entryName, source, combo))
+        return MakeUnexpected(Failure());
+    return combo;
 }
 
 

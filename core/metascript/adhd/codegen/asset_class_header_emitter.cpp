@@ -22,139 +22,98 @@ void AssetClassHeaderEmitter::emitSubsystem(MString& out, const ClassDecl& decl)
     const AssetTypeAnalyzer assetTypes(m_symbols);
     const SubsystemContractInfo& sub = ContractSemantics::s_Subsystem;
     const ClassRoleContractInfo* subsystemContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Subsystem);
-    const usize scopePos = sub.typedSubsystemBase.rfind(ContractSemantics::s_CppScopeSeparator);
-    const MStringView typedSubLeaf = (scopePos == MStringView::npos)
-        ? sub.typedSubsystemBase
-        : sub.typedSubsystemBase.substr(scopePos + ContractSemantics::s_CppScopeSeparator.size());
+    out.append("class ").append(decl.name).append(" final : public ").append(sub.typedAssetBase).append("<");
+    out.append(decl.name).append(", ").append(sub.familyType).append(">{\r\npublic:\r\n");
+    out.append("    ").append(subsystemContract->defineMacroName).append("(\"").append(decl.subsystemTypeName).append("\")\r\n");
+    out.append("    using Parents = ::Vector<").append(sub.assetRefTemplate).append("<").append(sub.familyType).append(">, ::ArenaBase>;\r\n");
+    out.append("    explicit ").append(decl.name).append("(").append(sub.assetArenaCppType).append("& arena, const ::Name& path = ::s_NameNone)noexcept\r\n");
+    out.append("        : ").append(sub.typedAssetBase).append("<").append(decl.name).append(", ").append(sub.familyType).append(">(path)\r\n");
+    out.append("        , subsystems(arena)\r\n");
 
-    out.append("class ");
-    out.append(decl.name.data(), decl.name.size());
-    out.append(" final : public ");
-    out.append(sub.typedSubsystemBase.data(), sub.typedSubsystemBase.size());
-    out.push_back('<');
-    out.append(decl.name.data(), decl.name.size());
-    out.append(">{\r\n");
-    out.append("public:\r\n");
-    if(subsystemContract && !subsystemContract->defineMacroName.empty()){
-        out.append("    ");
-        out.append(subsystemContract->defineMacroName.data(), subsystemContract->defineMacroName.size());
-        out.append("(\"");
-        out.append(decl.subsystemTypeName.data(), decl.subsystemTypeName.size());
-        out.append("\")\r\n\r\n");
-    }
-
-    b8 hasVectorField = false;
-    for(const FieldDecl* field : decl.fields){
-        if(!field)
-            continue;
-        MStringView assetName;
-        b8 isVectorField = false;
-        if(assetTypes.tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField) && isVectorField){
-            hasVectorField = true;
-            break;
+    const auto visitFields = [&](const auto& visit){
+        usize index = 0u;
+        for(const FieldDecl* field : decl.fields){
+            MStringView asset;
+            b8 repeated = false;
+            if(field && assetTypes.tryResolveSubsystemFieldAssetType(*field, asset, repeated))
+                visit(*field, asset, repeated, index++);
         }
-    }
-
-    out.append("public:\r\n");
-    if(!hasVectorField){
-        out.append("    using ");
-        out.append(sub.typedSubsystemBase.data(), sub.typedSubsystemBase.size());
-        out.push_back('<');
-        out.append(decl.name.data(), decl.name.size());
-        out.push_back('>');
-        out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
-        out.append(typedSubLeaf.data(), typedSubLeaf.size());
-        out.append(";\r\n\r\n");
-    }
-    else{
-        const auto emitVectorFieldInitializers = [&](){
-            for(const FieldDecl* field : decl.fields){
-                if(!field)
-                    continue;
-                MStringView assetName;
-                b8 isVectorField = false;
-                if(assetTypes.tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField) && isVectorField){
-                    out.append("        , ");
-                    out.append(field->name.data(), field->name.size());
-                    out.append("(arena)\r\n");
-                }
-            }
-        };
-        out.append("    explicit ");
-        out.append(decl.name.data(), decl.name.size());
-        out.push_back('(');
-        out.append(sub.assetArenaCppType.data(), sub.assetArenaCppType.size());
-        out.append("& arena)noexcept\r\n        : ");
-        out.append(typedSubLeaf.data(), typedSubLeaf.size());
-        out.append("(arena)\r\n");
-        emitVectorFieldInitializers();
-        out.append("    {}\r\n");
+        return index;
+    };
+    const usize count = visitFields([&](const FieldDecl& field, MStringView, const b8 repeated, usize){
+        if(repeated)
+            out.append("        , ").append(field.name).append("(arena)\r\n");
+    });
+    out.append("    {}\r\n\r\n    Parents subsystems;\r\n");
+    const auto emitRef = [&](const MStringView asset){
+        out.append(sub.assetRefTemplate).append("<");
+        m_typeEmitter.appendQualifiedName(out, m_symbols.findTypeNamespace(asset), asset);
+        out.append(">");
+    };
+    visitFields([&](const FieldDecl& field, const MStringView asset, const b8 repeated, usize){
         out.append("    ");
-        out.append(decl.name.data(), decl.name.size());
-        out.push_back('(');
-        out.append(sub.assetArenaCppType.data(), sub.assetArenaCppType.size());
-        out.append("& arena, const ");
-        out.append(CodegenSymbols::s_NameCppType.data(), CodegenSymbols::s_NameCppType.size());
-        out.append("& virtualPath)noexcept\r\n        : ");
-        out.append(typedSubLeaf.data(), typedSubLeaf.size());
-        out.append("(arena, virtualPath)\r\n");
-        emitVectorFieldInitializers();
-        out.append("    {}\r\n\r\n");
-    }
-
-    out.append("public:\r\n");
-    for(const FieldDecl* field : decl.fields){
-        if(!field)
-            continue;
-        MStringView assetName;
-        b8 isVectorField = false;
-        if(!assetTypes.tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
-            continue;
-        const MStringView fieldTmpl = isVectorField ? sub.assetRefVectorTemplate : sub.assetRefTemplate;
-        out.append("    ");
-        out.append(fieldTmpl.data(), fieldTmpl.size());
-        out.push_back('<');
-        out.append(assetName.data(), assetName.size());
-        out.append("> ");
-        out.append(field->name.data(), field->name.size());
-        out.append(";\r\n");
-    }
-
-    out.append("\r\npublic:\r\n    static constexpr ");
-    out.append(sub.fieldDescTemplate.data(), sub.fieldDescTemplate.size());
-    out.push_back('<');
-    out.append(decl.name.data(), decl.name.size());
-    out.append("> s_Fields[] = {\r\n");
-    for(const FieldDecl* field : decl.fields){
-        if(!field)
-            continue;
-        MStringView assetName;
-        b8 isVectorField = false;
-        if(!assetTypes.tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
-            continue;
-        out.append("        ");
-        out.append(sub.makeFieldDescTemplate.data(), sub.makeFieldDescTemplate.size());
-        out.push_back('<');
-        out.append(decl.name.data(), decl.name.size());
-        out.append(", ");
-        m_typeEmitter.appendQualifiedName(out, m_symbols.findTypeNamespace(assetName), assetName);
-        out.append(", &");
-        out.append(decl.name.data(), decl.name.size());
-        out.append(ContractSemantics::s_CppScopeSeparator.data(), ContractSemantics::s_CppScopeSeparator.size());
-        out.append(field->name.data(), field->name.size());
-        out.append(">(\"");
-        AppendCamelToSnakeCase(out, field->name);
-        out.append("\", ");
-        out.append(CodegenSymbols::s_NameCppType.data(), CodegenSymbols::s_NameCppType.size());
-        out.append("(\"");
-        const ClassDecl* assetCls = m_symbols.findClass(assetName);
-        if(assetCls && !assetCls->assetTypeName.empty())
-            out.append(assetCls->assetTypeName.data(), assetCls->assetTypeName.size());
+        if(repeated)
+            out.append(sub.assetVectorTemplate).append("<");
+        emitRef(asset);
+        if(repeated)
+            out.append(">");
+        out.append(" ").append(field.name).append(";\r\n");
+    });
+    out.append("\r\n    const Parents& parentRefs()const noexcept override{ return subsystems; }\r\n");
+    out.append("    Parents& editParentRefs()noexcept override{ return subsystems; }\r\n");
+    out.append("    b8 loadBinary(const Span<const u8> binary)noexcept override{ return ").append(sub.loadFunction).append("(binary, *this); }\r\n");
+    out.append("    b8 validatePayload()const noexcept override{ return ").append(sub.validateFunction).append("(*this); }\r\n");
+    out.append("    usize fieldCount()const noexcept override{ return ");
+    AppendUnsignedDecimal(out, count);
+    out.append("u; }\r\n");
+    const auto emitAccess = [&](const MStringView signature, const MStringView fallback, const auto& emitCase){
+        out.append("    ").append(signature).append("noexcept override{\r\n        switch(index){\r\n");
+        visitFields([&](const FieldDecl& field, const MStringView asset, const b8 repeated, const usize index){
+            out.append("        case ");
+            AppendUnsignedDecimal(out, index);
+            out.append("u: ");
+            emitCase(field, asset, repeated);
+            out.append("\r\n");
+        });
+        out.append("        default: FOUNDATION_ASSERT(false); ").append(fallback).append("\r\n        }\r\n    }\r\n");
+    };
+    out.append("    ");
+    out.append(sub.descriptorType).append(" fieldDescriptor(const usize index)const noexcept override{\r\n        switch(index){\r\n");
+    visitFields([&](const FieldDecl& field, const MStringView asset, const b8 repeated, const usize index){
+        out.append("        case ");
+        AppendUnsignedDecimal(out, index);
+        out.append("u: return ").append(sub.descriptorType).append("(\"");
+        AppendCamelToSnakeCase(out, field.name);
+        out.append("\", ::Name(\"");
+        const ClassDecl* target = m_symbols.findClass(asset);
+        if(target && !target->assetTypeName.empty())
+            out.append(target->assetTypeName);
         else
-            AppendCamelToSnakeCase(out, assetName);
-        out.append("\")),\r\n");
-    }
-    out.append("    };\r\n");
+            AppendCamelToSnakeCase(out, asset);
+        out.append("\"), ").append(repeated ? "true" : "false").append(");\r\n");
+    });
+    out.append("        default: FOUNDATION_ASSERT(false); return {};\r\n        }\r\n    }\r\n");
+    emitAccess("usize fieldValueCount(const usize index)const ", "return 0u;", [&](const FieldDecl& field, MStringView, const b8 repeated){
+        out.append("return ");
+        if(repeated)
+            out.append(field.name).append(".size();");
+        else
+            out.append("1u;");
+    });
+    emitAccess("::Name fieldValue(const usize index, [[maybe_unused]] const usize element)const ", "return ::s_NameNone;", [&](const FieldDecl& field, MStringView, const b8 repeated){
+        if(repeated)
+            out.append("FOUNDATION_ASSERT(element < ").append(field.name).append(".size()); return ").append(field.name).append("[element].name();");
+        else
+            out.append("FOUNDATION_ASSERT(element == 0u); return ").append(field.name).append(".name();");
+    });
+    emitAccess("void clearFieldValues(const usize index)", "return;", [&](const FieldDecl& field, MStringView, const b8 repeated){
+        out.append(field.name).append(repeated ? ".clear(); return;" : " = {}; return;");
+    });
+    emitAccess("void appendFieldValue(const usize index, const ::Name value)", "return;", [&](const FieldDecl& field, const MStringView asset, const b8 repeated){
+        out.append(field.name).append(repeated ? ".push_back(" : " = ");
+        emitRef(asset);
+        out.append(repeated ? "(value)); return;" : "(value); return;");
+    });
     out.append("};\r\n\r\n");
 
 }

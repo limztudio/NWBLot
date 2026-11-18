@@ -41,6 +41,60 @@ inline constexpr u64 s_PendingSubmissionCost = 4u;
 
 
 b8 GpuTaskScheduler::scheduleGraph(
+    const GpuTaskGraph& graph, const GpuTaskGraphCompileOptions& options, GpuTaskGraphAnalysis& analysis,
+    GpuTaskGraphQueueAssignments& assignments, GpuCompiledGraph& compiled, GpuRecordedGraph& recorded, GpuGraphSubmissionTransaction& transaction
+)const{
+    Alloc::ScratchArena scratch;
+    return scheduleGraph(graph, options, scratch, analysis, assignments, compiled, recorded, transaction);
+}
+
+b8 GpuTaskScheduler::executeGraphWithTiming(
+    const GpuTaskGraphNormalExecutionDesc& desc,
+    GpuTaskGraph& graph,
+    GpuCompiledGraph& compiled,
+    GpuRecordedGraph& recorded,
+    GpuGraphSubmissionTransaction& transaction,
+    GpuTimingRecorder& timing
+)const{
+    Alloc::ScratchArena scratch;
+    return executeGraph(desc, scratch, graph, compiled, recorded, transaction, &timing);
+}
+
+b8 GpuTaskScheduler::executeAcceptedFrontierTask(
+    const GpuCompiledGraph& compiled,
+    GpuTaskId task,
+    GpuTaskGraph& graph,
+    GpuRecordedGraph& recorded,
+    GpuGraphSubmissionTransaction& transaction,
+    GpuTimingRecorder& timing
+)const{
+    Alloc::ScratchArena scratch;
+    return executeAcceptedFrontierTask(compiled, task, scratch, graph, recorded, transaction, &timing);
+}
+
+b8 GpuTaskScheduler::executeTask(
+    const GpuCompiledGraph& compiled,
+    GpuTaskId task,
+    const GpuTaskGraphTaskRecordedCallback& onRecorded,
+    const GpuTaskGraphTaskAcceptedCallback& onAccepted,
+    GpuTaskGraph& graph,
+    GpuRecordedGraph& recorded,
+    GpuGraphSubmissionTransaction& transaction,
+    GpuTimingRecorder& timing
+)const{
+    Alloc::ScratchArena scratch;
+    return executeTask(compiled, task, &onRecorded, &onAccepted, scratch, graph, recorded, transaction, &timing);
+}
+
+b8 GpuTaskScheduler::executeGraph(
+    const GpuTaskGraphNormalExecutionDesc& desc, GpuTaskGraph& graph,
+    GpuCompiledGraph& compiled, GpuRecordedGraph& recorded, GpuGraphSubmissionTransaction& transaction
+)const{
+    Alloc::ScratchArena scratch;
+    return executeGraph(desc, scratch, graph, compiled, recorded, transaction, nullptr);
+}
+
+b8 GpuTaskScheduler::scheduleGraph(
     const GpuTaskGraph& graph,
     Alloc::ScratchArena& scratchArena,
     GpuTaskGraphAnalysis& analysis,

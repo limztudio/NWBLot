@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "atomic.h"
 #include "platform.h"
 #include "type.h"
 
@@ -62,6 +63,12 @@ enum Enum : i32{
 
 [[nodiscard]] inline b8 SetSignalHandler(ProcessSignal::Enum signalValue, SignalHandler handler)noexcept{
     return std::signal(signalValue, handler) != SIG_ERR;
+}
+
+
+[[nodiscard]] inline u64 NextProcessSequence()noexcept{
+    static Atomic<u64> sequence{0u};
+    return sequence.fetch_add(1u, MemoryOrder::relaxed);
 }
 
 

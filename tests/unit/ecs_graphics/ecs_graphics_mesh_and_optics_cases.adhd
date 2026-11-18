@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.adhd>
+#include <impl/ecs_render/mesh/renderer_mesh_types.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_graphics/suite.adhd>
 
@@ -23,7 +25,6 @@ native{
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.adhd.h>
 #include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
-#include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.adhd.h>
 #include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/deferred/task_graph_present_task.adhd.h>
 #include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd.h>
@@ -148,6 +149,7 @@ using namespace NWB::Impl;
 struct OpticalSceneContext{
     Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneUpload) };
     Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneGather) };
+    Core::Alloc::SharedPool versions{ arena };
     RayTracingOpticalSceneGather gather{ scratch, 4u };
 };
 
@@ -181,45 +183,12 @@ struct OpaqueCsgClearContext{
     const Core::GpuTaskId dependency,
     GraphClearTimingRecordState& clearTimingState
 ){
-    const OpaqueCsgIntervalClearInputs inputs{
-        .targets = targets,
-        .csgFrameData = {},
-        .csgIntervalId = {},
-        .csgReceiverEventCount = {},
-        .csgPeelSubresources = {},
-        .csgReceiverEventCountSubresources = {},
-        .dependencyTask = dependency,
-        .hasOpaqueCsgFrameWork = false,
-    };
+    OpaqueCsgIntervalClearInputs inputs;
+    inputs.width = targets.width;
+    inputs.height = targets.height;
+    inputs.dependencyTask = dependency;
     OpaqueCsgIntervalClearBuilder builder(graph);
     return builder.declare(inputs, clearTimingState);
-}
-
-[[nodiscard]] FOUNDATION_INLINE Vector<Core::GpuTaskResourceUse, ::ArenaBase> CollectSparseCsgOpaqueGbufferResourceUses(
-    const DeferredGraphResourceImportResult& resources,
-    const Core::TextureSubresourceSet& peel,
-    const Core::TextureSubresourceSet& events,
-    const Core::TextureSubresourceSet& counts
-){
-    Core::Alloc::ScratchArena scratch(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpaqueGbufferCsgSparse);
-    const OpaqueGbufferResourceUseInputs inputs{
-        .resources = resources,
-        .materialInstanceRange = {},
-        .materialTypedRange = {},
-        .csgReceiverRange = {},
-        .csgCutterRange = {},
-        .csgPeelSubresources = peel,
-        .csgReceiverEventDataSubresources = events,
-        .csgReceiverEventCountSubresources = counts,
-        .hasOpaqueDrawItems = false,
-        .hasCsgFrameGpuWork = false,
-        .hasOpaqueCsgFrameWork = true,
-    };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> scratchUses{ scratch };
-    OpaqueGbufferResourceUseBuilder::Append(inputs, scratchUses);
-    Vector<Core::GpuTaskResourceUse, ::ArenaBase> uses(NWB::Tests::TestDetail::Arena());
-    uses.assign(scratchUses.begin(), scratchUses.end());
-    return uses;
 }
 
 [[nodiscard]] FOUNDATION_INLINE u32 ReadCopiedU32(const Span<const u8> bytes, const usize offset)noexcept{
@@ -229,11 +198,11 @@ struct OpaqueCsgClearContext{
 }
 
 FOUNDATION_INLINE void AcceptNullOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
-    RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, frameGeneration, token);
+    AcceptDeferredOutputLayer({}, frameGeneration, token);
 }
 
 FOUNDATION_INLINE void AcceptRecordingOutputLayer(RecordingLayerContributor& contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
-    RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, frameGeneration, token);
+    AcceptDeferredOutputLayer(MakeNotNull(static_cast<Core::IGpuTaskGraphOutputLayerContributor*>(&contributor)), frameGeneration, token);
 }
 
 struct PreparedSoftwareBvhGraphResourcesTestsTag{};
@@ -285,14 +254,14 @@ namespace Tests::EcsGraphicsCases{
 using MeshResources = Impl::MeshResources;
 using MeshAccelerationStatePolicy = Impl::MeshAccelerationStatePolicy;
 using MeshRayTracingSnapshotPolicy = Impl::MeshRayTracingSnapshotPolicy;
-using MeshRayTracingSnapshot = decltype(Impl::MeshRayTracingSnapshotPolicy::Capture(DeclVal<const Impl::MeshResources&>()));
+using MeshRayTracingSnapshot = decltype(Impl::MeshRayTracingSnapshotPolicy().capture(DeclVal<const Impl::MeshResources&>()));
 using MeshViewStatePolicy = Impl::MeshViewStatePolicy;
 using MeshViewGpuData = Impl::MeshViewGpuData;
 using MeshViewByteArray = Array<u8, Impl::s_MeshViewGpuDataBytes>;
 using ConstByteSpan = Span<const u8>;
 
 using ObjectGeometryCacheLayout = Impl::ObjectGeometryCacheLayout;
-using ObjectGeometryCacheSnapshotType = Impl::ECSRenderDetail::ObjectGeometryCacheSnapshot;
+using ObjectGeometryCacheSnapshotType = Impl::ObjectGeometryCacheSnapshot;
 using RendererMeshSystem = Impl::RendererMeshSystem;
 inline constexpr u64 s_MeshObjectVertexByteSize = NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
 
@@ -351,7 +320,6 @@ using GraphClearTimingRecordState = Impl::GraphClearTimingRecordState;
 using OpaqueCsgIntervalClearResult = Impl::OpaqueCsgIntervalClearResult;
 using OpaqueCsgClearContext = EcsGraphicsMeshOpticsDetail::OpaqueCsgClearContext;
 using EcsGraphicsMeshOpticsDetail::DeclareOpaqueCsgIntervalClear;
-using EcsGraphicsMeshOpticsDetail::CollectSparseCsgOpaqueGbufferResourceUses;
 using EcsGraphicsMeshOpticsDetail::ReadCopiedU32;
 using RecordingLayerContributor = EcsGraphicsMeshOpticsDetail::RecordingLayerContributor;
 using EcsGraphicsMeshOpticsDetail::AcceptNullOutputLayer;
@@ -366,7 +334,7 @@ using PreparedMeshSwBvhGraphResourceVectorResult = Expected<Impl::PreparedMeshSw
 using RaySceneGraphReadsContext = EcsGraphicsMeshOpticsDetail::RaySceneGraphReadsContext;
 using Impl::ImportRayTracingSceneGraphReads;
 [[nodiscard]] FOUNDATION_INLINE b8 TryImportRaySceneGraphReads(const Impl::RayTracingSceneGraphResources& resources, RaySceneGraphReadsContext& context){
-    return Impl::ImportRayTracingSceneGraphReads(resources, ResourceStates::Common, Core::GpuTaskId(), context.graph, context.scratch).has_value();
+    return Impl::ImportRayTracingSceneGraphReads(context.scratch, resources, ResourceStates::Common, Core::GpuTaskId(), context.graph).has_value();
 }
 using EcsGraphicsMeshOpticsDetail::MakeZeroFloat34U;
 
@@ -465,23 +433,23 @@ void VerifyMeshRayTracingSnapshotPolicyTests_MissingMeshletBoundsDoNotPublishPar
     mesh.runtimeMesh = true;
     mesh.runtimeGeometryContentRevision = 7u;
     mesh.meshletCount = 1u;
-    MeshRayTracingSnapshot snapshot = MeshRayTracingSnapshotPolicy::Capture(mesh);
+    MeshRayTracingSnapshot snapshot = MeshRayTracingSnapshotPolicy().capture(mesh);
     EXPECT_EQ(snapshot.meshletCount, 0u);
-    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::Matches(mesh, snapshot));
+    EXPECT_TRUE(MeshRayTracingSnapshotPolicy().matches(mesh, snapshot));
     snapshot.meshletCount = 1u;
-    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::Matches(mesh, snapshot));
+    EXPECT_FALSE(MeshRayTracingSnapshotPolicy().matches(mesh, snapshot));
 }
 
 void VerifyMeshRayTracingSnapshotPolicyTests_IdentityIgnoresBuildStateButTracksGeometryRevision(){
     MeshResources mesh = MeshResources();
     mesh.runtimeMesh = true;
     mesh.runtimeGeometryContentRevision = 7u;
-    const MeshRayTracingSnapshot current = MeshRayTracingSnapshotPolicy::Capture(mesh);
+    const MeshRayTracingSnapshot current = MeshRayTracingSnapshotPolicy().capture(mesh);
     MeshRayTracingSnapshot other = current;
     other.blasBuildPending = !current.blasBuildPending;
-    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::SameIdentity(current, other));
+    EXPECT_TRUE(MatchesMeshRayTracingSnapshotIdentity(current, other));
     ++other.runtimeGeometryContentRevision;
-    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::SameIdentity(current, other));
+    EXPECT_FALSE(MatchesMeshRayTracingSnapshotIdentity(current, other));
 }
 
 void VerifyMeshViewStatePolicyTests_MissingTruncatedAndChangedSnapshotsRequireUpload(){
@@ -545,29 +513,29 @@ void VerifyObjectGeometryCacheTests_RuntimeReuseRequiresAcceptedNonzeroCurrentCo
     MeshResources mesh = MeshResources();
     mesh.runtimeMesh = true;
     mesh.runtimeGeometryContentRevision = 7u;
-    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    EXPECT_TRUE(CaptureObjectGeometryCache(mesh).requiresDecode);
     mesh.objectGeometryCache.initialized = true;
     mesh.objectGeometryCache.acceptedContent = true;
     mesh.objectGeometryCache.acceptedContentRevision = 7u;
-    EXPECT_FALSE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    EXPECT_FALSE(CaptureObjectGeometryCache(mesh).requiresDecode);
     mesh.runtimeGeometryContentRevision = 8u;
-    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    EXPECT_TRUE(CaptureObjectGeometryCache(mesh).requiresDecode);
     mesh.runtimeGeometryContentRevision = 0u;
     mesh.objectGeometryCache.acceptedContentRevision = 0u;
-    const ObjectGeometryCacheSnapshotType pending = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
+    const ObjectGeometryCacheSnapshotType pending = CaptureObjectGeometryCache(mesh);
     EXPECT_TRUE(pending.requiresDecode);
     mesh.runtimeGeometryContentRevision = 7u;
     mesh.objectGeometryCache.acceptedContentRevision = 7u;
     mesh.objectGeometryCache.acceptedContent = false;
-    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    EXPECT_TRUE(CaptureObjectGeometryCache(mesh).requiresDecode);
 }
 
 void VerifyObjectGeometryCacheTests_ImmutableStaticContentReusesZeroRevisionOnlyAfterAcceptance(){
     MeshResources mesh = MeshResources();
-    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh).requiresDecode);
+    EXPECT_TRUE(CaptureObjectGeometryCache(mesh).requiresDecode);
     mesh.objectGeometryCache.acceptedContent = true;
     mesh.objectGeometryCache.initialized = true;
-    const ObjectGeometryCacheSnapshotType accepted = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
+    const ObjectGeometryCacheSnapshotType accepted = CaptureObjectGeometryCache(mesh);
     EXPECT_FALSE(accepted.requiresDecode);
     EXPECT_EQ(accepted.sourceRevision, 0u);
     // A content decision never substitutes for the required retained resource and decoder bindings.
@@ -630,7 +598,13 @@ void VerifyOpaqueGbufferResourceUses_CsgSparseValidityKeepsReadWriteRangesWithou
     const TextureSubresourceSet peel = TextureSubresourceSet(0u, 1u, 0u, 4u);
     const TextureSubresourceSet events = TextureSubresourceSet(0u, 1u, 0u, 8u);
     const TextureSubresourceSet counts = TextureSubresourceSet(0u, 1u, 0u, 1u);
-    const Vector<GpuTaskResourceUse> uses = CollectSparseCsgOpaqueGbufferResourceUses(resources, peel, events, counts);
+    OpaqueGbufferResourceUseInputs inputs;
+    inputs.csgPeelSubresources = peel;
+    inputs.csgReceiverEventDataSubresources = events;
+    inputs.csgReceiverEventCountSubresources = counts;
+    inputs.hasOpaqueCsgFrameWork = true;
+    Vector<GpuTaskResourceUse> uses;
+    AppendOpaqueGbufferResourceUses(resources, inputs, uses);
     ASSERT_EQ(uses.size(), 11u);
     EXPECT_EQ(uses[1u].resource, resources.csgCapBackNormal);
     EXPECT_EQ(uses[1u].access, GpuTaskResourceAccess::Write);
@@ -699,10 +673,10 @@ void VerifyOpticalRuntimeBounds_RejectedUploadControlDoesNotAllocateOrPublish(){
     GpuPhysicalQueueId queue = GpuPhysicalQueueId();
     queue.index = 0u;
     queue.deviceGeneration = 1u;
-    const ArenaMemoryStats before = context.arena.memoryStats();
-    const RayTracingOpticalUploadControlResult rejected = CreateRayTracingOpticalUploadControl(context.arena, BufferHandle(), queue);
+    const ArenaMemoryStats before = context.versions.memoryStats();
+    const RayTracingOpticalUploadControlResult rejected = CreateRayTracingOpticalUploadControl(context.versions, BufferHandle(), queue);
     ASSERT_FALSE(rejected.has_value());
-    const ArenaMemoryStats after = context.arena.memoryStats();
+    const ArenaMemoryStats after = context.versions.memoryStats();
     ExpectArenaMemoryUnchanged(before, after);
 }
 
@@ -848,8 +822,8 @@ void VerifyOpticalScene_AffineBoundsEncloseMirroringNonuniformScaleAndLargeTrans
     ASSERT_TRUE(bounds.has_value());
     Float3U minimum = Float3U();
     Float3U maximum = Float3U();
-    StoreFloat(bounds.value().minimum, minimum);
-    StoreFloat(bounds.value().maximum, maximum);
+    StoreFloat(LoadFloat(bounds.value().minimum), minimum);
+    StoreFloat(LoadFloat(bounds.value().maximum), maximum);
     for(u32 corner = 0u; corner < 8u; ++corner){
         Array<f64, 3> coordinates = Array<f64, 3>();
         if((corner & 1u) != 0u)
@@ -894,8 +868,8 @@ void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
     ASSERT_TRUE(bounds.has_value());
     Float3U minimum = Float3U();
     Float3U maximum = Float3U();
-    StoreFloat(bounds.value().minimum, minimum);
-    StoreFloat(bounds.value().maximum, maximum);
+    StoreFloat(LoadFloat(bounds.value().minimum), minimum);
+    StoreFloat(LoadFloat(bounds.value().maximum), maximum);
 
     // The exact third coordinate is one; cancellation must not make its error budget disappear.
     Array<f64, 3> exact = Array<f64, 3>();
@@ -974,10 +948,10 @@ void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExcep
                     bounds = ComputeOpticalWorldBounds(objectToWorld, poisonedMin, poisonedMax);
                     actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                     if(bounds){
-                        minimumW = VectorGetIntW(bounds->minimum);
-                        maximumW = VectorGetIntW(bounds->maximum);
-                        equalMinimum = Vector4EqualInt(bounds->minimum, reference->minimum);
-                        equalMaximum = Vector4EqualInt(bounds->maximum, reference->maximum);
+                        minimumW = VectorGetIntW(LoadFloat(bounds->minimum));
+                        maximumW = VectorGetIntW(LoadFloat(bounds->maximum));
+                        equalMinimum = Vector4EqualInt(LoadFloat(bounds->minimum), LoadFloat(reference->minimum));
+                        equalMaximum = Vector4EqualInt(LoadFloat(bounds->maximum), LoadFloat(reference->maximum));
                     }
                 }
             }

@@ -63,7 +63,6 @@ class MaterialBindInstance{
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -189,10 +188,10 @@ class MaterialBindSchemaValidator{
             error("Material bind '{}': duplicate instance name '{}'", bindFilePathText, instanceName);
             return false;
         }
-        MaterialBindInstance instance;
+        AppendArenaElement<MaterialBindInstance>(inOutInstances);
+        mut MaterialBindInstance instance = inOutInstances[inOutInstances.size() - 1u];
         instance.type.assign(typeName);
         instance.name.assign(instanceName);
-        inOutInstances.push_back(instance);
         return true;
     }
 };

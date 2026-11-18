@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/paint_context.adhd>
+#include <impl/assets_scene/asset.adhd>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd>
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
+#include <impl/ecs_ui/toolkit/widgets/label.adhd>
+#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd>
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 #include "fly_camera_motion.adhd"
 #include "scene_constants.adhd"
@@ -31,17 +38,13 @@ native{
 #include <impl/ecs_scene/module.adhd.h>
 #include <impl/ecs_ui/layer_system.adhd.h>
 #include <impl/ecs_ui/paint_context.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
 #include <impl/ecs_ui/toolkit/images/image_loader.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/context_menu.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/label.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
 
@@ -133,7 +136,7 @@ public:
     virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
     virtual StringView text(const u64 index)const noexcept override{ return m_state.text(index); }
     virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
-    [[nodiscard]] virtual b8 filter(const AStringView query)override{ return m_state.applyFilter(query); }
+    [[nodiscard]] virtual b8 filter(const AStringView query)noexcept override{ return m_state.applyFilter(query); }
     [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return m_view; }
 
 private:
@@ -182,51 +185,8 @@ FOUNDATION_INLINE void AttachProjectUiPaintEntity(NotNullUniquePtr<World>& world
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::ActiveSceneSubsystems"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class ActiveSceneSubsystems{
-    b8 loadProjectStartScene(...);
-    b8 loadScene(...);
-    b8 instantiateEntities(...)const;
-    b8 valid(...)const;
-    usize subsystemCount(...)const;
-};
-
-[cpp_name("::NWB::Impl::Ui::EditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class EditModel{
-    EditModel();
-    EditModel(in EditLimits limits);
-    EditModel(in EditLimits limits, in EditTextMode mode);
-    StringView text()const;
-    b8 setText(in StringView value);
-};
-
-[cpp_name("::NWB::Impl::Ui::SearchComboState"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class SearchComboState{
-    mut ComboState combo();
-    in ComboState combo()const;
-};
-
-[cpp_name("::NWB::Impl::Ui::IntegerEditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class IntegerEditModel{
-    i64 value()const;
-    b8 setValue(in i64 value);
-};
-
-[cpp_name("::NWB::Impl::Ui::FloatEditModel"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class FloatEditModel{
-    f64 value()const;
-    b8 setValue(in f64 value);
-};
-
-[cpp_name("::NWB::Impl::Ui::Label"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class Label{
-    TextLayoutStatus setText(...);
-    Expected<Rect> measure(...);
-    b8 paint(...);
-};
-
 [cpp_name("::Testbed::UiFilteredListSource"), cpp_flags(self_defaulted, arena_first_ctor, no_copy, no_assign)]
-extern class UiFilteredListSource<StateT>;
+extern class UiFilteredListSource<StateT> : ISearchableListDataSource{};
 
 type CpuTaskAdmissionErrorCode = CpuTaskAdmissionError;
 
@@ -373,11 +333,11 @@ void Testbed::DestroyInitialProjectWorld(ProjectRuntimeContext& context, NotNull
 
 void Testbed::BindActiveSceneSubsystemsToWorld(NotNullUniquePtr<World>& world, const ActiveSceneSubsystems& sceneSubsystems){
     if(auto* const rendererSystem = world->getSystem<RendererSystem>())
-        rendererSystem->setActiveSceneSubsystems(&sceneSubsystems);
+        rendererSystem->setActiveSceneSubsystems(MakeNotNull(&sceneSubsystems));
     if(auto* const meshSkinningSystem = world->getSystem<MeshSkinningSystem>())
-        meshSkinningSystem->setActiveSceneSubsystems(&sceneSubsystems);
+        meshSkinningSystem->setActiveSceneSubsystems(MakeNotNull(&sceneSubsystems));
     if(auto* const uiLayerSystem = world->getSystem<UiLayerSystem>())
-        uiLayerSystem->setActiveSceneSubsystems(&sceneSubsystems);
+        uiLayerSystem->setActiveSceneSubsystems(MakeNotNull(&sceneSubsystems));
 }
 
 b8 Testbed::CreateStartupCameraAndLights(NotNullUniquePtr<World>& world){
@@ -421,9 +381,9 @@ b8 Testbed::InstantiateSceneSubsystemsEntities(const ActiveSceneSubsystems& scen
 }
 
 Testbed::AssetRef<Testbed::Texture> Testbed::ResolveUiGallerySkinTextureRef(const AssetManager& assets, const ActiveSceneSubsystems& sceneSubsystems){
-    const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
-    if(uiSubsystem && uiSubsystem->basicSkin.valid()){
-        auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), FOUNDATION_TEXT("UiImageGallery"));
+    const auto uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
+    if(uiSubsystem && (*uiSubsystem)->basicSkin.valid()){
+        auto skin = assets.loadTypedSync<UiSkin>((*uiSubsystem)->basicSkin.name(), FOUNDATION_TEXT("UiImageGallery"));
         if(skin)
             return (*skin)->texture();
     }
@@ -434,7 +394,7 @@ Expected<Testbed::SharedImageSource> Testbed::LoadUiGallerySkinImageSource(Proje
     const AssetRef<Texture> textureRef = ResolveUiGallerySkinTextureRef(context.assetManager, sceneSubsystems);
     if(!textureRef.valid())
         return MakeUnexpected(Failure());
-    return LoadImageSource(context.objectArena, context.assetManager, textureRef);
+    return LoadImageSource(::NWB::Core::Alloc::SharedPool(context.objectArena), context.assetManager, textureRef);
 }
 
 StringView Testbed::FormatVirtualListRowLabel(const u64 rowKey, const Array<u8, 32u>& labelStorage)noexcept{

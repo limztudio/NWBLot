@@ -45,10 +45,10 @@ b8 SourceEmitter::tryEmitScalarFloatExpr(MString& out, const Expr& expr)const{
     const MStringView scalarType = CodegenSymbols::SimdScalarCppType(isDouble);
     if(assignment){
         // Evaluate the right side before asking for the target, outside generated names.
-        out.append("([](auto __target, const auto __rhs)noexcept -> decltype(auto){ auto& __lhs = __target(); __lhs = ");
+        out.append("([](auto __target, const auto __rhs)").append(lambdaExceptionSpec()).append(" -> decltype(auto){ auto& __lhs = __target(); __lhs = ");
     }
     else if(increment){
-        out.append("([](auto& __lhs)noexcept -> decltype(auto){ ");
+        out.append("([](auto& __lhs)").append(lambdaExceptionSpec()).append(" -> decltype(auto){ ");
         if(expr.isPostfix)
             out.append("const auto __old = __lhs; ");
         out.append("__lhs = ");
@@ -76,7 +76,7 @@ b8 SourceEmitter::tryEmitScalarFloatExpr(MString& out, const Expr& expr)const{
     }
     out.append("))");
     if(assignment){
-        out.append("; return (__lhs); }([&]()noexcept -> decltype(auto){ return (");
+        out.append("; return (__lhs); }([&]()").append(lambdaExceptionSpec()).append(" -> decltype(auto){ return (");
         emitExpr(out, *expr.lhs);
         out.append("); }, ");
         emitExpr(out, *expr.rhs);

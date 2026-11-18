@@ -85,6 +85,10 @@ b8 ReturnStatementChecker::check(ClassDecl* ownerClass, const Span<const ScopedV
     }
     if(stmt.expr && !m_checker.checkExpr(ownerClass, scope, retRefMode == ParamPassingMode::Mut, method, *stmt.expr, errors))
         ok = false;
+    if(stmt.expr && m_checker.wrappedReferenceType(activeRetType) && BorrowLifetimeAnalyzer(m_checker).localReferenceOwner(ownerClass, method, *stmt.expr, scope)){
+        m_checker.reportError(errors, stmt.span, "cannot return a stored reference to parameter copies or stack-local storage");
+        ok = false;
+    }
     if(stmt.expr && retRefMode == ParamPassingMode::None)
         m_checker.markSimdResultWrapperAdaptation(unwrappedRetType, *stmt.expr);
     if(stmt.expr && retRefMode == ParamPassingMode::In)

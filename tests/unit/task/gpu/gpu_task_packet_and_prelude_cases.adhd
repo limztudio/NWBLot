@@ -130,14 +130,6 @@ public:
     return Core::GpuTaskExternalStateSource{ .states = &stateHandoff };
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleDiscardTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    u32& discardedCount
-){
-    return graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .discardedCount = &discardedCount });
-}
-
 [[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
@@ -977,7 +969,7 @@ void VerifyGpuPacket_RejectsNonRecordableTasksDuringNativeCompilation(){
     GpuTaskDesc desc = GpuTaskDesc();
     desc.setIdentity(s_GpuCaseTaskGraphNonRecordable);
     desc.setMarkerLabel("Non-recordable Task");
-    const Expected<GpuTaskId> taskResult = AddPacketLifecycleDiscardTask(graph, desc, discardedCount);
+    const Expected<GpuTaskId> taskResult = AddDiscardOnlyTaskFromScratch(graph, desc, discardedCount);
     ASSERT_TRUE(taskResult.has_value());
     const GpuTaskId task = taskResult.value();
     ASSERT_TRUE(task.valid());
@@ -1260,13 +1252,31 @@ void VerifyGpuPacket_OperationPayloadRetirementDuringUnwindPreservesOriginalFail
     EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
+class DiscardOnlyTaskPayload{
+    private mut u32 m_discardedCount;
+    private Vector<u32> m_counts;
+    public DiscardOnlyTaskPayload(mut u32 discardedCount){
+        this.m_discardedCount = discardedCount;
+        this.m_counts.push_back(1u);
+    }
+    public void discarded(){
+        this.m_discardedCount += this.m_counts[0u];
+    }
+}
+
+Expected<GpuTaskId> AddDiscardOnlyTaskFromScratch(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut u32 discardedCount){
+    DiscardOnlyTaskPayload payload(discardedCount);
+    return graph.addPreparedPayloadTask(desc, payload);
+}
+
+
 void VerifyGpuPacket_DiscardsTypedPayloadWhenDeclarationIsRejected(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
 
     u32 discardedCount = 0u;
     GpuTaskDesc invalidDesc = GpuTaskDesc();
-    const Expected<GpuTaskId> task = AddPacketLifecycleDiscardTask(graph, invalidDesc, discardedCount);
+    const Expected<GpuTaskId> task = graph.addPayloadTask(invalidDesc, DiscardOnlyTaskPayload(discardedCount));
     EXPECT_FALSE(task.has_value());
     EXPECT_EQ(discardedCount, 1u);
 

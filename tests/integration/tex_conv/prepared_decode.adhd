@@ -90,10 +90,10 @@ void WriteLittleEndianU32(mut Vector<u8> output, mut usize offset, in u32 value)
 }
 
 Expected<Texture> CookDecodedTexture(in Path sourcePath, in MetascriptDocument document, mut DecodeTestArena testArena){
-    const Expected<TextureCookEntry> entry = ParseTextureCookMetadata(sourcePath.parentPath(), "tests", sourcePath, document, testArena.arena, testArena.scratchArena);
+    const Expected<TextureCookEntry> entry = ParseTextureCookMetadata(testArena.arena, sourcePath.parentPath(), "tests", sourcePath, document);
     if(!entry.has_value())
         return MakeUnexpected(Failure());
-    return BuildTextureAsset(entry.value(), testArena.arena);
+    return BuildTextureAsset(testArena.arena, entry.value());
 }
 
 b8 Decode(in StringView source, in StringView destination, in StringView mipText){

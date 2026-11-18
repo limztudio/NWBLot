@@ -118,6 +118,14 @@ public:
     // Freezes queue assignment at admission from a current pressure snapshot, then inits caller-owned artifacts for the immutable plan.
     // Explicit queue loads in compileOptions override automatic timeline sampling for deterministic tooling and tests.
     [[nodiscard]] b8 scheduleGraph(
+        const GpuTaskGraph& graph, const GpuTaskGraphCompileOptions& options, GpuTaskGraphAnalysis& analysis,
+        GpuTaskGraphQueueAssignments& assignments, GpuCompiledGraph& compiled, GpuRecordedGraph& recorded, GpuGraphSubmissionTransaction& transaction
+    )const;
+    [[nodiscard]] b8 executeGraph(
+        const GpuTaskGraphNormalExecutionDesc& desc, GpuTaskGraph& graph,
+        GpuCompiledGraph& compiled, GpuRecordedGraph& recorded, GpuGraphSubmissionTransaction& transaction
+    )const;
+    [[nodiscard]] b8 scheduleGraph(
         const GpuTaskGraph& graph,
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraphAnalysis& analysis,
@@ -172,6 +180,33 @@ public:
         GpuGraphSubmissionTransaction& transaction,
         GpuTimingRecorder* timingRecorder,
         GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
+
+    [[nodiscard]] b8 executeGraphWithTiming(
+        const GpuTaskGraphNormalExecutionDesc& desc,
+        GpuTaskGraph& graph,
+        GpuCompiledGraph& compiled,
+        GpuRecordedGraph& recorded,
+        GpuGraphSubmissionTransaction& transaction,
+        GpuTimingRecorder& timing
+    )const;
+    [[nodiscard]] b8 executeAcceptedFrontierTask(
+        const GpuCompiledGraph& compiled,
+        GpuTaskId task,
+        GpuTaskGraph& graph,
+        GpuRecordedGraph& recorded,
+        GpuGraphSubmissionTransaction& transaction,
+        GpuTimingRecorder& timing
+    )const;
+    [[nodiscard]] b8 executeTask(
+        const GpuCompiledGraph& compiled,
+        GpuTaskId task,
+        const GpuTaskGraphTaskRecordedCallback& onRecorded,
+        const GpuTaskGraphTaskAcceptedCallback& onAccepted,
+        GpuTaskGraph& graph,
+        GpuRecordedGraph& recorded,
+        GpuGraphSubmissionTransaction& transaction,
+        GpuTimingRecorder& timing
     )const;
 
 

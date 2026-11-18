@@ -2,204 +2,133 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "edit_geometry.adhd"
-#include "text_edit_session.adhd"
-#include "edit_clipboard_controller.adhd"
-#include "clipboard_publications.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/toolkit/context.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+#include <impl/ecs_ui/edit_geometry.adhd>
+#include <impl/ecs_ui/edit_box_host_records.adhd>
+#include <impl/ecs_ui/text_edit_session.adhd>
+#include <impl/ecs_ui/edit_clipboard_controller.adhd>
+#include <impl/ecs_ui/clipboard_publications.adhd>
+#include <impl/ecs_ui/toolkit/context.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
-class UiEditBoxHost final : public Ui::IEditBoxHost{
-private:
-    // Stack-only references for the matching loan; entries and events retain scalar identities and owned copies.
-    struct NavigationBorrow{
-        Ui::EditNavigationState& state;
-        Ui::IEditNavigationResolver& resolver;
-    };
-
-    struct Entry{
-        Ui::WidgetState widget;
-        UiTextEditOwner owner;
-        Ui::PopupToken popup;
-        Ui::EditModelSnapshot expected;
-        UiEditBoxGeometry candidate;
-        UiEditBoxGeometry displayed;
-        u64 seen = 0u;
-        u64 focusGeneration = 0u;
-        u64 retiredFocusGeneration = 0u;
-        u64 navigationInstanceGeneration = 0u;
-        usize dragAnchor = 0u;
-        usize wordDragStart = 0u;
-        usize wordDragEnd = 0u;
-        b8 dragging = false;
-        b8 wordDragging = false;
-        b8 preeditCaretVisible = true;
-        b8 actionCapable = false;
-        b8 focused = false;
-        b8 enabled = true;
-        b8 readOnly = false;
-        b8 navigationResetPending = false;
-        Core::TextInputSessionToken rejectedNative;
-
-
-    public:
-        explicit Entry(Core::Alloc::GlobalArena& arena)noexcept : expected(arena), candidate(arena), displayed(arena){}
-    };
-
-    struct Event{
-        UiTextEditOwner owner;
-        Core::TextInputEvent native;
-        Ui::EditCommandRequest command;
-        Ui::EditNavigationDirection::Enum navigationDirection = Ui::EditNavigationDirection::Up;
-        b8 completed = false;
-        b8 wordSelect = false;
-        usize position = 0u;
-        usize wordPosition = 0u;
-        u64 geometryRevision = 0u;
-        u64 selectionSequence = 0u;
-        Ui::InputSource selectionSource;
-        u64 focusGeneration = 0u;
-        u64 geometryExternalRevision = 0u;
-        u64 surroundingRevision = 0u;
-        u64 surroundingModelRevision = 0u;
-        u64 surroundingSelectionGeneration = 0u;
-        usize surroundingAnchor = 0u;
-        usize surroundingCaret = 0u;
-        f32 navigationViewportHeight = 0.0f;
-        UiEditBoxEventKind::Enum kind = UiEditBoxEventKind::Command;
-        b8 navigation = false;
-        b8 extend = false;
-        b8 dragging = false;
-
-
-    public:
-        explicit Event(Core::Alloc::GlobalArena& arena)noexcept : native(arena){}
-    };
-
-
-public:
-    UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard);
-    virtual ~UiEditBoxHost()noexcept override{ cancelTransfers(); }
-
-
-public:
-    [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, Ui::EditModel& model)override{
-        return editBorrowed(widget, options, m_context.popupToken(), model, nullptr);
+[modular]
+class UiEditBoxHost : IEditBoxHost{
+    [cpp_unwind]
+    public UiEditBoxHost(mut Context context, mut ITextInputService textInput, mut IClipboardService clipboard){
+        this.m_context = context;
+        this.m_textInput = textInput;
+        this.m_clipboardService = clipboard;
+        this.m_session = UiTextEditSession(textInput);
+        this.m_clipboard = UiEditClipboardController(clipboard);
+        this.m_primary = UiEditClipboardController(clipboard);
+        this.m_publications = UiClipboardPublications(clipboard);
+        this.m_entries.reserve(s_UiEditBoxMaxEntries);
+        this.m_events.reserve(s_InputMaxEvents);
     }
-    [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model)override{
-        return editBorrowed(widget, options, popup, model, nullptr);
+
+    public ~UiEditBoxHost(){ this.cancelTransfers(); }
+
+    public EditBoxResult edit(in WidgetState widget, in EditBoxOptions options, mut EditModel model)override{
+        return this.editBorrowed(widget, options, this.m_context.popupToken(), model, Optional<mut IEditActionSink>(), Optional<mut UiEditNavigationBorrow>());
     }
-    [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink& actions)override{
-        return editBorrowed(widget, options, popup, model, &actions);
+
+    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model)override{
+        return this.editBorrowed(widget, options, popup, model, Optional<mut IEditActionSink>(), Optional<mut UiEditNavigationBorrow>());
     }
-    [[nodiscard]] virtual Ui::EditBoxResult editNavigated(
-        const Ui::WidgetState& widget,
-        const Ui::EditBoxOptions& options,
-        const Ui::PopupToken& popup,
-        Ui::EditModel& model,
-        Ui::EditNavigationState& navigation,
-        Ui::IEditNavigationResolver& resolver,
-        Ui::IEditActionSink& actions
+
+    public EditBoxResult editActions(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, mut IEditActionSink actions)override{
+        return this.editBorrowed(widget, options, popup, model, Optional<mut IEditActionSink>(actions), Optional<mut UiEditNavigationBorrow>());
+    }
+    public EditBoxResult editNavigated(
+        in WidgetState widget,
+        in EditBoxOptions options,
+        in PopupToken popup,
+        mut EditModel model,
+        mut EditNavigationState navigation,
+        mut IEditNavigationResolver resolver,
+        mut IEditActionSink actions
     )override;
-    [[nodiscard]] virtual b8 publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
-    void beginFrame(u64 generation, const Ui::DisplayMetrics& display);
-    void finishFrame();
-    void commitFrame(u64 generation);
-    void collectNative();
-    [[nodiscard]] b8 prepareSubmit(const Ui::InputEvent& event)noexcept;
-    void input(const Ui::InputEvent& input, Ui::WidgetId previousCapture, b8 submit);
-    [[nodiscard]] b8 character(u32 unicode);
-    [[nodiscard]] b8 pastePrimary(Ui::Point position);
-    [[nodiscard]] b8 hasTextFocus()const noexcept;
-    [[nodiscard]] b8 wantsTextInput()const noexcept;
-    [[nodiscard]] b8 takeClipboardFailure()noexcept;
-    void synchronizeFocus();
-    void reset();
+    public b8 publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions options)override;
+    [cpp_unwind]
+    public void beginFrame(in u64 generation, in DisplayMetrics display);
+    [cpp_unwind]
+    public void finishFrame();
+    [cpp_unwind]
+    public void commitFrame(in u64 generation);
+    [cpp_unwind]
+    public void collectNative();
+    public b8 prepareSubmit(in InputEvent event);
+    [cpp_unwind]
+    public void input(in InputEvent input, in WidgetId previousCapture, in b8 submit);
+    [cpp_unwind]
+    public b8 character(in u32 unicode);
+    [cpp_unwind]
+    public b8 pastePrimary(in Point position);
+    public b8 hasTextFocus()const;
+    public b8 wantsTextInput()const;
+    public b8 takeClipboardFailure();
+    [cpp_unwind]
+    public void synchronizeFocus();
+    [cpp_unwind]
+    public void reset();
+    private Optional<mut UiEditBoxEntry> findEntry(in WidgetId widget);
+    private Optional<in UiEditBoxEntry> findConstEntry(in WidgetId widget)const;
+    private Optional<in UiEditBoxEntry> focusedTextEntry()const;
+    [cpp_unwind]
+    private b8 append(mut UiEditBoxEvent event);
+    private b8 compositionActive(in UiEditBoxEntry entry)const;
+    private void discard(in UiTextEditOwner owner);
+    private b8 rejectBorrowedMutation();
+    private u64 nextFocusGeneration();
+    [cpp_unwind]
+    private void cancelTransfers();
+    [cpp_unwind]
+    private void drainPublications();
+    [cpp_unwind]
+    private EditBoxResult editBorrowed(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, in Optional<mut IEditActionSink> actions, in Optional<mut UiEditNavigationBorrow> navigation);
+    [cpp_unwind]
+    private b8 apply(in EditBoxOptions options, mut UiEditBoxEvent event, mut UiEditBoxEntry entry, mut EditModel model, mut EditBoxResult result, in Optional<mut IEditActionSink> actions, in Optional<mut UiEditNavigationBorrow> navigation);
+    [cpp_unwind]
+    private b8 applyNavigation(in UiEditBoxEvent event, in EditNavigationDirection direction, mut EditModel model, mut UiEditNavigationBorrow navigation);
+    [cpp_unwind]
+    private b8 applyAction(in EditBoxOptions options, in EditAction action, mut UiEditBoxEntry entry, mut EditModel model, mut EditBoxResult result, mut IEditActionSink actions, in Optional<mut UiEditNavigationBorrow> navigation);
+    [cpp_unwind]
+    private void synchronizeSession(in EditBoxOptions options, in b8 inputMethod, mut UiEditBoxEntry entry, mut EditModel model);
+    [owner_result]
+    private UiEditBoxEvent makeEvent()const{ return UiEditBoxEvent(); }
 
-
-private:
-    [[nodiscard]] Entry* find(Ui::WidgetId widget)noexcept;
-    [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
-    [[nodiscard]] const Entry* focusedTextEntry()const noexcept;
-    [[nodiscard]] b8 append(Event&& event);
-    [[nodiscard]] b8 compositionActive(const Entry& entry)const noexcept;
-    void discard(const UiTextEditOwner& owner)noexcept;
-    [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
-    [[nodiscard]] b8 apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
-    [[nodiscard]] b8 applyNavigation(const Event& event, Ui::EditNavigationDirection::Enum direction, Ui::EditModel& model, NavigationBorrow& navigation);
-    [[nodiscard]] b8 applyAction(const Ui::EditBoxOptions& options, Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
-    [[nodiscard]] b8 rejectBorrowedMutation()noexcept;
-    [[nodiscard]] u64 nextFocusGeneration()noexcept;
-    void synchronizeSession(const Ui::EditBoxOptions& options, b8 inputMethod, Entry& entry, Ui::EditModel& model);
-    [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept{
-        return MakeUiEditNativeCaretRect(geometry, m_display);
+    private TextInputRect nativeCaret(in UiEditBoxGeometry geometry)const{
+        return MakeUiEditNativeCaretRect(geometry, this.m_display);
     }
-    void cancelTransfers();
-    void drainPublications();
 
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Ui::Context& m_context;
-    Core::ITextInputService& m_textInput;
-    Core::IClipboardService& m_clipboardService;
-    UiTextEditSession m_session;
-    UiEditClipboardController m_clipboard;
-    UiEditClipboardController m_primary;
-    UiClipboardPublications m_publications;
-    UiEditClickTracker m_clickTracker;
-    Ui::PaintVector<Entry> m_entries;
-    Ui::PaintVector<Event> m_events;
-    Ui::TextAreaModelStamp m_nativePublished;
-    UiTextEditOwner m_clipboardOwner;
-    UiTextEditOwner m_primaryOwner;
-    Ui::DisplayMetrics m_display;
-    u64 m_generation = 0u;
-    u64 m_lastNativeSequence = 0u;
-    u64 m_focusGeneration = 0u;
-    u64 m_selectionSequence = 0u;
-    u64 m_activeSelectionSequence = 0u;
-    Ui::InputSource m_selectionSource;
-    usize m_queuedTextBytes = 0u;
-    b8 m_clipboardFailure = false;
-    b8 m_borrowed = false;
-    b8 m_borrowRejected = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    private mut Context m_context;
+    private mut ITextInputService m_textInput;
+    private mut IClipboardService m_clipboardService;
+    private UiTextEditSession m_session;
+    private UiEditClipboardController m_clipboard;
+    private UiEditClipboardController m_primary;
+    private UiClipboardPublications m_publications;
+    private UiEditClickTracker m_clickTracker;
+    private Vector<UiEditBoxEntry> m_entries;
+    private Vector<UiEditBoxEvent> m_events;
+    private TextAreaModelStamp m_nativePublished;
+    private UiTextEditOwner m_clipboardOwner;
+    private UiTextEditOwner m_primaryOwner;
+    private DisplayMetrics m_display;
+    private u64 m_generation = 0u;
+    private u64 m_lastNativeSequence = 0u;
+    private u64 m_focusGeneration = 0u;
+    private u64 m_selectionSequence = 0u;
+    private u64 m_activeSelectionSequence = 0u;
+    private InputSource m_selectionSource;
+    private usize m_queuedTextBytes = 0u;
+    private b8 m_clipboardFailure = false;
+    private b8 m_borrowed = false;
+    private b8 m_borrowRejected = false;
 }
 
 

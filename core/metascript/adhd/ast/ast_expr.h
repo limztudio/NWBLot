@@ -26,6 +26,32 @@ struct Expr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct LayoutQuery{
+    MStringView keyword;
+    MStringView cppPrefix;
+    MStringView cppSuffix;
+    b8 booleanResult;
+};
+
+namespace LayoutQueryKind{
+    enum Enum : u8{
+#define NWB_ADHD_EXPORT_LAYOUT_QUERY(adhdName, enumName, cppPrefix, cppSuffix, booleanResult) enumName,
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_LAYOUT_QUERY
+        Count,
+    };
+}
+
+inline constexpr Array<LayoutQuery, LayoutQueryKind::Count> s_LayoutQueries = {{
+#define NWB_ADHD_EXPORT_LAYOUT_QUERY(adhdName, enumName, cppPrefix, cppSuffix, booleanResult) LayoutQuery{ adhdName, cppPrefix, cppSuffix, booleanResult },
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_LAYOUT_QUERY
+}};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ExprKind{
     enum Enum : u8{
         IntegerLiteral,
@@ -43,6 +69,7 @@ namespace ExprKind{
         Binary,
         Cast,
         BitCast,
+        LayoutQuery,
         Lambda,
     };
 };
@@ -65,6 +92,7 @@ namespace ExprKind{
     case ExprKind::Binary:
     case ExprKind::Cast:
     case ExprKind::BitCast:
+    case ExprKind::LayoutQuery:
     case ExprKind::Lambda:
         return true;
     default:
@@ -118,6 +146,10 @@ struct ParamDecl{
     TypeRef* type = nullptr;
     MStringView name;
     SourceSpan span;
+    b8 retainsBorrow = false;
+    b8 cppConstReference = false;
+    b8 forwardsArgument = false;
+    b8 copiesArgument = false;
 };
 
 
@@ -126,6 +158,7 @@ struct ParamDecl{
 
 struct Expr{
     ExprKind::Enum kind = ExprKind::Identifier;
+    LayoutQueryKind::Enum layoutQuery = LayoutQueryKind::Count;
     SourceSpan span;
     MStringView text;
     MStringView resolvedSimdType;
@@ -153,14 +186,16 @@ struct Expr{
     b8 isNotNullRebind = false;
     b8 derefNotNull = false;
     b8 isMutArg = false;
+    b8 isRetainedArg = false;
     b8 injectScratchArena = false;
     b8 injectClassArena = false;
+    b8 returnsFromThisArena = false;
     b8 lambdaUsesScratchArena = false;
     b8 lambdaUsesTaskScope = false;
     b8 lambdaInjectsCallerArena = false;
     b8 useAdhdAssign = false;
-    b8 useAdhdOptionalClassAssign = false;
-    b8 useAdhdOptionalScratchAssign = false;
+    b8 useAdhdWrappedClassAssign = false;
+    b8 useAdhdWrappedScratchAssign = false;
     b8 useAdhdMapIndex = false;
     b8 hasMutLocalCapture = false;
     b8 hasMutContainerCapture = false;

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/caustic/hardware_caustics_stage_builder.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
 #include <impl/ecs_render/caustic/rt_caustics_resolve_chain.adhd>
 
 
@@ -16,47 +18,8 @@ b8 ShouldConfirmCausticAccumulatorBootstrapClear(in b8 graphOwnsAccumulatorBoots
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/caustic/caustic_activity_resources.adhd.h>
-#include <impl/ecs_render/caustic/graph_types.adhd.h>
-#include <impl/ecs_render/caustic/hardware_caustics_stage_builder.adhd.h>
-#include <impl/ecs_render/caustic/rt_caustics_internal.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_scheduling.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-
-#include <core/common/log.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs)noexcept{
-    using namespace RendererTaskGraphDetail;
-    HardwareCausticsStageResult result{};
+Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(in HardwareCausticsStageInputs inputs){
+    HardwareCausticsStageResult result;
     if(!inputs.declaresHardwareCaustics)
         return result;
     if(
@@ -68,124 +31,101 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
         || !inputs.lights.valid()
         || !inputs.graphicsPrefixTask.valid()
     )
-        return MakeUnexpected(Failure{});
-    if(m_raytracingSystem->hasHwCausticWork(inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
+    if(this.m_raytracingSystem.hasHwCausticWork(inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
+        return MakeUnexpected(Failure());
 
-    CausticsResolveChainBuilder resolveChainBuilder(*m_graph, *m_raytracingSystem);
+    CausticsResolveChainBuilder resolveChainBuilder(this.m_graph, this.m_raytracingSystem);
     const auto stageTargetsResult = resolveChainBuilder.importStageTargets(inputs.targets, true);
-    if(!stageTargetsResult)
-        return MakeUnexpected(Failure{});
-    const CausticsStageTargets stageTargets = *stageTargetsResult;
+    if(!stageTargetsResult.has_value())
+        return MakeUnexpected(Failure());
+    const CausticsStageTargets stageTargets = stageTargetsResult.value();
 
-    Core::Alloc::ScratchArena scratchArena;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ scratchArena };
+    Vector<GpuTaskResourceUse> hardwarePhotonResourceUses;
     const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
     const TraceResourceSetUses hardwarePhotonResourceSetUses = MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
     hardwarePhotonResourceUses.reserve(ComputePhotonResourceUseCapacity(
         s_HardwarePhotonResourceUseCapacity,
-        inputs.rayTracingResources.csgTraceContextBuffer != nullptr,
+        inputs.rayTracingResources.csgTraceContextBuffer.valid(),
         inputs.rayTracingResources.csgTraceBoundsBuffers.size(),
         hardwareTraceGeometryStatesGraphOwned,
         inputs.hardwareTraceGeometryResources.size()
     ));
-    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    hardwarePhotonResourceUses.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
-    hardwarePhotonResourceUses.push_back(ReadUse(inputs.lights, Core::ResourceStates::ShaderResource));
+    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, ResourceStates::ShaderResource));
+    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, s_FramebufferSubresources, ResourceStates::ShaderResource));
+    hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, ResourceStates::ConstantBuffer));
+    hardwarePhotonResourceUses.push_back(ReadUse(inputs.sceneShading, ResourceStates::ConstantBuffer));
+    hardwarePhotonResourceUses.push_back(ReadUse(inputs.lights, ResourceStates::ShaderResource));
     if(inputs.opticalScene.valid())
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.opticalScene));
     hardwarePhotonResourceUses.push_back(ReadUse(stageTargets.sceneGeometryDomain));
-    hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
+    hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, s_CausticAccumulatorSubresources, ResourceStates::UnorderedAccess));
 
-    const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
-        if(!buffer)
-            return true;
-        const auto resourceResult = ImportExternalBuffer(*m_graph, buffer, identity, label);
-        if(!resourceResult)
-            return false;
-        hardwarePhotonResourceUses.push_back(ReadUse(*resourceResult, state));
-        return true;
-    };
     b8 optionalResourcesImported =
-        appendOptionalReadBuffer(inputs.meshViewSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel, Core::ResourceStates::ConstantBuffer)
-        && appendOptionalReadBuffer(
+        AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.meshViewSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel, ResourceStates::ConstantBuffer)
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses,
             inputs.rayTracingResources.shadowInstanceMaterialBuffer,
             Name(s_SceneShadowInstanceMaterialName),
             s_SceneShadowInstanceMaterialLabel,
-            Core::ResourceStates::ShaderResource
+            ResourceStates::ShaderResource
         )
-        && appendOptionalReadBuffer(inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel, Core::ResourceStates::ShaderResource)
-        && appendOptionalReadBuffer(inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel, Core::ResourceStates::ShaderResource)
-        && appendOptionalReadBuffer(inputs.rayTracingResources.causticEmissionTargetBuffer, Name(s_HardwareCausticEmissionTargetsName), s_CausticEmissionTargetsLabel, Core::ResourceStates::ShaderResource)
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel, ResourceStates::ShaderResource)
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel, ResourceStates::ShaderResource)
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.causticEmissionTargetBuffer, Name(s_HardwareCausticEmissionTargetsName), s_CausticEmissionTargetsLabel, ResourceStates::ShaderResource)
     ;
     if(inputs.materialContextSlots.valid())
-        hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
+        hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, ResourceStates::ConstantBuffer));
     // Candidate normal and seam checks read the frozen position and index streams.
-    for(const Core::GpuGraphResourceId resource : inputs.hardwareTraceGeometryResources){
+    for(in GpuGraphResourceId resource : inputs.hardwareTraceGeometryResources){
         if(!resource.valid()){
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: invalid prepared hardware-caustics geometry resource"));
-            return MakeUnexpected(Failure{});
+            warning("RendererSystem: invalid prepared hardware-caustics geometry resource");
+            return MakeUnexpected(Failure());
         }
         if(!hardwareTraceGeometryStatesGraphOwned)
-            hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            hardwarePhotonResourceUses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
     }
-    if(inputs.rayTracingResources.sceneTlas){
-        const auto tlas = m_graph->importAccelStruct(
-            inputs.rayTracingResources.sceneTlas,
-            AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel)
-                .setInitialState(m_raytracingSystem->sceneTlasBackingInitialState())
-        );
+    if(inputs.rayTracingResources.sceneTlas.valid()){
+        GpuGraphResourceDesc tlasDesc = AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel);
+        tlasDesc.setInitialState(this.m_raytracingSystem.sceneTlasBackingInitialState());
+        const auto tlas = this.m_graph.importAccelStruct(inputs.rayTracingResources.sceneTlas, tlasDesc);
         optionalResourcesImported = optionalResourcesImported && tlas.has_value();
         if(tlas.has_value())
-            hardwarePhotonResourceUses.push_back(ReadUse(*tlas, Core::ResourceStates::AccelStructRead));
+            hardwarePhotonResourceUses.push_back(ReadUse(tlas.value(), ResourceStates::AccelStructRead));
     }
-    optionalResourcesImported = optionalResourcesImported && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
+    optionalResourcesImported = optionalResourcesImported && AppendCurrentCsgRayGeometry(
         inputs.rayTracingResources.csgTraceContextBuffer,
         inputs.rayTracingResources.csgTraceBoundsBuffers,
-        *m_graph,
+        this.m_graph,
         hardwarePhotonResourceUses
     );
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import a hardware-caustics dynamic resource"));
-        return MakeUnexpected(Failure{});
+        warning("RendererSystem: could not import a hardware-caustics dynamic resource");
+        return MakeUnexpected(Failure());
     }
 
-    const Array<Core::GpuTaskId, 1u> hardwareDependencies = { inputs.graphicsPrefixTask };
-    const Span<const Core::GpuExternalCompletionId> hardwareExternalDependencies = inputs.features.laggedLightingHistoryWriterWaitPending
-        ? Span<const Core::GpuExternalCompletionId>(&inputs.historyWriterDrainCompletion, 1u)
-        : Span<const Core::GpuExternalCompletionId>{};
-    const Array<Core::GpuTaskExternalStateSource, 1u> accumulatorStateSources = {
-        Core::GpuTaskExternalStateSource{ .states = inputs.accumulatorPersistentState.source(), },
-    };
-    const Span<const Core::GpuTaskExternalStateSource> accumulatorStateSourceSpan = inputs.accumulatorPersistentState.valid()
-        ? Span<const Core::GpuTaskExternalStateSource>(accumulatorStateSources)
-        : Span<const Core::GpuTaskExternalStateSource>{};
+    const Array<GpuTaskId, 1u> hardwareDependencies(inputs.graphicsPrefixTask);
+    const Array<GpuExternalCompletionId, 1u> externalCompletions(inputs.historyWriterDrainCompletion);
+    const Span<GpuExternalCompletionId> hardwareExternalDependencies = Span<GpuExternalCompletionId>(externalCompletions).first(cast<usize>(inputs.features.laggedLightingHistoryWriterWaitPending));
+    const Array<GpuTaskExternalStateSource, 1u> accumulatorStateSources(ExternalStateSourceFromCache(inputs.accumulatorPersistentState));
+    const Span<GpuTaskExternalStateSource> accumulatorStateSourceSpan = Span<GpuTaskExternalStateSource>(accumulatorStateSources).first(cast<usize>(inputs.accumulatorPersistentState.valid()));
 
-    const auto prefixTasksResult = resolveChainBuilder.declarePrefixTasks(CausticsStagePrefixInputs{
-        .targets = inputs.targets,
-        .meshViewSnapshot = inputs.meshViewSnapshot,
-        .shadowPreparationReady = inputs.shadowPreparationReady,
-        .timingTicket = inputs.timingTicket,
-        .photonTiming = inputs.photonTiming,
-        .initialDependencies = hardwareDependencies,
-        .externalDependencies = hardwareExternalDependencies,
-        .irradianceClearStateSources = {},
-        .accumulatorStateSources = accumulatorStateSourceSpan,
-        .causticIrradiance = inputs.currentCausticIrradiance,
-        .causticAccumulator = stageTargets.causticAccumulator,
-        .causticAccumulatorInitialized = inputs.rayTracingResources.causticAccumulatorInitialized,
-        .hardwareCaustics = true,
-    });
-    if(!prefixTasksResult)
-        return MakeUnexpected(Failure{});
-    result.causticIrradianceClearTask = prefixTasksResult->causticIrradianceClearTask;
-    result.causticAccumulatorBootstrapClearTask = prefixTasksResult->causticAccumulatorBootstrapClearTask;
-    result.causticAccumulatorDecayTask = prefixTasksResult->causticAccumulatorDecayTask;
+    CausticsStagePrefixInputs prefixInputs(inputs.targets, inputs.meshViewSnapshot, inputs.shadowPreparationReady, inputs.timingTicket, inputs.photonTiming);
+    prefixInputs.initialDependencies = Span<GpuTaskId>(hardwareDependencies);
+    prefixInputs.externalDependencies = hardwareExternalDependencies;
+    prefixInputs.accumulatorStateSources = accumulatorStateSourceSpan;
+    prefixInputs.causticIrradiance = inputs.currentCausticIrradiance;
+    prefixInputs.causticAccumulator = stageTargets.causticAccumulator;
+    prefixInputs.causticAccumulatorInitialized = inputs.rayTracingResources.causticAccumulatorInitialized;
+    prefixInputs.hardwareCaustics = true;
+    const auto prefixTasksResult = resolveChainBuilder.declarePrefixTasks(prefixInputs);
+    if(!prefixTasksResult.has_value())
+        return MakeUnexpected(Failure());
+    result.causticIrradianceClearTask = prefixTasksResult.value().causticIrradianceClearTask;
+    result.causticAccumulatorBootstrapClearTask = prefixTasksResult.value().causticAccumulatorBootstrapClearTask;
+    result.causticAccumulatorDecayTask = prefixTasksResult.value().causticAccumulatorDecayTask;
 
-    Core::GpuTaskSchedulingHint hardwareCausticsScheduling;
-    hardwareCausticsScheduling.cost = Core::GpuTaskCostHint::Large;
+    GpuTaskSchedulingHint hardwareCausticsScheduling;
+    hardwareCausticsScheduling.cost = GpuTaskCostHint::Large;
     hardwareCausticsScheduling.forceSubmissionBoundary = false;
     hardwareCausticsScheduling.allowPacketMerge = true;
     hardwareCausticsScheduling.mergeWithPrevious = true;
@@ -193,500 +133,379 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
     hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;
     ConfigureComputeEffectRoutingHint(true, hardwareCausticsScheduling);
 
-    Core::GpuTaskDesc hardwarePhotonDesc;
+    GpuTaskDesc hardwarePhotonDesc;
     hardwarePhotonDesc
         .setIdentity(Name(s_RenderNameRenderHardwareCausticsPhotons))
         .setMarkerLabel("Hardware Caustic Photons")
         .setScheduling(hardwareCausticsScheduling)
-        .setDependencies({ &prefixTasksResult->photonDependencyTask, 1u })
+        .setDependency(prefixTasksResult.value().photonDependencyTask)
         .setResourceUses(hardwarePhotonResourceUses)
-        .setResourceSetUses({ hardwarePhotonResourceSetUses.useCount != 0u ? hardwarePhotonResourceSetUses.uses.data() : nullptr, hardwarePhotonResourceSetUses.useCount })
+        .setResourceSetUses(Span<GpuTaskResourceSetUse>(hardwarePhotonResourceSetUses.uses).first(hardwarePhotonResourceSetUses.useCount))
     ;
-    const auto causticPhotonTaskResult = m_raytracingSystem->declareHardwareCausticsTask(
-        *m_graph,
+    const auto causticPhotonTaskResult = this.m_raytracingSystem.declareHardwareCausticsTask(
+        this.m_graph,
         hardwarePhotonDesc,
         inputs.lightingResources,
         inputs.meshViewSnapshot,
         inputs.shadowPreparationReady,
-        prefixTasksResult->graphOwnsAccumulatorBootstrapClear,
+        prefixTasksResult.value().graphOwnsAccumulatorBootstrapClear,
         inputs.targets,
         inputs.timingTicket,
         inputs.photonTiming,
         inputs.producerDispatched
     );
-    if(!causticPhotonTaskResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
-        return MakeUnexpected(Failure{});
+    if(!causticPhotonTaskResult.has_value()){
+        warning("RendererSystem: could not declare hardware-caustics photon graph task");
+        return MakeUnexpected(Failure());
     }
-    result.causticPhotonTask = *causticPhotonTaskResult;
+    result.causticPhotonTask = causticPhotonTaskResult.value();
 
-    const auto geometryAndResolveResult = resolveChainBuilder.declareGeometryAndResolve(CausticsGeometryAndResolveInputs{
-        .targets = inputs.targets,
-        .producerDispatched = inputs.producerDispatched,
-        .timingTicket = inputs.timingTicket,
-        .resolveTiming = inputs.resolveTiming,
-        .stageTargets = stageTargets,
-        .worldPosition = inputs.worldPosition,
-        .depth = inputs.depth,
-        .causticIrradiance = inputs.currentCausticIrradiance,
-        .photonTask = result.causticPhotonTask,
-        .baseScheduling = hardwareCausticsScheduling,
-        .geometryStateSources = {},
-        .resolveStateSources = {},
-        .hardwareCaustics = true,
-    });
-    if(!geometryAndResolveResult)
-        return MakeUnexpected(Failure{});
-    result.causticGeometryTask = geometryAndResolveResult->causticGeometryTask;
-    result.causticResolvePrepareTask = geometryAndResolveResult->causticResolvePrepareTask;
-    result.causticResolveWaveletTasks = geometryAndResolveResult->causticResolveWaveletTasks;
-    result.causticResolveUpsampleTask = geometryAndResolveResult->causticResolveUpsampleTask;
-    result.hardwareCausticsTask = geometryAndResolveResult->causticsTask;
+    CausticsGeometryAndResolveInputs geometryInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
+    geometryInputs.stageTargets = stageTargets;
+    geometryInputs.worldPosition = inputs.worldPosition;
+    geometryInputs.depth = inputs.depth;
+    geometryInputs.causticIrradiance = inputs.currentCausticIrradiance;
+    geometryInputs.photonTask = result.causticPhotonTask;
+    geometryInputs.baseScheduling = hardwareCausticsScheduling;
+    geometryInputs.hardwareCaustics = true;
+    const auto geometryAndResolveResult = resolveChainBuilder.declareGeometryAndResolve(geometryInputs);
+    if(!geometryAndResolveResult.has_value())
+        return MakeUnexpected(Failure());
+    result.causticGeometryTask = geometryAndResolveResult.value().causticGeometryTask;
+    result.causticResolvePrepareTask = geometryAndResolveResult.value().causticResolvePrepareTask;
+    result.causticResolveWaveletTasks = geometryAndResolveResult.value().causticResolveWaveletTasks;
+    result.causticResolveUpsampleTask = geometryAndResolveResult.value().causticResolveUpsampleTask;
+    result.hardwareCausticsTask = geometryAndResolveResult.value().causticsTask;
     return result;
 }
 
+class CausticAccumulatorDecayGraphTask{
+    private mut RendererRayTracingSystem raytracingSystem;
+    private mut GraphicsRuntime graphics;
+    private mut DeferredFrameTargets targets;
+    private MeshViewBufferSnapshot meshView;
+    private in b8 shadowVisibilityPrepared;
+    private mut GpuTimingSubmissionTicket timingTicket;
+    private mut Optional<GpuTimingMeasure> causticPhotonTiming;
+    private b8 hardwareCaustics;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public CausticAccumulatorDecayGraphTask(
+        mut RendererRayTracingSystem raytracingSystem,
+        mut GraphicsRuntime graphics,
+        mut DeferredFrameTargets targets,
+        in MeshViewBufferSnapshot meshView,
+        in borrow b8 shadowVisibilityPrepared,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> causticPhotonTiming,
+        in b8 hardwareCaustics
+    ){
+        this.raytracingSystem = raytracingSystem;
+        this.graphics = graphics;
+        this.targets = targets;
+        this.meshView = meshView;
+        this.shadowVisibilityPrepared = shadowVisibilityPrepared;
+        this.timingTicket = timingTicket;
+        this.causticPhotonTiming = causticPhotonTiming;
+        this.hardwareCaustics = hardwareCaustics;
+    }
 
-
-namespace __hidden_rt_caustics_tasks{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Payload>
-static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(noexcept(ShouldConfirmCausticAccumulatorBootstrapClear(payload.graphOwnsAccumulatorBootstrapClear, payload.causticProducerDispatched)) && noexcept(payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear())){
-    if(ShouldConfirmCausticAccumulatorBootstrapClear(payload.graphOwnsAccumulatorBootstrapClear, payload.causticProducerDispatched))
-        payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
-}
-
-// A warm accumulator decays before either photon route writes splats. Separate task so the compiler lowers the UAV dep into the producer.
-struct CausticAccumulatorDecayGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // All bindings are required: decay always brackets the caustic-photon timing against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        MeshViewBufferSnapshot meshView;
-        const b8& shadowVisibilityPrepared;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
-        b8 hardwareCaustics = false;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         // Match the producer's no-work behavior: keep the dep, but skip dispatch unless the producer would run.
-        if(!payload.shadowVisibilityPrepared)
+        if(!this.shadowVisibilityPrepared)
             return true;
-        const b8 hasWork = payload.hardwareCaustics ? payload.raytracingSystem.hasHwCausticWork(payload.meshView) : payload.raytracingSystem.hasCausticWork(payload.meshView);
+        b8 hasWork = false;
+        if(this.hardwareCaustics)
+            hasWork = this.raytracingSystem.hasHwCausticWork(this.meshView);
+        else
+            hasWork = this.raytracingSystem.hasCausticWork(this.meshView);
         if(!hasWork)
             return true;
 
         // A rejected record may retry before discard. Release the incomplete reservation before the retry's interval.
-        Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        payload.causticPhotonTiming.emplace(payload.graphics.gpuTiming(), s_TimingScopeCausticPhotons, payload.graphics.getDevice(), commandList);
-        if(!Core::FinishSplitGpuTimingMarker(&payload.causticPhotonTiming))
+        DiscardGpuTimingMeasure(this.causticPhotonTiming);
+        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        this.causticPhotonTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeCausticPhotons, this.graphics.getDevice(), commandList);
+        if(!FinishSplitGpuTimingMarker(this.causticPhotonTiming))
             return false;
-        const b8 dispatched = payload.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, payload.targets);
+        const b8 dispatched = this.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, this.targets);
         if(!dispatched){
-            Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
+            DiscardGpuTimingMeasure(this.causticPhotonTiming);
+            warning("RendererSystem: graph-owned caustic accumulator decay pass failed");
         }
         return true;
     }
 
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.causticPhotonTiming);
     }
-};
+}
 
-// Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain.
-// The renderer still supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
-template<b8 Hardware>
-struct CausticProducerGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+class CausticProducerGraphTask{
+    private mut RendererRayTracingSystem raytracingSystem;
+    private mut DeferredFrameTargets targets;
+    private DeferredLightingGraphResources deferredLightingResources;
+    private MeshViewBufferSnapshot meshView;
+    private mut GpuTimingSubmissionTicket timingTicket;
+    private in b8 shadowVisibilityPrepared;
+    private mut Optional<GpuTimingMeasure> causticPhotonTiming;
+    private b8 graphOwnsAccumulatorBootstrapClear;
+    private mut b8 causticProducerDispatched;
+    private b8 hardware;
 
+    public CausticProducerGraphTask(
+        mut RendererRayTracingSystem raytracingSystem,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in MeshViewBufferSnapshot meshView,
+        mut GpuTimingSubmissionTicket timingTicket,
+        in borrow b8 shadowVisibilityPrepared,
+        mut Optional<GpuTimingMeasure> causticPhotonTiming,
+        in b8 graphOwnsAccumulatorBootstrapClear,
+        mut b8 causticProducerDispatched,
+        in b8 hardware
+    ){
+        this.raytracingSystem = raytracingSystem;
+        this.targets = targets;
+        this.deferredLightingResources = deferredLightingResources;
+        this.meshView = meshView;
+        this.timingTicket = timingTicket;
+        this.shadowVisibilityPrepared = shadowVisibilityPrepared;
+        this.causticPhotonTiming = causticPhotonTiming;
+        this.graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear;
+        this.causticProducerDispatched = causticProducerDispatched;
+        this.hardware = hardware;
+    }
 
-public:
-    // All bindings are required: photons always record against this frame's ticket and publish dispatch.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        MeshViewBufferSnapshot meshView;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        const b8& shadowVisibilityPrepared;
-        Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
-        b8 graphOwnsAccumulatorBootstrapClear = false;
-        b8& causticProducerDispatched;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-        payload.causticProducerDispatched = false;
-        if(!payload.deferredLightingResources.valid())
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        this.causticProducerDispatched = false;
+        if(!this.deferredLightingResources.valid())
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
         // Typed clears and warm decay precede photons; acceptance publishes their CPU lifecycle.
-        if(payload.shadowVisibilityPrepared){
-            b8 causticsDispatched;
-            if constexpr(Hardware)
-                causticsDispatched = payload.raytracingSystem.renderHwCaustics(commandList, payload.meshView, payload.targets, &payload.causticPhotonTiming);
+        if(this.shadowVisibilityPrepared){
+            b8 causticsDispatched = false;
+            if(this.hardware)
+                causticsDispatched = this.raytracingSystem.renderHwCaustics(commandList, this.meshView, this.targets, Optional<mut Optional<GpuTimingMeasure>>(this.causticPhotonTiming));
             else
-                causticsDispatched = payload.raytracingSystem.renderGpuBvhCaustics(commandList, payload.meshView, payload.targets, &payload.causticPhotonTiming);
+                causticsDispatched = this.raytracingSystem.renderGpuBvhCaustics(commandList, this.meshView, this.targets, Optional<mut Optional<GpuTimingMeasure>>(this.causticPhotonTiming));
             if(!causticsDispatched)
-                Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
-            payload.causticProducerDispatched = causticsDispatched;
+                DiscardGpuTimingMeasure(this.causticPhotonTiming);
+            this.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched){
-                if constexpr(Hardware){
-                    if(payload.raytracingSystem.hasHwCausticWork(payload.meshView))
-                        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: hardware caustic render pass failed"));
+                if(this.hardware){
+                    if(this.raytracingSystem.hasHwCausticWork(this.meshView))
+                        warning("RendererSystem: hardware caustic render pass failed");
                 }
-                else if(payload.raytracingSystem.hasCausticWork(payload.meshView))
-                    NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: software caustic render pass failed"));
+                else if(this.raytracingSystem.hasCausticWork(this.meshView))
+                    warning("RendererSystem: software caustic render pass failed");
             }
         }
         return true;
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-        ConfirmCausticAccumulatorClears(payload);
-        if(payload.causticProducerDispatched)
-            payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
+    public void accepted(in QueueSubmissionToken token){
+        if(ShouldConfirmCausticAccumulatorBootstrapClear(this.graphOwnsAccumulatorBootstrapClear, this.causticProducerDispatched))
+            this.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
+        if(this.causticProducerDispatched)
+            this.raytracingSystem.confirmRayTraceContextReadSubmission(token);
     }
 
-    static void Discarded(Payload& payload)noexcept{
-        payload.causticProducerDispatched = false;
-        Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+    public void discarded(){
+        this.causticProducerDispatched = false;
+        DiscardGpuTimingMeasure(this.causticPhotonTiming);
     }
-};
-
-template<b8 Hardware>
-[[nodiscard]] static Expected<Core::GpuTaskId> DeclareCausticProducerTask(
-    RendererRayTracingSystem& raytracingSystem,
-    const Core::GpuTaskDesc& desc,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const MeshViewBufferSnapshot& meshView,
-    const b8& shadowVisibilityPrepared,
-    const b8 graphOwnsAccumulatorBootstrapClear,
-    Core::GpuTaskGraph& graph,
-    DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-    b8& causticProducerDispatched
-){
-    using Task = CausticProducerGraphTask<Hardware>;
-    return graph.addTask<Task>(
-        desc,
-        typename Task::Payload{
-            .raytracingSystem = raytracingSystem,
-            .targets = targets,
-            .deferredLightingResources = deferredLightingResources,
-            .meshView = meshView,
-            .timingTicket = timingTicket,
-            .shadowVisibilityPrepared = shadowVisibilityPrepared,
-            .causticPhotonTiming = causticPhotonTiming,
-            .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
-            .causticProducerDispatched = causticProducerDispatched,
-        });
 }
 
-// Geometry downsample follows the selected photon producer in the same graph packet.
-// Its timing begin is retained until wavelet resolve records the endpoint, preserving the established full-resolve interval across callbacks.
-struct CausticGeometryDownsampleGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+class CausticGeometryDownsampleGraphTask{
+    private mut RendererRayTracingSystem raytracingSystem;
+    private mut GraphicsRuntime graphics;
+    private mut DeferredFrameTargets targets;
+    private mut GpuTimingSubmissionTicket timingTicket;
+    private in b8 causticProducerDispatched;
+    private mut Optional<GpuTimingMeasure> causticResolveTiming;
 
+    public CausticGeometryDownsampleGraphTask(
+        mut RendererRayTracingSystem raytracingSystem,
+        mut GraphicsRuntime graphics,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        in borrow b8 causticProducerDispatched,
+        mut Optional<GpuTimingMeasure> causticResolveTiming
+    ){
+        this.raytracingSystem = raytracingSystem;
+        this.graphics = graphics;
+        this.targets = targets;
+        this.timingTicket = timingTicket;
+        this.causticProducerDispatched = causticProducerDispatched;
+        this.causticResolveTiming = causticResolveTiming;
+    }
 
-public:
-    // All bindings are required: geometry downsample always brackets the caustic-resolve timing against this frame's ticket.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        const b8& causticProducerDispatched;
-        Optional<Core::GpuTimingMeasure>& causticResolveTiming;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-        Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
-        if(!payload.causticProducerDispatched)
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        DiscardGpuTimingMeasure(this.causticResolveTiming);
+        if(!this.causticProducerDispatched)
             return true;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        payload.causticResolveTiming.emplace(payload.graphics.gpuTiming(), s_TimingScopeCausticResolve, payload.graphics.getDevice(), commandList);
-        payload.raytracingSystem.dispatchCausticGeometryDownsample(commandList, payload.targets);
+        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        this.causticResolveTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeCausticResolve, this.graphics.getDevice(), commandList);
+        this.raytracingSystem.dispatchCausticGeometryDownsample(commandList, this.targets);
         // The next callback ends timestamps on this same list. Close this nested marker before the recorder advances.
-        return Core::FinishSplitGpuTimingMarker(&payload.causticResolveTiming);
+        return FinishSplitGpuTimingMarker(this.causticResolveTiming);
     }
 
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.causticResolveTiming);
     }
-};
+}
 
-// All resolve phases retain the same activity and producer bindings.
-// Specializations remain separate graph tasks, preserving each ping-pong resource handoff.
-struct CausticResolveRecordInputs{
-    RendererRayTracingSystem& raytracingSystem;
-    DeferredFrameTargets& targets;
-    const b8& causticProducerDispatched;
-    CausticResolveActivitySnapshot activity;
-};
+class CausticResolvePhaseGraphTask{
+    private mut RendererRayTracingSystem raytracingSystem;
+    private mut DeferredFrameTargets targets;
+    private in b8 causticProducerDispatched;
+    private CausticResolveActivitySnapshot activity;
+    private CausticResolveStage phase;
+    private u32 passIndex;
 
-template<auto Dispatch>
-struct CausticResolvePhaseGraphTask{
-    using Payload = CausticResolveRecordInputs;
+    public CausticResolvePhaseGraphTask(
+        mut RendererRayTracingSystem raytracingSystem,
+        mut DeferredFrameTargets targets,
+        in borrow b8 causticProducerDispatched,
+        in CausticResolveActivitySnapshot activity,
+        in CausticResolveStage phase,
+        in u32 passIndex
+    ){
+        this.raytracingSystem = raytracingSystem;
+        this.targets = targets;
+        this.causticProducerDispatched = causticProducerDispatched;
+        this.activity = activity;
+        this.phase = phase;
+        this.passIndex = passIndex;
+    }
 
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context)noexcept(noexcept((payload.raytracingSystem.*Dispatch)(commandList, payload.targets))){
-        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        return commands;
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        if(!this.activity.matches(this.raytracingSystem.causticResolveActivitySnapshot(this.targets)))
             return false;
-        if(payload.causticProducerDispatched)
-            (payload.raytracingSystem.*Dispatch)(commandList, payload.targets);
+        if(this.causticProducerDispatched){
+            if(this.phase == CausticResolveStage::PrepareDownsample)
+                this.raytracingSystem.dispatchCausticResolvePrepare(commandList, this.targets);
+            else if(this.phase == CausticResolveStage::Wavelet)
+                this.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, this.targets, this.passIndex);
+            else
+                this.raytracingSystem.dispatchCausticResolveUpsample(commandList, this.targets);
+        }
         return true;
     }
-};
+}
 
-struct CausticResolveWaveletGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+class CausticResolveGraphTask{
+    private mut GpuTimingSubmissionTicket timingTicket;
+    private in b8 causticProducerDispatched;
+    private mut Optional<GpuTimingMeasure> causticResolveTiming;
 
-
-public:
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        const b8& causticProducerDispatched;
-        CausticResolveActivitySnapshot activity;
-        u32 passIndex = 0u;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
-            return false;
-        if(payload.causticProducerDispatched)
-            payload.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, payload.targets, payload.passIndex);
-        return true;
+    public CausticResolveGraphTask(
+        mut GpuTimingSubmissionTicket timingTicket,
+        in borrow b8 causticProducerDispatched,
+        mut Optional<GpuTimingMeasure> causticResolveTiming
+    ){
+        this.timingTicket = timingTicket;
+        this.causticProducerDispatched = causticProducerDispatched;
+        this.causticResolveTiming = causticResolveTiming;
     }
-};
 
-using CausticResolvePrepareGraphTask = CausticResolvePhaseGraphTask<&RendererRayTracingSystem::dispatchCausticResolvePrepare>;
-using CausticResolveUpsampleGraphTask = CausticResolvePhaseGraphTask<&RendererRayTracingSystem::dispatchCausticResolveUpsample>;
-
-// The empty timing-close callback follows graph-owned upsample and finishes the retained full-resolve interval.
-struct CausticResolveGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
-
-
-public:
-    // All bindings are required: resolve always closes the caustic-resolve timing against this frame's ticket.
-    struct Payload{
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        const b8& causticProducerDispatched;
-        Optional<Core::GpuTimingMeasure>& causticResolveTiming;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+    public GpuTaskCommandRequirements commandRequirements()const{
+        return GpuTaskCommandRequirements();
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         // No-producer contract: the graph-owned irradiance clear wins, no resolve dispatch when the producer never recorded.
-        if(!payload.causticProducerDispatched){
-            Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+        if(!this.causticProducerDispatched){
+            DiscardGpuTimingMeasure(this.causticResolveTiming);
             return true;
         }
-        if(!payload.causticResolveTiming.has_value())
+        if(!this.causticResolveTiming.has_value())
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        payload.causticResolveTiming.value().finishTiming(commandList);
-        payload.causticResolveTiming.reset();
+        GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
+        this.causticResolveTiming.value().finishTiming(commandList);
+        this.causticResolveTiming.reset();
         return true;
     }
 
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.causticResolveTiming);
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    const MeshViewBufferSnapshot& meshView,
-    const b8& shadowVisibilityPrepared,
-    const b8 hardwareCaustics,
-    DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& causticPhotonTiming
-){
-    return graph.addTask<__hidden_rt_caustics_tasks::CausticAccumulatorDecayGraphTask>(
-        desc,
-        __hidden_rt_caustics_tasks::CausticAccumulatorDecayGraphTask::Payload{
-            .raytracingSystem = *this,
-            .graphics = m_graphics,
-            .targets = targets,
-            .meshView = meshView,
-            .shadowVisibilityPrepared = shadowVisibilityPrepared,
-            .timingTicket = timingTicket,
-            .causticPhotonTiming = causticPhotonTiming,
-            .hardwareCaustics = hardwareCaustics,
-        });
 }
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const MeshViewBufferSnapshot& meshView,
-    const b8& shadowVisibilityPrepared,
-    const b8 graphOwnsAccumulatorBootstrapClear,
-    DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-    b8& causticProducerDispatched
-){
-    return __hidden_rt_caustics_tasks::DeclareCausticProducerTask<false>(
-        *this,
-        desc,
-        deferredLightingResources,
-        meshView,
-        shadowVisibilityPrepared,
-        graphOwnsAccumulatorBootstrapClear,
-        graph,
-        targets,
-        timingTicket,
-        causticPhotonTiming,
-        causticProducerDispatched
-    );
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in MeshViewBufferSnapshot meshView,
+        in borrow b8 shadowVisibilityPrepared, in b8 hardwareCaustics, mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming){
+    return graph.addPayloadTask(desc, CausticAccumulatorDecayGraphTask(this, this.m_graphics, targets, meshView, shadowVisibilityPrepared, timingTicket, causticPhotonTiming, hardwareCaustics));
 }
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const MeshViewBufferSnapshot& meshView,
-    const b8& shadowVisibilityPrepared,
-    const b8 graphOwnsAccumulatorBootstrapClear,
-    DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-    b8& causticProducerDispatched
-){
-    return __hidden_rt_caustics_tasks::DeclareCausticProducerTask<true>(
-        *this,
-        desc,
-        deferredLightingResources,
-        meshView,
-        shadowVisibilityPrepared,
-        graphOwnsAccumulatorBootstrapClear,
-        graph,
-        targets,
-        timingTicket,
-        causticPhotonTiming,
-        causticProducerDispatched
-    );
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
+        in MeshViewBufferSnapshot meshView, in borrow b8 shadowVisibilityPrepared, in b8 graphOwnsAccumulatorBootstrapClear,
+        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming, mut b8 causticProducerDispatched){
+    return graph.addPayloadTask(desc, CausticProducerGraphTask(this, targets, deferredLightingResources, meshView, timingTicket, shadowVisibilityPrepared, causticPhotonTiming, graphOwnsAccumulatorBootstrapClear, causticProducerDispatched, false));
 }
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsampleTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    const b8& causticProducerDispatched,
-    DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& causticResolveTiming
-){
-    return graph.addTask<__hidden_rt_caustics_tasks::CausticGeometryDownsampleGraphTask>(
-        desc,
-        __hidden_rt_caustics_tasks::CausticGeometryDownsampleGraphTask::Payload{
-            .raytracingSystem = *this,
-            .graphics = m_graphics,
-            .targets = targets,
-            .timingTicket = timingTicket,
-            .causticProducerDispatched = causticProducerDispatched,
-            .causticResolveTiming = causticResolveTiming,
-        });
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
+        in MeshViewBufferSnapshot meshView, in borrow b8 shadowVisibilityPrepared, in b8 graphOwnsAccumulatorBootstrapClear,
+        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming, mut b8 causticProducerDispatched){
+    return graph.addPayloadTask(desc, CausticProducerGraphTask(this, targets, deferredLightingResources, meshView, timingTicket, shadowVisibilityPrepared, causticPhotonTiming, graphOwnsAccumulatorBootstrapClear, causticProducerDispatched, true));
 }
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(
-    Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    const b8& causticProducerDispatched,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& causticResolveTiming
-){
-    return graph.addTask<__hidden_rt_caustics_tasks::CausticResolveGraphTask>(
-        desc,
-        __hidden_rt_caustics_tasks::CausticResolveGraphTask::Payload{ .timingTicket = timingTicket, .causticProducerDispatched = causticProducerDispatched, .causticResolveTiming = causticResolveTiming, });
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsampleTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in borrow b8 causticProducerDispatched,
+        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticResolveTiming){
+    return graph.addPayloadTask(desc, CausticGeometryDownsampleGraphTask(this, this.m_graphics, targets, timingTicket, causticProducerDispatched, causticResolveTiming));
 }
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolvePrepareTask(const Core::GpuTaskDesc& desc, const b8& causticProducerDispatched, Core::GpuTaskGraph& graph, DeferredFrameTargets& targets){
-    return graph.addTask<__hidden_rt_caustics_tasks::CausticResolvePrepareGraphTask>(
-        desc,
-        __hidden_rt_caustics_tasks::CausticResolvePrepareGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), });
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in borrow b8 causticProducerDispatched,
+        mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticResolveTiming){
+    return graph.addPayloadTask(desc, CausticResolveGraphTask(timingTicket, causticProducerDispatched, causticResolveTiming));
 }
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveWaveletTask(
-    const Core::GpuTaskDesc& desc,
-    const u32 passIndex,
-    const b8& causticProducerDispatched,
-    Core::GpuTaskGraph& graph,
-    DeferredFrameTargets& targets
-){
-    return graph.addTask<__hidden_rt_caustics_tasks::CausticResolveWaveletGraphTask>(
-        desc,
-        __hidden_rt_caustics_tasks::CausticResolveWaveletGraphTask::Payload{
-            .raytracingSystem = *this,
-            .targets = targets,
-            .causticProducerDispatched = causticProducerDispatched,
-            .activity = causticResolveActivitySnapshot(targets),
-            .passIndex = passIndex,
-        });
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolvePrepareTask(in GpuTaskDesc desc, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets){
+    return graph.addPayloadTask(desc, CausticResolvePhaseGraphTask(this, targets, causticProducerDispatched, this.causticResolveActivitySnapshot(targets), CausticResolveStage::PrepareDownsample, 0u));
 }
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveUpsampleTask(const Core::GpuTaskDesc& desc, const b8& causticProducerDispatched, Core::GpuTaskGraph& graph, DeferredFrameTargets& targets){
-    return graph.addTask<__hidden_rt_caustics_tasks::CausticResolveUpsampleGraphTask>(
-        desc,
-        __hidden_rt_caustics_tasks::CausticResolveUpsampleGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), });
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveWaveletTask(in GpuTaskDesc desc, in u32 passIndex, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets){
+    return graph.addPayloadTask(desc, CausticResolvePhaseGraphTask(this, targets, causticProducerDispatched, this.causticResolveActivitySnapshot(targets), CausticResolveStage::Wavelet, passIndex));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveUpsampleTask(in GpuTaskDesc desc, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets){
+    return graph.addPayloadTask(desc, CausticResolvePhaseGraphTask(this, targets, causticProducerDispatched, this.causticResolveActivitySnapshot(targets), CausticResolveStage::Upsample, 0u));
 }
 
 

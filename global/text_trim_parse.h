@@ -339,6 +339,16 @@ struct DecodedUtf8CodePoint{
     return 4u;
 }
 
+template<typename TraitsT, typename AllocatorT>
+[[nodiscard]] inline b8 EncodeUtf8CodePoint(const u32 codePoint, std::basic_string<char, TraitsT, AllocatorT>& outText){
+    Array<char, s_Utf8MaxSequenceBytes> bytes{};
+    const auto count = EncodeUtf8CodePoint(codePoint, bytes);
+    if(!count)
+        return false;
+    outText.assign(bytes.data(), *count);
+    return true;
+}
+
 [[nodiscard]] inline constexpr b8 IsTextInputCodePoint(const u32 unicode)noexcept{
     if(unicode < s_UnicodeSpace || unicode == s_UnicodeDelete)
         return false;

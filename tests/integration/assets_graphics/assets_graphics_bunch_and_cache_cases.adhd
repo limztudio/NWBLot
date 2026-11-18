@@ -298,7 +298,7 @@ void VerifyAssetBunchOwnership_RegisteredExpanderTransfersValuesToTheModelParser
             output = expandedResult.value();
         }
         ASSERT_EQ(output.size(), 1u);
-        Expected<ModelCookEntry> entryParseResult = ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, fixture.outputArena, fixture.scratchArena);
+        Expected<ModelCookEntry> entryParseResult = ParseModelCookMetadata(fixture.outputArena, output[0u].virtualPath, fixture.filePath, output[0u].value);
         ASSERT_TRUE(entryParseResult.has_value());
         entry = entryParseResult.value();
     }
@@ -323,7 +323,7 @@ void VerifyAssetBunchOwnership_NullValueReachesTheTypeParserAndKeepsItsRejection
         }
         ASSERT_EQ(output.size(), 1u);
         EXPECT_TRUE(output[0u].value.isNull());
-        EXPECT_FALSE(ParseModelCookMetadata(output[0u].virtualPath, fixture.filePath, output[0u].value, fixture.outputArena, fixture.scratchArena).has_value());
+        EXPECT_FALSE(ParseModelCookMetadata(fixture.outputArena, output[0u].virtualPath, fixture.filePath, output[0u].value).has_value());
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     EXPECT_TRUE(SawCapturedError(logger, "asset is not a map"));

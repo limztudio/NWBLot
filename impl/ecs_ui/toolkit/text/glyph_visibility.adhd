@@ -2,97 +2,63 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/text/atlas.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout.adhd.h>
-
-#include <global/simd/result.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Stateless queries borrow immutable layout and atlas metadata.
-namespace TextGlyphVisibility{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] FOUNDATION_INLINE const BakedFontAtlas* SelectAtlas(const PlacedGlyph& glyph, const f32 physicalSize)noexcept{
-    if(!glyph.face || !glyph.face->valid())
-        return nullptr;
-    const SharedBakedFontAtlas& atlas = glyph.face->bakedAtlas();
-    if(!atlas || !atlas->valid() || !CanUseBakedFontAtlasAtPhysicalSize(atlas->bakePpem(), physicalSize) || !atlas->glyph(glyph.glyphId))
-        return nullptr;
-    return atlas.get();
+SharedBakedFontAtlas SelectAtlas(in PlacedGlyph glyph, in f32 physicalSize){
+    if(!glyph.face.valid() || !glyph.face.deref().valid())
+        return SharedBakedFontAtlas();
+    in SharedBakedFontAtlas atlas = glyph.face.deref().bakedAtlas();
+    if(!atlas.valid() || !atlas.deref().valid() || !CanUseBakedFontAtlasAtPhysicalSize(atlas.deref().bakePpem(), physicalSize) || !atlas.deref().hasGlyph(glyph.glyphId))
+        return SharedBakedFontAtlas();
+    return atlas;
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<SIMDVectorDoubleResult> LoadAtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
-    if(!atlas.valid())
-        return MakeUnexpected(Failure{});
-    const FontAtlasGlyph* record = atlas.glyph(glyph.glyphId);
-    if(!record)
-        return MakeUnexpected(Failure{});
-    return TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), *record);
+Expected<VectorDouble> LoadAtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 fontSize, in Point topLeft){
+    if(!atlas.valid() || !atlas.hasGlyph(glyph.glyphId))
+        return MakeUnexpected(Failure());
+    return TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), atlas.glyph(glyph.glyphId));
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Rect> AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
-    const auto rectangle = LoadAtlasRectangle(glyph, atlas, fontSize, topLeft);
-    if(!rectangle)
+Expected<Rect> AtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 fontSize, in Point topLeft){
+    const Expected<VectorDouble> rectangle = LoadAtlasRectangle(glyph, atlas, fontSize, topLeft);
+    if(!rectangle.has_value())
         return MakeUnexpected(rectangle.error());
-    return ToTextGlyphAtlasRect(rectangle->value);
+    return ToTextGlyphAtlasRect(rectangle.value());
 }
 
-// Coverage needs explicit bounds or a valid native face; untrusted native bounds retain conservative preparation.
-[[nodiscard]] FOUNDATION_INLINE TextGlyphIntersection::Enum Candidate(const PlacedGlyph& glyph, const BakedFontAtlas* const selectedAtlas, const f32 fontSize, const f32 physicalSize, const Point& topLeft, const Rect& clip, const Point pixelScale = { 1.0f, 1.0f })noexcept{
-    const TextGlyphIntersection::Enum inputStatus = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, fontSize, physicalSize, clip, pixelScale);
-    if(inputStatus != TextGlyphIntersection::Visible)
-        return inputStatus;
-    if(selectedAtlas){
-        const auto rectangle = LoadAtlasRectangle(glyph, *selectedAtlas, fontSize, topLeft);
-        if(!rectangle)
+// Faces with untrusted coverage bounds stay eligible for raster preparation.
+TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
+    const TextGlyphIntersection input = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, fontSize, physicalSize, clip, pixelScale);
+    if(input != TextGlyphIntersection::Visible)
+        return input;
+    if(selectedAtlas.valid()){
+        const Expected<VectorDouble> rectangle = LoadAtlasRectangle(glyph, selectedAtlas.deref(), fontSize, topLeft);
+        if(!rectangle.has_value())
             return TextGlyphIntersection::Invalid;
-        return IntersectGlyphAtlasRectangle(rectangle->value, clip);
+        return IntersectGlyphAtlasRectangle(rectangle.value(), clip);
     }
-    const b8 hasValidFace = glyph.face && glyph.face->valid();
-    const b8 coverageInkReliable = hasValidFace && glyph.face->coverageInkReliable();
-    const u32 faceUnitsPerEm = hasValidFace ? glyph.face->unitsPerEm() : 1u;
+    const b8 hasValidFace = glyph.face.valid() && glyph.face.deref().valid();
+    const b8 coverageInkReliable = hasValidFace && glyph.face.deref().coverageInkReliable();
+    u32 faceUnitsPerEm = 1u;
+    if(hasValidFace)
+        faceUnitsPerEm = glyph.face.deref().unitsPerEm();
     return EvaluateUnselectedAtlasGlyphCandidate(glyph.position, topLeft, glyph.ink, glyph.coverage, hasValidFace, coverageInkReliable, faceUnitsPerEm, fontSize, physicalSize, clip, pixelScale);
 }
 
-[[nodiscard]] FOUNDATION_INLINE Expected<Rect> CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale = { 1.0f, 1.0f })noexcept{
+TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip){
+    return Candidate(glyph, selectedAtlas, fontSize, physicalSize, topLeft, clip, Point(1.0f, 1.0f));
+}
+
+Expected<Rect> CoverageRectangle(in PlacedGlyph glyph, in AtlasGlyph record, in f32 rasterScale, in Point topLeft, in Point pixelScale){
     return TryResolveGlyphCoverageRectangle(glyph.position, record.pageIndex, record.pixels, record.bearingX, record.bearingY, rasterScale, topLeft, pixelScale);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<Rect> CoverageRectangle(in PlacedGlyph glyph, in AtlasGlyph record, in f32 rasterScale, in Point topLeft){
+    return CoverageRectangle(glyph, record, rasterScale, topLeft, Point(1.0f, 1.0f));
 }
 
 

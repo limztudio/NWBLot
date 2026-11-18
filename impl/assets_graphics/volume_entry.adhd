@@ -2,124 +2,80 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+#include <impl/assets_graphics/bvh_subsystem.adhd>
+#include <impl/assets_graphics/csg_subsystem.adhd>
+#include <impl/assets_graphics/cook_components.adhd>
+#include <impl/assets_graphics/deferred_subsystem.adhd>
+#include <impl/assets_graphics/gi_subsystem.adhd>
+#include <impl/assets_graphics/mesh_subsystem.adhd>
+#include <impl/assets_graphics/reflection_subsystem.adhd>
+#include <impl/assets_graphics/refractive_subsystem.adhd>
+#include <impl/assets_graphics/renderer_subsystem.adhd>
+#include <impl/assets_graphics/shadow_subsystem.adhd>
+#include <impl/assets_graphics/transparent_subsystem.adhd>
+#include <impl/assets_subsystem/cook.adhd>
+#include <impl/assets_scene/component_asset_binary_codec.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
+register_asset RendererSubsystem using SubsystemCookRegistration<RendererSubsystem>;
+register_asset MeshSubsystem using SubsystemCookRegistration<MeshSubsystem>;
+register_asset DeferredSubsystem using SubsystemCookRegistration<DeferredSubsystem>;
+register_asset BvhSubsystem using SubsystemCookRegistration<BvhSubsystem>;
+register_asset GiSubsystem using SubsystemCookRegistration<GiSubsystem>;
+register_asset ReflectionSubsystem using SubsystemCookRegistration<ReflectionSubsystem>;
+register_asset ShadowSubsystem using SubsystemCookRegistration<ShadowSubsystem>;
+register_asset TransparentSubsystem using SubsystemCookRegistration<TransparentSubsystem>;
+register_asset RefractiveSubsystem using SubsystemCookRegistration<RefractiveSubsystem>;
+register_asset CsgSubsystem using SubsystemCookRegistration<CsgSubsystem>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_graphics/cook_components.adhd.h>
-#include <impl/assets_graphics/bvh_subsystem.adhd.h>
-#include <impl/assets_graphics/csg_subsystem.adhd.h>
-#include <impl/assets_graphics/deferred_subsystem.adhd.h>
-#include <impl/assets_graphics/gi_subsystem.adhd.h>
-#include <impl/assets_graphics/mesh_subsystem.adhd.h>
-#include <impl/assets_graphics/reflection_subsystem.adhd.h>
-#include <impl/assets_graphics/refractive_subsystem.adhd.h>
-#include <impl/assets_graphics/renderer_subsystem.adhd.h>
-#include <impl/assets_graphics/shadow_subsystem.adhd.h>
-#include <impl/assets_graphics/transparent_subsystem.adhd.h>
-#include <impl/assets_graphics/cook_types.adhd.h>
-
-#include <impl/assets_subsystem/cook.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_graphics_volume_entry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Array<Name, 10u> s_GraphicsCookSubsystemAssetTypes = {
-    RendererSubsystem::AssetTypeName(),
-    MeshSubsystem::AssetTypeName(),
-    DeferredSubsystem::AssetTypeName(),
-    BvhSubsystem::AssetTypeName(),
-    GiSubsystem::AssetTypeName(),
-    ReflectionSubsystem::AssetTypeName(),
-    ShadowSubsystem::AssetTypeName(),
-    TransparentSubsystem::AssetTypeName(),
-    RefractiveSubsystem::AssetTypeName(),
-    CsgSubsystem::AssetTypeName(),
-};
-
-static b8 RegisterGraphicsSubsystemCookEntries(Core::Assets::CookEntryRegistry& registry){
-    return
-        AssetsSubsystemCook::RegisterSubsystemCookEntry<RendererSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<MeshSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<DeferredSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<BvhSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<GiSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<ReflectionSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<ShadowSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<TransparentSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<RefractiveSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookEntry<CsgSubsystem>(registry)
-        && RegisterGraphicsComponentCookEntries(registry)
-    ;
+[cook_entry("component", s_ModelComponentDiagnosticPrefix, ParseModelComponentCookMetadata, document_and_value, log_failure, ModelComponentCodec)]
+Expected<ModelComponentAsset> CookModelComponentVolumeEntry(in ModelComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<ModelComponentAsset, ModelComponentCookEntry>(entry);
 }
 
-static b8 RegisterGraphicsSubsystemCookDependencies(Core::Assets::CookDependencyRegistry& registry){
-    return
-        AssetsSubsystemCook::RegisterSubsystemCookDependency<RendererSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<MeshSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<DeferredSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<BvhSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<GiSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<ReflectionSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<ShadowSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<TransparentSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<RefractiveSubsystem>(registry)
-        && AssetsSubsystemCook::RegisterSubsystemCookDependency<CsgSubsystem>(registry)
-        && RegisterGraphicsComponentCookDependencies(registry)
-    ;
+b8 ExtractModelComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    const Expected<ModelComponentCookEntry> entry = ReadCookDependencyEntry<ModelComponentCookEntry>(context, s_ModelComponentDiagnosticPrefix, ParseModelComponentCookMetadata);
+    if(!entry.has_value())
+        return false;
+    return collector.addAssetDependency(entry.value().component.model.name(), Model::AssetTypeName());
 }
 
+[cook_entry("component", s_MeshComponentDiagnosticPrefix, ParseMeshComponentCookMetadata, document_and_value, log_failure, MeshComponentCodec)]
+Expected<MeshComponentAsset> CookMeshComponentVolumeEntry(in MeshComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<MeshComponentAsset, MeshComponentCookEntry>(entry);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 ExtractMeshComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    const Expected<MeshComponentCookEntry> entry = ReadCookDependencyEntry<MeshComponentCookEntry>(context, s_MeshComponentDiagnosticPrefix, ParseMeshComponentCookMetadata);
+    if(!entry.has_value())
+        return false;
+    return collector.addAssetDependency(entry.value().component.mesh.name(), Mesh::AssetTypeName());
+}
 
+[cook_entry("component", s_RendererComponentDiagnosticPrefix, ParseRendererComponentCookMetadata, document_and_value, log_failure, RendererComponentCodec)]
+Expected<RendererComponentAsset> CookRendererComponentVolumeEntry(in RendererComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<RendererComponentAsset, RendererComponentCookEntry>(entry);
+}
 
-NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_GraphicsSubsystemCookEntryRegistrar, RegisterGraphicsSubsystemCookEntries);
-NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_GraphicsSubsystemCookDependencyRegistrar, RegisterGraphicsSubsystemCookDependencies);
+b8 ExtractRendererComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    const Expected<RendererComponentCookEntry> entry = ReadCookDependencyEntry<RendererComponentCookEntry>(context, s_RendererComponentDiagnosticPrefix, ParseRendererComponentCookMetadata);
+    if(!entry.has_value())
+        return false;
+    return collector.addAssetDependency(entry.value().component.material.name(), Material::AssetTypeName());
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cook_registrar]
+b8 RegisterGraphicsComponentCookDependencies(mut CookDependencyRegistry registry){
+    return registry.registerType(ModelComponentAsset::AssetTypeName(), ExtractModelComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(MeshComponentAsset::AssetTypeName(), ExtractMeshComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(RendererComponentAsset::AssetTypeName(), ExtractRendererComponentDependencies, IComponent::AssetTypeName());
 }
 
 

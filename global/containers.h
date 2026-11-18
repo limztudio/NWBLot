@@ -135,6 +135,28 @@ using Deque = std::deque<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class AllocationIdentity{
+public:
+    explicit constexpr AllocationIdentity(const ArenaBase& arena)noexcept : m_arena(&arena){}
+
+    template<typename T, typename ArenaT>
+    [[nodiscard]] constexpr b8 owns(const Vector<T, ArenaT>& storage)const noexcept{
+        return storage.get_allocator().arenaPtr() == m_arena;
+    }
+
+private:
+    const ArenaBase* m_arena;
+};
+
+template<typename T, typename ArenaT>
+[[nodiscard]] constexpr AllocationIdentity AllocationIdentityOf(const Vector<T, ArenaT>& storage)noexcept{
+    return AllocationIdentity(storage.get_allocator().arena());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ContainerDetail{
 
 

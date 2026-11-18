@@ -249,13 +249,13 @@ TEST(OpticalSceneInteger, CancellationAndExtremeExponentBoxesEncloseExactDyadicC
                 const auto bounds = ::NWB::Impl::ComputeOpticalWorldBounds(matrix, low, high);
                 EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), before);
                 ASSERT_TRUE(bounds);
-                EXPECT_EQ(VectorGetIntW(bounds->minimum), 0u);
-                EXPECT_EQ(VectorGetIntW(bounds->maximum), 0u);
+                EXPECT_EQ(VectorGetIntW(LoadFloat(bounds->minimum)), 0u);
+                EXPECT_EQ(VectorGetIntW(LoadFloat(bounds->maximum)), 0u);
                 for(u32 corner = 0u; corner < 8u; ++corner){
                     for(usize row = 0u; row < 3u; ++row){
                         const Dyadic exact = Corner(input, corner, row);
-                        EXPECT_LE(Value(VectorGetIntByIndex(bounds->minimum, row)).compare(exact), 0);
-                        EXPECT_GE(Value(VectorGetIntByIndex(bounds->maximum, row)).compare(exact), 0);
+                        EXPECT_LE(Value(VectorGetIntByIndex(LoadFloat(bounds->minimum), row)).compare(exact), 0);
+                        EXPECT_GE(Value(VectorGetIntByIndex(LoadFloat(bounds->maximum), row)).compare(exact), 0);
                     }
                 }
             }

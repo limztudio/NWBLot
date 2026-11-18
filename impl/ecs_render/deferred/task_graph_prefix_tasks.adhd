@@ -2,75 +2,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
+
+#include <impl/ecs_render/deferred/deferred_system.adhd>
+#include <impl/ecs_render/shadow/light_space_settings.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/deferred_system.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
+class SceneShadingSetupGraphTask{
+    private mut RendererDeferredSystem m_deferredSystem;
+    private in GraphicsPrefixTimingTicket m_timingTicket;
+    private mut b8 m_ready;
+    private Array<SceneLightGpuData, s_SceneMaxLights> m_lightData;
+    private SceneShadingGpuData m_sceneShadingState;
+    private u32 m_lightCount;
+    private b8 m_lightUploadRequired;
+    private b8 m_sceneShadingUploadRequired;
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+    public SceneShadingSetupGraphTask(mut RendererDeferredSystem deferredSystem, in GraphicsPrefixTimingTicket timingTicket, mut b8 ready, in SceneShadingBufferUploads uploads){
+        this.m_deferredSystem = deferredSystem;
+        this.m_timingTicket = timingTicket;
+        this.m_ready = ready;
+        this.m_lightData = uploads.lightData;
+        this.m_sceneShadingState = uploads.sceneShadingState;
+        this.m_lightCount = uploads.lightCount;
+        this.m_lightUploadRequired = uploads.lightUploadRequired;
+        this.m_sceneShadingUploadRequired = uploads.sceneShadingUploadRequired;
+    }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SceneShadingSetupGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
-
-
-public:
-    // All bindings required: setup uploads scene shading and publishes readiness.
-    struct Payload{
-        RendererDeferredSystem& deferredSystem;
-        Core::GpuTimingSubmissionTicket*& timingTicket;
-        b8& ready;
-        u32 lightCount = 0u;
-        b8 lightUploadRequired = false;
-        b8 sceneShadingUploadRequired = false;
-        Array<SceneLightGpuData, NWB_SCENE_MAX_LIGHTS> lightData = {};
-        SceneShadingGpuData sceneShadingState;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-    static void Discarded(Payload& payload)noexcept{ payload.ready = false; }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(); }
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        GpuTimingTicketRecordingScope recording(this.m_timingTicket.value());
+        this.m_ready = true;
+        return true;
+    }
+    public void accepted(in QueueSubmissionToken token){
+        const Span<SceneLightGpuData> lights = this.m_lightData;
+        this.m_deferredSystem.confirmSceneShadingBufferUploads(lights.subspan(0u, this.m_lightCount), this.m_lightUploadRequired, this.m_sceneShadingState, this.m_sceneShadingUploadRequired);
+    }
+    public void discarded(){ this.m_ready = false; }
 }
 
 

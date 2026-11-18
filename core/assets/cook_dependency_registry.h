@@ -45,6 +45,13 @@ struct CookDependencyItemContext{
     const Core::Metascript::Document* document = nullptr;
     AssetArena& arena;
     ScratchArena& scratchArena;
+
+
+public:
+    template<typename Visitor>
+    [[nodiscard]] b8 visitDocument(Visitor&& visitor)const{
+        return document && visitor(*document);
+    }
 };
 
 

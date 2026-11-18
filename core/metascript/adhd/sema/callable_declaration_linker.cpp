@@ -154,6 +154,17 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
             continue;
         }
 
+        if(ool->returnsFromOwnerArena && !matched->returnsFromOwnerArena){
+            ReportAdhdDiagnostic(m_arena, errors, ool->span, "'[owner_result]' must appear on the class method declaration");
+            ok = false;
+            continue;
+        }
+        if(ool->allowsCppUnwind && !matched->allowsCppUnwind){
+            ReportAdhdDiagnostic(m_arena, errors, ool->span, "'[cpp_unwind]' must appear on the class method declaration");
+            ok = false;
+            continue;
+        }
+
         if(ool->isOverride && !matched->isOverride){
             ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method cannot specify 'override' when class declaration is not marked 'override'");
             ok = false;
@@ -171,7 +182,14 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
         b8 paramsMatch = true;
         for(usize pIdx = 0u; pIdx < matched->params.size(); ++pIdx){
             const ParamDecl& declP = matched->params[pIdx];
-            const ParamDecl& oolP = ool->params[pIdx];
+            ParamDecl& oolP = ool->params[pIdx];
+            if(oolP.retainsBorrow && !declP.retainsBorrow){
+                ReportAdhdDiagnostic(m_arena, errors, oolP.span, "'in borrow' must appear on the class method declaration");
+                ok = false;
+                paramsMatch = false;
+                break;
+            }
+            oolP.retainsBorrow = declP.retainsBorrow;
             if(declP.mode != oolP.mode || !m_comparator.areEquivalent(declP.type, oolP.type)){
                 ReportAdhdDiagnostic(m_arena, errors, oolP.span, "out-of-line parameter 'in'/'mut' mode or type does not match class declaration");
                 ok = false;
@@ -224,6 +242,35 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
                 false,
                 {}
             )){
+                ok = false;
+                continue;
+            }
+            b8 borrowMismatch = false;
+            for(usize paramIndex = 0u; paramIndex < fn->params.size(); ++paramIndex)
+                borrowMismatch |= prev->params[paramIndex].retainsBorrow != fn->params[paramIndex].retainsBorrow;
+            if(borrowMismatch){
+                ReportAdhdDiagnostic(m_arena, errors, fn->span, "free function declarations must agree on 'in borrow' parameters");
+                ok = false;
+                continue;
+            }
+            b8 hasValueParameter = false;
+            for(usize i = 0u; i < fn->params.size(); ++i){
+                const ParamDecl& oldParam = prev->params[i];
+                const ParamDecl& newParam = fn->params[i];
+                hasValueParameter |= oldParam.copiesArgument || newParam.copiesArgument || oldParam.forwardsArgument || newParam.forwardsArgument;
+            }
+            if(hasValueParameter){
+                ReportAdhdDiagnostic(m_arena, errors, fn->span, "a generic function with 'mut copy' or 'mut forward' must be defined at its declaration");
+                ok = false;
+                continue;
+            }
+            if(!prev->exceptionProbes.empty() || !fn->exceptionProbes.empty()){
+                ReportAdhdDiagnostic(m_arena, errors, fn->span, "a generic function with 'noexcept_like' must be defined at its declaration");
+                ok = false;
+                continue;
+            }
+            if(prev->allowsCppUnwind != fn->allowsCppUnwind){
+                ReportAdhdDiagnostic(m_arena, errors, fn->span, "free function declarations must agree on '[cpp_unwind]'");
                 ok = false;
                 continue;
             }

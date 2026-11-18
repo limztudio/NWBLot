@@ -1,0 +1,101 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/gpu/shader_abi.adhd>
+#include <impl/ecs_ui/toolkit/gpu/resource_versions.adhd>
+#include <impl/ecs_ui/toolkit/gpu/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The frame retains descriptor owners through recording and final GPU completion.
+[move_only]
+class GpuFrameData{
+    public DrawSnapshot m_snapshot;
+    public GpuVersion<GpuSkinVersion> m_skin;
+    public Vector<GpuVersion<GpuGlyphVersion>> m_glyphPages;
+    public Vector<GpuVersion<GpuSdfAtlasVersion>> m_sdfPages;
+    public Vector<GpuVersion<GpuTextureImageVersion>> m_textureImages;
+    public GpuVersion<GpuTargetVersion> m_target;
+    public GpuVersion<GpuSharedResources> m_resources;
+    public BufferHandle m_vertices;
+    public BufferHandle m_indices;
+    public GraphicsPipelineHandle m_outputPipeline;
+    public AcquiredPresentationFrame m_acquired;
+    public QueueSubmissionToken m_vertexUpload;
+    public QueueSubmissionToken m_indexUpload;
+    public QueueSubmissionToken m_clear;
+    public QueueSubmissionToken m_raster;
+    public QueueSubmissionToken m_finalConsumer;
+    public GpuCommandRecordingMode m_recordingMode = GpuCommandRecordingMode::Direct;
+    public b8 m_prepared = false;
+    public u32 m_presentationMode = s_ShaderUiPresentationSdr;
+
+    public void reset(mut DrawSnapshot snapshot, in GpuVersion<GpuSkinVersion> skin){
+        MoveInto<DrawSnapshot>(this.m_snapshot, snapshot);
+        this.m_skin = skin;
+        this.m_glyphPages.clear();
+        this.m_sdfPages.clear();
+        this.m_textureImages.clear();
+        this.m_target.reset();
+        this.m_resources.reset();
+        this.m_vertices.reset();
+        this.m_indices.reset();
+        this.m_outputPipeline.reset();
+        this.m_acquired = AcquiredPresentationFrame();
+        this.m_vertexUpload = QueueSubmissionToken();
+        this.m_indexUpload = QueueSubmissionToken();
+        this.m_clear = QueueSubmissionToken();
+        this.m_raster = QueueSubmissionToken();
+        this.m_finalConsumer = QueueSubmissionToken();
+        this.m_recordingMode = GpuCommandRecordingMode::Direct;
+        this.m_presentationMode = s_ShaderUiPresentationSdr;
+        this.m_prepared = false;
+    }
+
+    [cpp_unwind]
+    public b8 prefixComplete(mut Device device)const{
+        return GpuTokenComplete(device, this.m_vertexUpload) && GpuTokenComplete(device, this.m_indexUpload) && GpuTokenComplete(device, this.m_clear) && GpuTokenComplete(device, this.m_raster);
+    }
+
+    [cpp_unwind]
+    public b8 recyclable(mut Device device)const{
+        if(!GpuTokenComplete(device, this.m_finalConsumer) || !this.prefixComplete(device))
+            return false;
+        for(in auto page : this.m_glyphPages){
+            if(!GpuTokenComplete(device, page.deref().m_readinessToken))
+                return false;
+        }
+        for(in auto page : this.m_sdfPages){
+            if(!GpuTokenComplete(device, page.deref().m_readinessToken))
+                return false;
+        }
+        for(in auto image : this.m_textureImages){
+            if(!GpuTokenComplete(device, image.deref().m_texture.readinessToken))
+                return false;
+        }
+        return true;
+    }
+
+    [cpp_unwind]
+    public b8 complete(mut Device device)const{
+        return this.m_finalConsumer.valid() && this.recyclable(device);
+    }
+}
+
+type GpuFrame = GpuVersion<GpuFrameData>;
+
+class GpuFrameSlot{
+    public GpuVersion<GpuTargetVersion> target;
+    public BufferHandle vertices;
+    public BufferHandle indices;
+    public GpuFrame inFlight;
+    public usize vertexCapacity = 0u;
+    public usize indexCapacity = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

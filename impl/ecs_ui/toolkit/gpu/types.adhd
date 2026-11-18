@@ -8,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const GpuTimingScopeDefinition s_UiFrameTimingScope("render.frame");
+
 Expected<GpuPaintPushConstants> TryInitializeGpuPaintPushConstants(in GpuRasterGeometry geometry, in u32 samplerSlot){
     GpuPaintPushConstants outPush;
     const VectorSingle projection = VectorSingle(s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent, s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent) * VectorSingle(geometry.pixelScale);
@@ -73,7 +75,7 @@ void ExpandGpuSdfPagePixels(
     in u32 sourceChannels,
     in u32 uploadChannels,
     in Span<u8> sourcePixels,
-    mut ScratchByteVector outExpanded
+    mut Vector<u8> outExpanded
 ){
     const usize texels = cast<usize>(width) * cast<usize>(height);
     const usize srcCh = cast<usize>(sourceChannels);
@@ -237,6 +239,26 @@ b8 GpuTokenComplete(mut Device device, in QueueSubmissionToken token){
     queue.deviceGeneration = token.deviceGeneration;
     const Expected<GpuQueueTimelineSnapshot> timeline = device.getQueueTimelineSnapshot(queue);
     return timeline.has_value() && IsGpuQueueTimelineComplete(timeline.value().valid(), timeline.value().queue == queue, timeline.value().completedValue, token.value);
+}
+
+
+b8 MatchesGpuAcquiredPresentationFrame(in AcquiredPresentationFrame first, in AcquiredPresentationFrame second){
+    return
+        first.valid() && second.valid()
+        && first.backBuffer.texture == second.backBuffer.texture && first.framebuffer == second.framebuffer
+        && first.backBuffer.index == second.backBuffer.index && first.backBuffer.nativeInitialState == second.backBuffer.nativeInitialState
+        && first.backBuffer.availabilityCompletion == second.backBuffer.availabilityCompletion
+    ;
+}
+
+
+b8 MatchesPendingGpuFrameGeneration(in b8 hasPending, in u64 pendingGeneration, in u64 acceptedGeneration){
+    return hasPending && pendingGeneration == acceptedGeneration;
+}
+
+
+b8 IsValidGpuSubmissionReadinessToken(in b8 tokenValid, in b8 hasPhysicalQueueIdentity){
+    return tokenValid && hasPhysicalQueueIdentity;
 }
 
 

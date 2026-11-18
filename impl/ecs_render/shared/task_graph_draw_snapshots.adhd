@@ -2,191 +2,64 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
+#include <impl/ecs_render/material/renderer_draw_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
+[cpp_unwind]
+void CaptureGraphDrawItems(in MaterialPassDrawItemsView source, mut MaterialPassDrawItems retained){
+    AssignVector(retained.meshDrawItems, source.meshDrawItems);
+    AssignVector(retained.indexedDrawItems, source.indexedDrawItems);
+    AssignVector(retained.computeDrawItems, source.computeDrawItems);
+}
 
-#include <global/algorithm.h>
+class TransparentMaterialPassGraphSnapshot{
+    public MaterialPassDrawItems regular;
+    public MaterialPassDrawItems csg;
+    private Vector<CsgReceiverRangeGpuData> m_receiverRanges;
+    private Vector<CsgCutterGpuData> m_cutters;
+    private CsgFrameWorkRegion m_workRegion;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 captured = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
-
-struct MaterialPassCsgGraphSnapshotBase{
-    ReceiverRangeVector csgReceiverRanges;
-    CutterVector csgCutters;
-    usize instanceCount = 0u;
-    usize materialTypedByteCount = 0u;
-    CsgFrameWorkRegion csgWorkRegion;
-    b8 captured = false;
-
-
-public:
-    explicit MaterialPassCsgGraphSnapshotBase(Core::Alloc::GlobalArena& arena)noexcept
-        : csgReceiverRanges(arena)
-        , csgCutters(arena)
-    {}
-
-
-public:
-    FOUNDATION_INLINE void captureCsgFrameData(const CsgFrameGpuDataView& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
-        AssignVector(csgReceiverRanges, csgFrameData.receiverRanges);
-        AssignVector(csgCutters, csgFrameData.cutters);
-        csgWorkRegion = csgFrameData.workRegion;
-        instanceCount = inInstanceCount;
-        materialTypedByteCount = inMaterialTypedByteCount;
-        captured = true;
+    [cpp_unwind]
+    public void capture(in MaterialPassDrawItemPartitionsView draws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
+        CaptureGraphDrawItems(draws.regular, this.regular);
+        CaptureGraphDrawItems(draws.csg, this.csg);
+        AssignVector(this.m_receiverRanges, frame.receiverRanges);
+        AssignVector(this.m_cutters, frame.cutters);
+        this.m_workRegion = frame.workRegion;
+        this.instanceCount = instanceCount;
+        this.materialTypedByteCount = typedByteCount;
+        this.captured = true;
     }
-
-    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
-        return { csgReceiverRanges, csgCutters, csgWorkRegion };
+    public CsgFrameGpuDataView csgFrameDataView()const{
+        return CsgFrameGpuDataView(this.m_receiverRanges, this.m_cutters, this.m_workRegion);
     }
-};
-
-
-struct TransparentCsgIntervalGraphSnapshot : MaterialPassCsgGraphSnapshotBase{
-    DrawItemVector receiverSurfaceMeshDrawItems;
-    DrawItemVector receiverSurfaceIndexedDrawItems;
-    DrawItemVector receiverSurfaceComputeDrawItems;
-
-
-public:
-    explicit TransparentCsgIntervalGraphSnapshot(Core::Alloc::GlobalArena& arena)noexcept
-        : MaterialPassCsgGraphSnapshotBase(arena)
-        , receiverSurfaceMeshDrawItems(arena)
-        , receiverSurfaceIndexedDrawItems(arena)
-        , receiverSurfaceComputeDrawItems(arena)
-    {}
-
-
-public:
-    FOUNDATION_INLINE void capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount){
-        receiverSurfaceMeshDrawItems.assign(receiverSurfaceDrawItems.meshDrawItems.begin(), receiverSurfaceDrawItems.meshDrawItems.end());
-        receiverSurfaceIndexedDrawItems.assign(receiverSurfaceDrawItems.indexedDrawItems.begin(), receiverSurfaceDrawItems.indexedDrawItems.end());
-        receiverSurfaceComputeDrawItems.assign(receiverSurfaceDrawItems.computeDrawItems.begin(), receiverSurfaceDrawItems.computeDrawItems.end());
-        captureCsgFrameData(csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+    public MaterialPassDrawItemPartitionsView drawItemsView()const{
+        return MaterialPassDrawItemPartitionsView(MaterialPassDrawItemsView(this.regular), MaterialPassDrawItemsView(this.csg));
     }
+}
 
-    [[nodiscard]] MaterialPassDrawItemsView receiverSurfaceDrawItemsView()const noexcept{
-        return { receiverSurfaceMeshDrawItems, receiverSurfaceIndexedDrawItems, receiverSurfaceComputeDrawItems };
+class OpaqueMaterialPassGraphSnapshot{
+    public TransparentMaterialPassGraphSnapshot passes;
+    private MaterialPassDrawItems m_receivers;
+
+    [cpp_unwind]
+    public void capture(in MaterialPassDrawItemPartitionsView draws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
+        this.passes.capture(draws, frame, instanceCount, typedByteCount);
+        CaptureGraphDrawItems(draws.csgReceiverSurface, this.m_receivers);
     }
-};
-
-
-struct TransparentMaterialPassGraphSnapshot : MaterialPassCsgGraphSnapshotBase{
-    DrawItemVector regularMeshDrawItems;
-    DrawItemVector regularIndexedDrawItems;
-    DrawItemVector regularComputeDrawItems;
-    DrawItemVector csgMeshDrawItems;
-    DrawItemVector csgIndexedDrawItems;
-    DrawItemVector csgComputeDrawItems;
-
-
-public:
-    explicit TransparentMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)noexcept
-        : MaterialPassCsgGraphSnapshotBase(arena)
-        , regularMeshDrawItems(arena)
-        , regularIndexedDrawItems(arena)
-        , regularComputeDrawItems(arena)
-        , csgMeshDrawItems(arena)
-        , csgIndexedDrawItems(arena)
-        , csgComputeDrawItems(arena)
-    {}
-
-
-public:
-    FOUNDATION_INLINE void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount){
-        regularMeshDrawItems.assign(drawItems.regular.meshDrawItems.begin(), drawItems.regular.meshDrawItems.end());
-        regularIndexedDrawItems.assign(drawItems.regular.indexedDrawItems.begin(), drawItems.regular.indexedDrawItems.end());
-        regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
-        csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
-        csgIndexedDrawItems.assign(drawItems.csg.indexedDrawItems.begin(), drawItems.csg.indexedDrawItems.end());
-        csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
-        captureCsgFrameData(csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+    public CsgFrameGpuDataView csgFrameDataView()const{
+        return this.passes.csgFrameDataView();
     }
-
-    [[nodiscard]] MaterialPassDrawItemsView regularView()const noexcept{
-        return { regularMeshDrawItems, regularIndexedDrawItems, regularComputeDrawItems };
+    public MaterialPassDrawItemPartitionsView drawItemsView()const{
+        return MaterialPassDrawItemPartitionsView(MaterialPassDrawItemsView(this.passes.regular), MaterialPassDrawItemsView(this.passes.csg), MaterialPassDrawItemsView(this.m_receivers));
     }
-
-    [[nodiscard]] MaterialPassDrawItemsView csgView()const noexcept{
-        return { csgMeshDrawItems, csgIndexedDrawItems, csgComputeDrawItems };
-    }
-
-    [[nodiscard]] MaterialPassDrawItemPartitionsView drawItemsView()const noexcept{
-        return { regularView(), csgView() };
-    }
-};
-
-
-struct OpaqueMaterialPassGraphSnapshot : TransparentMaterialPassGraphSnapshot{
-    DrawItemVector csgReceiverSurfaceMeshDrawItems;
-    DrawItemVector csgReceiverSurfaceIndexedDrawItems;
-    DrawItemVector csgReceiverSurfaceComputeDrawItems;
-
-
-public:
-    explicit OpaqueMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)noexcept
-        : TransparentMaterialPassGraphSnapshot(arena)
-        , csgReceiverSurfaceMeshDrawItems(arena)
-        , csgReceiverSurfaceIndexedDrawItems(arena)
-        , csgReceiverSurfaceComputeDrawItems(arena)
-    {}
-
-
-public:
-    FOUNDATION_INLINE void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, usize inInstanceCount, usize inMaterialTypedByteCount){
-        TransparentMaterialPassGraphSnapshot::capture(drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
-        csgReceiverSurfaceMeshDrawItems.assign(drawItems.csgReceiverSurface.meshDrawItems.begin(), drawItems.csgReceiverSurface.meshDrawItems.end());
-        csgReceiverSurfaceIndexedDrawItems.assign(drawItems.csgReceiverSurface.indexedDrawItems.begin(), drawItems.csgReceiverSurface.indexedDrawItems.end());
-        csgReceiverSurfaceComputeDrawItems.assign(drawItems.csgReceiverSurface.computeDrawItems.begin(), drawItems.csgReceiverSurface.computeDrawItems.end());
-    }
-
-    [[nodiscard]] MaterialPassDrawItemsView csgReceiverSurfaceView()const noexcept{
-        return { csgReceiverSurfaceMeshDrawItems, csgReceiverSurfaceIndexedDrawItems, csgReceiverSurfaceComputeDrawItems };
-    }
-
-    [[nodiscard]] MaterialPassDrawItemPartitionsView drawItemsView()const noexcept{
-        return { regularView(), csgView(), csgReceiverSurfaceView() };
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

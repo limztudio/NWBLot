@@ -2,60 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_ui/toolkit/id.adhd>
+#include <impl/ecs_ui/toolkit/widgets/slider.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
-#include <impl/ecs_ui/toolkit/state/store.adhd.h>
+// The state is borrowed until the enclosing scope finishes validation.
+[move_only, friend(Builder)]
+class SliderFrame : NoCopy{
+    private mut SliderState m_state;
+    private SliderOptions m_options;
+    private SliderStyle m_style;
+    private SliderMetrics m_metrics;
+    private SliderSnapshot m_snapshot;
+    private WidgetState m_widget;
+    private ControlToken m_token;
+    private SliderResult m_result;
+    private b8 m_focusOnCommit = false;
+    private b8 m_interactive = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The required state loan remains live through the enclosing scope's final callback-free validation.
-class SliderFrame final : NoCopy{
-    friend class Builder;
-
-
-public:
-    explicit SliderFrame(SliderState& state)noexcept
-        : m_state(state)
-    {}
-
-
-private:
-    SliderState& m_state;
-    SliderOptions m_options;
-    SliderStyle m_style;
-    SliderMetrics m_metrics;
-    SliderSnapshot m_snapshot;
-    WidgetState m_widget;
-    ControlToken m_token;
-    SliderResult m_result;
-    b8 m_focusOnCommit = false;
-    b8 m_interactive = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public SliderFrame(mut SliderState state){ this.m_state = state; }
 }
 
 

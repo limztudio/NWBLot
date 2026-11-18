@@ -12,6 +12,21 @@ extern class ResolvedAssetRoot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ReadPairedMetadataSource"), cpp_flags(scratch_arena)]
+extern Expected<String> ReadPairedMetadataSource(in Path file);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::AssetPathsDetail::BuildRelativeAssetPathText")]
+extern b8 WriteRelativeAssetPathText(in Path relative, mut String output);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::BuildDerivedAssetVirtualPathText"), cpp_flags(scratch_arena)]
+extern Expected<String> DeriveAssetVirtualPathText(in Path root, in StringView virtualRoot, in Path source);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ExtractAssetVirtualRoot")]
+extern Expected<CompactString> ExtractAssetVirtualRoot(in StringView path);
+
+[cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::AssetPathHasExtension")]
+extern b8 AssetPathHasExtension(in Path path, in StringView extension);
+
 [cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::BuildDerivedAssetVirtualPath")]
 extern Expected<Name> BuildDerivedAssetVirtualPath(in Path a0, in StringView a1, in Path a2);
 

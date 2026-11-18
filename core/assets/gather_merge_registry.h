@@ -8,6 +8,8 @@
 #include "global.h"
 #include "module.h"
 
+#include <core/common/binary_update.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,6 +21,13 @@ NWB_ASSETS_BEGIN
 
 
 using AssetGatherMergeFunction = b8 (*)(const Name& virtualPath, Span<const u8> incomingPayload, Alloc::ScratchArena& scratchArena, AssetBytes& existingPayload);
+
+template<auto Merge>
+[[nodiscard]] b8 InvokeAssetGatherMerge(const Name& path, const Span<const u8> incoming, Alloc::ScratchArena& scratch, AssetBytes& output){
+    BinaryUpdateContext context{ output, scratch };
+    return Merge(path, BinaryByteView{ incoming.data(), incoming.size() }, context);
+}
+
 
 class AssetGatherMergeAutoRegistrar final{
 public:

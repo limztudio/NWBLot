@@ -16,6 +16,7 @@ native{
 
 
 #include <core/global.h>
+#include <core/graphics/shader_archive.h>
 #include <core/filesystem/factory.h>
 #include <core/perf/session.h>
 #include <core/telemetry/event.h>
@@ -81,7 +82,7 @@ struct ProjectStartupContext{
 
 
 struct ProjectRuntimeContext{
-    using ShaderPathResolveCallback = Function<Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName)>;
+    using ShaderPathResolveCallback = Core::ShaderArchive::PathResolver;
     using TelemetryCaptureCallback = Function<void(const Core::Telemetry::CaptureOptions& options)>;
     using TelemetryUploadFlushCallback = Function<b8(b8 clearAfterUpload)>;
     using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;

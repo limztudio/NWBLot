@@ -2,16 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/mesh/mesh_system.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RendererMeshSystem"), cpp_header("<impl/ecs_render/mesh/mesh_system.adhd.h>")]
-extern class RendererMeshSystem;
-[cpp_name("::NWB::Impl::RendererRayTracingSystem"), cpp_header("<impl/ecs_render/raytrace/raytracing_system.adhd.h>")]
-extern class RendererRayTracingSystem;
 
 
 // Software-BVH build-state import owns the mesh software-BVH parent plus raytracing BVH sort-buffer graph imports.

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font/asset.adhd>
+#include <impl/assets_font/types.adhd>
 #include <impl/assets_font/prepared_font_binary_codec.adhd>
 
 
@@ -11,6 +11,107 @@
 
 Sha256Digest ComputePreparedFontBytesDigest(in Span<u8> bytes){
     return ComputeSha256(bytes);
+}
+
+void LogPreparedFontReadFailure(in Path path, in StringView reason){
+    error("Prepared font '{}': {}", path, reason);
+}
+
+StringView PreparedFontReadFailure(in Path path, in StringView reason){
+    LogPreparedFontReadFailure(path, reason);
+    return reason;
+}
+
+b8 IsPreparedFontFileLengthInBounds(in b8 streamGood, in i64 fileEndBytes, in usize minHeaderBytes, in u64 maxFileBytes){
+    return streamGood && fileEndBytes >= cast<i64>(minHeaderBytes) && cast<u64>(fileEndBytes) <= maxFileBytes;
+}
+
+b8 MatchesExpectedPreparedFontFileBytes(in b8 hasExpectedBytes, in u64 expectedBytes, in i64 fileEndBytes){
+    return hasExpectedBytes && expectedBytes == cast<u64>(fileEndBytes);
+}
+
+b8 VerifyPreparedFontBytesSha256(in Span<u8> bytes, in Sha256Digest expectedDigest){
+    return ComputeSha256(bytes) == expectedDigest;
+}
+
+Sha256Digest ReadPreparedFontDigest(in Span<u8> header, in usize offset){
+    Sha256Digest digest = Sha256Digest();
+    for(usize i = 0u; i < s_Sha256DigestByteCount; ++i)
+        digest.bytes[i] = header[offset + i];
+    return digest;
+}
+
+Expected<PreparedFontSource, StringView> ReadPreparedFontSource(in Path path, in b8 includePixels){
+    BinaryInputStream stream(path);
+    if(!stream.isOpen())
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontOpenFailedReason));
+    const i64 fileEnd = stream.seekEnd();
+    if(!IsPreparedFontFileLengthInBounds(fileEnd >= 0, fileEnd, s_PreparedFontHeaderBytes, s_PreparedFontMaxFileBytes))
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontLengthOutOfBoundsReason));
+    if(!stream.seekBegin())
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontSeekFailedReason));
+
+    Array<u8, s_PreparedFontHeaderBytes> header;
+    if(!stream.readBytes(header))
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontHeaderTruncatedReason));
+    u32 fontByteCount = 0u;
+    u32 groupCount = 0u;
+    PreparedFontSource candidate;
+    PreparedFontBinaryCodec codec;
+    const Expected<b8, StringView> decoded = codec.decodeHeader(header, candidate.faceIndex, fontByteCount, groupCount);
+    if(!decoded.has_value())
+        return MakeUnexpected(PreparedFontReadFailure(path, decoded.error()));
+
+    candidate.fontSha256 = ReadPreparedFontDigest(header, s_PreparedFontHeaderFontSha256Offset);
+    candidate.groups.reserve(groupCount);
+    Array<u32, s_PreparedFontMaxGroupCount> groupByteCounts;
+    u64 pixelByteCount = 0u;
+    for(u32 index = 0u; index < groupCount; ++index){
+        Array<u8, s_PreparedFontGroupHeaderBytes> groupHeader;
+        if(!stream.readBytes(groupHeader))
+            return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontImageDirectoryTruncatedReason));
+        PreparedFontImageGroup group;
+        const Expected<b8, StringView> groupDecode = codec.decodeGroupHeader(groupHeader, pixelByteCount, group.width, group.height, group.channelCount, groupByteCounts[index]);
+        if(!groupDecode.has_value())
+            return MakeUnexpected(PreparedFontReadFailure(path, groupDecode.error()));
+        group.sha256 = ReadPreparedFontDigest(groupHeader, s_PreparedFontGroupSha256Offset);
+        candidate.groups.push_back(group);
+    }
+
+    const Expected<u64> expectedBytes = codec.expectedPayloadBytes(fontByteCount, groupCount, pixelByteCount);
+    if(!MatchesExpectedPreparedFontFileBytes(expectedBytes.has_value(), expectedBytes.value_or(0u), fileEnd))
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontLayoutMismatchReason));
+    candidate.fontBytes.resize(fontByteCount);
+    if(!stream.readBytes(candidate.fontBytes))
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontSfntBytesTruncatedReason));
+    if(!VerifyPreparedFontBytesSha256(candidate.fontBytes, candidate.fontSha256))
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontSfntHashMismatchReason));
+
+    if(includePixels){
+        for(u32 index = 0u; index < groupCount; ++index){
+            mut PreparedFontImageGroup group = candidate.groups[index];
+            group.pixels.resize(groupByteCounts[index]);
+            if(!stream.readBytes(group.pixels))
+                return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontImageBytesTruncatedReason));
+            if(!VerifyPreparedFontBytesSha256(group.pixels, group.sha256))
+                return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontImageHashMismatchReason));
+        }
+    }
+
+    if(stream.seekEnd() != fileEnd)
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontLengthChangedReason));
+    if(!stream.verifyEnd())
+        return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontChangedDuringReadReason));
+    return candidate;
+}
+
+Expected<b8, StringView> WritePreparedFontSource(in BinaryByteView sfnt, in u32 faceIndex, in Span<PreparedFontImageView> groups, mut Vector<u8> outBinary){
+    PreparedFontBinaryCodec codec;
+    const Expected<u64, StringView> expectedBytes = codec.validateSerializeInputs(sfnt.size(), sfnt.hasData(), faceIndex, groups);
+    if(!expectedBytes.has_value())
+        return MakeUnexpected(expectedBytes.error());
+    codec.appendSourceBinary(sfnt.span(), faceIndex, groups, expectedBytes.value(), outBinary);
+    return true;
 }
 
 

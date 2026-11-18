@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
+#include <impl/ecs_mesh/skinning/skinning_internal.adhd>
+#include <impl/ecs_mesh/skinning/skin_payload.adhd>
 #include <impl/ecs_mesh/skinning/runtime_instance.adhd>
 #include <impl/ecs_mesh/skinning/submission_state.adhd>
 
@@ -124,255 +125,180 @@ void ConfirmMeshSkinningInstanceDispatch(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_mesh/skinning/system.adhd.h>
-#include <impl/ecs_mesh/skinning/skinning_internal.adhd.h>
-#include <impl/ecs_mesh/skinning/runtime_instance.adhd.h>
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
-#include <impl/ecs_mesh/skinning/skin_payload.adhd.h>
-#include <impl/ecs_mesh/skinning/timing_names.adhd.h>
-#include <impl/ecs_mesh/components.adhd.h>
-#include <impl/ecs_mesh/runtime/buffer_upload.adhd.h>
-#include <impl/ecs_mesh/runtime/types.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_skinning_frame_plan_and_dispatch{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void ResolveSkeletonComponents(Core::ECS::World& world, const Core::ECS::EntityID fallbackEntity, const Core::ECS::EntityID skeletonEntity, const SkeletonJointPaletteComponent*& outJointPalette, const SkeletonPoseComponent*& outSkeletonPose)noexcept{
-    const Core::ECS::EntityID resolvedEntity = ResolveSkinningSkeletonEntity(fallbackEntity, skeletonEntity);
-    outJointPalette = world.tryGetComponent<SkeletonJointPaletteComponent>(resolvedEntity);
-    outSkeletonPose = world.tryGetComponent<SkeletonPoseComponent>(resolvedEntity);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MeshSkinningFramePlanBuilder::declare(const Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding)noexcept{
+b8 MeshSkinningFramePlanBuilder::declare(in EntityID entity, in SkinnedMeshBindingComponent binding){
     if(!binding.runtimeMesh.valid())
         return true;
 
-    MeshSkinningRuntimeInstance* const instance = m_system->m_runtimeMeshCache.findInstance(binding.runtimeMesh);
-    if(!instance)
+    const auto entry = this.m_system.m_runtimeMeshCache.editInstance(binding.runtimeMesh);
+    if(!entry.has_value())
         return true;
-    FOUNDATION_ASSERT(instance->valid());
-    const SkeletonJointPaletteComponent* jointPalette = nullptr;
-    const SkeletonPoseComponent* skeletonPose = nullptr;
-    __hidden_skinning_frame_plan_and_dispatch::ResolveSkeletonComponents(*m_system->m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
-    const auto foundResources = m_system->m_runtimeResources.find(instance->handle.value);
-    Core::Alloc::ScratchArena scratchArena;
-    RuntimeSkinPayloadScratch payload{ scratchArena };
+    mut MeshSkinningRuntimeInstance instance = entry.value();
+    assert(instance.valid());
+    const EntityID skeletonEntity = ResolveSkinningSkeletonEntity(entity, binding.skeletonEntity);
+    const auto jointPalette = FindSkinningComponent<SkeletonJointPaletteComponent>(this.m_system.m_world, skeletonEntity);
+    const auto skeletonPose = FindSkinningComponent<SkeletonPoseComponent>(this.m_system.m_world, skeletonEntity);
+    RuntimeSkinPayloadScratch payload;
     // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready mesh from declaring its immutable packet plan.
-    if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload)){
-        instance->deformationState.invalidateCurrent();
+    if(!BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload)){
+        instance.deformationState.invalidateCurrent();
         return true;
     }
 
     const b8 hasActiveSkin = payload.hasActiveSkin();
-    Span<const SkeletonJointMatrix> jointPaletteUpload;
+    Span<SkeletonJointMatrix> jointPaletteUpload;
     if(hasActiveSkin){
-        const auto upload = MeshSkinningPayload::ResolveGpuJointPalette(*instance, payload);
-        if(!upload){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: current joint palette does not match Skin upload bounds for runtime mesh '{}'"), instance->handle.value);
+        const auto upload = ResolveMeshSkinningGpuJointPalette(instance, payload);
+        if(!upload.has_value()){
+            error("MeshSkinningSystem: current joint palette does not match Skin upload bounds for runtime mesh '{}'", instance.handle.value);
             return false;
         }
-        jointPaletteUpload = *upload;
+        jointPaletteUpload = upload.value();
     }
-    const b8 skinningInputDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
-    const b8 meshletBoundsDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
-    if(instance->meshlets.empty())
+    const b8 skinningInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != RuntimeMeshDirtyFlag::None;
+    const b8 meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != RuntimeMeshDirtyFlag::None;
+    if(instance.meshlets.empty())
         return true;
 
-    if(foundResources == m_system->m_runtimeResources.end()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: runtime mesh '{}' has no prepared graph resources"), instance->handle.value);
+    if(!this.m_system.m_runtimeResources.contains(instance.handle.value)){
+        error("MeshSkinningSystem: runtime mesh '{}' has no prepared graph resources", instance.handle.value);
         return false;
     }
-    const MeshSkinningRuntimeResources& resources = foundResources.value();
-    const MeshSkinningDeformationInputs deformationInputs(resources.bindlessResourceSlotsBuffer, instance->editRevision, payload.resolvedSkinningMode);
-    instance->deformationState.refreshCurrent(deformationInputs, payload.jointMatrices, skinningInputDirty || meshletBoundsDirty);
-    const SkinningFramePlanFlags planFlags = BuildSkinningFramePlanFlags(hasActiveSkin, instance->deformationState.contentRevision(), instance->attributeBuffer != nullptr);
+    in MeshSkinningRuntimeResources resources = this.m_system.m_runtimeResources.at(instance.handle.value);
+    const MeshSkinningDeformationInputs deformationInputs(resources.bindlessResourceSlotsBuffer, instance.editRevision, payload.resolvedSkinningMode);
+    instance.deformationState.refreshCurrent(deformationInputs, payload.jointMatrices, skinningInputDirty || meshletBoundsDirty);
+    const SkinningFramePlanFlags planFlags = BuildSkinningFramePlanFlags(hasActiveSkin, instance.deformationState.contentRevision(), instance.attributeBuffer.valid());
     if(!planFlags.updatesMeshletBounds)
         return true;
-    const b8 validResourceSlotsDescriptor = resources.bindlessHeapHandles.resourceSlots.valid() && resources.bindlessHeapHandles.resourceSlots.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
+    const b8 validResourceSlotsDescriptor = resources.bindlessHeapHandles.resourceSlots.valid() && resources.bindlessHeapHandles.resourceSlots.descriptorClass() == GpuDescriptorClass::UniformBuffer;
     if(!ValidateFramePlanDispatchState(
-        instance->handle.value,
-        resources.bindlessResourceSlotsBuffer != nullptr,
+        instance.handle.value,
+        resources.bindlessResourceSlotsBuffer.valid(),
         validResourceSlotsDescriptor,
-        m_system->m_boundsComputePipeline != nullptr && m_system->m_localBoundsComputePipeline != nullptr,
+        this.m_system.m_boundsComputePipeline.valid() && this.m_system.m_localBoundsComputePipeline.valid(),
         planFlags.hasActiveSkin,
-        resources.skinBuffer != nullptr && resources.jointPaletteBuffer != nullptr && m_system->m_skinningComputePipeline != nullptr,
+        resources.skinBuffer.valid() && resources.jointPaletteBuffer.valid() && this.m_system.m_skinningComputePipeline.valid(),
         planFlags.repacksNormals,
-        m_system->m_repackComputePipeline != nullptr
+        this.m_system.m_repackComputePipeline.valid()
     ))
         return false;
 
     MeshSkinningGraphDispatchPlan plan;
-    plan.handle = instance->handle;
-    plan.submissionCommit.editRevision = instance->editRevision;
+    plan.handle = instance.handle;
+    plan.submissionCommit.editRevision = instance.editRevision;
     plan.submissionCommit.handledDirtyFlags = ResolveHandledSkinningDirtyFlags(skinningInputDirty, meshletBoundsDirty);
     plan.hasActiveSkin = planFlags.hasActiveSkin;
     plan.copiedRestStreams = planFlags.copiesRestStreams;
     plan.updatesMeshletBounds = planFlags.updatesMeshletBounds;
     plan.repacksNormals = planFlags.repacksNormals;
-    plan.meshletCount = static_cast<u32>(instance->meshlets.size());
-    plan.skinCount = static_cast<u32>(payload.skinInfluenceCount);
-    plan.jointCount = static_cast<u32>(jointPaletteUpload.size());
+    plan.meshletCount = cast<u32>(instance.meshlets.size());
+    plan.skinCount = cast<u32>(payload.skinInfluenceCount);
+    plan.jointCount = cast<u32>(jointPaletteUpload.size());
     plan.skinningMode = payload.resolvedSkinningMode;
     plan.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
     plan.bindlessResourceSlotsBuffer = resources.bindlessResourceSlotsBuffer;
     plan.bindlessResourceSlotsDescriptor = resources.bindlessHeapHandles.resourceSlots;
     plan.bindlessResourceSlotsPayload = resources.bindlessResourceSlots;
 
-    if(!MeshSkinningFrameResourceImports(*m_system, *m_graph).import(*instance, resources, plan))
+    MeshSkinningFrameResourceImports imports(this.m_system, this.m_graph);
+    if(!imports.import(instance, resources, plan))
         return false;
-    if(!resources.bindlessResourceSlotsUploaded && !declareBindlessSlotsUpload(*instance, resources, plan))
+    if(!resources.bindlessResourceSlotsUploaded && !this.declareBindlessSlotsUpload(instance, resources, plan))
         return false;
-    if(planFlags.copiesRestStreams && !declareRestToSkinnedCopy(*instance, plan))
+    if(planFlags.copiesRestStreams && !this.declareRestToSkinnedCopy(instance, plan))
         return false;
-    if(planFlags.hasActiveSkin && !declareJointPaletteUpload(*instance, jointPaletteUpload, plan))
+    if(planFlags.hasActiveSkin && !this.declareJointPaletteUpload(instance, jointPaletteUpload, plan))
         return false;
 
-    const auto deformationCandidate = instance->deformationState.stage(deformationInputs, payload.jointMatrices);
-    if(!deformationCandidate)
+    const auto deformationCandidate = instance.deformationState.stage(deformationInputs, payload.jointMatrices);
+    if(!deformationCandidate.has_value())
         return false;
-    plan.deformationCandidate = *deformationCandidate;
-    m_plans->push_back(Move(plan));
+    plan.deformationCandidate = deformationCandidate.value();
+    this.m_plans.push_back(plan);
     return true;
 }
 
 b8 MeshSkinningFramePlanBuilder::declareUploadTask(
-    const MeshSkinningRuntimeInstance& instance,
-    const AStringView identitySuffix,
-    const AStringView markerLabel,
-    const Span<const u8> data,
-    const usize dataAlignment,
-    const Core::GpuGraphResourceId destination,
-    const Core::ResourceStates::Mask finalState,
-    const AStringView retainErrorLabel,
-    const AStringView declareErrorLabel
-)noexcept{
-    const auto uploadIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, identitySuffix);
-    const auto uploadSourceResult = m_graph->copyUploadData(data.data(), data.size(), dataAlignment);
-    if(!uploadIdentity || !uploadSourceResult){
+    in MeshSkinningRuntimeInstance instance, in StringView identitySuffix, in StringView markerLabel,
+    in Expected<GpuUploadBlobId> uploadSource, in GpuGraphResourceId destination, in ResourceStates finalState,
+    in StringView retainErrorLabel, in StringView declareErrorLabel
+){
+    const Name identity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, identitySuffix);
+    if(identity == s_NameNone || !uploadSource.has_value()){
         LogSkinningFramePlanError("retain", retainErrorLabel, instance.handle.value);
         return false;
     }
-
-    Core::GpuTaskDesc uploadDesc;
-    uploadDesc.setIdentity(uploadIdentity).setMarkerLabel(markerLabel).setScheduling(MakeJointPaletteUploadScheduling());
-    if(m_terminalTask.valid())
-        uploadDesc.setDependencies({ &m_terminalTask, 1u });
-
-    const auto uploadTaskResult = m_graph->addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = *uploadSourceResult, .destination = destination, .finalState = finalState, });
-    if(!uploadTaskResult){
+    GpuTaskDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(MakeJointPaletteUploadScheduling());
+    if(this.m_terminalTask.valid())
+        desc.setDependency(this.m_terminalTask);
+    GpuUploadBufferTaskDesc upload;
+    upload.source = uploadSource.value();
+    upload.destination = destination;
+    upload.finalState = finalState;
+    const auto task = this.m_graph.addUploadBufferTask(desc, upload);
+    if(!task.has_value()){
         LogSkinningFramePlanError("declare", declareErrorLabel, instance.handle.value);
         return false;
     }
-    m_terminalTask = *uploadTaskResult;
+    this.m_terminalTask = task.value();
     return true;
 }
 
-b8 MeshSkinningFramePlanBuilder::declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const MeshSkinningRuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan)noexcept{
-    // The following graph-owned compute task declares the descriptor-visible ConstantBuffer state.
-    if(!declareUploadTask(
-        instance,
-        s_BindlessSlotsUploadSuffix,
-        s_BindlessSlotsUploadLabel,
-        Span<const u8>(reinterpret_cast<const u8*>(&resources.bindlessResourceSlots), sizeof(resources.bindlessResourceSlots)),
-        alignof(MeshSkinningBindlessResourceSlots),
-        plan.bindlessResourceSlotsResource,
-        Core::ResourceStates::Common,
-        "graph-owned bindless slots",
-        "graph-owned bindless slots"
+b8 MeshSkinningFramePlanBuilder::declareBindlessSlotsUpload(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut MeshSkinningGraphDispatchPlan plan){
+    if(!this.declareUploadTask(
+        instance, s_BindlessSlotsUploadSuffix, s_BindlessSlotsUploadLabel, this.m_graph.copyUploadValue(resources.bindlessResourceSlots),
+        plan.bindlessResourceSlotsResource, ResourceStates::Common, "graph-owned bindless slots", "graph-owned bindless slots"
     ))
         return false;
-
     plan.submissionCommit.bindlessResourceSlotsUploadRecorded = true;
     return true;
 }
 
-b8 MeshSkinningFramePlanBuilder::declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan)noexcept{
-    const Expected<MeshSkinningRestToSkinnedCopyByteCounts> copyByteCounts = TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size());
-    if(!copyByteCounts){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance.handle.value);
-        return false;
-    }
+GpuCopyBufferTaskRegion MakeSkinningCopyRegion(in GpuGraphResourceId source, in GpuGraphResourceId destination, in u64 size){
+    GpuCopyBufferTaskRegion region;
+    region.source = source;
+    region.destination = destination;
+    region.dataSizeBytes = size;
+    return region;
+}
 
-    const Array<Core::GpuCopyBufferTaskRegion, 3> copyRegions = {
-        Core::GpuCopyBufferTaskRegion{ .source = plan.restPositionResource, .destination = plan.skinnedPositionResource, .dataSizeBytes = copyByteCounts->positionBytes, },
-        Core::GpuCopyBufferTaskRegion{ .source = plan.restNormalResource, .destination = plan.skinnedNormalResource, .dataSizeBytes = copyByteCounts->normalBytes, },
-        Core::GpuCopyBufferTaskRegion{ .source = plan.restTangentResource, .destination = plan.skinnedTangentResource, .dataSizeBytes = copyByteCounts->tangentBytes, },
-    };
-    Core::GpuTaskDesc copyDesc;
-    const auto copyDescIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_RestToSkinnedCopySuffix);
-    if(!copyDescIdentity){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
+b8 MeshSkinningFramePlanBuilder::declareRestToSkinnedCopy(in MeshSkinningRuntimeInstance instance, in MeshSkinningGraphDispatchPlan plan){
+    const auto sizes = TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size());
+    if(!sizes.has_value()){
+        error("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'", instance.handle.value);
         return false;
     }
-    copyDesc.setIdentity(copyDescIdentity).setMarkerLabel(s_RestToSkinnedCopyLabel).setScheduling(MakeJointPaletteUploadScheduling());
-    if(m_terminalTask.valid())
-        copyDesc.setDependencies({ &m_terminalTask, 1u });
-
-    const auto copyTaskResult = m_graph->addCopyBufferTask(copyDesc, Core::GpuCopyBufferTaskDesc{ .regions = copyRegions.data(), .regionCount = copyRegions.size(), });
-    if(!copyTaskResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'"), instance.handle.value);
+    Array<GpuCopyBufferTaskRegion, 3u> regions;
+    regions[0] = MakeSkinningCopyRegion(plan.restPositionResource, plan.skinnedPositionResource, sizes.value().positionBytes);
+    regions[1] = MakeSkinningCopyRegion(plan.restNormalResource, plan.skinnedNormalResource, sizes.value().normalBytes);
+    regions[2] = MakeSkinningCopyRegion(plan.restTangentResource, plan.skinnedTangentResource, sizes.value().tangentBytes);
+    const Name identity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_RestToSkinnedCopySuffix);
+    if(identity == s_NameNone){
+        error("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy");
         return false;
     }
-    m_terminalTask = *copyTaskResult;
+    GpuTaskDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(s_RestToSkinnedCopyLabel).setScheduling(MakeJointPaletteUploadScheduling());
+    if(this.m_terminalTask.valid())
+        desc.setDependency(this.m_terminalTask);
+    const auto task = this.m_graph.addCopyBufferRegions(desc, Span<GpuCopyBufferTaskRegion>(regions));
+    if(!task.has_value()){
+        error("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'", instance.handle.value);
+        return false;
+    }
+    this.m_terminalTask = task.value();
     return true;
 }
 
-b8 MeshSkinningFramePlanBuilder::declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan)noexcept{
-    const auto jointPaletteBytes = TryComputeRuntimeMeshBufferByteCount(jointPaletteUpload.size(), sizeof(SkeletonJointMatrix));
-    if(!jointPaletteBytes || *jointPaletteBytes == 0u){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
+b8 MeshSkinningFramePlanBuilder::declareJointPaletteUpload(in MeshSkinningRuntimeInstance instance, in Span<SkeletonJointMatrix> jointPaletteUpload, in MeshSkinningGraphDispatchPlan plan){
+    const auto bytes = TryComputeRuntimeMeshBufferByteCount(jointPaletteUpload.size(), size_of<SkeletonJointMatrix>());
+    if(!bytes.has_value() || bytes.value() == 0u){
+        error("MeshSkinningSystem: joint palette payload byte size overflows");
         return false;
     }
-    return declareUploadTask(
-        instance,
-        s_JointPaletteUploadSuffix,
-        s_JointPaletteUploadLabel,
-        Span<const u8>(reinterpret_cast<const u8*>(jointPaletteUpload.data()), *jointPaletteBytes),
-        alignof(SkeletonJointMatrix),
-        plan.jointPaletteResource,
-        Core::ResourceStates::ShaderResource,
-        "graph-owned joint palette data",
-        "graph-owned joint palette upload"
+    return this.declareUploadTask(
+        instance, s_JointPaletteUploadSuffix, s_JointPaletteUploadLabel, this.m_graph.copyUploadElements<SkeletonJointMatrix>(jointPaletteUpload),
+        plan.jointPaletteResource, ResourceStates::ShaderResource, "graph-owned joint palette data", "graph-owned joint palette upload"
     );
 }
 
@@ -380,43 +306,43 @@ b8 MeshSkinningFramePlanBuilder::declareJointPaletteUpload(const MeshSkinningRun
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList)noexcept{
+b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList){
     if(!plan.hasActiveSkin)
         return false;
 
-    const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource)noexcept{ return context.declarations.bufferForResource(resource); };
-    Core::Buffer* const bindlessResourceSlots = resolveBuffer(plan.bindlessResourceSlotsResource);
-    Core::Buffer* const skinnedPosition = resolveBuffer(plan.skinnedPositionResource);
-    Core::Buffer* const restPosition = resolveBuffer(plan.restPositionResource);
-    Core::Buffer* const restNormal = resolveBuffer(plan.restNormalResource);
-    Core::Buffer* const restTangent = resolveBuffer(plan.restTangentResource);
-    Core::Buffer* const skinnedNormal = resolveBuffer(plan.skinnedNormalResource);
-    Core::Buffer* const skinnedTangent = resolveBuffer(plan.skinnedTangentResource);
-    Core::Buffer* const meshletDesc = resolveBuffer(plan.meshletDescResource);
-    Core::Buffer* const meshletPositionRefDeltas = resolveBuffer(plan.meshletPositionRefDeltaResource);
-    Core::Buffer* const meshletAttributeRefDeltas = resolveBuffer(plan.meshletAttributeRefDeltaResource);
-    Core::Buffer* const attributeSkins = resolveBuffer(plan.attributeSkinResource);
-    Core::Buffer* const skinInfluences = resolveBuffer(plan.skinResource);
-    Core::Buffer* const jointPalette = resolveBuffer(plan.jointPaletteResource);
-    Core::ComputePipeline* const skinningPipeline = context.declarations.computePipelineFor(plan.skinningPipeline);
-    if(!bindlessResourceSlots || !skinnedPosition || !restPosition || !restNormal || !restTangent || !skinnedNormal || !skinnedTangent || !meshletDesc || !meshletPositionRefDeltas || !meshletAttributeRefDeltas || !attributeSkins || !skinInfluences || !jointPalette || !skinningPipeline)
+    const b8 bindlessResourceSlots = context.declarations.borrowBuffer(plan.bindlessResourceSlotsResource).has_value();
+    const b8 skinnedPosition = context.declarations.borrowBuffer(plan.skinnedPositionResource).has_value();
+    const b8 restPosition = context.declarations.borrowBuffer(plan.restPositionResource).has_value();
+    const b8 restNormal = context.declarations.borrowBuffer(plan.restNormalResource).has_value();
+    const b8 restTangent = context.declarations.borrowBuffer(plan.restTangentResource).has_value();
+    const b8 skinnedNormal = context.declarations.borrowBuffer(plan.skinnedNormalResource).has_value();
+    const b8 skinnedTangent = context.declarations.borrowBuffer(plan.skinnedTangentResource).has_value();
+    const b8 meshletDesc = context.declarations.borrowBuffer(plan.meshletDescResource).has_value();
+    const b8 meshletPositionRefDeltas = context.declarations.borrowBuffer(plan.meshletPositionRefDeltaResource).has_value();
+    const b8 meshletAttributeRefDeltas = context.declarations.borrowBuffer(plan.meshletAttributeRefDeltaResource).has_value();
+    const b8 attributeSkins = context.declarations.borrowBuffer(plan.attributeSkinResource).has_value();
+    const b8 skinInfluences = context.declarations.borrowBuffer(plan.skinResource).has_value();
+    const b8 jointPalette = context.declarations.borrowBuffer(plan.jointPaletteResource).has_value();
+    const Optional<mut ComputePipeline> skinningPipeline = context.declarations.borrowComputePipeline(plan.skinningPipeline);
+    if(!bindlessResourceSlots || !skinnedPosition || !restPosition || !restNormal || !restTangent || !skinnedNormal || !skinnedTangent || !meshletDesc || !meshletPositionRefDeltas || !meshletAttributeRefDeltas
+        || !attributeSkins || !skinInfluences || !jointPalette || !skinningPipeline.has_value())
         return false;
 
-    auto& device = m_graphics->getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
     // Graph establishes inputs and declares UAV outputs; callback records dispatch only.
-    Core::ComputeState computeState;
-    computeState.setPipeline(skinningPipeline);
+    ComputeState computeState;
+    computeState.setPipeline(skinningPipeline.value());
     commandList.setComputeState(computeState);
-    heap.bindCompute(commandList, *skinningPipeline);
+    heap.bindCompute(commandList, skinningPipeline.value());
 
     const MeshSkinningPushConstants pushConstants = MakeMeshSkinningPushConstants(plan.meshletCount, plan.skinCount, plan.jointCount, plan.skinningMode, plan.bindlessResourceSlots);
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.setPushConstants(pushConstants);
     {
-        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), s_TimingScopeMeshSkinning, device, commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshSkinning, device, commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
     }
@@ -424,58 +350,57 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     return true;
 }
 
-b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList)noexcept{
+b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList){
     if(!plan.updatesMeshletBounds)
         return false;
 
-    const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource)noexcept{ return context.declarations.bufferForResource(resource); };
-    Core::Buffer* const bindlessResourceSlots = resolveBuffer(plan.bindlessResourceSlotsResource);
-    Core::Buffer* const skinnedPosition = resolveBuffer(plan.skinnedPositionResource);
-    Core::Buffer* const meshletDesc = resolveBuffer(plan.meshletDescResource);
-    Core::Buffer* const meshletPositionRefDeltas = resolveBuffer(plan.meshletPositionRefDeltaResource);
-    Core::Buffer* const meshletLocalVertexRefs = resolveBuffer(plan.meshletLocalVertexRefResource);
-    Core::Buffer* const meshletPrimitiveIndices = resolveBuffer(plan.meshletPrimitiveIndexResource);
-    Core::Buffer* const meshletBounds = resolveBuffer(plan.meshletBoundsResource);
-    Core::Buffer* const meshletLocalBounds = resolveBuffer(plan.meshletLocalBoundsResource);
-    Core::ComputePipeline* const boundsPipeline = context.declarations.computePipelineFor(plan.boundsPipeline);
-    if(!bindlessResourceSlots || !skinnedPosition || !meshletDesc || !meshletPositionRefDeltas || !meshletLocalVertexRefs || !meshletPrimitiveIndices || !meshletBounds || !meshletLocalBounds || !boundsPipeline)
+    const b8 bindlessResourceSlots = context.declarations.borrowBuffer(plan.bindlessResourceSlotsResource).has_value();
+    const b8 skinnedPosition = context.declarations.borrowBuffer(plan.skinnedPositionResource).has_value();
+    const b8 meshletDesc = context.declarations.borrowBuffer(plan.meshletDescResource).has_value();
+    const b8 meshletPositionRefDeltas = context.declarations.borrowBuffer(plan.meshletPositionRefDeltaResource).has_value();
+    const b8 meshletLocalVertexRefs = context.declarations.borrowBuffer(plan.meshletLocalVertexRefResource).has_value();
+    const b8 meshletPrimitiveIndices = context.declarations.borrowBuffer(plan.meshletPrimitiveIndexResource).has_value();
+    const b8 meshletBounds = context.declarations.borrowBuffer(plan.meshletBoundsResource).has_value();
+    const b8 meshletLocalBounds = context.declarations.borrowBuffer(plan.meshletLocalBoundsResource).has_value();
+    const Optional<mut ComputePipeline> boundsPipeline = context.declarations.borrowComputePipeline(plan.boundsPipeline);
+    if(!bindlessResourceSlots || !skinnedPosition || !meshletDesc || !meshletPositionRefDeltas || !meshletLocalVertexRefs || !meshletPrimitiveIndices || !meshletBounds || !meshletLocalBounds || !boundsPipeline.has_value())
         return false;
 
-    auto& device = m_graphics->getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
     // Bounds consumes declared skinned positions and writes declared bounds output.
-    Core::ComputeState computeState;
-    computeState.setPipeline(boundsPipeline);
+    ComputeState computeState;
+    computeState.setPipeline(boundsPipeline.value());
     commandList.setComputeState(computeState);
-    heap.bindCompute(commandList, *boundsPipeline);
+    heap.bindCompute(commandList, boundsPipeline.value());
 
     const MeshletBoundsPushConstants boundsPushConstants = MakeMeshletBoundsPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
-    commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
+    commandList.setPushConstants(boundsPushConstants);
     {
-        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), s_TimingScopeMeshSkinningMeshletBounds, device, commandList);
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshSkinningMeshletBounds, device, commandList);
 
         commandList.dispatch(boundsPushConstants.meshletCount, 1u, 1u);
     }
 
     if(plan.repacksNormals){
-        Core::Buffer* const skinnedNormal = resolveBuffer(plan.skinnedNormalResource);
-        Core::Buffer* const meshletAttributeRefDeltas = resolveBuffer(plan.meshletAttributeRefDeltaResource);
-        Core::Buffer* const attributeBuffer = resolveBuffer(plan.attributeResource);
-        Core::ComputePipeline* const repackPipeline = context.declarations.computePipelineFor(plan.repackPipeline);
-        if(!skinnedNormal || !meshletAttributeRefDeltas || !attributeBuffer || !repackPipeline)
+        const b8 skinnedNormal = context.declarations.borrowBuffer(plan.skinnedNormalResource).has_value();
+        const b8 meshletAttributeRefDeltas = context.declarations.borrowBuffer(plan.meshletAttributeRefDeltaResource).has_value();
+        const b8 attributeBuffer = context.declarations.borrowBuffer(plan.attributeResource).has_value();
+        const Optional<mut ComputePipeline> repackPipeline = context.declarations.borrowComputePipeline(plan.repackPipeline);
+        if(!skinnedNormal || !meshletAttributeRefDeltas || !attributeBuffer || !repackPipeline.has_value())
             return false;
 
         // Graph lowers the handoff before repack; publishes packed attributes as output.
-        computeState.setPipeline(repackPipeline);
+        computeState.setPipeline(repackPipeline.value());
         commandList.setComputeState(computeState);
-        heap.bindCompute(commandList, *repackPipeline);
+        heap.bindCompute(commandList, repackPipeline.value());
 
-        commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
+        commandList.setPushConstants(boundsPushConstants);
         {
-            Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), s_TimingScopeMeshSkinningRepackNormals, device, commandList);
+            GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshSkinningRepackNormals, device, commandList);
 
             commandList.dispatch(boundsPushConstants.meshletCount, 1u, 1u);
         }
@@ -483,27 +408,12 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
     return true;
 }
 
-void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept{
-    MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(plan.handle);
-    if(!instance)
+void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(in MeshSkinningGraphDispatchPlan plan){
+    const auto instance = this.m_runtimeMeshCache.editInstance(plan.handle);
+    if(!instance.has_value() || !this.m_runtimeResources.contains(plan.handle.value))
         return;
-
-    const auto foundResources = m_runtimeResources.find(plan.handle.value);
-    if(foundResources == m_runtimeResources.end())
-        return;
-    ConfirmMeshSkinningInstanceDispatch(plan, *instance, foundResources.value());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    mut MeshSkinningRuntimeResources resources = this.m_runtimeResources.at(plan.handle.value);
+    ConfirmMeshSkinningInstanceDispatch(plan, instance.value(), resources);
 }
 
 

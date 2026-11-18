@@ -24,452 +24,379 @@ b8 CanAppendShadowPrepareBuildInput(in b8 hasRequest, in b8 resourceValid, in b8
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-void ShadowPrepareGeometryResources::prepareStorage(const b8 blasInputStatesGraphOwned){
-    FOUNDATION_ASSERT(!m_storagePrepared);
-    if(blasInputStatesGraphOwned){
-        for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
-            addRequest(build.positionBuffer);
-            addRequest(build.triangleIndexBuffer);
-        }
-    }
-    m_blasBuildInputs.reserve(m_requests ? m_requests->size() : m_inlineRequestCount);
-    m_remainingTraceGeometry.reserve(m_inputs.traceResources.size());
-    m_preparedBlasPolicy = blasInputStatesGraphOwned;
-    m_storagePrepared = true;
+class ShadowPrepareBufferRequest{
+    public BufferHandle buffer;
+    public GpuGraphResourceId resource;
+    public b8 listedForTrace = false;
+    public b8 selected = false;
 }
 
-b8 ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph& graph){
-    FOUNDATION_ASSERT(m_storagePrepared && !m_inputsGathered);
-    if(!resolveRequests(graph)){
-        clearBuildInputs();
-        m_inputsGathered = true;
-        return false;
+class ShadowPrepareGeometryResources : NoCopy{
+    public Vector<GpuGraphResourceId> m_blasBuildInputs;
+    public Vector<GpuGraphResourceId> m_remainingTraceGeometry;
+    private ShadowPrepareGeometryInputs m_inputs;
+    private FixedVector<ShadowPrepareBufferRequest, s_ShadowTraceInlineCapacity> m_inlineRequests;
+    private Vector<ShadowPrepareBufferRequest> m_requests;
+    private HashMap<usize, usize> m_bufferIndices;
+    private HashMap<u32, usize> m_resourceIndices;
+    private HashSet<Name> m_names;
+    private u64 m_graphGeneration = 0u;
+    private b8 m_promoted = false;
+    private b8 m_namesPrepared = false;
+
+    public ShadowPrepareGeometryResources(in ShadowPrepareGeometryInputs inputs){
+        this.m_inputs = inputs;
     }
-    if(m_preparedBlasPolicy){
-        for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
-            if(!appendBuildInput(build.positionBuffer) || !appendBuildInput(build.triangleIndexBuffer)){
-                clearBuildInputs();
-                m_inputsGathered = true;
-                return false;
+
+    private usize count()const{
+        if(this.m_promoted)
+            return this.m_requests.size();
+        return this.m_inlineRequests.size();
+    }
+
+    private mut ShadowPrepareBufferRequest at(in usize index){
+        if(this.m_promoted)
+            return this.m_requests[index];
+        return this.m_inlineRequests[index];
+    }
+
+    private usize findBuffer(in BufferHandle buffer)const{
+        if(buffer.valid()){
+            if(this.m_promoted){
+                if(this.m_bufferIndices.contains(buffer.identity()))
+                    return this.m_bufferIndices.at(buffer.identity());
+            }
+            else{
+                for(usize i = 0u; i < this.m_inlineRequests.size(); ++i){
+                    if(this.m_inlineRequests[i].buffer.identity() == buffer.identity())
+                        return i;
+                }
             }
         }
+        return usize.max;
     }
-    m_inputsGathered = true;
-    return true;
-}
 
-b8 ShadowPrepareGeometryResources::gatherRemainingTraceResources()noexcept{
-    FOUNDATION_ASSERT(m_inputsGathered);
-    const b8 hasBlasInputs = !m_blasBuildInputs.empty();
-    for(const Core::GpuGraphResourceId resource : m_inputs.traceResources){
-        if(!resource.valid())
-            return false;
-        const BufferRequest* const request = hasBlasInputs ? findResolvedRequest(resource) : nullptr;
-        if(request && request->selected)
-            continue;
-        m_remainingTraceGeometry.push_back(resource);
-    }
-    return true;
-}
-
-b8 ShadowPrepareGeometryResources::isPreparedMeshBlasBuild(const Name& meshName)const{
-    if(!m_inputs.blasBuildsGraphOwned)
-        return false;
-    if(ShouldUseInlinePreparedBlasNameScan(m_inputs.blasBuilds.size())){
-        const PreparedMeshBlasBuild* const builds = m_inputs.blasBuilds.data();
-        for(usize index = 0u; index < m_inputs.blasBuilds.size(); ++index){
-            if(builds[index].meshName == meshName)
-                return true;
+    private void add(in BufferHandle buffer){
+        if(!buffer.valid() || this.findBuffer(buffer) != usize.max)
+            return;
+        ShadowPrepareBufferRequest request;
+        request.buffer = buffer;
+        if(!this.m_promoted){
+            if(this.m_inlineRequests.size() < s_ShadowTraceInlineCapacity){
+                this.m_inlineRequests.push_back(request);
+                return;
+            }
+            for(in ShadowPrepareBufferRequest entry : this.m_inlineRequests){
+                this.m_bufferIndices.try_emplace(entry.buffer.identity(), this.m_requests.size());
+                this.m_requests.push_back(entry);
+            }
+            this.m_inlineRequests.clear();
+            this.m_promoted = true;
         }
-        return false;
+        this.m_bufferIndices.try_emplace(buffer.identity(), this.m_requests.size());
+        this.m_requests.push_back(request);
     }
-    if(!m_namesPrepared)
-        prepareNames();
-    const NameHash& identity = meshName.identityHash();
-    if(m_names)
-        return m_names->find(MakeNotNull(&identity)) != m_names->end();
-    for(usize index = 0u; index < m_inlineNameCount; ++index){
-        if(*m_inlineNames[index] == identity)
+
+    private usize findResource(in GpuGraphResourceId resource)const{
+        if(CanMatchResolvedShadowPrepareRequest(resource.valid(), resource.generation, this.m_graphGeneration)){
+            if(this.m_promoted){
+                if(this.m_resourceIndices.contains(resource.index))
+                    return this.m_resourceIndices.at(resource.index);
+            }
+            else{
+                for(usize i = 0u; i < this.m_inlineRequests.size(); ++i){
+                    if(this.m_inlineRequests[i].resource == resource)
+                        return i;
+                }
+            }
+        }
+        return usize.max;
+    }
+
+    public void prepareStorage(in b8 graphOwned){
+        if(graphOwned){
+            for(in PreparedMeshBlasBuild build : this.m_inputs.blasBuilds){
+                this.add(build.positionBuffer);
+                this.add(build.triangleIndexBuffer);
+            }
+        }
+        this.m_blasBuildInputs.reserve(this.count());
+        this.m_remainingTraceGeometry.reserve(this.m_inputs.traceResources.size());
+    }
+
+    public b8 gatherBuildInputs(in GpuTaskGraph graph, in b8 graphOwned){
+        if(!graphOwned)
             return true;
-    }
-    return false;
-}
-
-void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer){
-    if(!buffer)
-        return;
-    BufferRequest* request = findRequest(buffer.get());
-    if(!request){
-        if(!m_requests && m_inlineRequestCount == s_SmallInlineIndexCapacity)
-            promoteRequests();
-        if(m_requests){
-            const auto inserted = m_requests->try_emplace(MakeNotNull(buffer.get()));
-            if(!inserted.second)
-                TerminateInvariant();
-            request = &inserted.first.value();
-            request->source = &buffer;
+        if(this.count() != 0u){
+            GpuTaskGraphDeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return false;
+            this.m_graphGeneration = declarations.generation();
+            for(usize i = 0u; i < this.count(); ++i){
+                mut ShadowPrepareBufferRequest request = this.at(i);
+                request.resource = declarations.findImportedBuffer(request.buffer);
+                if(this.m_promoted && request.resource.valid() && !this.m_resourceIndices.try_emplace(request.resource.index, i).second)
+                    TerminateInvariant();
+            }
         }
-        else{
-            InlineRequest& entry = m_inlineRequests[m_inlineRequestCount];
-            entry.buffer = buffer.get();
-            entry.request.source = &buffer;
-            request = &entry.request;
-            ++m_inlineRequestCount;
+        for(in GpuGraphResourceId resource : this.m_inputs.traceResources){
+            const usize index = this.findResource(resource);
+            if(index != usize.max)
+                this.at(index).listedForTrace = true;
         }
-    }
-}
-
-ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findRequest(Core::Buffer* const buffer)noexcept{
-    if(!buffer)
-        return nullptr;
-    if(m_requests){
-        const auto found = m_requests->find(MakeNotNull(buffer));
-        return found == m_requests->end() ? nullptr : &found.value();
-    }
-    for(usize index = 0u; index < m_inlineRequestCount; ++index){
-        if(m_inlineRequests[index].buffer == buffer)
-            return &m_inlineRequests[index].request;
-    }
-    return nullptr;
-}
-
-void ShadowPrepareGeometryResources::promoteRequests(){
-    RequestIndex requests(s_PromotedInlineIndexCapacity, m_scratchArena);
-    for(const InlineRequest& entry : m_inlineRequests){
-        if(!requests.emplace(MakeNotNull(entry.buffer), entry.request).second)
-            TerminateInvariant();
-    }
-    static_assert(IsNothrowMoveConstructible_V<RequestIndex>);
-    m_requests.emplace(Move(requests));
-}
-
-b8 ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& graph){
-    const usize requestCount = m_requests ? m_requests->size() : m_inlineRequestCount;
-    if(requestCount == 0u)
+        // Requests were inserted in BLAS build order, with duplicate buffers removed.
+        for(in PreparedMeshBlasBuild build : this.m_inputs.blasBuilds){
+            if(!build.positionBuffer.valid() || !build.triangleIndexBuffer.valid())
+                return false;
+        }
+        for(usize i = 0u; i < this.count(); ++i){
+            in ShadowPrepareBufferRequest request = this.at(i);
+            if(!CanAppendShadowPrepareBuildInput(true, request.resource.valid(), request.listedForTrace))
+                return false;
+        }
+        for(usize i = 0u; i < this.count(); ++i){
+            mut ShadowPrepareBufferRequest request = this.at(i);
+            this.m_blasBuildInputs.push_back(request.resource);
+            request.selected = true;
+        }
         return true;
-    {
-        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        if(!declarations.valid())
+    }
+
+    public b8 gatherRemainingTraceResources(){
+        for(in GpuGraphResourceId resource : this.m_inputs.traceResources){
+            if(!resource.valid())
+                return false;
+            const usize index = this.findResource(resource);
+            if(index == usize.max || !this.at(index).selected)
+                this.m_remainingTraceGeometry.push_back(resource);
+        }
+        return true;
+    }
+
+    public b8 isPreparedMeshBlasBuild(in Name meshName){
+        if(!this.m_inputs.blasBuildsGraphOwned)
             return false;
-        m_graphGeneration = declarations.generation();
-        if(m_requests){
-            for(auto request = m_requests->begin(); request != m_requests->end(); ++request)
-                request.value().resource = declarations.findImportedBuffer(*request.value().source);
-        }
-        else{
-            for(usize index = 0u; index < m_inlineRequestCount; ++index){
-                BufferRequest& request = m_inlineRequests[index].request;
-                request.resource = declarations.findImportedBuffer(*request.source);
+        if(ShouldUseInlinePreparedBlasNameScan(this.m_inputs.blasBuilds.size())){
+            for(in PreparedMeshBlasBuild build : this.m_inputs.blasBuilds){
+                if(build.meshName == meshName)
+                    return true;
             }
+            return false;
         }
-    }
-    if(m_requests){
-        ResourceIndex resources(m_requests->bucket_count(), m_scratchArena);
-        for(auto request = m_requests->begin(); request != m_requests->end(); ++request){
-            if(request.value().resource.valid() && !resources.emplace(request.value().resource.index, MakeNotNull(&request.value())).second)
-                TerminateInvariant();
+        if(!this.m_namesPrepared){
+            for(in PreparedMeshBlasBuild build : this.m_inputs.blasBuilds)
+                this.m_names.insert(build.meshName);
+            this.m_namesPrepared = true;
         }
-        static_assert(IsNothrowMoveConstructible_V<ResourceIndex>);
-        m_resources.emplace(Move(resources));
-    }
-    // Only resolved requests gain trace membership; stale generations stay distinct.
-    for(const Core::GpuGraphResourceId traceResource : m_inputs.traceResources){
-        if(BufferRequest* const request = findResolvedRequest(traceResource))
-            request->listedForTrace = true;
-    }
-    return true;
-}
-
-ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findResolvedRequest(const Core::GpuGraphResourceId resource)noexcept{
-    if(!CanMatchResolvedShadowPrepareRequest(resource.valid(), resource.generation, m_graphGeneration))
-        return nullptr;
-    if(m_resources){
-        const auto found = m_resources->find(resource.index);
-        return found == m_resources->end() ? nullptr : found.value().get();
-    }
-    for(usize index = 0u; index < m_inlineRequestCount; ++index){
-        BufferRequest& request = m_inlineRequests[index].request;
-        if(request.resource == resource)
-            return &request;
-    }
-    return nullptr;
-}
-
-b8 ShadowPrepareGeometryResources::appendBuildInput(const Core::BufferHandle& buffer)noexcept{
-    BufferRequest* const request = findRequest(buffer.get());
-    if(!CanAppendShadowPrepareBuildInput(request != nullptr, request ? request->resource.valid() : false, request ? request->listedForTrace : false))
-        return false;
-    if(!request->selected){
-        m_blasBuildInputs.push_back(request->resource);
-        request->selected = true;
-    }
-    return true;
-}
-
-void ShadowPrepareGeometryResources::clearBuildInputs()noexcept{
-    m_blasBuildInputs.clear();
-    if(m_requests){
-        for(auto request = m_requests->begin(); request != m_requests->end(); ++request)
-            request.value().selected = false;
-    }
-    else{
-        for(usize index = 0u; index < m_inlineRequestCount; ++index)
-            m_inlineRequests[index].request.selected = false;
+        return this.m_names.contains(meshName);
     }
 }
 
-void ShadowPrepareGeometryResources::prepareNames()const{
-    for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
-        const NameHash& identity = build.meshName.identityHash();
-        if(m_names){
-            m_names->insert(MakeNotNull(&identity));
-            continue;
-        }
-        b8 found = false;
-        for(usize index = 0u; index < m_inlineNameCount; ++index){
-            if(*m_inlineNames[index] == identity){
-                found = true;
-                break;
-            }
-        }
-        if(found)
-            continue;
-        if(m_inlineNameCount < s_SmallInlineIndexCapacity){
-            m_inlineNames[m_inlineNameCount] = &identity;
-            ++m_inlineNameCount;
-            continue;
-        }
-        NameIndex names(s_PromotedInlineIndexCapacity, m_scratchArena);
-        for(const NameHash* const existing : m_inlineNames)
-            names.insert(MakeNotNull(existing));
-        names.insert(MakeNotNull(&identity));
-        static_assert(IsNothrowMoveConstructible_V<NameIndex>);
-        m_names.emplace(Move(names));
-    }
-    m_namesPrepared = true;
+ResourceStates ShadowPrepareBlasInitialState(in b8 fresh){
+    if(fresh)
+        return ResourceStates::Common;
+    return ResourceStates::Unknown;
 }
 
+[cpp_unwind]
+b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, mut ShadowPrepareResourcePlan result){
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ShadowPrepareResourcePlanner::prepare(const ShadowPrepareResourceInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ShadowPrepareResourcePlan& result){
-    using namespace RendererTaskGraphDetail;
-    const auto& rayTracingShadowResources = inputs.rayTracingShadowResources;
-    const auto& uploads = inputs.uploads;
     const auto currentBindlessSlots = inputs.currentBindlessSlots;
     const auto materialContextSlots = inputs.materialContextSlots;
-    const auto& shadowTraceGeometryResources = inputs.shadowTraceGeometryResources;
-    const auto& softwareBvhBuildStateResources = inputs.softwareBvhBuildStateResources;
-    const auto& preparedMeshBlasBuilds = inputs.preparedMeshBlasBuilds;
     const auto sceneTlasBuildGraphOwned = inputs.sceneTlasBuildGraphOwned;
     const auto meshBlasBuildsGraphOwned = inputs.meshBlasBuildsGraphOwned;
     const auto meshBlasGeometryBuildInputStatesGraphOwned = inputs.meshBlasGeometryBuildInputStatesGraphOwned;
-    auto& resourceUses = result.resourceUses;
-    auto& resourceSetUses = result.resourceSetUses;
-    auto& resourceSetUseCount = result.resourceSetUseCount;
-    auto& accelStructFinalizeResourceUses = result.accelStructFinalizeResourceUses;
-    auto& sceneTlas = result.sceneTlas;
 
-    const ShadowPrepareGeometryInputs geometryInputs{ .blasBuilds = preparedMeshBlasBuilds, .traceResources = shadowTraceGeometryResources, .blasBuildsGraphOwned = meshBlasBuildsGraphOwned };
-    ShadowPrepareGeometryResources geometryResources(geometryInputs, scratchArena);
-    const auto& meshBlasGeometryBuildInputResources = geometryResources.m_blasBuildInputs;
-    const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
-    ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
-    m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
-    resourceUses.reserve(ResolveShadowPrepareResourceUseReserveCount(
-        uploads.csgTraceContext.valid(),
-        shadowTraceGeometryResources.size(),
-        softwareBvhBuildStateResources.size(),
+    ShadowPrepareGeometryInputs geometryInputs;
+    geometryInputs.blasBuilds = inputs.preparedMeshBlasBuilds;
+    geometryInputs.traceResources = inputs.shadowTraceGeometryResources;
+    geometryInputs.blasBuildsGraphOwned = meshBlasBuildsGraphOwned;
+    ShadowPrepareGeometryResources geometryResources(geometryInputs);
+    MeshBlasGraphStateVector liveMeshBlasGraphStates;
+    this.m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
+    result.resourceUses.reserve(ResolveShadowPrepareResourceUseReserveCount(
+        inputs.uploads.csgTraceContext.valid(),
+        inputs.shadowTraceGeometryResources.size(),
+        inputs.softwareBvhBuildStateResources.size(),
         liveMeshBlasGraphStates.size(),
-        preparedMeshBlasBuilds.size()
+        inputs.preparedMeshBlasBuilds.size()
     ));
-    accelStructFinalizeResourceUses.reserve(ResolveExpectedAccelStructFinalizeResourceUseCount(sceneTlasBuildGraphOwned, preparedMeshBlasBuilds.size()));
+    result.accelStructFinalizeResourceUses.reserve(ResolveExpectedAccelStructFinalizeResourceUseCount(sceneTlasBuildGraphOwned, inputs.preparedMeshBlasBuilds.size()));
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
     // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
-    resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    result.resourceUses.push_back(ReadWriteUse(currentBindlessSlots, ResourceStates::ConstantBuffer));
     // Retain Shadow Preparation as producer; WAW handoff retires the immutable upload.
-    resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
-    if(uploads.csgTraceContext.valid())
-        resourceUses.push_back(WriteUse(uploads.csgTraceContext, Core::ResourceStates::ShaderResource));
-    if(uploads.causticEmissionTargets.valid())
-        resourceUses.push_back(WriteUse(uploads.causticEmissionTargets, Core::ResourceStates::ShaderResource));
-    if(uploads.surfelFrameConstants.valid())
-        resourceUses.push_back(WriteUse(uploads.surfelFrameConstants, Core::ResourceStates::ConstantBuffer));
-    if(uploads.shadowInstanceMaterials.valid())
-        resourceUses.push_back(WriteUse(uploads.shadowInstanceMaterials, Core::ResourceStates::ShaderResource));
-    if(uploads.shadowInstances.valid())
-        resourceUses.push_back(WriteUse(uploads.shadowInstances, Core::ResourceStates::ShaderResource));
-    if(uploads.shadowMaterialTyped.valid())
-        resourceUses.push_back(WriteUse(uploads.shadowMaterialTyped, Core::ResourceStates::ShaderResource));
-    if(uploads.sceneBvhNodes.valid())
-        resourceUses.push_back(WriteUse(uploads.sceneBvhNodes, Core::ResourceStates::ShaderResource));
-    if(uploads.sceneBvhInstances.valid())
-        resourceUses.push_back(WriteUse(uploads.sceneBvhInstances, Core::ResourceStates::ShaderResource));
+    result.resourceUses.push_back(WriteUse(materialContextSlots, ResourceStates::ConstantBuffer));
+    if(inputs.uploads.csgTraceContext.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.csgTraceContext, ResourceStates::ShaderResource));
+    if(inputs.uploads.causticEmissionTargets.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.causticEmissionTargets, ResourceStates::ShaderResource));
+    if(inputs.uploads.surfelFrameConstants.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.surfelFrameConstants, ResourceStates::ConstantBuffer));
+    if(inputs.uploads.shadowInstanceMaterials.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.shadowInstanceMaterials, ResourceStates::ShaderResource));
+    if(inputs.uploads.shadowInstances.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.shadowInstances, ResourceStates::ShaderResource));
+    if(inputs.uploads.shadowMaterialTyped.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.shadowMaterialTyped, ResourceStates::ShaderResource));
+    if(inputs.uploads.sceneBvhNodes.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.sceneBvhNodes, ResourceStates::ShaderResource));
+    if(inputs.uploads.sceneBvhInstances.valid())
+        result.resourceUses.push_back(WriteUse(inputs.uploads.sceneBvhInstances, ResourceStates::ShaderResource));
 
     b8 resourcesImported = true;
-    if(!geometryResources.gatherBuildInputs(m_graph)){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen BLAS geometry inputs are missing graph resources"));
+    if(!geometryResources.gatherBuildInputs(this.m_graph, meshBlasGeometryBuildInputStatesGraphOwned)){
+        warning("RendererSystem: frozen BLAS geometry inputs are missing graph resources");
         return false;
     }
     if(meshBlasBuildsGraphOwned){
-        for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
+        for(in PreparedMeshBlasBuild build : inputs.preparedMeshBlasBuilds){
             const auto blasIdentity = DeriveName(build.meshName, s_BlasNameSuffix);
-            if(!blasIdentity){
+            if(!blasIdentity.has_value()){
                 resourcesImported = false;
                 continue;
             }
             // First build knows native Common; retained storage imports the accepted binding.
-            const Core::ResourceStates::Mask blasInitialState = build.backingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
-            const auto blas = m_graph.importAccelStruct(build.blas, AccelStructResourceDesc(*blasIdentity, "Prepared Mesh BLAS").setInitialState(blasInitialState));
+            const ResourceStates blasInitialState = ShadowPrepareBlasInitialState(build.backingFresh);
+            GpuGraphResourceDesc blasDesc = AccelStructResourceDesc(blasIdentity.value(), "Prepared Mesh BLAS");
+            blasDesc.setInitialState(blasInitialState);
+            const auto blas = this.m_graph.importAccelStruct(build.blas, blasDesc);
             resourcesImported = resourcesImported && blas.has_value();
             if(blas.has_value()){
                 // Typed acceleration-structure uses lower through their backing allocation.
-                resourceUses.push_back(ReadWriteUse(*blas, Core::ResourceStates::AccelStructWrite));
-                accelStructFinalizeResourceUses.push_back(ReadUse(*blas, Core::ResourceStates::AccelStructRead));
+                result.resourceUses.push_back(ReadWriteUse(blas.value(), ResourceStates::AccelStructWrite));
+                result.accelStructFinalizeResourceUses.push_back(ReadUse(blas.value(), ResourceStates::AccelStructRead));
             }
         }
     }
-    Core::GpuGraphResourceSetId meshBlasGeometryBuildInputSet;
-    if(meshBlasGeometryBuildInputStatesGraphOwned && !meshBlasGeometryBuildInputResources.empty()){
-        const auto meshBlasGeometryBuildInputSetResult = m_graph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name(s_ShadowPrepareBlasGeometryBuildInputs))
-                .setMarkerLabel("Shadow Prepare BLAS Geometry Build Inputs")
-                .setMembers(meshBlasGeometryBuildInputResources)
-        );
-        if(meshBlasGeometryBuildInputSetResult)
-            meshBlasGeometryBuildInputSet = *meshBlasGeometryBuildInputSetResult;
+    GpuGraphResourceSetId meshBlasGeometryBuildInputSet;
+    if(meshBlasGeometryBuildInputStatesGraphOwned && !geometryResources.m_blasBuildInputs.empty()){
+        GpuGraphResourceSetDesc setDesc;
+        setDesc.setIdentity(s_ShadowPrepareBlasGeometryBuildInputs)
+            .setMarkerLabel("Shadow Prepare BLAS Geometry Build Inputs")
+            .setMembers(geometryResources.m_blasBuildInputs);
+        const auto meshBlasGeometryBuildInputSetResult = this.m_graph.importResourceSet(setDesc);
+        if(meshBlasGeometryBuildInputSetResult.has_value())
+            meshBlasGeometryBuildInputSet = meshBlasGeometryBuildInputSetResult.value();
     }
     const b8 meshBlasGeometryBuildInputSetGraphOwned = meshBlasGeometryBuildInputSet.valid();
     if(meshBlasGeometryBuildInputStatesGraphOwned && !meshBlasGeometryBuildInputSetGraphOwned){
-        for(const Core::GpuGraphResourceId resource : meshBlasGeometryBuildInputResources)
-            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::AccelStructBuildInput));
+        for(in GpuGraphResourceId resource : geometryResources.m_blasBuildInputs)
+            result.resourceUses.push_back(ReadWriteUse(resource, ResourceStates::AccelStructBuildInput));
     }
-    const Core::GpuTaskResourceSetUse meshBlasGeometryBuildInputSetUse{ .resourceSet = meshBlasGeometryBuildInputSet, .range = {}, .requiredState = Core::ResourceStates::AccelStructBuildInput, .access = Core::GpuTaskResourceAccess::ReadWrite };
+    GpuTaskResourceSetUse meshBlasGeometryBuildInputSetUse;
+    meshBlasGeometryBuildInputSetUse.resourceSet = meshBlasGeometryBuildInputSet;
+    meshBlasGeometryBuildInputSetUse.requiredState = ResourceStates::AccelStructBuildInput;
+    meshBlasGeometryBuildInputSetUse.access = GpuTaskResourceAccess::ReadWrite;
     if(meshBlasGeometryBuildInputSetGraphOwned)
-        resourceSetUses[resourceSetUseCount++] = meshBlasGeometryBuildInputSetUse;
+        result.resourceSetUses[result.resourceSetUseCount++] = meshBlasGeometryBuildInputSetUse;
     if(!geometryResources.gatherRemainingTraceResources())
         return false;
 
 
     // Frozen trace list may carry build inputs; keep them separate from the SRV subset.
-    Core::GpuGraphResourceSetId shadowPrepareTraceGeometrySet;
-    if(!shadowPrepareTraceGeometryResources.empty()){
-        const auto shadowPrepareTraceGeometrySetResult = m_graph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name(s_ShadowPrepareTraceGeometry))
-                .setMarkerLabel("Shadow Prepare Trace Geometry")
-                .setMembers(shadowPrepareTraceGeometryResources)
-        );
-        if(shadowPrepareTraceGeometrySetResult)
-            shadowPrepareTraceGeometrySet = *shadowPrepareTraceGeometrySetResult;
+    GpuGraphResourceSetId shadowPrepareTraceGeometrySet;
+    if(!geometryResources.m_remainingTraceGeometry.empty()){
+        GpuGraphResourceSetDesc setDesc;
+        setDesc.setIdentity(s_ShadowPrepareTraceGeometry)
+            .setMarkerLabel("Shadow Prepare Trace Geometry")
+            .setMembers(geometryResources.m_remainingTraceGeometry);
+        const auto shadowPrepareTraceGeometrySetResult = this.m_graph.importResourceSet(setDesc);
+        if(shadowPrepareTraceGeometrySetResult.has_value())
+            shadowPrepareTraceGeometrySet = shadowPrepareTraceGeometrySetResult.value();
     }
     const b8 shadowPrepareTraceGeometryStatesGraphOwned = shadowPrepareTraceGeometrySet.valid();
     if(!shadowPrepareTraceGeometryStatesGraphOwned){
-        for(const Core::GpuGraphResourceId resource : shadowPrepareTraceGeometryResources)
-            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
+        for(in GpuGraphResourceId resource : geometryResources.m_remainingTraceGeometry)
+            result.resourceUses.push_back(ReadWriteUse(resource, ResourceStates::ShaderResource));
     }
-    const Core::GpuTaskResourceSetUse shadowPrepareTraceGeometrySetUse{ .resourceSet = shadowPrepareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::ReadWrite };
+    GpuTaskResourceSetUse shadowPrepareTraceGeometrySetUse;
+    shadowPrepareTraceGeometrySetUse.resourceSet = shadowPrepareTraceGeometrySet;
+    shadowPrepareTraceGeometrySetUse.requiredState = ResourceStates::ShaderResource;
+    shadowPrepareTraceGeometrySetUse.access = GpuTaskResourceAccess::ReadWrite;
     if(shadowPrepareTraceGeometryStatesGraphOwned)
-        resourceSetUses[resourceSetUseCount++] = shadowPrepareTraceGeometrySetUse;
-    for(const Core::GpuGraphResourceId resource : softwareBvhBuildStateResources){
+        result.resourceSetUses[result.resourceSetUseCount++] = shadowPrepareTraceGeometrySetUse;
+    for(in GpuGraphResourceId resource : inputs.softwareBvhBuildStateResources){
         if(!resource.valid())
             return false;
     }
-    Core::GpuGraphResourceSetId softwareBvhBuildStateSet;
-    if(!softwareBvhBuildStateResources.empty()){
-        const auto softwareBvhBuildStateSetResult = m_graph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name(s_ShadowPrepareSoftwareBvhBuildState))
-                .setMarkerLabel("Shadow Prepare Software BVH Build State")
-                .setMembers(softwareBvhBuildStateResources)
-        );
-        if(softwareBvhBuildStateSetResult)
-            softwareBvhBuildStateSet = *softwareBvhBuildStateSetResult;
+    GpuGraphResourceSetId softwareBvhBuildStateSet;
+    if(!inputs.softwareBvhBuildStateResources.empty()){
+        GpuGraphResourceSetDesc setDesc;
+        setDesc.setIdentity(s_ShadowPrepareSoftwareBvhBuildState)
+            .setMarkerLabel("Shadow Prepare Software BVH Build State")
+            .setMembers(inputs.softwareBvhBuildStateResources);
+        const auto softwareBvhBuildStateSetResult = this.m_graph.importResourceSet(setDesc);
+        if(softwareBvhBuildStateSetResult.has_value())
+            softwareBvhBuildStateSet = softwareBvhBuildStateSetResult.value();
     }
     const b8 softwareBvhBuildStateStatesGraphOwned = softwareBvhBuildStateSet.valid();
     if(!softwareBvhBuildStateStatesGraphOwned){
-        for(const Core::GpuGraphResourceId resource : softwareBvhBuildStateResources){
+        for(in GpuGraphResourceId resource : inputs.softwareBvhBuildStateResources){
             // Parent links and scratch keep native UAV state; they are state-only resources.
-            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
+            result.resourceUses.push_back(ReadWriteUse(resource, ResourceStates::UnorderedAccess));
         }
     }
-    const Core::GpuTaskResourceSetUse softwareBvhBuildStateSetUse{ .resourceSet = softwareBvhBuildStateSet, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::ReadWrite };
+    GpuTaskResourceSetUse softwareBvhBuildStateSetUse;
+    softwareBvhBuildStateSetUse.resourceSet = softwareBvhBuildStateSet;
+    softwareBvhBuildStateSetUse.requiredState = ResourceStates::UnorderedAccess;
+    softwareBvhBuildStateSetUse.access = GpuTaskResourceAccess::ReadWrite;
     if(softwareBvhBuildStateStatesGraphOwned)
-        resourceSetUses[resourceSetUseCount++] = softwareBvhBuildStateSetUse;
+        result.resourceSetUses[result.resourceSetUseCount++] = softwareBvhBuildStateSetUse;
 
-    if(rayTracingShadowResources.sceneTlas){
+    if(inputs.rayTracingShadowResources.sceneTlas.valid()){
         // Imports observe the backing generation; retained storage stays Unknown until accepted.
-        const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();
-        const auto sceneTlasResult = m_graph.importAccelStruct(
-            rayTracingShadowResources.sceneTlas,
-            AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel).setInitialState(sceneTlasInitialState)
-        );
-        if(sceneTlasResult)
-            sceneTlas = *sceneTlasResult;
+        const ResourceStates sceneTlasInitialState = this.m_raytracingSystem.sceneTlasBackingInitialState();
+        GpuGraphResourceDesc tlasDesc = AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel);
+        tlasDesc.setInitialState(sceneTlasInitialState);
+        const auto sceneTlasResult = this.m_graph.importAccelStruct(inputs.rayTracingShadowResources.sceneTlas, tlasDesc);
+        if(sceneTlasResult.has_value())
+            result.sceneTlas = sceneTlasResult.value();
         resourcesImported = resourcesImported && sceneTlasResult.has_value();
-        if(sceneTlas.valid()){
+        if(result.sceneTlas.valid()){
             if(sceneTlasBuildGraphOwned){
                 // Frozen recorder only builds; graph lowers Write entry, successor lowers Read handoff.
-                resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructWrite));
-                accelStructFinalizeResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
+                result.resourceUses.push_back(ReadWriteUse(result.sceneTlas, ResourceStates::AccelStructWrite));
+                result.accelStructFinalizeResourceUses.push_back(ReadUse(result.sceneTlas, ResourceStates::AccelStructRead));
             }
             else{
                 // Cached scene TLAS remains read-ready; retain its accepted-state handoff.
-                resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructRead));
+                result.resourceUses.push_back(ReadWriteUse(result.sceneTlas, ResourceStates::AccelStructRead));
             }
         }
     }
-    for(const ECSRenderDetail::MeshBlasGraphState& state : liveMeshBlasGraphStates){
+    for(in MeshBlasGraphState state : liveMeshBlasGraphStates){
         // Frozen plans own retained handles; never collide replacements with frozen identities.
         if(geometryResources.isPreparedMeshBlasBuild(state.meshName))
             continue;
 
         const auto blasIdentity = DeriveName(state.meshName, s_BlasNameSuffix);
-        if(!blasIdentity){
+        if(!blasIdentity.has_value()){
             resourcesImported = false;
             continue;
         }
-        const Core::ResourceStates::Mask blasInitialState = state.backingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
-        const auto blas = m_graph.importAccelStruct(state.blas, AccelStructResourceDesc(*blasIdentity, "Mesh BLAS").setInitialState(blasInitialState));
+        const ResourceStates blasInitialState = ShadowPrepareBlasInitialState(state.backingFresh);
+        GpuGraphResourceDesc blasDesc = AccelStructResourceDesc(blasIdentity.value(), "Mesh BLAS");
+        blasDesc.setInitialState(blasInitialState);
+        const auto blas = this.m_graph.importAccelStruct(state.blas, blasDesc);
         resourcesImported = resourcesImported && blas.has_value();
         if(blas.has_value()){
             if(state.nativeBuildsBlas){
                 // Retained backing keeps its accepted read state until the selected build is published.
-                resourceUses.push_back(ReadWriteUse(*blas, Core::ResourceStates::AccelStructRead));
+                result.resourceUses.push_back(ReadWriteUse(blas.value(), ResourceStates::AccelStructRead));
             }
             else{
                 // State-only import; rejected preparation re-pends and seeds accepted state.
-                resourceUses.push_back(ReadUse(*blas, Core::ResourceStates::AccelStructRead));
+                result.resourceUses.push_back(ReadUse(blas.value(), ResourceStates::AccelStructRead));
             }
         }
     }
     if(!resourcesImported){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import preflighted shadow-preparation resources"));
+        warning("RendererSystem: could not import preflighted shadow-preparation resources");
         return false;
     }
 
     return true;
-}
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

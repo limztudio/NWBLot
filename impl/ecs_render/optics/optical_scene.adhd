@@ -3,72 +3,29 @@
 
 
 #include <impl/ecs_render/optics/optical_scene_identity_builder.adhd>
+#include <impl/ecs_render/optics/optical_bounds_evaluator.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[layout(16)]
+class OpticalWorldBounds{
+    public f32x4 minimum = f32x4();
+    public f32x4 maximum = f32x4();
+}
 
+static_assert(align_of<Expected<OpticalWorldBounds>>() >= align_of<OpticalWorldBounds>());
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/optics/types.adhd.h>
-#include <impl/assets/graphics/raytrace/optical_scene_constants.h>
-
-#include <core/alloc/scratch.h>
-#include <core/ecs/entity_id.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/rhi/resource.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererComponent;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(RayTracingOpticalSceneHeaderGpu) == NWB_RT_OPTICAL_SCENE_HEADER_BYTES);
-static_assert(offsetof(RayTracingOpticalSceneHeaderGpu, transparentCount) == NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
-static_assert(offsetof(RayTracingOpticalSceneHeaderGpu, flags) == NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
-
-static_assert(sizeof(RayTracingOpticalInstanceGpu) == NWB_RT_OPTICAL_INSTANCE_BYTES);
-static_assert(offsetof(RayTracingOpticalInstanceGpu, mediumPriority) == NWB_RT_OPTICAL_INSTANCE_PRIORITY_OFFSET);
-static_assert(offsetof(RayTracingOpticalInstanceGpu, boundaryMode) == NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
-static_assert(offsetof(RayTracingOpticalInstanceGpu, flags) == NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET);
-
-// Call-scoped calculation scratch; retained scene/GPU values use Float storage.
-struct alignas(SIMDVectorSingle) OpticalWorldBounds{
-    SIMDVectorSingle minimum;
-    SIMDVectorSingle maximum;
-};
-static_assert(alignof(Expected<OpticalWorldBounds>) >= alignof(OpticalWorldBounds));
-
-// Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.
-[[nodiscard]] Expected<OpticalWorldBounds> FOUNDATION_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, SIMDVectorSingle localMin, SIMDVectorSingle localMax)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(in MatrixSingle objectToWorld, in VectorSingle localMin, in VectorSingle localMax){
+    VectorSingle minimum = VectorSingle();
+    VectorSingle maximum = VectorSingle();
+    if(!OpticalBoundsEvaluator().computeWorldBounds(objectToWorld, localMin, localMax, minimum, maximum))
+        return MakeUnexpected(Failure());
+    OpticalWorldBounds bounds;
+    bounds.minimum = f32x4(minimum);
+    bounds.maximum = f32x4(maximum);
+    return bounds;
 }
 
 
@@ -215,466 +172,91 @@ b8 ValidOpticalBoundsFinalizeDeclareInputs(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_HEADER_BYTES")]
+extern const u32 s_ShaderRtOpticalSceneHeaderBytes;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET")]
+extern const u32 s_ShaderRtOpticalSceneTransparentCountOffset;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET")]
+extern const u32 s_ShaderRtOpticalSceneFlagsOffset;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_BYTES")]
+extern const u32 s_ShaderRtOpticalInstanceBytes;
 
-#include <impl/ecs_render/optics/optical_scene.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_internal.adhd.h>
-#include <impl/ecs_render/optics/task_graph_optical_scene_upload.adhd.h>
-#include <impl/ecs_render/optics/optical_bounds_evaluator.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_identity_builder.adhd.h>
-#include <impl/ecs_render/components.adhd.h>
-#include <global/hash_utils.h>
-#include <impl/ecs_render/optics/coincident_volumes.adhd.h>
-#include <impl/ecs_render/material/material_system.adhd.h>
-#include <impl/ecs_csg/components.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_scene/components.adhd.h>
-#include <core/ecs/world.h>
-#include <impl/ecs_render/optics/optical_bounds_finalize.adhd.h>
-#include <impl/assets_graphics/transparent_subsystem.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
-#include <impl/assets_graphics/components.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
-#include <impl/ecs_render/optics/graph_types.adhd.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/shader_archive.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <core/alloc/scratch.h>
-#include <global/algorithm.h>
-#include <impl/ecs_render/optics/optical_scene_resources.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_binary_codec.adhd.h>
-#include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
-#include <impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>
-#include <impl/ecs_render/optics/types.adhd.h>
-#include <core/common/log.h>
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_PRIORITY_OFFSET")]
+extern const u32 s_ShaderRtOpticalInstancePriorityOffset;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET")]
+extern const u32 s_ShaderRtOpticalInstanceBoundaryOffset;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/raytrace/optical_scene_constants.h>"), cpp_name("NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET")]
+extern const u32 s_ShaderRtOpticalInstanceFlagsOffset;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_SIGN_BIT")]
+extern const u32 s_ShaderOpticalBoundsSignBit;
 
-NWB_IMPL_BEGIN
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK")]
+extern const u32 s_ShaderOpticalBoundsMagnitudeMask;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_FRACTION_MASK")]
+extern const u32 s_ShaderOpticalBoundsFractionMask;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_HIDDEN_BIT")]
+extern const u32 s_ShaderOpticalBoundsHiddenBit;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MANTISSA_BITS")]
+extern const i32 s_ShaderOpticalBoundsMantissaBits;
 
-static_assert(::NWB::Impl::s_OpticalBoundsSignBit == NWB_OPTICAL_BOUNDS_SIGN_BIT);
-static_assert(::NWB::Impl::s_OpticalBoundsMagnitudeMask == NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK);
-static_assert(::NWB::Impl::s_OpticalBoundsFractionMask == NWB_OPTICAL_BOUNDS_FRACTION_MASK);
-static_assert(::NWB::Impl::s_OpticalBoundsHiddenBit == NWB_OPTICAL_BOUNDS_HIDDEN_BIT);
-static_assert(::NWB::Impl::s_OpticalBoundsMantissaBits == NWB_OPTICAL_BOUNDS_MANTISSA_BITS);
-static_assert(::NWB::Impl::s_OpticalBoundsExponentBias == NWB_OPTICAL_BOUNDS_EXPONENT_BIAS);
-static_assert(::NWB::Impl::s_OpticalBoundsOneBits == NWB_OPTICAL_BOUNDS_ONE_BITS);
-static_assert(::NWB::Impl::s_OpticalBoundsMinInputExponent == NWB_OPTICAL_BOUNDS_MIN_INPUT_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsMaxInputExponent == NWB_OPTICAL_BOUNDS_MAX_INPUT_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsMaxMagnitudeExponent == NWB_OPTICAL_BOUNDS_MAX_MAGNITUDE_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsZeroExponent == NWB_OPTICAL_BOUNDS_ZERO_EXPONENT);
-static_assert(::NWB::Impl::s_OpticalBoundsFixedBits == NWB_OPTICAL_BOUNDS_FIXED_BITS);
-static_assert(::NWB::Impl::s_OpticalBoundsRelativeMarginShift == NWB_OPTICAL_BOUNDS_RELATIVE_MARGIN_SHIFT);
-static_assert(::NWB::Impl::s_OpticalBoundsMinMarginExponent == NWB_OPTICAL_BOUNDS_MIN_MARGIN_EXPONENT);
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_EXPONENT_BIAS")]
+extern const i32 s_ShaderOpticalBoundsExponentBias;
 
-static_assert(alignof(RayTracingOpticalRuntimeBounds) >= 16u);
-static_assert(offsetof(RayTracingOpticalRuntimeBounds, objectToWorld) % 16u == 0u);
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_ONE_BITS")]
+extern const u32 s_ShaderOpticalBoundsOneBits;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MIN_INPUT_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMinInputExponent;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAX_INPUT_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMaxInputExponent;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MAX_MAGNITUDE_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMaxMagnitudeExponent;
 
-Expected<OpticalWorldBounds> FOUNDATION_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax)noexcept{
-    OpticalWorldBounds bounds{};
-    if(!OpticalBoundsEvaluator{}.computeWorldBounds(objectToWorld, localMin, localMax, bounds.minimum, bounds.maximum))
-        return MakeUnexpected(Failure{});
-    return bounds;
-}
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_ZERO_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsZeroExponent;
 
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_FIXED_BITS")]
+extern const i32 s_ShaderOpticalBoundsFixedBits;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_RELATIVE_MARGIN_SHIFT")]
+extern const i32 s_ShaderOpticalBoundsRelativeMarginShift;
 
-
-void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMaterialSystem& materials)noexcept{
-    Core::Alloc::ScratchArena scratchArena;
-    auto rendererView = world.view<RendererComponent>();
-    const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
-    if(!meshSystemPtr || rendererView.candidateCount() < s_MinCoincidentCandidateCount){
-        reset();
-        return;
-    }
-
-    // Count opt-ins first; opaque-heavy worlds need no candidate allocation.
-    usize candidateCapacity = 0u;
-    for(auto&& [entity, renderer] : rendererView){
-        if(RendererComponentOpticalVolumeMergingEnabled(renderer))
-            ++candidateCapacity;
-    }
-    if(candidateCapacity < s_MinCoincidentCandidateCount){
-        reset();
-        return;
-    }
-    Vector<CoincidentOpticalVolumeCandidate, Core::Alloc::ScratchArena> candidates(scratchArena);
-    candidates.reserve(candidateCapacity);
-    for(auto&& [entity, renderer] : rendererView){
-        if(!RendererComponentOpticalVolumeMergingEnabled(renderer))
-            continue;
-        const auto materialResult = materials.findMaterialSurfaceInfo(renderer.material);
-        const b8 closed = OpticalBoundaryModeIsClosed(renderer.opticalBoundaryMode);
-        if(!materialResult)
-            continue;
-        const NotNull<MaterialSurfaceInfo*> material = *materialResult;
-        if(!MaterialParticipatesInOpticalVolumeSelection(material->transparent, material->refractive, closed))
-            continue;
-
-        const auto meshResult = meshSystemPtr->resolveRenderableMeshStatus(entity);
-        if(!meshResult || meshResult->runtime || !meshResult->mesh.valid())
-            continue;
-        const auto& mesh = *meshResult;
-        // Runtime providers and CSG can change boundaries; skip them here.
-        if(world.tryGetComponent<StaticCsgMeshComponent>(entity) || world.tryGetComponent<SkinnedCsgMeshComponent>(entity) || world.tryGetComponent<CsgReceiverComponent>(entity))
-            continue;
-
-        const auto* materialInstance = world.tryGetComponent<MaterialInstanceComponent>(entity);
-        const auto mutableBytes = materials.findPreparedMaterialInstanceMutableTypedBytes(entity, *material, materialInstance);
-        if(!mutableBytes)
-            continue;
-
-        CoincidentOpticalVolumeCandidate candidate = MakeCoincidentOpticalVolumeCandidate(entity, mesh.mesh, renderer, *mutableBytes);
-        if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
-            candidate.position = transformPtr->position;
-            candidate.rotation = transformPtr->rotation;
-            candidate.scale = transformPtr->scale;
-        }
-        candidates.push_back(candidate);
-    }
-    select(candidates);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RayTracingOpticalBoundsFinalizeResources::invalidate(){
-    m_snapshots.clear();
-    auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    const auto retire = [&](const Core::BufferHandle& buffer, const Core::GpuDescriptorHandle descriptor){
-        if(heap.isInitialized() && buffer && descriptor.valid() && buffer->getDeviceGeneration() == device.getDeviceGeneration())
-            heap.free(descriptor);
-    };
-    retire(m_inputBuffer, m_inputDescriptor);
-    retire(m_outputBuffer, m_outputDescriptor);
-    m_inputBuffer.reset();
-    m_outputBuffer.reset();
-    m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    m_outputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    m_pipeline.reset();
-    m_shader.reset();
-    m_bindingLayout.reset();
-}
-
-Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeResources::prepare(const RayTracingOpticalSceneGather& gather, const Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem){
-    if(
-        gather.runtimeBounds.empty() || !sourceDescriptor.valid()
-        || !OpticalRuntimeInputCountFits(gather.runtimeBounds.size(), sizeof(RayTracingOpticalRuntimeInputGpu))
-        || !OpticalSceneInstanceCountFits(gather.instances.size())
-        || !ensurePipeline(shaderSystem)
-    )
-        return MakeUnexpected(Failure{});
-    auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    const auto ensureBuffer = [&](Core::BufferHandle& buffer, Core::GpuDescriptorHandle& descriptor, const usize byteSize, const Name identity, const b8 output){
-        if(buffer && buffer->getDeviceGeneration() != device.getDeviceGeneration())
-            return false;
-        if(buffer && buffer->getCreationDescription().byteSize >= byteSize && descriptor.valid())
-            return true;
-        Core::BufferDesc desc;
-        desc.setByteSize(byteSize).setCanHaveRawViews(true).setCanHaveUAVs(output).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(identity).enableAutomaticStateTracking(Core::ResourceStates::Common);
-        auto replacementResult = m_graphics.createBuffer(desc);
-        if(!replacementResult)
-            return false;
-        Core::BufferHandle replacement = Move(*replacementResult);
-        const Core::DescriptorWriteItem write = output ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get()) : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get());
-        const Expected<Core::GpuDescriptorHandle> slotResult = RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, write);
-        if(!slotResult)
-            return false;
-        const Core::GpuDescriptorHandle slot = *slotResult;
-        if(descriptor.valid())
-            heap.free(descriptor);
-        buffer = Move(replacement);
-        descriptor = slot;
-        return true;
-    };
-    const usize inputBytes = ComputeOpticalRuntimeInputsByteSize(gather.runtimeBounds.size(), sizeof(RayTracingOpticalRuntimeInputGpu));
-    const usize outputBytes = ComputeOpticalResolvedSceneByteSize(NWB_RT_OPTICAL_SCENE_HEADER_BYTES, gather.instances.size(), NWB_RT_OPTICAL_INSTANCE_BYTES);
-    const b8 inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, inputBytes, Name(s_RenderNameRaytraceOpticalRuntimeInputs), false);
-    const b8 outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, outputBytes, Name(s_RenderNameRaytraceOpticalResolvedScene), true);
-    if(!outputReady){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Ray optical bounds: failed to create finalize buffers"));
-        return MakeUnexpected(Failure{});
-    }
-    RayTracingOpticalBoundsFinalizeHandle snapshot;
-    for(const RayTracingOpticalBoundsFinalizeHandle& cached : m_snapshots){
-        if(cached->getReferenceCount() == 1u){
-            AtomicThreadFence(MemoryOrder::acquire);
-            snapshot = cached;
-            break;
-        }
-    }
-    if(!snapshot){
-        snapshot = RayTracingOpticalBoundsFinalizeHandle(NewArenaObject<RayTracingOpticalBoundsFinalizeControl>(m_arena, m_arena, m_graphics), ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&m_arena), s_AdoptRef);
-        if(!snapshot)
-            return MakeUnexpected(Failure{});
-        m_snapshots.push_back(snapshot);
-    }
-    snapshot->inputs.clear();
-    snapshot->boundsBuffers.clear();
-    snapshot->inputBuffer = m_inputBuffer;
-    snapshot->outputBuffer = m_outputBuffer;
-    snapshot->pipeline = m_pipeline;
-    snapshot->inputDescriptor = m_inputDescriptor;
-    snapshot->outputDescriptor = m_outputDescriptor;
-    snapshot->sourceDescriptor = sourceDescriptor;
-    snapshot->queue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-    snapshot->instanceCount = static_cast<u32>(gather.instances.size());
-    snapshot->staticBoundsComplete = gather.boundsCompleteExceptRuntime;
-    snapshot->inputs.reserve(gather.runtimeBounds.size());
-    snapshot->boundsBuffers.reserve(gather.runtimeBounds.size());
-    u32 previousIndex = 0u;
-    for(const auto& bounds : gather.runtimeBounds){
-        const b8 hasBuffer = static_cast<b8>(bounds.buffer);
-        const u64 bufferDeviceGen = hasBuffer ? bounds.buffer->getDeviceGeneration() : 0u;
-        const u64 bufferByteSize = hasBuffer ? bounds.buffer->getCreationDescription().byteSize : 0u;
-        const u32 instanceFlags = bounds.instanceIndex < snapshot->instanceCount ? gather.instances[bounds.instanceIndex].flags : 0u;
-        if(!ValidateRayTracingOpticalRuntimeBoundsBinding(
-            hasBuffer,
-            bounds.descriptor.valid(),
-            bounds.instanceIndex,
-            snapshot->instanceCount,
-            bounds.descriptor.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer,
-            !snapshot->inputs.empty(),
-            previousIndex,
-            bufferDeviceGen,
-            device.getDeviceGeneration(),
-            bufferByteSize,
-            NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE,
-            instanceFlags
-        ))
-            return MakeUnexpected(Failure{});
-        previousIndex = bounds.instanceIndex;
-        snapshot->inputs.push_back(MakeRayTracingOpticalRuntimeInputGpu(LoadFloat(bounds.objectToWorld), bounds.descriptor.slot(), bounds.instanceIndex));
-        snapshot->boundsBuffers.push_back(bounds.buffer);
-    }
-    return snapshot;
-}
-
-b8 RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem& shaderSystem){
-    if(m_pipeline)
-        return true;
-    if(!EnsurePushConstantComputePipeline<TransparentSubsystem>(
-        m_graphics.getDevice(),
-        shaderSystem,
-        SubsystemAssetSelector<TransparentSubsystem, ComputeShader>([](const TransparentSubsystem& s){ return s.opticalBoundsFinalizeCs; }),
-        Core::ShaderArchive::s_DefaultVariant,
-        Name(s_RenderNameRayOpticalBoundsFinalize),
-        NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES,
-        false,
-        m_bindingLayout,
-        m_shader,
-        m_pipeline
-    )){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Ray optical bounds: failed to create finalize pipeline"));
-        return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(OpticalBoundsFinalizePushConstants) == NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES);
-
-struct OpticalBoundsFinalizeGraph::Task{
-    // Retained optical bounds are rewritten on the primary Graphics writer timeline.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
-
-
-public:
-    struct Payload{
-        Core::BufferHandle source;
-        RayTracingOpticalBoundsFinalizeHandle finalize;
-        Core::GpuUploadBlobId inputUpload;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        const auto inputs = context.declarations.uploadBlobData(payload.inputUpload);
-        if(!payload.finalize)
-            return false;
-        const auto& resources = *payload.finalize;
-        const usize expectedBytes = ComputeOpticalRuntimeInputsByteSize(resources.inputs.size(), sizeof(RayTracingOpticalRuntimeInputGpu));
-        if(!ValidOpticalBoundsFinalizeRecordState(
-            static_cast<b8>(payload.source),
-            true,
-            static_cast<b8>(inputs),
-            context.commandIrCapture,
-            context.queue == resources.queue,
-            static_cast<b8>(resources.pipeline),
-            static_cast<b8>(resources.inputBuffer),
-            static_cast<b8>(resources.outputBuffer),
-            inputs ? inputs->size() : 0u,
-            expectedBytes
-        ))
-            return false;
-        commandList.endRenderPass();
-        commandList.setBufferState(payload.source.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(resources.inputBuffer.get(), Core::ResourceStates::CopyDest);
-        commandList.setBufferState(resources.outputBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        for(const auto& bounds : resources.boundsBuffers)
-            commandList.setBufferState(bounds.get(), Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-        if(!commandList.tryWriteBuffer(*resources.inputBuffer, inputs->data(), inputs->size(), 0u))
-            return false;
-        commandList.setBufferState(resources.inputBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(resources.pipeline.get());
-        commandList.setComputeState(state);
-        resources.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.pipeline);
-        const OpticalBoundsFinalizePushConstants push = ResolveOpticalBoundsFinalizePushConstants(
-            resources.sourceDescriptor.slot(),
-            resources.inputDescriptor.slot(),
-            resources.outputDescriptor.slot(),
-            resources.instanceCount,
-            static_cast<u32>(resources.inputs.size()),
-            resources.staticBoundsComplete
-        );
-        commandList.setPushConstants(&push, sizeof(push));
-        {
-            Core::GpuTimingMeasure timing(resources.graphics.gpuTiming(), s_TimingScopeOpticalBoundsFinalize, resources.graphics.getDevice(), commandList);
-
-            commandList.dispatch(1u, 1u, 1u);
-        }
-        commandList.setBufferState(resources.inputBuffer.get(), Core::ResourceStates::Common);
-        commandList.setBufferState(resources.outputBuffer.get(), Core::ResourceStates::Common);
-        commandList.setBufferState(payload.source.get(), Core::ResourceStates::Common);
-        commandList.commitBarriers();
-        return true;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<RayTracingOpticalSceneGraphBuffer> OpticalBoundsFinalizeGraph::Declare(
-    const RayTracingOpticalSceneSnapshot& resources,
-    const Core::GpuGraphResourceId source,
-    const Core::GpuTaskId priorReadersDrained,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(!ValidOpticalBoundsFinalizeDeclareInputs(
-        static_cast<b8>(resources.finalize),
-        static_cast<b8>(resources.uploadBuffer),
-        source.valid(),
-        resources.finalize ? resources.finalize->inputs.size() : 0u,
-        resources.finalize ? resources.finalize->boundsBuffers.size() : 0u
-    ))
-        return MakeUnexpected(Failure{});
-    const auto& finalize = *resources.finalize;
-    const auto importCommon = [&](const Core::BufferHandle& buffer, const AStringView label) -> Expected<Core::GpuGraphResourceId>{
-        if(!buffer || !buffer->getCreationDescription().keepInitialState || buffer->getCreationDescription().initialState != Core::ResourceStates::Common)
-            return MakeUnexpected(Failure{});
-        return graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(buffer->getCreationDescription().debugName, label).setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
-    };
-    const auto inputsResult = importCommon(finalize.inputBuffer, "Ray Optical Runtime Inputs");
-    RayTracingOpticalSceneGraphBuffer result;
-    const auto resourceResult = importCommon(finalize.outputBuffer, "Ray Optical Resolved Scene");
-    if(!inputsResult || !resourceResult)
-        return MakeUnexpected(Failure{});
-    result.resource = *resourceResult;
-    const Core::GpuGraphResourceId inputs = *inputsResult;
-
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses(scratchArena);
-    uses.reserve(finalize.boundsBuffers.size() + s_OpticalBoundsUseCapacity);
-    uses.push_back(RendererTaskGraphDetail::ReadUse(source, Core::ResourceStates::ShaderResource));
-    uses.push_back(RendererTaskGraphDetail::ReadUse(source, Core::ResourceStates::Common));
-    uses.push_back(RendererTaskGraphDetail::WriteUse(inputs, Core::ResourceStates::CopyDest));
-    uses.push_back(RendererTaskGraphDetail::ReadUse(inputs, Core::ResourceStates::ShaderResource));
-    uses.push_back(RendererTaskGraphDetail::WriteUse(inputs, Core::ResourceStates::Common));
-    uses.push_back(RendererTaskGraphDetail::WriteUse(result.resource, Core::ResourceStates::UnorderedAccess));
-    uses.push_back(RendererTaskGraphDetail::WriteUse(result.resource, Core::ResourceStates::Common));
-    for(const auto& bounds : finalize.boundsBuffers){
-        Core::GpuGraphResourceId resource;
-        {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-            if(!declarations.valid())
-                return MakeUnexpected(Failure{});
-            resource = declarations.findImportedBuffer(bounds);
-        }
-        if(!resource.valid()){
-            const auto importedResource = graph.importBuffer(
-                bounds,
-                RendererTaskGraphDetail::BufferResourceDesc(bounds->getCreationDescription().debugName, "Ray Optical Runtime Bounds")
-                    .setInitialState(Core::ResourceStates::ShaderResource).setExternalFinalState(Core::ResourceStates::ShaderResource)
-            );
-            if(!importedResource)
-                return MakeUnexpected(Failure{});
-            resource = *importedResource;
-        }
-        if(!resource.valid())
-            return MakeUnexpected(Failure{});
-        const auto found = FindIf(uses.begin(), uses.end(), [&](const auto& use)noexcept{ return use.resource == resource; });
-        if(found == uses.end())
-            uses.push_back(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource));
-    }
-    const auto uploadResult = graph.copyUploadData(finalize.inputs.data(), finalize.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu), alignof(u32));
-    if(!uploadResult)
-        return MakeUnexpected(Failure{});
-    const Core::GpuUploadBlobId upload = *uploadResult;
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Tiny;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    scheduling.allowMergeAcrossConsumerFrontier = true;
-    Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name(s_RenderNameRenderRaytraceOpticalBoundsFinalize))
-        .setMarkerLabel("Ray Optical Bounds Finalize")
-        .setScheduling(scheduling)
-        .setDependencies({ priorReadersDrained.valid() ? &priorReadersDrained : nullptr, priorReadersDrained.valid() ? 1u : 0u })
-        .setResourceUses(uses)
-    ;
-    const auto uploadTaskResult = graph.addTask<Task>(desc, Task::Payload{ resources.uploadBuffer, resources.finalize, upload });
-    if(!uploadTaskResult)
-        return MakeUnexpected(uploadTaskResult.error());
-    result.uploadTask = *uploadTaskResult;
-    if(!result.valid())
-        return MakeUnexpected(Failure{});
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+[cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_MIN_MARGIN_EXPONENT")]
+extern const i32 s_ShaderOpticalBoundsMinMarginExponent;
+static_assert(size_of<RayTracingOpticalSceneHeaderGpu>() == s_ShaderRtOpticalSceneHeaderBytes);
+static_assert(offset_of<RayTracingOpticalSceneHeaderGpu>(transparentCount) == s_ShaderRtOpticalSceneTransparentCountOffset);
+static_assert(offset_of<RayTracingOpticalSceneHeaderGpu>(flags) == s_ShaderRtOpticalSceneFlagsOffset);
+static_assert(size_of<RayTracingOpticalInstanceGpu>() == s_ShaderRtOpticalInstanceBytes);
+static_assert(offset_of<RayTracingOpticalInstanceGpu>(mediumPriority) == s_ShaderRtOpticalInstancePriorityOffset);
+static_assert(offset_of<RayTracingOpticalInstanceGpu>(boundaryMode) == s_ShaderRtOpticalInstanceBoundaryOffset);
+static_assert(offset_of<RayTracingOpticalInstanceGpu>(flags) == s_ShaderRtOpticalInstanceFlagsOffset);
+static_assert(s_OpticalBoundsSignBit == s_ShaderOpticalBoundsSignBit);
+static_assert(s_OpticalBoundsMagnitudeMask == s_ShaderOpticalBoundsMagnitudeMask);
+static_assert(s_OpticalBoundsFractionMask == s_ShaderOpticalBoundsFractionMask);
+static_assert(s_OpticalBoundsHiddenBit == s_ShaderOpticalBoundsHiddenBit);
+static_assert(s_OpticalBoundsMantissaBits == s_ShaderOpticalBoundsMantissaBits);
+static_assert(s_OpticalBoundsExponentBias == s_ShaderOpticalBoundsExponentBias);
+static_assert(s_OpticalBoundsOneBits == s_ShaderOpticalBoundsOneBits);
+static_assert(s_OpticalBoundsMinInputExponent == s_ShaderOpticalBoundsMinInputExponent);
+static_assert(s_OpticalBoundsMaxInputExponent == s_ShaderOpticalBoundsMaxInputExponent);
+static_assert(s_OpticalBoundsMaxMagnitudeExponent == s_ShaderOpticalBoundsMaxMagnitudeExponent);
+static_assert(s_OpticalBoundsZeroExponent == s_ShaderOpticalBoundsZeroExponent);
+static_assert(s_OpticalBoundsFixedBits == s_ShaderOpticalBoundsFixedBits);
+static_assert(s_OpticalBoundsRelativeMarginShift == s_ShaderOpticalBoundsRelativeMarginShift);
+static_assert(s_OpticalBoundsMinMarginExponent == s_ShaderOpticalBoundsMinMarginExponent);
+static_assert(align_of<RayTracingOpticalRuntimeBounds>() >= 16u);
+static_assert(offset_of<RayTracingOpticalRuntimeBounds>(objectToWorld) % 16u == 0u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

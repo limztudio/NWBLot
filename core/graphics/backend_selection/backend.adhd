@@ -147,6 +147,7 @@ extern class Device{
     Expected<BindingLayoutHandle> createBindingLayout(...);
     Expected<BindingLayoutHandle> createBindlessLayout(...);
     Expected<RayTracingOpacityMicromapHandle> createOpacityMicromap(...);
+    RayTracingAccelStructDesc makeAccelStructDesc()const;
     Expected<RayTracingAccelStructHandle> createAccelStruct(...);
     Expected<MemoryRequirements> getAccelStructMemoryRequirements(...);
     Expected<RayTracingClusterOperationSizeInfo> getClusterOperationSizeInfo(...);

@@ -2,89 +2,39 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/execute/frame_execute_timing_state.adhd>
+#include <impl/ecs_render/execute/types.adhd>
+#include <impl/ecs_render/avboit/task_graph_stage.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/task_graph_stage.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
+class DeferredFrameTopologyResult{
+    public Array<GpuTaskId, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTasks;
+    public usize graphicsPrefixUniquePacketCount = 0u;
+    public RendererAvboitTaskGraphValidation avboitValidation;
+    public GpuTaskId terminalPresentationTask;
+    public Optional<GpuPhysicalQueueInfo> surfelGiCounterReadbackQueue;
+    public Optional<GpuPhysicalQueueInfo> laggedLightingHistoryQueue;
+}
 
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/task_graph.h>
+[modular]
+class DeferredFrameTopologyValidator : NoCopy{
+    private in RendererFramePipeline m_pipeline;
 
+    public DeferredFrameTopologyValidator(in RendererFramePipeline pipeline){
+        this.m_pipeline = pipeline;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-struct FrameExecuteTimingState;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct DeferredFrameTopologyResult{
-    Array<Core::GpuTaskId, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTasks;
-    usize graphicsPrefixUniquePacketCount = 0u;
-    RendererAvboitTaskGraphValidation avboitValidation;
-    Core::GpuTaskId terminalPresentationTask;
-    const Core::GpuPhysicalQueueInfo* surfelGiCounterReadbackQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* laggedLightingHistoryQueue = nullptr;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredFrameTopologyValidator final : NoCopy{
-public:
-    explicit DeferredFrameTopologyValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    [[nodiscard]] b8 validate(
-        const Core::GpuCompiledGraph::ReadView& deferredCompiledPlan,
-        const Core::GpuTaskGraph::DeclarationReadView& deferredTaskGraphView,
-        FrameExecuteTimingState& timing,
-        Core::GpuPhysicalQueueId primaryGraphicsQueue,
-        b8 deferredGraphScheduled,
-        b8 captureLaggedLightingHistory,
-        b8 hardwareShadowSupported,
-        b8 hasOpaqueCsgFrameWork,
-        b8 hasTransparentRenderers,
-        b8 clearAvboitTargets,
-        b8 laggedAsyncLightingSchedule,
-        b8 laggedLightingHistoryWriterWaitPending,
-        b8 surfelCounterReadbackCompletionValid,
-        DeferredFrameTopologyResult& outResult
-    )const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 validate(
+        in GpuCompiledGraphReadView deferredCompiledPlan, in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
+        mut FrameExecuteTimingState timing, in GpuPhysicalQueueId primaryGraphicsQueue,
+        in b8 deferredGraphScheduled, in b8 captureLaggedLightingHistory, in b8 hardwareShadowSupported,
+        in b8 hasOpaqueCsgFrameWork, in b8 hasTransparentRenderers, in b8 clearAvboitTargets,
+        in b8 laggedAsyncLightingSchedule, in b8 laggedLightingHistoryWriterWaitPending,
+        in b8 surfelCounterReadbackCompletionValid, mut DeferredFrameTopologyResult outResult
+    )const;
 }
 
 

@@ -108,7 +108,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 stmt.arenaFirstInit = (!m_checker.m_symbols.hasTypeSymbol(baseVarTypeName) && IsArenaFirstCtorType(baseVarTypeName)) || isNonRootClass;
                 if(ownerClass && !ownerClass->assetTypeName.empty())
                     ownerClass->needsClassArena = true;
-                else
+                else if(!stmt.expr)
                     m_checker.markScratchArenaUsed(method);
             }
         }
@@ -126,6 +126,10 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         const b8 isMutRefBinding = (varRefMode == ParamPassingMode::Mut);
         if(!m_checker.checkExpr(ownerClass, scope, isMutRefBinding, method, *stmt.expr, errors))
             ok = false;
+        if(stmt.expr->returnsFromThisArena)
+            stmt.usesScratchArena = false;
+        else if(stmt.usesScratchArena && (!ownerClass || ownerClass->assetTypeName.empty()))
+            m_checker.markScratchArenaUsed(method);
         if(varRefMode == ParamPassingMode::In){
             if(m_checker.isRvalueTemporaryExpr(ownerClass, &method, *stmt.expr, scope)){
                 m_checker.reportError(errors, stmt.span, "cannot bind 'in' reference variable to a literal or rvalue temporary");
@@ -188,7 +192,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         else if(exprTypeRef){
             stmt.inferredAutoType = const_cast<TypeRef*>(exprTypeRef);
             info.type = stmt.inferredAutoType;
-            if(TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*stmt.inferredAutoType)){
+            if(!stmt.expr->returnsFromThisArena && TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*stmt.inferredAutoType)){
                 stmt.usesScratchArena = true;
                 m_checker.markScratchArenaUsed(method);
             }
@@ -215,6 +219,15 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         }
     }
     const MStringView effectiveVarBase = m_checker.resolveScopedVarBaseType(info);
+    const b8 isView = IsBorrowViewType(effectiveVarBase);
+    const b8 holdsReference = m_checker.wrappedReferenceType(info.type) || varRefMode != ParamPassingMode::None || isView;
+    if(holdsReference){
+        const Expr* init = stmt.expr ? stmt.expr : (stmt.isCtorInit && stmt.arguments.size() == 1u ? stmt.arguments[0] : nullptr);
+        if(init){
+            if(const auto* owner = BorrowLifetimeAnalyzer(m_checker).localReferenceOwner(ownerClass, method, *init, scope, varRefMode != ParamPassingMode::None || (stmt.isCtorInit && isView)))
+                info.referenceOwnerName = owner->name;
+        }
+    }
     const Expr* stringViewInitExpr = stmt.expr
         ? stmt.expr
         : (stmt.isCtorInit && !stmt.arguments.empty() ? stmt.arguments[0] : nullptr);

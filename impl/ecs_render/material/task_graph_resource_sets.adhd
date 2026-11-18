@@ -2,84 +2,230 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
+#include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/material/sampled_texture_collection.adhd>
+#include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <impl/ecs_render/material/material_system.adhd.h>
-#include <impl/ecs_render/material/pipeline_types.adhd.h>
-#include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd.h>
+const StringView s_PreparedMaterialSampledTextureLabel = "Prepared Material Sampled Texture";
+const StringView s_PreparedMaterialGeometryLabel = "Prepared Material Geometry";
+
+
+Expected<usize> AccumulateMaterialGeometrySourceDrawCount(
+    in usize currentCount,
+    in usize meshDrawCount,
+    in usize computeDrawCount,
+    in usize maxDrawItemCount
+){
+    Expected<usize> afterMesh = TryAccumulateMaterialDrawCount(currentCount, meshDrawCount, maxDrawItemCount);
+    if(!afterMesh.has_value())
+        return MakeUnexpected(Failure());
+    return TryAccumulateMaterialDrawCount(afterMesh.value(), computeDrawCount, maxDrawItemCount);
+}
+
+class MaterialGeometrySourceKey{
+    public in MaterialPassMeshResourceSnapshot mesh;
+
+    public MaterialGeometrySourceKey(in MaterialPassMeshResourceSnapshot mesh){
+        this.mesh = mesh;
+    }
+
+    public usize hash()const{
+        usize seed = 0u;
+        ForEachMaterialPassMeshSourceBuffer(this.mesh, lambda[mut seed](in BufferHandle buffer) -> void{
+            seed = HashCombineValue(seed, buffer);
+        });
+        return seed;
+    }
+
+    public b8 operator==(in MaterialGeometrySourceKey other)const{
+        return SameAddress(this.mesh, other.mesh) || this.mesh.sourceBuffers.sameBuffers(other.mesh.sourceBuffers);
+    }
+}
+
+class MaterialGeometryBufferKey{
+    public in BufferHandle buffer;
+
+    public MaterialGeometryBufferKey(in BufferHandle buffer){
+        this.buffer = buffer;
+    }
+
+    public usize hash()const{
+        return HashValue(this.buffer);
+    }
+
+    public b8 operator==(in MaterialGeometryBufferKey other)const{
+        return this.buffer == other.buffer;
+    }
+}
+
+[cpp_unwind]
+b8 AppendMaterialGeometrySources(
+    in Span<MaterialPassDrawItem> items,
+    in b8 deduplicate,
+    mut HashSet<MaterialGeometrySourceKey> seen,
+    mut Vector<MaterialGeometrySourceKey> sources
+){
+    for(in MaterialPassDrawItem item : items){
+        if(!item.meshResources.valid())
+            return false;
+        const MaterialGeometrySourceKey key(item.meshResources);
+        if(!deduplicate || seen.insert(key).second)
+            sources.push_back(key);
+    }
+    return true;
+}
+
+[cpp_unwind]
+Expected<Vector<GpuTaskResourceUse>> GatherPreparedMaterialGeometryUses(in Span<MaterialPassDrawItemsView> drawItemSets, mut GpuTaskGraph graph){
+    Vector<GpuTaskResourceUse> uses;
+    // Indexed draws consume their generated cache. Only mesh and compute draws read the source streams.
+    const usize maxDrawCount = usize.max / cast<usize>(s_MeshInstanceGeometrySlotCount);
+    usize drawCount = 0u;
+    for(in MaterialPassDrawItemsView draws : drawItemSets){
+        const Expected<usize> count = AccumulateMaterialGeometrySourceDrawCount(drawCount, draws.meshDrawItems.size(), draws.computeDrawItems.size(), maxDrawCount);
+        if(!count.has_value())
+            return MakeUnexpected(Failure());
+        drawCount = count.value();
+    }
+    if(drawCount == 0u)
+        return uses;
+
+    Vector<MaterialGeometrySourceKey> sources;
+    sources.reserve(drawCount);
+    {
+        HashSet<MaterialGeometrySourceKey> seen;
+        if(drawCount > 1u)
+            seen.reserve(drawCount);
+        for(in MaterialPassDrawItemsView draws : drawItemSets){
+            if(!AppendMaterialGeometrySources(draws.meshDrawItems, drawCount > 1u, seen, sources)
+                || !AppendMaterialGeometrySources(draws.computeDrawItems, drawCount > 1u, seen, sources))
+                return MakeUnexpected(Failure());
+        }
+    }
+
+    const usize capacity = sources.size() * cast<usize>(s_MeshInstanceGeometrySlotCount);
+    Vector<MaterialGeometryBufferKey> buffers;
+    buffers.reserve(capacity);
+    {
+        HashSet<MaterialGeometryBufferKey> seen;
+        seen.reserve(capacity);
+        for(in MaterialGeometrySourceKey source : sources){
+            ForEachMaterialPassMeshSourceBuffer(source.mesh, lambda[mut seen, mut buffers](in BufferHandle buffer) -> void{
+                const MaterialGeometryBufferKey key(buffer);
+                if(seen.insert(key).second)
+                    buffers.push_back(key);
+            });
+        }
+    }
+    uses.reserve(capacity);
+    uses.resize(buffers.size());
+    {
+        const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
+        if(!declarations.valid())
+            return MakeUnexpected(Failure());
+        for(usize i = 0u; i < buffers.size(); ++i)
+            uses[i].resource = declarations.findImportedBuffer(buffers[i].buffer);
+    }
+    for(usize i = 0u; i < buffers.size(); ++i){
+        GpuGraphResourceId resource = uses[i].resource;
+        if(!resource.valid()){
+            in BufferHandle buffer = buffers[i].buffer;
+            const Name identity = buffer.deref().getCreationDescription().debugName;
+            if(identity == s_NameNone)
+                return MakeUnexpected(Failure());
+            const Expected<GpuGraphResourceId> imported = graph.importBuffer(buffer, BufferResourceDesc(identity, s_PreparedMaterialGeometryLabel));
+            if(!imported.has_value())
+                return MakeUnexpected(Failure());
+            resource = imported.value();
+        }
+        if(!resource.valid())
+            return MakeUnexpected(Failure());
+        uses[i] = ReadUse(resource, ResourceStates::ShaderResource);
+    }
+    return uses;
+}
+
+[cpp_unwind]
+Expected<GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
+    in Span<MaterialPassDrawItemsView> drawItemSets, in Name identity, in StringView label, mut GpuTaskGraph graph
+){
+    const Expected<Vector<GpuTaskResourceUse>> uses = GatherPreparedMaterialGeometryUses(drawItemSets, graph);
+    if(!uses.has_value())
+        return MakeUnexpected(Failure());
+    Vector<GpuGraphResourceId> members;
+    members.reserve(uses.value().size());
+    for(in GpuTaskResourceUse use : uses.value())
+        members.push_back(use.resource);
+    GpuGraphResourceSetDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setMembers(members);
+    return graph.importResourceSet(desc);
+}
+
+[cpp_unwind]
+Expected<GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(mut GpuTaskGraph graph, in RegularSharedComputeEmulationGraphPlan plan, in StringView label){
+    if(!plan.captured || !plan.outputBuffer.valid())
+        return MakeUnexpected(Failure());
+    return FindOrImportBuffer(graph, plan.outputBuffer, label);
+}
+
+// A failure preserves earlier imports. The returned members follow the input order.
+[cpp_unwind]
+Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterialSampledTextureResources(
+    in Span<TextureHandle> textures, in StringView markerLabel, mut GpuTaskGraph graph
+){
+    Vector<GpuGraphResourceId> resources;
+    resources.reserve(textures.size());
+    for(in TextureHandle texture : textures){
+        GpuGraphResourceId resource;
+        {
+            const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
+            if(!declarations.valid())
+                return MakeUnexpected(SampledTextureImportFailure::GraphUnavailable);
+            resource = declarations.findImportedTexture(texture);
+        }
+        if(!resource.valid()){
+            if(!texture.valid())
+                return MakeUnexpected(SampledTextureImportFailure::MissingIdentity);
+            const Name identity = texture.deref().getCreationDescription().name;
+            if(identity == s_NameNone)
+                return MakeUnexpected(SampledTextureImportFailure::MissingIdentity);
+            const Expected<GpuGraphResourceId> imported = graph.importTexture(texture, TextureResourceDesc(identity, markerLabel));
+            if(!imported.has_value())
+                return MakeUnexpected(SampledTextureImportFailure::ImportFailed);
+            resource = imported.value();
+        }
+        resources.push_back(resource);
+    }
+    return resources;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The result preserves texture order; imports already published to the graph remain on failure.
-[[nodiscard]] Expected<Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>, SampledTextureImportFailure::Enum> ImportMaterialSampledTextureResources(
-    Span<const Core::TextureHandle> textures,
-    AStringView markerLabel,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPreparedMaterialGeometryUses(Span<const MaterialPassDrawItemsView> drawItemSets, Core::GpuTaskGraph& graph, Core::Alloc::ScratchArena& scratchArena);
-
-// Material geometry enumerates from the frozen snapshot; give the graph one immutable collection.
-[[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
-    Span<const MaterialPassDrawItemsView> drawItemSets,
-    const Name& identity,
-    AStringView label,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
-);
-
-[[nodiscard]] Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(Core::GpuTaskGraph& graph, const RegularSharedComputeEmulationGraphPlan& plan, AStringView label);
-
-[[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
-    const RendererMaterialSystem& materialSystem,
-    Span<const MaterialPassDrawItemsView> drawItemSets,
-    const Name& identity,
-    AStringView label,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+Expected<GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
+    in RendererMaterialSystem materialSystem, in Span<MaterialPassDrawItemsView> drawItemSets,
+    in Name identity, in StringView label, mut GpuTaskGraph graph
+){
+    const Expected<Vector<TextureHandle>> textures = GatherPreparedMaterialPassSampledTextures(
+        materialSystem.materialState().m_surfaceInfos, materialSystem.materialState().m_resourceState, drawItemSets
+    );
+    if(!textures.has_value())
+        return MakeUnexpected(Failure());
+    const auto members = ImportMaterialSampledTextureResources(textures.value(), s_PreparedMaterialSampledTextureLabel, graph);
+    if(!members.has_value())
+        return MakeUnexpected(Failure());
+    if(members.value().empty())
+        return GpuGraphResourceSetId();
+    GpuGraphResourceSetDesc desc;
+    desc.setIdentity(identity).setMarkerLabel(label).setMembers(members.value());
+    return graph.importResourceSet(desc);
 }
 
 

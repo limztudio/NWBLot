@@ -3,89 +3,26 @@
 
 
 #include <impl/assets_scene/asset.adhd>
+#include <impl/ecs_skeleton/components.adhd>
 #include <impl/ecs_mesh/runtime/mesh.adhd>
 #include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
 #include <impl/ecs_mesh/skinning/local_bounds.adhd>
 #include <impl/ecs_mesh/skinning/timing_names.adhd>
+#include <impl/ecs_mesh/skinning/runtime_cache.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type MeshSkinningShaderPathResolveCallback = ShaderArchivePathResolver;
+type MeshSkinningRuntimeResourceMap = HashMap<u64, MeshSkinningRuntimeResources>;
+type MeshSkinningBufferVector = Vector<BufferHandle>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/runtime_cache.adhd.h>
-
-#include <impl/assets_scene/asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/ecs/system.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/render_pass.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/task/gpu/compiler.h>
-#include <core/task/gpu/packet_runtime.h>
-#include <core/task/gpu/persistent_state.h>
-#include <core/task/gpu/types.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct GpuTaskRecordContext;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MeshSkinningShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
-using MeshSkinningRuntimeResourceMap = HashMap<u64, MeshSkinningRuntimeResources, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
-using MeshSkinningGraphDispatchPlanVector = Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>;
-using MeshSkinningLocalBoundsDispatchVector = Vector<MeshSkinningLocalBoundsDispatch, Core::Alloc::GlobalArena>;
-using MeshSkinningBufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
-using GpuCompiledGraphReadView = Core::GpuCompiledGraph::ReadView;
-using CommandList = Core::CommandList;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[arena, system("mesh_skinning")]
+[arena, modular, system("mesh_skinning")]
 class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     // Compiler artifacts. Declared once, reset per submit; render() only redeclares into reused storage.
     private GpuTaskGraph m_frameTaskGraph;
@@ -114,12 +51,12 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     private MeshSkinningShaderPathResolveCallback m_shaderPathResolver;
     public MeshSkinningRuntimeCache m_runtimeMeshCache;
     private ActiveSceneSubsystems m_defaultSceneSubsystems;
-    private ActiveSceneSubsystemsConstPtr m_activeSceneSubsystems;
+    private ActiveSceneSubsystemsRef m_activeSceneSubsystems;
     public MeshSkinningRuntimeResourceMap m_runtimeResources;
     // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.
-    private MeshSkinningGraphDispatchPlanVector m_frameDispatchPlans;
-    private MeshSkinningGraphDispatchPlanVector m_frameDeformationPlans;
-    private MeshSkinningLocalBoundsDispatchVector m_frameLocalBoundsDispatches;
+    private Vector<MeshSkinningGraphDispatchPlan> m_frameDispatchPlans;
+    private Vector<MeshSkinningGraphDispatchPlan> m_frameDeformationPlans;
+    private Vector<MeshSkinningLocalBoundsDispatch> m_frameLocalBoundsDispatches;
     private MeshSkinningBufferVector m_frameLiveBuffers;
     private b8 m_runtimeSetupReady = false;
 
@@ -129,8 +66,33 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         mut AssetManager assetManager,
         mut IRuntimeMeshRegistry runtimeMeshRegistry,
         in MeshSkinningShaderPathResolveCallback shaderPathResolver
-    );
-    public ~MeshSkinningSystem();
+    ){
+        this.m_world = world;
+        this.m_graphics = graphics;
+        this.m_assetManager = assetManager;
+        this.m_runtimeMeshRegistry = runtimeMeshRegistry;
+        this.m_shaderPathResolver = shaderPathResolver;
+        this.m_runtimeMeshCache = MeshSkinningRuntimeCache(graphics, assetManager);
+        this.m_frameTaskGraph = world.makeSystemResource<GpuTaskGraph>();
+        this.m_frameCompiledGraph = world.makeSystemResource<GpuCompiledGraph>();
+        this.m_frameTaskGraphAnalysis = world.makeSystemResource<GpuTaskGraphAnalysis>();
+        this.m_frameSubmissionTransaction = world.makeSystemResource<GpuGraphSubmissionTransaction>();
+        this.m_acceptedSkinningState = world.makeSystemResource<GpuPersistentResourceStateCache>();
+        this.m_frameTaskGraphQueueAssignments = world.makeSystemResource<GpuTaskGraphQueueAssignments>();
+        this.m_frameRecordedGraph = world.makeSystemResource<GpuRecordedGraph>();
+        this.writeAccess<SkinnedMeshBindingComponent>();
+        this.readAccess<SkeletonJointPaletteComponent>();
+        this.readAccess<SkeletonPoseComponent>();
+        runtimeMeshRegistry.registerRuntimeMeshProvider(this);
+    }
+    public ~MeshSkinningSystem(){
+        {
+            const GpuCompiledGraphReadView planAccess(this.m_frameCompiledGraph);
+            this.resolveFrameTaskGraphAttempt(planAccess);
+        }
+        this.m_frameTaskGraph.reset();
+        this.m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(this);
+    }
 
     public void prepare(mut World world)override;
     public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
@@ -177,7 +139,9 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     }
     public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests)override;
 
-    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsConstPtr subsystems);
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
+        this.m_activeSceneSubsystems = subsystems;
+    }
     public b8 isSkinningFeatureEnabled()const;
 
     private b8 ensureActiveSceneSubsystems();
@@ -216,7 +180,7 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     public b8 recordGraphOwnedSkinningDeformation(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
     public b8 recordGraphOwnedSkinningPostDispatch(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
     public void confirmGraphOwnedSkinningDispatch(in MeshSkinningGraphDispatchPlan plan);
-    private void collectLiveSkinningStateBuffers(mut MeshSkinningBufferVector outBuffers)const;
+    private void collectLiveSkinningStateBuffers();
     private b8 replaceAcceptedSkinningState(in CommandListResourceStateHandoff state);
     private Expected<b8> ensureRuntimeResources(mut MeshSkinningRuntimeInstance instance);
     private b8 createRuntimeResourceBindlessHeapHandles(mut MeshSkinningRuntimeInstance instance, mut MeshSkinningRuntimeResources resources);

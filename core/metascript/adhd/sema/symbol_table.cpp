@@ -143,6 +143,16 @@ const FieldDecl* SymbolTable::FindClassField(const ClassDecl& classDecl, const M
     return nullptr;
 }
 
+b8 SymbolTable::canAccessPrivateMembers(const ClassDecl& target, const ClassDecl* const caller)const noexcept{
+    if(caller == &target)
+        return true;
+    if(!caller || target.friendClasses.empty() || !caller->templateParams.empty())
+        return false;
+    const MStringView targetNamespace = target.isImported ? target.cppNamespace : m_unit.cppNamespace;
+    const MStringView callerNamespace = caller->isImported ? caller->cppNamespace : m_unit.cppNamespace;
+    return targetNamespace == callerNamespace && ContainsStringView(target.friendClasses, caller->name);
+}
+
 b8 SymbolTable::HasCustomAssignOperator(const ClassDecl& classDecl)noexcept{
     for(const MethodDecl* m : classDecl.methods){
         if(m && m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal)
@@ -544,6 +554,10 @@ MStringView SymbolTable::resolveRoleScopeMemberType(const MStringView scopeName,
     if(const ClassDecl* scopedCls = findClass(baseName)){
         if(!scopedCls->assetTypeName.empty()){
             if(const MStringView t = resolveForRole(ClassRoleKind::Asset); !t.empty())
+                return t;
+        }
+        if(!scopedCls->subsystemTypeName.empty()){
+            if(const MStringView t = resolveForRole(ClassRoleKind::Subsystem); !t.empty())
                 return t;
         }
         if(!scopedCls->systemTypeName.empty()){

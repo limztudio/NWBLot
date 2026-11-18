@@ -37,8 +37,9 @@ private:
     void emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const;
     void emitGlobalConstDecl(MString& out, const Stmt& decl)const;
     void emitClassDecl(MString& out, const ClassDecl& decl)const;
-    void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
+    void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst, MStringView localNamespace)const;
     void emitClassMethodsCpp(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> orderedFields, b8 forceInlineBody, b8 classNeedsArena)const;
+    void emitClassCppTypeAliases(MString& out, const ClassDecl& decl)const;
     void emitClassFieldsCpp(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> orderedFields)const;
 
 

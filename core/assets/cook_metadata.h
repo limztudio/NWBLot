@@ -123,38 +123,6 @@ template<typename PathArenaT, typename MetadataValue>
     return true;
 }
 
-template<typename EntryT, typename RootArenaT, typename FileArenaT, typename ParseValueFn>
-[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
-    const ::Path<RootArenaT>& assetRoot,
-    const AStringView virtualRoot,
-    const ::Path<FileArenaT>& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    const AStringView diagnosticPrefix,
-    ParseValueFn&& parseValue,
-    Alloc::ScratchArena& scratchArena
-){
-    auto virtualPathResult = BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    const auto asset = FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, diagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return parseValue(*virtualPathResult, **asset);
-}
-
-template<typename EntryT, typename RootArenaT, typename FileArenaT, typename ParseValueFn>
-[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
-    const ::Path<RootArenaT>& assetRoot,
-    const AStringView virtualRoot,
-    const ::Path<FileArenaT>& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    const AStringView diagnosticPrefix,
-    ParseValueFn&& parseValue
-){
-    Alloc::ScratchArena scratchArena;
-    return ParseCookMetadataDocument<EntryT>(assetRoot, virtualRoot, nwbFilePath, doc, diagnosticPrefix, Forward<ParseValueFn>(parseValue), scratchArena);
-}
-
 template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
 [[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
     const Path& assetRoot,
@@ -168,6 +136,29 @@ template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
     return ParseCookMetadataDocument<EntryT>(assetRoot, virtualRoot, nwbFilePath, doc, diagnosticPrefix, [&](const Name virtualPath, const Core::Metascript::Value& asset){
         return ParseValFn(virtualPath, nwbFilePath, asset, arena, scratchArena);
     }, scratchArena);
+}
+
+template<typename EntryT, typename Reader>
+[[nodiscard]] inline Expected<EntryT> ReadCookDependencyWith(const CookDependencyItemContext& context, const AStringView prefix, Reader&& reader){
+    const auto read = [&](const Name path, const Core::Metascript::Value& value){
+        if constexpr(requires{ reader(context.arena, path, context.nwbFilePath, value); })
+            return reader(context.arena, path, context.nwbFilePath, value);
+        else
+            return reader(path, context.nwbFilePath, value);
+    };
+    if(context.document)
+        return ParseCookMetadataDocument<EntryT>(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, prefix, read, context.scratchArena);
+    return read(context.virtualPath, context.asset);
+}
+
+template<typename EntryT>
+[[nodiscard]] inline Expected<EntryT> ReadCookDependencyEntry(const CookDependencyItemContext& context, const AStringView prefix, Expected<EntryT>(*reader)(Name, const Path&, const Core::Metascript::Value&)){
+    return ReadCookDependencyWith<EntryT>(context, prefix, reader);
+}
+
+template<typename EntryT>
+[[nodiscard]] inline Expected<EntryT> ReadCookDependencyEntry(const CookDependencyItemContext& context, const AStringView prefix, Expected<EntryT>(*reader)(::ArenaBase&, Name, const Path&, const Core::Metascript::Value&)){
+    return ReadCookDependencyWith<EntryT>(context, prefix, reader);
 }
 
 template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
@@ -325,6 +316,15 @@ public:
     explicit CompositeRootAssetTypeAutoRegistrar(const Name& assetType);
 };
 
+template<typename Asset>
+class CompositeRootRegistration final{
+public:
+    CompositeRootRegistration() : m_registration(Asset::AssetTypeName()){}
+
+private:
+    CompositeRootAssetTypeAutoRegistrar m_registration;
+};
+
 struct AssetPairedSidecarRule{
     AStringView sidecarExtension;
 };
@@ -332,6 +332,14 @@ struct AssetPairedSidecarRule{
 class NonStandaloneAssetTypeAutoRegistrar final{
 public:
     explicit NonStandaloneAssetTypeAutoRegistrar(const Name& assetType, AStringView tokenText = {});
+};
+
+template<typename Asset>
+class NonStandaloneAssetRegistration final{
+public:
+    NonStandaloneAssetRegistration() : m_registration(Asset::AssetTypeName(), Asset::s_AssetTypeText){}
+private:
+    NonStandaloneAssetTypeAutoRegistrar m_registration;
 };
 
 class NonStandaloneFirstTokenSuffixAutoRegistrar final{
@@ -360,6 +368,34 @@ void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
 [[nodiscard]] b8 ParseAssetMetadata(Span<const DiscoveredNwbFile> nwbFiles, const Path& repoRoot, const Path& assetCacheDirectory, CookArena& cookArena, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
+
+template<typename Entry, typename Asset, typename Codec, const AStringView& DiagnosticPrefix, typename Read, typename Build>
+[[nodiscard]] inline b8 RegisterAuthoredCookEntry(CookEntryRegistry& registry, const TStringView label, const b8 acceptsValue, const b8 logsFailure, Read, Build){
+    using Bucket = CookEntryBucket<Entry, Asset, Codec>;
+    typename Bucket::DocumentParseFunction readDocument;
+    typename Bucket::ValueParseFunction readValue = nullptr;
+    if constexpr(requires(Read read, CookEntryParseContext& context, const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& document){ read(context, root, virtualRoot, path, document); }){
+        readDocument = [](const Path& root, const AStringView virtualRoot, const Path& path, const Core::Metascript::Document& document, CookEntryParseContext& context){
+            return Read{}(context, root, virtualRoot, path, document);
+        };
+    }
+    else{
+        readDocument = [](const Path& root, const AStringView virtualRoot, const Path& path, const Core::Metascript::Document& document, CookEntryParseContext& context){
+            return ParseCookMetadataDocument<Entry>(root, virtualRoot, path, document, DiagnosticPrefix, [&](const Name virtualPath, const Core::Metascript::Value& value){
+                return Read{}(context, virtualPath, path, value);
+            }, context.scratchArena);
+        };
+        if(acceptsValue){
+            readValue = [](const Name virtualPath, const Path& path, const Core::Metascript::Value& value, CookEntryParseContext& context){
+                return Read{}(context, virtualPath, path, value);
+            };
+        }
+    }
+    const typename Bucket::BuildAssetFunction build = [](Entry& entry, AssetArena& arena, ScratchArena&){
+        return Build{}(arena, entry);
+    };
+    return RegisterDocumentValueCookEntry<Entry, Asset, Codec>(label, readDocument, readValue, build, logsFailure, registry);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

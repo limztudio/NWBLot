@@ -166,6 +166,10 @@ const GpuPhysicalQueueInfo* GpuCompiledGraph::ReadView::queueInfoForTask(const G
     return m_graph ? m_graph->queueInfoForTask(task) : nullptr;
 }
 
+Optional<GpuPhysicalQueueInfo> GpuCompiledGraph::ReadView::findQueueInfo(const GpuPhysicalQueueId& queue)const noexcept{
+    const GpuPhysicalQueueInfo* const info = queueInfo(queue);
+    return info ? Optional<GpuPhysicalQueueInfo>(*info) : Optional<GpuPhysicalQueueInfo>();
+}
 Optional<GpuPhysicalQueueInfo> GpuCompiledGraph::ReadView::findQueueInfoForTask(const GpuTaskId& task)const noexcept{
     const GpuPhysicalQueueInfo* const info = queueInfoForTask(task);
     return info ? Optional<GpuPhysicalQueueInfo>(*info) : Optional<GpuPhysicalQueueInfo>();

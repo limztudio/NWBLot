@@ -79,6 +79,7 @@ namespace BuiltinFunctionReturnRule{
 namespace BuiltinCallLowering{
     enum Enum : u8{
         None = 0u,
+        PlatformLiteralArg0,
         BinaryByteViewArg0,
         BinaryByteViewArg1,
         StagedWriteTextAtomic,
@@ -122,6 +123,7 @@ namespace SpecialMethodKind{
     enum Enum : u8{
         None = 0u,
         Substr,
+        CheckedElementAccess,
         UnwrapValue,
         Deref,
         EcsEmplaceSystem,
@@ -158,6 +160,7 @@ struct BuiltinObjectTypeInfo{
     b8 isAbstract;
     b8 isPolymorphicBase;
     u8 formatArgWrapKind;
+    Span<const TemplateParamDecl> templateParams{};
 };
 
 struct BuiltinEnumInfo{
@@ -289,6 +292,7 @@ struct BuiltinReceiverMethodInfo{
     b8 synthesizeTypeRef;
     b8 isMutating;
     b8 returnsReference;
+    ParamPassingMode::Enum returnTypeArgRefMode = ParamPassingMode::None;
 };
 
 struct BuiltinReceiverSignatureInfo{
@@ -296,6 +300,9 @@ struct BuiltinReceiverSignatureInfo{
     MStringView methodName;
     Array<BuiltinFunctionArgRule::Enum, 9> argRules;
     u8 arity;
+    u32 retainedArgMask = 0u;
+    u32 cppConstReferenceMask = 0u;
+    b8 allowsCppUnwind = false;
 };
 
 struct BuiltinVisitorRuleInfo{
@@ -343,6 +350,8 @@ struct BuiltinFunctionInfo{
     b8 rejectsSimdStorage;
     b8 returnsReference;
     Array<BuiltinFunctionArgRule::Enum, 20> argRules;
+    u32 retainedArgMask = 0u;
+    u32 explicitTypeParamMask = 0u;
 };
 
 struct BuiltinGlobalConstantInfo{
@@ -399,6 +408,7 @@ struct BuiltinSpecialMethodInfo{
     return KeywordSemantics::IsEnumSentryReflected(entry.name);
 }
 
+[[nodiscard]] MStringView BuiltinPreludeLoadError()noexcept;
 [[nodiscard]] const BuiltinObjectTypeInfo* FindBuiltinObjectType(MStringView name)noexcept;
 [[nodiscard]] const BuiltinEnumInfo* FindBuiltinEnum(MStringView name)noexcept;
 [[nodiscard]] b8 HasBuiltinEnumEntry(MStringView enumName, MStringView entryName)noexcept;

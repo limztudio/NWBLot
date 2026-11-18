@@ -1075,11 +1075,11 @@ void VerifyGpuTelemetry_RanksEqualDurationsAfterShorterCandidateAppears(){
     durations[3u] = 0.002;
     durations[4u] = 0.002;
 
-    GpuTaskTimingHistoryStore history = GpuTaskTimingHistoryStore(testArena.arena, 1u);
+    GpuTaskTimingHistoryStore history = testArena.makeTimingHistory(1u);
     for(usize queueIndex = 0u; queueIndex < queues.size(); ++queueIndex)
         ASSERT_TRUE(history.recordNonCommittingSample(historyKey, queues[queueIndex].id, durations[queueIndex]));
     ASSERT_TRUE(history.noteAcceptedAssignment(historyKey, queues[0u].id, 1u));
-    GpuTaskTimingHistorySnapshot snapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistorySnapshot snapshot = testArena.makeTimingSnapshot();
     history.snapshot(snapshot);
     ASSERT_TRUE(snapshot.valid());
 
@@ -1163,8 +1163,8 @@ void VerifyGpuTelemetry_RanksEqualDurationsAfterShorterCandidateAppears(){
 
 void VerifyGpuTelemetry_PreservesEveryRouteKeyFieldAndFullNameIdentity(){
     TestArena testArena = TestArena(s_GpuCaseTimingHistoryFullIdentity);
-    GpuTaskTimingHistoryStore store = GpuTaskTimingHistoryStore(testArena.arena);
-    GpuTaskTimingHistorySnapshot snapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistoryStore store = testArena.makeTimingHistory();
+    GpuTaskTimingHistorySnapshot snapshot = testArena.makeTimingSnapshot();
     for(u32 index = 100u; index < 164u; ++index){
         const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput(index);
         ASSERT_TRUE(store.recordNonCommittingSample(input.key, input.queue, 1.0));
@@ -1212,7 +1212,7 @@ void VerifyGpuTelemetry_PreservesEveryRouteKeyFieldAndFullNameIdentity(){
 
 void VerifyGpuTelemetry_KeepsSemanticAssignmentsAcrossQueueClassChangesAndLateSamples(){
     TestArena testArena = TestArena(s_GpuCaseTimingHistoryAssignmentOrder);
-    GpuTaskTimingHistoryStore store = GpuTaskTimingHistoryStore(testArena.arena, 2u);
+    GpuTaskTimingHistoryStore store = testArena.makeTimingHistory(2u);
     for(u32 index = 1u; index < 80u; ++index){
         const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput(index);
         ASSERT_TRUE(store.recordSample(input.key, input.queue, 1.0, 1u));
@@ -1259,7 +1259,7 @@ void VerifyGpuTelemetry_KeepsSemanticAssignmentsAcrossQueueClassChangesAndLateSa
 void VerifyGpuTelemetry_PreservesOrderedAverageAndExtremaAcrossRollingWindows(){
     const u32 capacity = 4u;
     TestArena testArena = TestArena(s_GpuCaseTimingHistoryOrderedReduction);
-    GpuTaskTimingHistoryStore store = GpuTaskTimingHistoryStore(testArena.arena, capacity);
+    GpuTaskTimingHistoryStore store = testArena.makeTimingHistory(capacity);
     const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput(0u);
     Array<f64, 9> samples = Array<f64, 9>();
     samples[0u] = 1.0e100;
@@ -1334,10 +1334,10 @@ void VerifyGpuTelemetry_PreservesAbsoluteAndRelativeHysteresisThresholds(){
 void VerifyGpuTelemetry_SnapshotSurvivesStoreGrowthResetAndReplacementInAnotherArena(){
     TestArena storeArena = TestArena(s_GpuCaseTimingHistoryStoreOwner);
     TestArena snapshotArena = TestArena(s_GpuCaseTimingHistorySnapshotOwner);
-    GpuTaskTimingHistorySnapshot snapshot = GpuTaskTimingHistorySnapshot(snapshotArena.arena);
+    GpuTaskTimingHistorySnapshot snapshot = snapshotArena.makeTimingSnapshot();
     const GpuTelemetryTimingInput first = MakeGpuTelemetryTimingInput(0u);
     {
-        GpuTaskTimingHistoryStore store = GpuTaskTimingHistoryStore(storeArena.arena, 3u);
+        GpuTaskTimingHistoryStore store = storeArena.makeTimingHistory(3u);
         for(u32 index = 0u; index < 512u; ++index){
             const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput((index * 73u) % 512u);
             ASSERT_TRUE(store.recordSample(input.key, input.queue, cast<f64>(input.key.variant + 1u), 10u));
@@ -1389,7 +1389,7 @@ void VerifyGpuTelemetry_SnapshotSurvivesStoreGrowthResetAndReplacementInAnotherA
     ASSERT_TRUE(survivingOpt.has_value());
     EXPECT_DOUBLE_EQ(survivingOpt.value().averageSeconds, 1.0);
 
-    GpuTaskTimingHistoryStore replacement = GpuTaskTimingHistoryStore(storeArena.arena);
+    GpuTaskTimingHistoryStore replacement = storeArena.makeTimingHistory();
     ASSERT_TRUE(replacement.recordSample(first.key, first.queue, 3.0, 30u));
     replacement.reset(snapshot);
     EXPECT_EQ(snapshot.deviceGeneration(), 0u);
@@ -1417,8 +1417,8 @@ void VerifyGpuTelemetry_SnapshotSurvivesStoreGrowthResetAndReplacementInAnotherA
 
 void VerifyGpuTelemetry_RejectedInputDoesNotCreateHistoryOrAssignmentState(){
     TestArena testArena = TestArena(s_GpuCaseTimingHistoryRejections);
-    GpuTaskTimingHistoryStore store = GpuTaskTimingHistoryStore(testArena.arena);
-    GpuTaskTimingHistorySnapshot snapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistoryStore store = testArena.makeTimingHistory();
+    GpuTaskTimingHistorySnapshot snapshot = testArena.makeTimingSnapshot();
     const u64 baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
     const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput(0u);
     EXPECT_FALSE(store.recordSample(GpuTaskTimingKey(), input.queue, 1.0, 1u));
@@ -1445,9 +1445,9 @@ void VerifyGpuTelemetry_RejectedInputDoesNotCreateHistoryOrAssignmentState(){
 
 void VerifyGpuTelemetry_PromotesHistoryAndAssignmentCollectionsIndependentlyAndReusesResetStorage(){
     TestArena testArena = TestArena(s_GpuCaseTimingHistoryIndependentCollections);
-    GpuTaskTimingHistoryStore historyStore = GpuTaskTimingHistoryStore(testArena.arena);
-    GpuTaskTimingHistoryStore assignmentStore = GpuTaskTimingHistoryStore(testArena.arena);
-    GpuTaskTimingHistorySnapshot snapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
+    GpuTaskTimingHistoryStore historyStore = testArena.makeTimingHistory();
+    GpuTaskTimingHistoryStore assignmentStore = testArena.makeTimingHistory();
+    GpuTaskTimingHistorySnapshot snapshot = testArena.makeTimingSnapshot();
     for(u32 index = 0u; index < 80u; ++index){
         const GpuTelemetryTimingInput input = MakeGpuTelemetryTimingInput(index);
         ASSERT_TRUE(historyStore.recordNonCommittingSample(input.key, input.queue, 1.0));
@@ -1968,6 +1968,7 @@ NWB_ADHD_GTEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFr
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

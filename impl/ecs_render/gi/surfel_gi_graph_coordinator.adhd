@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd>
 
@@ -9,58 +10,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class SurfelGiGraphContext{
+    public mut GpuTaskGraph graph;
+    public mut RendererRayTracingSystem rayTracing;
+    public mut GpuPersistentResourceStateCache computeState;
+    public mut GpuPersistentResourceStateCache counterState;
+    public mut GpuPersistentResourceStateCache irradianceReturnState;
+    public in GpuTaskId frameTimingEndTask;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/persistent_state.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-
-
-struct SurfelGiGraphContext{
-    Core::GpuTaskGraph& graph;
-    RendererRayTracingSystem& rayTracing;
-    Core::GpuPersistentResourceStateCache& computeState;
-    Core::GpuPersistentResourceStateCache& counterState;
-    Core::GpuPersistentResourceStateCache& irradianceReturnState;
-    // The frame-timing task is declared after the GI stages.
-    const Core::GpuTaskId& frameTimingEndTask;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public SurfelGiGraphContext(
+        mut GpuTaskGraph graphIn,
+        mut RendererRayTracingSystem rayTracingIn,
+        mut GpuPersistentResourceStateCache computeStateIn,
+        mut GpuPersistentResourceStateCache counterStateIn,
+        mut GpuPersistentResourceStateCache irradianceReturnStateIn,
+        in GpuTaskId frameTimingEndTaskIn
+    ){
+        this.graph = graphIn;
+        this.rayTracing = rayTracingIn;
+        this.computeState = computeStateIn;
+        this.counterState = counterStateIn;
+        this.irradianceReturnState = irradianceReturnStateIn;
+        this.frameTimingEndTask = frameTimingEndTaskIn;
+    }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_name("::NWB::Impl::SurfelGiGraphContext")]
-extern class SurfelGiGraphContext;
 
 [modular]
 class SurfelGiGraphCoordinator : NoCopy{

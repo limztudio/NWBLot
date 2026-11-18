@@ -91,6 +91,36 @@ constexpr void Sort(RandomIt first, RandomIt last, Compare&& compare){
     std::sort(first, last, Forward<Compare>(compare));
 }
 
+template<typename T, typename Sequence>
+    requires(IsSame_V<T, typename Sequence::value_type>)
+inline void SortUniqueSequence(Sequence& sequence){
+    std::sort(sequence.begin(), sequence.end());
+    sequence.erase(std::unique(sequence.begin(), sequence.end()), sequence.end());
+}
+
+template<typename T, typename Sequence>
+    requires(IsSame_V<T, typename Sequence::value_type>)
+[[nodiscard]] inline usize LowerBoundValueIndex(const Sequence& sequence, const T& value){
+    return static_cast<usize>(std::lower_bound(sequence.begin(), sequence.end(), value) - sequence.begin());
+}
+
+template<typename Sequence>
+[[nodiscard]] constexpr usize SequenceSize(const Sequence& values)noexcept(noexcept(values.size())){
+    return values.size();
+}
+
+template<typename T, typename Sequence>
+    requires(IsSame_V<T, typename Sequence::value_type>)
+inline void AppendArenaElement(Sequence& values){
+    values.emplace_back(values.get_allocator().arena());
+}
+
+template<typename T, typename Sequence, typename Compare>
+    requires(IsSame_V<T, typename Sequence::value_type>)
+constexpr void SortSequence(Sequence& values, Compare&& compare){
+    Sort(values.begin(), values.end(), Forward<Compare>(compare));
+}
+
 template<typename ForwardIt>
 [[nodiscard]] constexpr ForwardIt Unique(ForwardIt first, ForwardIt last){
     return std::unique(first, last);

@@ -80,6 +80,7 @@ public:
     void defineObjectMacro(MStringView name, MStringView body);
     void undefineMacro(MStringView name)noexcept;
     [[nodiscard]] b8 isOffsetInIncludedRange(usize offset)const noexcept;
+    [[nodiscard]] MStringView includedFileAtOffset(usize offset)const noexcept{ return m_includes.includedFileAtOffset(offset); }
     [[nodiscard]] MStringView resolveIncludedNamespaceAtOffset(usize offset)const noexcept;
 
     [[nodiscard]] b8 process(MStringView source, MString& outProcessed);

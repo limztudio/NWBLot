@@ -1,0 +1,94 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_glyph_info_t"), cpp_flags(self_defaulted)]
+extern class HarfBuzzGlyphInfo{
+    u32 codepoint;
+    u32 cluster;
+};
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_glyph_position_t"), cpp_flags(self_defaulted)]
+extern class HarfBuzzGlyphPosition{
+    i32 x_advance;
+    i32 y_advance;
+    i32 x_offset;
+    i32 y_offset;
+};
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_font_extents_t"), cpp_flags(self_defaulted)]
+extern class HarfBuzzFontExtents{
+    i32 ascender;
+    i32 descender;
+    i32 line_gap;
+};
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_glyph_extents_t"), cpp_flags(self_defaulted)]
+extern class HarfBuzzGlyphExtents{
+    i32 x_bearing;
+    i32 y_bearing;
+    i32 width;
+    i32 height;
+};
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_direction_t"), cpp_flags(small_value, equality_switch)]
+extern class HarfBuzzDirection;
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_script_t"), cpp_flags(small_value, equality_switch)]
+extern class HarfBuzzScript;
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_buffer_cluster_level_t"), cpp_flags(small_value, equality_switch)]
+extern class HarfBuzzClusterLevel;
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::HB_DIRECTION_LTR")]
+extern const HarfBuzzDirection s_HarfBuzzLeftToRight;
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::HB_DIRECTION_RTL")]
+extern const HarfBuzzDirection s_HarfBuzzRightToLeft;
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::HB_SCRIPT_INVALID")]
+extern const HarfBuzzScript s_HarfBuzzInvalidScript;
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES")]
+extern const HarfBuzzClusterLevel s_HarfBuzzMonotoneGraphemes;
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::NWB::Core::HarfBuzzTag")]
+extern u32 HarfBuzzTag(in StringView tag);
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::hb_script_from_iso15924_tag")]
+extern HarfBuzzScript HarfBuzzScriptFromTag(in u32 tag);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::NWB::Core::HarfBuzzFont"), cpp_flags(self_defaulted, no_copy, no_assign)]
+extern class HarfBuzzFont{
+    b8 open(in FontFileBytes bytes, in u32 faceIndex);
+    b8 valid()const;
+    u32 unitsPerEm()const;
+    u32 glyphCount()const;
+    u32 tableLength(in u32 tag)const;
+    void setOpenTypeFunctions();
+    void setScale(in i32 x, in i32 y);
+    b8 horizontalExtents(mut HarfBuzzFontExtents extents)const;
+    b8 glyphExtents(in u32 glyph, mut HarfBuzzGlyphExtents extents)const;
+};
+
+[cpp_header("<core/font/harfbuzz.h>"), cpp_name("::NWB::Core::HarfBuzzBuffer"), cpp_flags(self_defaulted, no_copy, no_assign)]
+extern class HarfBuzzBuffer{
+    b8 valid()const;
+    void clear();
+    void setDirection(in HarfBuzzDirection direction);
+    void setScript(in HarfBuzzScript script);
+    void setClusterLevel(in HarfBuzzClusterLevel level);
+    b8 setLanguage(in StringView language);
+    b8 addUtf8(in StringView text, in u32 offset, in u32 count);
+    void shape(in HarfBuzzFont font);
+    Span<HarfBuzzGlyphInfo> glyphInfos()const;
+    Span<HarfBuzzGlyphPosition> glyphPositions()const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -111,13 +111,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             else if(const ClassDecl* ctorCls = m_symbols.findClass(baseCallee)){
                 recordRequiredHeader(ctorCls->requiredHeader);
                 targetOwnerCls = ctorCls;
-                targetCallable = m_symbols.findClassConstructor(*ctorCls, callArgCount, ownerClass != ctorCls, argTypeHints, argIsMutHints);
+                targetCallable = m_symbols.findClassConstructor(*ctorCls, callArgCount, !m_symbols.canAccessPrivateMembers(*ctorCls, ownerClass), argTypeHints, argIsMutHints);
                 expr.lhs->resolvedCppNamespace = (targetCallable && !targetCallable->cppNamespace.empty()) ? targetCallable->cppNamespace : ctorCls->cppNamespace;
                 if(!ctorCls->cppExportName.empty())
                     expr.lhs->resolvedCppExportName = ctorCls->cppExportName;
                 if(targetCallable){
                     recordRequiredHeader(targetCallable->requiredHeader);
-                    if(ownerClass != ctorCls && targetCallable->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessPrivateMembers(*ctorCls, ownerClass) && targetCallable->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
                         ok = false;
                     }
@@ -223,13 +223,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 const MStringView emplacedTypeName = m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
                 if(const ClassDecl* emplacedCls = m_symbols.findClass(emplacedTypeName)){
                     targetOwnerCls = emplacedCls;
-                    targetCallable = m_symbols.findClassConstructor(*emplacedCls, callArgCount, ownerClass != emplacedCls, argTypeHints, argIsMutHints);
+                    targetCallable = m_symbols.findClassConstructor(*emplacedCls, callArgCount, !m_symbols.canAccessPrivateMembers(*emplacedCls, ownerClass), argTypeHints, argIsMutHints);
                 }
             }
             if(targetCls){
                 targetOwnerCls = targetCls;
                 recordRequiredHeader(targetCls->requiredHeader);
-                targetCallable = m_symbols.findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls, argTypeHints, argIsMutHints);
+                targetCallable = m_symbols.findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, !m_symbols.canAccessPrivateMembers(*targetCls, ownerClass), argTypeHints, argIsMutHints);
                 if(targetCallable){
                     recordRequiredHeader(targetCallable->requiredHeader);
                     if(!targetCallable->cppExportName.empty()){
@@ -238,13 +238,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                             ? targetCallable->cppExportName.substr(lastSep + ContractSemantics::s_CppScopeSeparator.size())
                             : targetCallable->cppExportName;
                     }
-                    if(ownerClass != targetCls && targetCallable->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessPrivateMembers(*targetCls, ownerClass) && targetCallable->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
                         ok = false;
                     }
                 }
                 else if(const FieldDecl* field = SymbolTable::FindClassField(*targetCls, mName)){
-                    if(ownerClass != targetCls && field->access != AccessSpecifier::Public){
+                    if(!m_symbols.canAccessPrivateMembers(*targetCls, ownerClass) && field->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                         ok = false;
                     }
@@ -323,7 +323,16 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             }
             else if(!isUserObjType && specialMethod == SpecialMethodKind::UnwrapValue && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
                 if(IsOptionalOrExpectedGenericType(objType)){
-                    if(SymbolTable::IsSimdRegisterVectorType(m_symbols.resolveBaseTypeName(recvTypeRef->templateArgs[0].type->name)))
+                    const TypeRef* element = recvTypeRef->templateArgs[0].type;
+                    const ParamPassingMode::Enum refMode = m_symbols.resolveRefMode(element);
+                    if(refMode != ParamPassingMode::None){
+                        expr.derefNotNull = true;
+                        if(isMutationTarget && refMode == ParamPassingMode::In){
+                            reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
+                            ok = false;
+                        }
+                    }
+                    else if(SymbolTable::IsSimdRegisterVectorType(m_symbols.resolveBaseTypeName(element->name)))
                         expr.unwrapSimdResultValue = true;
                 }
             }
@@ -375,10 +384,10 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         ){
             const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]));
             targetOwnerCls = scopedCls;
-            targetCallable = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, ownerClass != scopedCls, argTypeHints, argIsMutHints, true);
+            targetCallable = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, !m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass), argTypeHints, argIsMutHints, true);
             recordRequiredHeader(scopedCls->requiredHeader);
             if(targetCallable){
-                if(ownerClass != scopedCls && targetCallable->access != AccessSpecifier::Public){
+                if(!m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass) && targetCallable->access != AccessSpecifier::Public){
                     reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
                     ok = false;
                 }
@@ -396,7 +405,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 calleeSignatureKnown = true;
             }
             else if(const FieldDecl* staticField = SymbolTable::FindClassField(*scopedCls, expr.lhs->scopeChain[1]); staticField && staticField->isStatic){
-                if(ownerClass != scopedCls && staticField->access != AccessSpecifier::Public){
+                if(!m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass) && staticField->access != AccessSpecifier::Public){
                     reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                     ok = false;
                 }
@@ -454,6 +463,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             recordBuiltinTypeHeader(unwrappedRet->name);
     }
 
+    if(targetCallable && targetCallable->returnsFromOwnerArena && expr.lhs){
+        expr.returnsFromThisArena = expr.lhs->kind == ExprKind::ThisMember;
+        if(ownerClass && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs && expr.lhs->lhs->kind == ExprKind::ThisMember){
+            const FieldDecl* receiver = SymbolTable::FindClassField(*ownerClass, expr.lhs->lhs->text);
+            expr.returnsFromThisArena = receiver && receiver->type && m_symbols.resolveRefMode(receiver->type) == ParamPassingMode::None;
+        }
+    }
     if(targetCallable && !targetCallable->isConstructor && targetCallable->injectsCallerArena){
         injectActiveArena();
     }
@@ -553,7 +569,14 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     if(!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier && expr.arguments.size() == 1u && expr.arguments[0]){
         const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
         if(IsOptionalOrExpectedGenericType(baseCallee)){
-            if(SymbolTable::IsSimdRegisterVectorType(expr.arguments[0]->resolvedSimdType))
+            TypeRef target(m_arena);
+            target.name = expr.lhs->text;
+            target.templateArgs = expr.callTemplateArgs;
+            if(wrappedReferenceType(&target)){
+                if(!checkWrappedReferenceArgument(ownerClass, method, target, *expr.arguments[0], scope, errors))
+                    ok = false;
+            }
+            else if(SymbolTable::IsSimdRegisterVectorType(expr.arguments[0]->resolvedSimdType))
                 expr.arguments[0]->wrapInSimdResult = true;
         }
     }

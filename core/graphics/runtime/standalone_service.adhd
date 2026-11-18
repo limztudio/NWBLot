@@ -2,8 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService::BufferSetupDesc"), cpp_flags(self_defaulted)]
+extern class StandaloneBufferSetupDesc{
+    BufferDesc bufferDesc;
+    void setData<T>(in Span<T> payload);
+};
+
+[cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService::TextureUploadRegion"), cpp_flags(self_defaulted)]
+extern class StandaloneTextureUploadRegion{
+    usize rowPitch;
+    usize depthPitch;
+    u32 arraySlice;
+    u32 mipLevel;
+    void setBytes(in Span<u8> bytes);
+};
+
 [cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService"), cpp_flags(binary_serializable, no_copy, no_assign)]
-extern class GraphicsStandaloneService;
+extern class GraphicsStandaloneService{
+    Expected<QueueSubmissionToken> submitStandaloneTaskGraph(in auto declare, in GpuPhysicalQueueId queue)const;
+    Expected<QueueSubmissionToken> submitStandaloneTaskGraphWithTiming(in auto declare, in GpuPhysicalQueueId queue, mut GpuTimingRecorder recorder, mut GpuTimingFrameTransaction timing)const;
+    b8 uploadTextureBatch(in TextureHandle destination, in Span<StandaloneTextureUploadRegion> regions, in ResourceStates finalState, in ResourceStates initialState, mut QueueSubmissionToken acceptedToken)const;
+    Expected<BufferHandle> setupBuffer(in StandaloneBufferSetupDesc setup)const;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

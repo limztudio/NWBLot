@@ -12,6 +12,8 @@
 #include <global/expected.h>
 #include <global/span.h>
 
+#include <cstdlib>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,6 +57,43 @@ public: \
         \
         NWB_ASSET_CODEC_SERIALIZE_DECL() \
     }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AssetTypeDescriptor{
+    AStringView text;
+    Name name;
+    const void* identity;
+
+
+    template<typename T>
+    static inline constexpr u8 s_TypeKey = 0u;
+};
+
+template<typename T>
+[[nodiscard]] constexpr AssetTypeDescriptor DescribeAssetType()noexcept{
+    return { T::s_AssetTypeText, T::s_AssetTypeName, &AssetTypeDescriptor::s_TypeKey<T> };
+}
+
+template<typename T, usize Count>
+[[nodiscard]] constexpr usize FindAssetTypeIndex(const Array<AssetTypeDescriptor, Count>& types)noexcept{
+    for(usize i = 0u; i < Count; ++i){
+        if(types[i].identity == &AssetTypeDescriptor::s_TypeKey<T>)
+            return i;
+    }
+    return Count;
+}
+
+
+template<typename T, usize Count>
+[[nodiscard]] consteval usize RequireAssetTypeIndex(const Array<AssetTypeDescriptor, Count>& types){
+    const usize index = FindAssetTypeIndex<T>(types);
+    if(index == Count)
+        std::abort();
+    return index;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

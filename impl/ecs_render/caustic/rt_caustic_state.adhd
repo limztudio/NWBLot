@@ -2,112 +2,84 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/caustic/caustic_resolve_state.adhd>
+#include <impl/ecs_render/caustic/caustic_emission_target_buffer.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets/graphics/caustic/hw_binding_slots.h>
-#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/assets/graphics/caustic/sw_binding_slots.h>
-#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
-#include <impl/ecs_render/caustic/caustic_emission_target_buffer.adhd.h>
+[cpp_header("<impl/assets/graphics/caustic/hw_binding_slots.h>"), cpp_name("NWB_CAUSTIC_HW_MAX_PAYLOAD_BYTES")]
+extern const u32 s_ShaderCausticHwMaxPayloadBytes;
+const u32 s_CausticHwMaxPayloadBytes = s_ShaderCausticHwMaxPayloadBytes;
 
-#include <core/graphics/rhi/device.h>
+[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT")]
+extern const u32 s_ShaderCausticAccumulatorChannelCount;
 
-#include <global/simplemath.h>
-#include <global/span.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(s_CausticAccumulatorChannelCount == NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT, "s_CausticAccumulatorChannelCount must match NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT");
-
-
-static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
-static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
-static_assert(sizeof(CausticResolvePushConstants) == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
-static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
-static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
-static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 7u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
-static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
-
-// Frame-parity reuse retains the same two-phase checkerboard for both photon producers.
+[cpp_header("<impl/assets/graphics/caustic/sw_binding_slots.h>"), cpp_name("NWB_CAUSTIC_SW_GRID_SIDE")]
+extern const u32 s_ShaderCausticSwGridSide;
+static_assert(s_CausticHwMaxPayloadBytes == 8u);
+static_assert(s_CausticAccumulatorChannelCount == s_ShaderCausticAccumulatorChannelCount, "s_CausticAccumulatorChannelCount must match NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT");
+static_assert(size_of<NwbCausticEmissionTargetGpu>() == size_of<f32x4>() * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
+static_assert(size_of<CausticPhotonPushConstants>() == size_of<u32>() * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
+static_assert(size_of<CausticResolvePushConstants>() == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(offset_of<CausticResolvePushConstants>(activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
+static_assert(offset_of<CausticResolvePushConstants>(activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
+static_assert(size_of<CausticGeometryDownsamplePushConstants>() == size_of<u32>() * 7u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
+static_assert(size_of<CausticAccumulatorDecayPushConstants>() == size_of<u32>() * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
 static_assert(s_CausticTemporalPhaseCount == 2u);
 static_assert(s_CausticTemporalPhaseCount > s_CausticTemporalDisabledPhaseCount);
 static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
-static_assert((NWB_CAUSTIC_SW_GRID_SIDE % s_CausticTemporalPhaseCount) == 0u);
+static_assert((s_ShaderCausticSwGridSide % s_CausticTemporalPhaseCount) == 0u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RtCausticState{
-    Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+class RtCausticState{
+    public f32x4 m_causticTargetBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 m_causticTargetBoundsMax = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
 
     // Software caustics are push-only and reuse the SW trace geometry.
-    Core::BindingLayoutHandle m_swCausticBindingLayout;
-    Core::ShaderHandle m_swCausticShader;
-    Core::ComputePipelineHandle m_swCausticPipeline;
-    Core::ShaderHandle m_swCausticCsgShader;
-    Core::ComputePipelineHandle m_swCausticCsgPipeline;
+    public BindingLayoutHandle m_swCausticBindingLayout;
+    public ShaderHandle m_swCausticShader;
+    public ComputePipelineHandle m_swCausticPipeline;
+    public ShaderHandle m_swCausticCsgShader;
+    public ComputePipelineHandle m_swCausticCsgPipeline;
     // Hardware caustics are push-only and use the TLAS plus global heap views.
-    Core::BindingLayoutHandle m_hwCausticBindingLayout;
-    Core::RayTracingPipelineHandle m_hwCausticPipeline;
-    Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
-    Core::RayTracingPipelineHandle m_hwCausticCsgPipeline;
-    Core::RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
+    public BindingLayoutHandle m_hwCausticBindingLayout;
+    public RayTracingPipelineHandle m_hwCausticPipeline;
+    public RayTracingShaderTableHandle m_hwCausticShaderTable;
+    public RayTracingPipelineHandle m_hwCausticCsgPipeline;
+    public RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
     // Per-frame refractive-instance AABBs shared by caustic lights.
-    CausticEmissionTargetBuffer m_causticEmissionTargets;
+    public CausticEmissionTargetBuffer m_causticEmissionTargets;
     // Push-only a-trous caustic resolve.
-    CausticResolveState m_causticResolve;
+    public CausticResolveState m_causticResolve;
     // Half-resolution geometry cache for edge-aware caustic resolve.
-    Core::BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
-    Core::ShaderHandle m_causticGeometryDownsampleShader;
-    Core::ComputePipelineHandle m_causticGeometryDownsamplePipeline;
+    public BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
+    public ShaderHandle m_causticGeometryDownsampleShader;
+    public ComputePipelineHandle m_causticGeometryDownsamplePipeline;
     // Decay persistent accumulator after seeding; clear it after target recreation.
-    Core::BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
-    Core::ShaderHandle m_causticAccumulatorDecayShader;
-    Core::ComputePipelineHandle m_causticAccumulatorDecayPipeline;
+    public BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
+    public ShaderHandle m_causticAccumulatorDecayShader;
+    public ComputePipelineHandle m_causticAccumulatorDecayPipeline;
 
     // Fresh heap views preserve old buffers for recorded dispatches.
-    u32 m_causticRefractiveInstanceCount = 0u;
+    public u32 m_causticRefractiveInstanceCount = 0u;
     // Producer runs only when refractive instances and caustic lights exist.
-    u32 m_causticLightCount = 0u;
+    public u32 m_causticLightCount = 0u;
 
-    b8 m_swCausticDispatchLogged = false;
-    b8 m_swCausticPipelineFailed = false;
-    b8 m_swCausticCsgPipelineFailed = false;
-    b8 m_hwCausticPipelineFailed = false;
-    b8 m_hwCausticCsgPipelineFailed = false;
-    b8 m_hwCausticDispatchLogged = false;
-    b8 m_causticEmissionGateLogged = false;
-    b8 m_causticGeometryDownsamplePipelineFailed = false;
-    b8 m_causticAccumulatorInitialized = false;
-    b8 m_causticAccumulatorDecayPipelineFailed = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 m_swCausticDispatchLogged = false;
+    public b8 m_swCausticPipelineFailed = false;
+    public b8 m_swCausticCsgPipelineFailed = false;
+    public b8 m_hwCausticPipelineFailed = false;
+    public b8 m_hwCausticCsgPipelineFailed = false;
+    public b8 m_hwCausticDispatchLogged = false;
+    public b8 m_causticEmissionGateLogged = false;
+    public b8 m_causticGeometryDownsamplePipelineFailed = false;
+    public b8 m_causticAccumulatorInitialized = false;
+    public b8 m_causticAccumulatorDecayPipelineFailed = false;
 }
 
 

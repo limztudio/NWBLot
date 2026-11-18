@@ -14,11 +14,27 @@ extern b8 IsSingleLinePathText(in StringView a0);
 [cpp_name("::PathHasListedExtension")]
 extern b8 PathHasListedExtension(in Path a0, in auto a1);
 
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::AppendOwnedPath")]
+extern void AppendOwnedPath(mut auto paths, in Path path);
+
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::NativePathComparisonKey"), cpp_flags(scratch_arena)]
+extern String NativePathComparisonKey(in Path path);
+
 [cpp_name("::PathToGenericString<char>"), cpp_flags(scratch_arena)]
 extern String PathToGenericString(in auto a0);
 
 [cpp_name("::PathToString<char>"), cpp_flags(scratch_arena)]
 extern String PathToString(in auto a0);
+
+
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::FirstPathComponent"), cpp_flags(scratch_arena)]
+extern Path FirstPathComponent(in Path path);
+
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::NativePathSize")]
+extern usize NativePathSize(in Path path);
+
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::s_NativePathUsesChar")]
+extern const b8 s_NativePathUsesChar;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

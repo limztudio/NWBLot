@@ -39,6 +39,118 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_name("::NWB::Tests::Smoke::UiListSmokeSource")]
+extern class UiListSmokeSource : IListDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 rowCount()const;
+    u64 key(in u64 index)const;
+    Expected<u64> indexOf(in u64 keyValue)const;
+    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+    StringView text(in u64 index)const;
+    b8 enabled(in u64 index)const;
+    void reverse();
+    void remove(in u64 keyValue);
+    void beginFrame();
+    b8 reversed()const;
+    u64 removedKey()const;
+    u32 labelReads()const;
+};
+
+[cpp_name("::NWB::Tests::Smoke::UiComboSmokeSource")]
+extern class UiComboSmokeSource : IListDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 rowCount()const;
+    u64 key(in u64 index)const;
+    Expected<u64> indexOf(in u64 keyValue)const;
+    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+    StringView text(in u64 index)const;
+    b8 enabled(in u64 index)const;
+    void reverse();
+    void remove(in u64 keyValue);
+    void beginFrame();
+    void toggleEmpty();
+    void replace();
+    b8 reversed()const;
+    u64 removedKey()const;
+    u32 labelReads()const;
+};
+
+[cpp_name("::NWB::Tests::Smoke::UiNestedPopupSmokeSource")]
+extern class UiNestedPopupSmokeSource : ISearchableListDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 rowCount()const;
+    u64 key(in u64 index)const;
+    Expected<u64> indexOf(in u64 keyValue)const;
+    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+    StringView text(in u64 index)const;
+    b8 enabled(in u64 index)const;
+    b8 filter(in StringView query);
+    in IListDataSource filtered()const;
+    void beginFrame();
+    u32 labelReads()const;
+};
+
+[cpp_name("::NWB::Tests::Smoke::UiPopupToolsSmokeSource")]
+extern class UiPopupToolsSmokeSource : IListDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 rowCount()const;
+    u64 key(in u64 index)const;
+    Expected<u64> indexOf(in u64 keyValue)const;
+    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+    StringView text(in u64 index)const;
+    b8 enabled(in u64 index)const;
+    void reverse();
+    void replace();
+    void beginFrame();
+    b8 reversed()const;
+    u32 labelReads()const;
+};
+
+[cpp_name("::NWB::Tests::Smoke::UiRadioGroupSmokeSource")]
+extern class UiRadioGroupSmokeSource : IListDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 rowCount()const;
+    u64 key(in u64 index)const;
+    Expected<u64> indexOf(in u64 keyValue)const;
+    Expected<u64> findEnabled(in u64 start, in b8 reverseValue)const;
+    StringView text(in u64 index)const;
+    b8 enabled(in u64 index)const;
+    void reverse();
+    void remove(in u64 keyValue);
+    void replace();
+    void beginFrame();
+    b8 reversed()const;
+    u64 removedKey()const;
+    u32 labelReads()const;
+    void invalidateText()const;
+};
+
+[cpp_name("::NWB::Tests::Smoke::UiSearchComboSmokeSource")]
+extern class UiSearchComboSmokeSource : ISearchableListDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 rowCount()const;
+    u64 key(in u64 index)const;
+    Expected<u64> indexOf(in u64 keyValue)const;
+    Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
+    StringView text(in u64 index)const;
+    b8 enabled(in u64 index)const;
+    b8 filter(in StringView query);
+    in IListDataSource filtered()const;
+    void reverse();
+    void remove(in u64 keyValue);
+    void beginFrame();
+    b8 reversed()const;
+    u64 removedKey()const;
+    u32 labelReads()const;
+};
+
+
 [header]
 native{
 
@@ -274,8 +386,8 @@ struct SmokeClipboardRef final{
     const Impl::Ui::PopupToken& popup,
     const u64 parentGen
 )noexcept{
-    const Impl::Ui::PopupScope* const scope = input.popupScope(popup);
-    return scope != nullptr && scope->parent.instanceGeneration == parentGen;
+    const auto scope = input.popupScope(popup);
+    return scope && (*scope)->parent.instanceGeneration == parentGen;
 }
 
 [[nodiscard]] FOUNDATION_INLINE b8 CreateSmokeTextAtlasPages(
@@ -285,6 +397,7 @@ struct SmokeClipboardRef final{
     Array<Impl::Ui::SharedSdfAtlasPage, 4u>& outSdf
 ){
     Core::Alloc::GlobalArena& arena = ActiveSmokeArena();
+    const Core::Alloc::SharedPool pages(arena);
     constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
     constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 
@@ -297,9 +410,9 @@ struct SmokeClipboardRef final{
         .width = 12u,
         .height = 4u
     };
-    Impl::Ui::GlyphPage::Pixels coveragePixels(arena);
+    Impl::Ui::GlyphPagePixels coveragePixels(arena);
     coveragePixels.assign(coverageBytes.begin(), coverageBytes.end());
-    auto coverageResult = Impl::Ui::CreateGlyphPage(arena, coverageBinding, Move(coveragePixels));
+    auto coverageResult = Impl::Ui::CreateGlyphPage(pages, coverageBinding, coveragePixels);
     if(coverageResult)
         outCoverage = Move(*coverageResult);
 
@@ -317,9 +430,9 @@ struct SmokeClipboardRef final{
             .spreadPixels = 8u
         };
         const usize byteCount = 48u * static_cast<usize>(channels);
-        Impl::Ui::SdfAtlasPage::Pixels sdfPixels(arena);
+        Impl::Ui::SdfAtlasPixels sdfPixels(arena);
         sdfPixels.assign(sdfBytes[channels - 1u].data(), sdfBytes[channels - 1u].data() + byteCount);
-        auto pageResult = Impl::Ui::CreateSdfAtlasPage(arena, sdfBinding, Move(sdfPixels));
+        auto pageResult = Impl::Ui::CreateSdfAtlasPage(pages, sdfBinding, sdfPixels);
         if(pageResult)
             outSdf[channels - 1u] = Move(*pageResult);
         if(!outSdf[channels - 1u])
@@ -366,13 +479,13 @@ FOUNDATION_INLINE void LoadSmokeSkinImageSources(
         const auto skin = assets.loadTypedSync<Impl::UiSkin>(skinRef.name(), FOUNDATION_TEXT("UiTextureImageSmokeScene"));
         if(!skin || !*skin || !(*skin)->texture().valid())
             return MakeUnexpected(Failure{});
-        return Impl::Ui::LoadImageSource(arena, assets, (*skin)->texture());
+        return Impl::Ui::LoadImageSource(Core::Alloc::SharedPool(arena), assets, (*skin)->texture());
     };
 
     Impl::ActiveSceneSubsystems sceneSubsystems(arena);
     if(sceneSubsystems.loadProjectStartScene(assets)){
-        if(const Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
-            auto loadedDefault = loadSkinSource(uiSubsystem->basicSkin);
+        if(const auto uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
+            auto loadedDefault = loadSkinSource((*uiSubsystem)->basicSkin);
             if(loadedDefault)
                 outDefault = Move(*loadedDefault);
         }
@@ -407,7 +520,7 @@ FOUNDATION_INLINE void LoadSmokeSkinImageSources(
         payload.alphaMode(),
         payload.alphaConstantUnorm8()
     );
-    auto nextSource = Impl::Ui::MakeImageSource(arena, replacement);
+    auto nextSource = Impl::Ui::MakeImageSource(Core::Alloc::SharedPool(arena), replacement);
     if(!nextSource)
         return {};
     return Move(*nextSource);

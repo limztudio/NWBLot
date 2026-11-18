@@ -2,44 +2,36 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/avboit/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/avboit/types.adhd.h>
-#include <impl/assets/graphics/avboit/constants.h>
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE")]
+extern const u32 s_ShaderAvboitPushConstantByteSize;
+
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_FRAME_WORD_OFFSET")]
+extern const u32 s_ShaderAvboitPushFrameWordOffset;
+
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_VOLUME_WORD_OFFSET")]
+extern const u32 s_ShaderAvboitPushVolumeWordOffset;
+
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_PARAMS_WORD_OFFSET")]
+extern const u32 s_ShaderAvboitPushParamsWordOffset;
+
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_PUSH_HEAP_SLOTS_WORD_OFFSET")]
+extern const u32 s_ShaderAvboitPushHeapSlotsWordOffset;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(sizeof(RendererAvboitPushConstants) == NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE, "RendererAvboitPushConstants layout must stay stable");
-static_assert(offsetof(RendererAvboitPushConstants, frame) == sizeof(u32) * NWB_AVBOIT_PUSH_FRAME_WORD_OFFSET, "RendererAvboit frame push offset drifted");
-static_assert(offsetof(RendererAvboitPushConstants, volume) == sizeof(u32) * NWB_AVBOIT_PUSH_VOLUME_WORD_OFFSET, "RendererAvboit volume push offset drifted");
-static_assert(offsetof(RendererAvboitPushConstants, params) == sizeof(u32) * NWB_AVBOIT_PUSH_PARAMS_WORD_OFFSET, "RendererAvboit params push offset drifted");
-static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * NWB_AVBOIT_PUSH_HEAP_SLOTS_WORD_OFFSET, "RendererAvboit heap-slot push offset drifted");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+static_assert(size_of<RendererAvboitPushConstants>() == s_ShaderAvboitPushConstantByteSize, "RendererAvboitPushConstants layout must stay stable");
+static_assert(offset_of<RendererAvboitPushConstants>(frame) == size_of<u32>() * s_ShaderAvboitPushFrameWordOffset, "RendererAvboit frame push offset drifted");
+static_assert(offset_of<RendererAvboitPushConstants>(volume) == size_of<u32>() * s_ShaderAvboitPushVolumeWordOffset, "RendererAvboit volume push offset drifted");
+static_assert(offset_of<RendererAvboitPushConstants>(params) == size_of<u32>() * s_ShaderAvboitPushParamsWordOffset, "RendererAvboit params push offset drifted");
+static_assert(offset_of<RendererAvboitPushConstants>(heapSlots) == size_of<u32>() * s_ShaderAvboitPushHeapSlotsWordOffset, "RendererAvboit heap-slot push offset drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

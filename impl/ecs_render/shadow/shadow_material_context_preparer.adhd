@@ -2,16 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/material/renderer_pipeline_types.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/shadow/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Impl::RendererRayTracingSystem"), cpp_header("<impl/ecs_render/raytrace/raytracing_system.adhd.h>")]
-extern class RendererRayTracingSystem;
-[cpp_name("::NWB::Impl::MaterialTypedByteDataVector"), cpp_header("<impl/ecs_render/material/renderer_pipeline_types.adhd.h>")]
-extern class MaterialTypedByteDataVector;
+const usize s_MinimumShadowMaterialTypedByteCount = 4u;
+
+b8 IsValidPreparedShadowMaterialContextRoute(in PreparedShadowMaterialContextRoute route){
+    return route == PreparedShadowMaterialContextRoute::Hardware || route == PreparedShadowMaterialContextRoute::Software;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [modular]
@@ -29,6 +35,17 @@ class ShadowMaterialContextPreparer : NoCopy{
         in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
         in Span<InstanceGpuData> shadowInstanceData,
         mut MaterialTypedByteDataVector shadowMaterialTypedBytes
+    ){
+        if(!IsValidPreparedShadowMaterialContextRoute(route))
+            return MakeUnexpected(Failure());
+        if(shadowMaterialTypedBytes.empty())
+            shadowMaterialTypedBytes.resize(s_MinimumShadowMaterialTypedByteCount, 0u);
+        return this.prepareBytes(route, staticScene, sceneInstanceCount, instanceMaterials, shadowInstanceData, Span<u8>(shadowMaterialTypedBytes));
+    }
+
+    private Expected<u64> prepareBytes(
+        in PreparedShadowMaterialContextRoute route, in b8 staticScene, in usize sceneInstanceCount,
+        in Span<NwbRtInstanceMaterialGpu> instanceMaterials, in Span<InstanceGpuData> shadowInstanceData, in Span<u8> shadowMaterialTypedBytes
     );
 }
 

@@ -127,7 +127,57 @@ namespace __hidden_last_use_move_analyzer{
     return false;
 }
 
-[[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, MStringView varName, const SymbolTable& symbols)noexcept;
+[[nodiscard]] b8 ExprMayRetainAlias(const Expr* expr, const MStringView alias)noexcept{
+    if(!expr)
+        return false;
+    if((expr->isRetainedArg || expr->wrapInNotNull || expr->kind == ExprKind::Lambda) && ExprReferencesIdentifier(expr, alias))
+        return true;
+    if(expr->isNotNullRebind && ExprReferencesIdentifier(expr->rhs, alias))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprMayRetainAlias(arg, alias))
+            return true;
+    }
+    return ExprMayRetainAlias(expr->lhs, alias) || ExprMayRetainAlias(expr->rhs, alias);
+}
+
+[[nodiscard]] b8 StmtMayRetainAlias(const Stmt* stmt, const MStringView alias, const SymbolTable& symbols)noexcept{
+    if(!stmt)
+        return false;
+    if((stmt->kind == StmtKind::NativeBlock || stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall)
+        && StmtReferencesIdentifier(stmt, alias))
+        return true;
+    if(stmt->kind == StmtKind::VarDecl && stmt->name != alias && stmt->varType
+        && (symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None || IsBorrowViewType(symbols.resolveBaseTypeName(stmt->varType->name)))
+        && StmtReferencesIdentifier(stmt, alias))
+        return true;
+    if(ExprMayRetainAlias(stmt->expr, alias) || ExprMayRetainAlias(stmt->condition, alias) || ExprMayRetainAlias(stmt->stepExpr, alias)
+        || StmtMayRetainAlias(stmt->initStmt, alias, symbols))
+        return true;
+    for(const Expr* arg : stmt->arguments){
+        if(ExprMayRetainAlias(arg, alias))
+            return true;
+    }
+    for(const Stmt* child : stmt->statements){
+        if(StmtMayRetainAlias(child, alias, symbols))
+            return true;
+        if(stmt->kind == StmtKind::ForRange && ExprReferencesIdentifier(stmt->expr, alias) && StmtMayRetainAlias(child, stmt->name, symbols))
+            return true;
+    }
+    for(const Stmt* child : stmt->elseStatements){
+        if(StmtMayRetainAlias(child, alias, symbols))
+            return true;
+    }
+    for(const SwitchCase& sc : stmt->switchCases){
+        for(const Stmt* child : sc.statements){
+            if(StmtMayRetainAlias(child, alias, symbols))
+                return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, MStringView varName, const SymbolTable& symbols, const Stmt* endedScope = nullptr)noexcept;
 
 [[nodiscard]] b8 ExprHasMutLambdaCapture(const Expr* expr, const MStringView varName, const SymbolTable& symbols)noexcept{
     if(!expr)
@@ -151,15 +201,17 @@ namespace __hidden_last_use_move_analyzer{
     return false;
 }
 
-[[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, const MStringView varName, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, const MStringView varName, const SymbolTable& symbols, const Stmt* endedScope)noexcept{
     if(!stmt)
         return false;
     if((stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall) && StmtReferencesIdentifier(stmt, varName))
         return true;
     if(stmt->kind == StmtKind::VarDecl && stmt->name != varName && stmt->varType && StmtReferencesIdentifier(stmt, varName)){
         const MStringView baseVarType = symbols.resolveBaseTypeName(stmt->varType->name);
-        if(symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None || IsBorrowViewType(baseVarType))
-            return true;
+        if(symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None || IsBorrowViewType(baseVarType)){
+            if(!endedScope || StmtMayRetainAlias(endedScope, stmt->name, symbols))
+                return true;
+        }
     }
     if(ExprHasMutLambdaCapture(stmt->expr, varName, symbols) || ExprHasMutLambdaCapture(stmt->condition, varName, symbols) || ExprHasMutLambdaCapture(stmt->stepExpr, varName, symbols))
         return true;
@@ -171,21 +223,21 @@ namespace __hidden_last_use_move_analyzer{
         if(ExprHasMutLambdaCapture(nb.sourceExpr, varName, symbols))
             return true;
     }
-    if(stmt->initStmt && StmtPreventsMoveAtLastUse(stmt->initStmt, varName, symbols))
+    if(stmt->initStmt && StmtPreventsMoveAtLastUse(stmt->initStmt, varName, symbols, endedScope ? endedScope : stmt))
         return true;
     for(const Stmt* child : stmt->statements){
-        if(StmtPreventsMoveAtLastUse(child, varName, symbols))
+        if(StmtPreventsMoveAtLastUse(child, varName, symbols, endedScope ? endedScope : stmt))
             return true;
     }
     for(const Stmt* child : stmt->elseStatements){
-        if(StmtPreventsMoveAtLastUse(child, varName, symbols))
+        if(StmtPreventsMoveAtLastUse(child, varName, symbols, endedScope ? endedScope : stmt))
             return true;
     }
     for(const SwitchCase& sc : stmt->switchCases){
         if(ExprHasMutLambdaCapture(sc.matchExpr, varName, symbols))
             return true;
         for(const Stmt* child : sc.statements){
-            if(StmtPreventsMoveAtLastUse(child, varName, symbols))
+            if(StmtPreventsMoveAtLastUse(child, varName, symbols, endedScope ? endedScope : stmt))
                 return true;
         }
     }
@@ -222,7 +274,7 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
 
         b8 capturedOrAsyncOrAliased = false;
         for(usize j = 0u; j < scope.size(); ++j){
-            if(scope[j].borrowsLocalStringOwner && scope[j].borrowedLocalOwnerName == local.name){
+            if((scope[j].borrowsLocalStringOwner && scope[j].borrowedLocalOwnerName == local.name) || scope[j].referenceOwnerName == local.name){
                 capturedOrAsyncOrAliased = true;
                 break;
             }
@@ -250,7 +302,7 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
 
         Stmt* lastStmt = statements[lastUseIndex];
         auto tryMarkLastUseValueOrIdent = [&](Expr* candidate)noexcept{
-            if(!candidate || candidate->isMutArg)
+            if(!candidate || candidate->isMutArg || candidate->wrapInNotNull)
                 return;
             if(candidate->kind == ExprKind::Identifier && candidate->text == local.name){
                 candidate->moveAtLastUse = true;

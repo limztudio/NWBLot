@@ -25,6 +25,7 @@ if(NWB_BUILD_PIPELINE)
         SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_entry.adhd"
     )
     target_link_libraries(nwb_assets_ui_skin_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_ui_skin_types nwb_metascript)
     target_compile_definitions(nwb_assets_ui_skin_cook PRIVATE NWB_COOK=1)

@@ -2,160 +2,163 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/mesh/renderer_mesh_state.adhd>
+#include <impl/ecs_render/mesh/mesh_acceleration_state_policy.adhd>
+#include <impl/ecs_render/mesh/mesh_raytracing_snapshot_policy.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
+#include <impl/assets_mesh/asset.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/mesh/renderer_mesh_state.adhd.h>
-#include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/assets/graphics/mesh/binding_slots.h>
-
-#include <core/assets/ref.h>
-#include <core/ecs/entity_id.h>
-#include <core/graphics/runtime/render_pass.h>
+type MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState>;
+type MeshRetainedAccelerationStateBufferVector = Vector<BufferHandle>;
+type MeshBlasGraphStateVector = Vector<MeshBlasGraphState>;
+type MeshRayTracingResourceSnapshotVector = Vector<MeshRayTracingResourceSnapshot>;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[modular]
+class RendererMeshSystem : NoCopy{
+    private mut World m_world;
+    private mut GraphicsRuntime m_graphics;
+    private mut AssetManager m_assetManager;
+    private mut RendererMeshState m_meshState;
 
-
-NWB_ASSETS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class AssetManager;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-    using MeshSoftwareBvhParentBuildState = ::NWB::Impl::MeshSoftwareBvhParentBuildState;
-    using MeshBlasGraphState = ::NWB::Impl::MeshBlasGraphState;
-    using MeshRayTracingResourceSnapshot = ::NWB::Impl::MeshRayTracingResourceSnapshot;
-    using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;
-    using MeshRetainedAccelerationStateBufferVector = Vector<Core::BufferHandle, Core::Alloc::ScratchArena>;
-    using MeshBlasGraphStateVector = Vector<MeshBlasGraphState, Core::Alloc::ScratchArena>;
-    using MeshRayTracingResourceSnapshotVector = Vector<MeshRayTracingResourceSnapshot, Core::Alloc::ScratchArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMeshSystem final : NoCopy{
-    friend class RuntimeMeshResourceCache;
-
-public:
-    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
-
-    template<typename BindingHandler>
-    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(NWB::Impl::ForEachMeshSourceBindingSlot(Forward<BindingHandler>(handler)))){
-        NWB::Impl::ForEachMeshSourceBindingSlot(Forward<BindingHandler>(handler));
+    public RendererMeshSystem(mut World world, mut GraphicsRuntime graphics, mut AssetManager assetManager, mut RendererMeshState meshState){
+        this.m_world = world;
+        this.m_graphics = graphics;
+        this.m_assetManager = assetManager;
+        this.m_meshState = meshState;
     }
 
-    [[nodiscard]] static b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
-        return NWB::Impl::GeometryHeapHandlesReady(geometryHeapHandles);
+    [owner_result]
+    private MeshResources emptyMesh()const{
+        return MeshResources();
     }
 
-    [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot)noexcept;
-
-    template<typename BufferHandler>
-    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(DeclVal<const u32&>(), MeshSourceBuffer(mesh, NWB_MESH_BINDING_POSITION), DeclVal<const b8&>()))){
-        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8 rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
-            handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
-        });
+    public void invalidateMeshViewBufferUploadMirror(){
+        this.m_meshState.m_meshViewGpuDataValid = false;
     }
 
+    [cpp_unwind]
+    public void invalidateResources();
 
-public:
-    RendererMeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererMeshState& meshState)noexcept
-        : m_arena(arena)
-        , m_world(world)
-        , m_graphics(graphics)
-        , m_assetManager(assetManager)
-        , m_meshState(meshState)
-    {}
+    [cpp_unwind]
+    public Expected<mut MeshResources> createMeshResources(in AssetRef<Mesh> meshAsset);
 
+    public Expected<mut MeshResources> findMeshResources(in Name meshKey);
 
-public:
-    void invalidateResources();
-    [[nodiscard]] Expected<NotNull<MeshResources*>> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena);
-    // Graph declaration resolves prepared keys without touching assets or mesh state.
-    [[nodiscard]] Expected<NotNull<MeshResources*>> findMeshResources(const Name& meshKey)noexcept;
-    [[nodiscard]] Expected<NotNull<MeshResources*>> createRuntimeMeshResources(const RuntimeMeshDesc& desc);
-    [[nodiscard]] Expected<NotNull<MeshResources*>> findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept;
-    [[nodiscard]] b8 prepareComputeEmulationResources(MeshResources& mesh);
-    [[nodiscard]] b8 prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
-    [[nodiscard]] b8 confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, b8 runtimeMesh)noexcept;
-    void pruneRuntimeMeshResources(Core::Alloc::ScratchArena& scratchArena);
-    void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(const Name& meshName)const noexcept;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& desc)const noexcept;
-    [[nodiscard]] b8 commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired);
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected);
-    void discardRayTracingBuildState()noexcept;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> collectSoftwareBvhParentBuildStates(Core::Alloc::ScratchArena& arena)const;
-    void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
-    void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
-    [[nodiscard]] b8 createMeshViewBuffer();
-    [[nodiscard]] MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
-    [[nodiscard]] Expected<Float44> snapshotAcceptedMeshViewWorldToClip()const noexcept;
-    // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
-    [[nodiscard]] MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const noexcept;
-    void confirmMeshViewBufferUpload(const MeshViewGpuData& viewState)noexcept;
-    void invalidateMeshViewBufferUploadMirror()noexcept{ m_meshState.m_meshViewGpuDataValid = false; }
-    [[nodiscard]] b8 prepareMeshFrameBindings(const MaterialPassBufferSnapshot& materialBuffers);
-    [[nodiscard]] MeshFrameBindingSnapshot meshFrameBindingSnapshot()const noexcept;
-    void populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept;
-    void releaseMeshGeometryHeapHandles(MeshResources& mesh);
+    [cpp_unwind]
+    public Expected<mut MeshResources> createRuntimeMeshResources(in RuntimeMeshDesc desc);
 
+    public Expected<mut MeshResources> findRuntimeMeshResources(in RuntimeMeshDesc desc);
 
-private:
-    void releaseMeshFrameHeapHandles();
-    // Mesh descriptors are established at creation; draw paths only consume ready handles.
-    [[nodiscard]] b8 createMeshRenderBindings(MeshResources& mesh);
-    [[nodiscard]] b8 meshRenderBindingsReady(const MeshResources& mesh)const noexcept;
-    [[nodiscard]] b8 createMeshGeometryHeapHandles(MeshResources& mesh);
-    [[nodiscard]] b8 ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
-    void releaseAllMeshGeometryHeapHandles();
+    [cpp_unwind]
+    public b8 prepareComputeEmulationResources(mut MeshResources mesh);
 
+    [cpp_unwind]
+    public b8 prepareObjectGeometryCache(mut MeshResources mesh, in ComputePipelineHandle decoderPipeline);
 
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::ECS::World& m_world;
-    Core::GraphicsRuntime& m_graphics;
-    Core::Assets::AssetManager& m_assetManager;
-    RendererMeshState& m_meshState;
-};
+    public b8 confirmObjectGeometryCache(in Name meshKey, in RuntimeMeshBuffers sourceBuffers, in ObjectGeometryCacheSnapshot expected, in b8 runtimeMesh);
 
+    [cpp_unwind]
+    public void pruneRuntimeMeshResources();
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public void collectRayTracingResourceSnapshots(mut MeshRayTracingResourceSnapshotVector outSnapshots)const{
+        outSnapshots.clear();
+        outSnapshots.reserve(this.m_meshState.m_meshes.size());
+        for(in auto entry : this.m_meshState.m_meshes){
+            auto snapshot = MeshRayTracingSnapshotPolicy().capture(entry.second);
+            outSnapshots.push_back(snapshot);
+        }
+    }
 
+    public Expected<MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(in Name meshName)const;
 
-NWB_IMPL_END
+    public Expected<MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(in RenderableMeshDesc desc)const;
 
+    [cpp_unwind]
+    public b8 commitRayTracingResourceSnapshot(in MeshRayTracingResourceSnapshot expected, mut MeshRayTracingResourceSnapshot desired);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    [cpp_unwind]
+    public Expected<MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(in MeshRayTracingResourceSnapshot expected);
 
+    public void discardRayTracingBuildState();
 
+    [cpp_unwind]
+    public Expected<MeshSoftwareBvhParentBuildStateVector> collectSoftwareBvhParentBuildStates()const;
+
+    [cpp_unwind]
+    public void collectRetainedAccelerationStateBuffers(mut MeshRetainedAccelerationStateBufferVector outBuffers)const{
+        outBuffers.clear();
+        outBuffers.reserve(this.m_meshState.m_meshes.size() * s_RetainedAccelerationBuffersPerMesh);
+        for(in auto entry : this.m_meshState.m_meshes){
+            in MeshResources mesh = entry.second;
+            // Retain every live BLAS source and backing buffer across preparation packets.
+            if(mesh.blas.valid()){
+                outBuffers.push_back(mesh.buffers.positionBuffer);
+                outBuffers.push_back(mesh.triangleIndexBuffer);
+                outBuffers.push_back(mesh.blas.deref().getBackingBufferHandle());
+            }
+            // Preserve mesh-local software buffers across tracing-backend changes.
+            outBuffers.push_back(mesh.swBvhNodeBuffer);
+            outBuffers.push_back(mesh.swBvhParentBuffer);
+        }
+    }
+
+    [cpp_unwind]
+    public void collectBlasGraphStates(mut MeshBlasGraphStateVector outStates)const{
+        outStates.clear();
+        outStates.reserve(this.m_meshState.m_meshes.size());
+        for(in auto entry : this.m_meshState.m_meshes){
+            in MeshResources mesh = entry.second;
+            if(!mesh.blas.valid())
+                continue;
+            // This predicate consumes only build/revision state; the graph output below retains the BLAS.
+            const b8 nativeBuildsBlas = MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision);
+            outStates.push_back(MeshBlasGraphState(mesh.meshName, mesh.blas, mesh.blasBackingFresh, nativeBuildsBlas));
+        }
+    }
+
+    [cpp_unwind]
+    public b8 createMeshViewBuffer();
+
+    public MeshViewBufferSnapshot meshViewBufferSnapshot()const;
+
+    public Expected<f32x4x4> snapshotAcceptedMeshViewWorldToClip()const;
+
+    public MeshViewBufferUpload prepareMeshViewBufferUpload(in f32 fallbackAspectRatio)const;
+
+    public void confirmMeshViewBufferUpload(in MeshViewGpuData viewState);
+
+    [cpp_unwind]
+    public b8 prepareMeshFrameBindings(in MaterialPassBufferSnapshot materialBuffers);
+
+    public MeshFrameBindingSnapshot meshFrameBindingSnapshot()const;
+
+    public void populateMeshGeometryHeapSlots(in MeshResources mesh, mut InstanceGpuData outInstance)const;
+
+    [cpp_unwind]
+    public void releaseMeshGeometryHeapHandles(mut MeshResources mesh);
+
+    [cpp_unwind]
+    private void releaseMeshFrameHeapHandles();
+
+    [cpp_unwind]
+    private b8 createMeshRenderBindings(mut MeshResources mesh);
+
+    private b8 meshRenderBindingsReady(in MeshResources mesh)const;
+
+    [cpp_unwind]
+    private b8 createMeshGeometryHeapHandles(mut MeshResources mesh);
+
+    [cpp_unwind]
+    private b8 ensureMeshSwBvhInputHeapHandles(mut MeshResources mesh);
+
+    [cpp_unwind]
+    private void releaseAllMeshGeometryHeapHandles();
 }
 
 

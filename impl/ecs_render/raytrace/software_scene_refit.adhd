@@ -2,137 +2,316 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/raytrace/graph_types.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
+#include <impl/ecs_render/raytrace/push_constants.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
+#include <impl/assets_graphics/bvh_subsystem.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/raytrace/graph_types.adhd.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/assets/graphics/bvh/scene_refit_constants.h>
+[cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_INSTANCE_BYTES")]
+extern const u32 s_ShaderSceneBvhRefitInstanceBytes;
 
-#include <core/alloc/global.h>
-#include <core/alloc/scratch.h>
-#include <core/graphics/rhi/command.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/task/gpu/task_graph.h>
+[cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET")]
+extern const u32 s_ShaderSceneBvhRefitMeshSlotOffset;
+static_assert(align_of<SoftwareSceneRefitInstanceGpu>() >= 16u);
+static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_ShaderSceneBvhRefitInstanceBytes);
+static_assert(offset_of<SoftwareSceneRefitInstanceGpu>(meshNodeSlot) == s_ShaderSceneBvhRefitMeshSlotOffset);
 
-#include <global/arena_object.h>
-#include <global/refcount_ptr.h>
-#include <global/simdmath.h>
-#include <global/span.h>
+const usize s_SoftwareSceneRefitInstanceGpuByteSize = 64u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_BEGIN
+class SoftwareSceneBvhValidationPolicy{
+    public b8 validateSceneRefitCounts(in usize instanceCount, in usize meshNodeCount, in u32 nodeCount)const{
+        return instanceCount != 0u
+            && meshNodeCount == instanceCount
+            && instanceCount <= cast<usize>(u32.max) / s_SoftwareSceneRefitInstanceGpuByteSize
+            && ComputeBinaryBvhNodeCount(instanceCount) == cast<usize>(nodeCount);
+    }
+
+    public b8 validateSceneNodeBufferBytes(in u32 nodeCount, in u64 sceneByteSize)const{
+        return sceneByteSize >= cast<u64>(nodeCount) * cast<u64>(s_NwbBvhNodeGpuByteSize);
+    }
+
+    public b8 validateTraversalCaptureCounts(in usize meshCount, in u32 instanceCount)const{
+        return meshCount != 0u && meshCount <= cast<usize>(u32.max) && instanceCount != 0u;
+    }
+
+    public b8 validateTraversalMeshMetadata(in Name meshName, in u32 primitiveCount, in usize nodeByteSize, in usize positionByteSize, in usize triangleIndexByteSize, in usize attributeByteSize)const{
+        return meshName != Name() && primitiveCount != 0u && nodeByteSize != 0u && positionByteSize != 0u && triangleIndexByteSize != 0u && attributeByteSize != 0u;
+    }
+
+    public b8 matchesTraversalTableSizes(
+        in u32 swShadowMeshCount,
+        in usize preparedMeshCount,
+        in u32 sceneBvhInstanceCount,
+        in u32 preparedInstanceCount,
+        in usize nodeBufferCount,
+        in usize positionBufferCount,
+        in usize indexBufferCount,
+        in usize attributeBufferCount,
+        in usize nodeHandleCount,
+        in usize positionHandleCount,
+        in usize indexHandleCount,
+        in usize attributeHandleCount
+    )const{
+        return swShadowMeshCount == cast<u32>(preparedMeshCount) && sceneBvhInstanceCount == preparedInstanceCount
+            && nodeBufferCount == preparedMeshCount && positionBufferCount == preparedMeshCount && indexBufferCount == preparedMeshCount && attributeBufferCount == preparedMeshCount
+            && nodeHandleCount == preparedMeshCount && positionHandleCount == preparedMeshCount && indexHandleCount == preparedMeshCount && attributeHandleCount == preparedMeshCount;
+    }
+}
+
+static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_SoftwareSceneRefitInstanceGpuByteSize);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GraphicsRuntime;
+class SoftwareSceneRefitSnapshot{
+    public BufferHandle inputBuffer;
+    public BufferHandle sceneNodes;
+    public ComputePipelineHandle pipeline;
+    public Vector<SoftwareSceneRefitInstanceGpu> inputs;
+    public Vector<BufferHandle> meshNodes;
+    public mut GraphicsRuntime graphics;
+    public GpuDescriptorHandle inputDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle sceneDescriptor = GpuDescriptorHandleInvalid();
+    public GpuPhysicalQueueId queue;
+    public u32 nodeCount = 0u;
+
+    public SoftwareSceneRefitSnapshot(mut GraphicsRuntime graphics){ this.graphics = graphics; }
+}
+
+type SoftwareSceneRefitHandle = Shared<SoftwareSceneRefitSnapshot>;
+
+class SoftwareSceneRefitResources : NoCopy{
+    private SharedPool m_versions = SharedPool();
+    private mut GraphicsRuntime m_graphics;
+    private Vector<SoftwareSceneRefitHandle> m_snapshots;
+    private BufferHandle m_inputBuffer;
+    private GpuDescriptorHandle m_inputDescriptor = GpuDescriptorHandleInvalid();
+    private BindingLayoutHandle m_bindingLayout;
+    private ShaderHandle m_shader;
+    private ComputePipelineHandle m_pipeline;
+
+    public SoftwareSceneRefitResources(mut GraphicsRuntime graphics){
+        this.m_graphics = graphics;
+    }
+
+    [cpp_unwind]
+    public void invalidate(){
+        this.m_snapshots.clear();
+        mut Device device = this.m_graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        if(heap.isInitialized() && this.m_inputBuffer.valid() && this.m_inputDescriptor.valid() && this.m_inputBuffer.deref().getDeviceGeneration() == device.getDeviceGeneration())
+            heap.free(this.m_inputDescriptor);
+        this.m_inputBuffer.reset();
+        this.m_inputDescriptor = GpuDescriptorHandleInvalid();
+        this.m_pipeline.reset();
+        this.m_shader.reset();
+        this.m_bindingLayout.reset();
+    }
+
+    [cpp_unwind]
+    public Expected<SoftwareSceneRefitHandle> prepare(
+        in Span<SoftwareSceneRefitInstanceGpu> inputs,
+        in Span<BufferHandle> meshNodes,
+        in BufferHandle sceneNodes,
+        in GpuDescriptorHandle sceneDescriptor,
+        in u32 nodeCount,
+        mut RendererShaderSystem shaderSystem
+    ){
+        const SoftwareSceneBvhValidationPolicy validationPolicy = SoftwareSceneBvhValidationPolicy();
+        const usize instanceCount = inputs.size();
+        if(
+            !validationPolicy.validateSceneRefitCounts(instanceCount, meshNodes.size(), nodeCount)
+            || !sceneNodes.valid() || !sceneDescriptor.valid() || sceneDescriptor.descriptorClass() != GpuDescriptorClass::StorageBuffer
+            || !this.ensurePipeline(shaderSystem)
+        )
+            return MakeUnexpected(Failure());
+        mut Device device = this.m_graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        in BufferDesc sceneDesc = sceneNodes.deref().getCreationDescription();
+        if(sceneNodes.deref().getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs || !validationPolicy.validateSceneNodeBufferBytes(nodeCount, sceneDesc.byteSize))
+            return MakeUnexpected(Failure());
+        const usize byteSize = instanceCount * size_of<SoftwareSceneRefitInstanceGpu>();
+        if(this.m_inputBuffer.valid() && this.m_inputBuffer.deref().getDeviceGeneration() != device.getDeviceGeneration())
+            return MakeUnexpected(Failure());
+        if(!this.m_inputBuffer.valid() || this.m_inputBuffer.deref().getCreationDescription().byteSize < byteSize){
+            BufferDesc desc;
+            desc.setByteSize(byteSize).setCanHaveRawViews(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+                .setDebugName(Name(s_SoftwareSceneRefitInputsName)).enableAutomaticStateTracking(ResourceStates::Common);
+            auto replacementResult = this.m_graphics.createBuffer(desc);
+            if(!replacementResult.has_value())
+                return MakeUnexpected(Failure());
+            BufferHandle replacement = replacementResult.value();
+            const Expected<GpuDescriptorHandle> descriptorResult = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, replacement.deref()));
+            if(!descriptorResult.has_value())
+                return MakeUnexpected(descriptorResult.error());
+            const GpuDescriptorHandle descriptor = descriptorResult.value();
+            if(this.m_inputDescriptor.valid())
+                heap.free(this.m_inputDescriptor);
+            this.m_inputBuffer = replacement;
+            this.m_inputDescriptor = descriptor;
+        }
+        SoftwareSceneRefitHandle snapshot;
+        for(in SoftwareSceneRefitHandle cached : this.m_snapshots){
+            if(cached.referenceCount() == 1u){
+                AtomicThreadFence(MemoryOrder::acquire);
+                snapshot = cached;
+                break;
+            }
+        }
+        if(!snapshot.valid()){
+            const auto created = this.m_versions.make<SoftwareSceneRefitSnapshot>(this.m_graphics);
+            if(!created.has_value())
+                return MakeUnexpected(Failure());
+            snapshot = created.value();
+            this.m_snapshots.push_back(snapshot);
+        }
+        snapshot.deref().inputs.clear();
+        snapshot.deref().meshNodes.clear();
+        snapshot.deref().inputBuffer = this.m_inputBuffer;
+        snapshot.deref().sceneNodes = sceneNodes;
+        snapshot.deref().pipeline = this.m_pipeline;
+        snapshot.deref().inputDescriptor = this.m_inputDescriptor;
+        snapshot.deref().sceneDescriptor = sceneDescriptor;
+        snapshot.deref().queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        snapshot.deref().nodeCount = nodeCount;
+        snapshot.deref().inputs.reserve(instanceCount);
+        snapshot.deref().meshNodes.reserve(instanceCount);
+        for(usize index = 0u; index < instanceCount; ++index){
+            if(
+                !meshNodes[index].valid() || inputs[index].meshNodeSlot == u32.max
+                || meshNodes[index].deref().getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index].deref().getCreationDescription().byteSize < s_NwbBvhNodeGpuByteSize
+            )
+                return MakeUnexpected(Failure());
+            snapshot.deref().inputs.push_back(inputs[index]);
+            snapshot.deref().meshNodes.push_back(meshNodes[index]);
+        }
+        return snapshot;
+    }
+
+    [cpp_unwind]
+    private b8 ensurePipeline(mut RendererShaderSystem shaderSystem){
+        return EnsurePushConstantComputePipeline<BvhSubsystem>(
+            this.m_graphics.getDevice(), shaderSystem, lambda[](in BvhSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.sceneRefitCs; }, s_DefaultVariant, Name(s_RenderNameSoftwareSceneRefit),
+                size_of<SoftwareSceneRefitPushConstants>(), false, this.m_bindingLayout, this.m_shader, this.m_pipeline
+        );
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_END
+class SoftwareSceneRefitTask{
+    private SoftwareSceneRefitHandle m_snapshot;
 
+    public SoftwareSceneRefitTask(in SoftwareSceneRefitHandle snapshot){ this.m_snapshot = snapshot; }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = GpuQueueCapability::Compute;
+        commands.requiresPrimaryGraphicsQueue = true;
+        return commands;
+    }
 
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        if(!this.m_snapshot.valid() || context.commandIrCapture)
+            return false;
+        in SoftwareSceneRefitSnapshot snapshot = this.m_snapshot.deref();
+        if(context.queue != snapshot.queue || !snapshot.pipeline.valid())
+            return false;
+        commandList.endRenderPass();
+        ComputeState state;
+        state.setPipeline(snapshot.pipeline.deref());
+        commandList.setComputeState(state);
+        snapshot.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, snapshot.pipeline.deref());
+        const SoftwareSceneRefitPushConstants push = MakeSoftwareSceneRefitPushConstants(snapshot.nodeCount, snapshot.sceneDescriptor.slot(), snapshot.inputDescriptor.slot(), cast<u32>(snapshot.inputs.size()));
+        commandList.setPushConstants(push);
+        commandList.dispatch(1u, 1u, 1u);
+        return true;
+    }
+}
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererShaderSystem;
-
-static_assert(alignof(SoftwareSceneRefitInstanceGpu) >= 16u);
-static_assert(sizeof(SoftwareSceneRefitInstanceGpu) == NWB_SCENE_BVH_REFIT_INSTANCE_BYTES);
-static_assert(offsetof(SoftwareSceneRefitInstanceGpu, meshNodeSlot) == NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET);
-
-// Frozen instance order and owning roots are consumed only after their prepared mesh builds.
-struct SoftwareSceneRefitSnapshot{
-    Core::BufferHandle inputBuffer;
-    Core::BufferHandle sceneNodes;
-    Core::ComputePipelineHandle pipeline;
-    Vector<SoftwareSceneRefitInstanceGpu, Core::Alloc::GlobalArena> inputs;
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> meshNodes;
-    Core::GraphicsRuntime& graphics;
-    Core::GpuDescriptorHandle inputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle sceneDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuPhysicalQueueId queue;
-    u32 nodeCount = 0u;
-
-
-public:
-    SoftwareSceneRefitSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphicsIn)noexcept
-        : inputs(arena)
-        , meshNodes(arena)
-        , graphics(graphicsIn)
-    {}
-};
-using SoftwareSceneRefitControl = RefCounter<SoftwareSceneRefitSnapshot>;
-using SoftwareSceneRefitHandle = RefCountPtr<SoftwareSceneRefitControl, ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>>;
-
-class SoftwareSceneRefitResources final : NoCopy{
-public:
-    SoftwareSceneRefitResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_snapshots(arena)
-    {}
-
-
-public:
-    void invalidate();
-    [[nodiscard]] Expected<SoftwareSceneRefitHandle> prepare(
-        Span<const SoftwareSceneRefitInstanceGpu> inputs, Span<const Core::BufferHandle> meshNodes,
-        const Core::BufferHandle& sceneNodes, Core::GpuDescriptorHandle sceneDescriptor, u32 nodeCount,
-        RendererShaderSystem& shaderSystem
-    );
-
-
-private:
-    [[nodiscard]] b8 ensurePipeline(RendererShaderSystem& shaderSystem);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    Vector<SoftwareSceneRefitHandle, Core::Alloc::GlobalArena> m_snapshots;
-    Core::BufferHandle m_inputBuffer;
-    Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
-    Core::BindingLayoutHandle m_bindingLayout;
-    Core::ShaderHandle m_shader;
-    Core::ComputePipelineHandle m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Both tasks must share the accepting packet with all mesh builds and the scene upload.
-[[nodiscard]] Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(const SoftwareSceneRefitHandle& snapshot, Core::GpuGraphResourceId sceneNodes, Core::GpuTaskId dependency, Core::GpuTaskGraph& graph, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[cpp_unwind]
+Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareSceneRefitHandle snapshot, in GpuGraphResourceId sceneNodes, in borrow GpuTaskId dependency, mut GpuTaskGraph graph){
+    if(!snapshot.valid() || !sceneNodes.valid() || !dependency.valid() || snapshot.deref().inputs.empty())
+        return MakeUnexpected(Failure());
+    {
+        const GpuTaskGraphDeclarationReadView declarations(graph);
+        if(!declarations.valid() || declarations.findImportedBuffer(snapshot.deref().sceneNodes) != sceneNodes)
+            return MakeUnexpected(Failure());
+    }
+    GpuGraphResourceDesc inputDesc = BufferResourceDesc(Name(s_SoftwareSceneRefitInputsName), "Software Scene Refit Inputs");
+    inputDesc.setInitialState(ResourceStates::Common).setExternalFinalState(ResourceStates::Common);
+    const auto inputResult = graph.importBuffer(snapshot.deref().inputBuffer, inputDesc);
+    if(!inputResult.has_value())
+        return MakeUnexpected(Failure());
+    const GpuGraphResourceId input = inputResult.value();
+    Vector<GpuTaskResourceUse> uses;
+    // The input buffer and the scene nodes.
+    uses.reserve(snapshot.deref().meshNodes.size() + s_SoftwareSceneRefitFixedUseCapacity);
+    uses.push_back(ReadUse(input, ResourceStates::ShaderResource));
+    uses.push_back(ReadWriteUse(sceneNodes, ResourceStates::UnorderedAccess));
+    // Reuse every root's existing import, including accepted meshes without a build in this frame.
+    for(in BufferHandle root : snapshot.deref().meshNodes){
+        GpuGraphResourceId resource;
+        {
+            const GpuTaskGraphDeclarationReadView declarations(graph);
+            if(!declarations.valid())
+                return MakeUnexpected(Failure());
+            resource = declarations.findImportedBuffer(root);
+        }
+        if(!resource.valid())
+            return MakeUnexpected(Failure());
+        b8 present = false;
+        for(in GpuTaskResourceUse use : uses){
+            if(use.resource == resource){
+                present = true;
+                break;
+            }
+        }
+        if(!present)
+            uses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
+    }
+    const auto uploadResult = graph.copyUploadBytes<u32>(PodArrayBytes<SoftwareSceneRefitInstanceGpu>(Span<SoftwareSceneRefitInstanceGpu>(snapshot.deref().inputs)));
+    if(!uploadResult.has_value())
+        return MakeUnexpected(Failure());
+    const GpuUploadBlobId upload = uploadResult.value();
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    GpuTaskDesc uploadDesc;
+    uploadDesc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefitInputsUpload)).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(scheduling).setDependency(dependency);
+    SoftwareSceneRefitGraphTasks result;
+    GpuUploadBufferTaskDesc uploadTask;
+    uploadTask.source = upload;
+    uploadTask.destination = input;
+    uploadTask.finalState = ResourceStates::Common;
+    const auto inputUploadResult = graph.addUploadBufferTask(uploadDesc, uploadTask);
+    if(!inputUploadResult.has_value())
+        return MakeUnexpected(Failure());
+    result.inputUpload = inputUploadResult.value();
+    GpuTaskDesc desc;
+    desc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefit)).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependency(result.inputUpload).setResourceUses(Span<GpuTaskResourceUse>(uses));
+    const auto refitResult = graph.addPayloadTask(desc, SoftwareSceneRefitTask(snapshot));
+    if(!refitResult.has_value())
+        return MakeUnexpected(refitResult.error());
+    result.refit = refitResult.value();
+    return result;
 }
 
 

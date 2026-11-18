@@ -2,99 +2,146 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/deferred/task_graph_prefix_tasks.adhd>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
+#include <impl/ecs_render/mesh/task_graph_prefix_tasks.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/mesh/mesh_view_private.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
+b8 HasValidPrefixSceneUploadInputs(
+    in b8 meshViewValid,
+    in b8 lightsValid,
+    in b8 sceneShadingValid,
+    in b8 shadowPrepareTaskValid
+){
+    return meshViewValid && lightsValid && sceneShadingValid && shadowPrepareTaskValid;
+}
 
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_graph.h>
+class PrefixSceneUploadInputs{
+    public RayTracingLightingClassificationInput rayTracingLightingInput;
+    public in MeshViewGpuData meshViewState;
+    public GpuGraphResourceId meshView;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId sceneShading;
+    public GpuTaskId shadowPrepareTask;
+    public f32 meshViewAspectRatio = 1.f;
+    public b8 meshViewUploadRequired = false;
+    public mut Optional<GpuTimingMeasure> asyncPrefixTiming;
+    public in GraphicsPrefixTimingTicket meshViewSetupTimingTicket;
+    public in GraphicsPrefixTimingTicket sceneShadingSetupTimingTicket;
+    public in b8 asyncPrefixTimingSpansOnePacket;
+    public in GpuTaskId shadowVisibilityTask;
+    public mut b8 meshViewSetupReady;
+    public mut b8 sceneShadingSetupReady;
 
+    public PrefixSceneUploadInputs(
+        in MeshViewGpuData meshViewState, mut Optional<GpuTimingMeasure> asyncPrefixTiming,
+        in GraphicsPrefixTimingTicket meshTicket, in GraphicsPrefixTimingTicket shadingTicket, in b8 asyncSpansPacket,
+        in GpuTaskId shadowVisibilityTask, mut b8 meshViewSetupReady, mut b8 sceneShadingSetupReady
+    ){
+        this.meshViewState = meshViewState;
+        this.asyncPrefixTiming = asyncPrefixTiming;
+        this.meshViewSetupTimingTicket = meshTicket;
+        this.sceneShadingSetupTimingTicket = shadingTicket;
+        this.asyncPrefixTimingSpansOnePacket = asyncSpansPacket;
+        this.shadowVisibilityTask = shadowVisibilityTask;
+        this.meshViewSetupReady = meshViewSetupReady;
+        this.sceneShadingSetupReady = sceneShadingSetupReady;
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class PrefixSceneUploadResult{
+    public GpuTaskId meshViewSetupTask;
+    public GpuTaskId sceneShadingSetupTask;
+    public RayTracingLightingClassification lightingClassification;
+    public Array<SceneLightGpuData, s_SceneMaxLights> lightData;
+    public u32 lightCount = 0u;
+    public u64 sceneLightingContentHash = 0u;
+}
 
+class PrefixSceneUploadBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererDeferredSystem m_deferredSystem;
+    private mut RendererMeshSystem m_meshSystem;
+    private mut GraphicsRuntime m_graphics;
 
-NWB_IMPL_BEGIN
+    public PrefixSceneUploadBuilder(mut GpuTaskGraph graph, mut RendererDeferredSystem deferredSystem, mut RendererMeshSystem meshSystem, mut GraphicsRuntime graphics){
+        this.m_graph = graph;
+        this.m_deferredSystem = deferredSystem;
+        this.m_meshSystem = meshSystem;
+        this.m_graphics = graphics;
+    }
 
+    [cpp_unwind]
+    public Expected<PrefixSceneUploadResult> declare(mut PrefixSceneUploadInputs inputs){
+        if(!HasValidPrefixSceneUploadInputs(inputs.meshView.valid(), inputs.lights.valid(), inputs.sceneShading.valid(), inputs.shadowPrepareTask.valid()))
+            return MakeUnexpected(Failure());
+        PrefixSceneUploadResult result;
+        const SceneShadingBufferUploads uploads = this.m_deferredSystem.prepareSceneShadingBufferUploads(inputs.meshViewAspectRatio, inputs.rayTracingLightingInput);
+        const Span<SceneLightGpuData> allLights = uploads.lightData;
+        const Span<SceneLightGpuData> lights = allLights.subspan(0u, uploads.lightCount);
+        result.sceneLightingContentHash = ComputeSceneLightingContentHash(uploads.sceneShadingState, lights);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        GpuTaskSchedulingHint scheduling;
+        scheduling.cost = GpuTaskCostHint::Medium;
+        scheduling.forceSubmissionBoundary = false;
+        scheduling.allowPacketMerge = true;
+        GpuTaskDesc setupDesc;
+        setupDesc.setIdentity(s_RenderNameRenderGraphicsPrefixMeshViewSetup).setMarkerLabel("Mesh View Setup").setScheduling(scheduling);
+        setupDesc.setDependency(inputs.shadowPrepareTask);
+        const auto setupTask = this.m_graph.addPayloadTask(setupDesc, MeshViewSetupGraphTask(this.m_graphics, inputs.asyncPrefixTiming, inputs.meshViewSetupTimingTicket, inputs.asyncPrefixTimingSpansOnePacket, inputs.shadowVisibilityTask));
+        if(!setupTask.has_value())
+            return MakeUnexpected(Failure());
+        result.meshViewSetupTask = setupTask.value();
+        GpuTaskId dependency = result.meshViewSetupTask;
+        if(inputs.meshViewUploadRequired){
+            const auto blob = this.m_graph.copyUploadValue(inputs.meshViewState);
+            if(!blob.has_value())
+                return MakeUnexpected(blob.error());
+            if(!AppendImmutableBufferUpload(this.m_graph, blob.value(), inputs.meshView, s_RenderNameRenderGraphicsPrefixMeshViewUpload, "Mesh View Upload", dependency))
+                return MakeUnexpected(Failure());
+        }
 
+        scheduling.cost = GpuTaskCostHint::Tiny;
+        scheduling.mergeWithPrevious = true;
+        GpuTaskDesc commitDesc;
+        commitDesc.setIdentity(s_RenderNameRenderGraphicsPrefixMeshViewUploadCommit).setMarkerLabel("Mesh View Upload Commit").setScheduling(scheduling);
+        commitDesc.setDependency(dependency);
+        const auto committed = this.m_graph.addPayloadTask(commitDesc, MeshViewUploadCommitGraphTask(this.m_meshSystem, inputs.meshViewState, inputs.meshViewUploadRequired, inputs.meshViewSetupReady));
+        if(!committed.has_value())
+            return MakeUnexpected(Failure());
+        dependency = committed.value();
+        if(uploads.lightUploadRequired){
+            const auto blob = this.m_graph.copyUploadElements<SceneLightGpuData>(lights);
+            if(!blob.has_value())
+                return MakeUnexpected(blob.error());
+            if(!AppendImmutableBufferUpload(this.m_graph, blob.value(), inputs.lights, s_RenderNameRenderGraphicsPrefixSceneLightsUpload, "Scene Lights Upload", dependency))
+                return MakeUnexpected(Failure());
+        }
+        if(uploads.sceneShadingUploadRequired){
+            const auto blob = this.m_graph.copyUploadValue(uploads.sceneShadingState);
+            if(!blob.has_value())
+                return MakeUnexpected(blob.error());
+            if(!AppendImmutableBufferUpload(this.m_graph, blob.value(), inputs.sceneShading, s_RenderNameRenderGraphicsPrefixSceneShadingUpload, "Scene Shading Upload", dependency))
+                return MakeUnexpected(Failure());
+        }
 
-class RendererDeferredSystem;
-class RendererMeshSystem;
-
-// Graphics-prefix scene uploads own mesh-view plus scene light/shading upload chain.
-struct PrefixSceneUploadInputs{
-    RayTracingLightingClassificationInput rayTracingLightingInput;
-    const MeshViewGpuData& meshViewState;
-    Core::GpuGraphResourceId meshView;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuTaskId shadowPrepareTask;
-    f32 meshViewAspectRatio = 1.f;
-    b8 meshViewUploadRequired = false;
-    Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
-    Core::GpuTimingSubmissionTicket*& meshViewSetupTimingTicket;
-    Core::GpuTimingSubmissionTicket*& sceneShadingSetupTimingTicket;
-    const b8& asyncPrefixTimingSpansOnePacket;
-    const Core::GpuTaskId& shadowVisibilityTask;
-    b8& meshViewSetupReady;
-    b8& sceneShadingSetupReady;
-};
-
-struct PrefixSceneUploadResult{
-    Core::GpuTaskId meshViewSetupTask;
-    Core::GpuTaskId sceneShadingSetupTask;
-    RayTracingLightingClassification lightingClassification;
-    Array<SceneLightGpuData, NWB_SCENE_MAX_LIGHTS> lightData{};
-    u32 lightCount = 0u;
-    u64 sceneLightingContentHash = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class PrefixSceneUploadBuilder final : NoCopy{
-public:
-    PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem, RendererMeshSystem& meshSystem, Core::GraphicsRuntime& graphics)noexcept
-        : m_graph(graph)
-        , m_deferredSystem(deferredSystem)
-        , m_meshSystem(meshSystem)
-        , m_graphics(graphics)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<PrefixSceneUploadResult> declare(const PrefixSceneUploadInputs& inputs);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererDeferredSystem& m_deferredSystem;
-    RendererMeshSystem& m_meshSystem;
-    Core::GraphicsRuntime& m_graphics;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        GpuTaskDesc shadingDesc;
+        shadingDesc.setIdentity(s_RenderNameRenderGraphicsPrefixSceneShadingSetup).setMarkerLabel("Scene Shading Setup").setScheduling(scheduling);
+        shadingDesc.setDependency(dependency);
+        const auto shadingTask = this.m_graph.addPayloadTask(shadingDesc, SceneShadingSetupGraphTask(this.m_deferredSystem, inputs.sceneShadingSetupTimingTicket, inputs.sceneShadingSetupReady, uploads));
+        if(!shadingTask.has_value())
+            return MakeUnexpected(Failure());
+        result.sceneShadingSetupTask = shadingTask.value();
+        result.lightingClassification = uploads.lightingClassification;
+        result.lightData = uploads.lightData;
+        result.lightCount = uploads.lightCount;
+        return result;
+    }
 }
 
 

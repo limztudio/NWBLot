@@ -47,6 +47,14 @@ public:
         // Direct native consumer timeline; kCount resolves from payload size, final state, and available queues.
         // The scheduler independently places the producer and submits readiness bridges for consumers.
         CommandQueue::Enum queue = CommandQueue::kCount;
+
+
+    public:
+        template<typename T>
+        void setData(const Span<const T> payload)noexcept{
+            data = payload.data();
+            dataSize = payload.size_bytes();
+        }
     };
 
     // One immutable CPU payload per subresource. Batch copies regions into graph blobs first, so callers may free decoded memory on return.
@@ -59,6 +67,13 @@ public:
         u32 arraySlice = 0u;
         u32 mipLevel = 0u;
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
+
+
+    public:
+        void setBytes(const Span<const u8> bytes)noexcept{
+            data = bytes.data();
+            dataSize = bytes.size();
+        }
     };
 
     // Multi-subresource texture upload via a compiler-owned graph.
@@ -89,6 +104,15 @@ public:
 public:
     [[nodiscard]] Expected<BufferHandle> setupBuffer(const BufferSetupDesc& desc)const;
     [[nodiscard]] b8 uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
+    [[nodiscard]] b8 uploadTextureBatch(
+        const TextureHandle& destination, const Span<const TextureUploadRegion> regions, const ResourceStates::Mask finalState,
+        const ResourceStates::Mask initialState, QueueSubmissionToken& acceptedToken
+    )const{
+        return uploadTextureBatch(TextureUploadBatchDesc{
+            .destination = destination, .regions = regions.data(), .regionCount = regions.size(), .acceptedToken = &acceptedToken,
+            .finalState = finalState, .physicalInitialState = initialState, .hasPhysicalInitialState = true,
+        });
+    }
     // Compiles, records, and submits an isolated graph synchronously.
     // This is the graph-owned escape hatch for a standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
     [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraph(
@@ -98,6 +122,29 @@ public:
         GpuTimingRecorder* timingRecorder = nullptr,
         GpuTimingFrameTransaction* frameTimingTransaction = nullptr
     )const;
+    template<typename Declare>
+    [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraph(Declare&& declare, GpuPhysicalQueueId requiredTerminalQueue)const{
+        return submitCallable(declare, requiredTerminalQueue, nullptr, nullptr);
+    }
+
+    template<typename Declare>
+    [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraphWithTiming(
+        Declare&& declare, GpuPhysicalQueueId requiredTerminalQueue, GpuTimingRecorder& timingRecorder, GpuTimingFrameTransaction& frameTimingTransaction
+    )const{
+        return submitCallable(declare, requiredTerminalQueue, &timingRecorder, &frameTimingTransaction);
+    }
+
+
+private:
+    template<typename Declare>
+    [[nodiscard]] Expected<QueueSubmissionToken> submitCallable(
+        Declare& declare, GpuPhysicalQueueId queue, GpuTimingRecorder* timingRecorder, GpuTimingFrameTransaction* frameTimingTransaction
+    )const{
+        auto invoke = [&declare](GpuTaskGraph& graph){ return declare(graph); };
+        return submitStandaloneTaskGraph(&invoke, [](void* context, GpuTaskGraph& graph){
+            return (*static_cast<decltype(invoke)*>(context))(graph);
+        }, queue, timingRecorder, frameTimingTransaction);
+    }
 
 
 

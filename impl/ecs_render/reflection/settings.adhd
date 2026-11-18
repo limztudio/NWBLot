@@ -184,5 +184,16 @@ b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSet
 }
 
 
+class ReflectionGraphResult{
+    public GpuTaskId completion;
+    public GpuGraphResourceId opaqueRadiance;
+    public GpuGraphResourceId glassRadiance;
+    public GpuGraphResourceId frameParameters;
+    public GpuGraphResourceId counters;
+
+    public b8 valid()const{ return this.completion.valid(); }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

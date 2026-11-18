@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
+#include <impl/ecs_render/avboit/avboit.adhd>
+#include <impl/ecs_render/avboit/avboit_system.adhd>
+#include <impl/ecs_render/avboit/geometry_types.adhd>
+#include <impl/ecs_render/material/compute_emulation_output_index.adhd>
 #include <impl/ecs_render/csg/renderer_csg_types.adhd>
 #include <impl/ecs_render/kernel/timing_names.adhd>
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
@@ -602,145 +605,74 @@ b8 FrameBindingsMatch(in MeshFrameBindingSnapshot left, in MeshFrameBindingSnaps
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_avboit_pass_and_geometry_reuse{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 EligibleGroup(
-    const MaterialPassDrawItemPartitionsView& draws,
-    const Span<const InstanceGpuData> instances,
-    const MeshFrameBindingSnapshot& frameBindings,
-    const MaterialPipelinePass::Enum pass,
-    Core::Alloc::ScratchArena& arena
-){
-    if(!IsEligibleAvboitReuseGroupHeader(
-        MaterialPipelinePassUsesRendererAvboit(pass),
-        draws.regular.computeDrawItems.empty(),
-        draws.regular.meshDrawItems.empty(),
-        draws.csg.empty(),
-        draws.csgReceiverSurface.empty(),
-        frameBindings.bindingValid(),
-        frameBindings.instanceBufferCapacity,
-        instances.size()
-    ))
+[cpp_unwind]
+b8 EligibleAvboitReuseGroup(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot bindings, in MaterialPipelinePass pass){
+    if(!IsEligibleAvboitReuseGroupHeader(MaterialPipelinePassUsesRendererAvboit(pass), draws.regular.computeDrawItems.empty(),
+        draws.regular.meshDrawItems.empty(), draws.csg.empty(), draws.csgReceiverSurface.empty(), bindings.bindingValid(), bindings.instanceBufferCapacity, instances.size()))
         return false;
-
-    ECSRenderDetail::MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(arena);
-    ECSRenderDetail::MaterialPassEmulationOutputIndex<u32> slots(arena);
-    for(const MaterialPassDrawItem& draw : draws.regular.computeDrawItems){
-        const MaterialPassMeshResourceSnapshot& mesh = draw.meshResources;
-        if(
-            draw.pipelineKey.pass != pass || draw.pipelineKey.csgMode != MaterialPipelineCsgMode::None
+    MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> outputs;
+    MaterialPassEmulationOutputIndex<u32> slots;
+    for(in MaterialPassDrawItem draw : draws.regular.computeDrawItems){
+        in MaterialPassMeshResourceSnapshot mesh = draw.meshResources;
+        if(draw.pipelineKey.pass != pass || draw.pipelineKey.csgMode != MaterialPipelineCsgMode::None
             || !draw.pipelineResources.sharedGeometryComputeProgram || draw.instanceIndex >= instances.size()
-            || !mesh.valid() || !mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()
-            || mesh.emulationVertexHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-            || !outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get())) || !slots.insert(mesh.emulationVertexHeapHandle.slot())
-        )
+            || !mesh.valid() || !mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid()
+            || mesh.emulationVertexHeapHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer
+            || !outputs.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer)) || !slots.insert(mesh.emulationVertexHeapHandle.slot()))
             return false;
     }
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void AvboitGeneratedGeometryReuse::reset()noexcept{
-    m_draws.clear();
-    m_instances.clear();
-    m_frameBindings = {};
-    m_producer = {};
-    m_captured = false;
+void AvboitGeneratedGeometryReuse::reset(){
+    this.m_draws.clear();
+    this.m_instances.clear();
+    this.m_frameBindings = MeshFrameBindingSnapshot();
+    this.m_producer = GpuTaskId();
+    this.m_captured = false;
 }
 
-b8 AvboitGeneratedGeometryReuse::capture(
-    const MaterialPassDrawItemPartitionsView& draws,
-    const Span<const InstanceGpuData> instances,
-    const MeshFrameBindingSnapshot& frameBindings,
-    const MeshViewGpuData& view,
-    const MaterialPipelinePass::Enum pass
-){
-    reset();
-    if(!__hidden_avboit_pass_and_geometry_reuse::EligibleGroup(draws, instances, frameBindings, pass, m_arena))
+b8 AvboitGeneratedGeometryReuse::capture(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot frameBindings, in MeshViewGpuData view, in MaterialPipelinePass pass){
+    this.reset();
+    if(!EligibleAvboitReuseGroup(draws, instances, frameBindings, pass))
         return false;
-    m_draws.reserve(draws.regular.computeDrawItems.size());
-    m_draws.assign(draws.regular.computeDrawItems.begin(), draws.regular.computeDrawItems.end());
-    m_instances.reserve(m_draws.size());
-    for(const MaterialPassDrawItem& draw : m_draws)
-        m_instances.push_back(instances[draw.instanceIndex]);
-    m_frameBindings = frameBindings;
-    static_assert(sizeof(m_viewBytes) == sizeof(view));
-    FOUNDATION_MEMCPY(m_viewBytes.data(), sizeof(m_viewBytes), &view, sizeof(view));
-    m_captured = true;
+    this.m_draws.reserve(draws.regular.computeDrawItems.size());
+    this.m_instances.reserve(draws.regular.computeDrawItems.size());
+    for(in MaterialPassDrawItem draw : draws.regular.computeDrawItems){
+        this.m_draws.push_back(draw);
+        this.m_instances.push_back(instances[draw.instanceIndex]);
+    }
+    this.m_frameBindings = frameBindings;
+    this.m_viewBytes = bit_cast<Array<u8, s_MeshViewGpuDataBytes>>(view);
+    this.m_captured = true;
     return true;
 }
 
-b8 AvboitGeneratedGeometryReuse::matches(
-    const MaterialPassDrawItemPartitionsView& draws,
-    const Span<const InstanceGpuData> instances,
-    const MeshFrameBindingSnapshot& frameBindings,
-    const MeshViewGpuData& view,
-    const MaterialPipelinePass::Enum pass
-){
-    const b8 eligibleGroup = m_captured && m_producer.valid() && __hidden_avboit_pass_and_geometry_reuse::EligibleGroup(draws, instances, frameBindings, pass, m_arena);
-    if(
-        !CanMatchAvboitReusableGeometry(m_captured, m_producer.valid(), eligibleGroup, m_draws.size(), draws.regular.computeDrawItems.size())
-        || !FrameBindingsMatch(m_frameBindings, frameBindings)
-        || FOUNDATION_MEMCMP(m_viewBytes.data(), &view, sizeof(view)) != 0
-    ){
-        reset();
+b8 AvboitGeneratedGeometryReuse::matches(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot frameBindings, in MeshViewGpuData view, in MaterialPipelinePass pass){
+    const b8 eligible = this.m_captured && this.m_producer.valid() && EligibleAvboitReuseGroup(draws, instances, frameBindings, pass);
+    if(!CanMatchAvboitReusableGeometry(this.m_captured, this.m_producer.valid(), eligible, this.m_draws.size(), draws.regular.computeDrawItems.size())
+        || !FrameBindingsMatch(this.m_frameBindings, frameBindings) || this.m_viewBytes != bit_cast<Array<u8, s_MeshViewGpuDataBytes>>(view)){
+        this.reset();
         return false;
     }
-    for(usize index = 0u; index < m_draws.size(); ++index){
-        const MaterialPassDrawItem& current = draws.regular.computeDrawItems[index];
-        if(!DrawInputsMatch(m_draws[index], current) || FOUNDATION_MEMCMP(&m_instances[index], &instances[current.instanceIndex], sizeof(InstanceGpuData)) != 0){
-            reset();
+    for(usize index = 0u; index < this.m_draws.size(); ++index){
+        in MaterialPassDrawItem current = draws.regular.computeDrawItems[index];
+        if(!DrawInputsMatch(this.m_draws[index], current)
+            || bit_cast<Array<u8, s_InstanceGpuDataByteSize>>(this.m_instances[index]) != bit_cast<Array<u8, s_InstanceGpuDataByteSize>>(instances[current.instanceIndex])){
+            this.reset();
             return false;
         }
     }
     return true;
 }
 
-b8 AvboitGeneratedGeometryReuse::publishProducer(const Core::GpuTaskId task)noexcept{
-    if(!CanPublishAvboitReusableGeometryProducer(m_captured, task.valid())){
-        reset();
+b8 AvboitGeneratedGeometryReuse::publishProducer(in GpuTaskId task){
+    if(!CanPublishAvboitReusableGeometryProducer(this.m_captured, task.valid())){
+        this.reset();
         return false;
     }
-    m_producer = task;
+    this.m_producer = task;
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

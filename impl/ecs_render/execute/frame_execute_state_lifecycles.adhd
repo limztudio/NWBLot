@@ -2,101 +2,54 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/types.adhd>
+#include <impl/ecs_render/execute/frame_execute_lifecycle.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[ordered]
+class FrameExecuteStateLifecycleSet : NoCopy{
+    public Vector<BufferHandle> meshAccelerationStateBuffers;
+    public Vector<BufferHandle> shadowPrepareLiveStateBuffers;
+    public Array<TextureHandle, s_SinglePersistentResourceCapacity> shadowVisibilityReturnTextures;
+    public LightSpaceShadowSnapshot lightSpaceShadowResources;
+    public Array<TextureHandle, s_ShadowComputeScratchTextureCapacity> shadowComputeScratchTextures;
+    public Array<BufferHandle, s_ShadowComputeScratchBufferCapacity> shadowComputeScratchBuffers;
+    public Array<TextureHandle, s_CausticsComputeScratchTextureCapacity> causticsComputeScratchTextures;
+    public Array<TextureHandle, s_SinglePersistentResourceCapacity> causticIrradianceTextures;
+    public Array<TextureHandle, s_SinglePersistentResourceCapacity> surfelIrradianceReturnTextures;
+    public Array<BufferHandle, s_SinglePersistentResourceCapacity> surfelGiCounterBuffers;
+    public Array<TextureHandle, s_SinglePersistentResourceCapacity> surfelGiComputeScratchTextures;
+    public Array<BufferHandle, s_SurfelGiComputeScratchBufferCapacity> surfelGiComputeScratchBuffers;
+    public Array<TextureHandle, s_SinglePersistentResourceCapacity> hardwareCausticAccumulatorTextures;
+    public ShadowPrepareStateLifecycleContext shadowPrepareStateLifecycle;
+    public ShadowVisibilityStateLifecycleContext shadowVisibilityStateLifecycle;
+    public SoftwareCausticsStateLifecycleContext softwareCausticsStateLifecycle;
+    public SurfelGiStateLifecycleContext surfelGiStateLifecycle;
+    public HardwareCausticsStateLifecycleContext hardwareCausticsStateLifecycle;
+    public DeferredLightingStateLifecycleContext deferredLightingStateLifecycle;
+    public Array<GpuTaskGraphTaskRecordedCallback, s_FrameExecuteLifecycleCallbackCapacity> recordedCallbacks;
+    public Array<GpuTaskGraphTaskAcceptedCallback, s_FrameExecuteLifecycleCallbackCapacity> acceptedCallbacks;
+    public usize recordedCallbackCount = 0u;
+    public usize acceptedCallbackCount = 0u;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/execute/frame_execute_lifecycle.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
-
-#include <core/task/gpu/packet_runtime.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Persistent-state candidates, retained resource lists, and record/accept callbacks for the stateful normal-execution tasks of one frame.
-// Contexts point at sibling members, so the set stays in place for the whole execution.
-struct FrameExecuteStateLifecycleSet final : NoCopy{
-    // Prep/prefix stay serial; later upload packets may use workers.
-    Core::Alloc::ScratchArena shadowPrepareStateScratchArena;
-    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> meshAccelerationStateBuffers;
-    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers;
-    // Build the sparse candidate after recording; commit on Shadow Preparation accept.
-    Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate;
-    Core::Alloc::ScratchArena normalExecutionScratchArena;
-    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> shadowVisibilityReturnTextures;
-    // Freeze the resource generation selected during graph declaration from preflight-owned light-space storage.
-    LightSpaceShadowSnapshot lightSpaceShadowResources;
-    Array<Core::TextureHandle, s_ShadowComputeScratchTextureCapacity> shadowComputeScratchTextures;
-    Array<Core::BufferHandle, s_ShadowComputeScratchBufferCapacity> shadowComputeScratchBuffers;
-    Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate;
-    Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate;
-    Array<Core::TextureHandle, s_CausticsComputeScratchTextureCapacity> causticsComputeScratchTextures;
-    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> causticIrradianceTextures;
-    Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate;
-    Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate;
-    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> surfelIrradianceReturnTextures;
-    Array<Core::BufferHandle, s_SinglePersistentResourceCapacity> surfelGiCounterBuffers;
-    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> surfelGiComputeScratchTextures;
-    Array<Core::BufferHandle, s_SurfelGiComputeScratchBufferCapacity> surfelGiComputeScratchBuffers;
-    Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate;
-    Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate;
-    Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate;
-    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> hardwareCausticAccumulatorTextures;
-    Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate;
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate;
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate;
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate;
-    FrameExecuteLifecycle::ShadowPrepareStateLifecycleContext shadowPrepareStateLifecycle;
-    FrameExecuteLifecycle::ShadowVisibilityStateLifecycleContext shadowVisibilityStateLifecycle;
-    FrameExecuteLifecycle::SoftwareCausticsStateLifecycleContext softwareCausticsStateLifecycle;
-    FrameExecuteLifecycle::SurfelGiStateLifecycleContext surfelGiStateLifecycle;
-    FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext hardwareCausticsStateLifecycle;
-    FrameExecuteLifecycle::DeferredLightingStateLifecycleContext deferredLightingStateLifecycle;
-    Array<Core::GpuTaskGraphTaskRecordedCallback, s_FrameExecuteLifecycleCallbackCapacity> recordedCallbacks = {};
-    Array<Core::GpuTaskGraphTaskAcceptedCallback, s_FrameExecuteLifecycleCallbackCapacity> acceptedCallbacks = {};
-    usize recordedCallbackCount = 0u;
-    usize acceptedCallbackCount = 0u;
-
-
-public:
-    FrameExecuteStateLifecycleSet(
-        RendererFramePipeline& renderer,
-        DeferredFrameTargets& targets,
-        const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
-        const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources,
-        const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
-        const b8 hardwareShadowSupported,
-        const b8 usesLaggedHistory
-    )
-        : shadowPrepareStateScratchArena(s_TaskGraphArena)
-        , meshAccelerationStateBuffers(shadowPrepareStateScratchArena)
-        , shadowPrepareLiveStateBuffers(shadowPrepareStateScratchArena)
-        , shadowPrepareAcceptedStateCandidate(renderer.m_shadowPreparePersistentState)
-        , normalExecutionScratchArena(s_TaskGraphArena)
-        , shadowVisibilityReturnTextures{ targets.shadowVisibility, }
-        , lightSpaceShadowResources(renderer.m_raytracingSystem.lightSpaceShadowSnapshot())
-        , shadowComputeScratchTextures{
-            lightSpaceShadowResources.depth,
+    [cpp_unwind]
+    public FrameExecuteStateLifecycleSet(mut RendererFramePipeline renderer, mut DeferredFrameTargets targets,
+        in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources,
+        in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources,
+        in b8 hardwareShadowSupported, in b8 usesLaggedHistory){
+        this.shadowPrepareStateLifecycle = ShadowPrepareStateLifecycleContext(renderer);
+        this.shadowVisibilityStateLifecycle = ShadowVisibilityStateLifecycleContext(renderer, targets);
+        this.softwareCausticsStateLifecycle = SoftwareCausticsStateLifecycleContext(renderer);
+        this.surfelGiStateLifecycle = SurfelGiStateLifecycleContext(renderer);
+        this.hardwareCausticsStateLifecycle = HardwareCausticsStateLifecycleContext(renderer);
+        this.deferredLightingStateLifecycle = DeferredLightingStateLifecycleContext(renderer, targets);
+        const Array<TextureHandle, s_SinglePersistentResourceCapacity> shadowVisibilityReturnTextures(targets.shadowVisibility);
+        this.shadowVisibilityReturnTextures = shadowVisibilityReturnTextures;
+        this.lightSpaceShadowResources = renderer.m_raytracingSystem.lightSpaceShadowSnapshot();
+        const Array<TextureHandle, s_ShadowComputeScratchTextureCapacity> shadowComputeScratchTextures(this.lightSpaceShadowResources.depth,
             targets.shadowCoarseTransmittance,
             targets.shadowSoftHalfA,
             targets.shadowSoftHalfB,
@@ -110,186 +63,128 @@ public:
             targets.transparentHistA,
             targets.transparentHistB,
             targets.transparentMomentsA,
-            targets.transparentMomentsB,
-        }
-        , shadowComputeScratchBuffers{
-            lightSpaceShadowResources.counts,
-            lightSpaceShadowResources.events,
-            lightSpaceShadowResources.views,
-            lightSpaceShadowResources.drawArguments,
-            lightSpaceShadowResources.csgContext,
-            lightSpaceShadowResources.csgOpaqueDepth,
+            targets.transparentMomentsB);
+        this.shadowComputeScratchTextures = shadowComputeScratchTextures;
+        const Array<BufferHandle, s_ShadowComputeScratchBufferCapacity> shadowComputeScratchBuffers(this.lightSpaceShadowResources.counts,
+            this.lightSpaceShadowResources.events,
+            this.lightSpaceShadowResources.views,
+            this.lightSpaceShadowResources.drawArguments,
+            this.lightSpaceShadowResources.csgContext,
+            this.lightSpaceShadowResources.csgOpaqueDepth,
             rayTracingShadowResources.swShadowEdgeCounterBuffer,
             rayTracingShadowResources.swShadowEdgeListBuffer,
             rayTracingShadowResources.swShadowIndirectArgsBuffer,
             rayTracingGraphResources.hardwareTransparentCrossingsBuffer,
             rayTracingGraphResources.hardwareTransparentOverflowListBuffer,
-            rayTracingGraphResources.hardwareTransparentOverflowArgsBuffer,
-        }
-        , shadowVisibilityReturnStateCandidate(renderer.m_shadowVisibilityReturnState)
-        , shadowComputeScratchStateCandidate(renderer.m_shadowComputePersistentState)
-        , causticsComputeScratchTextures{ targets.causticAccumulator, targets.causticHistory, targets.causticResolveHalf, targets.causticResolveGeometry, }
-        , causticIrradianceTextures{ targets.causticIrradiance, }
-        , causticReturnStateCandidate(renderer.m_causticIrradianceReturnState)
-        , causticsScratchStateCandidate(renderer.m_causticsComputePersistentState)
-        , surfelIrradianceReturnTextures{ targets.surfelIrradiance, }
-        , surfelGiCounterBuffers{ rayTracingSurfelResources.counterBuffer, }
-        , surfelGiComputeScratchTextures{ targets.surfelIrradianceHalf, }
-        , surfelGiComputeScratchBuffers{
-            rayTracingSurfelResources.poolBuffer,
+            rayTracingGraphResources.hardwareTransparentOverflowArgsBuffer);
+        this.shadowComputeScratchBuffers = shadowComputeScratchBuffers;
+        const Array<TextureHandle, s_CausticsComputeScratchTextureCapacity> causticsComputeScratchTextures(targets.causticAccumulator, targets.causticHistory, targets.causticResolveHalf, targets.causticResolveGeometry);
+        this.causticsComputeScratchTextures = causticsComputeScratchTextures;
+        const Array<TextureHandle, s_SinglePersistentResourceCapacity> causticIrradianceTextures(targets.causticIrradiance);
+        this.causticIrradianceTextures = causticIrradianceTextures;
+        const Array<TextureHandle, s_SinglePersistentResourceCapacity> surfelIrradianceReturnTextures(targets.surfelIrradiance);
+        this.surfelIrradianceReturnTextures = surfelIrradianceReturnTextures;
+        const Array<BufferHandle, s_SinglePersistentResourceCapacity> surfelGiCounterBuffers(rayTracingSurfelResources.counterBuffer);
+        this.surfelGiCounterBuffers = surfelGiCounterBuffers;
+        const Array<TextureHandle, s_SinglePersistentResourceCapacity> surfelGiComputeScratchTextures(targets.surfelIrradianceHalf);
+        this.surfelGiComputeScratchTextures = surfelGiComputeScratchTextures;
+        const Array<BufferHandle, s_SurfelGiComputeScratchBufferCapacity> surfelGiComputeScratchBuffers(rayTracingSurfelResources.poolBuffer,
             rayTracingSurfelResources.cellHeadBuffer,
             rayTracingSurfelResources.traceIndirectArgsBuffer,
             rayTracingSurfelResources.freeListBuffer,
             rayTracingSurfelResources.poolSnapshotBuffer,
-            rayTracingSurfelResources.cellHeadSnapshotBuffer,
-        }
-        , surfelIrradianceReturnStateCandidate(renderer.m_surfelIrradianceReturnState)
-        , surfelGiCounterStateCandidate(renderer.m_surfelGiCounterPersistentState)
-        , surfelGiComputeStateCandidate(renderer.m_surfelGiComputePersistentState)
-        , hardwareCausticAccumulatorTextures{ targets.causticAccumulator, }
-        , hardwareCausticAccumulatorStateCandidate(renderer.m_hardwareCausticAccumulatorPersistentState)
-        , deferredLightingShadowReturnStateCandidate(renderer.m_shadowVisibilityReturnState)
-        , deferredLightingCausticReturnStateCandidate(renderer.m_causticIrradianceReturnState)
-        , deferredLightingSurfelReturnStateCandidate(renderer.m_surfelIrradianceReturnState)
-        , shadowPrepareStateLifecycle{
-            .renderer = MakeNotNull(&renderer),
-            .scratchArena = shadowPrepareStateScratchArena,
-            .stateCandidate = MakeNotNull(&shadowPrepareAcceptedStateCandidate),
-        }
-        , shadowVisibilityStateLifecycle{
-            .scratchArena = normalExecutionScratchArena,
-            .renderer = MakeNotNull(&renderer),
-            .targets = MakeNotNull(&targets),
-            .returnStateCandidate = MakeNotNull(&shadowVisibilityReturnStateCandidate),
-            .scratchStateCandidate = MakeNotNull(&shadowComputeScratchStateCandidate),
-            .returnTextures = shadowVisibilityReturnTextures,
-            .scratchTextures = shadowComputeScratchTextures,
-            .scratchBuffers = shadowComputeScratchBuffers,
-            .lightSpacePrepared = &renderer.m_shadowPrepareGraph.m_shadowPreparationOutcome.ready,
-            .lightSpaceCaptureTicket = lightSpaceShadowResources.captureTicket,
-        }
-        , softwareCausticsStateLifecycle{
-            .scratchArena = normalExecutionScratchArena,
-            .renderer = MakeNotNull(&renderer),
-            .returnStateCandidate = MakeNotNull(&causticReturnStateCandidate),
-            .scratchStateCandidate = MakeNotNull(&causticsScratchStateCandidate),
-            .irradianceTextures = causticIrradianceTextures,
-            .scratchTextures = causticsComputeScratchTextures,
-        }
-        , surfelGiStateLifecycle{
-            .scratchArena = normalExecutionScratchArena,
-            .renderer = MakeNotNull(&renderer),
-            .returnStateCandidate = MakeNotNull(&surfelIrradianceReturnStateCandidate),
-            .counterStateCandidate = MakeNotNull(&surfelGiCounterStateCandidate),
-            .computeStateCandidate = MakeNotNull(&surfelGiComputeStateCandidate),
-            .returnTextures = surfelIrradianceReturnTextures,
-            .counterBuffers = surfelGiCounterBuffers,
-            .computeTextures = surfelGiComputeScratchTextures,
-            .computeBuffers = surfelGiComputeScratchBuffers,
-        }
-        , hardwareCausticsStateLifecycle{
-            .scratchArena = normalExecutionScratchArena,
-            .renderer = MakeNotNull(&renderer),
-            .accumulatorStateCandidate = MakeNotNull(&hardwareCausticAccumulatorStateCandidate),
-            .accumulatorTextures = hardwareCausticAccumulatorTextures,
-        }
-        , deferredLightingStateLifecycle{
-            .scratchArena = normalExecutionScratchArena,
-            .renderer = MakeNotNull(&renderer),
-            .targets = MakeNotNull(&targets),
-            .shadowReturnStateCandidate = MakeNotNull(&deferredLightingShadowReturnStateCandidate),
-            .causticReturnStateCandidate = MakeNotNull(&deferredLightingCausticReturnStateCandidate),
-            .surfelReturnStateCandidate = MakeNotNull(&deferredLightingSurfelReturnStateCandidate),
-            .shadowReturnTextures = shadowVisibilityReturnTextures,
-            .causticReturnTextures = causticIrradianceTextures,
-            .surfelReturnTextures = surfelIrradianceReturnTextures,
-            .usesLaggedHistory = usesLaggedHistory,
-        }
-    {
-        collectShadowPrepareStateBuffers(renderer, rayTracingShadowResources, rayTracingGraphResources);
-        bindCallbacks(renderer, hardwareShadowSupported);
+            rayTracingSurfelResources.cellHeadSnapshotBuffer);
+        this.surfelGiComputeScratchBuffers = surfelGiComputeScratchBuffers;
+        const Array<TextureHandle, s_SinglePersistentResourceCapacity> hardwareCausticAccumulatorTextures(targets.causticAccumulator);
+        this.hardwareCausticAccumulatorTextures = hardwareCausticAccumulatorTextures;
+        this.shadowVisibilityStateLifecycle.returnTextures = Span<TextureHandle>(this.shadowVisibilityReturnTextures);
+        this.shadowVisibilityStateLifecycle.scratchTextures = Span<TextureHandle>(this.shadowComputeScratchTextures);
+        this.shadowVisibilityStateLifecycle.scratchBuffers = Span<BufferHandle>(this.shadowComputeScratchBuffers);
+        this.shadowVisibilityStateLifecycle.lightSpacePrepared = Optional<in b8>(renderer.m_shadowPrepareGraph.m_shadowPreparationOutcome.ready);
+        this.shadowVisibilityStateLifecycle.lightSpaceCaptureTicket = this.lightSpaceShadowResources.captureTicket;
+        this.softwareCausticsStateLifecycle.irradianceTextures = Span<TextureHandle>(this.causticIrradianceTextures);
+        this.softwareCausticsStateLifecycle.scratchTextures = Span<TextureHandle>(this.causticsComputeScratchTextures);
+        this.surfelGiStateLifecycle.returnTextures = Span<TextureHandle>(this.surfelIrradianceReturnTextures);
+        this.surfelGiStateLifecycle.counterBuffers = Span<BufferHandle>(this.surfelGiCounterBuffers);
+        this.surfelGiStateLifecycle.computeTextures = Span<TextureHandle>(this.surfelGiComputeScratchTextures);
+        this.surfelGiStateLifecycle.computeBuffers = Span<BufferHandle>(this.surfelGiComputeScratchBuffers);
+        this.hardwareCausticsStateLifecycle.accumulatorTextures = Span<TextureHandle>(this.hardwareCausticAccumulatorTextures);
+        this.deferredLightingStateLifecycle.shadowReturnTextures = Span<TextureHandle>(this.shadowVisibilityReturnTextures);
+        this.deferredLightingStateLifecycle.causticReturnTextures = Span<TextureHandle>(this.causticIrradianceTextures);
+        this.deferredLightingStateLifecycle.surfelReturnTextures = Span<TextureHandle>(this.surfelIrradianceReturnTextures);
+        this.deferredLightingStateLifecycle.usesLaggedHistory = usesLaggedHistory;
+        this.collectShadowPrepareStateBuffers(renderer, rayTracingShadowResources, rayTracingGraphResources);
+        this.bindCallbacks(renderer, hardwareShadowSupported);
     }
 
-
-public:
-    [[nodiscard]] FOUNDATION_INLINE b8 selectedCausticsStateReady(const b8 hardwareShadowSupported)const noexcept{
-        return hardwareShadowSupported ? hardwareCausticsStateLifecycle.stateReady : softwareCausticsStateLifecycle.stateReady;
+    public b8 selectedCausticsStateReady(in b8 hardwareShadowSupported)const{
+        if(hardwareShadowSupported)
+            return this.hardwareCausticsStateLifecycle.stateReady;
+        return this.softwareCausticsStateLifecycle.stateReady;
     }
 
+    private void appendStateBuffer(in BufferHandle buffer){
+        if(buffer.valid())
+            this.shadowPrepareLiveStateBuffers.push_back(buffer);
+    }
 
-private:
-    FOUNDATION_INLINE void collectShadowPrepareStateBuffers(RendererFramePipeline& renderer, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources, const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources){
-        renderer.m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
-        const auto& acceptedTraceGeometry = renderer.m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
-        const auto& preparedTraceGeometry = renderer.m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-        const usize shadowPrepareFixedCapacity = SelectShadowPrepareFixedStateBufferCapacity(static_cast<b8>(rayTracingGraphResources.csgTraceContextBuffer));
-        shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), shadowPrepareFixedCapacity)));
-        const auto appendStateBuffer = [this](const Core::BufferHandle& buffer)noexcept{
-            if(buffer)
-                shadowPrepareLiveStateBuffers.push_back(buffer);
-        };
-        if(rayTracingShadowResources.sceneTlasBackingBuffer)
-            appendStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
-        b8 stateCandidateRequired = static_cast<b8>(rayTracingShadowResources.sceneTlas) || renderer.m_raytracingSystem.preparedMeshSwBvhBuildsReady() || renderer.m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted();
+    [cpp_unwind]
+    private void collectShadowPrepareStateBuffers(mut RendererFramePipeline renderer, in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources, in RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources){
+        renderer.m_meshSystem.collectRetainedAccelerationStateBuffers(this.meshAccelerationStateBuffers);
+        const Span<BufferHandle> acceptedTraceGeometry = renderer.m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
+        const Span<PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = renderer.m_raytracingSystem.preparedShadowTraceGeometryBuffers();
+        const usize shadowPrepareFixedCapacity = SelectShadowPrepareFixedStateBufferCapacity(rayTracingGraphResources.csgTraceContextBuffer.valid());
+        this.shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(this.meshAccelerationStateBuffers.size(), shadowPrepareFixedCapacity)));
+        if(rayTracingShadowResources.sceneTlasBackingBuffer.valid())
+            this.appendStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
+        b8 stateCandidateRequired = rayTracingShadowResources.sceneTlas.valid() || renderer.m_raytracingSystem.preparedMeshSwBvhBuildsReady() || renderer.m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted();
         // Keep accepted trace-geometry state with the handoff, including invisible streams.
-        for(const Core::BufferHandle& acceptedBuffer : acceptedTraceGeometry){
-            appendStateBuffer(acceptedBuffer);
+        for(in BufferHandle acceptedBuffer : acceptedTraceGeometry){
+            this.appendStateBuffer(acceptedBuffer);
             stateCandidateRequired = true;
         }
-        for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
-            appendStateBuffer(preparedBuffer.buffer);
+        for(in PreparedShadowTraceGeometryBuffer preparedBuffer : preparedTraceGeometry){
+            this.appendStateBuffer(preparedBuffer.buffer);
             stateCandidateRequired = true;
         }
-        for(const Core::BufferHandle& buffer : meshAccelerationStateBuffers){
-            if(buffer)
+        for(in BufferHandle buffer : this.meshAccelerationStateBuffers){
+            if(buffer.valid())
                 stateCandidateRequired = true;
-            appendStateBuffer(buffer);
+            this.appendStateBuffer(buffer);
         }
-        appendStateBuffer(rayTracingShadowResources.bvhSortKeysBuffer);
-        appendStateBuffer(rayTracingShadowResources.bvhSortPayloadBuffer);
-        appendStateBuffer(rayTracingShadowResources.bvhVisitCounterBuffer);
-        if(rayTracingGraphResources.csgTraceContextBuffer){
-            appendStateBuffer(rayTracingGraphResources.csgTraceContextBuffer);
+        this.appendStateBuffer(rayTracingShadowResources.bvhSortKeysBuffer);
+        this.appendStateBuffer(rayTracingShadowResources.bvhSortPayloadBuffer);
+        this.appendStateBuffer(rayTracingShadowResources.bvhVisitCounterBuffer);
+        if(rayTracingGraphResources.csgTraceContextBuffer.valid()){
+            this.appendStateBuffer(rayTracingGraphResources.csgTraceContextBuffer);
             stateCandidateRequired = true;
         }
 
-        shadowPrepareStateLifecycle.buffers = shadowPrepareLiveStateBuffers;
-        shadowPrepareStateLifecycle.stateCandidateRequired = stateCandidateRequired;
+        this.shadowPrepareStateLifecycle.buffers = Span<BufferHandle>(this.shadowPrepareLiveStateBuffers);
+        this.shadowPrepareStateLifecycle.stateCandidateRequired = stateCandidateRequired;
     }
 
-    FOUNDATION_INLINE void bindCallbacks(const RendererFramePipeline& renderer, const b8 hardwareShadowSupported)noexcept{
-        recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowPrepareTask, };
-        recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask, };
+    private void bindCallbacks(in RendererFramePipeline renderer, in b8 hardwareShadowSupported){
+        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, this.shadowPrepareStateLifecycle);
+        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, this.shadowVisibilityStateLifecycle);
         if(!hardwareShadowSupported)
-            recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, .context = &softwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask, };
-        recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_surfelGiGraph.m_deferredSurfelGiTask, .context = &surfelGiStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareSurfelGiTask, };
+            this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, this.softwareCausticsStateLifecycle);
+        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, this.surfelGiStateLifecycle);
         if(hardwareShadowSupported)
-            recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_causticsGraph.m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask, };
-        recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask, };
-        FOUNDATION_ASSERT(recordedCallbackCount <= recordedCallbacks.size());
+            this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_causticsGraph.m_deferredHardwareCausticsTask, this.hardwareCausticsStateLifecycle);
+        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_deferredLightingTask, this.deferredLightingStateLifecycle);
+        assert(this.recordedCallbackCount <= this.recordedCallbacks.size());
 
-        acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask, };
-        acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask, };
+        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, this.shadowPrepareStateLifecycle);
+        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, this.shadowVisibilityStateLifecycle);
         if(!hardwareShadowSupported)
-            acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, .context = &softwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask, };
-        acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_surfelGiGraph.m_deferredSurfelGiTask, .context = &surfelGiStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptSurfelGiTask, };
+            this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, this.softwareCausticsStateLifecycle);
+        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, this.surfelGiStateLifecycle);
         if(hardwareShadowSupported)
-            acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_causticsGraph.m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask, };
-        acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask, };
-        FOUNDATION_ASSERT(acceptedCallbackCount <= acceptedCallbacks.size());
+            this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_causticsGraph.m_deferredHardwareCausticsTask, this.hardwareCausticsStateLifecycle);
+        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_deferredLightingTask, this.deferredLightingStateLifecycle);
+        assert(this.acceptedCallbackCount <= this.acceptedCallbacks.size());
     }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -156,8 +156,17 @@ class DependencyChecksum{
 }
 
 class SlangStageMapping{
-    public StringView stage = "";
-    public StringView slangStage = "";
+    public StringView stage;
+    public StringView slangStage;
+
+    public SlangStageMapping(){
+        this.stage = "";
+        this.slangStage = "";
+    }
+    public SlangStageMapping(in StringView archive, in StringView compiler){
+        this.stage = archive;
+        this.slangStage = compiler;
+    }
 }
 
 

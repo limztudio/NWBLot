@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+interface IUnwindCallback{
+    [cpp_unwind]
+    u32 record(mut Func<u32()> callback)const;
+}
+
+class CppUnwindCallback : IUnwindCallback{
+    [cpp_unwind]
+    public u32 record(mut Func<u32()> callback)const override;
+    public b8 ready()const{
+        return true;
+    }
+}
+
+u32 CppUnwindCallback::record(mut Func<u32()> callback)const{
+    auto outer = lambda[mut callback]() -> u32{
+        auto inner = lambda[mut callback]() -> u32{
+            return callback();
+        };
+        return inner();
+    };
+    return outer();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

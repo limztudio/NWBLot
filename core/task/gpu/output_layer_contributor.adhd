@@ -14,9 +14,11 @@ extern class GpuTaskGraphOutputLayer{
 
 [cpp_header("<core/task/gpu/output_layer_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphOutputLayerContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class IGpuTaskGraphOutputLayerContributor{
-    void acceptTaskGraphOutputLayer(...);
-    Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(...);
-    b8 prepareTaskGraphOutputLayer(...);
+    void acceptTaskGraphOutputLayer(in u64 generation, in cpp_ref QueueSubmissionToken submissionToken);
+    [cpp_flags(unwind)]
+    Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(mut GpuTaskGraph graph);
+    [cpp_flags(unwind)]
+    b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame);
 };
 
 

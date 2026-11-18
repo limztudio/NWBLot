@@ -1,0 +1,143 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/gpu/renderer_internal.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RenderState PaintRenderState(){
+    RenderState state;
+    state.depthStencilState.disableDepthTest().disableDepthWrite();
+    state.rasterState.enableDepthClip().setCullNone();
+    state.blendState.targets[s_ShaderUiColorTargetLocation]
+        .enableBlend()
+        .setSrcBlend(BlendFactor::One)
+        .setDestBlend(BlendFactor::InvSrcAlpha)
+        .setBlendOp(BlendOp::Add)
+        .setSrcBlendAlpha(BlendFactor::One)
+        .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
+        .setBlendOpAlpha(BlendOp::Add)
+    ;
+    return state;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 GpuRendererState::createResources(){
+    if(this.m_resources.valid())
+        return true;
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+    auto resourcesResult = this.m_versions.make<GpuSharedResources>(this.m_graphics);
+    if(!resourcesResult.has_value())
+        return false;
+    GpuVersion<GpuSharedResources> resources = resourcesResult.value();
+    if(!this.m_activeSceneSubsystems.has_value())
+        return false;
+    const auto subsystem = this.m_activeSceneSubsystems.value().findSubsystem<UiSubsystem>();
+    if(!subsystem.has_value())
+        return false;
+    in UiSubsystem ui = subsystem.value();
+    if(!this.loadShader<VertexShader>(ui.vs, s_GpuVertexShaderName, resources.deref().m_vertexShader)
+        || !this.loadShader<PixelShader>(ui.ps, s_GpuPixelShaderName, resources.deref().m_pixelShader)
+        || !this.loadShader<VertexShader>(ui.outputVs, s_GpuOutputVertexShaderName, resources.deref().m_outputVertexShader)
+        || !this.loadShader<PixelShader>(ui.outputPs, s_GpuOutputPixelShaderName, resources.deref().m_outputPixelShader))
+        return false;
+    Array<VertexAttributeDesc, s_ShaderUiVertexAttributeCount> attributes;
+    attributes[s_ShaderUiVertexPositionLocation].setFormat(Format::RG32_FLOAT).setBufferIndex(s_ShaderUiVertexBufferIndex).setOffset(s_ShaderUiVertexPositionByteOffset).setElementStride(size_of<Vertex>()).setName(s_GpuVertexPositionSemantic);
+    attributes[s_ShaderUiVertexUvLocation].setFormat(Format::RG32_FLOAT).setBufferIndex(s_ShaderUiVertexBufferIndex).setOffset(s_ShaderUiVertexUvByteOffset).setElementStride(size_of<Vertex>()).setName(s_GpuVertexTexCoordSemantic);
+    attributes[s_ShaderUiVertexColorLocation].setFormat(Format::RGBA32_FLOAT).setBufferIndex(s_ShaderUiVertexBufferIndex).setOffset(s_ShaderUiVertexColorByteOffset).setElementStride(size_of<Vertex>()).setName(s_GpuVertexColorSemantic);
+    auto inputLayoutResult = device.createInputLayout(attributes, resources.deref().m_vertexShader.deref());
+    if(inputLayoutResult.has_value())
+        resources.deref().m_inputLayout = inputLayoutResult.value();
+    else
+        resources.deref().m_inputLayout.reset();
+    if(!inputLayoutResult.has_value())
+        return false;
+    BindingLayoutDesc paintLayout;
+    paintLayout.setVisibility(ShaderTypeMask::AllGraphics).addItem(BindingLayoutItemPushConstants(0u, size_of<GpuPaintPushConstants>()));
+    auto layoutResult = device.createBindingLayout(paintLayout);
+    if(layoutResult.has_value())
+        resources.deref().m_layout = layoutResult.value();
+    else
+        resources.deref().m_layout.reset();
+    BindingLayoutDesc outputLayout;
+    outputLayout.setVisibility(ShaderTypeMask::AllGraphics).addItem(BindingLayoutItemPushConstants(0u, size_of<GpuOutputPushConstants>()));
+    auto outputLayoutResult = device.createBindingLayout(outputLayout);
+    if(outputLayoutResult.has_value())
+        resources.deref().m_outputLayout = outputLayoutResult.value();
+    else
+        resources.deref().m_outputLayout.reset();
+    SamplerDesc sampler;
+    sampler.setAllFilters(true).setAllAddressModes(SamplerAddressMode::Clamp);
+    auto samplerResult = device.createSampler(sampler);
+    if(samplerResult.has_value())
+        resources.deref().m_sampler = samplerResult.value();
+    else
+        resources.deref().m_sampler.reset();
+    if(!layoutResult.has_value() || !outputLayoutResult.has_value() || !samplerResult.has_value())
+        return false;
+    const Expected<GpuDescriptorHandle> samplerDescriptor = heap.allocate(GpuDescriptorClass::Sampler);
+    if(!samplerDescriptor.has_value())
+        return false;
+    resources.deref().m_samplerDescriptor = samplerDescriptor.value();
+    if(!heap.write(resources.deref().m_samplerDescriptor, DescriptorWriteItemSampler(0u, resources.deref().m_sampler.deref())))
+        return false;
+    GraphicsPipelineDesc pipeline;
+    pipeline
+        .setInputLayout(resources.deref().m_inputLayout)
+        .setVertexShader(resources.deref().m_vertexShader)
+        .setPixelShader(resources.deref().m_pixelShader)
+        .setRenderState(PaintRenderState())
+        .addBindingLayout(resources.deref().m_layout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    FramebufferInfo targetInfo;
+    targetInfo.addColorFormat(Format::RGBA16_FLOAT);
+    auto pipelineResult = device.createGraphicsPipeline(pipeline, targetInfo);
+    if(pipelineResult.has_value())
+        resources.deref().m_pipeline = pipelineResult.value();
+    else
+        resources.deref().m_pipeline.reset();
+    if(!pipelineResult.has_value())
+        return false;
+    this.m_resources = resources;
+    return true;
+}
+
+b8 GpuRendererState::prepareOutputPipeline(in FramebufferInfo info){
+    if(this.m_resources.deref().m_outputPipeline.valid() && this.m_resources.deref().m_outputPipeline.deref().getFramebufferInfo() == info)
+        return true;
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    RenderState renderState;
+    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
+    renderState.rasterState.setCullNone();
+    GraphicsPipelineDesc description;
+    description
+        .setVertexShader(this.m_resources.deref().m_outputVertexShader)
+        .setPixelShader(this.m_resources.deref().m_outputPixelShader)
+        .setRenderState(renderState)
+        .addBindingLayout(this.m_resources.deref().m_outputLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    auto outputPipelineResult = device.createGraphicsPipeline(description, info);
+    if(outputPipelineResult.has_value())
+        this.m_resources.deref().m_outputPipeline = outputPipelineResult.value();
+    else
+        this.m_resources.deref().m_outputPipeline.reset();
+    return outputPipelineResult.has_value();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

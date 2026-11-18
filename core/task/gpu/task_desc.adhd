@@ -51,12 +51,16 @@ extern class GpuClearTextureTaskDesc{
     Color floatValue;
     UIntColor uintValue;
     IntColor intValue;
+    void publishAcceptedToken(mut QueueSubmissionToken token);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuClearTextureTaskRecordHooks"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuClearTextureTaskRecordHooks{
     GpuTaskCommandRequirements commands;
 };
+
+[cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::MakeGpuClearTextureTaskRecordHooks")]
+extern GpuClearTextureTaskRecordHooks MakeGpuClearTextureTaskRecordHooks(mut auto state, in b8 beforeClear, in b8 afterClear);
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuCopyBufferTaskDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class GpuCopyBufferTaskDesc{
@@ -196,21 +200,24 @@ extern class GpuTaskDesc{
     usize resourceSetUseCount;
     usize resourceVersionUseCount;
     GpuTaskTimingMetadata timing;
-    GpuTaskDesc setDependencies(...);
-    GpuTaskDesc setExternalDependencies(...);
-    GpuTaskDesc setExternalStateSources(...);
-    GpuTaskDesc setIdentity(...);
-    GpuTaskDesc setMarkerLabel(...);
-    GpuTaskDesc setResourceSetUses(...);
-    GpuTaskDesc setResourceUses(...);
-    GpuTaskDesc setResourceVersionUses(...);
-    GpuTaskDesc setScheduling(...);
-    GpuTaskDesc setTiming(...);
+    mut GpuTaskDesc setDependencies(...);
+    mut GpuTaskDesc setDependency(in borrow GpuTaskId value);
+    mut GpuTaskDesc setExternalDependencies(...);
+    mut GpuTaskDesc setExternalStateSources(...);
+    mut GpuTaskDesc setIdentity(...);
+    mut GpuTaskDesc setMarkerLabel(...);
+    mut GpuTaskDesc setResourceSetUses(...);
+    mut GpuTaskDesc setResourceUses(...);
+    mut GpuTaskDesc setResourceVersionUses(...);
+    mut GpuTaskDesc setScheduling(...);
+    mut GpuTaskDesc setTiming(...);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuTaskExternalStateSource"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
 extern class GpuTaskExternalStateSource{
     CommandQueue applicableConsumerQueueClass;
+    b8 hasState()const;
+    void setState(in borrow CommandListResourceStateHandoff source);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuTaskSchedulingHint"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
@@ -247,6 +254,7 @@ extern class GpuUploadBufferTaskDesc{
     GpuGraphResourceId destination;
     u64 destinationOffsetBytes;
     ResourceStates finalState;
+    void publishAcceptedToken(mut QueueSubmissionToken token);
 };
 
 [cpp_header("<core/task/gpu/task_desc.h>"), cpp_name("::NWB::Core::GpuUploadTextureTaskDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]

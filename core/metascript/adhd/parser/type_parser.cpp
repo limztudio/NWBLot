@@ -342,6 +342,34 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto,
                 }
             }
 
+            if(m_cursor.matchIdentifier(KeywordSemantics::s_ForwardParam)){
+                if(param.mode != ParamPassingMode::Mut || allowAuto || isExtern){
+                    m_cursor.error("'forward' requires a mutable generic function parameter");
+                    return false;
+                }
+                param.forwardsArgument = true;
+            }
+            else if(m_cursor.matchIdentifier(KeywordSemantics::s_CopyParam)){
+                if(param.mode != ParamPassingMode::Mut || allowAuto || isExtern){
+                    m_cursor.error("'copy' requires a mutable generic function parameter");
+                    return false;
+                }
+                param.copiesArgument = true;
+            }
+            if(m_cursor.matchIdentifier(KeywordSemantics::s_CppRefParam)){
+                if(!isExtern || param.mode != ParamPassingMode::In){
+                    m_cursor.error("'cpp_ref' requires an 'in' parameter on an extern declaration");
+                    return false;
+                }
+                param.cppConstReference = true;
+            }
+            else if(m_cursor.matchIdentifier(KeywordSemantics::s_Borrow)){
+                if(param.mode != ParamPassingMode::In || (allowAuto && !isExtern)){
+                    m_cursor.error("'borrow' requires an 'in' parameter on a callable declaration");
+                    return false;
+                }
+                param.retainsBorrow = true;
+            }
             param.type = parseType(false, allowAuto);
             if(!param.type)
                 return false;

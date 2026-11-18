@@ -2,76 +2,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/deferred_internal.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
+usize ComputePostGbufferNormalizeUseCapacity(in usize baseCapacity, in b8 geometrySetGraphOwned, in usize geometryResourceCount){
+    if(geometrySetGraphOwned)
+        return baseCapacity;
+    return baseCapacity + geometryResourceCount;
+}
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+class PostGbufferNormalizeInputs{
+    public in DeferredGraphResourceImportResult resources;
+    public Span<GpuGraphResourceId> shadowTraceGeometryResources;
+    public GpuGraphResourceSetId shadowTraceGeometrySet;
+    public GpuTaskId gbufferCompletionTask;
+    public in GpuTaskId shadowVisibilityTask;
+    public mut Optional<GpuTimingMeasure> asyncPrefixTiming;
+    public in GraphicsPrefixTimingTicket timingTicket;
 
+    public PostGbufferNormalizeInputs(in DeferredGraphResourceImportResult resources, in GpuTaskId shadowVisibilityTask,
+        mut Optional<GpuTimingMeasure> asyncPrefixTiming, in GraphicsPrefixTimingTicket timingTicket){
+        this.resources = resources;
+        this.shadowVisibilityTask = shadowVisibilityTask;
+        this.asyncPrefixTiming = asyncPrefixTiming;
+        this.timingTicket = timingTicket;
+    }
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class PostGbufferNormalizeBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererRayTracingSystem m_raytracingSystem;
 
+    public PostGbufferNormalizeBuilder(mut GpuTaskGraph graph, mut RendererRayTracingSystem raytracingSystem){
+        this.m_graph = graph;
+        this.m_raytracingSystem = raytracingSystem;
+    }
 
-NWB_IMPL_BEGIN
+    public Expected<GpuTaskId> declare(mut PostGbufferNormalizeInputs inputs){
+        const b8 shadowTraceGeometryStatesGraphOwned = inputs.shadowTraceGeometrySet.valid();
+        Vector<GpuTaskResourceUse> normalizeResourceUses;
+        normalizeResourceUses.reserve(ComputePostGbufferNormalizeUseCapacity(s_NormalizeResourceUseCapacity, shadowTraceGeometryStatesGraphOwned, inputs.shadowTraceGeometryResources.size()));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.meshView, ResourceStates::ConstantBuffer));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.normal, ResourceStates::ShaderResource));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.worldPosition, ResourceStates::ShaderResource));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.specularRoughness, ResourceStates::ShaderResource));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.depth, ResourceStates::ShaderResource));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.sceneShading, ResourceStates::ConstantBuffer));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.lights, ResourceStates::ShaderResource));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.currentBindlessSlots, ResourceStates::ConstantBuffer));
+        normalizeResourceUses.push_back(ReadUse(inputs.resources.materialContextSlots, ResourceStates::ConstantBuffer));
+        for(in GpuGraphResourceId resource : inputs.shadowTraceGeometryResources){
+            if(!resource.valid())
+                return MakeUnexpected(Failure());
+            if(!shadowTraceGeometryStatesGraphOwned)
+                normalizeResourceUses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
+        }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-class DeferredGraphResourceImportResult;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct PostGbufferNormalizeInputs{
-    const DeferredGraphResourceImportResult& resources;
-    Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources;
-    Core::GpuGraphResourceSetId shadowTraceGeometrySet;
-    Core::GpuTaskId gbufferCompletionTask;
-    const Core::GpuTaskId& shadowVisibilityTask;
-    Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
-    Core::GpuTimingSubmissionTicket*& timingTicket;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class PostGbufferNormalizeBuilder final : NoCopy{
-public:
-    PostGbufferNormalizeBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<Core::GpuTaskId> declare(const PostGbufferNormalizeInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        GpuTaskSchedulingHint scheduling;
+        scheduling.cost = GpuTaskCostHint::Tiny;
+        scheduling.forceSubmissionBoundary = false;
+        scheduling.allowPacketMerge = true;
+        scheduling.mergeWithPrevious = true;
+        FixedVector<GpuTaskResourceSetUse, 1u> sets;
+        if(shadowTraceGeometryStatesGraphOwned){
+            GpuTaskResourceSetUse use;
+            use.resourceSet = inputs.shadowTraceGeometrySet;
+            use.requiredState = ResourceStates::ShaderResource;
+            use.access = GpuTaskResourceAccess::Read;
+            sets.push_back(use);
+        }
+        GpuTaskDesc desc;
+        desc.setIdentity(s_FrameGraphNameRenderGraphicsPrefixNormalize).setMarkerLabel("Post-G-Buffer Normalize").setScheduling(scheduling)
+            .setDependency(inputs.gbufferCompletionTask).setResourceUses(normalizeResourceUses).setResourceSetUses(sets);
+        const auto added = this.m_graph.addPayloadTask(desc, PostGbufferNormalizeGraphTask(this.m_raytracingSystem, inputs.asyncPrefixTiming, inputs.timingTicket, inputs.shadowVisibilityTask));
+        if(!added.has_value())
+            warning("RendererSystem: could not declare post-G-buffer normalization task");
+        return added;
+    }
 }
 
 

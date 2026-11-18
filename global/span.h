@@ -19,5 +19,11 @@ template<typename T, usize Extent = s_DynamicExtent>
 using Span = std::span<T, Extent>;
 
 
+template<typename T, usize Extent>
+[[nodiscard]] constexpr b8 HasSpanStorage(const Span<const T, Extent> values)noexcept{
+    return values.data() != nullptr;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

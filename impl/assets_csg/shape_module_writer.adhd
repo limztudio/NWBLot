@@ -64,3 +64,67 @@ b8 WriteEmptyDefaultCsgModuleInclude(in Path includeRoot){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class CsgShapeModuleWriter{
+    public Expected<Path> emit(in Path cacheDirectory, in StringView configuration, in Span<CsgShapeCookEntry> entries)const{
+        Path root = cacheDirectory / configuration / s_GeneratedIncludeCacheDirectory;
+        if(entries.empty()){
+            if(!PrepareGeneratedIncludeRoot(root, s_CsgShapeIncludeGenerationLabel) || !WriteEmptyDefaultCsgModuleInclude(root))
+                return MakeUnexpected(Failure());
+            return root;
+        }
+
+        HashSet<NameHash> shapes;
+        shapes.reserve(entries.size());
+        for(in CsgShapeCookEntry entry : entries){
+            if(!ValidateUniqueCsgShapeName(shapes.insert(entry.shapeName.hash()).second, entry.shapeName))
+                return MakeUnexpected(Failure());
+        }
+
+        HashSet<NameHash> modules;
+        HashMap<String, Name> owners;
+        modules.reserve(entries.size());
+        owners.reserve(entries.size());
+        usize capacity = 0u;
+        // Validate every output path before replacing the generated include tree.
+        for(in CsgShapeCookEntry module : entries){
+            if(!modules.insert(module.shaderModule.hash()).second)
+                continue;
+            usize bytes = s_CsgModuleSourceHeader.size();
+            for(in CsgShapeCookEntry entry : entries){
+                if(entry.shaderModule != module.shaderModule)
+                    continue;
+                bytes = AddSize(bytes, AddSize(s_FixedShapeSourceBytes, entry.evalInclude.size()));
+                if(!ValidateCsgModuleIncludeConsistency(module.shaderModule, module.moduleInclude, entry.moduleInclude))
+                    return MakeUnexpected(Failure());
+            }
+            capacity = Max(capacity, bytes);
+            String path = module.moduleInclude;
+            CanonicalizeTextInPlace(path);
+            const auto owner = owners.try_emplace(path, module.shaderModule);
+            if(!ValidateSharedCsgGeneratedIncludeOwner(owner.second, owner.first.value(), module.shaderModule, module.moduleInclude))
+                return MakeUnexpected(Failure());
+        }
+        if(!PrepareGeneratedIncludeRoot(root, s_CsgShapeIncludeGenerationLabel))
+            return MakeUnexpected(Failure());
+        modules.clear();
+        String source;
+        source.reserve(capacity);
+        for(in CsgShapeCookEntry module : entries){
+            if(!modules.insert(module.shaderModule.hash()).second)
+                continue;
+            CsgShapeModuleSource().begin(source);
+            for(in CsgShapeCookEntry entry : entries){
+                if(entry.shaderModule == module.shaderModule)
+                    CsgShapeModuleSource().appendEval(entry.shapeTypeId, entry.evalInclude, source);
+            }
+            if(!WriteCsgGeneratedIncludeFile(ResolveCsgModuleOutputPath(root, module.moduleInclude), source))
+                return MakeUnexpected(Failure());
+        }
+        return root;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

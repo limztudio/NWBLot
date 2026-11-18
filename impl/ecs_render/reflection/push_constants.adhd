@@ -4,6 +4,28 @@
 
 #include <impl/ecs_render/reflection/types.adhd>
 
+[cpp_header("<impl/assets/graphics/reflection/depth_constants.h>"), cpp_name("NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES")]
+extern const u32 s_ReflectionShaderDepthPushBytes;
+[cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES")]
+extern const u32 s_ReflectionShaderCsgPushBytes;
+[cpp_header("<impl/assets/graphics/reflection/temporal_constants.h>"), cpp_name("NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES")]
+extern const u32 s_ReflectionShaderTemporalPushBytes;
+
+[cpp_header("<impl/assets/graphics/reflection/spatial_constants.h>"), cpp_name("NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES")]
+extern const u32 s_ReflectionShaderSpatialPushBytes;
+[cpp_header("<impl/assets/graphics/reflection/temporal_constants.h>"), cpp_name("NWB_REFLECTION_TEMPORAL_GROUP_SIZE")]
+extern const u32 s_ReflectionShaderTemporalGroupSize;
+[cpp_header("<impl/assets/graphics/reflection/spatial_constants.h>"), cpp_name("NWB_REFLECTION_SPATIAL_GROUP_SIZE")]
+extern const u32 s_ReflectionShaderSpatialGroupSize;
+[cpp_header("<impl/assets/graphics/reflection/depth_constants.h>"), cpp_name("NWB_REFLECTION_DEPTH_GROUP_SIZE")]
+extern const u32 s_ReflectionShaderDepthGroupSize;
+[cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_CLASSIFY_GROUP_SIZE")]
+extern const u32 s_ReflectionShaderClassifyGroupSize;
+[cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_MODE_SCREEN")]
+extern const u32 s_ReflectionShaderModeScreen;
+[cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_MODE_HYBRID")]
+extern const u32 s_ReflectionShaderModeHybrid;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

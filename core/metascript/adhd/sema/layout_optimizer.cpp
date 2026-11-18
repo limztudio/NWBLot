@@ -130,8 +130,8 @@ namespace __hidden_adhd_layout_optimizer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSerialize, const usize headerPointerCount, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept{
-    if(!isSerialize){
+void LayoutOptimizer::SortAndPackFields(const b8 keepFieldOrder, const b8 packSerialize, const usize minimumAlignment, const usize headerPointerCount, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept{
+    if(!keepFieldOrder){
         for(usize i = 1u; i < orderedFields.size(); ++i){
             FieldDecl* key = orderedFields[i];
             usize j = i;
@@ -151,6 +151,7 @@ void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSeria
 
     usize currentOffset = headerPointerCount * 8u;
     usize maxAlign = packSerialize ? 1u : (headerPointerCount > 0u ? 8u : 1u);
+    maxAlign = Max(maxAlign, minimumAlignment);
     for(FieldDecl* field : orderedFields){
         const usize align = (packSerialize && !field->isTransient) ? 1u : field->resolvedAlign;
         if(align > maxAlign)
@@ -161,7 +162,7 @@ void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSeria
     }
 
     outTotalAlign = maxAlign;
-    outTotalSize = currentOffset == 0u ? 1u : ::AlignUp(currentOffset, maxAlign);
+    outTotalSize = currentOffset == 0u ? maxAlign : ::AlignUp(currentOffset, maxAlign);
 }
 
 b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
@@ -219,7 +220,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
                     markFieldArenaUsage(*clonedField->type, *clonedField, *inst->templateDecl, inst->needsClassArena);
             }
             const b8 hasMotherArenaPointer = inst->templateDecl->canBorrowMotherArena() && inst->needsClassArena;
-            finalizeClassFieldLayouts(inst->templateDecl->isSerialize, m_symbols.hasPolymorphicBase(*inst->templateDecl), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
+            finalizeClassFieldLayouts(*inst->templateDecl, m_symbols.hasPolymorphicBase(*inst->templateDecl), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
             if(inst->totalSize != prevSize || inst->totalAlign != prevAlign || inst->needsClassArena != prevArena)
                 changed = true;
         }
@@ -378,12 +379,12 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
     }
 
     const b8 hasMotherArenaPointer = classDecl.canBorrowMotherArena() && classDecl.needsClassArena;
-    finalizeClassFieldLayouts(classDecl.isSerialize, m_symbols.hasPolymorphicBase(classDecl), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
+    finalizeClassFieldLayouts(classDecl, m_symbols.hasPolymorphicBase(classDecl), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
     return true;
 }
 
-void LayoutOptimizer::finalizeClassFieldLayouts(const b8 isSerialize, const b8 hasVtablePointer, const b8 hasMotherArenaPointer, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)const noexcept{
-    const b8 packSerialize = isSerialize && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(orderedFields);
+void LayoutOptimizer::finalizeClassFieldLayouts(const ClassDecl& decl, const b8 hasVtablePointer, const b8 hasMotherArenaPointer, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)const noexcept{
+    const b8 packSerialize = decl.isSerialize && !decl.recordAlignment && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(orderedFields);
     for(FieldDecl* field : orderedFields){
         if(!field || !field->type)
             continue;
@@ -394,7 +395,7 @@ void LayoutOptimizer::finalizeClassFieldLayouts(const b8 isSerialize, const b8 h
         field->resolvedAlign = (packSerialize && !field->isTransient) ? 1u : fieldAlign;
     }
     const usize headerPointerCount = (hasVtablePointer ? 1u : 0u) + (hasMotherArenaPointer ? 1u : 0u);
-    SortAndPackFields(isSerialize, packSerialize, headerPointerCount, orderedFields, outTotalSize, outTotalAlign);
+    SortAndPackFields(decl.isSerialize || decl.recordAlignment || decl.preserveFieldOrder, packSerialize, decl.recordAlignment, headerPointerCount, orderedFields, outTotalSize, outTotalAlign);
 }
 
 

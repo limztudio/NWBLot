@@ -95,6 +95,15 @@ public:
     // Every valid registration receives attributed samples captured in a dispatch batch.
     // New listeners begin with the next batch; removing one registration never replaces or clears another consumer.
     [[nodiscard]] Expected<GpuTimingSampleSubscription> subscribeSampleListener(const GpuTimingSampleListener& listener);
+    template<typename Observer>
+    [[nodiscard]] Expected<GpuTimingSampleSubscription> subscribeSampleObserver(Observer& observer){
+        return subscribeSampleListener({
+            .context = &observer,
+            .invoke = [](void* context, const GpuTimingSample& sample){
+                static_cast<Observer*>(context)->onGpuTimingSample(sample);
+            },
+        });
+    }
     // Callback-free: attribution retirement waits for collect(), keeping the no-throw boundary while a listener stays subscribed.
     void unsubscribeSampleListener(const GpuTimingSampleSubscription& subscription)noexcept;
     // Atomically replaces one listener's feedback-only query scopes.

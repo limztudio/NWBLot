@@ -2,88 +2,38 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/renderer_frame_pipeline.adhd>
+#include <impl/ecs_scene/components.adhd>
+#include <impl/assets_scene/asset.adhd>
+#include <impl/ecs_render/caustic/settings.adhd>
+#include <impl/ecs_render/gi/quality_settings.adhd>
+#include <impl/ecs_render/material/material_instance.adhd>
+#include <impl/ecs_render/reflection/frame_parameters.adhd>
+#include <impl/ecs_render/refraction/types.adhd>
+#include <impl/ecs_render/deferred/presentation_settings.adhd>
+#include <impl/ecs_render/shadow/light_space_plan.adhd>
+#include <impl/ecs_render/shadow/quality_settings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/ecs_render/caustic/settings.adhd.h>
-#include <impl/ecs_render/gi/quality_settings.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-#include <impl/ecs_render/reflection/frame_parameters.adhd.h>
-#include <impl/ecs_render/refraction/types.adhd.h>
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
-#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/ecs/system.h>
-#include <core/graphics/runtime/render_pass.h>
-#include <core/task/gpu/packet_runtime.h>
-#include <core/telemetry/frame_graph_contributor.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class AssetManager;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ActiveSceneSubsystems;
-class RendererFramePipeline;
-
-using ActiveSceneSubsystemsConstPtr = const ActiveSceneSubsystems*;
-using RendererShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
-using RendererFramePipelineOwner = NotNullUniquePtr<RendererFramePipeline, Core::GlobalUniquePtr<RendererFramePipeline>::deleter_type>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::ActiveSceneSubsystemsConstPtr"), cpp_flags(self_defaulted, small_value, brace_init)]
-extern class ActiveSceneSubsystemsConstPtr;
 
 [arena, system("renderer")]
 class RendererSystem : IRenderPass, IFrameGraphContributor{
-    private RendererFramePipelineOwner m_pipeline;
+    private RendererFramePipeline m_pipeline;
 
-    public RendererSystem(mut World world, mut GraphicsRuntime graphics, mut AssetManager assetManager, in RendererShaderPathResolveCallback shaderPathResolver);
-    public ~RendererSystem();
+    public RendererSystem(mut World world, mut GraphicsRuntime graphics, mut AssetManager assetManager, in RendererShaderPathResolveCallback shaderPathResolver){
+        this.m_pipeline = RendererFramePipeline(world, graphics, assetManager, shaderPathResolver);
+        this.readAccess<ActiveCameraComponent>();
+        this.readAccess<TransformComponent>();
+        this.readAccess<CameraComponent>();
+        this.readAccess<RendererComponent>();
+        this.readAccess<MaterialInstanceComponent>();
+        this.readAccess<CsgReceiverComponent>();
+        this.readAccess<StaticCsgMeshComponent>();
+        this.readAccess<SkinnedCsgMeshComponent>();
+        this.readAccess<CsgCutterComponent>();
+    }
 
     public b8 validateResources(in u32 width, in u32 height, in u32 sampleCount)override;
     public void invalidateResources()override;
@@ -94,7 +44,7 @@ class RendererSystem : IRenderPass, IFrameGraphContributor{
     public void render(in FramebufferPtr framebuffer)override;
     public b8 appendFrameGraph(mut FrameGraphBuilder builder)override;
 
-    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsConstPtr subsystems);
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems);
     public void setRefractionEnabled(in b8 enabled);
     public void setRefractionHardwareTracingEnabled(in b8 enabled);
     public void setRefractionDiagnosticsEnabled(in b8 enabled);

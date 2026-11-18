@@ -50,7 +50,6 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
-using UiWidgetTests::s_FontScratchArenaName;
 using UiWidgetTests::s_TestKoreanFontPath;
 using UiWidgetTests::s_TestLatinFontPath;
 using UiWidgetTests::s_TestSkinPath;
@@ -106,14 +105,13 @@ public:
 
 public:
     virtual void SetUp()override{
-        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
         ASSERT_TRUE(Tests::LoadBundledFont(m_latin, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         ASSERT_TRUE(Tests::LoadBundledFont(m_korean, m_arena, NWB_TEST_FONT_DIRECTORY, "korean.font"));
         const Array<FontSource, 2> sources{
             FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u },
             FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), m_korean, 1u },
         };
-        ASSERT_TRUE(m_service.setFonts(fontScratchArena, Span(sources.data(), 2u)));
+        ASSERT_TRUE(m_service.setFonts(Span(sources.data(), 2u)));
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
     }
@@ -131,9 +129,8 @@ public:
     }
 
     [[nodiscard]] b8 setLatinFontGeneration(const u64 generation){
-        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
         const FontSource replacement{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, generation };
-        return m_service.setFonts(fontScratchArena, Span(&replacement, 1u));
+        return m_service.setFonts(Span(&replacement, 1u));
     }
 
     void clearLatinFontBytes(){
@@ -142,14 +139,12 @@ public:
     }
 
     [[nodiscard]] b8 setEmptyFonts(){
-        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
-        return m_service.setFonts(fontScratchArena, {});
+        return m_service.setFonts({});
     }
 
     [[nodiscard]] Expected<SharedFontFace> makeLatinFace(const u64 generation = 1u){
-        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
         const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, generation };
-        return MakeFontFace(fontScratchArena, m_arena, source);
+        return MakeFontFace(::NWB::Core::Alloc::SharedPool(m_arena), source);
     }
 
 
@@ -200,11 +195,11 @@ public:
 
 public:
     virtual void SetUp()override{
-        Core::Alloc::ScratchArena fontScratchArena{Name(NWB::Tests::UiCases::s_UiCaseNameFontScratch)};
+
         ASSERT_TRUE(loadFont("latin.font", m_latin));
         ASSERT_TRUE(loadFont("korean.font", m_korean));
-        auto faceResult = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
-        auto koreanFaceResult = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestKoreanFontPath), m_korean, 1u });
+        auto faceResult = MakeFontFace(::NWB::Core::Alloc::SharedPool(m_arena), { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
+        auto koreanFaceResult = MakeFontFace(::NWB::Core::Alloc::SharedPool(m_arena), { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestKoreanFontPath), m_korean, 1u });
         ASSERT_TRUE(faceResult);
         ASSERT_TRUE(koreanFaceResult);
         m_face = Move(*faceResult);
@@ -265,7 +260,7 @@ public:
         group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
         m_asset.setPayload(Move(payload));
         ASSERT_TRUE(m_asset.validatePayload());
-        auto atlasResult = CreateBakedFontAtlas(m_arena, m_asset, 1u);
+        auto atlasResult = CreateBakedFontAtlas(::NWB::Core::Alloc::SharedPool(m_arena), m_asset, 1u);
         ASSERT_TRUE(atlasResult);
         m_atlas = Move(*atlasResult);
         ASSERT_TRUE(m_atlas);
@@ -305,15 +300,13 @@ using namespace NWB::Impl::Ui;
 
 class GeometryShaper final : public ITextShaper{
 public:
-    explicit GeometryShaper(Core::Alloc::GlobalArena& arena)noexcept
-        : m_arena(arena)
-    {}
+    explicit GeometryShaper(Core::Alloc::GlobalArena&)noexcept{}
     virtual ~GeometryShaper()noexcept override = default;
 
 
 public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
-        ShapedRun run(m_arena);
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(::ArenaBase& resultArena, const ShapeRequest& request)override{
+        ShapedRun run(resultArena);
         run.metrics = { 8.0f, 2.0f, 2.0f };
         for(usize index = 0u; index < request.text.size(); ++index)
             run.glyphs.push_back({ {}, 1u, static_cast<u32>(index), static_cast<u32>(index + 1u), index == 0u ? m_offset : m_secondOffset, m_advance, m_ink, m_coverage });
@@ -327,10 +320,6 @@ public:
     Point m_advance{ 10.0f, 0.0f };
     Rect m_ink{ -2.0f, -8.0f, 9.0f, 10.0f };
     GlyphCoverageBounds m_coverage{};
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
 };
 
 class TextLayoutInkTests : public testing::Test{
@@ -469,7 +458,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     const ::NWB::Impl::Ui::Point& origin,
     const ::NWB::Impl::Ui::Rect& clip
 )noexcept{
-    return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, atlas.get(), fontSize, physicalSize, origin, clip);
+    return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, atlas, fontSize, physicalSize, origin, clip);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Expected<Rect> UiTextGlyphAtlasRect(
@@ -533,15 +522,15 @@ void VerifyTextFontConstruction_ThrowingNativeFaceDiagnosticReleasesAcquiredAren
         const ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font> emptyFontRef("tests/ui/font_construction/empty");
         ::NWB::Impl::Font emptyFont(sourceArena, emptyFontRef.name());
         ::NWB::Core::Alloc::GlobalArena fontArena{Name(::NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionNative)};
-        ::NWB::Core::Alloc::ScratchArena scratchArena{Name(::NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionScratch)};
+        const ::NWB::Core::Alloc::SharedPool fontPool(fontArena);
         ::NWB::Core::Common::LogArena logArena{Name(::NWB::Tests::UiCases::s_UiFixtureNameTestsUiFontConstructionLogger)};
         ThrowingFontConstructionLogger logger(logArena);
         ::NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, ::NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
         const ::NWB::Impl::Ui::FontSource source{ emptyFontRef, emptyFont, 1u };
-        const auto before = fontArena.memoryStats();
-        EXPECT_THROW({ const auto failed = ::NWB::Impl::Ui::MakeFontFace(scratchArena, fontArena, source); EXPECT_FALSE(failed && (*failed)->valid()); }, i32);
+        const auto before = fontPool.memoryStats();
+        EXPECT_THROW({ const auto failed = ::NWB::Impl::Ui::MakeFontFace(fontPool, source); EXPECT_FALSE(failed && (*failed)->valid()); }, i32);
         sawFaceFailure = logger.sawFaceFailure();
-        const auto after = fontArena.memoryStats();
+        const auto after = fontPool.memoryStats();
         beforeAllocs = before.allocationCount;
         afterAllocs = after.allocationCount;
         beforeUsed = before.usedBytes;

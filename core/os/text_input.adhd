@@ -89,7 +89,7 @@ extern class TextInputCapabilities{
     TextInputBackend backend;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent")]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent"), cpp_flags(arena_first_ctor)]
 extern class TextInputEvent{
     String text;
     TextInputSessionToken token;

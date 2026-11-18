@@ -83,6 +83,40 @@ b8 IsInactiveModelObjectOwner(in World world, in EntityID owner){
     return !world.hasComponent<ModelRuntimeComponent>(owner) || !world.hasComponent<ModelComponent>(owner);
 }
 
+void RemoveInactiveModelEntities(mut World world, in usize inactiveObjectCount, in usize inactiveRuntimeCount){
+    Vector<EntityID> inactiveEntities = Vector<EntityID>();
+    inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
+    if(inactiveObjectCount != 0u){
+        world.view<ModelObjectComponent>().each(lambda[mut world, mut inactiveEntities](in EntityID entity, in ModelObjectComponent object) -> void{
+            if(IsInactiveModelObjectOwner(world, object.owner))
+                inactiveEntities.push_back(entity);
+        });
+        for(in EntityID entity : inactiveEntities)
+            world.destroyEntity(entity);
+    }
+    if(inactiveRuntimeCount != 0u){
+        // Destroying objects can also remove runtime components.
+        inactiveEntities.clear();
+        world.view<ModelRuntimeComponent>().each(lambda[mut world, mut inactiveEntities](in EntityID entity, in ModelRuntimeComponent runtime) -> void{
+            if(!world.hasComponent<ModelComponent>(entity))
+                inactiveEntities.push_back(entity);
+        });
+        for(in EntityID entity : inactiveEntities)
+            world.removeComponent<ModelRuntimeComponent>(entity);
+    }
+}
+
+void DestroyOwnedModelEntities(mut World world, in EntityID entity, in usize ownedCount){
+    Vector<EntityID> ownedEntities = Vector<EntityID>();
+    ownedEntities.reserve(ownedCount);
+    world.view<ModelObjectComponent>().each(lambda[in entity, mut ownedEntities](in EntityID objectEntity, in ModelObjectComponent object) -> void{
+        if(object.owner == entity)
+            ownedEntities.push_back(objectEntity);
+    });
+    for(in EntityID objectEntity : ownedEntities)
+        world.destroyEntity(objectEntity);
+}
+
 void UpdateNonStaticModelObjectTransform(in World world, in ModelObjectComponent object, mut TransformComponent outTransform){
     if(object.kind == ModelObjectKind::StaticMesh)
         return;
@@ -357,164 +391,97 @@ class ModelSystem{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/assets/manager.h>
-#include <core/ecs/entity.h>
-
-#include <global/algorithm.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ModelSystem::syncModelRuntimes()noexcept{
-    clearInactiveModelRuntimes();
-
-    m_world->view<ModelComponent>().each([&](const Core::ECS::EntityID entity, ModelComponent& component){
-        ensureModelRuntime(entity, component);
+void ModelSystem::syncModelRuntimes(){
+    this.clearInactiveModelRuntimes();
+    mut ModelSystem system = this;
+    this.m_world.view<ModelComponent>().each(lambda[mut system](in EntityID entity, in ModelComponent component) -> void{
+        system.ensureModelRuntime(entity, component);
     });
 }
 
-void ModelSystem::clearInactiveModelRuntimes()noexcept{
-    const auto objects = m_world->view<ModelObjectComponent>();
-    const auto runtimes = m_world->view<ModelRuntimeComponent>();
+void ModelSystem::clearInactiveModelRuntimes(){
+    mut World world = this.m_world;
+    const auto objects = world.view<ModelObjectComponent>();
+    const auto runtimes = world.view<ModelRuntimeComponent>();
     usize inactiveObjectCount = 0u;
-    objects.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
-        if(IsInactiveModelObjectOwner(*m_world, object.owner))
+    objects.each(lambda[in world, mut inactiveObjectCount](in EntityID entity, in ModelObjectComponent object) -> void{
+        if(IsInactiveModelObjectOwner(world, object.owner))
             ++inactiveObjectCount;
     });
     usize inactiveRuntimeCount = 0u;
-    runtimes.each([&](const Core::ECS::EntityID entity, [[maybe_unused]] const ModelRuntimeComponent& runtime)noexcept{
-        if(!m_world->tryGetComponent<ModelComponent>(entity))
+    runtimes.each(lambda[in world, mut inactiveRuntimeCount](in EntityID entity, in ModelRuntimeComponent runtime) -> void{
+        if(!world.hasComponent<ModelComponent>(entity))
             ++inactiveRuntimeCount;
     });
     if(inactiveObjectCount == 0u && inactiveRuntimeCount == 0u)
         return;
 
-    Core::Alloc::ScratchArena scratchArena(s_ModelSyncRuntimeArena);
-    Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> inactiveEntities(scratchArena);
-    inactiveEntities.reserve(Max(inactiveObjectCount, inactiveRuntimeCount));
-    if(inactiveObjectCount != 0u){
-        objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
-            if(IsInactiveModelObjectOwner(*m_world, object.owner))
-                inactiveEntities.push_back(entity);
-        });
-        for(const Core::ECS::EntityID entity : inactiveEntities)
-            m_world->destroyEntity(entity);
-    }
-
-    if(inactiveRuntimeCount != 0u){
-        // Destroying objects can also remove runtime components, so take a fresh view after that batch completes.
-        inactiveEntities.clear();
-        m_world->view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, [[maybe_unused]] const ModelRuntimeComponent& runtime)noexcept{
-            if(!m_world->tryGetComponent<ModelComponent>(entity))
-                inactiveEntities.push_back(entity);
-        });
-        for(const Core::ECS::EntityID entity : inactiveEntities)
-            m_world->entity(entity).removeComponent<ModelRuntimeComponent>();
-    }
+    RemoveInactiveModelEntities(world, inactiveObjectCount, inactiveRuntimeCount);
 }
 
-void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity)noexcept{
-    const auto objects = m_world->view<ModelObjectComponent>();
+void ModelSystem::clearModelRuntime(in EntityID entity){
+    const auto objects = this.m_world.view<ModelObjectComponent>();
     usize ownedCount = 0u;
-    objects.each([&]([[maybe_unused]] const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
+    objects.each(lambda[in entity, mut ownedCount](in EntityID objectEntity, in ModelObjectComponent object) -> void{
         if(object.owner == entity)
             ++ownedCount;
     });
-    if(ownedCount != 0u){
-        Core::Alloc::ScratchArena scratchArena(s_ModelSyncRuntimeArena);
-        Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> ownedEntities(scratchArena);
-        ownedEntities.reserve(ownedCount);
-        objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
-            if(object.owner == entity)
-                ownedEntities.push_back(objectEntity);
-        });
-        for(const Core::ECS::EntityID objectEntity : ownedEntities)
-            m_world->destroyEntity(objectEntity);
-    }
-
-    if(auto* runtime = m_world->tryGetComponent<ModelRuntimeComponent>(entity))
-        ResetModelRuntimeState(*runtime);
+    if(ownedCount != 0u)
+        DestroyOwnedModelEntities(this.m_world, entity, ownedCount);
+    if(this.m_world.hasComponent<ModelRuntimeComponent>(entity))
+        ResetModelRuntimeState(this.m_world.getComponent<ModelRuntimeComponent>(entity));
 }
 
-Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const noexcept{
-    const auto objects = m_world->view<ModelObjectComponent>();
-    for(auto it = objects.begin(); it != objects.end(); ++it){
-        auto&& [entity, object] = *it;
-        if(MatchesModelObjectIdentity(object, owner, objectName))
-            return entity;
+EntityID ModelSystem::findSpawnedObject(in EntityID owner, in Name objectName)const{
+    for(in auto row : this.m_world.view<ModelObjectComponent>()){
+        if(MatchesModelObjectIdentity(Get<1>(row), owner, objectName))
+            return Get<0>(row);
     }
-    return Core::ECS::s_InvalidEntityId;
+    return s_InvalidEntityId;
 }
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObjectTransforms()noexcept{
-    return m_world->view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
-        m_world->taskScope(),
+Expected<void, CpuTaskAdmissionError> ModelSystem::updateModelObjectTransforms(){
+    mut World world = this.m_world;
+    return world.view<ModelObjectComponent, TransformComponent>().parallelEach(
+        world.taskScope(),
         s_ParallelModelObjectTransformGrainSize,
-        [&]([[maybe_unused]] const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform)noexcept{
-            UpdateNonStaticModelObjectTransform(*m_world, object, transform);
-        });
+        lambda[in world](in EntityID entity, in ModelObjectComponent object, mut TransformComponent transform) -> void{
+            UpdateNonStaticModelObjectTransform(world, object, transform);
+        }
+    );
 }
 
-void ModelSystem::updateStaticMeshAttachments()noexcept{
-    const auto attachments = m_world->view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>();
+void ModelSystem::updateStaticMeshAttachments(){
+    mut World world = this.m_world;
+    const auto attachments = world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, TransformComponent>();
     usize queryCount = 0u;
     if(attachments.candidateCount() > 1u){
-        attachments.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, [[maybe_unused]] const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, [[maybe_unused]] const Scene::TransformComponent& transform)noexcept{
+        attachments.each(lambda[mut queryCount](in EntityID entity, in ModelObjectComponent object, in ModelStaticMeshAttachmentComponent attachment, in TransformComponent transform) -> void{
             if(attachment.hasJointAttachment())
                 ++queryCount;
         });
     }
 
-    // Attachment grouping storage is reused member state; zero or one joint query needs neither an index nor scratch.
-    // Only capacity growth may allocate, never per-frame creation.
-    Vector<ModelAttachmentJointQuery, ::ArenaBase>& jointQueries = m_attachmentJointQueries;
+    mut Vector<ModelAttachmentJointQuery> jointQueries = this.m_attachmentJointQueries;
     jointQueries.clear();
     if(queryCount > 1u){
         jointQueries.reserve(queryCount);
         b8 sharedParent = true;
-        attachments.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, [[maybe_unused]] const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, [[maybe_unused]] const Scene::TransformComponent& transform)noexcept{
+        attachments.each(lambda[mut sharedParent, mut jointQueries](in EntityID entity, in ModelObjectComponent object, in ModelStaticMeshAttachmentComponent attachment, in TransformComponent transform) -> void{
             AppendModelStaticMeshAttachmentJointQuery(attachment, sharedParent, jointQueries);
         });
-        const Span<const ModelAttachmentJointQuery> queries(jointQueries.data(), jointQueries.size());
         if(sharedParent)
-            ResolveModelAttachmentJointQueries({}, *m_world, m_scratchJoints, jointQueries);
+            ResolveModelAttachmentJointQueries(Span<usize>(), world, this.m_scratchJoints, jointQueries);
         else{
-            Vector<usize, ::ArenaBase>& parentOrder = m_attachmentParentOrder;
-            BuildSortedModelAttachmentParentOrder(queries, parentOrder);
-            ResolveModelAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), *m_world, m_scratchJoints, jointQueries);
+            BuildSortedModelAttachmentParentOrder(jointQueries, this.m_attachmentParentOrder);
+            ResolveModelAttachmentJointQueries(this.m_attachmentParentOrder, world, this.m_scratchJoints, jointQueries);
         }
     }
 
     usize nextQuery = 0u;
-    attachments.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
-        UpdateModelStaticMeshAttachmentTransform(*m_world, queryCount, jointQueries, object, attachment, nextQuery, transform);
+    attachments.each(lambda[in world, in queryCount, in jointQueries, mut nextQuery](in EntityID entity, in ModelObjectComponent object, in ModelStaticMeshAttachmentComponent attachment, mut TransformComponent transform) -> void{
+        UpdateModelStaticMeshAttachmentTransform(world, queryCount, jointQueries, object, attachment, nextQuery, transform);
     });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

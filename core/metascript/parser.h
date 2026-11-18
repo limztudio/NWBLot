@@ -90,6 +90,31 @@ public:
     [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }
     [[nodiscard]] const StructMap& structs()const noexcept{ return m_structs; }
 
+    [[nodiscard]] Optional<MStringView> declarationType(const MStringView name)const noexcept{
+        if(const Declaration* declaration = findDeclaration(name))
+            return MStringView(declaration->type);
+        return {};
+    }
+
+    [[nodiscard]] usize structCount()const noexcept{ return m_structs.size(); }
+    [[nodiscard]] usize declarationCount()const noexcept{ return m_declarations.size(); }
+    template<typename Visitor>
+    b8 forEachStruct(Visitor&& visitor)const{
+        for(const auto& [name, value] : m_structs){
+            if(!visitor(MStringView(name), value))
+                return false;
+        }
+        return true;
+    }
+    template<typename Visitor>
+    b8 forEachDeclaration(Visitor&& visitor)const{
+        for(const Declaration& declaration : m_declarations){
+            if(!visitor(MStringView(declaration.type), MStringView(declaration.variable)))
+                return false;
+        }
+        return true;
+    }
+
     [[nodiscard]] b8 hasErrors()const noexcept{ return !m_errors.empty(); }
 
     [[nodiscard]] const ErrorList& errors()const noexcept{ return m_errors; }

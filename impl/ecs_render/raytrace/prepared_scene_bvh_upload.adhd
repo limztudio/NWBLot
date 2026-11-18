@@ -12,12 +12,12 @@
 
 
 b8 IsPreparedSceneBvhStorageReady(in RendererRayTracingState state, in usize nodeCount, in usize instanceCount){
-    return state.m_sceneBvhNodeBuffer.valid()
-        && state.m_sceneInstanceBuffer.valid()
-        && state.m_sceneBvhNodeCapacity >= nodeCount
-        && state.m_sceneInstanceCapacity >= instanceCount
-        && IsDescriptorClass(state.m_sceneBvhNodeHeapHandle, GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.m_sceneInstanceHeapHandle, GpuDescriptorClass::StorageBuffer);
+    return state.sceneBvh.m_sceneBvhNodeBuffer.valid()
+        && state.sceneBvh.m_sceneInstanceBuffer.valid()
+        && state.sceneBvh.m_sceneBvhNodeCapacity >= nodeCount
+        && state.sceneBvh.m_sceneInstanceCapacity >= instanceCount
+        && IsDescriptorClass(state.sceneBvh.m_sceneBvhNodeHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.sceneBvh.m_sceneInstanceHeapHandle, GpuDescriptorClass::StorageBuffer);
 }
 
 b8 HasPreparedSceneBvhBuffers(in RendererRayTracingState state, in u32 instanceCount){

@@ -3,126 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/text/layout_measurement.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/text/shaper.adhd.h>
-
-#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
-#include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
-
-#include <global/simd/convert.h>
-#include <global/simd/result.h>
-#include <global/simd/vector_arithmetic.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using PlacedGlyph = PlacedGlyphRecord<SharedFontFace>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Owns source bytes, layout data, and the exact immutable CPU font versions needed for later glyph rasterization.
-class TextLayout final{
-    friend class TextLayoutBuilder;
-
-
-public:
-    explicit TextLayout(Core::Alloc::GlobalArena& arena)noexcept
-        : m_text(arena)
-        , m_glyphs(arena)
-        , m_clusters(arena)
-        , m_lines(arena)
-    {}
-    TextLayout(TextLayout&&)noexcept = default;
-    TextLayout(const TextLayout&) = delete;
-
-
-public:
-    TextLayout& operator=(TextLayout&&)noexcept = default;
-
-    TextLayout& operator=(const TextLayout&) = delete;
-
-
-public:
-    [[nodiscard]] StringView utf8()const noexcept{ return { m_text.data(), m_text.size() }; }
-
-    [[nodiscard]] f32 fontSize()const noexcept{ return m_fontSize; }
-
-    [[nodiscard]] Point measure()const noexcept{ return m_measure; }
-
-    [[nodiscard]] Rect inkBounds()const noexcept{ return m_inkBounds; }
-
-    [[nodiscard]] const PaintVector<PlacedGlyph>& glyphs()const noexcept{ return m_glyphs; }
-
-    [[nodiscard]] const PaintVector<TextCluster>& clusters()const noexcept{ return m_clusters; }
-
-    [[nodiscard]] const PaintVector<TextLine>& lines()const noexcept{ return m_lines; }
-
-    [[nodiscard]] TextHit hitTest(const Point point)const noexcept{ return HitTestTextLayout(m_lines, m_clusters, point); }
-    [[nodiscard]] Expected<Rect> caretRect(const u32 byteOffset, const TextCaretEdge::Enum edge)const noexcept{
-        return TryResolveTextCaretRect(m_lines, m_clusters, m_direction, byteOffset, edge);
-    }
-
-
-private:
-    AString<Core::Alloc::GlobalArena> m_text;
-    PaintVector<PlacedGlyph> m_glyphs;
-    PaintVector<TextCluster> m_clusters;
-    PaintVector<TextLine> m_lines;
-    Point m_measure;
-    Rect m_inkBounds;
-    f32 m_fontSize = 0.0f;
-    TextDirection::Enum m_direction = TextDirection::LeftToRight;
-};
-
-class TextLayoutBuilder final : NoCopy{
-public:
-    TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)noexcept
-        : m_arena(arena)
-        , m_shaper(shaper)
-    {}
-
-
-public:
-    // Line breaks are LF/CRLF; there is no automatic wrap or paragraph bidi.
-    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const ShapeRequest& request);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    ITextShaper& m_shaper;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/ecs_ui/toolkit/text/shaper.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -142,78 +23,85 @@ Rect StoreTextLayoutInkBounds(in VectorDouble inkBounds){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+// The layout owns its UTF-8 and holds the font faces used by its positioned glyphs.
+[move_only]
+class TextLayout{
+    private String m_text;
+    private Vector<PlacedGlyph> m_glyphs;
+    private Vector<TextCluster> m_clusters;
+    private Vector<TextLine> m_lines;
+    private Point m_measure = Point();
+    private Rect m_inkBounds = Rect();
+    private f32 m_fontSize = 0.0f;
+    private TextDirection m_direction = TextDirection::LeftToRight;
 
+    public StringView utf8()const{ return StringView(this.m_text); }
+    public f32 fontSize()const{ return this.m_fontSize; }
+    public Point measure()const{ return this.m_measure; }
+    public Rect inkBounds()const{ return this.m_inkBounds; }
+    public in Vector<PlacedGlyph> glyphs()const{ return this.m_glyphs; }
+    public in Vector<TextCluster> clusters()const{ return this.m_clusters; }
+    public in Vector<TextLine> lines()const{ return this.m_lines; }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const ShapeRequest& request){
-    const TextLayoutStatus::Enum validation = ValidateTextRequest(request, true);
-    if(validation != TextLayoutStatus::Success)
-        return MakeUnexpected(validation);
-    TextLayout result(m_arena);
-    if(!request.text.empty())
-        result.m_text.assign(request.text.data(), request.text.size());
-    result.m_fontSize = request.fontSize;
-    result.m_direction = request.direction;
-    result.m_glyphs.reserve(request.text.size());
-    result.m_clusters.reserve(request.text.size());
-    result.m_lines.reserve(1u);
-    b8 hasInk = false;
-    SIMDVectorDouble inkBounds = VectorDoubleZero();
-    usize byteBegin = 0u;
-    while(true){
-        usize byteEnd = byteBegin;
-        usize breakEnd = byteBegin;
-        ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
-        const ShapeRequest lineRequest = MakeTextLineShapeRequest(request, byteBegin, byteEnd);
-        const auto shapedRun = m_shaper.shape(lineRequest);
-        if(!shapedRun)
-            return MakeUnexpected(shapedRun.error());
-        const ShapedRun& run = *shapedRun;
-        const TextLayoutStatus::Enum lineStatus = PlaceShapedLineInto<SharedFontFace>(
-            byteBegin,
-            byteEnd,
-            breakEnd,
-            run.metrics,
-            run.glyphs,
-            lineRequest.text,
-            request.direction,
-            result.m_glyphs,
-            result.m_clusters,
-            result.m_lines,
-            result.m_measure,
-            inkBounds,
-            hasInk
-        );
-        if(lineStatus != TextLayoutStatus::Success)
-            return MakeUnexpected(lineStatus);
-        if(breakEnd == byteEnd)
-            break;
-        byteBegin = breakEnd;
+    public TextHit hitTest(in Point point)const{
+        return HitTestTextLayout(Span<TextLine>(this.m_lines), Span<TextCluster>(this.m_clusters), point);
     }
-    result.m_inkBounds = StoreTextLayoutInkBounds(inkBounds);
-    return result;
+    public Expected<Rect> caretRect(in u32 byteOffset, in TextCaretEdge edge)const{
+        return TryResolveTextCaretRect(Span<TextLine>(this.m_lines), Span<TextCluster>(this.m_clusters), this.m_direction, byteOffset, edge);
+    }
+
+    [cpp_unwind, owner_result]
+    public Expected<TextLayout, TextLayoutStatus> shape(in ShapeRequest request, mut ITextShaper shaper)const{
+        const TextLayoutStatus validation = ValidateTextRequest(request, true);
+        if(validation != TextLayoutStatus::Success)
+            return MakeUnexpected(validation);
+        TextLayout result;
+        result.m_text.assign(request.text);
+        result.m_fontSize = request.fontSize;
+        result.m_direction = request.direction;
+        result.m_glyphs.reserve(request.text.size());
+        result.m_clusters.reserve(request.text.size());
+        result.m_lines.reserve(1u);
+        b8 hasInk = false;
+        VectorDouble inkBounds = VectorDoubleZero();
+        usize byteBegin = 0u;
+        while(true){
+            usize byteEnd = byteBegin;
+            usize breakEnd = byteBegin;
+            ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
+            const ShapeRequest lineRequest = MakeTextLineShapeRequest(request, byteBegin, byteEnd);
+            const Expected<ShapedRun, TextLayoutStatus> shapedRun = shaper.shape(lineRequest);
+            if(!shapedRun.has_value())
+                return MakeUnexpected(shapedRun.error());
+            in ShapedRun run = shapedRun.value();
+            const TextLayoutStatus lineStatus = PlaceShapedLineInto<SharedFontFace>(
+                byteBegin, byteEnd, breakEnd, run.metrics, Span<ShapedGlyph>(run.glyphs),
+                lineRequest.text, request.direction, result.m_glyphs, result.m_clusters, result.m_lines,
+                result.m_measure, inkBounds, hasInk
+            );
+            if(lineStatus != TextLayoutStatus::Success)
+                return MakeUnexpected(lineStatus);
+            if(breakEnd == byteEnd)
+                break;
+            byteBegin = breakEnd;
+        }
+        result.m_inkBounds = StoreTextLayoutInkBounds(inkBounds);
+        return result;
+    }
 }
 
+class TextLayoutBuilder : NoCopy{
+    private mut ITextShaper m_shaper;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public TextLayoutBuilder(mut ITextShaper shaper){
+        this.m_shaper = shaper;
+    }
 
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind, owner_result]
+    public Expected<TextLayout, TextLayoutStatus> layout(in ShapeRequest request){
+        TextLayout target;
+        return target.shape(request, this.m_shaper);
+    }
 }
 
 

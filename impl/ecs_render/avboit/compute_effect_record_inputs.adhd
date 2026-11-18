@@ -2,117 +2,171 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/avboit/avboit_system.adhd>
+#include <impl/ecs_render/avboit/graph_types.adhd>
+#include <impl/ecs_render/kernel/task_timing_feedback.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererAvboitSystem;
-class RendererTaskTimingFeedback;
-class AvboitFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct AvboitComputeEffectRecordInputs{
-    RendererAvboitSystem& avboitSystem;
-    AvboitFrameTargets& targets;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    RendererTaskTimingFeedback* timingFeedback = nullptr;
-    const Core::GpuTimingScopeDefinition* timingScope = nullptr;
-    mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-};
-
-template<typename DispatchMethod>
-[[nodiscard]] FOUNDATION_INLINE b8 RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const DispatchMethod dispatch){
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    b8 timingRecorded = false;
-    const auto timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
-    if(!timingAttribution){
-        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-        return false;
-    }
-    payload.timingAttribution = *timingAttribution;
-    dispatch(payload.avboitSystem, commandList, payload.targets, payload.timingAttribution, timingRecorded);
-    if(!timingRecorded && payload.timingFeedback){
-        payload.timingFeedback->discardRecording(payload.timingAttribution);
-        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-    }
-    return true;
+enum<u8> AvboitComputeEffect{
+    DepthWarp,
+    Integration,
 }
 
-FOUNDATION_INLINE void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-}
+class AvboitComputeEffectGraphTask{
+    private mut RendererAvboitSystem m_system;
+    private mut AvboitFrameTargets m_targets;
+    private mut GpuTimingSubmissionTicket m_ticket;
+    private Optional<mut RendererTaskTimingFeedback> m_feedback;
+    private Optional<in GpuTimingScopeDefinition> m_scope;
+    private GpuTimingRecordedSample m_sample;
+    private AvboitComputeEffect m_effect;
 
-FOUNDATION_INLINE void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->discardRecording(payload.timingAttribution);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-}
-
-struct AvboitComputeEffectGraphTaskBase{
-    // The avboit system, the frame targets, and the timing ticket are required: effects always dispatch against this frame's targets.
-    // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
-    using Payload = AvboitComputeEffectRecordInputs;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-        AcceptAvboitComputeEffect(payload, token);
+    public AvboitComputeEffectGraphTask(
+        mut RendererAvboitSystem system, mut AvboitFrameTargets targets, mut GpuTimingSubmissionTicket ticket,
+        in Optional<mut RendererTaskTimingFeedback> feedback, in Optional<in GpuTimingScopeDefinition> scope,
+        in AvboitComputeEffect effect
+    ){
+        this.m_system = system;
+        this.m_targets = targets;
+        this.m_ticket = ticket;
+        this.m_feedback = feedback;
+        this.m_scope = scope;
+        this.m_effect = effect;
     }
 
-    static void Discarded(Payload& payload)noexcept{
-        DiscardAvboitComputeEffect(payload);
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Compute;
+        return requirements;
     }
-};
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        GpuTimingTicketRecordingScope recording(this.m_ticket);
+        GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
+        if(this.m_feedback.has_value() && this.m_scope.has_value()){
+            const auto result = BeginTaskTimingSample(this.m_feedback.value(), this.m_scope.value(), context);
+            if(!result.has_value()){
+                this.m_sample.record(s_NoGpuTimingSampleAttribution);
+                return false;
+            }
+            attribution = result.value();
+        }
+        this.m_sample.record(attribution);
+        b8 timingRecorded = false;
+        if(this.m_effect == AvboitComputeEffect::DepthWarp)
+            this.m_system.dispatchAvboitDepthWarp(commands, this.m_targets, attribution, timingRecorded);
+        else
+            this.m_system.dispatchAvboitIntegration(commands, this.m_targets, attribution, timingRecorded);
+        if(!timingRecorded && this.m_feedback.has_value()){
+            this.m_feedback.value().discardRecording(attribution);
+            this.m_sample.record(s_NoGpuTimingSampleAttribution);
+        }
+        return true;
+    }
+
+    public void accepted(in QueueSubmissionToken token){
+        if(this.m_feedback.has_value())
+            this.m_feedback.value().acceptSubmission(this.m_sample.attribution(), token);
+        this.m_sample.reset();
+    }
+
+    public void discarded(){
+        if(this.m_feedback.has_value())
+            this.m_feedback.value().discardRecording(this.m_sample.attribution());
+        this.m_sample.reset();
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+class AvboitDepthWarpStageInputs{
+    public mut AvboitFrameTargets targets;
+    public GpuGraphResourceId coverage;
+    public GpuGraphResourceId depthWarp;
+    public GpuGraphResourceId control;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuTaskId occupancyTask;
+    public mut GpuTimingSubmissionTicket depthWarpTimingTicket;
+    public mut RendererTaskTimingFeedback timingFeedback;
+    public b8 hasTransparentRenderers;
+
+    public AvboitDepthWarpStageInputs(
+        mut AvboitFrameTargets targets,
+        in GpuGraphResourceId coverage,
+        in GpuGraphResourceId depthWarp,
+        in GpuGraphResourceId control,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuTaskId occupancyTask,
+        mut GpuTimingSubmissionTicket depthWarpTimingTicket,
+        mut RendererTaskTimingFeedback timingFeedback,
+        in b8 hasTransparentRenderers
+    ){
+        this.targets = targets;
+        this.coverage = coverage;
+        this.depthWarp = depthWarp;
+        this.control = control;
+        this.currentBindlessSlots = currentBindlessSlots;
+        this.occupancyTask = occupancyTask;
+        this.depthWarpTimingTicket = depthWarpTimingTicket;
+        this.timingFeedback = timingFeedback;
+        this.hasTransparentRenderers = hasTransparentRenderers;
+    }
+}
+
+class AvboitIntegrationStageInputs{
+    public mut AvboitFrameTargets targets;
+    public GpuGraphResourceId extinction;
+    public GpuGraphResourceId control;
+    public GpuGraphResourceId extinctionOverflow;
+    public GpuGraphResourceId transmittance;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuTaskId extinctionTask;
+    public mut GpuTimingSubmissionTicket integrationTimingTicket;
+    public mut RendererTaskTimingFeedback timingFeedback;
+
+    public AvboitIntegrationStageInputs(
+        mut AvboitFrameTargets targets,
+        in GpuGraphResourceId extinction,
+        in GpuGraphResourceId control,
+        in GpuGraphResourceId extinctionOverflow,
+        in GpuGraphResourceId transmittance,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuTaskId extinctionTask,
+        mut GpuTimingSubmissionTicket integrationTimingTicket,
+        mut RendererTaskTimingFeedback timingFeedback
+    ){
+        this.targets = targets;
+        this.extinction = extinction;
+        this.control = control;
+        this.extinctionOverflow = extinctionOverflow;
+        this.transmittance = transmittance;
+        this.currentBindlessSlots = currentBindlessSlots;
+        this.extinctionTask = extinctionTask;
+        this.integrationTimingTicket = integrationTimingTicket;
+        this.timingFeedback = timingFeedback;
+    }
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[modular]
+class AvboitComputeEffectChainBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererAvboitSystem m_avboitSystem;
 
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public AvboitComputeEffectChainBuilder(mut GpuTaskGraph graph, mut RendererAvboitSystem avboit){
+        this.m_graph = graph;
+        this.m_avboitSystem = avboit;
+    }
+    [cpp_unwind]
+    public Expected<AvboitDepthWarpStageResult> declareDepthWarp(mut AvboitDepthWarpStageInputs inputs);
+    [cpp_unwind]
+    public b8 declareIntegration(mut AvboitIntegrationStageInputs inputs);
 }
 
 

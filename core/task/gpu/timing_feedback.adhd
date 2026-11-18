@@ -58,13 +58,13 @@ extern class GpuTaskTimingHistoryEntry{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistorySnapshot"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistorySnapshot"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
 extern class GpuTaskTimingHistorySnapshot{
     u16 deviceGeneration(...)const;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistoryStore"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistoryStore"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
 extern class GpuTaskTimingHistoryStore{
     u16 deviceGeneration(...)const;
     usize historyCount(...)const;

@@ -2,181 +2,94 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
+
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
+#include <impl/ecs_render/material/material_system.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
+[modular]
+class OpaqueCsgReceiverComputeEmulationGraphTaskPayload{
+    public mut RendererMaterialSystem materialSystem;
+    public in DeferredFrameTargets targets;
+    public in GraphicsPrefixTimingTicket timingTicket;
+    public in b8 meshViewSetupReady;
+    public in b8 sceneShadingSetupReady;
+    public MeshFrameBindingSnapshot frameBindings;
+    public CsgGraphResourceSnapshot csgResources;
+    public OpaqueCsgReceiverComputeEmulationGraphPlan plan;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 materialDrawBuffersUploaded = false;
+    public b8 csgFrameBuffersUploaded = false;
+    public b8 materialFrameStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned = false;
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMaterialSystem;
-class DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct OpaqueCsgReceiverComputeEmulationGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // All bindings required: the receiver emulation always generates against this frame's bindings.
-    struct Payload{
-        RendererMaterialSystem& materialSystem;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket*& timingTicket;
-        const b8& meshViewSetupReady;
-        const b8& sceneShadingSetupReady;
-        MeshFrameBindingSnapshot frameBindings;
-        CsgGraphResourceSnapshot csgResources;
-        OpaqueCsgReceiverComputeEmulationGraphPlan plan;
-        usize instanceCount = 0u;
-        usize materialTypedByteCount = 0u;
-        b8 materialDrawBuffersUploaded = false;
-        b8 csgFrameBuffersUploaded = false;
-        b8 materialFrameStatesGraphOwned = false;
-        b8 materialGeometryStatesGraphOwned = false;
-
-
-    public:
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            RendererMaterialSystem& materialSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const b8& meshViewSetupReadyIn,
-            const b8& sceneShadingSetupReadyIn
-        )noexcept
-            : materialSystem(materialSystemIn)
-            , targets(targetsIn)
-            , timingTicket(timingTicketIn)
-            , meshViewSetupReady(meshViewSetupReadyIn)
-            , sceneShadingSetupReady(sceneShadingSetupReadyIn)
-            , plan(arena)
-        {}
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-};
-
-
-// Split interval-sample emulation only for distinct outputs; keep timing in one packet.
-struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    // All bindings required: emulation always brackets its dispatch with the frame timing.
-    struct Payload{
-        Core::GraphicsRuntime& graphics;
-        RendererMaterialSystem& materialSystem;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket*& timingTicket;
-        const b8& meshViewSetupReady;
-        const b8& sceneShadingSetupReady;
-        Optional<Core::GpuTimingMeasure>& opaqueCsgTiming;
-        MeshFrameBindingSnapshot frameBindings;
-        CsgGraphResourceSnapshot csgResources;
-        OpaqueCsgIntervalSampleComputeEmulationGraphPlan plan;
-        usize instanceCount = 0u;
-        usize materialTypedByteCount = 0u;
-        b8 materialDrawBuffersUploaded = false;
-        b8 csgFrameBuffersUploaded = false;
-        b8 materialFrameStatesGraphOwned = false;
-        b8 materialGeometryStatesGraphOwned = false;
-
-
-    public:
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            Core::GraphicsRuntime& graphicsIn,
-            RendererMaterialSystem& materialSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const b8& meshViewSetupReadyIn,
-            const b8& sceneShadingSetupReadyIn,
-            Optional<Core::GpuTimingMeasure>& opaqueCsgTimingIn
-        )noexcept
-            : graphics(graphicsIn)
-            , materialSystem(materialSystemIn)
-            , targets(targetsIn)
-            , timingTicket(timingTicketIn)
-            , meshViewSetupReady(meshViewSetupReadyIn)
-            , sceneShadingSetupReady(sceneShadingSetupReadyIn)
-            , opaqueCsgTiming(opaqueCsgTimingIn)
-            , plan(arena)
-        {}
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.opaqueCsgTiming);
+    public OpaqueCsgReceiverComputeEmulationGraphTaskPayload(
+        mut RendererMaterialSystem materials, in DeferredFrameTargets targets, in GraphicsPrefixTimingTicket ticket,
+        in b8 meshReady, in b8 shadingReady
+    ){
+        this.materialSystem = materials;
+        this.targets = targets;
+        this.timingTicket = ticket;
+        this.meshViewSetupReady = meshReady;
+        this.sceneShadingSetupReady = shadingReady;
     }
-};
 
+    public GpuTaskCommandRequirements commandRequirements()const{
+        return SharedComputeEmulationCommandRequirements(true);
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[modular]
+class OpaqueCsgIntervalSampleComputeEmulationGraphTask{
+    public mut GraphicsRuntime graphics;
+    public mut Optional<GpuTimingMeasure> opaqueCsgTiming;
+    public mut RendererMaterialSystem materialSystem;
+    public in DeferredFrameTargets targets;
+    public in GraphicsPrefixTimingTicket timingTicket;
+    public in b8 meshViewSetupReady;
+    public in b8 sceneShadingSetupReady;
+    public MeshFrameBindingSnapshot frameBindings;
+    public CsgGraphResourceSnapshot csgResources;
+    public OpaqueCsgIntervalSampleComputeEmulationGraphPlan plan;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 materialDrawBuffersUploaded = false;
+    public b8 csgFrameBuffersUploaded = false;
+    public b8 materialFrameStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned = false;
 
+    public OpaqueCsgIntervalSampleComputeEmulationGraphTask(
+        mut GraphicsRuntime graphics,
+        mut RendererMaterialSystem materials, in DeferredFrameTargets targets, in GraphicsPrefixTimingTicket ticket,
+        in b8 meshReady, in b8 shadingReady, mut Optional<GpuTimingMeasure> timing
+    ){
+        this.materialSystem = materials;
+        this.targets = targets;
+        this.timingTicket = ticket;
+        this.meshViewSetupReady = meshReady;
+        this.sceneShadingSetupReady = shadingReady;
+        this.graphics = graphics;
+        this.opaqueCsgTiming = timing;
+    }
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public GpuTaskCommandRequirements commandRequirements()const{
+        return SharedComputeEmulationCommandRequirements(true);
+    }
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
+    public void discarded(){
+        DiscardGpuTimingMeasure(this.opaqueCsgTiming);
+    }
 }
 
 

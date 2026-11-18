@@ -31,6 +31,7 @@ if(NWB_BUILD_PIPELINE)
         NAMESPACE "NWB::Impl"
         SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_entry.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/payload_codec.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
     )

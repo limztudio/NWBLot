@@ -2,98 +2,105 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/deferred/presentation_settings.adhd>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd>
+#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd.h>
-#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd.h>
+class OpaqueComputeEmulationProducerInputs{
+    public in DeferredGraphResourceImportResult resources;
+    public GpuTaskResourceSetUse materialGeometrySetUse;
+    public GpuTaskResourceSetUse materialSampledTextureSetUse;
+    public BufferRange materialInstanceRange;
+    public BufferRange materialTypedRange;
+    public BufferRange csgReceiverRange;
+    public BufferRange csgCutterRange;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 materialDrawBuffersUploaded = false;
+    public b8 csgFrameBuffersUploaded = false;
+    public b8 materialFrameStatesGraphOwned = false;
+    public b8 materialGeometryStatesGraphOwned = false;
 
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphResourceImportResult;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct OpaqueComputeEmulationProducerInputs{
-    const DeferredGraphResourceImportResult& resources;
-    Core::GpuTaskResourceSetUse materialGeometrySetUse{};
-    Core::GpuTaskResourceSetUse materialSampledTextureSetUse{};
-    Core::BufferRange materialInstanceRange{};
-    Core::BufferRange materialTypedRange{};
-    Core::BufferRange csgReceiverRange{};
-    Core::BufferRange csgCutterRange{};
-    usize instanceCount = 0u;
-    usize materialTypedByteCount = 0u;
-    b8 materialDrawBuffersUploaded = false;
-    b8 csgFrameBuffersUploaded = false;
-    b8 materialFrameStatesGraphOwned = false;
-    b8 materialGeometryStatesGraphOwned = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public OpaqueComputeEmulationProducerInputs(in DeferredGraphResourceImportResult resources){ this.resources = resources; }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd>
-
-[cpp_name("::NWB::Impl::OpaqueComputeEmulationProducerInputs"), cpp_header("<impl/ecs_render/deferred/opaque_compute_emulation_producers.adhd.h>")]
-extern class OpaqueComputeEmulationProducerInputs;
-[cpp_name("::NWB::Impl::ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload"), cpp_header("<impl/ecs_render/material/task_graph_opaque_compute_tasks.adhd.h>")]
-extern class OpaqueRegularComputeEmulationGraphTaskPayload;
-[cpp_name("::NWB::Impl::ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload"), cpp_header("<impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd.h>")]
-extern class OpaqueCsgReceiverComputeEmulationGraphTaskPayload;
-
-// Graph-owned compute producers that write generated vertices right before the G-buffer rasterizes them.
-[modular]
 class OpaqueComputeEmulationProducerBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
+    public OpaqueComputeEmulationProducerBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
 
-    public OpaqueComputeEmulationProducerBuilder(mut GpuTaskGraph graph){
-        this.m_graph = graph;
+    private GpuTaskDesc producerDesc(in Name identity, in StringView label, in borrow GpuTaskId dependency, in Span<GpuTaskResourceUse> resources,
+        in Span<GpuTaskResourceSetUse> sets)const{
+        GpuTaskSchedulingHint scheduling;
+        scheduling.cost = GpuTaskCostHint::Medium;
+        scheduling.forceSubmissionBoundary = false;
+        scheduling.allowPacketMerge = true;
+        scheduling.mergeWithPrevious = true;
+        scheduling.allowMergeAcrossConsumerFrontier = true;
+        GpuTaskDesc task;
+        task.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling).setDependency(dependency).setResourceUses(resources).setResourceSetUses(sets);
+        return task;
+    }
+    private void appendSets(in OpaqueComputeEmulationProducerInputs inputs, in GpuTaskResourceSetUse output,
+        mut FixedVector<GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> sets)const{
+        sets.push_back(inputs.materialGeometrySetUse);
+        if(inputs.materialSampledTextureSetUse.resourceSet.valid())
+            sets.push_back(inputs.materialSampledTextureSetUse);
+        sets.push_back(output);
     }
 
-    public Expected<GpuTaskId> declareRegular(
-        in OpaqueComputeEmulationProducerInputs inputs,
-        in GpuTaskResourceSetUse outputUavSetUse,
-        in GpuTaskId dependency,
-        mut OpaqueRegularComputeEmulationGraphTaskPayload payload
-    );
-    public Expected<GpuTaskId> declareCsgReceiver(
-        in OpaqueComputeEmulationProducerInputs inputs,
-        in CsgGraphResourceSnapshot csgResources,
-        in GpuTaskResourceSetUse outputUavSetUse,
-        in GpuTaskId dependency,
-        mut OpaqueCsgReceiverComputeEmulationGraphTaskPayload payload
-    );
+    public Expected<GpuTaskId> declareRegular(in OpaqueComputeEmulationProducerInputs inputs, in GpuTaskResourceSetUse output, in borrow GpuTaskId dependency, mut OpaqueRegularComputeEmulationGraphTaskPayload payload){
+        payload.instanceCount = inputs.instanceCount;
+        payload.materialTypedByteCount = inputs.materialTypedByteCount;
+        payload.materialDrawBuffersUploaded = inputs.materialDrawBuffersUploaded;
+        payload.materialFrameStatesGraphOwned = inputs.materialFrameStatesGraphOwned;
+        payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
+        const Array<GpuTaskResourceUse, 3u> uses(
+            ReadUse(inputs.resources.meshView, ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
+            ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange)
+        );
+        FixedVector<GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> sets;
+        this.appendSets(inputs, output, sets);
+        const GpuTaskDesc desc = this.producerDesc(s_RenderNameRenderGraphicsPrefixOpaqueComputeEmulation, "Opaque Compute Emulation", dependency, uses, sets);
+        const auto added = this.m_graph.addPreparedPayloadTask(desc, payload);
+        if(!added.has_value())
+            warning("RendererSystem: could not declare opaque compute-emulation producer");
+        return added;
+    }
+
+    public Expected<GpuTaskId> declareCsgReceiver(in OpaqueComputeEmulationProducerInputs inputs, in CsgGraphResourceSnapshot csgResources, in GpuTaskResourceSetUse output, in borrow GpuTaskId dependency,
+        mut OpaqueCsgReceiverComputeEmulationGraphTaskPayload payload){
+        payload.csgResources = csgResources;
+        payload.csgFrameBuffersUploaded = inputs.csgFrameBuffersUploaded;
+        payload.instanceCount = inputs.instanceCount;
+        payload.materialTypedByteCount = inputs.materialTypedByteCount;
+        payload.materialDrawBuffersUploaded = inputs.materialDrawBuffersUploaded;
+        payload.materialFrameStatesGraphOwned = inputs.materialFrameStatesGraphOwned;
+        payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
+        const Array<GpuTaskResourceUse, 8u> uses(
+            ReadUse(inputs.resources.meshView, ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
+            ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
+            ReadBufferUse(inputs.resources.csgReceiverRanges, inputs.csgReceiverRange),
+            ReadBufferUse(inputs.resources.csgCutters, inputs.csgCutterRange),
+            ReadUse(inputs.resources.csgClipContextSlots, ResourceStates::ConstantBuffer),
+            ReadUse(inputs.resources.csgIntervalSampleState, ResourceStates::ConstantBuffer),
+            ReadUse(inputs.resources.currentBindlessSlots, ResourceStates::ConstantBuffer)
+        );
+        FixedVector<GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> sets;
+        this.appendSets(inputs, output, sets);
+        const GpuTaskDesc desc = this.producerDesc(s_RenderNameRenderGraphicsPrefixOpaqueCsgReceiverComputeEmulation, "Opaque CSG Receiver Compute Emulation", dependency, uses, sets);
+        const auto added = this.m_graph.addPreparedPayloadTask(desc, payload);
+        if(!added.has_value())
+            warning("RendererSystem: could not declare opaque CSG receiver compute-emulation producer");
+        return added;
+    }
 }
 
 

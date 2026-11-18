@@ -2,88 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font_atlas/asset.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_font_atlas/asset.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FontAtlasCookEntry{
-    FontAtlasPayload payload;
-    Name virtualPath = s_NameNone;
-
-
-public:
-    explicit FontAtlasCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
-        : payload(memoryArena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-template<typename RootArenaT, typename FileArenaT>
-    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return ParseFontAtlasCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
-}
-
-template<typename FileArenaT>
-    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] FOUNDATION_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return ParseFontAtlasCookMetadataValue(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
-}
-[[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/assets_font_atlas/cook_entry.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -290,6 +209,7 @@ b8 ReadFontAtlasSettings(in Path path, in MetascriptValue asset, mut FontAtlasPa
     return true;
 }
 
+[asset_writer]
 b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     if(!atlas.checkVirtualPath("FontAtlas::validatePayload"))
         return false;
@@ -341,113 +261,48 @@ b8 PopulateFontAtlasPayloadFromPreparedSource(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cook_sidecar(s_PreparedFontExtension)]
+Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath, in Path path, in MetascriptValue asset){
+    if(virtualPath == s_NameNone || !CheckMetadataAssetMap(path, asset, s_FontAtlasMetaDiagnosticPrefix))
+        return MakeUnexpected(Failure());
+    if(!ValidateMetadataAssetFields(path, asset, s_FontAtlasMetaDiagnosticPrefix, lambda[](in StringView fieldName) -> b8{
+        return IsAllowedFontAtlasMetadataField(fieldName);
+    }))
+        return MakeUnexpected(Failure());
 
+    FontAtlasCookEntry candidate;
+    const Expected<AssetRef<Font>> fontRef = ReadMetadataAssetRefField<Font>(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasMetaFontField, true);
+    if(!fontRef.has_value())
+        return MakeUnexpected(Failure());
+    candidate.payload.font = fontRef.value();
+    if(!ReadFontAtlasSettings(path, asset, candidate.payload))
+        return MakeUnexpected(Failure());
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/assets/cook_metadata.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_font_atlas_cook_metadata{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontAtlasPairedSidecarRuleAutoRegistrar({
-    .sidecarExtension = s_PreparedFontExtension,
-});
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("FontAtlasAssetCodec::serialize")))
-        return false;
-    const FontAtlas& atlas = *MakeNotNull(checked_cast<const FontAtlas*>(&asset));
-    return SerializeFontAtlasAsset(atlas, outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<FontAtlasCookEntry, &ParseFontAtlasCookMetadataValue>(assetRoot, virtualRoot, nwbFilePath, doc, s_FontAtlasMetaDiagnosticPrefix, arena, scratchArena);
-}
-
-Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    if(
-        !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix, &IsAllowedFontAtlasMetadataField)
-    )
-        return MakeUnexpected(Failure{});
-    FontAtlasCookEntry candidate(arena);
-    auto fontResult = Core::Assets::ReadMetadataAssetRefField<Font>(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasMetaFontField, true);
-    if(!fontResult)
-        return MakeUnexpected(Failure{});
-    candidate.payload.font = *fontResult;
-    if(!ReadFontAtlasSettings(nwbFilePath, asset, candidate.payload))
-        return MakeUnexpected(Failure{});
-    Path fontPath = nwbFilePath;
-    fontPath.replaceExtension(s_PreparedFontExtension);
-    auto sourceResult = ReadPreparedFontSource(fontPath, s_FontAtlasCookIncludePreparedPixels, arena);
-    if(!sourceResult)
-        return MakeUnexpected(Failure{});
-    PreparedFontSource& source = *sourceResult;
-    Font font(arena, candidate.payload.font.name());
-    font.setFontBytes(Move(source.fontBytes), source.faceIndex);
-    if(!PopulateFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, candidate.payload))
-        return MakeUnexpected(Failure{});
+    Path sourcePath = path;
+    sourcePath.replaceExtension(s_PreparedFontExtension);
+    const Expected<PreparedFontSource, StringView> source = ReadPreparedFontSource(sourcePath, s_FontAtlasCookIncludePreparedPixels);
+    if(!source.has_value())
+        return MakeUnexpected(Failure());
+    Font font(candidate.payload.font.name());
+    font.setFontBytes(source.value().fontBytes, source.value().faceIndex);
+    if(!PopulateFontAtlasPayloadFromPreparedSource(path, asset, source.value(), font, candidate.payload))
+        return MakeUnexpected(Failure());
     candidate.virtualPath = virtualPath;
     return candidate;
 }
 
-Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return BuildFontAtlasAssetFromPayload(arena, entry.virtualPath, entry.payload);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<FontAtlasCookEntry>(root, virtualRoot, file, document, s_FontAtlasMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<FontAtlasCookEntry>{
+        return ParseFontAtlasCookMetadataValue(path, file, value);
+    });
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<FontAtlas> BuildFontAtlasAsset(in FontAtlasCookEntry entry){
+    return BuildFontAtlasAssetFromPayload(entry.virtualPath, entry.payload);
 }
 
 

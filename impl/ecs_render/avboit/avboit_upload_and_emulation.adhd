@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
 
 
@@ -46,166 +47,143 @@ b8 IsAvboitComputeEmulationFrameReady(in b8 planMatches, in b8 materialDrawBuffe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::declare(
-    Core::Alloc::ScratchArena& scratchArena,
-    const FrameGraphAvboitPassPhaseDesc& phaseDesc,
-    const FrameGraphAvboitPassUploadInputs& inputs,
-    AvboitRasterPassTaskPayload& rasterPayload,
-    AvboitComputeEmulationTaskPayload& computeEmulationPayload,
-    AvboitGeneratedGeometryReuse& generatedGeometry
-){
-    FrameGraphAvboitMaterialUploadResult result{};
-    result.uploadTask = inputs.uploadTask;
-    if(!inputs.hasTransparentRenderers)
-        return result;
-
-    MaterialPassDrawItemPartitions drawItems{ scratchArena };
-    InstanceGpuDataVector instanceData{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
-#if defined(NWB_DEBUG)
-    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{ scratchArena };
-#endif
-    MaterialTypedByteDataVector materialTypedBytes{ scratchArena };
-    AvboitPassUploadHelper uploadHelper(m_materialSystem);
-    const auto uploadResult = uploadHelper.gather(
-        AvboitPassUploadInputs{
-            .framebuffer = phaseDesc.framebuffer,
-            .pass = phaseDesc.pass,
-            .csgFrameState = inputs.csgFrameState,
-            .frameBindings = inputs.frameBindings,
-            .csgResources = inputs.csgResources,
-            .meshViewState = inputs.meshViewState,
-            .materialInstances = inputs.materialInstances,
-            .materialTyped = inputs.materialTyped,
-            .csgReceiverRanges = inputs.csgReceiverRanges,
-            .csgCutters = inputs.csgCutters,
-            .csgClipContextSlots = inputs.csgClipContextSlots,
-            .csgIntervalSampleState = inputs.csgIntervalSampleState,
-        },
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
+[cpp_unwind]
+Expected<AvboitPassUploadResult> GatherAvboitPassUpload(mut RendererMaterialSystem materials, in FrameGraphAvboitStageInputs inputs,
+    in FramebufferHandle framebuffer, in MaterialPipelinePass pass, mut MaterialPassDrawItemPartitions drawItems, mut InstanceGpuDataVector instanceData,
+    mut CsgFrameGpuData csgFrameData, mut MaterialTypedInstanceRangeVector materialTypedRanges, mut MaterialTypedByteDataVector materialTypedBytes){
+    const AvboitPassUploadReadinessPolicy readinessPolicy();
+    AvboitPassUploadResult result;
+    materials.gatherMaterialPassDrawItems(
+        framebuffer,
+        pass,
+        true,
+        inputs.csgFrameState,
+        RendererResourceLookupMode::PreparedOnly,
+        Optional<in MeshViewGpuData>(inputs.meshViewState),
         drawItems,
         instanceData,
         csgFrameData,
-#if defined(NWB_DEBUG)
         materialTypedRanges,
-#endif
         materialTypedBytes
     );
-    if(!uploadResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: prepared AVBOIT pass resources were unavailable during graph declaration"));
-        return MakeUnexpected(Failure{});
+
+    result.hasDrawItems = !drawItems.empty();
+    result.hasCsgDrawItems = !drawItems.csg.empty();
+    if(!result.hasDrawItems)
+        return result;
+    const b8 csgReady = readinessPolicy.isCsgPassReady(
+        result.hasCsgDrawItems,
+        csgFrameData.hasWork(),
+        inputs.resources.csgReceiverRanges.valid(),
+        inputs.resources.csgCutters.valid(),
+        inputs.resources.csgClipContextSlots.valid(),
+        pass == MaterialPipelinePass::AvboitExtinction,
+        inputs.resources.csgIntervalSampleState.valid(),
+        inputs.csgResources.frameReady(csgFrameData),
+        materials.drawRecorder().materialPassDrawResourcesReady(drawItems.csg, inputs.frameBindings)
+    );
+    if(!readinessPolicy.arePassResourcesReady(
+        inputs.resources.materialInstances.valid(),
+        inputs.resources.materialTyped.valid(),
+        inputs.frameBindings.frameReady(instanceData.size(), materialTypedBytes.size()),
+        materials.drawRecorder().materialPassDrawResourcesReady(drawItems.regular, inputs.frameBindings),
+        csgReady
+    ))
+        return MakeUnexpected(Failure());
+    return result;
+}
+
+Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::declare(
+    in FrameGraphAvboitStageInputs inputs, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitGeometryPhase phase,
+    in GpuTaskId uploadTask, in b8 intervalOutputsGraphOwned, in b8 hasTransparentRenderers,
+    mut AvboitRasterPassTaskPayload rasterPayload, mut AvboitComputeEmulationTaskPayload computeEmulationPayload, mut AvboitGeneratedGeometryReuse generatedGeometry
+){
+    FrameGraphAvboitMaterialUploadResult result;
+    result.uploadTask = uploadTask;
+    if(!hasTransparentRenderers)
+        return result;
+
+    MaterialPassDrawItemPartitions drawItems;
+    InstanceGpuDataVector instanceData;
+    CsgFrameGpuData csgFrameData;
+    MaterialTypedInstanceRangeVector materialTypedRanges;
+    MaterialTypedByteDataVector materialTypedBytes;
+    const auto uploadResult = GatherAvboitPassUpload(this.m_materialSystem, inputs, framebuffer, pass,
+        drawItems,
+        instanceData,
+        csgFrameData,
+        materialTypedRanges,
+        materialTypedBytes
+    );
+    if(!uploadResult.has_value()){
+        warning("RendererSystem: prepared AVBOIT pass resources were unavailable during graph declaration");
+        return MakeUnexpected(Failure());
     }
 
-    const b8 hasCsgDrawItems = uploadResult->hasCsgDrawItems;
-    if(hasCsgDrawItems && !inputs.intervalOutputsGraphOwned){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: clipped AVBOIT draws require prepared interval outputs"));
-        return MakeUnexpected(Failure{});
+    const b8 hasCsgDrawItems = uploadResult.value().hasCsgDrawItems;
+    if(hasCsgDrawItems && !intervalOutputsGraphOwned){
+        warning("RendererSystem: clipped AVBOIT draws require prepared interval outputs");
+        return MakeUnexpected(Failure());
     }
-    if(!uploadResult->hasDrawItems){
+    if(!uploadResult.value().hasDrawItems){
         rasterPayload.snapshot.capture(drawItems, csgFrameData, instanceData.size(), materialTypedBytes.size());
         rasterPayload.phasePrepared = true;
         return result;
     }
 
-    const Array<MaterialPassDrawItemsView, 2u> materialGeometryDrawSets = { drawItems.regular, drawItems.csg, };
-    AvboitGeometryPreparationBuilder geometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
-    const auto geometryPreparationResult = geometryPreparationBuilder.declare(AvboitGeometryPreparationInputs(materialGeometryDrawSets, phaseDesc.phase));
-    if(!geometryPreparationResult)
-        return MakeUnexpected(Failure{});
-    rasterPayload.materialGeometryStatesGraphOwned = geometryPreparationResult->geometryOwned;
-    result.materialGeometrySet = geometryPreparationResult->materialGeometrySet;
-    result.materialSampledTextureSet = geometryPreparationResult->materialSampledTextureSet;
-    const b8 sampledTexturesCollected = geometryPreparationResult->sampledTexturesCollected;
+    const Array<MaterialPassDrawItemsView, 2u> materialGeometryDrawSets(MaterialPassDrawItemsView(drawItems.regular), MaterialPassDrawItemsView(drawItems.csg));
+    const auto geometryPreparationResult = PrepareAvboitMaterialGeometry(this.m_graph, this.m_materialSystem, AvboitGeometryPreparationInputs(materialGeometryDrawSets, phase));
+    if(!geometryPreparationResult.has_value())
+        return MakeUnexpected(Failure());
+    rasterPayload.materialGeometryStatesGraphOwned = geometryPreparationResult.value().geometryOwned;
+    result.materialGeometrySet = geometryPreparationResult.value().materialGeometrySet;
+    result.materialSampledTextureSet = geometryPreparationResult.value().materialSampledTextureSet;
+    const b8 sampledTexturesCollected = geometryPreparationResult.value().sampledTexturesCollected;
 
-    m_materialSystem.prepareMaterialPassInstanceUploadData(inputs.csgResources, instanceData);
-#if defined(NWB_DEBUG)
-    if(!AvboitUploadCountsFit(
-        instanceData.size(),
-        csgFrameData.receiverRanges.size(),
-        csgFrameData.cutters.size(),
-        Limit<usize>::s_Max / sizeof(InstanceGpuData),
-        Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData),
-        Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
-    )){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
-        return MakeUnexpected(Failure{});
+    this.m_materialSystem.prepareMaterialPassInstanceUploadData(inputs.csgResources, instanceData);
+    if(s_RuntimeAssertionsEnabled){
+        if(!AvboitUploadCountsFit(
+            instanceData.size(),
+            csgFrameData.receiverRanges.size(),
+            csgFrameData.cutters.size(),
+            usize.max / size_of<InstanceGpuData>(),
+            usize.max / size_of<CsgReceiverRangeGpuData>(),
+            usize.max / size_of<CsgCutterGpuData>()
+        )){
+            warning("RendererSystem: AVBOIT upload size overflows graph blob capacity");
+            return MakeUnexpected(Failure());
+        }
+        assert(instanceData.size() == materialTypedRanges.size());
+        ValidateMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
     }
-    FOUNDATION_ASSERT(instanceData.size() == materialTypedRanges.size());
-    ValidateMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
-#endif
 
-    AvboitMaterialUploadBuilder materialUploadBuilder(m_graph, m_csgSystem);
-    const auto csgStreamsUploadedResult = materialUploadBuilder.declare(
-        AvboitMaterialUploadInputs{
-            .targets = inputs.targets,
-            .csgResources = inputs.csgResources,
-            .frameBindings = inputs.frameBindings,
-            .materialInstances = inputs.materialInstances,
-            .materialTyped = inputs.materialTyped,
-            .csgReceiverRanges = inputs.csgReceiverRanges,
-            .csgCutters = inputs.csgCutters,
-            .csgClipContextSlots = inputs.csgClipContextSlots,
-            .uploadTask = result.uploadTask,
-            .phase = phaseDesc.phase,
-        },
+    const auto csgStreamsUploadedResult = DeclareAvboitMaterialUploads(this.m_graph, this.m_csgSystem, inputs, phase,
         instanceData,
         materialTypedBytes,
         csgFrameData,
         hasCsgDrawItems,
         result.uploadTask
     );
-    if(!csgStreamsUploadedResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT material upload"));
-        return MakeUnexpected(Failure{});
+    if(!csgStreamsUploadedResult.has_value()){
+        warning("RendererSystem: could not declare AVBOIT material upload");
+        return MakeUnexpected(Failure());
     }
-    result.csgStreamsUploaded = *csgStreamsUploadedResult;
+    result.csgStreamsUploaded = csgStreamsUploadedResult.value();
 
     rasterPayload.snapshot.capture(drawItems, csgFrameData, instanceData.size(), materialTypedBytes.size());
     rasterPayload.phasePrepared = true;
     rasterPayload.streamsUploaded = true;
     result.streamsUploaded = true;
 
-    AvboitComputeEmulationCapture computeEmulationCapture;
-    const auto computeEmulationCaptureResult = computeEmulationCapture.capture(
-        AvboitComputeEmulationCaptureInputs{
-            .drawItems = drawItems,
-            .csgFrameData = csgFrameData,
-            .geometryOwned = rasterPayload.materialGeometryStatesGraphOwned,
-            .sampledTexturesCollected = sampledTexturesCollected,
-            .csgStreamsUploaded = result.csgStreamsUploaded,
-            .intervalOutputsGraphOwned = inputs.intervalOutputsGraphOwned,
-        },
-        instanceData.size(),
-        materialTypedBytes.size(),
-        scratchArena,
-        computeEmulationPayload.plan,
-        computeEmulationPayload.csgPlan
-    );
-    if(!computeEmulationCaptureResult)
-        return MakeUnexpected(Failure{});
-    result.regularComputeEmulationPlanCaptured = computeEmulationCaptureResult->regularCaptured;
-    result.csgComputeEmulationPlanCaptured = computeEmulationCaptureResult->csgCaptured;
-    result.sharedComputeEmulationPlanCaptured = computeEmulationCaptureResult->sharedCaptured;
-    result.sharedComputeEmulationPlan = computeEmulationCaptureResult->sharedPlan;
-    result.sharedComputeEmulationInstanceCount = computeEmulationCaptureResult->sharedInstanceCount;
-    result.sharedComputeEmulationMaterialTypedByteCount = computeEmulationCaptureResult->sharedMaterialTypedByteCount;
-    if(result.regularComputeEmulationPlanCaptured && generatedGeometry.matches(drawItems, instanceData, inputs.frameBindings, inputs.meshViewState, phaseDesc.pass))
+    CaptureAvboitEmulationPlans(MaterialPassDrawItemPartitionsView(drawItems), CsgFrameGpuDataView(csgFrameData),
+        rasterPayload.materialGeometryStatesGraphOwned, sampledTexturesCollected, intervalOutputsGraphOwned, instanceData.size(), materialTypedBytes.size(),
+        computeEmulationPayload.plan, computeEmulationPayload.csgPlan, result);
+    if(result.regularComputeEmulationPlanCaptured && generatedGeometry.matches(drawItems, instanceData, inputs.frameBindings, inputs.meshViewState, pass))
         result.reusedGeometryProducer = generatedGeometry.producerTask();
     else{
         generatedGeometry.reset();
-        result.producesReusableGeometry = result.regularComputeEmulationPlanCaptured && generatedGeometry.capture(drawItems, instanceData, inputs.frameBindings, inputs.meshViewState, phaseDesc.pass);
+        result.producesReusableGeometry = result.regularComputeEmulationPlanCaptured && generatedGeometry.capture(drawItems, instanceData, inputs.frameBindings, inputs.meshViewState, pass);
     }
     if(result.regularComputeEmulationPlanCaptured || result.csgComputeEmulationPlanCaptured){
         computeEmulationPayload.instanceCount = instanceData.size();
@@ -218,26 +196,27 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::declare(const AvboitGeometryPreparationInputs& inputs){
-    AvboitGeometryPreparationResult result{};
+[cpp_unwind]
+Expected<AvboitGeometryPreparationResult> PrepareAvboitMaterialGeometry(mut GpuTaskGraph graph, mut RendererMaterialSystem materialSystem, in AvboitGeometryPreparationInputs inputs){
+    AvboitGeometryPreparationResult result;
     if(inputs.drawItemSets.empty())
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     const AvboitGeometryPhaseIdentities identities = ResolveAvboitGeometryPhaseIdentities(inputs.phase);
-    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(inputs.drawItemSets, identities.geometryIdentity, identities.geometryLabel, m_graph, m_scratchArena);
+    const auto materialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(inputs.drawItemSets, identities.geometryIdentity, identities.geometryLabel, graph);
     result.geometryOwned = materialGeometrySetResult.has_value();
-    if(materialGeometrySetResult)
-        result.materialGeometrySet = *materialGeometrySetResult;
+    if(materialGeometrySetResult.has_value())
+        result.materialGeometrySet = materialGeometrySetResult.value();
     if(!result.geometryOwned){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared AVBOIT material geometry states"));
-        return MakeUnexpected(Failure{});
+        warning("RendererSystem: could not declare prepared AVBOIT material geometry states");
+        return MakeUnexpected(Failure());
     }
-    const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(m_materialSystem, inputs.drawItemSets, identities.sampledIdentity, identities.sampledLabel, m_graph, m_scratchArena);
+    const auto materialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, inputs.drawItemSets, identities.sampledIdentity, identities.sampledLabel, graph);
     result.sampledTexturesCollected = materialSampledTextureSetResult.has_value();
-    if(materialSampledTextureSetResult)
-        result.materialSampledTextureSet = *materialSampledTextureSetResult;
+    if(materialSampledTextureSetResult.has_value())
+        result.materialSampledTextureSet = materialSampledTextureSetResult.value();
     if(!result.sampledTexturesCollected){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared AVBOIT material sampled textures"));
-        return MakeUnexpected(Failure{});
+        warning("RendererSystem: could not declare prepared AVBOIT material sampled textures");
+        return MakeUnexpected(Failure());
     }
     return result;
 }
@@ -246,112 +225,73 @@ Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::decl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<b8> AvboitMaterialUploadBuilder::declare(
-    const AvboitMaterialUploadInputs& inputs,
-    const Span<const InstanceGpuData> instanceData,
-    const Span<const u8> materialTypedBytes,
-    const CsgFrameGpuDataView& csgFrameData,
-    const b8 hasCsgDrawItems,
-    Core::GpuTaskId& inOutUploadTask
-){
+[cpp_unwind]
+Expected<b8> DeclareAvboitMaterialUploads(mut GpuTaskGraph graph, mut RendererCsgSystem csgSystem, in FrameGraphAvboitStageInputs inputs, in AvboitGeometryPhase phase,
+    in Span<InstanceGpuData> instanceData, in Span<u8> materialTypedBytes, in CsgFrameGpuDataView csgFrameData, in b8 hasCsgDrawItems, mut GpuTaskId inOutUploadTask){
     if(!inOutUploadTask.valid())
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     if(!AvboitUploadCountsFit(
         instanceData.size(),
         csgFrameData.receiverRanges.size(),
         csgFrameData.cutters.size(),
-        Limit<usize>::s_Max / sizeof(InstanceGpuData),
-        Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData),
-        Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
+        usize.max / size_of<InstanceGpuData>(),
+        usize.max / size_of<CsgReceiverRangeGpuData>(),
+        usize.max / size_of<CsgCutterGpuData>()
     )){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
-        return MakeUnexpected(Failure{});
+        warning("RendererSystem: AVBOIT upload size overflows graph blob capacity");
+        return MakeUnexpected(Failure());
     }
 
-    const AvboitMaterialUploadIdentities identities = ResolveAvboitMaterialUploadIdentities(inputs.phase);
-    const auto instanceBlobResult = m_graph.copyUploadData(instanceData.data(), instanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
-    const auto materialTypedBlobResult = m_graph.copyUploadData(materialTypedBytes.data(), materialTypedBytes.size(), alignof(u32));
-    if(!instanceBlobResult || !materialTypedBlobResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not retain immutable AVBOIT material upload data"));
-        return MakeUnexpected(Failure{});
+    const AvboitMaterialUploadIdentities identities = ResolveAvboitMaterialUploadIdentities(phase);
+    const auto instanceBlobResult = graph.copyUploadElements<InstanceGpuData>(instanceData);
+    const auto materialTypedBlobResult = graph.copyUploadBytes<u32>(materialTypedBytes);
+    if(!instanceBlobResult.has_value() || !materialTypedBlobResult.has_value()){
+        warning("RendererSystem: could not retain immutable AVBOIT material upload data");
+        return MakeUnexpected(Failure());
     }
-    const Core::GpuUploadBlobId instanceBlob = *instanceBlobResult;
-    const Core::GpuUploadBlobId materialTypedBlob = *materialTypedBlobResult;
+    const GpuUploadBlobId instanceBlob = instanceBlobResult.value();
+    const GpuUploadBlobId materialTypedBlob = materialTypedBlobResult.value();
 
-    Core::GpuTaskSchedulingHint uploadScheduling;
-    uploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
-    uploadScheduling.forceSubmissionBoundary = false;
-    uploadScheduling.allowPacketMerge = true;
-    uploadScheduling.mergeWithPrevious = true;
-
-    Core::GpuTaskDesc instanceUploadDesc;
-    instanceUploadDesc.setIdentity(identities.instanceIdentity).setMarkerLabel(identities.instanceLabel).setScheduling(uploadScheduling).setDependencies({ &inOutUploadTask, 1u });
-    const auto inOutUploadTaskResult = m_graph.addUploadBufferTask(instanceUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = instanceBlob, .destination = inputs.materialInstances, .finalState = Core::ResourceStates::Common, });
-    if(!inOutUploadTaskResult){
-        inOutUploadTask = {};
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT material instance upload"));
-        return MakeUnexpected(Failure{});
+    if(!AppendImmutableBufferUpload(graph, instanceBlob, inputs.resources.materialInstances, identities.instanceIdentity, identities.instanceLabel, inOutUploadTask)){
+        warning("RendererSystem: could not declare AVBOIT material instance upload");
+        return MakeUnexpected(Failure());
     }
-    inOutUploadTask = *inOutUploadTaskResult;
-
-    Core::GpuTaskDesc materialTypedUploadDesc;
-    materialTypedUploadDesc.setIdentity(identities.typedIdentity).setMarkerLabel(identities.typedLabel).setScheduling(uploadScheduling).setDependencies({ &inOutUploadTask, 1u });
-    const auto inOutUploadTaskResult2 = m_graph.addUploadBufferTask(materialTypedUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = materialTypedBlob, .destination = inputs.materialTyped, .finalState = Core::ResourceStates::Common, });
-    if(!inOutUploadTaskResult2){
-        inOutUploadTask = {};
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT material typed upload"));
-        return MakeUnexpected(Failure{});
+    if(!AppendImmutableBufferUpload(graph, materialTypedBlob, inputs.resources.materialTyped, identities.typedIdentity, identities.typedLabel, inOutUploadTask)){
+        warning("RendererSystem: could not declare AVBOIT material typed upload");
+        return MakeUnexpected(Failure());
     }
-    inOutUploadTask = *inOutUploadTaskResult2;
 
     if(!hasCsgDrawItems)
         return false;
 
-    const auto clipContextSlotData = m_csgSystem.prepareCsgClipContextSlotData(inputs.targets, csgFrameData, inputs.csgResources, inputs.frameBindings);
-    if(!clipContextSlotData){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not snapshot AVBOIT CSG context data"));
-        return MakeUnexpected(Failure{});
+    const auto clipContextSlotData = csgSystem.prepareCsgClipContextSlotData(inputs.targets, csgFrameData, inputs.csgResources, inputs.frameBindings);
+    if(!clipContextSlotData.has_value()){
+        warning("RendererSystem: could not snapshot AVBOIT CSG context data");
+        return MakeUnexpected(Failure());
     }
-    const auto receiverRangesBlobResult = m_graph.copyUploadData(csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData));
-    const auto cuttersBlobResult = m_graph.copyUploadData(csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData));
-    const auto clipContextSlotsBlobResult = m_graph.copyUploadData(&*clipContextSlotData, sizeof(*clipContextSlotData), alignof(CsgClipContextSlots));
-    if(!receiverRangesBlobResult || !cuttersBlobResult || !clipContextSlotsBlobResult){
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not retain immutable AVBOIT CSG upload data"));
-        return MakeUnexpected(Failure{});
+    const auto receiverRangesBlobResult = graph.copyUploadElements<CsgReceiverRangeGpuData>(csgFrameData.receiverRanges);
+    const auto cuttersBlobResult = graph.copyUploadElements<CsgCutterGpuData>(csgFrameData.cutters);
+    const auto clipContextSlotsBlobResult = graph.copyUploadValue(clipContextSlotData.value());
+    if(!receiverRangesBlobResult.has_value() || !cuttersBlobResult.has_value() || !clipContextSlotsBlobResult.has_value()){
+        warning("RendererSystem: could not retain immutable AVBOIT CSG upload data");
+        return MakeUnexpected(Failure());
     }
-    const Core::GpuUploadBlobId receiverRangesBlob = *receiverRangesBlobResult;
-    const Core::GpuUploadBlobId cuttersBlob = *cuttersBlobResult;
-    const Core::GpuUploadBlobId clipContextSlotsBlob = *clipContextSlotsBlobResult;
+    const GpuUploadBlobId receiverRangesBlob = receiverRangesBlobResult.value();
+    const GpuUploadBlobId cuttersBlob = cuttersBlobResult.value();
+    const GpuUploadBlobId clipContextSlotsBlob = clipContextSlotsBlobResult.value();
 
-    Core::GpuTaskDesc receiverRangesUploadDesc;
-    receiverRangesUploadDesc.setIdentity(identities.receiverIdentity).setMarkerLabel(identities.receiverLabel).setScheduling(uploadScheduling).setDependencies({ &inOutUploadTask, 1u });
-    const auto inOutUploadTaskResult3 = m_graph.addUploadBufferTask(receiverRangesUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = receiverRangesBlob, .destination = inputs.csgReceiverRanges, .finalState = Core::ResourceStates::Common, });
-    if(!inOutUploadTaskResult3){
-        inOutUploadTask = {};
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT CSG receiver-range upload"));
-        return MakeUnexpected(Failure{});
+    if(!AppendImmutableBufferUpload(graph, receiverRangesBlob, inputs.resources.csgReceiverRanges, identities.receiverIdentity, identities.receiverLabel, inOutUploadTask)){
+        warning("RendererSystem: could not declare AVBOIT CSG receiver-range upload");
+        return MakeUnexpected(Failure());
     }
-    inOutUploadTask = *inOutUploadTaskResult3;
-
-    Core::GpuTaskDesc cuttersUploadDesc;
-    cuttersUploadDesc.setIdentity(identities.cutterIdentity).setMarkerLabel(identities.cutterLabel).setScheduling(uploadScheduling).setDependencies({ &inOutUploadTask, 1u });
-    const auto inOutUploadTaskResult4 = m_graph.addUploadBufferTask(cuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = cuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
-    if(!inOutUploadTaskResult4){
-        inOutUploadTask = {};
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT CSG cutter upload"));
-        return MakeUnexpected(Failure{});
+    if(!AppendImmutableBufferUpload(graph, cuttersBlob, inputs.resources.csgCutters, identities.cutterIdentity, identities.cutterLabel, inOutUploadTask)){
+        warning("RendererSystem: could not declare AVBOIT CSG cutter upload");
+        return MakeUnexpected(Failure());
     }
-    inOutUploadTask = *inOutUploadTaskResult4;
-
-    Core::GpuTaskDesc clipContextSlotsUploadDesc;
-    clipContextSlotsUploadDesc.setIdentity(identities.clipIdentity).setMarkerLabel(identities.clipLabel).setScheduling(uploadScheduling).setDependencies({ &inOutUploadTask, 1u });
-    const auto inOutUploadTaskResult5 = m_graph.addUploadBufferTask(clipContextSlotsUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = clipContextSlotsBlob, .destination = inputs.csgClipContextSlots, .finalState = Core::ResourceStates::Common, });
-    if(!inOutUploadTaskResult5){
-        inOutUploadTask = {};
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT CSG clip-context upload"));
-        return MakeUnexpected(Failure{});
+    if(!AppendImmutableBufferUpload(graph, clipContextSlotsBlob, inputs.resources.csgClipContextSlots, identities.clipIdentity, identities.clipLabel, inOutUploadTask)){
+        warning("RendererSystem: could not declare AVBOIT CSG clip-context upload");
+        return MakeUnexpected(Failure());
     }
-    inOutUploadTask = *inOutUploadTaskResult5;
     return true;
 }
 
@@ -359,107 +299,92 @@ Expected<b8> AvboitMaterialUploadBuilder::declare(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AvboitComputeEmulationCaptureResult> AvboitComputeEmulationCapture::capture(
-    const AvboitComputeEmulationCaptureInputs& inputs,
-    const usize instanceCount,
-    const usize materialTypedByteCount,
-    Core::Alloc::ScratchArena& scratchArena,
-    ECSRenderDetail::AliasFreeComputeEmulationGraphPlan& plan,
-    ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan
-){
-    AvboitComputeEmulationCaptureResult result{};
-    const MaterialPassDrawItemPartitionsView& drawItems = inputs.drawItems;
+[cpp_unwind]
+void CaptureAvboitEmulationPlans(in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView frame, in b8 geometryOwned, in b8 sampledTexturesCollected,
+    in b8 intervalOutputsGraphOwned, in usize instanceCount, in usize materialTypedByteCount, mut AliasFreeComputeEmulationGraphPlan plan,
+    mut OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan, mut FrameGraphAvboitMaterialUploadResult result){
     // A phase owns one alias-free stream; mixed work keeps local interleaving.
-    result.regularCaptured = CanCaptureRegularAvboitComputeEmulation(drawItems.csg.computeDrawItems.empty(), inputs.geometryOwned, inputs.sampledTexturesCollected) && plan.capture(drawItems.regular, scratchArena);
-    result.csgCaptured = CanCaptureCsgAvboitComputeEmulation(
+    result.regularComputeEmulationPlanCaptured = CanCaptureRegularAvboitComputeEmulation(drawItems.csg.computeDrawItems.empty(), geometryOwned, sampledTexturesCollected) && plan.capture(drawItems.regular, false);
+    result.csgComputeEmulationPlanCaptured = CanCaptureCsgAvboitComputeEmulation(
         drawItems.regular.computeDrawItems.empty(),
-        inputs.csgStreamsUploaded,
-        inputs.intervalOutputsGraphOwned,
-        inputs.geometryOwned,
-        inputs.sampledTexturesCollected
-    ) && csgPlan.capture(drawItems.csg, inputs.csgFrameData, scratchArena);
+        result.csgStreamsUploaded,
+        intervalOutputsGraphOwned,
+        geometryOwned,
+        sampledTexturesCollected
+    ) && csgPlan.capture(drawItems.csg, frame);
     // All-compute draws share one output only as an explicit D/R sequence; mixed raster routes keep their main callback.
-    result.sharedCaptured = CanCaptureSharedAvboitComputeEmulation(
-        result.regularCaptured,
+    result.sharedComputeEmulationPlanCaptured = CanCaptureSharedAvboitComputeEmulation(
+        result.regularComputeEmulationPlanCaptured,
         drawItems.regular.meshDrawItems.empty(),
         drawItems.regular.indexedDrawItems.empty(),
         drawItems.csg.empty(),
-        inputs.geometryOwned,
-        inputs.sampledTexturesCollected
-    ) && result.sharedPlan.capture(drawItems.regular, s_SharedComputeEmulationMaximumDrawCount)
-        && IsSupportedSharedComputeEmulationDrawCount(result.sharedPlan.drawCount);
-    FOUNDATION_ASSERT(!(result.regularCaptured && result.csgCaptured));
-    FOUNDATION_ASSERT(!result.sharedCaptured || (!result.regularCaptured && !result.csgCaptured));
-    if(result.sharedCaptured){
-        result.sharedInstanceCount = instanceCount;
-        result.sharedMaterialTypedByteCount = materialTypedByteCount;
+        geometryOwned,
+        sampledTexturesCollected
+    ) && result.sharedComputeEmulationPlan.capture(drawItems.regular, s_SharedComputeEmulationMaximumDrawCount)
+        && IsSupportedSharedComputeEmulationDrawCount(result.sharedComputeEmulationPlan.drawCount);
+    assert(!(result.regularComputeEmulationPlanCaptured && result.csgComputeEmulationPlanCaptured));
+    assert(!result.sharedComputeEmulationPlanCaptured || (!result.regularComputeEmulationPlanCaptured && !result.csgComputeEmulationPlanCaptured));
+    if(result.sharedComputeEmulationPlanCaptured){
+        result.sharedComputeEmulationInstanceCount = instanceCount;
+        result.sharedComputeEmulationMaterialTypedByteCount = materialTypedByteCount;
     }
-    return result;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 AvboitComputeEmulationOutputPlanner::Prepare(
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena,
-    const AvboitRecordInputsBase& inputs,
-    const AvboitRasterRecordPhaseDesc& phaseDesc,
-    AvboitRasterPassTaskPayload& rasterPayload,
-    const AvboitComputeEmulationTaskPayload& computeEmulationPayload,
-    Optional<Core::GpuTimingMeasure>& computeEmulationTiming,
-    AvboitComputeEmulationOutputs& result
-){
-    using namespace RendererTaskGraphDetail;
-    const AvboitComputeEmulationOutputPolicy outputPolicy;
-    const b8 generatedGeometryReused = inputs.generatedGeometryReused();
+[cpp_unwind]
+b8 PrepareAvboitEmulationOutputs(mut GpuTaskGraph graph, in FrameGraphAvboitMaterialUploadResult upload, in AvboitRasterRecordPhaseDesc phaseDesc,
+    mut AvboitRasterPassTaskPayload rasterPayload, in AvboitComputeEmulationTaskPayload computeEmulationPayload,
+    mut Optional<GpuTimingMeasure> computeEmulationTiming, mut AvboitComputeEmulationOutputs result){
+    const AvboitComputeEmulationOutputPolicy outputPolicy();
+    const b8 generatedGeometryReused = upload.reusedGeometryProducer.valid();
 
-    auto& computeEmulationOutputSet = result.computeEmulationOutputSet;
-    const b8 computeEmulationPlanCaptured = outputPolicy.isAnyComputeEmulationPlanCaptured(inputs.regularComputeEmulationPlanCaptured, inputs.csgComputeEmulationPlanCaptured);
-    auto& computeEmulationOutputStatesGraphOwned = result.computeEmulationOutputStatesGraphOwned;
-    if(inputs.regularComputeEmulationPlanCaptured){
+    const b8 computeEmulationPlanCaptured = outputPolicy.isAnyComputeEmulationPlanCaptured(upload.regularComputeEmulationPlanCaptured, upload.csgComputeEmulationPlanCaptured);
+    if(upload.regularComputeEmulationPlanCaptured){
         const auto outputSetResult = GatherImportedOutputBufferResourceSet(
             graph,
-            computeEmulationPayload.plan,
-            scratchArena,
+            computeEmulationPayload.plan.captured,
+            computeEmulationPayload.plan.outputBuffers,
             phaseDesc.regularOutputSetIdentity,
             phaseDesc.regularOutputSetLabel
         );
-        computeEmulationOutputStatesGraphOwned = outputSetResult.has_value();
-        if(outputSetResult)
-            computeEmulationOutputSet = *outputSetResult;
+        result.computeEmulationOutputStatesGraphOwned = outputSetResult.has_value();
+        if(outputSetResult.has_value())
+            result.computeEmulationOutputSet = outputSetResult.value();
     }
-    else if(inputs.csgComputeEmulationPlanCaptured){
+    else if(upload.csgComputeEmulationPlanCaptured){
         const auto outputSetResult = GatherImportedOutputBufferResourceSet(
             graph,
-            computeEmulationPayload.csgPlan,
-            scratchArena,
+            computeEmulationPayload.csgPlan.geometry.generated.captured,
+            computeEmulationPayload.csgPlan.geometry.generated.outputBuffers,
             phaseDesc.csgOutputSetIdentity,
             phaseDesc.csgOutputSetLabel
         );
-        computeEmulationOutputStatesGraphOwned = outputSetResult.has_value();
-        if(outputSetResult)
-            computeEmulationOutputSet = *outputSetResult;
+        result.computeEmulationOutputStatesGraphOwned = outputSetResult.has_value();
+        if(outputSetResult.has_value())
+            result.computeEmulationOutputSet = outputSetResult.value();
     }
-    if(computeEmulationPlanCaptured && !computeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned AVBOIT compute-emulation output states"));
-    if(!outputPolicy.canProceedWithGeometryReuse(generatedGeometryReused, computeEmulationOutputStatesGraphOwned))
+    if(computeEmulationPlanCaptured && !result.computeEmulationOutputStatesGraphOwned)
+        warning("RendererSystem: could not declare graph-owned AVBOIT compute-emulation output states");
+    if(!outputPolicy.canProceedWithGeometryReuse(generatedGeometryReused, result.computeEmulationOutputStatesGraphOwned))
         return false;
-    rasterPayload.computeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && computeEmulationOutputStatesGraphOwned;
-    rasterPayload.csgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && computeEmulationOutputStatesGraphOwned;
-    rasterPayload.computeEmulationTiming = computeEmulationOutputStatesGraphOwned ? &computeEmulationTiming : nullptr;
+    rasterPayload.computeEmulationOutputStatesGraphOwned = upload.regularComputeEmulationPlanCaptured && result.computeEmulationOutputStatesGraphOwned;
+    rasterPayload.csgComputeEmulationOutputStatesGraphOwned = upload.csgComputeEmulationPlanCaptured && result.computeEmulationOutputStatesGraphOwned;
+    if(result.computeEmulationOutputStatesGraphOwned)
+        rasterPayload.computeEmulationTiming = Optional<mut Optional<GpuTimingMeasure>>(computeEmulationTiming);
+    else
+        rasterPayload.computeEmulationTiming.reset();
 
-    auto& sharedComputeEmulationOutput = result.sharedComputeEmulationOutput;
-    auto& sharedComputeEmulationOutputStatesGraphOwned = result.sharedComputeEmulationOutputStatesGraphOwned;
-    if(inputs.sharedComputeEmulationPlanCaptured){
-        const auto sharedOutputResult = GatherRegularSharedComputeEmulationResource(graph, inputs.sharedComputeEmulationPlan, phaseDesc.sharedOutputLabel);
-        sharedComputeEmulationOutputStatesGraphOwned = sharedOutputResult.has_value();
-        if(sharedOutputResult)
-            sharedComputeEmulationOutput = *sharedOutputResult;
+    if(upload.sharedComputeEmulationPlanCaptured){
+        const auto sharedOutputResult = GatherRegularSharedComputeEmulationResource(graph, upload.sharedComputeEmulationPlan, phaseDesc.sharedOutputLabel);
+        result.sharedComputeEmulationOutputStatesGraphOwned = sharedOutputResult.has_value();
+        if(sharedOutputResult.has_value())
+            result.sharedComputeEmulationOutput = sharedOutputResult.value();
     }
-    if(inputs.sharedComputeEmulationPlanCaptured && !sharedComputeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned AVBOIT shared compute-emulation output state"));
+    if(upload.sharedComputeEmulationPlanCaptured && !result.sharedComputeEmulationOutputStatesGraphOwned)
+        warning("RendererSystem: could not declare graph-owned AVBOIT shared compute-emulation output state");
 
     return true;
 }
@@ -468,126 +393,102 @@ b8 AvboitComputeEmulationOutputPlanner::Prepare(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 RecordAvboitComputeEmulation(const AvboitComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
-    const Core::FramebufferHandle& traitFramebuffer = SelectAvboitTargetFramebuffer(inputs.targets.avboit, trait.framebufferKind);
-    if(!HasValidAvboitComputeEmulationRecordInputs(traitFramebuffer != nullptr, inputs.plan.captured, inputs.csgPlan.captured))
+b8 AvboitComputeEmulationTaskPayload::record(mut CommandList commands, in GpuTaskRecordContext context)const{
+    const auto trait = GetAvboitComputeEmulationRecordTrait(this.pass);
+    const FramebufferHandle framebuffer = SelectAvboitTargetFramebuffer(this.targets.avboit, trait.framebufferKind);
+    const b8 csg = this.csgPlan.geometry.generated.captured;
+    if(!HasValidAvboitComputeEmulationRecordInputs(framebuffer.valid(), this.plan.captured, csg))
         return false;
-
-    const AvboitComputeEmulationOutputPolicy outputPolicy;
-    Core::GraphicsRuntime& graphics = inputs.graphics;
-    RendererMaterialSystem& materialSystem = inputs.materialSystem;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(inputs.timingTicket);
-    const b8 csgComputeEmulation = inputs.csgPlan.captured;
-    if(!IsAvboitComputeEmulationFrameReady(csgComputeEmulation ? inputs.csgPlan.matches() : inputs.plan.matches(), inputs.materialDrawBuffersUploaded, inputs.frameBindings.frameReady(inputs.instanceCount, inputs.materialTypedByteCount)))
+    GpuTimingTicketRecordingScope recording(this.timingTicket);
+    b8 matches = false;
+    if(csg)
+        matches = this.csgPlan.geometry.generated.matches();
+    else
+        matches = this.plan.matches();
+    if(!IsAvboitComputeEmulationFrameReady(matches, this.materialDrawBuffersUploaded, this.frameBindings.frameReady(this.instanceCount, this.materialTypedByteCount)))
         return false;
-
-    const Span<const MaterialPassDrawItem> computeDrawItems = csgComputeEmulation ? Span<const MaterialPassDrawItem>(inputs.csgPlan.drawItems) : Span<const MaterialPassDrawItem>(inputs.plan.drawItems);
-    // Reject late losses so the packet is discarded and the next frame re-preflights.
-    const b8 drawResourcesReady = csgComputeEmulation ? materialSystem.drawRecorder().materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings) : materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings);
-    if(!drawResourcesReady)
-        return false;
-    if(csgComputeEmulation){
-        const CsgFrameGpuDataView csgFrameData = inputs.csgPlan.csgFrameDataView();
-        if(!outputPolicy.isCsgComputeEmulationRecordReady(inputs.csgFrameBuffersUploaded, csgFrameData.hasWork(), inputs.csgResources.frameReady(csgFrameData)))
+    Span<MaterialPassDrawItem> draws = this.plan.drawItems;
+    if(csg){
+        draws = this.csgPlan.geometry.generated.drawItems;
+        if(!this.materialSystem.drawRecorder().materialPassDrawResourcesReady(this.csgPlan.geometry.drawItemsView(), this.frameBindings))
             return false;
-    }
-    if(inputs.timing.has_value())
+        const auto csgFrame = this.csgPlan.csgFrameDataView();
+        if(!AvboitComputeEmulationOutputPolicy().isCsgComputeEmulationRecordReady(this.csgFrameBuffersUploaded, csgFrame.hasWork(), this.csgResources.frameReady(csgFrame)))
+            return false;
+    }else if(!this.materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(draws, this.frameBindings))
+        return false;
+    if(this.timing.has_value())
         return false;
 
-    commandList.endRenderPass();
-    inputs.timing.emplace(graphics.gpuTiming(), trait.timingScope, graphics.getDevice(), commandList);
-    // Close the marker now; the raster consumer owns finishTiming/discard.
-    if(!Core::FinishSplitGpuTimingMarker(&inputs.timing))
+    commands.endRenderPass();
+    this.timing.emplace(this.graphics.gpuTiming(), trait.timingScope, this.graphics.getDevice(), commands);
+    if(!FinishSplitGpuTimingMarker(this.timing))
         return false;
-    Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(traitFramebuffer->getFramebufferInfo().getViewport());
-    MaterialPassDrawContext drawContext(
-        commandList,
-        viewportState,
-        inputs.frameBindings,
-        trait.pipelinePass,
-        inputs.materialFrameStatesGraphOwned,
-        inputs.materialGeometryStatesGraphOwned,
-        true
-    );
-    drawContext.setAvboitTargets(inputs.targets.avboit).setConservativeGeometryScissor(inputs.conservativeGeometryScissor);
-    if(csgComputeEmulation)
-        drawContext.setCsgResources(inputs.csgResources);
-    materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, computeDrawItems);
+    ViewportState viewport;
+    viewport.addViewportAndScissorRect(framebuffer.deref().getFramebufferInfo().getViewport());
+    MaterialPassDrawContext drawContext(commands, viewport, this.frameBindings, this.pass, this.materialFrameStatesGraphOwned, this.materialGeometryStatesGraphOwned, true);
+    drawContext.setAvboitTargets(this.targets.avboit).setConservativeGeometryScissor(this.conservativeGeometryScissor);
+    if(csg)
+        drawContext.setCsgResources(this.csgResources);
+    this.materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, draws);
     return true;
 }
 
-[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
-    const b8 generatePhase = inputs.phase == SharedComputeEmulationPhase::Generate;
-    const Core::FramebufferHandle& traitFramebuffer = SelectAvboitTargetFramebuffer(inputs.targets.avboit, trait.framebufferKind);
-    if(!HasValidAvboitSharedComputeEmulationRecordInputs(traitFramebuffer != nullptr, inputs.plan.captured, inputs.drawIndex, inputs.plan.drawCount))
+b8 AvboitSharedComputeEmulationTaskPayload::record(mut CommandList commands, in GpuTaskRecordContext context)const{
+    const auto trait = GetAvboitComputeEmulationRecordTrait(this.pass);
+    const FramebufferHandle framebuffer = SelectAvboitTargetFramebuffer(this.targets.avboit, trait.framebufferKind);
+    if(!HasValidAvboitSharedComputeEmulationRecordInputs(framebuffer.valid(), this.plan.captured, this.drawIndex, this.plan.drawCount))
+        return false;
+    GpuTimingTicketRecordingScope recording(this.timingTicket);
+    if(!IsAvboitComputeEmulationFrameReady(this.plan.matches(this.drawIndex), this.materialDrawBuffersUploaded, this.frameBindings.frameReady(this.instanceCount, this.materialTypedByteCount)))
+        return false;
+    const Span<MaterialPassDrawItem> allDraws = this.plan.drawItems;
+    const Span<MaterialPassDrawItem> draws = allDraws.subspan(this.drawIndex, 1u);
+    if(!this.materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(draws, this.frameBindings))
         return false;
 
-    Core::GraphicsRuntime& graphics = inputs.graphics;
-    RendererMaterialSystem& materialSystem = inputs.materialSystem;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(inputs.timingTicket);
-    if(!IsAvboitComputeEmulationFrameReady(inputs.plan.matches(inputs.drawIndex), inputs.materialDrawBuffersUploaded, inputs.frameBindings.frameReady(inputs.instanceCount, inputs.materialTypedByteCount)))
-        return false;
-
-    const Span<const MaterialPassDrawItem> drawItems(&inputs.plan.drawItems[inputs.drawIndex], 1u);
-    if(!materialSystem.drawRecorder().computeMaterialPassDrawResourcesReady(drawItems, inputs.frameBindings))
-        return false;
-
-    if(generatePhase){
-        // End the prior raster phase before the marker and compute bind.
-        commandList.endRenderPass();
-        if(inputs.beginTiming){
-            if(inputs.timing.has_value())
-                return false;
-            inputs.timing.emplace(graphics.gpuTiming(), trait.timingScope, graphics.getDevice(), commandList);
-            // Close the marker before advancing to the raster consumer.
-            if(!Core::FinishSplitGpuTimingMarker(&inputs.timing))
-                return false;
-        }
-        else if(!inputs.timing.has_value())
+    const b8 generate = this.phase == SharedComputeEmulationPhase::Generate;
+    if(generate)
+        commands.endRenderPass();
+    if(generate && this.beginTiming){
+        if(this.timing.has_value())
             return false;
-    }
-    else if(!inputs.timing.has_value())
+        this.timing.emplace(this.graphics.gpuTiming(), trait.timingScope, this.graphics.getDevice(), commands);
+        if(!FinishSplitGpuTimingMarker(this.timing))
+            return false;
+    }else if(!this.timing.has_value())
         return false;
 
-    Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(traitFramebuffer->getFramebufferInfo().getViewport());
-    MaterialPassDrawContext drawContext(
-        commandList,
-        viewportState,
-        inputs.frameBindings,
-        trait.pipelinePass,
-        inputs.materialFrameStatesGraphOwned,
-        inputs.materialGeometryStatesGraphOwned,
-        true
-    );
-    drawContext.setAvboitTargets(inputs.targets.avboit);
-    if(!generatePhase)
-        drawContext.setFramebuffer(traitFramebuffer);
-    if(generatePhase)
-        materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems);
+    ViewportState viewport;
+    viewport.addViewportAndScissorRect(framebuffer.deref().getFramebufferInfo().getViewport());
+    MaterialPassDrawContext drawContext(commands, viewport, this.frameBindings, this.pass, this.materialFrameStatesGraphOwned, this.materialGeometryStatesGraphOwned, true);
+    drawContext.setAvboitTargets(this.targets.avboit);
+    if(generate)
+        this.materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, draws);
     else{
-        materialSystem.drawRecorder().renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
-        if(inputs.finishTiming){
-            inputs.timing.value().finishTiming(commandList);
-            inputs.timing.reset();
+        drawContext.setFramebuffer(framebuffer);
+        this.materialSystem.drawRecorder().renderComputeMaterialPassDrawItemsRasterOnly(drawContext, draws);
+        if(this.finishTiming){
+            this.timing.value().finishTiming(commands);
+            this.timing.reset();
         }
-        // Never bind compute while dynamic rendering is active.
-        commandList.endRenderPass();
+        commands.endRenderPass();
     }
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 AvboitRasterPassTaskPayload::record(mut CommandList commands, in GpuTaskRecordContext context)const{
+    if((this.computeEmulationOutputStatesGraphOwned || this.csgComputeEmulationOutputStatesGraphOwned) && !this.generatedGeometryReused && !this.computeEmulationTiming.has_value())
+        return false;
+    GpuTimingTicketRecordingScope recording(this.timingTicket);
+    if(!this.hasTransparentRenderers)
+        return true;
+    if(!this.phasePrepared || !this.snapshot.captured)
+        return false;
+    this.avboitSystem.renderPreparedGraphPass(commands, this.targets, this.pass, this.snapshot, this.csgResources,
+        this.frameBindings, this.materialFrameStatesGraphOwned, this.materialGeometryStatesGraphOwned,
+        this.computeEmulationOutputStatesGraphOwned, this.csgComputeEmulationOutputStatesGraphOwned, this.generatedGeometryReused, this.computeEmulationTiming);
+    return true;
 }
 
 

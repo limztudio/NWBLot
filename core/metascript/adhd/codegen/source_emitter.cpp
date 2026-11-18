@@ -4,6 +4,7 @@
 
 #include "source_emitter.h"
 #include "constructor_argument_emitter.h"
+#include "asset_cook_role_emitter.h"
 #include "parallel_statement_emitter.h"
 #include "simd_expression_analysis.h"
 
@@ -179,15 +180,16 @@ namespace __hidden_adhd_source_emitter{
     return false;
 }
 
-[[nodiscard]] b8 ExprDisallowsMemberInitializerLift(const Expr* const expr)noexcept{
+template<typename IsReadyField>
+[[nodiscard]] b8 ExprDisallowsMemberInitializerLift(const Expr* const expr, const IsReadyField& isReadyField)noexcept{
     if(!expr)
         return false;
-    if((expr->kind == ExprKind::ThisMember && !expr->text.empty()) || expr->kind == ExprKind::Lambda || expr->injectScratchArena)
+    if((expr->kind == ExprKind::ThisMember && !expr->text.empty() && !isReadyField(expr->text)) || expr->kind == ExprKind::Lambda || expr->injectScratchArena)
         return true;
-    if(ExprDisallowsMemberInitializerLift(expr->lhs) || ExprDisallowsMemberInitializerLift(expr->rhs))
+    if(ExprDisallowsMemberInitializerLift(expr->lhs, isReadyField) || ExprDisallowsMemberInitializerLift(expr->rhs, isReadyField))
         return true;
     for(const Expr* arg : expr->arguments){
-        if(ExprDisallowsMemberInitializerLift(arg))
+        if(ExprDisallowsMemberInitializerLift(arg, isReadyField))
             return true;
     }
     return false;
@@ -244,6 +246,8 @@ namespace __hidden_adhd_source_emitter{
 
 [[nodiscard]] static b8 HasOnlyGlobalConstants(const TranslationUnit& unit)noexcept{
     return !unit.globalConstants.empty()
+        && unit.staticAssertions.empty()
+        && unit.assetRegistrations.empty()
         && unit.topLevelNativeBlocks.empty()
         && unit.sourceNativeBlocks.empty()
         && unit.includedAdhdFiles.empty()
@@ -370,6 +374,18 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
             out.append(hdr.data(), hdr.size());
             out.append("\r\n");
         });
+        for(const MethodDecl* fn : unit.freeFunctions){
+            if(fn && !fn->isImported && (fn->assetCookRole == AssetCookRole::Entry || !fn->pairedSidecar.empty())){
+                out.append("#if defined(NWB_COOK)\r\n#include <core/assets/cook_metadata.h>\r\n#endif\r\n");
+                break;
+            }
+        }
+        for(const MethodDecl* fn : unit.freeFunctions){
+            if(fn && !fn->isImported && fn->assetCookRole == AssetCookRole::GatherMerge){
+                out.append("#include <core/assets/gather_merge_registry.h>\r\n");
+                break;
+            }
+        }
         if(hasAutoCodecRegistrar && !codec.registrarHeader.empty()){
             out.append(CodegenSymbols::s_IncludePrefix.data(), CodegenSymbols::s_IncludePrefix.size());
             out.append(codec.registrarHeader.data(), codec.registrarHeader.size());
@@ -422,6 +438,7 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
 
         emitOutOfClassCallable(out, nullptr, *fn, true, false, false);
     }
+    AssetCookRoleEmitter::Emit(out, unit, m_symbols);
 
     if(!namespacePath.empty()){
         out.append("};\r\n\r\n\r\n");
@@ -536,7 +553,12 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
         out.append("#pragma STDC FENV_ACCESS ON\r\n");
     emitUnusedParamSuppressions(out, method.params, method.body, indent);
     const b8 needsScratch = method.usesScratchArena || instantiatedStatementsNeedScratchArena(method.body);
-    if(!method.isConstructor && !method.isDestructor && method.injectsCallerArena){
+    if(method.returnsFromOwnerArena){
+        emitIndent(out, indent);
+        out.append("::ArenaBase& __adhd_caller_arena = ").append(activeClassArenaExpr()).append(";\r\n");
+    }
+    const b8 hasResultArena = method.injectsCallerArena || method.returnsFromOwnerArena;
+    if(!method.isConstructor && !method.isDestructor && hasResultArena){
         emitIndent(out, indent);
         if(needsScratch)
             out.append("[[maybe_unused]] ::ArenaBase& __adhd_scratch = __adhd_caller_arena;\r\n");
@@ -549,12 +571,14 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     if(method.usesTaskScope)
         ParallelStatementEmitter(*this).emitTaskScopePrologue(out, indent);
 
+    const b8 prevUnwind = m_allowsCppUnwind;
+    m_allowsCppUnwind = method.allowsCppUnwind || !method.exceptionProbes.empty();
     const b8 prevScalarSimd = m_emittingScalarSimd;
     m_emittingScalarSimd = true;
     const TypeRef* prevCallerReturnType = m_activeCallerArenaReturnType;
     const u32 prevParallelWorkerDepth = m_parallelWorkerDepth;
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
-    m_activeCallerArenaReturnType = (!method.isConstructor && !method.isDestructor && method.injectsCallerArena) ? method.returnType : nullptr;
+    m_activeCallerArenaReturnType = (!method.isConstructor && !method.isDestructor && hasResultArena) ? method.returnType : nullptr;
     m_parallelWorkerDepth = 0u;
     m_activeSwitchBreakLabelLine = 0u;
     m_activeLocalVarDecls.clear();
@@ -566,6 +590,7 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     m_parallelWorkerDepth = prevParallelWorkerDepth;
     m_activeCallerArenaReturnType = prevCallerReturnType;
     m_emittingScalarSimd = prevScalarSimd;
+    m_allowsCppUnwind = prevUnwind;
     m_skippedCtorAssignExprs = nullptr;
 }
 
@@ -636,13 +661,26 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
         out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
         out.append("))");
     }
+    MVector<MStringView> readyFields(m_arena);
+    const auto isReadyField = [&](const MStringView name)noexcept{
+        for(const MStringView ready : readyFields){
+            if(ready == name)
+                return true;
+        }
+        return false;
+    };
     for(const FieldDecl* field : orderedFields){
-        if(!field || !field->type || field->defaultExpr || field->hasCtorInit)
+        if(!field || !field->type)
             continue;
         const Expr* uniqueAssign = nullptr;
         b8 inLeadingPrefix = false;
         const Expr* rhs = __hidden_adhd_source_emitter::FindConstructorFieldAssignment(ctor.body, field->name, uniqueAssign, inLeadingPrefix);
-        if(!rhs)
+        if(!rhs){
+            if(m_activeOwnerClass && m_activeOwnerClass->preserveFieldOrder)
+                readyFields.push_back(field->name);
+            continue;
+        }
+        if(field->defaultExpr || field->hasCtorInit)
             continue;
         const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
         if(fieldRefMode != ParamPassingMode::None){
@@ -655,7 +693,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
             emitExpr(out, *rhs);
             out.append(")))");
         }
-        else if(uniqueAssign && inLeadingPrefix && !__hidden_adhd_source_emitter::ExprDisallowsMemberInitializerLift(rhs)){
+        else if(uniqueAssign && inLeadingPrefix && !__hidden_adhd_source_emitter::ExprDisallowsMemberInitializerLift(rhs, isReadyField)){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
             const b8 isDirectCtorCall = rhs->kind == ExprKind::Call
                 && !rhs->isBuiltinCall
@@ -667,7 +705,10 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
                 && m_symbols.findFreeFunction(baseFieldType) == nullptr;
             const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
             const b8 requiresMemberInit = !m_symbols.isSelfDefaultedType(field->type->name, m_activeOwnerClass);
-            if(field->usesClassArena && !requiresMemberInit && (!isDirectCtorCall || layoutAnalyzer.isTypeAssignable(*field->type, false)))
+            const ClassDecl* fieldClass = m_symbols.findClass(baseFieldType);
+            // Asset assignment preserves the destination virtual path. Construct the named asset directly.
+            const b8 constructsAsset = isDirectCtorCall && fieldClass && !fieldClass->assetTypeName.empty();
+            if(field->usesClassArena && !requiresMemberInit && !constructsAsset && (!isDirectCtorCall || layoutAnalyzer.isTypeAssignable(*field->type, false)))
                 continue;
             if(!isDirectCtorCall && !requiresMemberInit)
                 continue;
@@ -685,6 +726,10 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
                 out.push_back(')');
             }
         }
+        else
+            continue;
+        if(m_activeOwnerClass && m_activeOwnerClass->preserveFieldOrder)
+            readyFields.push_back(field->name);
     }
     if(!skipped->empty())
         m_skippedCtorAssignExprs = skipped;

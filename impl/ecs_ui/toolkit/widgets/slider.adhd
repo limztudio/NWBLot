@@ -3,64 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/widgets/slider_gesture.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/input/input.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SliderBehavior final{
-public:
-    [[nodiscard]] static Expected<f64> Normalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
-        return NormalizeFiniteRange(minimum, maximum, value);
-    }
-    [[nodiscard]] static Expected<f64> Interpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
-        return InterpolateFiniteRange(minimum, maximum, normalized);
-    }
-    // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
-    [[nodiscard]] static b8 Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
-        return AdmitSliderState(state, options, placement);
-    }
-    [[nodiscard]] static b8 Apply(const SliderOptions& options, const ControlAction& action, SliderState& state, SliderResult& result)noexcept{
-        return ApplySliderControlAction(options, action, state, result);
-    }
-    [[nodiscard]] static b8 Seek(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept{
-        return SeekSliderPointerGesture(options, gesture, state, result);
-    }
-    [[nodiscard]] static b8 Drag(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept{
-        return DragSliderPointerGesture(options, gesture, state, result);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/ecs_ui/toolkit/input/input.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,105 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/edit_geometry.adhd>
+#include <impl/ecs_ui/text_edit_session.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd>
+#include <impl/ecs_ui/edit_click_tracker.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiEditBorrowRelease : NoCopy{
+    private mut b8 m_borrowed;
+
+    public UiEditBorrowRelease(mut b8 borrowed){ this.m_borrowed = borrowed; }
+    public ~UiEditBorrowRelease(){ this.m_borrowed = false; }
+}
+
+class UiEditSelectionRelease : NoCopy{
+    private mut u64 m_sequence;
+    private mut InputSource m_source;
+    private b8 m_release;
+
+    public UiEditSelectionRelease(mut u64 sequence, mut InputSource source, in b8 release){
+        this.m_sequence = sequence;
+        this.m_source = source;
+        this.m_release = release;
+    }
+
+    public ~UiEditSelectionRelease(){
+        if(this.m_release){
+            this.m_sequence = 0u;
+            this.m_source = InputSource();
+        }
+    }
+}
+
+// The navigation loan ends with the current declaration. Entries and events retain only owned state.
+class UiEditNavigationBorrow{
+    public mut EditNavigationState state;
+    public mut IEditNavigationResolver resolver;
+
+    public UiEditNavigationBorrow(mut EditNavigationState state, mut IEditNavigationResolver resolver){
+        this.state = state;
+        this.resolver = resolver;
+    }
+}
+
+class UiEditBoxEntry{
+    public WidgetState widget;
+    public UiTextEditOwner owner;
+    public PopupToken popup;
+    public EditModelSnapshot expected;
+    public UiEditBoxGeometry candidate;
+    public UiEditBoxGeometry displayed;
+    public u64 seen = 0u;
+    public u64 focusGeneration = 0u;
+    public u64 retiredFocusGeneration = 0u;
+    public u64 navigationInstanceGeneration = 0u;
+    public usize dragAnchor = 0u;
+    public usize wordDragStart = 0u;
+    public usize wordDragEnd = 0u;
+    public b8 dragging = false;
+    public b8 wordDragging = false;
+    public b8 preeditCaretVisible = true;
+    public b8 actionCapable = false;
+    public b8 focused = false;
+    public b8 enabled = true;
+    public b8 readOnly = false;
+    public b8 navigationResetPending = false;
+    public TextInputSessionToken rejectedNative;
+}
+
+[move_only]
+class UiEditBoxEvent{
+    public UiTextEditOwner owner;
+    public TextInputEvent native = TextInputEvent();
+    public EditCommandRequest command;
+    public EditNavigationDirection navigationDirection = EditNavigationDirection::Up;
+    public b8 completed = false;
+    public b8 wordSelect = false;
+    public usize position = 0u;
+    public usize wordPosition = 0u;
+    public u64 geometryRevision = 0u;
+    public u64 selectionSequence = 0u;
+    public InputSource selectionSource;
+    public u64 focusGeneration = 0u;
+    public u64 geometryExternalRevision = 0u;
+    public u64 surroundingRevision = 0u;
+    public u64 surroundingModelRevision = 0u;
+    public u64 surroundingSelectionGeneration = 0u;
+    public usize surroundingAnchor = 0u;
+    public usize surroundingCaret = 0u;
+    public f32 navigationViewportHeight = 0.0f;
+    public UiEditBoxEventKind kind = UiEditBoxEventKind::Command;
+    public b8 navigation = false;
+    public b8 extend = false;
+    public b8 dragging = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

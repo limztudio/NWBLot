@@ -48,7 +48,7 @@ extern class ClipboardCapabilities{
     b8 writeText;
 };
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCompletion")]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCompletion"), cpp_flags(arena_first_ctor)]
 extern class ClipboardCompletion{
     String text;
     ClipboardRequestToken token;

@@ -19,6 +19,12 @@ extern class Futex{
     void unlock(...);
 };
 
+[cpp_header("<global/sync.h>"), cpp_name("::FutexGuard"), cpp_flags(no_copy, no_assign)]
+extern class FutexGuard;
+
+[cpp_header("<global/sync.h>"), cpp_name("::AcquireFutex")]
+extern FutexGuard AcquireFutex(in Futex mutex);
+
 [cpp_name("::MallocMutex"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
 extern class MallocMutex{
     void lock(...);

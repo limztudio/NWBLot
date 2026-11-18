@@ -36,6 +36,7 @@ public:
     [[nodiscard]] MString emitSource(const TranslationUnit& unit, MStringView headerIncludePath, MStringView namespacePath)const;
 
     void setCurrentNamespace(const MStringView namespacePath)const noexcept{ m_typeEmitter.setCurrentNamespace(namespacePath); }
+    void setLocalNamespace(const MStringView namespacePath)const noexcept{ m_typeEmitter.setLocalNamespace(namespacePath); }
 
     void setActiveOwnerClassContext(const ClassDecl* ownerClass, const b8 ownerNeedsArena)const noexcept{
         m_activeOwnerClass = ownerClass;
@@ -51,6 +52,7 @@ public:
         m_activeOrderedFields = orderedFields;
     }
     void setInFieldInitializer(const b8 inFieldInit)const noexcept{ m_inFieldInitializer = inFieldInit; }
+    [[nodiscard]] MStringView lambdaExceptionSpec()const noexcept{ return m_allowsCppUnwind ? "" : "noexcept"; }
     [[nodiscard]] b8 inFieldInitializer()const noexcept{ return m_inFieldInitializer; }
     [[nodiscard]] Span<const TemplateParamDecl> activeTemplateParams()const noexcept{ return m_activeTemplateParams; }
     [[nodiscard]] Span<const TypeArg> activeTemplateArgs()const noexcept{ return m_activeTemplateArgs; }
@@ -118,6 +120,7 @@ private:
     mutable Span<const TypeArg> m_activeTemplateArgs{};
     mutable Span<const FieldDecl* const> m_activeOrderedFields{};
     mutable b8 m_inFieldInitializer = false;
+    mutable b8 m_allowsCppUnwind = false;
     mutable b8 m_emittingScalarSimd = false;
     [[nodiscard]] b8 instantiatedStatementsNeedScratchArena(Span<const Stmt* const> statements)const;
     [[nodiscard]] b8 instantiatedExprNeedsScratchArena(const Expr* expr)const;

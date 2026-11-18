@@ -1,0 +1,169 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/asset.adhd>
+#include <impl/assets_material/cook_bind_schema.adhd>
+#include <impl/assets_material/bind_parameter_application.adhd>
+#include <impl/assets_material/cook_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type MaterialStageShaderMap = HashMap<ShaderType, AssetRef<IShader>>;
+type MaterialParameterMap = HashMap<CompactString, CompactString>;
+
+class MaterialCookEntry{
+    // Readable source text (not Name); the cook builds paths and dedup keys from it.
+    public String virtualPath;
+    public String materialInterface;
+    public u64 typedLayoutHash = 0u;
+    public TypedLayoutBlockVector typedLayoutBlocks;
+    public TypedLayoutFieldVector typedLayoutFields;
+    public TypedBlockByteVector typedBlockBytes;
+    public ResourceReferenceVector resourceReferences;
+    public String shaderVariant;
+    // Deferred lighting BXDF source; resolved and deduped by the cross-asset phase.
+    public String bxdfSource;
+    // Surface hook; empty when explicit `shaders` are declared instead.
+    public String surfaceSource;
+    public MaterialStageShaderMap stageShaders;
+    // Generated AVBOIT accumulate PS name; empty for opaque materials.
+    public String avboitAccumulatePixelShaderName;
+    // Occupancy/extinction twins of the accumulate name.
+    public String avboitOccupancyPixelShaderName;
+    public String avboitExtinctionPixelShaderName;
+    public MaterialParameterMap parameters;
+    public u32 shadingModelId = 0u;
+    // Surface dispatch id, deduped over the `surface` source set.
+    public u32 surfaceDispatchId = 0u;
+    public b8 transparent = false;
+    public b8 twoSided = false;
+    // Explicit caster classification, independent of transparency; NwbMeshSurface supplies the optical parameters.
+    public b8 refractive = false;
+}
+
+class MaterialBindEntry{
+    public String source;
+    public String virtualPath;
+    public Vector<MaterialBindStruct> structs;
+    public Vector<MaterialBindInstance> instances;
+
+    [owner_result]
+    public Expected<MaterialBindStruct> parseStruct(in Path file, in StringView name, in MetascriptValue value)const{
+        return ParseMaterialBindStruct(file, this.source, name, value);
+    }
+
+    public Optional<in MaterialBindStruct> findStruct(in StringView name)const{
+        const Expected<usize> index = FindMaterialBindStructIndex(this.structs, name);
+        if(index.has_value())
+            return Optional<in MaterialBindStruct>(this.structs[index.value()]);
+        return Optional<in MaterialBindStruct>();
+    }
+    public Optional<in MaterialBindInstance> findInstance(in StringView name)const{
+        const Expected<usize> index = FindMaterialBindInstanceIndex(this.instances, name);
+        if(index.has_value())
+            return Optional<in MaterialBindInstance>(this.instances[index.value()]);
+        return Optional<in MaterialBindInstance>();
+    }
+}
+
+type MaterialBindInterfaceLookup = HashMap<Name, usize>;
+
+Expected<Name> ReadMaterialCookName(in StringView text){
+    const Expected<Optional<Name>, NameTextError> name = ToName(text);
+    if(!name.has_value())
+        return MakeUnexpected(Failure());
+    if(name.value().has_value())
+        return name.value().value();
+    return s_NameNone;
+}
+
+Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(in Span<MaterialBindEntry> entries){
+    MaterialBindInterfaceLookup lookup;
+    lookup.reserve(entries.size());
+    for(usize index = 0u; index < entries.size(); ++index){
+        const Expected<Name> name = ReadMaterialCookName(entries[index].virtualPath);
+        if(!name.has_value())
+            return MakeUnexpected(Failure());
+        if(!lookup.emplace(name.value(), index).second){
+            error("Material bind interface '{}' is duplicated", entries[index].virtualPath);
+            return MakeUnexpected(Failure());
+        }
+    }
+    return lookup;
+}
+
+class GeneratedMaterialPixelShader{
+    public String name;
+    public String source;
+}
+
+class MaterialBindDependency{
+    public String interfacePath;
+    public Vector<Path> interfaceSources;
+    public Name interfaceName = s_NameNone;
+    public b8 dependsOnMaterialBind = false;
+}
+
+type MaterialBindParameterMap = MaterialParameterMap;
+type MaterialBindTypedLayoutBlockLookup = HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
+type MaterialBindTypedLayoutParameterLookup = HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry>;
+
+class MaterialBindTypedLayout{
+    public String interfacePath = "<unknown>";
+    public u64 layoutHash = 0u;
+    public TypedLayoutBlockVector typedLayoutBlocks;
+    public TypedLayoutFieldVector typedLayoutFields;
+    public TypedBlockByteVector typedBlockBytes;
+    public MaterialBindTypedLayoutBlockLookup blockLookup;
+    public MaterialBindTypedLayoutParameterLookup parameterLookup;
+}
+
+class MaterialBindTypedLayoutCache{
+    public Vector<MaterialBindTypedLayout> entries;
+    public HashMap<Name, usize> lookup;
+
+    public void reserve(in usize count){
+        this.entries.reserve(count);
+        this.lookup.reserve(count);
+    }
+}
+
+Expected<usize> FindOrBuildMaterialBindTypedLayout(in Name materialInterface, in MaterialBindEntry bindEntry, mut MaterialBindTypedLayoutCache cache){
+    if(cache.lookup.contains(materialInterface)){
+        const usize index = cache.lookup.at(materialInterface);
+        assert(index < cache.entries.size());
+        return index;
+    }
+    const usize index = cache.entries.size();
+    AppendArenaElement<MaterialBindTypedLayout>(cache.entries);
+    mut MaterialBindTypedLayout layout = cache.entries[index];
+    layout.interfacePath.assign(bindEntry.virtualPath);
+    if(!BuildMaterialBindTypedLayoutData(bindEntry.virtualPath, materialInterface, bindEntry.structs, bindEntry.instances,
+        layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields, layout.typedBlockBytes, layout.blockLookup, layout.parameterLookup)
+        || !ValidateInsertedMaterialBindTypedLayoutCacheEntry(cache.lookup.emplace(materialInterface, index).second, materialInterface)){
+        cache.entries.pop_back();
+        return MakeUnexpected(Failure());
+    }
+    return index;
+}
+
+void CopyMaterialBindTypedLayoutDefaults(in MaterialBindTypedLayout layout, mut u64 hash, mut TypedLayoutBlockVector blocks,
+    mut TypedLayoutFieldVector fields, mut TypedBlockByteVector bytes){
+    MaterialBindStorage storage;
+    storage.copyMaterialBindTypedLayoutDefaults(layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields,
+        layout.typedBlockBytes, hash, blocks, fields, bytes);
+}
+
+b8 ApplyMaterialBindTypedLayoutParameters(in MaterialBindTypedLayout layout, in Name name, in MaterialBindParameterMap parameters,
+    mut TypedBlockByteVector bytes, mut ResourceReferenceVector references){
+    MaterialBindParameterApplication application;
+    return application.applyMaterialBindTypedLayoutParametersToStorage(layout.interfacePath, layout.parameterLookup,
+        layout.typedLayoutFields, name, parameters, bytes, references);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

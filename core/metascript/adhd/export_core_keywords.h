@@ -25,6 +25,21 @@ NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("component", componentTypeName, true,  "'
 
 NWB_ADHD_EXPORT_INTERFACE_STRING_ATTRIBUTE("asset", assetTypeName)
 
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(AssetWriter, "asset_writer")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookDocument, "cook_document")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(VolumePrepare, "volume_prepare")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookSetup, "cook_setup")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(GatherMerge, "gather_merge")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookRegistrar, "cook_registrar")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookSidecar, "cook_sidecar")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookEntry, "cook_entry")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookDocumentOnly, "document_only")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookDocumentAndValue, "document_and_value")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookQuiet, "quiet")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CookLogFailure, "log_failure")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(RegistrationUsing, "using")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(RegisterAsset, "register_asset")
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

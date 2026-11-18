@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd>
+#include <impl/ecs_ui/toolkit/context.adhd>
+#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd>
 #include <impl/ecs_ui/toolkit/widgets/popup_style.adhd>
 
 
@@ -66,480 +74,445 @@ PopupOptions BuildCompoundPopupReservationOptions(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+class RadioGroupPopupLoan{
+    public in PopupState state;
+    public PopupToken token;
+
+    public RadioGroupPopupLoan(in PopupState state, in PopupToken token){
+        this.state = state;
+        this.token = token;
+    }
+}
+
+class RadioGroupPopupGuard : IRadioGroupReconcileGuard{
+    private in Context m_context;
+    private Array<Optional<RadioGroupPopupLoan>, s_InputMaxPopups> m_popups;
+    private usize m_count = 0u;
+
+    public RadioGroupPopupGuard(in Context context){ this.m_context = context; }
+
+    public b8 add(in PopupState state, in PopupToken token){
+        if(this.m_count == s_InputMaxPopups)
+            return false;
+        this.m_popups[this.m_count] = RadioGroupPopupLoan(state, token);
+        ++this.m_count;
+        return true;
+    }
+
+    public b8 current()const override{
+        if(this.m_context.failed())
+            return false;
+        for(usize index = 0u; index < this.m_count; ++index){
+            in RadioGroupPopupLoan loan = this.m_popups[index].value();
+            if(!IsPopupLoanCurrent(loan.state.isOpen(), loan.state.instanceGeneration(), loan.state.openGeneration(), loan.token))
+                return false;
+        }
+        return true;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/builder.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
-
-#include <global/scope_exit.h>
-#include <global/simd/vector_arithmetic.h>
-#include <global/simplemath.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const PopupOptions& options){
-    const b8 nested = m_scope->m_popupState && m_scope->m_panelActive;
-    if(declarationBlocked() || (!balanced() && !nested) || !m_skin || m_context.failed()){
-        m_context.fail();
+b8 Builder::beginPopup(in StringView stableKey, mut PopupState state, in PopupOptions options){
+    const b8 nested = this.m_scope.value().m_popupState.has_value() && this.m_scope.value().m_panelActive;
+    if(this.declarationBlocked() || (!this.balanced() && !nested) || !this.m_skin.has_value() || this.m_context.failed()){
+        this.m_context.fail();
         return false;
     }
-    if(nested && !synchronizePopup())
+    if(nested && !this.synchronizePopup())
         return false;
-    const auto widget = m_context.declare(stableKey, WidgetKind::Popup);
-    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Popup);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
         return false;
-    const WidgetState declaration = **widget;
-    state.bindParent(m_context.popupToken());
-    const PopupToken token{ (*widget)->id, (*widget)->declarationGeneration, state.instanceGeneration(), state.openGeneration() };
-    m_context.input().fencePopup(token);
-    if(m_context.input().consumePopupDismissal(token))
+    const WidgetState declaration = widget.value();
+    state.bindParent(this.m_context.popupToken());
+    PopupToken token;
+    token.widget = widget.value().id;
+    token.declarationGeneration = widget.value().declarationGeneration;
+    token.instanceGeneration = state.instanceGeneration();
+    token.openGeneration = state.openGeneration();
+    this.m_context.input().fencePopup(token);
+    if(this.m_context.input().consumePopupDismissal(token))
         state.close();
     if(!state.isOpen()){
-        m_context.input().closePopup(token);
+        this.m_context.input().closePopup(token);
         return false;
     }
-    const UiSkinRegion* background = region(m_popupStyle.background, m_popupStyle.fallback);
-    const auto placement = PlacePopup(options, m_paint.displayMetrics());
-    if(!background || !placement){
-        m_context.fail();
+    const auto background = this.region(this.m_popupStyle.background, this.m_popupStyle.fallback);
+    const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
+    if(!background.has_value() || !placement.has_value()){
+        this.m_context.fail();
         return false;
     }
-    const PopupScope scope = UiScopeDescriptorFactory().popupFrame(token, m_context.popupToken(), *placement, options);
-    NotNull<BuilderScopeFrame*> next = m_scope;
+    const PopupScope scope = UiScopeDescriptorFactory().popupFrame(token, this.m_context.popupToken(), placement.value(), options);
+    auto next = this.m_scope;
     if(!nested)
-        reset();
+        this.reset();
     else{
-        if(m_popupFrameCount >= m_popupFrames.size() || !m_popupFrames[m_popupFrameCount]){
-            m_context.fail();
+        if(this.m_popupFrameCount >= this.m_popupFrames.size() || !this.m_popupFrames[this.m_popupFrameCount].valid()){
+            this.m_context.fail();
             return false;
         }
-        BuilderScopeFrame& child = *m_popupFrames[m_popupFrameCount++];
+        mut BuilderScopeFrame child = this.m_popupFrames[this.m_popupFrameCount].value();
+        ++this.m_popupFrameCount;
         child.reset();
-        child.m_parent = m_scope.get();
-        next = MakeNotNull(&child);
+        child.m_parent = this.m_scope;
+        next = Optional<mut BuilderScopeFrame>(child);
     }
-    if(!m_context.beginPopupScope(declaration, scope) || !m_context.pushScope(stableKey) || !m_paint.beginOverlay(m_context.popupLayer())){
-        m_context.fail();
+    if(!this.m_context.beginPopupScope(declaration, scope) || !this.m_context.pushScope(stableKey) || !this.m_paint.beginOverlay(this.m_context.popupLayer())){
+        this.m_context.fail();
         return false;
     }
-    m_scope = next;
-    m_scope->m_panelState = declaration;
-    m_scope->m_popupPaintStyle = m_popupStyle;
-    m_scope->m_bounds = placement->bounds;
-    const LayoutNodeDesc description = UiScopeDescriptorFactory().popupRoot(m_scope->m_bounds, m_scope->m_popupPaintStyle.padding, background->padding, m_style.gap);
+    this.m_scope = next;
+    this.m_scope.value().m_panelState = declaration;
+    this.m_scope.value().m_popupPaintStyle = this.m_popupStyle;
+    this.m_scope.value().m_bounds = placement.value().bounds;
+    const LayoutNodeDesc description = UiScopeDescriptorFactory().popupRoot(this.m_scope.value().m_bounds, this.m_scope.value().m_popupPaintStyle.padding, background.value().padding, this.m_style.gap);
     u32 node = 0u;
-    const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
-    if(!admittedNode){
-        m_context.fail();
+    const auto admittedNode = this.m_scope.value().m_layout.addNode(s_LayoutNoParent, description);
+    if(!admittedNode.has_value()){
+        this.m_context.fail();
         return false;
     }
-    node = *admittedNode;
-    m_scope->m_stack.push_back(node);
-    m_scope->m_popupState = &state;
-    m_scope->m_popupToken = token;
-    m_scope->m_popupOptions = options;
-    m_scope->m_popupPlacement = *placement;
-    state.m_placement = *placement;
-    m_scope->m_panelActive = true;
+    node = admittedNode.value();
+    this.m_scope.value().m_stack.push_back(node);
+    this.m_scope.value().m_popupState = Optional<mut PopupState>(state);
+    this.m_scope.value().m_popupToken = token;
+    this.m_scope.value().m_popupOptions = options;
+    this.m_scope.value().m_popupPlacement = placement.value();
+    state.m_placement = placement.value();
+    this.m_scope.value().m_panelActive = true;
     return true;
 }
 
 b8 Builder::endPopup(){
-    if(declarationBlocked() || !m_scope->m_popupState || !m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_stack.size() != 1u){
-        m_context.fail();
+    if(this.declarationBlocked() || !this.m_scope.value().m_popupState.has_value() || !this.m_scope.value().m_panelActive || this.m_scope.value().m_windowActive || this.m_scope.value().m_stack.size() != 1u){
+        this.m_context.fail();
         return false;
     }
-    m_finalizing = true;
-    ScopeExit finish([this]()noexcept{ m_finalizing = false; });
-    const b8 visible = synchronizePopup();
-    const b8 arranged = !visible || (!m_context.failed() && m_scope->m_layout.arrange(m_scope->m_bounds));
-    const b8 overlayEnded = m_paint.endOverlay();
-    const b8 scopePopped = m_context.popScope();
-    const b8 popupEnded = m_context.endPopupScope(visible && arranged);
-    m_scope->m_panelActive = false;
-    m_scope->m_stack.clear();
+    this.m_finalizing = true;
+    BuilderOperationEnd finish(this.m_finalizing);
+    const b8 visible = this.synchronizePopup();
+    const b8 arranged = !visible || (!this.m_context.failed() && this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds));
+    const b8 overlayEnded = this.m_paint.endOverlay();
+    const b8 scopePopped = this.m_context.popScope();
+    const b8 popupEnded = this.m_context.endPopupScope(visible && arranged);
+    this.m_scope.value().m_panelActive = false;
+    this.m_scope.value().m_stack.clear();
     if(!arranged || !overlayEnded || !scopePopped || !popupEnded){
-        m_context.fail();
-        if(m_scope->m_parent)
-            m_scope = MakeNotNull(m_scope->m_parent);
+        this.m_context.fail();
+        if(this.m_scope.value().m_parent.has_value())
+            this.m_scope = this.m_scope.value().m_parent;
         else
-            releasePopupFamily();
+            this.releasePopupFamily();
         return false;
     }
-    if(m_scope->m_parent){
-        m_scope = MakeNotNull(m_scope->m_parent);
+    if(this.m_scope.value().m_parent.has_value()){
+        this.m_scope = this.m_scope.value().m_parent;
         return true;
     }
-    const b8 finished = finishPopupFamily();
+    const b8 finished = this.finishPopupFamily();
     if(!finished)
-        m_context.fail();
+        this.m_context.fail();
     return finished;
 }
 
-b8 Builder::synchronizePopup()noexcept{
-    for(const BuilderScopeFrame* frame = m_scope.get(); frame; frame = frame->m_parent){
-        if(frame->m_popupState && !popupFrameVisible(*frame)){
-            m_context.input().closePopup(frame->m_popupToken);
+b8 Builder::synchronizePopup(){
+    auto ancestor = this.m_scope;
+    while(ancestor.has_value()){
+        in BuilderScopeFrame frame = ancestor.value();
+        if(frame.m_popupState.has_value() && !this.popupFrameVisible(frame)){
+            this.m_context.input().closePopup(frame.m_popupToken);
             return false;
         }
-    }
-    return true;
-}
-
-b8 Builder::popupAncestorsVisible()const noexcept{
-    if(m_context.failed())
-        return false;
-    for(const BuilderScopeFrame* frame = m_scope.get(); frame; frame = frame->m_parent){
-        if(frame->m_popupState && !popupFrameVisible(*frame))
-            return false;
+        ancestor = frame.m_parent;
     }
     return true;
 }
 
 b8 Builder::finishPopupFamily(){
     // Visibility is resolved without calling application sources before any deferred subtree paint.
-    m_scopeFrame.m_popupVisible = popupFrameVisible(m_scopeFrame);
-    if(!m_scopeFrame.m_popupVisible)
-        m_context.discardPopupScope(m_scopeFrame.m_popupToken);
-    for(usize index = 0u; index < m_popupFrameCount; ++index){
-        BuilderScopeFrame& frame = *m_popupFrames[index];
-        frame.m_popupVisible = frame.m_parent->m_popupVisible && popupFrameVisible(frame);
+    this.m_scopeFrame.m_popupVisible = this.popupFrameVisible(this.m_scopeFrame);
+    if(!this.m_scopeFrame.m_popupVisible)
+        this.m_context.discardPopupScope(this.m_scopeFrame.m_popupToken);
+    for(usize index = 0u; index < this.m_popupFrameCount; ++index){
+        mut BuilderScopeFrame frame = this.m_popupFrames[index].value();
+        frame.m_popupVisible = frame.m_parent.value().m_popupVisible && this.popupFrameVisible(frame);
         if(!frame.m_popupVisible)
-            m_context.discardPopupScope(frame.m_popupToken);
+            this.m_context.discardPopupScope(frame.m_popupToken);
     }
-    const b8 painted = paintPopupFamily(m_scopeFrame);
-    const b8 valid = painted && validatePopupFamily();
-    for(usize index = 0u; index <= m_popupFrameCount; ++index){
-        BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
-        m_scope = MakeNotNull(&frame);
-        publishSliderResults(valid && frame.m_popupVisible);
+    const b8 painted = this.paintPopupFamily(this.m_scopeFrame);
+    const b8 valid = painted && this.validatePopupFamily();
+    for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
+        mut BuilderScopeFrame frame = this.popupFrameAt(index);
+        this.m_scope = Optional<mut BuilderScopeFrame>(frame);
+        this.publishSliderResults(valid && frame.m_popupVisible);
     }
-    releasePopupFamily();
+    this.releasePopupFamily();
     return valid;
 }
 
-b8 Builder::paintPopupFamily(BuilderScopeFrame& frame){
-    m_scope = MakeNotNull(&frame);
+b8 Builder::paintPopupFamily(mut BuilderScopeFrame frame){
+    this.m_scope = Optional<mut BuilderScopeFrame>(frame);
     if(!frame.m_popupVisible)
         return true;
-    if(!popupAncestorsVisible() || !m_context.activatePopupScope(frame.m_popupToken))
+    if(!this.popupAncestorsVisible() || !this.m_context.activatePopupScope(frame.m_popupToken))
         return false;
-    if(!m_paint.beginOverlay(m_context.popupLayer())){
-        const b8 ended = m_context.endPopupScope(false);
+    if(!this.m_paint.beginOverlay(this.m_context.popupLayer())){
+        const b8 ended = this.m_context.endPopupScope(false);
         if(!ended)
-            m_context.fail();
+            this.m_context.fail();
         return false;
     }
-    b8 painted = paintPopup() && paintDeferredContents();
-    for(usize index = 0u; painted && index < m_popupFrameCount; ++index){
-        BuilderScopeFrame& child = *m_popupFrames[index];
-        if(child.m_parent == &frame)
-            painted = paintPopupFamily(child);
+    b8 painted = this.paintPopup() && this.paintDeferredContents();
+    for(usize index = 0u; painted && index < this.m_popupFrameCount; ++index){
+        mut BuilderScopeFrame child = this.m_popupFrames[index].value();
+        if((child.m_parent.has_value() && SameAddress(child.m_parent.value(), frame)))
+            painted = this.paintPopupFamily(child);
     }
-    m_scope = MakeNotNull(&frame);
-    const b8 overlayEnded = m_paint.endOverlay();
-    const b8 scopeEnded = m_context.endPopupScope(painted);
+    this.m_scope = Optional<mut BuilderScopeFrame>(frame);
+    const b8 overlayEnded = this.m_paint.endOverlay();
+    const b8 scopeEnded = this.m_context.endPopupScope(painted);
     return painted && overlayEnded && scopeEnded;
 }
 
 b8 Builder::validatePopupFamily(){
     // A child callback can change an already painted parent, or a later sibling can change an ended child.
-    for(usize index = 0u; index <= m_popupFrameCount; ++index){
-        BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
-        m_scope = MakeNotNull(&frame);
-        if(frame.m_popupVisible && (!popupFrameVisible(frame) || !validateDeferredSources()))
+    for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
+        mut BuilderScopeFrame frame = this.popupFrameAt(index);
+        this.m_scope = Optional<mut BuilderScopeFrame>(frame);
+        if(frame.m_popupVisible && (!this.popupFrameVisible(frame) || !this.validateDeferredSources()))
             return false;
     }
     // This pass calls no source code. Every model and ancestor lifetime is still borrowed until it completes.
-    for(usize index = 0u; index <= m_popupFrameCount; ++index){
-        BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
-        m_scope = MakeNotNull(&frame);
-        if(frame.m_popupVisible && (!popupFrameVisible(frame) || !validateDeferredStates()))
+    for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
+        mut BuilderScopeFrame frame = this.popupFrameAt(index);
+        this.m_scope = Optional<mut BuilderScopeFrame>(frame);
+        if(frame.m_popupVisible && (!this.popupFrameVisible(frame) || !this.validateDeferredStates()))
             return false;
     }
-    return !m_context.failed();
+    return !this.m_context.failed();
 }
 
-void Builder::releasePopupFamily()noexcept{
-    for(usize index = 0u; index <= m_popupFrameCount; ++index){
-        BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
-        m_scope = MakeNotNull(&frame);
+void Builder::releasePopupFamily(){
+    for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
+        mut BuilderScopeFrame frame = this.popupFrameAt(index);
+        this.m_scope = Optional<mut BuilderScopeFrame>(frame);
         if(!frame.m_popupVisible){
-            for(auto& tooltip : frame.m_tooltips){
-                if(tooltip.state && tooltip.state->revision() == tooltip.revision)
-                    tooltip.state->reset();
+            for(mut auto tooltip : frame.m_tooltips){
+                if(tooltip.state.has_value() && tooltip.state.value().revision() == tooltip.revision)
+                    tooltip.state.value().reset();
             }
         }
-        releaseDeferredLoans();
-        frame.m_popupState = nullptr;
+        this.releaseDeferredLoans();
+        frame.m_popupState.reset();
     }
-    m_scope = MakeNotNull(&m_scopeFrame);
+    this.m_scope = Optional<mut BuilderScopeFrame>(this.m_scopeFrame);
 }
 
-b8 Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& token){
+b8 Builder::reserveCompoundPopup(in WidgetState widget, in PopupToken token){
     const PopupOptions options = BuildCompoundPopupReservationOptions();
-    const auto placement = PlacePopup(options, m_paint.displayMetrics());
-    if(!placement)
+    const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
+    if(!placement.has_value())
         return false;
-    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(token, m_context.popupToken(), *placement);
-    return m_context.registerPopupScope(widget, scope);
+    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(token, this.m_context.popupToken(), placement.value());
+    return this.m_context.registerPopupScope(widget, scope);
 }
 
 b8 Builder::paintPopup(){
-    const Optional<LayoutBox> panel = m_scope->m_layout.box(0u);
-    const UiSkinRegion* background = region(m_scope->m_popupPaintStyle.background, m_scope->m_popupPaintStyle.fallback);
-    if(!panel || !background)
+    const Optional<LayoutBox> panel = this.m_scope.value().m_layout.box(0u);
+    const auto background = this.region(this.m_scope.value().m_popupPaintStyle.background, this.m_scope.value().m_popupPaintStyle.fallback);
+    if(!panel.has_value() || !background.has_value())
         return false;
-    if(m_scope->m_popupOptions.modal){
-        const Color& color = m_scope->m_popupPaintStyle.backdrop;
+    if(this.m_scope.value().m_popupOptions.modal){
+        in Color color = this.m_scope.value().m_popupPaintStyle.backdrop;
         if(!IsValidPaintColor(color))
             return false;
-        m_paint.fillRect(m_scope->m_popupPlacement.viewport, color);
+        this.m_paint.fillRect(this.m_scope.value().m_popupPlacement.viewport, color);
     }
-    m_paint.pushClip(m_scope->m_popupPlacement.viewport);
-    const b8 painted = m_paint.drawRegion(background->name, panel->rectangle);
-    const b8 popped = m_paint.popClip();
-    const HitTarget barrier = HitTargetFactory().makeBarrierHitTarget(panel->rectangle, m_scope->m_popupPlacement.viewport);
-    if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
+    this.m_paint.pushClip(this.m_scope.value().m_popupPlacement.viewport);
+    const b8 painted = this.m_paint.drawRegion(background.value().name, panel.value().rectangle);
+    const b8 popped = this.m_paint.popClip();
+    HitTargetFactory targets;
+    const HitTarget barrier = targets.makeBarrierHitTarget(panel.value().rectangle, this.m_scope.value().m_popupPlacement.viewport);
+    if(!painted || !popped || !this.m_context.addTarget(this.m_scope.value().m_panelState, barrier))
         return false;
-    return paintItems();
+    return this.paintItems();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_builder_popups_and_ranges{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ReconcileGuard final : public IRadioGroupReconcileGuard{
-private:
-    struct PopupLoan{
-        const PopupState& state;
-        PopupToken token;
-    };
-
-
-public:
-    explicit ReconcileGuard(const Context& context)noexcept
-        : m_context(context)
-    {}
-    virtual ~ReconcileGuard()noexcept override = default;
-
-
-public:
-    [[nodiscard]] b8 add(const PopupState& state, const PopupToken& token)noexcept{
-        if(m_count == s_InputMaxPopups)
-            return false;
-        m_popups[m_count].emplace(PopupLoan{ state, token });
-        ++m_count;
-        return true;
-    }
-
-    [[nodiscard]] virtual b8 current()const noexcept override{
-        if(m_context.failed())
-            return false;
-        for(usize index = 0u; index < m_count; ++index){
-            const PopupLoan& loan = *m_popups[index];
-            if(!IsPopupLoanCurrent(loan.state.isOpen(), loan.state.instanceGeneration(), loan.state.openGeneration(), loan.token))
-                return false;
-        }
-        return true;
-    }
-
-
-private:
-    const Context& m_context;
-    Array<Optional<PopupLoan>, s_InputMaxPopups> m_popups{};
-    usize m_count = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options){
+RadioGroupResult Builder::radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options){
     RadioGroupResult result;
-    if(itemDeclarationBlocked() || !m_skin){
-        m_context.fail();
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value()){
+        this.m_context.fail();
         return result;
     }
-    if(!synchronizePopup()){
+    if(!this.synchronizePopup()){
         result.valid = true;
         return result;
     }
-    m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    const auto widget = m_context.declare(stableKey, WidgetKind::RadioGroup);
-    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::RadioGroup);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
         return result;
-    RadioGroupFrame frame(m_arena, source, state);
+    auto frame = this.makeRadioGroupFrame(source, state);
     frame.m_options = options;
-    frame.m_style = m_radioGroupStyle;
-    frame.m_widgetStyle = m_style;
+    frame.m_style = this.m_radioGroupStyle;
+    frame.m_widgetStyle = this.m_style;
     // Reject options and style before invoking application callbacks or changing reconciliation state.
-    const auto metrics = MeasureRadioGroup(0u, {}, options, frame.m_style);
-    if(!metrics){
-        m_context.fail();
+    const auto metrics = MeasureRadioGroup(0u, Point(), options, frame.m_style);
+    if(!metrics.has_value()){
+        this.m_context.fail();
         return result;
     }
-    frame.m_metrics = *metrics;
-    const b8 previouslyFocused = m_context.input().focus() == (*widget)->id;
-    __hidden_builder_popups_and_ranges::ReconcileGuard guard(m_context);
-    for(const BuilderScopeFrame* scope = m_scope.get(); scope; scope = scope->m_parent){
-        if(scope->m_popupState && !guard.add(*scope->m_popupState, scope->m_popupToken)){
-            m_context.fail();
+    frame.m_metrics = metrics.value();
+    const b8 previouslyFocused = this.m_context.input().focus() == widget.value().id;
+    RadioGroupPopupGuard guard(this.m_context);
+    auto ancestor = this.m_scope;
+    while(ancestor.has_value()){
+        in BuilderScopeFrame scope = ancestor.value();
+        if(scope.m_popupState.has_value() && !guard.add(scope.m_popupState.value(), scope.m_popupToken)){
+            this.m_context.fail();
             return result;
         }
+        ancestor = scope.m_parent;
     }
-    const auto choices = RadioGroupBehavior::Reconcile(source, &guard, state, result);
+    const auto choices = ReconcileRadioGroup(source, guard, state, result);
     const b8 reconciled = choices.has_value();
-    if(choices)
-        frame.m_choices = *choices;
-    if(m_context.failed()){
+    if(choices.has_value())
+        frame.m_choices = choices.value();
+    if(this.m_context.failed()){
         result.valid = false;
         return result;
     }
     // Source callbacks can close or reopen an ancestor before reconciliation or copied input commits.
-    if(!synchronizePopup()){
+    if(!this.synchronizePopup()){
         result.valid = true;
         return result;
     }
     if(!reconciled){
         result.valid = false;
-        m_context.fail();
+        this.m_context.fail();
         return result;
     }
     frame.m_snapshot = state.snapshot();
-    frame.m_token = { state.inputGeneration(), frame.m_choices.sourceGeneration, frame.m_choices.sourceRevision };
-    m_context.input().fenceControl((*widget)->id, (*widget)->declarationGeneration, frame.m_token);
+    frame.m_token.instanceGeneration = state.inputGeneration();
+    frame.m_token.contentGeneration = frame.m_choices.sourceGeneration;
+    frame.m_token.contentRevision = frame.m_choices.sourceRevision;
+    this.m_context.input().fenceControl(widget.value().id, widget.value().declarationGeneration, frame.m_token);
     const b8 interactive = IsRadioGroupInteractive(frame.m_choices, options);
     if(!interactive)
-        m_context.input().invalidateTarget((*widget)->id);
-    while(auto action = m_context.takeControlAction(**widget, interactive, frame.m_token)){
-        if(!RadioGroupBehavior::Apply(frame.m_choices, options, *action, state, result)){
+        this.m_context.input().invalidateTarget(widget.value().id);
+    while(true){
+        const auto action = this.m_context.takeControlAction(widget.value(), interactive, frame.m_token);
+        if(!action.has_value())
+            break;
+        if(!ApplyRadioGroupControlAction(frame.m_choices, options, action.value(), state, result)){
             result.valid = false;
-            m_context.fail();
+            this.m_context.fail();
             return result;
         }
     }
     frame.m_snapshot = state.snapshot();
-    result.focused = interactive && m_context.input().focus() == (*widget)->id;
+    result.focused = interactive && this.m_context.input().focus() == widget.value().id;
     frame.m_focusOnCommit = interactive && previouslyFocused && !result.focused;
-    if(!prepareRadioGroup(frame)){
+    if(!this.prepareRadioGroup(frame)){
         result.valid = false;
-        m_context.fail();
+        this.m_context.fail();
         return result;
     }
-    Item item(m_arena);
-    item.state = **widget;
+    auto item = this.makeItem();
+    item.state = widget.value();
     item.enabled = interactive;
-    item.radioGroup = static_cast<u32>(m_scope->m_radioGroups.size());
+    item.radioGroup = cast<u32>(this.m_scope.value().m_radioGroups.size());
     const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
-    if(!addItemNode(description, item)){
+    if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
     }
-    m_scope->m_radioGroups.push_back(Move(frame));
-    m_scope->m_items.push_back(Move(item));
+    AppendOwned<RadioGroupFrame>(this.m_scope.value().m_radioGroups, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     result.valid = true;
     return result;
 }
 
-b8 Builder::radioGroupMatches(const RadioGroupFrame& frame)const{
+b8 Builder::radioGroupMatches(in RadioGroupFrame frame)const{
     // Repeat the stamp fence to catch a one-shot metadata mutation from the final count callback.
     for(u32 pass = 0u; pass < s_RadioGroupStampFencePassCount; ++pass){
         if(
-            !radioGroupStateMatches(frame)
-            || frame.m_source.instanceGeneration() != frame.m_choices.sourceGeneration || !radioGroupStateMatches(frame)
-            || frame.m_source.revision() != frame.m_choices.sourceRevision || !radioGroupStateMatches(frame)
-            || frame.m_source.rowCount() != frame.m_choices.count || !radioGroupStateMatches(frame)
+            !this.radioGroupStateMatches(frame)
+            || frame.m_source.instanceGeneration() != frame.m_choices.sourceGeneration || !this.radioGroupStateMatches(frame)
+            || frame.m_source.revision() != frame.m_choices.sourceRevision || !this.radioGroupStateMatches(frame)
+            || frame.m_source.rowCount() != frame.m_choices.count || !this.radioGroupStateMatches(frame)
         )
             return false;
     }
     return true;
 }
 
-b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
-    if(!radioGroupMatches(frame))
+b8 Builder::prepareRadioGroup(mut RadioGroupFrame frame){
+    if(!this.radioGroupMatches(frame))
         return false;
-    Point maximumLabel{};
+    Point maximumLabel;
     frame.m_labels.reserve(frame.m_choices.count);
     for(u32 index = 0u; index < frame.m_choices.count; ++index){
-        if(!radioGroupStateMatches(frame))
+        if(!this.radioGroupStateMatches(frame))
             return false;
         const StringView text = frame.m_source.text(index);
         // Do not call any further source method until the temporary label has been shaped and copied.
-        if(!radioGroupStateMatches(frame))
+        if(!this.radioGroupStateMatches(frame))
             return false;
-        auto label = m_text.layout(textShapeRequest(text, frame.m_widgetStyle.fontSize));
-        if(!label || !radioGroupMatches(frame))
+        auto label = this.m_text.layout(this.textShapeRequest(text, frame.m_widgetStyle.fontSize));
+        if(!label.has_value() || !this.radioGroupMatches(frame))
             return false;
-        const auto textBounds = m_text.measure(*label, m_paint.displayMetrics());
-        if(!textBounds)
+        const auto textBounds = this.m_text.measure(label.value(), this.m_paint.displayMetrics());
+        if(!textBounds.has_value())
             return false;
-        const SIMDVectorSingle maximum = VectorMax(VectorSet(maximumLabel.x, maximumLabel.y, maximumLabel.x, maximumLabel.y), VectorSet(textBounds->width, textBounds->height, textBounds->width, textBounds->height));
-        maximumLabel.x = VectorGetX(maximum);
-        maximumLabel.y = VectorGetY(maximum);
-        frame.m_labels.push_back({ Move(*label), *textBounds });
+        maximumLabel.x = Max(maximumLabel.x, textBounds.value().width);
+        maximumLabel.y = Max(maximumLabel.y, textBounds.value().height);
+        frame.m_labels.emplace_back(label.value(), textBounds.value());
     }
-    if(!m_skin || !ControlStyleMetrics().radioGroupMetrics(*m_skin, frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))
+    if(!this.m_skin.has_value() || !ControlStyleMetrics().radioGroupMetrics(this.m_skin.value(), frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))
         return false;
-    return radioGroupMatches(frame);
+    return this.radioGroupMatches(frame);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
-    if(item.radioGroup >= m_scope->m_radioGroups.size())
+b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
+    if(item.radioGroup >= this.m_scope.value().m_radioGroups.size())
         return false;
-    RadioGroupFrame& frame = m_scope->m_radioGroups[item.radioGroup];
-    if(!radioGroupMatches(frame) || frame.m_labels.size() != frame.m_choices.count)
+    mut RadioGroupFrame frame = this.m_scope.value().m_radioGroups[item.radioGroup];
+    if(!this.radioGroupMatches(frame) || frame.m_labels.size() != frame.m_choices.count)
         return false;
-    const auto placement = PlaceRadioGroup(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics);
-    if(!placement)
+    const auto placement = PlaceRadioGroup(box.rectangle, this.visibleClip(box.clip), frame.m_choices, frame.m_metrics);
+    if(!placement.has_value())
         return false;
-    const HitTarget host = HitTargetFactory().makeRadioGroupHostHitTarget(*placement, item.enabled, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
-    if(!m_context.addTarget(item.state, host))
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeRadioGroupHostHitTarget(placement.value(), item.enabled, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
+    if(!this.m_context.addTarget(item.state, host))
         return false;
     const auto choices = TryMakeWidgetId(item.state.id, s_WidgetPartChoices);
-    if(!choices)
+    if(!choices.has_value())
         return false;
-    const UiSkinRegion* mark = placement->count != 0u ? region(frame.m_style.mark, frame.m_style.markFallback) : nullptr;
-    for(u32 index = 0u; index < placement->count; ++index){
-        const RadioGroupChoicePlacement& row = placement->rows[index];
-        const auto part = TryMakeWidgetPartId(*choices, row.key);
-        if(!part)
+    ControlVisualPainter painter;
+    Optional<in UiSkinRegion> mark;
+    if(placement.value().count != 0u)
+        mark = this.region(frame.m_style.mark, frame.m_style.markFallback);
+    for(u32 index = 0u; index < placement.value().count; ++index){
+        in RadioGroupChoicePlacement row = placement.value().rows[index];
+        const auto part = TryMakeWidgetPartId(choices.value(), row.key);
+        if(!part.has_value())
             return false;
-        const InputRouter& input = m_context.input();
+        in InputRouter input = this.m_context.input();
         const RadioChoiceVisualFlags visualFlags = BuildRadioChoiceVisualFlags(
             frame.m_options.enabled,
             row.enabled,
@@ -547,23 +520,23 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
             frame.m_snapshot.cursorKey,
             row.key,
             input.hover(),
-            *part,
-            input.pressed(*part),
+            part.value(),
+            input.pressed(part.value()),
             input.pressed(item.state.id),
             input.focus(),
             item.state.id
         );
-        if(!mark || !ControlVisualPainter().paintRadioGroupChoiceRow(
-            m_paint,
-            m_text,
-            *m_skin,
+        if(!mark.has_value() || !painter.paintRadioGroupChoiceRow(
+            this.m_paint,
+            this.m_text,
+            this.m_skin.value(),
             frame.m_style,
             frame.m_widgetStyle,
             frame.m_metrics,
             row,
             frame.m_labels[index].text,
             frame.m_labels[index].bounds,
-            mark->name,
+            mark.value().name,
             visualFlags.enabled,
             visualFlags.checked,
             visualFlags.pressed,
@@ -572,15 +545,15 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         ))
             return false;
         if(item.enabled){
-            const HitTarget target = HitTargetFactory().makeRadioGroupChoiceHitTarget(row, visualFlags.enabled, frame.m_token);
-            if(!m_context.addPartTarget(item.state, *part, target))
+            const HitTarget target = targets.makeRadioGroupChoiceHitTarget(row, visualFlags.enabled, frame.m_token);
+            if(!this.m_context.addPartTarget(item.state, part.value(), target))
                 return false;
         }
     }
-    if(!radioGroupMatches(frame))
+    if(!this.radioGroupMatches(frame))
         return false;
     // Diagnostics describe prepared placement; input still uses the last published owned hit targets.
-    frame.m_state.m_placement = *placement;
+    frame.m_state.m_placement = placement.value();
     return true;
 }
 
@@ -588,64 +561,64 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Builder::slider(const AStringView stableKey, SliderState& state, const SliderOptions& options){
-    if(itemDeclarationBlocked() || !m_skin){
-        m_context.fail();
+b8 Builder::slider(in StringView stableKey, mut SliderState state, in SliderOptions options){
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value()){
+        this.m_context.fail();
         return false;
     }
-    if(!synchronizePopup())
+    if(!this.synchronizePopup())
         return true;
-    m_declaring = true;
-    ScopeExit finish([this]()noexcept{ m_declaring = false; });
-    const auto widget = m_context.declare(stableKey, WidgetKind::Slider);
-    if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Slider);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
         return false;
     // Attempt diagnostics retire immediately; invalid policy leaves semantic state and accepted geometry untouched.
-    state.m_result = {};
+    state.m_result = SliderResult();
     SliderFrame frame(state);
     frame.m_options = options;
-    frame.m_style = m_sliderStyle;
+    frame.m_style = this.m_sliderStyle;
     frame.m_snapshot = state.snapshot();
-    frame.m_widget = **widget;
+    frame.m_widget = widget.value();
     if(!IsValidSliderOptions(options)){
-        m_context.fail();
+        this.m_context.fail();
         return false;
     }
     const auto metrics = MeasureSlider(options, frame.m_style);
-    if(!metrics){
-        m_context.fail();
+    if(!metrics.has_value()){
+        this.m_context.fail();
         return false;
     }
-    frame.m_metrics = *metrics;
-    if(!prepareSlider(frame)){
-        m_context.fail();
+    frame.m_metrics = metrics.value();
+    if(!this.prepareSlider(frame)){
+        this.m_context.fail();
         return false;
     }
-    Item item(m_arena);
-    item.state = **widget;
+    auto item = this.makeItem();
+    item.state = widget.value();
     item.enabled = options.enabled;
-    item.slider = static_cast<u32>(m_scope->m_sliders.size());
+    item.slider = cast<u32>(this.m_scope.value().m_sliders.size());
     const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
-    if(!addItemNode(description, item))
+    if(!this.addItemNode(description, item))
         return false;
-    m_scope->m_sliders.push_back(Move(frame));
-    m_scope->m_items.push_back(Move(item));
+    AppendOwned<SliderFrame>(this.m_scope.value().m_sliders, frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return true;
 }
 
-b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
-    if(!sliderMatches(frame) || !m_skin)
+b8 Builder::prepareSlider(mut SliderFrame frame){
+    if(!this.sliderMatches(frame) || !this.m_skin.has_value())
         return false;
-    if(!ControlStyleMetrics().sliderMetrics(*m_skin, frame.m_options, frame.m_style, frame.m_metrics))
+    if(!ControlStyleMetrics().sliderMetrics(this.m_skin.value(), frame.m_options, frame.m_style, frame.m_metrics))
         return false;
-    return sliderMatches(frame);
+    return this.sliderMatches(frame);
 }
 
-void Builder::publishSliderResults(const b8 valid)noexcept{
-    const InputRouter& input = m_context.input();
-    for(const auto& frame : m_scope->m_sliders){
+void Builder::publishSliderResults(in b8 valid){
+    in InputRouter input = this.m_context.input();
+    for(mut auto frame : this.m_scope.value().m_sliders){
         SliderResult result;
-        if(valid && frame.m_result.valid && sliderMatches(frame)){
+        if(valid && frame.m_result.valid && this.sliderMatches(frame)){
             const auto finalized = TryFinalizeSliderFrameResult(
                 frame.m_result,
                 frame.m_widget.id,
@@ -654,12 +627,12 @@ void Builder::publishSliderResults(const b8 valid)noexcept{
                 input.primaryDown(),
                 input.capture()
             );
-            if(!finalized){
-                m_context.fail();
-                frame.m_state.m_result = {};
+            if(!finalized.has_value()){
+                this.m_context.fail();
+                frame.m_state.m_result = SliderResult();
                 continue;
             }
-            result = *finalized;
+            result = finalized.value();
         }
         frame.m_state.m_result = result;
     }
@@ -669,23 +642,23 @@ void Builder::publishSliderResults(const b8 valid)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
-    if(item.slider >= m_scope->m_sliders.size())
+b8 Builder::paintSlider(in BuilderItem item, in LayoutBox box){
+    if(item.slider >= this.m_scope.value().m_sliders.size())
         return false;
-    SliderFrame& frame = m_scope->m_sliders[item.slider];
-    if(!sliderMatches(frame))
+    mut SliderFrame frame = this.m_scope.value().m_sliders[item.slider];
+    if(!this.sliderMatches(frame))
         return false;
-    auto normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
-    if(!normalized)
+    auto normalized = NormalizeFiniteRange(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
+    if(!normalized.has_value())
         return false;
-    const Rect clip = visibleClip(box.clip);
-    auto placement = PlaceSlider(box.rectangle, clip, frame.m_metrics, *normalized);
-    if(!placement || !SliderBehavior::Admit(frame.m_state, frame.m_options, *placement))
+    const Rect clip = this.visibleClip(box.clip);
+    auto placement = PlaceSlider(box.rectangle, clip, frame.m_metrics, normalized.value());
+    if(!placement.has_value() || !AdmitSliderState(frame.m_state, frame.m_options, placement.value()))
         return false;
     frame.m_snapshot = frame.m_state.snapshot();
     frame.m_token = frame.m_state.controlToken();
-    const b8 interactive = IsSliderPlacementInteractive(frame.m_options, *placement);
-    InputRouter& input = m_context.input();
+    const b8 interactive = IsSliderPlacementInteractive(frame.m_options, placement.value());
+    mut InputRouter input = this.m_context.input();
     const b8 previouslyFocused = input.focus() == item.state.id;
     // Prospective geometry and policy fence the displayed lifetime before any copied intention changes the value.
     input.fenceControl(item.state.id, item.state.declarationGeneration, frame.m_token);
@@ -693,53 +666,43 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
         input.invalidateTarget(item.state.id);
     frame.m_focusOnCommit = interactive && previouslyFocused && input.focus() != item.state.id;
     frame.m_interactive = interactive;
-    if(!applySliderInput(frame, *placement, interactive))
+    if(!this.applySliderInput(frame, placement.value(), interactive))
         return false;
-    normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
-    if(!normalized)
+    normalized = NormalizeFiniteRange(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
+    if(!normalized.has_value())
         return false;
-    placement = PlaceSlider(box.rectangle, clip, frame.m_metrics, *normalized);
-    if(!placement)
+    placement = PlaceSlider(box.rectangle, clip, frame.m_metrics, normalized.value());
+    if(!placement.has_value())
         return false;
     const auto trackId = TryMakeWidgetId(item.state.id, s_WidgetPartTrack);
-    if(!trackId)
+    if(!trackId.has_value())
         return false;
     const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartThumb);
-    if(!thumbId)
+    if(!thumbId.has_value())
         return false;
-    const b8 hover = interactive && input.hover() == *thumbId;
-    const b8 pressed = ResolveSliderThumbPressedState(interactive, input.primaryDown(), input.capture(), *trackId, *thumbId);
+    const b8 hover = interactive && input.hover() == thumbId.value();
+    const b8 pressed = ResolveSliderThumbPressedState(interactive, input.primaryDown(), input.capture(), trackId.value(), thumbId.value());
     const b8 focused = input.focus() == item.state.id;
-    if(!ControlVisualPainter().paintSliderVisual(m_paint, *m_skin, frame.m_style, *placement, interactive, pressed, hover, focused) || !sliderMatches(frame))
+    ControlVisualPainter painter;
+    if(!painter.paintSliderVisual(this.m_paint, this.m_skin.value(), frame.m_style, placement.value(), interactive, pressed, hover, focused) || !this.sliderMatches(frame))
         return false;
-    const HitTarget host = HitTargetFactory().makeSliderHostHitTarget(*placement, interactive, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
-    if(!m_context.addTarget(item.state, host))
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeSliderHostHitTarget(placement.value(), interactive, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
+    if(!this.m_context.addTarget(item.state, host))
         return false;
     if(interactive){
-        const HitTarget trackTarget = HitTargetFactory().makeSliderTrackHitTarget(*placement, frame.m_token);
-        if(!m_context.addPartTarget(item.state, *trackId, trackTarget))
+        const HitTarget trackTarget = targets.makeSliderTrackHitTarget(placement.value(), frame.m_token);
+        if(!this.m_context.addPartTarget(item.state, trackId.value(), trackTarget))
             return false;
-        const HitTarget thumbTarget = HitTargetFactory().makeSliderThumbHitTarget(*placement, frame.m_token, frame.m_state.value());
-        if(!m_context.addPartTarget(item.state, *thumbId, thumbTarget))
+        const HitTarget thumbTarget = targets.makeSliderThumbHitTarget(placement.value(), frame.m_token, frame.m_state.value());
+        if(!this.m_context.addPartTarget(item.state, thumbId.value(), thumbTarget))
             return false;
     }
-    if(!sliderMatches(frame))
+    if(!this.sliderMatches(frame))
         return false;
-    frame.m_state.m_placement = *placement;
+    frame.m_state.m_placement = placement.value();
     frame.m_result.valid = true;
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

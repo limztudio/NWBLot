@@ -109,7 +109,17 @@ using GpuTaskHazardTypeEnum = Core::GpuTaskHazardType::Enum;
 using GpuCompiledBarrierTypeEnum = Core::GpuCompiledBarrierType::Enum;
 using ResourceQueueSharingMask = Core::ResourceQueueSharing::Mask;
 using ResourceStatesMask = Core::ResourceStates::Mask;
-using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTestsTag>;
+struct TestArena : ::NWB::Tests::TestArena<struct TaskGraphTestsTag>{
+    using Tests::TestArena<TaskGraphTestsTag>::TestArena;
+
+    [[nodiscard]] Core::GpuTaskTimingHistoryStore makeTimingHistory(u32 capacity = Core::s_DefaultGpuTaskTimingHistorySampleCount){
+        return Core::GpuTaskTimingHistoryStore(arena, capacity);
+    }
+
+    [[nodiscard]] Core::GpuTaskTimingHistorySnapshot makeTimingSnapshot(){
+        return Core::GpuTaskTimingHistorySnapshot(arena);
+    }
+};
 
 namespace Telemetry = Core::Telemetry;
 namespace FrameGraphEdgeKind = Telemetry::FrameGraphEdgeKind;

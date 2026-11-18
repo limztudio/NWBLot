@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
+#include <impl/ecs_render/shadow/soft_shadow_resolve_dispatch_builder.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/shadow/slot_selection.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_state.adhd>
 
 
@@ -66,56 +69,43 @@ void ResolveSoftShadowCombinedHalfExtentsAndGroups(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_GROUP_SIZE")]
+extern const u32 s_ShaderShadowResolveGroupSize;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-b8 SoftShadowCombinedWaveletInputs::valid()const noexcept{
-    const Array<const Core::Texture*, 7> textures = { opaqueHistory, opaqueMoments, transparentHistory, transparentMoments, geometry, opaqueOutput, transparentOutput };
-    return AllValidAndDistinct(Span<const Core::Texture* const>(textures.data(), textures.size()), [](const Core::Texture* texture)noexcept{ return texture != nullptr; }, [](const Core::Texture* current, const Core::Texture* previous)noexcept{ return current == previous; });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    const auto& resolve = m_rayTracingState.m_softShadowResolve;
+b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(mut CommandList commandList, mut DeferredFrameTargets targets){
+    in SoftShadowResolveState resolve = this.m_rayTracingState.shadow.m_softShadowResolve;
     if(!CanRunSoftShadowCombinedTemporalMerge(
-        static_cast<b8>(resolve.m_combinedTemporal.m_pipeline),
-        m_rayTracingState.m_softShadowReady,
-        m_rayTracingState.m_softTransparentReady,
-        m_rayTracingState.m_softShadowTemporalReady,
-        m_rayTracingState.m_softTransparentTemporalReady,
+        resolve.m_combinedTemporal.m_pipeline.valid(),
+        this.m_rayTracingState.softShadow.m_softShadowReady,
+        this.m_rayTracingState.softShadow.m_softTransparentReady,
+        this.m_rayTracingState.softShadow.m_softShadowTemporalReady,
+        this.m_rayTracingState.softShadow.m_softTransparentTemporalReady,
         targets.bindless.valid(),
-        m_rayTracingState.m_softShadowSlotMask
+        this.m_rayTracingState.softShadow.m_softShadowSlotMask
     ))
         return false;
 
-    const b8 frontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
-    const Array<Core::Texture*, 4> outputs = {
-        frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get(),
-        frontIsA ? targets.shadowMomentsB.get() : targets.shadowMomentsA.get(),
-        frontIsA ? targets.transparentHistB.get() : targets.transparentHistA.get(),
-        frontIsA ? targets.transparentMomentsB.get() : targets.transparentMomentsA.get(),
-    };
-    // This graph-only pass inherits both raw inputs and all four selected history/moment output states.
-    for(Core::Texture* const output : outputs)
-        commandList.setEnableUavBarriersForTexture(output, true);
+    const b8 frontIsA = this.m_rayTracingState.softShadow.m_softShadowHistoryFrontIsA != 0u;
+    // The graph provides both input textures and the four selected history and moment outputs.
+    if(frontIsA){
+        commandList.setEnableUavBarriersForTexture(targets.shadowHistB.deref(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.deref(), true);
+        commandList.setEnableUavBarriersForTexture(targets.transparentHistB.deref(), true);
+        commandList.setEnableUavBarriersForTexture(targets.transparentMomentsB.deref(), true);
+    } else{
+        commandList.setEnableUavBarriersForTexture(targets.shadowHistA.deref(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.deref(), true);
+        commandList.setEnableUavBarriersForTexture(targets.transparentHistA.deref(), true);
+        commandList.setEnableUavBarriersForTexture(targets.transparentMomentsA.deref(), true);
+    }
     commandList.commitBarriers();
 
-    const DeferredBindlessFrameResources& bindless = targets.bindless;
+    in DeferredBindlessFrameResources bindless = targets.bindless;
     const ShadowCombinedTemporalPushConstants push = MakeShadowCombinedTemporalPushConstants(
-        LoadFloat(m_rayTracingState.m_prevWorldToClip),
+        LoadFloat(this.m_rayTracingState.softShadow.m_prevWorldToClip),
         targets.shadowReceiverFactor,
-        ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask),
-        softShadowTemporalHistoryUsable(),
+        ResolveSoftShadowLightSlotRangeCount(this.m_rayTracingState.softShadow.m_softShadowSlotMask),
+        this.softShadowTemporalHistoryUsable(),
         bindless.shadowSoftGeometry.slot(),
         bindless.shadowSoftGeometryPrev.slot(),
         bindless.gbufferWorldPosition.slot(),
@@ -138,44 +128,44 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::Command
         targets.width,
         targets.height,
         targets.shadowReceiverFactor,
-        static_cast<u32>(NWB_SHADOW_REPROJECT_MERGE_GROUP_SIZE),
+        cast<u32>(s_ShadowReprojectMergeGroupSize),
         halfWidth,
         halfHeight,
         groupsX,
         groupsY
     );
-    Core::ComputeState state;
-    state.setPipeline(resolve.m_combinedTemporal.m_pipeline.get());
+    ComputeState state;
+    state.setPipeline(resolve.m_combinedTemporal.m_pipeline.deref());
     commandList.setComputeState(state);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resolve.m_combinedTemporal.m_pipeline.get());
-    commandList.setPushConstants(&push, sizeof(push));
-    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), s_TimingScopeShadowCombinedTemporal, m_graphics.getDevice(), commandList);
+    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, resolve.m_combinedTemporal.m_pipeline.deref());
+    commandList.setPushConstants(push);
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeShadowCombinedTemporal, this.m_graphics.getDevice(), commandList);
 
     commandList.dispatch(groupsX, groupsY, 1u);
-    m_rayTracingState.m_transparentShadowSamplingHistory.record(m_rayTracingState.m_softShadowSlotMask);
+    this.m_rayTracingState.softShadow.m_transparentShadowSamplingHistory.record(this.m_rayTracingState.softShadow.m_softShadowSlotMask);
     return true;
 }
 
-b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    const auto& resolve = m_rayTracingState.m_softShadowResolve;
-    const b8 frontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
+b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(mut CommandList commandList, mut DeferredFrameTargets targets){
+    in SoftShadowResolveState resolve = this.m_rayTracingState.shadow.m_softShadowResolve;
+    const b8 frontIsA = this.m_rayTracingState.softShadow.m_softShadowHistoryFrontIsA != 0u;
     if(
         !CanCombineSoftShadowWavelets(
-            static_cast<b8>(resolve.m_combinedUpsample.m_pipeline),
-            static_cast<b8>(resolve.m_combinedWavelet.m_pipeline),
-            m_rayTracingState.m_softShadowTemporalReady,
-            m_rayTracingState.m_softTransparentTemporalReady,
-            NWB_SHADOW_RESOLVE_PASS_COUNT,
-            NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
+            resolve.m_combinedUpsample.m_pipeline.valid(),
+            resolve.m_combinedWavelet.m_pipeline.valid(),
+            this.m_rayTracingState.softShadow.m_softShadowTemporalReady,
+            this.m_rayTracingState.softShadow.m_softTransparentTemporalReady,
+            s_ShadowWaveletResolvePassCount,
+            s_ShadowWaveletTransparentResolvePassCount
         )
-        || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
-        || !targets.bindless.valid() || m_rayTracingState.m_softShadowSlotMask == 0u
+        || !this.m_rayTracingState.softShadow.m_softShadowReady || !this.m_rayTracingState.softShadow.m_softTransparentReady
+        || !targets.bindless.valid() || this.m_rayTracingState.softShadow.m_softShadowSlotMask == 0u
     )
         return false;
 
     // This graph-only phase inherits both history/moments reads and both distinct output UAV states.
-    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
-    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.deref(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.deref(), true);
     commandList.commitBarriers();
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
@@ -184,20 +174,20 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& 
     ResolveSoftShadowCombinedHalfExtentsAndGroups(
         targets.width,
         targets.height,
-        static_cast<u32>(targets.shadowReceiverFactor),
-        static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE),
+        cast<u32>(targets.shadowReceiverFactor),
+        cast<u32>(s_ShaderShadowResolveGroupSize),
         halfWidth,
         halfHeight,
         groupsX,
         groupsY
     );
-    const DeferredBindlessFrameResources& bindless = targets.bindless;
+    in DeferredBindlessFrameResources bindless = targets.bindless;
     const ShadowCombinedWaveletPushConstants push = MakeShadowCombinedWaveletPushConstants(
         targets.width,
         targets.height,
         halfWidth,
         halfHeight,
-        ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask),
+        ResolveSoftShadowLightSlotRangeCount(this.m_rayTracingState.softShadow.m_softShadowSlotMask),
         bindless.shadowSoftGeometry.slot(),
         SelectSoftShadowHistorySlot(frontIsA, bindless.transparentHistB.slot(), bindless.transparentHistA.slot()),
         SelectSoftShadowHistorySlot(frontIsA, bindless.transparentMomentsB.slot(), bindless.transparentMomentsA.slot()),
@@ -207,49 +197,51 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& 
         bindless.shadowSoftHalfBStorage.slot(),
         targets.shadowReceiverFactor
     );
-    Core::ComputeState state;
-    state.setPipeline(resolve.m_combinedWavelet.m_pipeline.get());
+    ComputeState state;
+    state.setPipeline(resolve.m_combinedWavelet.m_pipeline.deref());
     commandList.setComputeState(state);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resolve.m_combinedWavelet.m_pipeline.get());
-    commandList.setPushConstants(&push, sizeof(push));
+    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, resolve.m_combinedWavelet.m_pipeline.deref());
+    commandList.setPushConstants(push);
     commandList.dispatch(groupsX, groupsY, 1u);
     return true;
 }
 
-b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const b8 transparentReady){
-    const auto& resolve = m_rayTracingState.m_softShadowResolve;
-    const Core::ComputePipelineHandle& pipeline = transparentReady ? resolve.m_combinedUpsample.m_pipeline : resolve.m_scalar.m_upsample.m_pipeline;
-    const b8 baseTargetsReady = static_cast<b8>(targets.depth)
-        && static_cast<b8>(targets.worldPosition)
-        && static_cast<b8>(targets.normal)
-        && static_cast<b8>(targets.shadowSoftHalfB)
-        && static_cast<b8>(targets.shadowSoftGeometry)
-        && static_cast<b8>(targets.shadowVisibility);
+b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 transparentReady){
+    in SoftShadowResolveState resolve = this.m_rayTracingState.shadow.m_softShadowResolve;
+    ComputePipelineHandle pipeline = resolve.m_scalar.m_upsample.m_pipeline;
+    if(transparentReady)
+        pipeline = resolve.m_combinedUpsample.m_pipeline;
+    const b8 baseTargetsReady = targets.depth.valid()
+        && targets.worldPosition.valid()
+        && targets.normal.valid()
+        && targets.shadowSoftHalfB.valid()
+        && targets.shadowSoftGeometry.valid()
+        && targets.shadowVisibility.valid();
     if(!CanRenderSoftShadowTerminalUpsample(
-        static_cast<b8>(pipeline),
-        m_rayTracingState.m_softShadowReady,
-        m_rayTracingState.m_softShadowSlotMask,
-        NWB_SHADOW_RESOLVE_PASS_COUNT,
-        NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT,
+        pipeline.valid(),
+        this.m_rayTracingState.softShadow.m_softShadowReady,
+        this.m_rayTracingState.softShadow.m_softShadowSlotMask,
+        s_ShadowWaveletResolvePassCount,
+        s_ShadowWaveletTransparentResolvePassCount,
         deferredLightingResources.valid(),
         targets.bindless.valid(),
         baseTargetsReady,
         transparentReady,
-        m_rayTracingState.m_softTransparentReady,
-        static_cast<b8>(targets.shadowSoftHalfA)
+        this.m_rayTracingState.softShadow.m_softTransparentReady,
+        targets.shadowSoftHalfA.valid()
     ))
         return false;
 
-    commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.deref(), true);
     commandList.commitBarriers();
 
-    const DeferredBindlessFrameResources& bindless = targets.bindless;
+    in DeferredBindlessFrameResources bindless = targets.bindless;
     const ShadowResolvePushConstants push = MakeShadowTerminalUpsamplePushConstants(
         targets.width,
         targets.height,
-        DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor)),
-        DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor)),
-        ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask),
+        DivideUp(targets.width, cast<u32>(targets.shadowReceiverFactor)),
+        DivideUp(targets.height, cast<u32>(targets.shadowReceiverFactor)),
+        ResolveSoftShadowLightSlotRangeCount(this.m_rayTracingState.softShadow.m_softShadowSlotMask),
         bindless.shadowSoftGeometry.slot(),
         bindless.gbufferDepth.slot(),
         bindless.gbufferWorldPosition.slot(),
@@ -261,25 +253,16 @@ b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList&
         bindless.shadowSoftHalfB.slot(),
         targets.shadowReceiverFactor
     );
-    Core::ComputeState state;
-    state.setPipeline(pipeline.get());
+    ComputeState state;
+    state.setPipeline(pipeline.deref());
     commandList.setComputeState(state);
-    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline.get());
-    commandList.setPushConstants(&push, sizeof(push));
-    commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), 1u);
+    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref());
+    commandList.setPushConstants(push);
+    commandList.dispatch(DivideUp(targets.width, cast<u32>(s_ShaderShadowResolveGroupSize)), DivideUp(targets.height, cast<u32>(s_ShaderShadowResolveGroupSize)), 1u);
     // The original terminal fold is the only successful history-advance endpoint. Opaque recovery does not advance it.
-    if(transparentReady && m_rayTracingState.m_softShadowTemporalReady)
-        m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = true;
+    if(transparentReady && this.m_rayTracingState.softShadow.m_softShadowTemporalReady)
+        this.m_rayTracingState.softShadow.m_softShadowTemporalHistoryAdvancePending = true;
     return true;
-}
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

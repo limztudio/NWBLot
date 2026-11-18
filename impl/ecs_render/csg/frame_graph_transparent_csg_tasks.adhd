@@ -2,113 +2,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/transparent_interval_payloads.adhd>
+#include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.adhd>
+#include <impl/ecs_render/avboit/task_graph_occupancy_tasks.adhd>
+#include <impl/ecs_render/avboit/avboit_system.adhd>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.adhd>
 #include <impl/ecs_render/csg/graph_types.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class FrameGraphTransparentCsgTaskInputs{
+    public in DeferredGraphResourceImportResult resources;
+    public GraphicsPrefixTimingTicket timingTicket;
+    public TransparentCsgIntervalProducerResult producer;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/csg/graph_types.adhd.h>
-#include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.adhd.h>
-#include <impl/ecs_render/avboit/task_graph_occupancy_tasks.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererAvboitSystem;
-class ObjectGeometryCacheGraph;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Transparent-CSG interval tasks own the AVBOIT interval, receiver-span, and interval-combine graph task declarations.
-struct FrameGraphTransparentCsgTaskInputs{
-    Core::GpuGraphResourceId albedo;
-    Core::GpuGraphResourceId normal;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId specularRoughness;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId meshView;
-    Core::GpuGraphResourceId materialInstances;
-    Core::GpuGraphResourceId materialTyped;
-    Core::GpuGraphResourceId csgReceiverRanges;
-    Core::GpuGraphResourceId csgCutters;
-    Core::GpuGraphResourceId csgClipContextSlots;
-    Core::GpuGraphResourceId csgIntervalSampleState;
-    Core::GpuGraphResourceId csgCapBackNormal;
-    Core::GpuGraphResourceId csgIntervalDepth;
-    Core::GpuGraphResourceId csgIntervalId;
-    Core::GpuGraphResourceId csgReceiverEventData;
-    Core::GpuGraphResourceId csgReceiverEventCount;
-    Core::GpuGraphResourceId csgReceiverSpanData;
-    Core::GpuGraphResourceId csgReceiverSpanCount;
-    Core::GpuGraphResourceId csgRemovedIntervalDepth;
-    Core::GpuGraphResourceId csgRemovedIntervalCapNormal;
-    Core::GpuGraphResourceId csgRemovedIntervalData;
-    Core::GpuGraphResourceId csgRemovedIntervalCount;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId avboitMaterialDomain;
-    Core::GpuGraphResourceId avboitCsgDomain;
-    Core::TextureSubresourceSet csgPeelSubresources;
-    Core::TextureSubresourceSet csgReceiverEventDataSubresources;
-    Core::TextureSubresourceSet csgReceiverEventCountSubresources;
-    Core::TextureSubresourceSet csgReceiverSpanDataSubresources;
-    Core::TextureSubresourceSet csgReceiverSpanCountSubresources;
-    Core::TextureSubresourceSet csgRemovedIntervalSubresources;
-    Core::TextureSubresourceSet csgRemovedIntervalCountSubresources;
-    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-    Core::GpuTaskId transparentCsgUploadTask;
-    Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
-    Core::GpuGraphResourceSetId transparentCsgMaterialSampledTextureSet;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public FrameGraphTransparentCsgTaskInputs(
+        in DeferredGraphResourceImportResult resources,
+        in GraphicsPrefixTimingTicket timingTicket,
+        in TransparentCsgIntervalProducerResult producer
+    ){
+        this.resources = resources;
+        this.timingTicket = timingTicket;
+        this.producer = producer;
+    }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_name("::NWB::Impl::RendererAvboitSystem")]
-extern class RendererAvboitSystem;
-[cpp_name("::NWB::Impl::ObjectGeometryCacheGraph")]
-extern class ObjectGeometryCacheGraph;
-[cpp_name("::NWB::Impl::FrameGraphTransparentCsgTaskInputs")]
-extern class FrameGraphTransparentCsgTaskInputs;
-[cpp_name("::NWB::Impl::RendererTaskGraphDetail::AvboitPreGraphTask::Payload")]
-extern class AvboitPreGraphTaskPayload;
-[cpp_name("::NWB::Impl::ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload")]
-extern class AvboitCsgReceiverSpanGraphTaskPayload;
-[cpp_name("::NWB::Impl::ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload")]
-extern class AvboitCsgIntervalCombineGraphTaskPayload;
 
 [modular]
 class FrameGraphTransparentCsgTasks : NoCopy{
@@ -124,8 +46,8 @@ class FrameGraphTransparentCsgTasks : NoCopy{
         in FrameGraphTransparentCsgTaskInputs inputs,
         mut ObjectGeometryCacheGraph objectGeometry,
         mut AvboitPreGraphTaskPayload prePayload,
-        mut AvboitCsgReceiverSpanGraphTaskPayload receiverSpanPayload,
-        mut AvboitCsgIntervalCombineGraphTaskPayload intervalCombinePayload
+        mut TransparentCsgIntervalRecordInputs receiverSpanPayload,
+        mut TransparentCsgIntervalRecordInputs intervalCombinePayload
     );
 }
 

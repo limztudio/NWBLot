@@ -37,13 +37,15 @@ static TypeRef* SynthesizeBuiltinReturnTypeRef(
     const MStringView returnTypeName,
     const MStringView returnTypeArgName,
     const MStringView returnNestedTypeArgName,
-    const MStringView returnErrorTypeName
+    const MStringView returnErrorTypeName,
+    const ParamPassingMode::Enum valueMode = ParamPassingMode::None
 )noexcept{
     TypeRef* synth = AllocateAstNode<TypeRef>(arena);
     synth->name = returnTypeName;
     if(!returnTypeArgName.empty()){
         TypeRef* valType = AllocateAstNode<TypeRef>(arena);
         valType->name = returnTypeArgName;
+        valType->refMode = valueMode;
         if(!returnNestedTypeArgName.empty()){
             TypeRef* nestedType = AllocateAstNode<TypeRef>(arena);
             nestedType->name = returnNestedTypeArgName;
@@ -342,13 +344,13 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             if(const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))){
                 const MStringView member = expr.scopeChain[1];
                 if(
-                    (!scopedCls->assetTypeName.empty() && ContractSemantics::IsClassRoleTypeNameStaticField(ClassRoleKind::Asset, member))
+                    ((!scopedCls->assetTypeName.empty() || !scopedCls->subsystemTypeName.empty()) && ContractSemantics::IsClassRoleTypeNameStaticField(ClassRoleKind::Asset, member))
                     || (!scopedCls->systemTypeName.empty() && ContractSemantics::IsClassRoleTypeNameStaticField(ClassRoleKind::System, member))
                     || (!scopedCls->componentTypeName.empty() && ContractSemantics::IsClassRoleTypeNameStaticField(ClassRoleKind::Component, member))
                 )
                     return BuiltinTypeSemantics::NameTypeName();
                 if(
-                    (!scopedCls->assetTypeName.empty() && ContractSemantics::IsClassRoleTypeTextStaticField(ClassRoleKind::Asset, member))
+                    ((!scopedCls->assetTypeName.empty() || !scopedCls->subsystemTypeName.empty()) && ContractSemantics::IsClassRoleTypeTextStaticField(ClassRoleKind::Asset, member))
                     || (!scopedCls->systemTypeName.empty() && ContractSemantics::IsClassRoleTypeTextStaticField(ClassRoleKind::System, member))
                     || (!scopedCls->componentTypeName.empty() && ContractSemantics::IsClassRoleTypeTextStaticField(ClassRoleKind::Component, member))
                 )
@@ -366,6 +368,9 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             }
         }
         return resolveScopeAccessEnumTypeName(ownerClass, method, expr, scope);
+    }
+    else if(expr.kind == ExprKind::LayoutQuery){
+        return s_LayoutQueries[expr.layoutQuery].booleanResult ? BuiltinTypeSemantics::BoolScalarTypeName() : BuiltinTypeSemantics::UsizeScalarTypeName();
     }
     else if(const MStringView fixedLitType = LookupFixedLiteralExprTypeName(expr.kind); !fixedLitType.empty()){
         return fixedLitType;
@@ -563,7 +568,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     return m_symbols.unwrapTypeAlias(ft->funcReturnType);
             }
             if(const BuiltinReceiverMethodInfo* inheritedRecv = m_symbols.findInheritedBuiltinReceiverMethod(ownerClass, nullptr, expr.lhs->text); inheritedRecv && !inheritedRecv->returnTypeName.empty())
-                return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName);
+                return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName, inheritedRecv->returnTypeArgRefMode);
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const TypeRef* recvTypeRef = nullptr;
@@ -571,7 +576,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             const MStringView mName = expr.lhs->text;
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
                 const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs->lhs, scope) : false;
-                if(const MethodDecl* m = m_symbols.findClassMethod(*cls, mName, &callArgCount, recvIsConst, ownerClass != cls, argTypeHints, argIsMutHints))
+                if(const MethodDecl* m = m_symbols.findClassMethod(*cls, mName, &callArgCount, recvIsConst, !m_symbols.canAccessPrivateMembers(*cls, ownerClass), argTypeHints, argIsMutHints))
                     return __hidden_adhd_type_infer::SubstituteCallableReturnType(m_arena, m_symbols, ownerClass, method, *m, cls, recvTypeRef, expr, scope, templateDeducer);
                 if(const FieldDecl* field = SymbolTable::FindClassField(*cls, mName)){
                     const TypeRef* ft = m_symbols.substituteTypeParams(field->type, cls->templateParams, recvTypeRef);
@@ -579,13 +584,13 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                         return m_symbols.unwrapTypeAlias(uft->funcReturnType);
                 }
                 if(const BuiltinReceiverMethodInfo* inheritedRecv = m_symbols.findInheritedBuiltinReceiverMethod(cls, nullptr, mName); inheritedRecv && !inheritedRecv->returnTypeName.empty())
-                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName);
+                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName, inheritedRecv->returnTypeArgRefMode);
             }
             else if(const InterfaceDecl* ifaceDecl = recvTypeRef ? m_symbols.findInterface(lhsType) : nullptr){
                 if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints); m && m->returnType)
                     return m_symbols.unwrapTypeAlias(m->returnType);
                 if(const BuiltinReceiverMethodInfo* inheritedRecv = m_symbols.findInheritedBuiltinReceiverMethod(nullptr, ifaceDecl, mName); inheritedRecv && !inheritedRecv->returnTypeName.empty())
-                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName);
+                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName, inheritedRecv->returnTypeArgRefMode);
             }
             else if(const TemplateParamDecl* tp = FindTemplateParam(ownerClass, method, lhsType)){
                 for(const TypeRef* boundRef : tp->interfaceBounds){
@@ -599,7 +604,15 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                 if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(lhsType, mName); recvMethod && recvMethod->synthesizeTypeRef){
                     if(recvMethod->returnTypeName.empty() && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
                         return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
-                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, recvMethod->returnTypeName, recvMethod->returnTypeArgName, recvMethod->returnNestedTypeArgName, recvMethod->returnErrorTypeName);
+                    return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, recvMethod->returnTypeName, recvMethod->returnTypeArgName, recvMethod->returnNestedTypeArgName, recvMethod->returnErrorTypeName, recvMethod->returnTypeArgRefMode);
+                }
+                if(recvTypeRef && FindSpecialMethodSemantics(mName) == SpecialMethodKind::CheckedElementAccess){
+                    const BuiltinGenericTypeInfo* container = FindBuiltinGenericType(lhsType);
+                    if(container && (container->isReflectedMap || container->isIndexableSequence)){
+                        const usize element = container->isReflectedMap ? 1u : 0u;
+                        if(element < recvTypeRef->templateArgs.size())
+                            return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[element].type);
+                    }
                 }
                 if(recvTypeRef && FindBuiltinGenericType(lhsType) && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
                     if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName)){
@@ -630,7 +643,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             && isUnshadowedTypeScopeAccess(scope, expr.lhs->scopeChain[0])
         ){
             if(const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]))){
-                if(const MethodDecl* m = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, ownerClass != scopedCls, argTypeHints, argIsMutHints, true))
+                if(const MethodDecl* m = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, !m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass), argTypeHints, argIsMutHints, true))
                     return __hidden_adhd_type_infer::SubstituteCallableReturnType(m_arena, m_symbols, ownerClass, method, *m, nullptr, nullptr, expr, scope, templateDeducer);
                 if(const FieldDecl* staticField = SymbolTable::FindClassField(*scopedCls, expr.lhs->scopeChain[1]); staticField && staticField->isStatic && staticField->type){
                     if(const TypeRef* uft = m_symbols.unwrapTypeAlias(staticField->type); uft && uft->isFuncType && uft->funcReturnType)

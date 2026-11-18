@@ -31,7 +31,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
     if(isMatrix){
         const MStringView matRegType = SimdRegisterCppType(simdType);
         if(binaryOp == TokenType::Plus || binaryOp == TokenType::Minus){
-            out.append("([&]()noexcept{ const ");
+            out.append("([&]()").append(m_emitter.lambdaExceptionSpec()).append("{ const ");
             out.append(matRegType.data(), matRegType.size());
             out.append(" __a = ");
             m_emitter.emitSimdRegExpr(out, lhs, simdType);
@@ -55,7 +55,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             }
             const Expr& matOperand = !lhs.resolvedSimdType.empty() ? lhs : rhs;
             const Expr& scalarOperand = !lhs.resolvedSimdType.empty() ? rhs : lhs;
-            out.append("([&]()noexcept{ const ");
+            out.append("([&]()").append(m_emitter.lambdaExceptionSpec()).append("{ const ");
             out.append(matRegType.data(), matRegType.size());
             out.append(" __m = ");
             m_emitter.emitSimdRegExpr(out, matOperand, simdType);
@@ -66,7 +66,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             return true;
         }
         if(binaryOp == TokenType::Slash && rhs.resolvedSimdType.empty()){
-            out.append("([&]()noexcept{ const ");
+            out.append("([&]()").append(m_emitter.lambdaExceptionSpec()).append("{ const ");
             out.append(matRegType.data(), matRegType.size());
             out.append(" __m = ");
             m_emitter.emitSimdRegExpr(out, lhs, simdType);
@@ -102,7 +102,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
         const MStringView laneType = IntSimdLaneType(simdType);
         const MStringView rawWordType = IntSimdRawWordType(isDouble);
         const MStringView opSym = SimdBinaryScalarOpSymbol(binaryOp);
-        out.append("([&]()noexcept{ const ");
+        out.append("([&]()").append(m_emitter.lambdaExceptionSpec()).append("{ const ");
         out.append(regType.data(), regType.size());
         out.append(" __lhs = ");
         m_emitter.emitSimdRegExpr(out, lhs, simdType);

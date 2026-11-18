@@ -28,6 +28,7 @@ public:
     );
 
 private:
+    [[nodiscard]] b8 requiresRetainedClassTemporary(const TypeRef& expected, const TypeRef& actual)const noexcept;
     [[nodiscard]] b8 checkBuiltinVisitor(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& arg, const BuiltinVisitorRuleInfo& rule, b8 receiverIsConst, MVector<ParseError>& errors);
 
 

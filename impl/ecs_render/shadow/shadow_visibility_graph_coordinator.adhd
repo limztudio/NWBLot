@@ -2,142 +2,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
-#include <core/task/gpu/persistent_state.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-class RendererRayTracingSystem;
-class DeferredFrameTargets;
-class DeferredLightingGraphResources;
-class RayTracingSceneGraphReads;
-
-
-struct ShadowVisibilityGraphContext{
-    Core::Alloc::GlobalArena& arena;
-    Core::GraphicsRuntime& graphics;
-    Core::GpuTaskGraph& graph;
-    RendererRayTracingSystem& rayTracing;
-    Core::GpuPersistentResourceStateCache& shadowComputeState;
-    Core::GpuPersistentResourceStateCache& shadowReturnState;
+class ShadowVisibilityGraphContext{
+    public mut GraphicsRuntime graphics;
+    public mut GpuTaskGraph graph;
+    public mut RendererRayTracingSystem rayTracing;
+    public mut GpuPersistentResourceStateCache shadowComputeState;
+    public mut GpuPersistentResourceStateCache shadowReturnState;
     // Graph callbacks observe the pipeline-owned preparation result after declaration.
-    const b8& shadowPrepared;
-};
+    public in b8 shadowPrepared;
 
+    public ShadowVisibilityGraphContext(
+        mut GraphicsRuntime graphics,
+        mut GpuTaskGraph graph,
+        mut RendererRayTracingSystem rayTracing,
+        mut GpuPersistentResourceStateCache shadowComputeState,
+        mut GpuPersistentResourceStateCache shadowReturnState,
+        in borrow b8 shadowPrepared
+    ){
+        this.graphics = graphics;
+        this.graph = graph;
+        this.rayTracing = rayTracing;
+        this.shadowComputeState = shadowComputeState;
+        this.shadowReturnState = shadowReturnState;
+        this.shadowPrepared = shadowPrepared;
+    }
+}
 
-class ShadowVisibilityGraphCoordinator final : NoCopy{
-    friend class RendererFramePipeline;
-    friend class DeferredFrameTopologyValidator;
-    friend struct FrameExecuteTimingState;
-    friend struct FrameExecuteStateLifecycleSet;
-    friend class ShadowVisibilityMergeValidator;
+[modular, friend(RendererFramePipeline, DeferredFrameTopologyValidator, FrameExecuteTimingState, FrameExecuteStateLifecycleSet, ShadowVisibilityMergeValidator)]
+class ShadowVisibilityGraphCoordinator : NoCopy{
+    private GpuTaskId m_deferredShadowVisibilityOpaqueTask;
+    private GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
+    private GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
+    private GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
+    private GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
+    private GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
+    private GpuTaskId m_deferredShadowVisibilityDiagnosticsTask;
+    private GpuTaskId m_deferredShadowVisibilityAdaptiveCounterClearTask;
+    private GpuTaskId m_deferredShadowVisibilityAllLitClearTask;
+    private GpuTaskId m_deferredShadowVisibilityTask;
+    private b8 m_deferredShadowCombinedUpsample = false;
+    private b8 m_deferredShadowCombinedWavelet = false;
+    private b8 m_deferredShadowCombinedTemporal = false;
 
-
-public:
-    ShadowVisibilityGraphCoordinator()noexcept = default;
-
-
-public:
-    [[nodiscard]] b8 declareDeferredShadowVisibilityTask(
-        const ShadowVisibilityGraphContext& context,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
-        const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
-        const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan,
-        const RayTracingSceneGraphReads& hardwareSceneReads,
-        b8 hardwareShadowSupported,
-        Core::GpuGraphResourceId worldPosition,
-        Core::GpuGraphResourceId normal,
-        Core::GpuGraphResourceId depth,
-        Core::GpuGraphResourceId shadowVisibility,
-        Core::GpuGraphResourceId currentBindlessSlots,
-        Core::GpuGraphResourceId sceneShading,
-        Core::GpuGraphResourceId lights,
-        Core::GpuGraphResourceId materialContextSlots,
-        Span<const Core::GpuGraphResourceId> traceGeometryResources,
-        Core::GpuGraphResourceSetId traceGeometrySet,
-        Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
-        Core::GpuTaskId prefixTask,
-        Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
-        Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming,
-        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
-        Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
-        Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
-        b8& opaqueProduced,
-        b8& transparentTraceProduced,
-        u32& opaqueFrameIndex
+    [cpp_unwind]
+    public b8 declareDeferredShadowVisibilityTask(
+        in ShadowVisibilityGraphContext context,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in RayTracingShadowVisibilityGraphPlanSnapshot rayTracingPlan,
+        in RayTracingSceneGraphReads hardwareSceneReads,
+        in b8 hardwareShadowSupported,
+        in GpuGraphResourceId worldPosition,
+        in GpuGraphResourceId normal,
+        in GpuGraphResourceId depth,
+        in GpuGraphResourceId shadowVisibility,
+        in GpuGraphResourceId currentBindlessSlots,
+        in GpuGraphResourceId sceneShading,
+        in GpuGraphResourceId lights,
+        in GpuGraphResourceId materialContextSlots,
+        in Span<GpuGraphResourceId> traceGeometryResources,
+        in GpuGraphResourceSetId traceGeometrySet,
+        in GpuGraphResourceSetId traceMaterialSampledTextureSet,
+        in GpuTaskId prefixTask,
+        in GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
+        mut DeferredFrameTargets deferredTargets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming,
+        mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+        mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+        mut Optional<GpuTimingMeasure> transparentResolveTiming,
+        mut b8 opaqueProduced,
+        mut b8 transparentTraceProduced,
+        mut u32 opaqueFrameIndex
     );
-
-
-private:
-    // Soft-transparent shadow frames compile opaque production, wavelets, tails, transparent trace, merge, and terminal tail into one packet.
-    Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
-    Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
-    Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
-    Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
-    Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
-    Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
-    Core::GpuTaskId m_deferredShadowVisibilityDiagnosticsTask;
-    // The adaptive append-counter clear shares the monolithic visibility packet to keep its CopyDest -> UAV handoff graph-owned.
-    Core::GpuTaskId m_deferredShadowVisibilityAdaptiveCounterClearTask;
-    // The monolithic route clears visibility to all-lit right before its callback, in the same packet to keep handoff and acceptance graph-owned.
-    Core::GpuTaskId m_deferredShadowVisibilityAllLitClearTask;
-    Core::GpuTaskId m_deferredShadowVisibilityTask;
-    b8 m_deferredShadowCombinedUpsample = false;
-    b8 m_deferredShadowCombinedWavelet = false;
-    b8 m_deferredShadowCombinedTemporal = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

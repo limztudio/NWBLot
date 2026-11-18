@@ -155,14 +155,12 @@ b8 IsValidCameraTransformVectors(in VectorSingle position, in VectorSingle rotat
 
 b8 IsValidSceneCameraViewProjection(
     in EntityID entity,
-    in b8 hasTransform,
-    in b8 hasCamera,
+    in b8 hasComponents,
     in CameraProjection projection
 ){
     return
         entity.valid()
-        && hasTransform
-        && hasCamera
+        && hasComponents
         && CameraProjectionValuesValid(
             VectorSingle(projection.projectionParams),
             projection.aspectRatio,

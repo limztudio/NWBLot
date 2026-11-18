@@ -13,6 +13,154 @@ def ninja_escape(path: pathlib.Path) -> str:
     return path.as_posix().replace("$", "$$").replace(" ", "$ ").replace(":", "$:")
 
 
+def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
+    source = root / "layout.adhd"
+    consumer = root / "consumer_layout.adhd"
+    output = root / "layout_output"
+    source.write_text(
+        "namespace_wrapper EXAMPLE_LAYOUT;\n"
+        "class Entry<T, U>{ public T key; public U value; }\n"
+        "class Catalog{ private Vector<u8> bytes; [owner_result] public Vector<u8> snapshot()const{ return this.bytes; } }\n"
+        "class Item{ [owner_result] public Vector<u8> read()const{ return Vector<u8>(); } }\n"
+        "interface IBacking{ b8 valid()const; } class Backing : IBacking{ public b8 valid()const override{ return true; } } "
+        "class Converted{ public Converted(in Backing input){} } type ConvertedAlias = Converted; "
+        "void Observe(in Converted v){} void Keep(in borrow ConvertedAlias v){} void KeepBase(in borrow IBacking v){} "
+        "void KeepStable(in Backing owner, in ConvertedAlias view){ Observe(owner); Keep(view); KeepBase(owner); }\n"
+        "class OutputProbe : IGpuTaskGraphOutputLayerContributor{ "
+        "[cpp_unwind] public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame)override{ return frame.valid(); } "
+        "public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override; }\n"
+        "void OutputProbe::acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token){}\n"
+        "class Consumer{ [cpp_rvalue_overload] public b8 consume(mut u32 value){ ++value; return true; } }\n"
+        "class Guard : NoCopy{ [cpp_unwind] public Guard(){} [cpp_unwind] public ~Guard(){} }\n"
+        "class Slot{ private u32 value = 0u; [cpp_explicit_bool] public b8 ready()const{ return this.value != 0u; } "
+        "[cpp_take_assignment] public void take(mut u32 incoming){ this.value = incoming; incoming = 0u; } }\n"
+        "class CounterRef{ private mut u32 count; public CounterRef(mut u32 count){ this.count = count; } }\n"
+        "[ordered] class Owner{ private u8 first = 0u; private u32 count = 0u; private CounterRef last; "
+        "public Owner(){ this.last = CounterRef(this.count); } }\n"
+        "[layout(8)] class WirePair<T, U>{ public T tag; public U value; }\n"
+        "static_assert(offset_of<WirePair<u8, u32>>(value) == 4u);\n"
+        "static_assert(align_of<WirePair<u8, u32>>() == 8u);\n"
+        "static_assert(offset_of<Entry<u32, f32>>(key) == 0u);\n"
+        'static_assert(size_of<Entry<u32, f32>>() == 8u, "entry size");\n'
+        "static_assert(align_of<u32>() == 4u);\n"
+        "static_assert(is_standard_layout<Entry<u32, f32>>());\n"
+        "static_assert(is_trivially_copyable<Entry<u32, f32>>());\n",
+        encoding="utf-8",
+    )
+    consumer.write_text('#include "layout.adhd"\n', encoding="utf-8")
+
+    def generate(path: pathlib.Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(compiler), "--input", str(path), "--output", str(output), "--namespace", "NWB::Example::Layout"],
+            cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False,
+        )
+
+    for path in (source, consumer):
+        result = generate(path)
+        if result.returncode:
+            raise AssertionError(result.stdout + result.stderr)
+    header = (output / "layout.adhd.h").read_text(encoding="utf-8")
+    if "#define EXAMPLE_LAYOUT_BEGIN NWB_BEGIN namespace Example::Layout{" not in header or "#define EXAMPLE_LAYOUT_END }; NWB_END" not in header:
+        raise AssertionError(f"namespace wrapper lost its configured namespace:\n{header}")
+    if "const ::NWB::Core::QueueSubmissionToken& token)noexcept override" not in header or "prepareTaskGraphOutputLayer(const ::NWB::Core::AcquiredPresentationFrame& frame) override" not in header:
+        raise AssertionError("SDK overrides must preserve the virtual signature")
+    if header.count("static_assert(") < 5 or 'offsetof(AdhdLayoutType, key)' not in header or '"entry size"' not in header:
+        raise AssertionError(f"layout checks missing from their defining header:\n{header}")
+    generated = (output / "layout.adhd.cpp").read_text(encoding="utf-8")
+    if "snapshot()const" not in header or "__adhd_caller_arena = (*this->__adhd_arena)" not in header + generated:
+        raise AssertionError("owner_result did not use the declaring object's arena")
+    if "    Guard(){" not in header or "~Guard()noexcept(false){" not in header:
+        raise AssertionError("ordinary constructors and destructors did not retain their exception contracts")
+    if "explicit Item(::ArenaBase&" not in header or "read()const" not in header:
+        raise AssertionError("owner_result did not retain an arena on the fieldless owner")
+    owner_fields = ("u8 first", "u32 count", "CounterRef last")
+    owner = header[header.index("class Owner final{"):].split("};", 1)[0]
+    positions = [owner.index(field) for field in owner_fields]
+    if positions != sorted(positions):
+        raise AssertionError("ordered class changed the declared field order")
+    if "last(this->count)" not in header + generated:
+        raise AssertionError("ordered field lost its constructor borrow of an earlier sibling")
+    if "class alignas(8) WirePair" not in header:
+        raise AssertionError(f"missing record alignment:\n{header}")
+    imported = (output / "consumer_layout.adhd.h").read_text(encoding="utf-8")
+    if "#define EXAMPLE_LAYOUT" in imported or '"entry size"' in imported:
+        raise AssertionError(f"import redefined a namespace wrapper or assertion:\n{imported}")
+
+    for invalid, diagnostic in (
+        ("[owner_result] Vector<u8> Read(){ return Vector<u8>(); }", "instance method"),
+        ("class Item{ [owner_result] public u32 read()const{ return 1u; } }", "arena-backed result"),
+        ("class Item{ [cpp_explicit_bool] public i32 value()const{ return 1; } }", "returning b8"),
+        ("class Item{ [cpp_take_assignment] public void take(in u32 input){} }", "one mutable value"),
+        ("class Item{ [cpp_take_assignment] public void take(mut Item item){} }", "another type"),
+        ("class Item{ [cpp_explicit_bool] public b8 ready()const{ return true; } [cpp_explicit_bool] public b8 valid()const{ return true; } }", "already exports"),
+        ("class X : IGpuTaskGraphOutputLayerContributor{ [cpp_unwind] public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override{} }", "nonthrowing SDK override contract"),
+        ("void Read(in cpp_ref u32 value){}", "requires an 'in' parameter on an extern"),
+        ("class Item{ [cpp_rvalue_overload] public b8 read(in u32 value){ return true; } }", "one mutable value"),
+        ("[cpp_type_alias(Item, u32)] class Item{}", "distinct member name"),
+        ("[cpp_type_alias(Value, u32)] class Item{ public u32 Value; }", "distinct member name"),
+        ("class A{} class B{ public B(in A a){} } class Retains{ private in B b; public Retains(in B value){ this.b = value; } } "
+         "void Bad(in A a){ Retains dangling(a); }", "a retained reference cannot bind to a temporary created by an implicit class conversion"),
+        ("[layout(3)] class Item{}", "power-of-two"),
+        ("[layout(0)] class Item{}", "power-of-two"),
+        ("namespace_wrapper NWB;", "reserved"),
+        ("namespace_wrapper A; namespace_wrapper B;", "one namespace_wrapper"),
+        ("class Item{ private i32 hidden; } static_assert(offset_of<Item>(hidden) == 0u);", "accessible instance field"),
+        ('static_assert(true, "bad" + "message");', "message must be a string literal"),
+    ):
+        source.write_text(invalid, encoding="utf-8")
+        result = generate(source)
+        if result.returncode == 0 or diagnostic not in result.stdout + result.stderr:
+            raise AssertionError(f"expected '{diagnostic}' for {invalid}:\n{result.stdout}\n{result.stderr}")
+
+
+def run_shared_specialization_cli_test(compiler: pathlib.Path, root: pathlib.Path) -> None:
+    folder = root / "shared_specialization"
+    folder.mkdir()
+    owner = folder / "cell.adhd"
+    left = folder / "left.adhd"
+    right = folder / "right.adhd"
+    output = folder / "generated"
+    owner.write_text(
+        "class Slot{ public u32 count = 0u; }\n"
+        "class Cell<T>{ public T value; public Slot slot; "
+        "public void reset(){ mut Slot entry = this.slot; entry.count = 0u; } }\n",
+        encoding="utf-8",
+    )
+    left.write_text(
+        '#include "cell.adhd"\n'
+        '[cpp_header("<sdk/width.h>"), cpp_name("SDK_WIDTH")] extern const u32 extWidth;\n'
+        'type Word = u32;\nclass Left{ public Cell<Array<Word, 2u>> cell; public Array<u32, extWidth> values; }\n',
+        encoding="utf-8",
+    )
+    right.write_text(
+        '#include "cell.adhd"\n'
+        'class Right{ public Cell<Array<u32, 2>> cell; public Cell<Array<u32, 3u>> wider; }\n',
+        encoding="utf-8",
+    )
+    names = {owner: "Cells", left: "LeftClient", right: "RightClient"}
+    namespace_map = folder / "namespaces.txt"
+    namespace_map.write_text("".join(f"{path.resolve()}\t{namespace}\n" for path, namespace in names.items()), encoding="utf-8")
+    guards = {}
+    for path, namespace in names.items():
+        result = subprocess.run(
+            [str(compiler), "--input", str(path), "--output", str(output), "--namespace", namespace,
+             "--namespace-map", str(namespace_map), "-I", str(folder)],
+            cwd=folder, capture_output=True, text=True, errors="replace", timeout=30, check=False,
+        )
+        if result.returncode:
+            raise AssertionError(result.stdout + result.stderr)
+        header = (output / (path.name + ".h")).read_text(encoding="utf-8")
+        guards[path] = {line for line in header.splitlines() if line.startswith("#ifndef NWB_ADHD_CLASS_SPECIALIZATION_Cell_")}
+        if path != owner and ("namespace Cells{" not in header or f"namespace {namespace}{{" not in header):
+            raise AssertionError(f"specialization in the wrong namespace:\n{header}")
+        if path == left and "#include <sdk/width.h>" not in header:
+            raise AssertionError(f"array capacity omitted its external constant header:\n{header}")
+        if path != owner and "entry->count" not in header:
+            raise AssertionError(f"imported specialization did not lower its borrowed local:\n{header}")
+    if len(guards[left]) != 1 or len(guards[right]) != 2 or not guards[left] < guards[right]:
+        raise AssertionError(f"independent imports disagree on the specialization guards: {guards}")
+
+
 def run_cpp_import_cli_tests(compiler: pathlib.Path, root: pathlib.Path, ninja: str | None) -> None:
     cpp_root = root / "cpp_import_cli"
     cpp_inc = cpp_root / "inc"
@@ -197,10 +345,87 @@ def run_cpp_import_cli_tests(compiler: pathlib.Path, root: pathlib.Path, ninja: 
         raise AssertionError(f"missing --cpp-header did not fail without touching sentinels: {missing_hdr.stdout}\n{missing_hdr.stderr}")
 
 
+def check_conditional_exception_spec(compiler: pathlib.Path, root: pathlib.Path) -> None:
+    source = root / "visitor.adhd"
+    output = root / "visitor_output"
+    command = [str(compiler), "--input", str(source), "--output", str(output)]
+    visitor = "b8 Apply<F>(mut forward F visitor)noexcept_like(){ return cast<b8>(visitor()); }"
+    cases = (
+        (visitor + "\nb8 Check(){ return Apply(lambda[]() -> b8{ return true; }); }", True, "F&& visitor)noexcept(noexcept(::DeclVal<void(*)(b8)noexcept>()("),
+        (visitor.replace("noexcept_like()", "noexcept_like(visitor())"), True, "noexcept(noexcept(visitor()))"),
+        (visitor.replace("forward F", "copy F").replace("noexcept_like()", "noexcept_like(visitor(), cast<b8>(visitor()))"), True, "IsNothrowDestructible_V<F> && noexcept(visitor()) && noexcept(static_cast<b8>(visitor()))"),
+        (visitor.replace("noexcept_like()", "noexcept_like(unknownArgument)"), False, "requires a visible parameter"),
+        (visitor.replace("return cast", "u32 unused = 0u; return cast"), False, "one return expression"),
+        (visitor.replace("forward F", "forward u32"), False, "unwrapped type parameter"),
+    )
+    platform_text = 'const PlatformStringView s_Reason = PlatformTextLiteral("invalid");'
+    cases += (
+        (platform_text, True, '::TStringView(FOUNDATION_TEXT("invalid"))'),
+        ("PlatformStringView Convert(in StringView input){ return PlatformTextLiteral(input); }", False, "platform text requires a string literal"),
+    )
+    for text, success, expected in cases:
+        source.write_text(text, encoding="utf-8")
+        result = subprocess.run(command, cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+        actual = (output / "visitor.adhd.h").read_text(encoding="utf-8") if result.returncode == 0 else result.stdout + result.stderr
+        if (result.returncode == 0) != success or expected not in actual:
+            raise AssertionError(f"unexpected generic visitor result: {actual}")
+
+
+def check_asset_cook_roles(compiler: pathlib.Path, root: pathlib.Path) -> None:
+    source = root / "cook_roles.adhd"
+    output = root / "cook_role_output"
+    command = [str(compiler), "--input", str(source), "--output", str(output)]
+
+    def check(text: str, expected: str, success: bool) -> None:
+        source.write_text(text, encoding="utf-8")
+        result = subprocess.run(command, cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+        actual = (output / "cook_roles.adhd.cpp").read_text(encoding="utf-8") if result.returncode == 0 else result.stdout + result.stderr
+        if (result.returncode == 0) != success or expected not in actual:
+            raise AssertionError(f"unexpected asset role result: {actual}")
+
+    asset = '[arena, asset("sample")] class Sample{ public b8 loadBinary(in Span<u8> bytes); }\n'
+    document = "[cook_document] AssetMetadataParseResult Parse(mut AssetDocumentMetadataParseContext context){ return AssetMetadataParseResult::Unsupported; }"
+    prepare = "[volume_prepare] b8 Prepare(mut CookVolumePrepareContext context){ return true; }"
+    setup = "[cook_setup] void Setup(){}"
+    check(document, "AssetMetadataParserAutoRegistrar s_ParseRegistrar(&Parse, nullptr)", True)
+    check(prepare, "AssetVolumePrepareAutoRegistrar s_PrepareRegistrar(&Prepare)", True)
+    check(setup, "s_SetupRegistered = (Setup(), true)", True)
+    check(document.replace("mut AssetDocumentMetadataParseContext", "in AssetDocumentMetadataParseContext"), "must match its registry", False)
+    check(prepare.replace("CookVolumePrepareContext", "CookEntryRegistry"), "must match its registry", False)
+    check(setup.replace("Setup()", "Setup(in Name name)"), "requires a void function with no parameters", False)
+    merge = "[gather_merge] b8 Merge(in Name path, in BinaryByteView incoming, mut BinaryUpdateContext storage){ return true; }"
+    check(merge, "InvokeAssetGatherMerge<&Merge>", True)
+    check(merge.replace("mut BinaryUpdateContext", "in BinaryUpdateContext"), "mut BinaryUpdateContext", False)
+    writer = "[asset_writer] b8 Write(in Sample sample, mut Vector<u8> output){ return true; }\n"
+    entry = 'class Entry{ public Name path = s_NameNone; }\nconst StringView s_Label = "Sample meta";\n'
+    reader = "Expected<Entry> Read(in Name path, in Path file, in MetascriptValue value){ Entry entry; return entry; }\n"
+    builder = '[cook_entry("sample", s_Label, Read, document_and_value, quiet)] Expected<Sample> Build(in Entry entry){ Sample result(entry.path); return result; }\n'
+    subsystem = '[arena, subsystem("group")] class Group{ public AssetRef<Sample> owner; }\n'
+    registration = "register_asset Group using TypedAssetRegistration<IAsset, Group, Entry>; "
+    check(asset + subsystem + registration, "Group, Entry> s_GroupAssetRegistrar", True)
+    check(asset + subsystem + "register_asset Group using u32;", "requires a codec registrar", False)
+    check(asset + "register_asset Sample;", "expected 'using'", False)
+    check(asset + "register_asset Entry using AssetCodecRegistration<Entry>;", "requires an asset or a subsystem", False)
+    check(asset + subsystem + registration * 2, "duplicate asset registration", False)
+    check(asset + writer, "SampleAssetCodec::serialize", True)
+    check('const StringView s_Ext = ".data";\n[cook_sidecar(s_Ext)] b8 ReadSidecar(){ return true; }', "AssetPairedSidecarRuleAutoRegistrar", True)
+    check("[cook_sidecar(missing)] b8 ReadSidecar(){ return true; }", "StringView extension constant", False)
+    check(asset + entry + reader + builder, "RegisterAuthoredCookEntry<Entry, Sample, SampleAssetCodec, s_Label>", True)
+    check(asset + entry + reader.replace("in MetascriptValue value)", "in MetascriptValue value, in CpuTaskScheduler scheduler)") + builder, "value, context.cpuScheduler)", True)
+    document_reader = "Expected<Entry> Read(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument doc){ Entry entry; return entry; }\n"
+    check(asset + entry + document_reader + builder.replace("document_and_value", "document_only"), "root, virtualRoot, path, document);", True)
+    check(asset + entry + document_reader + builder, "requires a visible typed value reader", False)
+    check(asset + "register_asset Sample using NonStandaloneAssetRegistration<Sample>;", "NonStandaloneAssetRegistration<Sample>", True)
+    check(asset + writer.replace("mut Vector<u8>", "in Vector<u8>"), "requires (in Asset, mut Vector<u8>)", False)
+    check(asset + entry + reader.replace("in Name path", "in u32 path") + builder, "requires a visible typed value reader", False)
+    check("[cook_registrar] b8 Bad(in CookEntryRegistry registry){ return false; }", "requires a mutable cook entry or dependency registry", False)
+
+
 def main() -> None:
     compiler = pathlib.Path(sys.argv[1]).resolve()
     with tempfile.TemporaryDirectory(prefix="nwb_adhd_include_") as name:
         root = pathlib.Path(name)
+        run_layout_cli_tests(compiler, root)
         source_dir = root / "source"
         include_dir = root / "include"
         output_dir = root / "output"
@@ -478,6 +703,9 @@ def main() -> None:
         else:
             print("SKIP: Ninja depfile consumption check (Ninja not available)")
 
+        check_asset_cook_roles(compiler, root)
+        check_conditional_exception_spec(compiler, root)
+        run_shared_specialization_cli_test(compiler, root)
         run_cpp_import_cli_tests(compiler, root, ninja)
 
 

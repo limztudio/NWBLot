@@ -461,7 +461,7 @@ void VerifyUiTextEditSession_ExplicitEndClearsCompositionAndInvalidatesOldToken(
     EXPECT_FALSE(model.composition().active);
     ASSERT_EQ(session.begin(s_SessionTestOwner, s_SessionTestCaret, model), TextInputAdmission::Accepted);
     EXPECT_NE(session.token(), first);
-    TextInputEvent event = TextInputEvent(arena.arena);
+    TextInputEvent event = TextInputEvent();
     EXPECT_EQ(service.poll(first, event), TextInputPollResult::InvalidSession);
 }
 

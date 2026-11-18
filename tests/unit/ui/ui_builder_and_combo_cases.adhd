@@ -95,8 +95,7 @@ public:
 
 public:
     virtual void SetUp()override{
-        Core::Alloc::ScratchArena fontScratchArena(UiWidgetTests::s_FontScratchArenaName);
-        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text));
+        ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(m_arena, m_font, m_text));
         configureSkin();
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
@@ -343,8 +342,8 @@ private:
 
 
 [[nodiscard]] FOUNDATION_INLINE b8 Navigate(const ComboSource& source, const ControlActionKind::Enum kind, ComboState& state)noexcept{
-    ListState& preview = ComboBehavior::Preview(state);
-    if(!ListBehavior::Reconcile(preview, source))
+    ListState& preview = state.listState();
+    if(!ReconcileListState(preview, source))
         return false;
     ListOptions options;
     options.selectOnNavigate = false;
@@ -352,7 +351,7 @@ private:
     action.kind = kind;
     action.control = { preview.inputGeneration(), source.instanceGeneration(), source.revision() };
     ListResult result;
-    return ListBehavior::Apply(source, options, action, preview, result);
+    return ApplyListControlAction(source, options, action, preview, result);
 }
 
 
@@ -452,28 +451,28 @@ using ::NWB::Tests::UiCases::s_UiCaseTestsUiReplacementSkin;
 [[nodiscard]] FOUNDATION_INLINE ComboOptions MakeUiComboBuilderDefaultOptions()noexcept{ return ::NWB::UiComboTests::Options(); }
 
 [[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorBind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
-    return ::NWB::Impl::Ui::ComboBehavior::Bind(state, owner, declarationGeneration);
+    return ::NWB::Impl::Ui::BindComboState(state, owner, declarationGeneration);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorReconcile(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ComboBehavior::Reconcile(state, source);
+    return ::NWB::Impl::Ui::ReconcileComboState(state, source);
 }
 FOUNDATION_INLINE void UiComboBehaviorOpen(ComboState& state)noexcept{
-    ::NWB::Impl::Ui::ComboBehavior::Open(state);
+    ::NWB::Impl::Ui::OpenComboState(state);
 }
 FOUNDATION_INLINE void UiComboBehaviorClose(ComboState& state)noexcept{
-    ::NWB::Impl::Ui::ComboBehavior::Close(state);
+    ::NWB::Impl::Ui::CloseComboState(state);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorCommit(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source, const u64 key){
-    return ::NWB::Impl::Ui::ComboBehavior::Commit(state, source, key);
+    return ::NWB::Impl::Ui::CommitComboSelection(state, source, key);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorNavigate(const UiComboBehaviorSource& source, const ControlActionKindEnum kind, ComboState& state)noexcept{
     return __hidden_ui_combo_behavior_tests::Navigate(source, kind, state);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorReconcilePreview(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
-    return ::NWB::Impl::Ui::ListBehavior::Reconcile(::NWB::Impl::Ui::ComboBehavior::Preview(state), source);
+    return ::NWB::Impl::Ui::ReconcileListState(state.listState(), source);
 }
 [[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorScrollPreviewTo(ComboState& state, const f64 offset)noexcept{
-    return ::NWB::Impl::Ui::ComboBehavior::Preview(state).scrollTo(offset);
+    return state.listState().scrollTo(offset);
 }
 
 [[nodiscard]] FOUNDATION_INLINE Sha256Digest ComputeUiBuilderFirstGlyphPageHash(const DrawSnapshot& snapshot)noexcept{

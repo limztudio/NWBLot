@@ -39,6 +39,7 @@ public:
     constexpr FramebufferAttachment& setIsReadOnly(b8 val)noexcept{ isReadOnly = val; return *this; }
 
     [[nodiscard]] constexpr b8 valid()const noexcept{ return texture != nullptr; }
+    [[nodiscard]] constexpr b8 hasTexture(const Texture& value)const noexcept{ return texture == &value; }
 };
 
 struct FramebufferDesc{

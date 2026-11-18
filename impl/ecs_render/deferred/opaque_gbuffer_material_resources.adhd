@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/deferred/deferred_internal.adhd>
+#include <impl/ecs_render/deferred/deferred_prefix_stages.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,9 +20,10 @@ class OpaqueGbufferMaterialResources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 Expected<OpaqueGbufferMaterialResources> GatherOpaqueGbufferMaterialResources(
     in MaterialPassDrawItemPartitions drawItems,
-    in DeferredRendererMaterialSystem materialSystem,
+    in RendererMaterialSystem materialSystem,
     mut GpuTaskGraph graph
 ){
     OpaqueGbufferMaterialResources resources;

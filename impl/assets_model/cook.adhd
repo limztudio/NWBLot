@@ -10,71 +10,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ModelCookEntry{
-    Name virtualPath = s_NameNone;
-    Model::SkeletonObjectVector skeletonObjects;
-    Model::StaticMeshObjectVector staticMeshObjects;
-    Model::SkinnedMeshObjectVector skinnedMeshObjects;
-
-
-public:
-    explicit ModelCookEntry(Core::Assets::AssetArena& arena)noexcept
-        : skeletonObjects(arena)
-        , staticMeshObjects(arena)
-        , skinnedMeshObjects(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<ModelCookEntry> ParseModelCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<ModelCookEntry> ParseModelCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class ModelCookEntry{
+    public Name virtualPath = s_NameNone;
+    public SkeletonObjectVector skeletonObjects;
+    public StaticMeshObjectVector staticMeshObjects;
+    public SkinnedMeshObjectVector skinnedMeshObjects;
 }
 
 
@@ -355,93 +295,39 @@ b8 ParseModelObjectsInto(
     return true;
 }
 
+Expected<ModelCookEntry> ParseModelCookMetadata(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
+    ModelCookEntry entry;
+    if(!CheckMetadataAssetMap(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix))
+        return MakeUnexpected(Failure());
+    if(!AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ModelMetaDiagnosticPrefix, entry))
+        return MakeUnexpected(Failure());
+    if(!ParseModelObjectsInto(nwbFilePath, asset, entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects))
+        return MakeUnexpected(Failure());
+    if(!ValidateModelPayloadObjects(entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects))
+        return MakeUnexpected(Failure());
+    return entry;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/assets/binary_payload_io.h>
-#include <core/assets/cook_metadata.h>
-#include <core/metascript/parser.h>
-
-#include <global/binary.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, s_ModelSerializeContext))
-        return false;
-
-    const Model& model = static_cast<const Model&>(asset);
+[asset_writer]
+b8 SerializeModelAsset(in Model model, mut Vector<u8> outBinary){
     if(!model.validatePayload())
         return false;
 
     return SerializeModelBinaryPayload(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
 }
 
-Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    ModelCookEntry entry(arena);
-
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-
-    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ModelMetaDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure{});
-    if(!ParseModelObjectsInto(nwbFilePath, asset, entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects))
-        return MakeUnexpected(Failure{});
-
-    Model candidateModel(entry.skeletonObjects.get_allocator().arena(), entry.virtualPath);
-    candidateModel.setObjects(Move(entry.skeletonObjects), Move(entry.staticMeshObjects), Move(entry.skinnedMeshObjects));
-    if(!candidateModel.validatePayload())
-        return MakeUnexpected(Failure{});
-    candidateModel.takeObjects(entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects);
-    return entry;
-}
-
-Expected<ModelCookEntry> ParseModelCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return Core::Assets::ParseCookMetadataDocument<ModelCookEntry, &ParseModelCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_ModelMetaDiagnosticPrefix, arena, scratchArena);
-}
-
-Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return BuildModelAssetFromObjects(arena, modelEntry.virtualPath, modelEntry.skeletonObjects, modelEntry.staticMeshObjects, modelEntry.skinnedMeshObjects);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+Expected<ModelCookEntry> ParseModelCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
+    return ParseCookMetadataDocument<ModelCookEntry>(root, virtualRoot, file, document, s_ModelMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<ModelCookEntry>{
+        return ParseModelCookMetadata(path, file, value);
+    });
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+Expected<Model> BuildModelAsset(in ModelCookEntry entry){
+    return BuildModelAssetFromObjects(entry.virtualPath, entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects);
 }
 
 

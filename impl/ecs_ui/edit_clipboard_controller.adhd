@@ -51,7 +51,7 @@ UiEditClipboardResult MakeAppliedUiEditClipboardResult(
 [modular]
 class UiEditClipboardController : NoCopy{
     private mut IClipboardService m_service;
-    private ClipboardCompletion m_completion;
+    private ClipboardCompletion m_completion = ClipboardCompletion();
     private EditModelSnapshot m_expectedModel;
     private String m_insertText;
     private UiTextEditOwner m_owner;
@@ -59,7 +59,9 @@ class UiEditClipboardController : NoCopy{
     private ClipboardChannel m_channel = ClipboardChannel::Clipboard;
     private EditClipboardAction m_action = EditClipboardAction::None;
 
-    public UiEditClipboardController(mut IClipboardService service);
+    public UiEditClipboardController(mut IClipboardService service){
+        this.m_service = service;
+    }
 
     public ~UiEditClipboardController(){
         if(!this.cancel())
@@ -211,41 +213,6 @@ class UiEditClipboardController : NoCopy{
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::ModelRejected);
         return MakeAppliedUiEditClipboardResult(revision, model.revision(), anchor, model.anchor(), caret, model.caret());
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiEditClipboardController::UiEditClipboardController(::ArenaBase& __adhd_mother_arena, Core::IClipboardService& service)noexcept
-    : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
-    , m_completion(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
-    , m_service(::MakeNotNull(&service))
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -466,7 +466,7 @@ b8 ValidateOptions(const BakeOptions& options){
 
 Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena){
     if(IsPreparedFontSourcePath(path)){
-        auto prepared = Impl::ReadPreparedFontSource(path, false, arena);
+        auto prepared = Impl::ReadPreparedFontSource(arena, path, false);
         if(!prepared)
             return MakeUnexpected(prepared.error());
         if(!IsValidPreparedFontFaceIndex(prepared->faceIndex)){
@@ -557,7 +557,11 @@ Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<con
     for(const auto& group : atlas.groups){
         images.push_back(Impl::PreparedFontImageView(group.width, group.height, group.channelCount, { group.pixels.data(), group.pixels.size() }));
     }
-    return Impl::SerializePreparedFontSource({ sourceFontBytes.data(), sourceFontBytes.size() }, atlas.faceIndex, images, arena);
+    Core::Assets::AssetBytes binary(arena);
+    const auto result = Impl::WritePreparedFontSource({ sourceFontBytes.data(), sourceFontBytes.size() }, atlas.faceIndex, images, binary);
+    if(!result)
+        return MakeUnexpected(result.error());
+    return binary;
 }
 
 b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){

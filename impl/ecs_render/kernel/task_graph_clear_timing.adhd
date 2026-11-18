@@ -2,104 +2,70 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/graphics_prefix_timing_ticket.adhd>
+
 #include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class GraphClearTimingRecordState{
+    private Optional<mut GraphicsRuntime> m_graphics;
+    private Optional<mut Optional<GpuTimingMeasure>> m_timing;
+    private Optional<in GraphicsPrefixTimingTicket> m_rebindableTimingTicket;
+    private GraphicsPrefixTimingTicket m_timingTicket;
+    private GpuTimingScopeDefinition m_scope;
 
+    public GraphClearTimingRecordState(){}
+    public GraphClearTimingRecordState(mut GraphicsRuntime graphics, mut Optional<GpuTimingMeasure> timing, in borrow GraphicsPrefixTimingTicket ticket, in GpuTimingScopeDefinition scope){
+        this.m_graphics = Optional<mut GraphicsRuntime>(graphics);
+        this.m_timing = Optional<mut Optional<GpuTimingMeasure>>(timing);
+        this.m_rebindableTimingTicket = Optional<in GraphicsPrefixTimingTicket>(ticket);
+        this.m_scope = scope;
+    }
+    public GraphClearTimingRecordState(mut GraphicsRuntime graphics, mut Optional<GpuTimingMeasure> timing, mut GpuTimingSubmissionTicket ticket, in GpuTimingScopeDefinition scope){
+        this.m_graphics = Optional<mut GraphicsRuntime>(graphics);
+        this.m_timing = Optional<mut Optional<GpuTimingMeasure>>(timing);
+        this.m_timingTicket = Optional<mut GpuTimingSubmissionTicket>(ticket);
+        this.m_scope = scope;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
-
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_desc.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct GraphClearTimingRecordState{
-    Core::GraphicsRuntime* graphics = nullptr;
-    Optional<Core::GpuTimingMeasure>* timing = nullptr;
-    Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
-    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-    Core::GpuTimingScopeDefinition scope;
-};
-
-
-[[nodiscard]] FOUNDATION_INLINE Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(const GraphClearTimingRecordState& state)noexcept{
-    return state.rebindableTimingTicket ? *state.rebindableTimingTicket : state.timingTicket;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 BeginGraphClearTiming(
-    Core::GraphicsRuntime* const graphics,
-    Optional<Core::GpuTimingMeasure>* const timing,
-    Core::GpuTimingSubmissionTicket* const timingTicket,
-    const Core::GpuTimingScopeDefinition& scope,
-    Core::CommandList& commandList
-){
-    if(!CanBeginGraphClearTimingState(graphics != nullptr, timing != nullptr, timingTicket != nullptr, timing && timing->has_value()))
-        return false;
-
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*timingTicket);
-    timing->emplace(graphics->gpuTiming(), scope, graphics->getDevice(), commandList);
-    return Core::FinishSplitGpuTimingMarker(timing);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* const timing, Core::GpuTimingSubmissionTicket* const timingTicket, Core::CommandList& commandList){
-    if(!CanEndGraphClearTimingState(timing != nullptr, timing && timing->has_value(), timingTicket != nullptr))
-        return false;
-
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*timingTicket);
-    timing->value().finishTiming(commandList);
-    timing->reset();
-    return true;
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 BeginGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-    GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
-    if(!state)
-        return false;
-    return BeginGraphClearTiming(state->graphics, state->timing, ResolveGraphClearTimingTicket(*state), state->scope, commandList);
-}
-
-[[nodiscard]] FOUNDATION_INLINE b8 EndGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-    GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
-    if(!state)
-        return false;
-    return EndGraphClearTiming(state->timing, ResolveGraphClearTimingTicket(*state), commandList);
-}
-
-FOUNDATION_INLINE void DiscardGraphClearTimingRecord(void* const rawState){
-    GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
-    if(!state)
-        return;
-    Core::DiscardGpuTimingMeasure(state->timing);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 usesRebindableTiming(in Optional<GpuTimingMeasure> timing)const{
+        return this.m_graphics.has_value() && this.m_rebindableTimingTicket.has_value() && this.m_timing.has_value() && SameAddress(this.m_timing.value(), timing);
+    }
+    private GraphicsPrefixTimingTicket currentTicket()const{
+        if(this.m_rebindableTimingTicket.has_value())
+            return this.m_rebindableTimingTicket.value();
+        return this.m_timingTicket;
+    }
+    public GpuClearTextureTaskRecordHooks hooks(in b8 before, in b8 after){
+        return MakeGpuClearTextureTaskRecordHooks(this, before, after);
+    }
+    [cpp_unwind]
+    public b8 beforeClear(mut CommandList commands, in GpuTaskRecordContext context){
+        const auto ticket = this.currentTicket();
+        if(!CanBeginGraphClearTimingState(this.m_graphics.has_value(), this.m_timing.has_value(), ticket.has_value(), this.m_timing.has_value() && this.m_timing.value().has_value()))
+            return false;
+        GpuTimingTicketRecordingScope recording(ticket.value());
+        this.m_timing.value().emplace(this.m_graphics.value().gpuTiming(), this.m_scope, this.m_graphics.value().getDevice(), commands);
+        return FinishSplitGpuTimingMarker(this.m_timing.value());
+    }
+    [cpp_unwind]
+    public b8 afterClear(mut CommandList commands, in GpuTaskRecordContext context){
+        const auto ticket = this.currentTicket();
+        if(!CanEndGraphClearTimingState(this.m_timing.has_value(), this.m_timing.has_value() && this.m_timing.value().has_value(), ticket.has_value()))
+            return false;
+        GpuTimingTicketRecordingScope recording(ticket.value());
+        this.m_timing.value().value().finishTiming(commands);
+        this.m_timing.value().reset();
+        return true;
+    }
+    [cpp_unwind]
+    public void discarded(){
+        if(this.m_timing.has_value())
+            DiscardGpuTimingMeasure(this.m_timing.value());
+    }
 }
 
 

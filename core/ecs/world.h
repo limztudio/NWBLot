@@ -10,6 +10,8 @@
 
 #include <global/allocation_size.h>
 #include <global/containers.h>
+#include <global/not_null.h>
+#include <global/optional.h>
 #include <global/scope_exit.h>
 
 
@@ -94,6 +96,11 @@ public:
 
 
 public:
+    template<typename T>
+    [[nodiscard]] T makeSystemResource()const{
+        return T(m_arena);
+    }
+
     template<typename T, typename... Args>
     T& addSystem(Args&&... args){
         static_assert(IsBaseOf_V<ISystem, T>, "addSystem requires T to derive from ISystem");
@@ -106,6 +113,13 @@ public:
         m_scheduler.addSystem(ref);
         m_systems.push_back(SystemEntry{ SystemType<T>(), Move(ptr) });
         return ref;
+    }
+
+    template<typename T>
+    [[nodiscard]] Optional<NotNull<T*>> borrowSystem()noexcept{
+        if(auto* system = getSystem<T>())
+            return MakeNotNull(system);
+        return {};
     }
 
     template<typename T>

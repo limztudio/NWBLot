@@ -2,93 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/text/shaper_types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/text/font.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ShapedGlyph = ShapedGlyphRecord<SharedFontFace>;
-
-struct ShapedRun{
-    PaintVector<ShapedGlyph> glyphs;
-    FontMetrics metrics;
-
-
-public:
-    explicit ShapedRun(Core::Alloc::GlobalArena& arena)noexcept
-        : glyphs(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-interface ITextShaper : private NoCopy{
-public:
-    virtual ~ITextShaper()noexcept = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request) = 0;
-};
-
-class TextShaper final : public ITextShaper{
-public:
-    explicit TextShaper(Core::Alloc::GlobalArena& arena)noexcept
-        : m_arena(arena)
-        , m_fonts(arena)
-        , m_primary(arena)
-        , m_fallback(arena)
-        , m_spans(arena)
-    {}
-    virtual ~TextShaper()noexcept override = default;
-
-
-public:
-    [[nodiscard]] b8 setFonts(Core::Alloc::ScratchArena& scratchArena, Span<const FontSource> sources);
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    PaintVector<SharedFontFace> m_fonts;
-    PaintVector<RawShapedGlyph> m_primary;
-    PaintVector<RawShapedGlyph> m_fallback;
-    PaintVector<TextFontSpan> m_spans;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <impl/ecs_ui/toolkit/text/font.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,101 +24,96 @@ TextFontSpan MakeInitialTextClusterSpan(in usize begin, in usize end, in RawShap
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+type ShapedGlyph = ShapedGlyphRecord<SharedFontFace>;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const Span<const FontSource> sources){
-    const usize count = sources.size();
-    if(!IsValidTextFontSourceCount(count))
-        return false;
-    PaintVector<SharedFontFace> fonts(m_arena);
-    fonts.reserve(count);
-    for(usize index = 0u; index < count; ++index){
-        const FontSource& source = sources[index];
-        if(!HasValidTextFontSourceMetadata<Font>(source.identity, source.generation) || !source.font.validatePayload())
-            return false;
-        auto face = MakeFontFace(scratchArena, m_arena, source);
-        if(!face || !(*face)->valid())
-            return false;
-        fonts.push_back(Move(*face));
-    }
-    m_fonts = Move(fonts);
-    return true;
+class ShapedRun{
+    public Vector<ShapedGlyph> glyphs;
+    public FontMetrics metrics = FontMetrics();
 }
 
-Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest& request){
-    const TextLayoutStatus::Enum validation = ValidateTextRequest(request, false);
-    if(validation != TextLayoutStatus::Success)
-        return MakeUnexpected(validation);
-    if(m_fonts.empty())
-        return MakeUnexpected(TextLayoutStatus::FontFailure);
-    ShapedRun run(m_arena);
-    const auto primaryMetrics = m_fonts[0]->metrics(request.fontSize);
-    if(!primaryMetrics || !m_fonts[0]->shape(request, 0u, static_cast<u32>(request.text.size()), m_primary))
-        return MakeUnexpected(TextLayoutStatus::FontFailure);
-    run.metrics = *primaryMetrics;
-    run.glyphs.reserve(m_primary.size());
-    m_spans.clear();
-    m_spans.reserve(m_primary.size());
-    usize begin = 0u;
-    while(begin < m_primary.size()){
-        const usize end = FindClusterEnd(m_primary, begin);
-        TextFontSpan span = MakeInitialTextClusterSpan(begin, end, m_primary[begin]);
-        if(ClusterHasMissingGlyph(m_primary, begin, end)){
-            span.fontIndex = m_fonts.size();
-            for(usize fontIndex = 1u; fontIndex < m_fonts.size(); ++fontIndex){
-                if(!m_fonts[fontIndex]->shape(request, span.byteBegin, span.byteEnd, m_fallback))
-                    return MakeUnexpected(TextLayoutStatus::FontFailure);
-                if(ClusterHasMissingGlyph(m_fallback, 0u, m_fallback.size()))
-                    continue;
-                span.fontIndex = fontIndex;
-                break;
+interface ITextShaper : NoCopy{
+    [cpp_unwind]
+    Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request);
+}
+
+class TextShaper : ITextShaper{
+    private SharedPool m_pool = SharedPool();
+    private Vector<SharedFontFace> m_fonts;
+    private Vector<RawShapedGlyph> m_primary;
+    private Vector<RawShapedGlyph> m_fallback;
+    private Vector<TextFontSpan> m_spans;
+
+    [cpp_unwind]
+    public b8 setFonts(in Span<FontSource> sources){
+        if(!IsValidTextFontSourceCount(sources.size()))
+            return false;
+        Vector<SharedFontFace> fonts;
+        fonts.reserve(sources.size());
+        for(in FontSource source : sources){
+            if(!HasValidTextFontSourceMetadata<Font>(source.identity, source.generation) || !source.font.validatePayload())
+                return false;
+            Expected<SharedFontFace> face = MakeFontFace(this.m_pool, source);
+            if(!face.has_value() || !face.value().deref().valid())
+                return false;
+            fonts.push_back(face.value());
+        }
+        this.m_fonts = fonts;
+        return true;
+    }
+
+    [cpp_unwind]
+    public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
+        const TextLayoutStatus validation = ValidateTextRequest(request, false);
+        if(validation != TextLayoutStatus::Success)
+            return MakeUnexpected(validation);
+        if(this.m_fonts.empty())
+            return MakeUnexpected(TextLayoutStatus::FontFailure);
+        const Expected<FontMetrics> primaryMetrics = this.m_fonts[0u].deref().metrics(request.fontSize);
+        if(!primaryMetrics.has_value() || !this.m_fonts[0u].deref().shape(request, 0u, cast<u32>(request.text.size()), this.m_primary))
+            return MakeUnexpected(TextLayoutStatus::FontFailure);
+        ShapedRun run;
+        run.metrics = primaryMetrics.value();
+        run.glyphs.reserve(this.m_primary.size());
+        this.m_spans.clear();
+        this.m_spans.reserve(this.m_primary.size());
+        usize begin = 0u;
+        while(begin < this.m_primary.size()){
+            const usize end = FindClusterEnd(Span<RawShapedGlyph>(this.m_primary), begin);
+            TextFontSpan span = MakeInitialTextClusterSpan(begin, end, this.m_primary[begin]);
+            if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_primary), begin, end)){
+                span.fontIndex = this.m_fonts.size();
+                for(usize fontIndex = 1u; fontIndex < this.m_fonts.size(); ++fontIndex){
+                    if(!this.m_fonts[fontIndex].deref().shape(request, span.byteBegin, span.byteEnd, this.m_fallback))
+                        return MakeUnexpected(TextLayoutStatus::FontFailure);
+                    if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size()))
+                        continue;
+                    span.fontIndex = fontIndex;
+                    break;
+                }
+                if(span.fontIndex == this.m_fonts.size())
+                    return MakeUnexpected(TextLayoutStatus::MissingGlyph);
             }
-            if(span.fontIndex == m_fonts.size())
-                return MakeUnexpected(TextLayoutStatus::MissingGlyph);
+            AppendOrMergeTextFontSpan(span, this.m_spans);
+            begin = end;
         }
-        AppendOrMergeTextFontSpan(span, m_spans);
-        begin = end;
-    }
-    for(const TextFontSpan& span : m_spans){
-        const SharedFontFace& face = m_fonts[span.fontIndex];
-        if(span.fontIndex == 0u)
-            AppendRawShapedGlyphs(face, m_primary, span.glyphBegin, span.glyphEnd, run.glyphs);
-        else{
-            if(!face->shape(request, span.byteBegin, span.byteEnd, m_fallback))
+        for(in TextFontSpan span : this.m_spans){
+            in SharedFontFace face = this.m_fonts[span.fontIndex];
+            if(span.fontIndex == 0u){
+                AppendRawShapedGlyphs<SharedFontFace>(face, Span<RawShapedGlyph>(this.m_primary), span.glyphBegin, span.glyphEnd, run.glyphs);
+                continue;
+            }
+            if(!face.deref().shape(request, span.byteBegin, span.byteEnd, this.m_fallback))
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
-            if(ClusterHasMissingGlyph(m_fallback, 0u, m_fallback.size()))
+            if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size()))
                 return MakeUnexpected(TextLayoutStatus::MissingGlyph);
-            const auto metrics = face->metrics(request.fontSize);
-            if(!metrics)
+            const Expected<FontMetrics> metrics = face.deref().metrics(request.fontSize);
+            if(!metrics.has_value())
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
-            run.metrics = MaxFontMetrics(run.metrics, *metrics);
-            AppendRawShapedGlyphs(face, m_fallback, 0u, m_fallback.size(), run.glyphs);
+            run.metrics = MaxFontMetrics(run.metrics, metrics.value());
+            AppendRawShapedGlyphs<SharedFontFace>(face, Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size(), run.glyphs);
         }
+        return run;
     }
-    return run;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -192,6 +192,10 @@ class ComboState : NoCopy{
         return this.m_list;
     }
 
+    public mut ListState listState(){
+        return this.m_list;
+    }
+
     // Explicit application changes renew the field input lifetime even when the value is unchanged.
     public void select(in u64 key){
         this.m_inputGeneration = AllocateServiceIdentity();

@@ -2,83 +2,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_mesh/skinning/submission_state.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
+class SkinningStateHandoff{
+    private mut GpuPersistentResourceStateCache m_cache;
+    private mut GpuPersistentStateCandidate m_candidate;
+    private Span<BufferHandle> m_buffers;
+    private b8 m_preparationInvoked = false;
+    private b8 m_statePrepared = false;
+    private b8 m_stateAccepted = false;
 
-#include <core/alloc/scratch.h>
-#include <core/task/gpu/persistent_state.h>
-#include <core/task/gpu/scheduler.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SkinningStateHandoff final : NoCopy{
-public:
-    SkinningStateHandoff(Core::GpuPersistentResourceStateCache& cache, Core::Alloc::ScratchArena& scratchArena, const Span<const Core::BufferHandle> buffers)
-        : m_cache(cache)
-        , m_scratchArena(scratchArena)
-        , m_candidate(cache)
-        , m_buffers(buffers)
-    {}
-
-
-public:
-    [[nodiscard]] static b8 Prepare(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        SkinningStateHandoff* const context = static_cast<SkinningStateHandoff*>(rawContext);
-        if(!context)
-            return false;
-        context->m_preparationInvoked = true;
-        if(!CanPrepareSkinningStateHandoff(finalState != nullptr, context->m_buffers.empty(), context->m_buffers.data() != nullptr))
-            return false;
-        context->m_statePrepared = context->m_cache.buildMergedBufferSubset(*finalState, Span<const Core::BufferHandle>(context->m_buffers), context->m_scratchArena, context->m_candidate);
-        return context->m_statePrepared;
+    public SkinningStateHandoff(mut GpuPersistentResourceStateCache cache, mut GpuPersistentStateCandidate candidate, in Span<BufferHandle> buffers){
+        this.m_cache = cache;
+        this.m_candidate = candidate;
+        this.m_buffers = buffers;
     }
-    [[nodiscard]] static b8 Accept(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-        SkinningStateHandoff* const context = static_cast<SkinningStateHandoff*>(rawContext);
-        if(!context || !context->m_statePrepared)
+
+    [cpp_unwind]
+    public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
+        this.m_preparationInvoked = true;
+        if(!CanPrepareSkinningStateHandoff(finalState.has_value(), this.m_buffers.empty(), HasSpanStorage<BufferHandle>(this.m_buffers)))
             return false;
-        context->m_stateAccepted = context->m_cache.commit(context->m_candidate);
-        return context->m_stateAccepted;
+        this.m_statePrepared = this.m_cache.buildMergedBufferSubset(finalState.value(), this.m_buffers, this.m_candidate);
+        return this.m_statePrepared;
     }
-    [[nodiscard]] b8 preparationInvoked()const noexcept{ return m_preparationInvoked; }
-    [[nodiscard]] b8 statePrepared()const noexcept{ return m_statePrepared; }
-    [[nodiscard]] b8 stateAccepted()const noexcept{ return m_stateAccepted; }
 
+    public b8 accepted(in QueueSubmissionToken token){
+        if(!this.m_statePrepared)
+            return false;
+        this.m_stateAccepted = this.m_cache.commit(this.m_candidate);
+        return this.m_stateAccepted;
+    }
 
-private:
-    Core::GpuPersistentResourceStateCache& m_cache;
-    Core::Alloc::ScratchArena& m_scratchArena;
-    Core::GpuPersistentResourceStateCache::Candidate m_candidate;
-    Span<const Core::BufferHandle> m_buffers;
-    b8 m_preparationInvoked = false;
-    b8 m_statePrepared = false;
-    b8 m_stateAccepted = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public b8 preparationInvoked()const{ return this.m_preparationInvoked; }
+    public b8 statePrepared()const{ return this.m_statePrepared; }
+    public b8 stateAccepted()const{ return this.m_stateAccepted; }
 }
 
 

@@ -2,75 +2,112 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/deferred_internal.adhd>
+#include <impl/ecs_render/deferred/graph_types.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/deferred/presentation_settings.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
+#include <impl/ecs_render/shadow/quality_settings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/graph_types.adhd.h>
+const usize s_HistoryCopyRegionCount = s_SceneShadowSlotCount + s_IrradianceHistoryCopyRegionCount;
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+class DeferredFrameTailInputs{
+    public mut GpuTimingFrameTransaction frameTimingTransaction;
+    public mut QueueSubmissionToken historyCopySubmissionToken;
+    public mut b8 recoveryArmed;
+    public mut b8 recoveryRetiresFrameTiming;
+    public GpuTaskId terminalPresentationTask;
+    public GpuGraphResourceId historyCopyShadowVisibility;
+    public GpuGraphResourceId historyCopyCausticIrradiance;
+    public GpuGraphResourceId historyCopySurfelIrradiance;
+    public GpuGraphResourceId historyCopyDestinationShadowVisibility;
+    public GpuGraphResourceId historyCopyDestinationCausticIrradiance;
+    public GpuGraphResourceId historyCopyDestinationSurfelIrradiance;
+    public b8 capturesLaggedLightingHistory = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Tail tasks retain explicit publication destinations; root orchestration owns graph compilation.
-struct DeferredFrameTailInputs{
-    Core::GpuTimingFrameTransaction& frameTimingTransaction;
-    Core::QueueSubmissionToken& historyCopySubmissionToken;
-    b8& recoveryArmed;
-    b8& recoveryRetiresFrameTiming;
-    Core::GpuTaskId terminalPresentationTask;
-    Core::GpuGraphResourceId historyCopyShadowVisibility;
-    Core::GpuGraphResourceId historyCopyCausticIrradiance;
-    Core::GpuGraphResourceId historyCopySurfelIrradiance;
-    Core::GpuGraphResourceId historyCopyDestinationShadowVisibility;
-    Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance;
-    Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance;
-    b8 capturesLaggedLightingHistory = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public DeferredFrameTailInputs(mut GpuTimingFrameTransaction frameTimingTransaction, mut QueueSubmissionToken historyCopySubmissionToken, mut b8 recoveryArmed, mut b8 recoveryRetiresFrameTiming){
+        this.frameTimingTransaction = frameTimingTransaction;
+        this.historyCopySubmissionToken = historyCopySubmissionToken;
+        this.recoveryArmed = recoveryArmed;
+        this.recoveryRetiresFrameTiming = recoveryRetiresFrameTiming;
+    }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/deferred/graph_types.adhd>
-
-[cpp_name("::NWB::Impl::DeferredFrameTailInputs"), cpp_header("<impl/ecs_render/deferred/frame_tail_builder.adhd.h>")]
-extern class DeferredFrameTailInputs;
-
-[modular]
 class DeferredFrameTailBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
+    public DeferredFrameTailBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
 
-    public DeferredFrameTailBuilder(mut GpuTaskGraph graph){
-        this.m_graph = graph;
+    public Expected<DeferredFrameTailResult> declare(mut DeferredFrameTailInputs inputs){
+        DeferredFrameTailResult result;
+        if(!inputs.terminalPresentationTask.valid())
+            return MakeUnexpected(Failure());
+
+        if(inputs.capturesLaggedLightingHistory){
+            // The built-in derives whole-resource copy declarations and retains imports; slices stay explicit only in the copy body.
+            // Caustic and surfel irradiance copy regions follow the shadow visibility slots.
+            Array<GpuCopyTextureTaskRegion, s_HistoryCopyRegionCount> historyCopyRegions;
+            for(u32 shadowSlot = 0u; shadowSlot < s_SceneShadowSlotCount; ++shadowSlot){
+                mut GpuCopyTextureTaskRegion region = historyCopyRegions[shadowSlot];
+                region.source = inputs.historyCopyShadowVisibility;
+                region.destination = inputs.historyCopyDestinationShadowVisibility;
+                region.sourceSlice.setArraySlice(shadowSlot);
+                region.destinationSlice.setArraySlice(shadowSlot);
+            }
+            historyCopyRegions[s_SceneShadowSlotCount].source = inputs.historyCopyCausticIrradiance;
+            historyCopyRegions[s_SceneShadowSlotCount].destination = inputs.historyCopyDestinationCausticIrradiance;
+            historyCopyRegions[s_SceneShadowSlotCount + 1u].source = inputs.historyCopySurfelIrradiance;
+            historyCopyRegions[s_SceneShadowSlotCount + 1u].destination = inputs.historyCopyDestinationSurfelIrradiance;
+            GpuTaskSchedulingHint historyCopyScheduling;
+            historyCopyScheduling.cost = GpuTaskCostHint::Medium;
+            historyCopyScheduling.forceSubmissionBoundary = true;
+            historyCopyScheduling.allowPacketMerge = false;
+            GpuTaskDesc historyCopyDesc;
+            historyCopyDesc.setIdentity(Name(s_RenderNameRenderLaggedHistoryCopy)).setMarkerLabel("Lagged Lighting History Copy").setScheduling(historyCopyScheduling).setDependency(inputs.terminalPresentationTask);
+            const auto historyCopyTaskResult = this.m_graph.addCopyTextureRegions(historyCopyDesc, Span<GpuCopyTextureTaskRegion>(historyCopyRegions), inputs.historyCopySubmissionToken);
+            if(!historyCopyTaskResult.has_value()){
+                result.historyCopyTask = GpuTaskId();
+                warning("RendererSystem: could not declare deferred lagged-lighting history-copy task");
+                return MakeUnexpected(Failure());
+            }
+            result.historyCopyTask = historyCopyTaskResult.value();
+        }
+
+        // Recovery is a late independent Graphics tail.
+        // It deliberately has no packet dependency on normal work: a rejected suffix must not prevent it from retiring the accepted frame prefix.
+        // Its compiled packet asks the graph transaction to join every accepted non-Graphics physical queue at submit time.
+        const auto recoveryDomainResult = this.m_graph.importHazardDomain(HazardDomainDesc(Name(s_RenderNameRenderFrameRecoveryTiming), "Frame Recovery Timing"));
+        if(!recoveryDomainResult.has_value()){
+            warning("RendererSystem: could not import deferred frame-recovery graph resources");
+            return MakeUnexpected(Failure());
+        }
+        const GpuGraphResourceId recoveryDomain = recoveryDomainResult.value();
+
+        const Array<GpuTaskResourceUse, 1> recoveryResourceUses(ReadWriteUse(recoveryDomain, ResourceStates::Common));
+        GpuTaskSchedulingHint recoveryScheduling;
+        recoveryScheduling.cost = GpuTaskCostHint::Tiny;
+        recoveryScheduling.forceSubmissionBoundary = true;
+        recoveryScheduling.allowPacketMerge = false;
+        recoveryScheduling.joinsAcceptedQueueFrontier = true;
+        recoveryScheduling.isRecoverySubmission = true;
+        GpuTaskDesc recoveryDesc;
+        recoveryDesc.setIdentity(Name(s_RenderNameRenderFrameRecovery)).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryResourceUses);
+        const auto recoveryTaskResult = this.m_graph.addPayloadTask(
+            recoveryDesc,
+            FrameRecoveryGraphTask(inputs.frameTimingTransaction, inputs.recoveryArmed, inputs.recoveryRetiresFrameTiming)
+        );
+        if(!recoveryTaskResult.has_value()){
+            result.recoveryTask = GpuTaskId();
+            warning("RendererSystem: could not declare deferred frame-recovery graph task");
+            return MakeUnexpected(Failure());
+        }
+        result.recoveryTask = recoveryTaskResult.value();
+
+        return result;
     }
-
-    public Expected<DeferredFrameTailResult> declare(in DeferredFrameTailInputs inputs);
 }
 
 

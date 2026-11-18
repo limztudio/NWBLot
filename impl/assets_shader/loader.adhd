@@ -2,129 +2,72 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_shader/shader_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets_shader/asset.adhd.h>
-
-#include <core/assets/manager.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/shader_stage_names.h>
-#include <core/common/log.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ShaderAssetLoader{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ShaderT, typename ShaderPathResolver, typename OwnerNameT>
-    requires(IsBaseOf_V<IShader, ShaderT> && !IsAbstract_V<ShaderT>)
-[[nodiscard]] b8 Load(
-    const Name& shaderName,
-    const AStringView variantName,
-    const Name& debugName,
-    const OwnerNameT& ownerName,
-    Core::GraphicsRuntime& graphics,
-    Core::Assets::AssetManager& assetManager,
-    ShaderPathResolver& shaderPathResolver,
-    const Name* archiveStageName,
-    Core::ShaderHandle& outShader
+[cpp_unwind]
+b8 Load<ShaderT : IShader, Resolver>(
+    in Name shaderName, in StringView variantName, in Name debugName, in StringView owner,
+    mut GraphicsRuntime graphics, in AssetManager assets, mut Resolver resolve,
+    in Optional<Name> archiveStage, mut ShaderHandle outShader
 ){
-    static_assert(Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<ShaderT>));
-    constexpr Core::ShaderType::Mask s_ShaderType = Core::ShaderType::ToMask(ShaderAssetTypes::s_StageForShader<ShaderT>);
-
-    if(outShader)
+    const ShaderType stage = cast<ShaderType>(RequireAssetTypeIndex<ShaderT>(s_ShaderAssetTypes));
+    const ShaderTypeMask mask = ToMask(stage);
+    if(outShader.valid())
         return true;
-    if(!shaderName){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: shader name is empty"), ConvertString(ownerName));
+    if(shaderName == s_NameNone){
+        error("{}: shader name is empty", owner);
         return false;
     }
 
-    const Name& stageName = archiveStageName ? *archiveStageName : Core::ShaderStageNames::ArchiveStageNameFromShaderType(s_ShaderType);
-    if(!stageName){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: unsupported shader stage {}"), ConvertString(ownerName), static_cast<u32>(s_ShaderType));
+    Name stageName = ArchiveStageNameFromShaderType(mask);
+    if(archiveStage.has_value())
+        stageName = archiveStage.value();
+    if(stageName == s_NameNone){
+        error("{}: unsupported shader stage {}", owner, cast<u32>(mask));
         return false;
     }
-
     if(variantName.empty()){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: shader variant is empty"), ConvertString(ownerName));
+        error("{}: shader variant is empty", owner);
         return false;
     }
-    if(!shaderPathResolver){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: shader path resolver is null"), ConvertString(ownerName));
-        return false;
-    }
-
-    const auto shaderVirtualPath = shaderPathResolver(shaderName, variantName, stageName);
-    if(!shaderVirtualPath){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'"), ConvertString(ownerName), ConvertString(shaderName.resolvedText()), ConvertString(variantName), ConvertString(stageName.resolvedText()));
-        return false;
-    }
-    if(!*shaderVirtualPath){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'"), ConvertString(ownerName), ConvertString(shaderName.resolvedText()), ConvertString(variantName), ConvertString(stageName.resolvedText()));
+    if(!cast<b8>(resolve)){
+        error("{}: shader path resolver is null", owner);
         return false;
     }
 
-    auto loadedAsset = assetManager.loadTypedSync<ShaderT>(*shaderVirtualPath, ownerName);
-    if(!loadedAsset)
+    const Expected<Name> path = resolve(shaderName, variantName, stageName);
+    if(!path.has_value()){
+        error("{}: failed to resolve shader '{}' variant '{}' stage '{}'", owner, shaderName.resolvedText(), variantName, stageName.resolvedText());
         return false;
+    }
+    if(path.value() == s_NameNone){
+        error("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'", owner, shaderName.resolvedText(), variantName, stageName.resolvedText());
+        return false;
+    }
 
-    const ShaderT& shaderAsset = **loadedAsset;
-    const auto& shaderBinary = shaderAsset.bytecode();
-    FOUNDATION_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & ShaderBinaryPayload::s_SpvWordByteMask) == 0u);
-
-    Core::ShaderDesc shaderDesc;
-    shaderDesc.setShaderType(s_ShaderType);
-    shaderDesc.setDebugName(debugName);
-    shaderDesc.setEntryName(AStringView(shaderAsset.entryPoint()));
-
-    auto& device = graphics.getDevice();
-    auto shaderResult = device.createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
-    if(shaderResult)
-        outShader = Move(*shaderResult);
-    else
+    const Expected<UniquePtr<ShaderT>> loaded = LoadTypedAssetSync<ShaderT>(assets, path.value(), owner);
+    if(!loaded.has_value())
+        return false;
+    in ShaderT shader = loaded.value().deref();
+    const StringView entryPoint = shader.entryPoint();
+    in auto binary = shader.bytecode();
+    assert(!entryPoint.empty() && !binary.empty() && (binary.size() & s_SpvWordByteMask) == 0u);
+    ShaderDesc descriptor;
+    descriptor.setShaderType(mask);
+    descriptor.setDebugName(debugName);
+    descriptor.setEntryName(entryPoint);
+    Expected<ShaderHandle> result = graphics.getDevice().createShader(descriptor, binary);
+    if(!result.has_value()){
         outShader.reset();
-    if(!shaderResult){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create shader '{}' from asset '{}'"), ConvertString(ownerName), ConvertString(debugName.resolvedText()), ConvertString(shaderVirtualPath->resolvedText()));
+        error("{}: failed to create shader '{}' from asset '{}'", owner, debugName.resolvedText(), path.value().resolvedText());
         return false;
     }
-
+    outShader = result.value();
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

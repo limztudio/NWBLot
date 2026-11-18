@@ -67,6 +67,11 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     for(const ClassDecl* classDecl : unit.classes){
         if(!classDecl || classDecl->isImported || classDecl->isExtern)
             continue;
+        for(const MStringView peer : classDecl->friendClasses){
+            const ClassDecl* known = m_symbols.findClass(peer);
+            if((!known || known->isImported) && !ContainsStringView(externalForwardClasses, peer))
+                externalForwardClasses.push_back(peer);
+        }
         for(const FieldDecl* f : classDecl->fields){
             if(f && !f->isStatic && f->type)
                 collectTypeForwardDecls(*f->type, classDecl->templateParams, {}, false);
@@ -236,7 +241,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                     if(!depsReady)
                         continue;
                     instEmitted[idx] = 1u;
-                    emitClassTemplateSpecialization(out, *inst);
+                    emitClassTemplateSpecialization(out, *inst, namespacePath);
                     progress = true;
                 }
             }
@@ -252,7 +257,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
         for(usize idx = 0u; idx < unit.templateInstantiations.size(); ++idx){
             if(instEmitted[idx] == 0u && unit.templateInstantiations[idx] && !unit.templateInstantiations[idx]->isImported)
-                emitClassTemplateSpecialization(out, *unit.templateInstantiations[idx]);
+                emitClassTemplateSpecialization(out, *unit.templateInstantiations[idx], namespacePath);
         }
         for(const ClassDecl* classDecl : sortedClasses){
             if(!classDecl || classDecl->isExtern)
@@ -285,6 +290,16 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(emitFreeFnPrototypesEarly && !emitInlineBody)
             continue;
         m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, emitInlineBody, true, !emitFreeFnPrototypesEarly);
+    }
+
+    for(const StaticAssertion& assertion : unit.staticAssertions){
+        out.append("static_assert(");
+        m_sourceEmitter.emitExpr(out, *assertion.condition);
+        if(assertion.message){
+            out.append(", ");
+            m_sourceEmitter.emitExpr(out, *assertion.message);
+        }
+        out.append(");\r\n");
     }
 
     if(!namespacePath.empty()){

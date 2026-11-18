@@ -2,6 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::TakeFamilyAsset")]
+extern UniquePtr<T> TakeFamilyAsset<T>(mut UniquePtr<IAsset> asset);
+
+[cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::BorrowTypedAsset")]
+extern Optional<in T> BorrowTypedAsset<T>(in borrow IAsset asset);
+
+[cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::PolymorphicAssetTypeAutoRegistrar")]
+extern class AssetFamilyTypes<Base>;
+
+[cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::AssetCodecRegistration")]
+extern class AssetCodecRegistration<Codec>;
+
+[cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::TypedPolymorphicAssetAutoRegistrar")]
+extern class TypedAssetRegistration<Base, Asset, Codec>;
+
 [cpp_header("<core/assets/auto_registration.h>"), cpp_name("::NWB::Core::Assets::AssetCodecAutoRegistrar")]
 extern class AssetCodecAutoRegistrar{
     void finalize(...);

@@ -2,182 +2,139 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "light_space_plan.adhd"
+#include <impl/ecs_render/shadow/light_space_plan.adhd>
+#include <impl/ecs_render/shadow/light_space_csg.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_PUSH_BYTES")]
+extern const usize s_SharedLightSpacePushBytes;
 
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_BYTES")]
+extern const usize s_SharedLightSpaceViewBytes;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_DEPTH_RANGE_OFFSET")]
+extern const usize s_SharedLightSpaceViewDepthRangeOffset;
 
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_LIGHT_OFFSET")]
+extern const usize s_SharedLightSpaceViewLightOffset;
 
-#include <impl/ecs_render/shadow/light_space_csg.adhd.h>
-#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
-#include <impl/assets/graphics/shadow/light_space_constants.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_MAP_OFFSET")]
+extern const usize s_SharedLightSpaceViewMapOffset;
 
-#include <core/alloc/global.h>
-#include <core/graphics/rhi/pipeline.h>
-#include <core/graphics/rhi/command.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET")]
+extern const usize s_SharedLightSpaceViewOriginOffset;
 
+[cpp_header("<impl/assets/graphics/scene/binding_slots.h>"), cpp_name("NWB_SCENE_SHADOW_SLOT_COUNT")]
+extern const usize s_SharedSceneShadowSlotCount;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static_assert(align_of<LightSpaceViewGpu>() >= 16u);
+static_assert(size_of<LightSpaceViewGpu>() == s_SharedLightSpaceViewBytes);
+static_assert(offset_of<LightSpaceViewGpu>(originOrDirection) == s_SharedLightSpaceViewOriginOffset);
+static_assert(offset_of<LightSpaceViewGpu>(depthRange) == s_SharedLightSpaceViewDepthRangeOffset);
+static_assert(offset_of<LightSpaceViewGpu>(map) == s_SharedLightSpaceViewMapOffset);
+static_assert(offset_of<LightSpaceViewGpu>(light) == s_SharedLightSpaceViewLightOffset);
 
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuTimingRecorder;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(alignof(LightSpaceViewGpu) >= 16u);
-static_assert(sizeof(LightSpaceViewGpu) == NWB_LIGHT_SPACE_VIEW_BYTES);
-static_assert(offsetof(LightSpaceViewGpu, originOrDirection) == NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET);
-static_assert(offsetof(LightSpaceViewGpu, depthRange) == NWB_LIGHT_SPACE_VIEW_DEPTH_RANGE_OFFSET);
-static_assert(offsetof(LightSpaceViewGpu, map) == NWB_LIGHT_SPACE_VIEW_MAP_OFFSET);
-static_assert(offsetof(LightSpaceViewGpu, light) == NWB_LIGHT_SPACE_VIEW_LIGHT_OFFSET);
-
-static_assert(sizeof(LightSpaceShadowPush) == NWB_LIGHT_SPACE_PUSH_BYTES);
-static_assert(offsetof(LightSpaceShadowPush, receiverFactor) == 76u);
-static_assert(offsetof(LightSpaceShadowPush, captureDrawCount) == 80u);
-static_assert(offsetof(LightSpaceShadowPush, casterDrawOffset) == 84u);
-static_assert(offsetof(LightSpaceShadowPush, meshletDescSlot) == 88u);
-static_assert(offsetof(LightSpaceShadowPush, meshletBoundsSlot) == 92u);
-static_assert(offsetof(LightSpaceShadowPush, meshletCount) == 96u);
-static_assert(offsetof(LightSpaceShadowPush, receiverViewSlot) == 100u);
-static_assert(offsetof(LightSpaceShadowPush, receiverCsgSampleStateSlot) == 104u);
+static_assert(size_of<LightSpaceShadowPush>() == s_SharedLightSpacePushBytes);
+static_assert(offset_of<LightSpaceShadowPush>(receiverFactor) == 76u);
+static_assert(offset_of<LightSpaceShadowPush>(captureDrawCount) == 80u);
+static_assert(offset_of<LightSpaceShadowPush>(casterDrawOffset) == 84u);
+static_assert(offset_of<LightSpaceShadowPush>(meshletDescSlot) == 88u);
+static_assert(offset_of<LightSpaceShadowPush>(meshletBoundsSlot) == 92u);
+static_assert(offset_of<LightSpaceShadowPush>(meshletCount) == 96u);
+static_assert(offset_of<LightSpaceShadowPush>(receiverViewSlot) == 100u);
+static_assert(offset_of<LightSpaceShadowPush>(receiverCsgSampleStateSlot) == 104u);
 
 // Resource handles freeze one allocation generation. Graph tasks must copy the caster span into their arena.
-struct LightSpaceShadowSnapshot{
-    LightSpacePlan plan;
-    Core::BufferHandle counts;
-    Core::BufferHandle events;
-    Core::BufferHandle views;
-    Core::BufferHandle drawArguments;
-    Core::BufferHandle csgContext;
-    Core::BufferHandle csgOpaqueDepth;
-    Core::BufferHandle receiverView;
-    Core::BufferHandle receiverCsgSampleState;
-    Core::TextureHandle depth;
-    Core::GpuDescriptorHandle countsDescriptor;
-    Core::GpuDescriptorHandle eventsDescriptor;
-    Core::GpuDescriptorHandle viewsDescriptor;
-    Core::GpuDescriptorHandle drawArgumentsDescriptor;
-    Core::GpuDescriptorHandle csgContextDescriptor;
-    Core::GpuDescriptorHandle csgOpaqueDepthDescriptor;
-    Core::GpuDescriptorHandle depthDescriptor;
-    Core::GpuDescriptorHandle csgTlasDescriptor;
-    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> opaqueFramebuffers;
-    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> transparentFramebuffers;
-    Core::BindingLayoutHandle layout;
-    Core::ComputePipelineHandle viewPipeline;
-    Core::ComputePipelineHandle cullPipeline;
-    Core::ComputePipelineHandle opaqueResolve;
-    Core::ComputePipelineHandle transparentResolve;
-    Core::ComputePipelineHandle opaqueFallback;
-    Core::ComputePipelineHandle transparentFallback;
-    Core::ComputePipelineHandle shadePipeline;
-    Core::ComputePipelineHandle csgShadePipeline;
-    Core::ComputePipelineHandle csgOpaqueResolve;
-    Core::ComputePipelineHandle csgTransparentResolve;
-    Core::ComputePipelineHandle csgOpaqueFallback;
-    Core::ComputePipelineHandle csgTransparentFallback;
-    Core::GraphicsPipelineHandle opaqueCapture;
-    Core::GraphicsPipelineHandle transparentCapture;
-    LightSpaceShadowPush push;
-    Span<const LightSpaceShadowCaster> casters{};
-    LightSpaceCaptureTicket captureTicket;
-    LightSpaceCaptureHistory* captureHistory = nullptr;
-    LightSpaceShadowDiagnostics* diagnostics = nullptr;
-    Core::BufferHandle diagnosticReadback;
-    u32 diagnosticFrame = 0u;
-    Span<const u8> csgContextBytes{};
-    Span<const Core::BufferHandle> csgDynamicBounds{};
-    b8 ready = false;
-};
+const usize s_LightSpaceFramebufferCount = s_SharedSceneShadowSlotCount * s_PointLightViewCount;
 
-struct LightSpaceShadowState{
-    LightSpaceShadowSnapshot m_snapshot;
-    SoftwareShadowSettings m_settings;
-    LightSpaceCsgState m_csg;
-    u64 m_captureSceneIdentity = 0u;
-    LightSpaceCaptureHistory m_captureHistory;
-    LightSpaceShadowDiagnostics m_diagnostics;
-    Vector<LightSpaceShadowCaster, Core::Alloc::GlobalArena> m_casters;
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_sceneBuffers;
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_captureBuffers;
-    Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_sceneTextures;
-    Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_captureTextures;
-    Array<Core::ShaderHandle, s_LightSpaceShaderCount> m_shaders{};
-    b8 m_captureSceneTrusted = false;
-    b8 m_captureReuseLogged = false;
-    b8 m_sceneEligible = false;
-    b8 m_resourcesPrepared = false;
-    b8 m_pipelineFailed = false;
-    b8 m_dispatchLogged = false;
-    b8 m_csgDispatchLogged = false;
-    b8 m_csgRequired = false;
+class LightSpaceShadowSnapshot{
+    public LightSpacePlan plan;
+    public BufferHandle counts;
+    public BufferHandle events;
+    public BufferHandle views;
+    public BufferHandle drawArguments;
+    public BufferHandle csgContext;
+    public BufferHandle csgOpaqueDepth;
+    public BufferHandle receiverView;
+    public BufferHandle receiverCsgSampleState;
+    public TextureHandle depth;
+    public GpuDescriptorHandle countsDescriptor;
+    public GpuDescriptorHandle eventsDescriptor;
+    public GpuDescriptorHandle viewsDescriptor;
+    public GpuDescriptorHandle drawArgumentsDescriptor;
+    public GpuDescriptorHandle csgContextDescriptor;
+    public GpuDescriptorHandle csgOpaqueDepthDescriptor;
+    public GpuDescriptorHandle depthDescriptor;
+    public GpuDescriptorHandle csgTlasDescriptor;
+    public Array<FramebufferHandle, s_LightSpaceFramebufferCount> opaqueFramebuffers;
+    public Array<FramebufferHandle, s_LightSpaceFramebufferCount> transparentFramebuffers;
+    public BindingLayoutHandle layout;
+    public ComputePipelineHandle viewPipeline;
+    public ComputePipelineHandle cullPipeline;
+    public ComputePipelineHandle opaqueResolve;
+    public ComputePipelineHandle transparentResolve;
+    public ComputePipelineHandle opaqueFallback;
+    public ComputePipelineHandle transparentFallback;
+    public ComputePipelineHandle shadePipeline;
+    public ComputePipelineHandle csgShadePipeline;
+    public ComputePipelineHandle csgOpaqueResolve;
+    public ComputePipelineHandle csgTransparentResolve;
+    public ComputePipelineHandle csgOpaqueFallback;
+    public ComputePipelineHandle csgTransparentFallback;
+    public GraphicsPipelineHandle opaqueCapture;
+    public GraphicsPipelineHandle transparentCapture;
+    public LightSpaceShadowPush push;
+    public Span<LightSpaceShadowCaster> casters;
+    public LightSpaceCaptureTicket captureTicket;
+    public Optional<mut LightSpaceCaptureHistory> captureHistory;
+    public Optional<mut LightSpaceShadowDiagnostics> diagnostics;
+    public BufferHandle diagnosticReadback;
+    public u32 diagnosticFrame = 0u;
+    public Span<u8> csgContextBytes;
+    public Span<BufferHandle> csgDynamicBounds;
+    public b8 ready = false;
+}
 
-
-public:
-    explicit LightSpaceShadowState(Core::Alloc::GlobalArena& arena)noexcept
-        : m_csg(arena)
-        , m_casters(arena)
-        , m_sceneBuffers(arena)
-        , m_captureBuffers(arena)
-        , m_sceneTextures(arena)
-        , m_captureTextures(arena)
-    {}
-};
-
-// Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.
-[[nodiscard]] b8 RecordLightSpaceViews(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
-[[nodiscard]] b8 RecordLightSpaceCull(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
-[[nodiscard]] b8 RecordLightSpaceCapture(const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, b8 transparent, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
-[[nodiscard]] b8 RecordLightSpaceShade(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
-[[nodiscard]] b8 RecordLightSpaceResolve(
-    const LightSpaceShadowSnapshot& snapshot,
-    u32 frameIndex, u32 sampleCount, u32 outputSlot, b8 transparent,
-    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing, Core::Texture& outputTexture
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class LightSpaceShadowState{
+    public LightSpaceShadowSnapshot m_snapshot;
+    public SoftwareShadowSettings m_settings;
+    public LightSpaceCsgState m_csg;
+    public u64 m_captureSceneIdentity = 0u;
+    public LightSpaceCaptureHistory m_captureHistory;
+    public LightSpaceShadowDiagnostics m_diagnostics;
+    public Vector<LightSpaceShadowCaster> m_casters;
+    public Vector<BufferHandle> m_sceneBuffers;
+    public Vector<BufferHandle> m_captureBuffers;
+    public Vector<TextureHandle> m_sceneTextures;
+    public Vector<TextureHandle> m_captureTextures;
+    public Array<ShaderHandle, s_LightSpaceShaderCount> m_shaders;
+    public b8 m_captureSceneTrusted = false;
+    public b8 m_captureReuseLogged = false;
+    public b8 m_sceneEligible = false;
+    public b8 m_resourcesPrepared = false;
+    public b8 m_pipelineFailed = false;
+    public b8 m_dispatchLogged = false;
+    public b8 m_csgDispatchLogged = false;
+    public b8 m_csgRequired = false;
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.
+[modular]
+class LightSpaceShadowRecorder{
+    public b8 views(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
+    public b8 cull(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
+    public b8 capture(in LightSpaceShadowSnapshot snapshot, in u32 viewIndex, in b8 transparent, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
+    public b8 shade(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
+    public b8 resolve(
+        in LightSpaceShadowSnapshot snapshot,
+        in u32 frameIndex, in u32 sampleCount, in u32 outputSlot, in b8 transparent,
+        mut CommandList commandList, mut GpuDescriptorHeap heap, mut GpuTimingRecorder timing, mut RhiTexture outputTexture
+    )const;
+}
 
 
 Expected<u32> LightSpaceShadowDrawCount(in Span<LightSpaceShadowCaster> casters){

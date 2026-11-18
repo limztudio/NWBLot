@@ -2,8 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/gi/rt_surfel_gi_state.adhd>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
 #include <impl/ecs_render/gi/lifecycle_types.adhd>
+#include <impl/ecs_render/gi/surfel_gi_graph_coordinator.adhd>
 #include <impl/ecs_render/raytrace/graph_snapshots.adhd>
 #include <impl/ecs_render/shader/shader_system.adhd>
 
@@ -11,168 +14,102 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class SurfelGiLifecycleInputs{
+    public Optional<mut DeferredFrameTargets> targets;
+    public GpuTaskId dependency;
+    public GpuGraphResourceId surfelPool;
+    public GpuGraphResourceId surfelCellHead;
+    public GpuGraphResourceId surfelCounter;
+    public GpuGraphResourceId surfelFreeList;
+    public GpuGraphResourceId surfelPoolSnapshot;
+    public GpuGraphResourceId surfelCellHeadSnapshot;
+    public u64 poolSnapshotByteSize = 0u;
+    public u64 cellHeadSnapshotByteSize = 0u;
+    public GpuTaskSchedulingHint scheduling;
+    public Span<GpuExternalCompletionId> externalDependencies;
+    public GpuTaskExternalStateSource computeStateSource;
+    public GpuTaskExternalStateSource counterStateSource;
+    public b8 hasWork = false;
+}
 
+class SurfelGiResourceInputs{
+    public in DeferredFrameTargets deferredTargets;
+    public in RayTracingDeferredGraphResourceSnapshot rayTracingResources;
+    public in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources;
+    public GpuGraphResourceId worldPosition;
+    public GpuGraphResourceId normal;
+    public GpuGraphResourceId surfelIrradiance;
+    public GpuGraphResourceId currentBindlessSlots;
+    public GpuGraphResourceId sceneShading;
+    public GpuGraphResourceId lights;
+    public GpuGraphResourceId materialContextSlots;
+    public Span<GpuGraphResourceId> traceGeometryResources;
+    public b8 traceGeometryStatesGraphOwned;
+    public b8 useHwTrace;
+    public b8 hasSurfelWork;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public SurfelGiResourceInputs(
+        in DeferredFrameTargets deferredTargetsIn,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingResourcesIn,
+        in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResourcesIn,
+        in GpuGraphResourceId worldPositionIn,
+        in GpuGraphResourceId normalIn,
+        in GpuGraphResourceId surfelIrradianceIn,
+        in GpuGraphResourceId currentBindlessSlotsIn,
+        in GpuGraphResourceId sceneShadingIn,
+        in GpuGraphResourceId lightsIn,
+        in GpuGraphResourceId materialContextSlotsIn,
+        in Span<GpuGraphResourceId> traceGeometryResourcesIn,
+        in b8 traceGeometryStatesGraphOwnedIn,
+        in b8 useHwTraceIn,
+        in b8 hasSurfelWorkIn
+    ){
+        this.deferredTargets = deferredTargetsIn;
+        this.rayTracingResources = rayTracingResourcesIn;
+        this.rayTracingSurfelResources = rayTracingSurfelResourcesIn;
+        this.worldPosition = worldPositionIn;
+        this.normal = normalIn;
+        this.surfelIrradiance = surfelIrradianceIn;
+        this.currentBindlessSlots = currentBindlessSlotsIn;
+        this.sceneShading = sceneShadingIn;
+        this.lights = lightsIn;
+        this.materialContextSlots = materialContextSlotsIn;
+        this.traceGeometryResources = traceGeometryResourcesIn;
+        this.traceGeometryStatesGraphOwned = traceGeometryStatesGraphOwnedIn;
+        this.useHwTrace = useHwTraceIn;
+        this.hasSurfelWork = hasSurfelWorkIn;
+    }
+}
 
+class SurfelGiResourcePlan{
+    public GpuGraphResourceId surfelIrradianceHalf;
+    public GpuGraphResourceId sceneGeometryDomain;
+    public GpuGraphResourceId shadowInstanceMaterials;
+    public GpuGraphResourceId shadowMaterialTyped;
+    public GpuGraphResourceId shadowInstances;
+    public GpuGraphResourceId csgTraceContext;
+    public GpuGraphResourceId surfelConstants;
+    public GpuGraphResourceId surfelPool;
+    public GpuGraphResourceId surfelGuidePool;
+    public GpuGraphResourceId surfelCellHead;
+    public GpuGraphResourceId surfelCounter;
+    public GpuGraphResourceId surfelTraceIndirectArgs;
+    public GpuGraphResourceId surfelFreeList;
+    public GpuGraphResourceId surfelPoolSnapshot;
+    public GpuGraphResourceId surfelCellHeadSnapshot;
+    public GpuGraphResourceId sceneBvhNodes;
+    public GpuGraphResourceId sceneInstances;
+    public GpuGraphResourceId tlas;
+    public Vector<GpuTaskResourceUse> resourceUses;
+    public Vector<GpuTaskResourceUse> traceResourceUses;
+    public b8 graphOwnsSurfelGiResolve = false;
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/gi/rt_surfel_gi_state.adhd.h>
-#include <impl/ecs_render/gi/surfel_gi_graph_coordinator.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Surfel-GI lifecycle owns pool-initialization clears plus lifecycle plus snapshot-copy declaration.
-struct SurfelGiLifecycleInputs{
-    DeferredFrameTargets* targets = nullptr;
-    Core::GpuTaskId dependency;
-    Core::GpuGraphResourceId surfelPool;
-    Core::GpuGraphResourceId surfelCellHead;
-    Core::GpuGraphResourceId surfelCounter;
-    Core::GpuGraphResourceId surfelFreeList;
-    Core::GpuGraphResourceId surfelPoolSnapshot;
-    Core::GpuGraphResourceId surfelCellHeadSnapshot;
-    u64 poolSnapshotByteSize = 0u;
-    u64 cellHeadSnapshotByteSize = 0u;
-    Core::GpuTaskSchedulingHint scheduling;
-    Span<const Core::GpuExternalCompletionId> externalDependencies{};
-    Core::GpuTaskExternalStateSource computeStateSource;
-    Core::GpuTaskExternalStateSource counterStateSource;
-    b8 hasWork = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SurfelGiResourceInputs{
-    const DeferredFrameTargets& deferredTargets;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
-    const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId normal;
-    Core::GpuGraphResourceId surfelIrradiance;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    Core::GpuGraphResourceId sceneShading;
-    Core::GpuGraphResourceId lights;
-    Core::GpuGraphResourceId materialContextSlots;
-    Span<const Core::GpuGraphResourceId> traceGeometryResources;
-    b8 traceGeometryStatesGraphOwned;
-    b8 useHwTrace;
-    b8 hasSurfelWork;
-};
-
-struct SurfelGiResourcePlan{
-    Core::GpuGraphResourceId surfelIrradianceHalf;
-    Core::GpuGraphResourceId sceneGeometryDomain;
-    Core::GpuGraphResourceId shadowInstanceMaterials;
-    Core::GpuGraphResourceId shadowMaterialTyped;
-    Core::GpuGraphResourceId shadowInstances;
-    Core::GpuGraphResourceId csgTraceContext;
-    Core::GpuGraphResourceId surfelConstants;
-    Core::GpuGraphResourceId surfelPool;
-    Core::GpuGraphResourceId surfelGuidePool;
-    Core::GpuGraphResourceId surfelCellHead;
-    Core::GpuGraphResourceId surfelCounter;
-    Core::GpuGraphResourceId surfelTraceIndirectArgs;
-    Core::GpuGraphResourceId surfelFreeList;
-    Core::GpuGraphResourceId surfelPoolSnapshot;
-    Core::GpuGraphResourceId surfelCellHeadSnapshot;
-    Core::GpuGraphResourceId sceneBvhNodes;
-    Core::GpuGraphResourceId sceneInstances;
-    Core::GpuGraphResourceId tlas;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceResourceUses;
-    b8 graphOwnsSurfelGiResolve = false;
-
-
-public:
-    explicit SurfelGiResourcePlan(Core::Alloc::ScratchArena& scratchArena)noexcept
-        : resourceUses(scratchArena)
-        , traceResourceUses(scratchArena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public SurfelGiResourcePlan(){}
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_name("::NWB::Impl::RendererRayTracingSystem")]
-extern class RendererRayTracingSystem : NoCopy;
-[cpp_name("::NWB::Impl::RtSurfelGiState")]
-extern class RtSurfelGiState{
-    BindingLayoutHandle m_surfelHeapBindingLayout;
-    ShaderHandle m_surfelSpawnShader;
-    ComputePipelineHandle m_surfelSpawnPipeline;
-    ShaderHandle m_surfelAgeFreeShader;
-    ComputePipelineHandle m_surfelAgeFreePipeline;
-    ShaderHandle m_surfelHashBuildShader;
-    ComputePipelineHandle m_surfelHashBuildPipeline;
-    ShaderHandle m_surfelTraceShader;
-    ComputePipelineHandle m_surfelTracePipeline;
-    ShaderHandle m_surfelTraceCsgShader;
-    ComputePipelineHandle m_surfelTraceCsgPipeline;
-    ShaderHandle m_surfelResolveShader;
-    ComputePipelineHandle m_surfelResolvePipeline;
-    ShaderHandle m_surfelUpsampleShader;
-    ComputePipelineHandle m_surfelUpsamplePipeline;
-    ShaderHandle m_surfelTraceBuildArgsShader;
-    ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
-    ShaderHandle m_surfelTraceHwShader;
-    ComputePipelineHandle m_surfelTraceHwPipeline;
-    ShaderHandle m_surfelTraceCsgHwShader;
-    ComputePipelineHandle m_surfelTraceCsgHwPipeline;
-    b8 m_surfelTraceHwPipelineFailed;
-    b8 m_surfelUseCsgTrace;
-    b8 m_surfelTraceCsgPipelineFailed;
-    b8 m_surfelTraceCsgHwPipelineFailed;
-    b8 m_surfelTraceBuildArgsPipelineFailed;
-    b8 m_surfelUpsamplePipelineFailed;
-    b8 m_surfelResolvePipelineFailed;
-    b8 m_surfelTracePipelineFailed;
-    b8 m_surfelHashBuildPipelineFailed;
-    b8 m_surfelAgeFreePipelineFailed;
-    b8 m_surfelSpawnPipelineFailed;
-};
-[cpp_name("::NWB::Impl::SurfelGiLifecycleInputs")]
-extern class SurfelGiLifecycleInputs;
-[cpp_name("::NWB::Impl::SurfelGiResourceInputs")]
-extern class SurfelGiResourceInputs;
-[cpp_name("::NWB::Impl::SurfelGiResourcePlan")]
-extern class SurfelGiResourcePlan;
 
 [modular]
 class SurfelGiLifecycleBuilder : NoCopy{

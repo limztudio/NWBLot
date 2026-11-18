@@ -150,7 +150,9 @@ extern class GpuCommandIrBuiltinTaskRecord{
 
 [cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::GpuCommandIrCapture"), cpp_flags(no_copy, no_assign)]
 extern class GpuCommandIrCapture{
+    GpuCommandIrCapture(mut GraphicsAllocator allocator);
     b8 beginRecordingAttempt(...);
+    b8 captureBindGraphicsHeap(mut GpuDescriptorHeap heap, in GpuTaskId task, in GpuSubmissionPacketId packet, in GpuPhysicalQueueId queue, in GpuGraphPipelineId pipeline, in GraphicsPipelineHandle pipelineOwner, in GpuCommandIrOwnerAnchor descriptorOwner);
     b8 captureClearBuffer(...);
     b8 captureClearTexture(...);
     b8 captureClearTextureRectUInt(...);
@@ -159,6 +161,7 @@ extern class GpuCommandIrCapture{
     b8 captureDraw(...);
     b8 captureEndRenderPass(...);
     b8 captureSetGraphicsState(...);
+    b8 capturePushValue(in GpuTaskId task, in GpuSubmissionPacketId packet, in GpuPhysicalQueueId queue, in auto value);
     GpuCommandIrCaptureCheckpoint checkpoint(...)const;
     Expected<GpuCommandIrOwnedStream> exportOwned(...)const;
     u64 graphGeneration(...)const;
@@ -376,6 +379,9 @@ extern class GpuCommandIrUploadTextureRecord{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::ReplayGpuCommandIrPacket")]
+extern GpuCommandIrReplayResult ReplayGpuCommandIrPacket(in GpuCommandIrOwnedStream stream, in GpuTaskGraphDeclarationReadView graph, in GpuCompiledGraphReadView plan, in GpuSubmissionPacketId packet, mut CommandList commands);
 
 [cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::ValidateGpuCommandIrStream"), cpp_flags(byte_view_arg0)]
 extern GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(in Span<u8> a0);

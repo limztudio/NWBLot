@@ -106,6 +106,29 @@ private:
     const PolymorphicAssetTypeAutoRegistrar* m_next = nullptr;
 };
 
+template<typename BaseT>
+[[nodiscard]] inline UniquePtr<BaseT> TakeFamilyAsset(UniquePtr<IAsset>& asset)noexcept{
+    if(!PolymorphicAssetTypeAutoRegistrar<BaseT>::Cast(asset.get()))
+        return {};
+    return UniquePtr<BaseT>(checked_cast<BaseT*>(asset.release()));
+}
+
+template<typename AssetT>
+[[nodiscard]] inline Optional<NotNull<const AssetT*>> BorrowTypedAsset(const IAsset& asset)noexcept{
+    if(const AssetT* typed = CastAsset<AssetT>(&asset))
+        return MakeNotNull(typed);
+    return {};
+}
+
+template<typename CodecT>
+class AssetCodecRegistration final : NoCopy{
+public:
+    AssetCodecRegistration()noexcept : m_registrar(&CreateAssetCodec<CodecT>){}
+
+private:
+    AssetCodecAutoRegistrar m_registrar;
+};
+
 template<typename BaseAssetT, typename ConcreteAssetT, typename CodecT>
 class TypedPolymorphicAssetAutoRegistrar final : NoCopy{
 private:

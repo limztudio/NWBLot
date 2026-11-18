@@ -257,11 +257,11 @@ b8 LoadAuthoredSkin(in Path assetRoot, in Path atlasPath, in StringView virtualR
     MetascriptDocument document(testArena.arena);
     if(!document.parse(metadata))
         return false;
-    Expected<UiSkinCookEntry> entryResult = ParseUiSkinCookMetadata(assetRoot, virtualRoot, atlasPath, document, testArena.arena, testArena.scratchArena);
+    Expected<UiSkinCookEntry> entryResult = ParseUiSkinCookMetadata(testArena.arena, assetRoot, virtualRoot, atlasPath, document);
     if(!entryResult.has_value())
         return false;
     const UiSkinCookEntry entry = entryResult.value();
-    Expected<UiSkin> skinResult = BuildUiSkinAsset(entry, testArena.arena);
+    Expected<UiSkin> skinResult = BuildUiSkinAsset(testArena.arena, entry);
     if(!skinResult.has_value())
         return false;
     outSkin = skinResult.value();
@@ -285,7 +285,7 @@ b8 CanParseMetadata(in StringView metadata, mut SkinTestArena testArena){
         return false;
     const Path assetRoot = Path(s_SkinAssetRoot);
     const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-    return ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, testArena.scratchArena).has_value();
+    return ParseUiSkinCookMetadata(testArena.arena, assetRoot, "project", metadataPath, document).has_value();
 }
 
 AssetBytes MakeBinary(in UiSkinHeaderBinary header, in UiSkinRegionBinary region, mut SkinTestArena testArena){
@@ -606,10 +606,10 @@ void VerifyAssetsUiSkinToolkitContract_CookOptInRejectsIncompleteMetadataWhileGe
 
     MetascriptDocument genericDocument(testArena.arena);
     ASSERT_TRUE(genericDocument.parse(genericMetadata));
-    Expected<UiSkinCookEntry> genericEntryResult = ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, genericDocument, testArena.arena, testArena.scratchArena);
+    Expected<UiSkinCookEntry> genericEntryResult = ParseUiSkinCookMetadata(testArena.arena, assetRoot, "project", atlasPath, genericDocument);
     ASSERT_TRUE(genericEntryResult.has_value());
     const UiSkinCookEntry genericEntry = genericEntryResult.value();
-    Expected<UiSkin> genericBuildResult = BuildUiSkinAsset(genericEntry, testArena.arena);
+    Expected<UiSkin> genericBuildResult = BuildUiSkinAsset(testArena.arena, genericEntry);
     ASSERT_TRUE(genericBuildResult.has_value());
     const UiSkin genericSkin = genericBuildResult.value();
     EXPECT_FALSE(genericEntry.completeToolkitSkin);
@@ -617,7 +617,7 @@ void VerifyAssetsUiSkinToolkitContract_CookOptInRejectsIncompleteMetadataWhileGe
 
     MetascriptDocument completeDocument(testArena.arena);
     ASSERT_TRUE(completeDocument.parse(completeMetadata));
-    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, completeDocument, testArena.arena, testArena.scratchArena).has_value());
+    EXPECT_FALSE(ParseUiSkinCookMetadata(testArena.arena, assetRoot, "project", atlasPath, completeDocument).has_value());
     EXPECT_TRUE(SawCapturedError(logger, s_ErrMissingWindowNormal));
 }
 
@@ -824,7 +824,7 @@ void VerifyAssetsUiSkin_RejectsOverLimitCountsBeforeReadingOrCopyingRegions(){
     ASSERT_TRUE(RepeatFirstDocumentAssetRegion(document, s_UiSkinMaxRegionCount + 1u));
     const Path assetRoot = Path(s_SkinAssetRoot);
     const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, testArena.scratchArena).has_value());
+    EXPECT_FALSE(ParseUiSkinCookMetadata(testArena.arena, assetRoot, "project", metadataPath, document).has_value());
     EXPECT_TRUE(SawCapturedError(logger, s_ErrCookRegionLimit));
 
     RegionVector oversized(testArena.arena);
@@ -870,7 +870,7 @@ void VerifyAssetsUiSkin_RetiredSpriteSliceFieldsAreRejected(){
     ASSERT_TRUE(document.parse(spriteMetadata));
     const Path assetRoot = Path(s_SkinAssetRoot);
     const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-    const Expected<UiSkinCookEntry> entryResult = ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, testArena.scratchArena);
+    const Expected<UiSkinCookEntry> entryResult = ParseUiSkinCookMetadata(testArena.arena, assetRoot, "project", metadataPath, document);
     ASSERT_TRUE(entryResult.has_value());
     ASSERT_EQ(entryResult.value().regions.size(), 1u);
 }

@@ -90,7 +90,6 @@ const Name s_UiCaseProgressTest = "progress.test";
 const Name s_UiCaseTestsUiRadioTemporaryLabels = "tests/ui/radio/temporary_labels";
 const Name s_UiCaseTestsUiSearchCombo = "tests/ui/search_combo";
 const Name s_UiCaseTestsUiTextBaked = "tests/ui/text/baked";
-const Name s_UiCaseTestsUiTextBakedScratch = "tests/ui/text/baked_scratch";
 const Name s_UiCaseTestsUiFontsLatinAtlas = "tests/ui/fonts/latin_atlas";
 const Name s_UiCaseTestsUiTextControlLifetime = "tests/ui/text_control_lifetime";
 const Name s_UiCaseTestsUiTextFont = "tests/ui/text/font";
@@ -104,16 +103,13 @@ const Name s_UiCaseTestsUiTextRegionsCentering = "tests/ui/text_regions/centerin
 const Name s_UiCaseWindowTitle = "window.title";
 const Name s_UiCaseTestsUiSelectableStateMetrics = "tests/ui/selectable_state_metrics";
 const Name s_UiCaseTestsUiFontsVisibleAtlas = "tests/ui/fonts/visible_atlas";
-const Name s_UiCaseTestsUiTextVisibleBakedValidationScratch = "tests/ui/text/visible_baked/validation_scratch";
 const Name s_UiCaseTestsUiTextVisibleHangul = "tests/ui/text/visible_hangul";
 const Name s_UiCaseTestsUiTextVisibleRetainedPixels = "tests/ui/text/visible_retained_pixels";
 const Name s_UiCaseTestsUiFontsMeasuredSdf = "tests/ui/fonts/measured_sdf";
-const Name s_UiCaseTestsUiTextMeasureSdf = "tests/ui/text/measure_sdf";
 const Name s_UiCaseTestsUiTextVisible = "tests/ui/text/visible";
 const Name s_UiCaseTestsUiWheelInput = "tests/ui/wheel_input";
 const Name s_UiCaseTestsUiWidgets = "tests/ui/widgets";
 
-const Name s_UiCaseNameFontScratch = "tests/ui/fonts/operation_scratch";
 const Name s_UiCaseNameEditBoxLayout = "tests/ui/widgets/edit_box/layout";
 const Name s_UiCaseNameButtonNormal = "button.normal";
 

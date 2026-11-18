@@ -72,6 +72,11 @@ public:
     [[nodiscard]] b8 valid()const noexcept{
         return id.valid() && plan && (plan->taskCount == 0u || tasks) && (plan->dependencyCount == 0u || dependencies) && (plan->externalDependencyCount == 0u || externalDependencies);
     }
+    [[nodiscard]] Span<const GpuTaskId> taskSpan()const noexcept{
+        if(!valid())
+            return {};
+        return { tasks, plan->taskCount };
+    }
     [[nodiscard]] Optional<GpuSubmissionPacket> packetPlan()const noexcept{
         if(!plan)
             return Optional<GpuSubmissionPacket>();
@@ -130,6 +135,8 @@ public:
     [[nodiscard]] b8 valid()const noexcept{
         return plan && (plan->prologueStateSeedCount == 0u || prologueStateSeeds) && (plan->prologueBarrierCount == 0u || prologueBarriers) && (plan->epilogueBarrierCount == 0u || epilogueBarriers);
     }
+
+    [[nodiscard]] b8 recordsNonCommittingTimingSample()const noexcept{ return plan && plan->recordsNonCommittingTimingSample; }
 };
 
 // One terminal declared range that contributes to an explicit graph-to-external release.
@@ -392,6 +399,7 @@ public:
         [[nodiscard]] b8 taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
         [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const & noexcept;
         const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const && = delete;
+        [[nodiscard]] Optional<GpuPhysicalQueueInfo> findQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
         [[nodiscard]] Optional<GpuPhysicalQueueInfo> findQueueInfoForTask(const GpuTaskId& task)const noexcept;
         [[nodiscard]] GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const & noexcept;
         GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const && = delete;
@@ -408,6 +416,11 @@ public:
         GpuCompiledExternalResourceExportView externalResourceExport(const GpuGraphResourceId& resource)const && = delete;
         [[nodiscard]] const GpuCompiledPresentEndpoint* presentEndpoint()const & noexcept;
         const GpuCompiledPresentEndpoint* presentEndpoint()const && = delete;
+        [[nodiscard]] Optional<GpuCompiledPresentEndpoint> findPresentEndpoint()const noexcept{
+            if(const auto* endpoint = presentEndpoint())
+                return *endpoint;
+            return {};
+        }
         [[nodiscard]] GpuTaskGraphCompileStatistics compileStatistics()const noexcept;
         [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept;
         [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const & noexcept;
@@ -585,7 +598,19 @@ struct GpuTaskRecordContext{
     GpuPhysicalQueueId queue;
     // Optional capture sink; null keeps direct native task recording.
     GpuCommandIrCapture* commandIrCapture = nullptr;
+
+    [[nodiscard]] b8 hasCommandIrCapture()const noexcept{ return commandIrCapture != nullptr; }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Direct recording has no capture sink.
+template<typename Capture>
+[[nodiscard]] b8 CaptureGpuTaskCommandsIfEnabled(const GpuTaskRecordContext& context, Capture&& capture){
+    return !context.commandIrCapture || capture(*context.commandIrCapture);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

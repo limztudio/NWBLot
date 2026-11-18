@@ -7,6 +7,8 @@
 
 #include "paths.h"
 
+#include <core/metascript/parser.h>
+
 #include <global/numeric_text.h>
 #include <global/text_utils.h>
 
@@ -167,6 +169,17 @@ template<typename SourceStringT, typename MetadataDocument, typename ParseDocume
     return true;
 }
 
+template<typename PathArenaT, typename Visitor>
+[[nodiscard]] inline b8 VisitMetadataDocumentFile(const ::Path<PathArenaT>& path, const AStringView prefix, Visitor&& visitor){
+    Metascript::MetaArena documentArena;
+    Metascript::Document document(documentArena);
+    Alloc::ScratchArena scratch;
+    AString<Alloc::ScratchArena> text(scratch);
+    if(!ParseMetadataDocumentText(path, prefix, [&](const AStringView data){ return document.parse(data); }, text, document))
+        return false;
+    return visitor(document);
+}
+
 namespace Detail{
 
 [[nodiscard]] b8 CheckPairedSourceExtensionNative(TStringView nwbFilePathText, AStringView sourcePath, AStringView expectedExtension, AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena);
@@ -176,6 +189,12 @@ namespace Detail{
 template<typename PathArenaT>
 [[nodiscard]] inline b8 CheckPairedSourceExtension(const ::Path<PathArenaT>& nwbFilePath, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
     return Detail::CheckPairedSourceExtensionNative(nwbFilePath.native(), sourcePath, expectedExtension, diagnosticPrefix, scratchArena);
+}
+
+template<typename PathArenaT>
+[[nodiscard]] inline b8 CheckMetadataSourceExtension(const ::Path<PathArenaT>& file, const AStringView source, const AStringView extension, const AStringView prefix){
+    Alloc::ScratchArena scratch;
+    return CheckPairedSourceExtension(file, source, extension, prefix, scratch);
 }
 
 template<typename PathArenaT, typename MetadataValue>
@@ -225,6 +244,52 @@ template<typename MetadataDocument, typename MetadataValue, typename PathArenaT>
         return MakeUnexpected(Failure{});
     }
     return MakeNotNull(asset);
+}
+
+template<typename EntryT, typename RootArenaT, typename FileArenaT, typename MetadataDocument, typename ParseValueFn>
+[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
+    const ::Path<RootArenaT>& assetRoot,
+    const AStringView virtualRoot,
+    const ::Path<FileArenaT>& nwbFilePath,
+    const MetadataDocument& doc,
+    const AStringView diagnosticPrefix,
+    ParseValueFn&& parseValue,
+    Alloc::ScratchArena& scratchArena
+){
+    auto virtualPathResult = BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    if(!virtualPathResult)
+        return MakeUnexpected(Failure{});
+    using MetadataValue = RemoveCVRef_T<decltype(*doc.findVariable(s_MetadataAssetVariable))>;
+    const auto asset = FindMetadataAssetValue<MetadataDocument, MetadataValue>(nwbFilePath, doc, diagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return parseValue(*virtualPathResult, **asset);
+}
+
+template<typename EntryT, typename RootArenaT, typename FileArenaT, typename MetadataDocument, typename ParseValueFn>
+[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
+    const ::Path<RootArenaT>& assetRoot,
+    const AStringView virtualRoot,
+    const ::Path<FileArenaT>& nwbFilePath,
+    const MetadataDocument& doc,
+    const AStringView diagnosticPrefix,
+    ParseValueFn&& parseValue
+){
+    Alloc::ScratchArena scratchArena;
+    return ParseCookMetadataDocument<EntryT>(assetRoot, virtualRoot, nwbFilePath, doc, diagnosticPrefix, Forward<ParseValueFn>(parseValue), scratchArena);
+}
+
+template<typename EntryT, typename RootArenaT, typename FileArenaT, typename MetadataDocument, typename Read>
+[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
+    ::ArenaBase& callerArena, const ::Path<RootArenaT>& root, const AStringView virtualRoot, const ::Path<FileArenaT>& path,
+    const MetadataDocument& document, const AStringView diagnosticPrefix, Read&& read
+){
+    return ParseCookMetadataDocument<EntryT>(root, virtualRoot, path, document, diagnosticPrefix, [&](const Name virtualPath, const auto& asset){
+        if constexpr(requires{ read(callerArena, virtualPath, asset); })
+            return read(callerArena, virtualPath, asset);
+        else
+            return read(virtualPath, asset);
+    });
 }
 
 template<typename MetadataDocument, typename MetadataValue, typename PathArenaT>

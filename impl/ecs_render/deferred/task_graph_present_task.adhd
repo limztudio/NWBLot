@@ -2,88 +2,90 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/deferred_system.adhd>
+#include <impl/ecs_render/kernel/task_graph_queue_lookup.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
+b8 ShouldAcceptDeferredOutputLayer(in b8 hasContributor, in u64 frameGeneration, in b8 tokenValid){
+    return hasContributor && frameGeneration != 0u && tokenValid;
+}
 
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_graph.h>
-#include <core/task/gpu/output_layer_contributor.h>
+[cpp_unwind]
+void AcceptDeferredOutputLayer(in Optional<mut IGpuTaskGraphOutputLayerContributor> contributor, in u64 generation, in QueueSubmissionToken token){
+    if(ShouldAcceptDeferredOutputLayer(contributor.has_value(), generation, token.valid()))
+        contributor.value().acceptTaskGraphOutputLayer(generation, token);
+}
 
+class DeferredPresentGraphTask{
+    private mut RendererDeferredSystem m_deferredSystem;
+    private mut GraphicsRuntime m_graphics;
+    private mut DeferredFrameTargets m_targets;
+    private AcquiredPresentationFrame m_presentationFrame;
+    private GpuGraphResourceId m_backBuffer;
+    private GpuTaskGraphOutputLayer m_outputLayer;
+    private Optional<mut IGpuTaskGraphOutputLayerContributor> m_contributor;
+    private mut Optional<GpuTimingMeasure> m_asyncFinalTiming;
+    private mut GpuTimingSubmissionTicket m_timingTicket;
+    private in GpuTaskId m_shadowVisibilityTask;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public DeferredPresentGraphTask(mut RendererDeferredSystem deferredSystem, mut GraphicsRuntime graphics, mut DeferredFrameTargets targets,
+        in AcquiredPresentationFrame presentationFrame, in GpuGraphResourceId backBuffer, in GpuTaskGraphOutputLayer outputLayer,
+        in Optional<mut IGpuTaskGraphOutputLayerContributor> contributor, mut Optional<GpuTimingMeasure> asyncFinalTiming,
+        mut GpuTimingSubmissionTicket timingTicket, in GpuTaskId shadowVisibilityTask){
+        this.m_deferredSystem = deferredSystem;
+        this.m_graphics = graphics;
+        this.m_targets = targets;
+        this.m_presentationFrame = presentationFrame;
+        this.m_backBuffer = backBuffer;
+        this.m_outputLayer = outputLayer;
+        this.m_contributor = contributor;
+        this.m_asyncFinalTiming = asyncFinalTiming;
+        this.m_timingTicket = timingTicket;
+        this.m_shadowVisibilityTask = shadowVisibilityTask;
+    }
 
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        requirements.requiresPrimaryGraphicsQueue = true;
+        return requirements;
+    }
 
-NWB_IMPL_BEGIN
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        const auto shadowQueue = QueueForTask(context, this.m_shadowVisibilityTask);
+        if(!this.m_presentationFrame.valid() || !this.m_backBuffer.valid() || !shadowQueue.has_value())
+            return false;
+        in FramebufferDesc framebuffer = this.m_presentationFrame.framebuffer.deref().getDescription();
+        in RhiTexture backBuffer = this.m_presentationFrame.backBuffer.texture.deref();
+        if(framebuffer.colorAttachments.size() != 1u || !framebuffer.colorAttachments[0u].hasTexture(backBuffer))
+            return false;
+        if(!VisitGpuTaskTexture(context.declarations, this.m_backBuffer, lambda[in backBuffer](mut RhiTexture texture) -> b8{ return SameAddress(texture, backBuffer); }))
+            return false;
 
+        GpuTimingTicketRecordingScope recording(this.m_timingTicket);
+        const b8 shadowUsesCompute = shadowQueue.value().queueClass == CommandQueue::Compute;
+        if(shadowUsesCompute){
+            this.m_asyncFinalTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeAsyncFinal, this.m_graphics.getDevice(), commands);
+            if(!FinishSplitGpuTimingMarker(this.m_asyncFinalTiming))
+                return false;
+        }
+        const b8 recorded = this.m_deferredSystem.renderDeferredPresent(commands, this.m_targets, this.m_presentationFrame, this.m_outputLayer.sampledImage);
+        if(shadowUsesCompute && recorded && this.m_asyncFinalTiming.has_value()){
+            this.m_asyncFinalTiming.value().finishTiming(commands);
+            this.m_asyncFinalTiming.reset();
+        }
+        return recorded;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererDeferredSystem;
-class DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct DeferredPresentGraphTask{
-    // Acquired backbuffer recording belongs to the primary presentation timeline.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
-
-
-public:
-    // All bindings required: present closes the async-final range when shadow runs on compute.
-    // Only the output-layer contributor stays optional.
-    struct Payload{
-        RendererDeferredSystem& deferredSystem;
-        Core::GraphicsRuntime& graphics;
-        DeferredFrameTargets& targets;
-        Core::AcquiredPresentationFrame presentationFrame;
-        Core::GpuGraphResourceId backBuffer;
-        Core::GpuTaskGraphOutputLayer outputLayer;
-        Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor = nullptr;
-        Optional<Core::GpuTimingMeasure>& asyncFinalTiming;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        const Core::GpuTaskId& shadowVisibilityTask;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
-    // Narrow output-layer acceptance: the only optional coupling inside Accepted.
-    static void AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* contributor, u64 frameGeneration, const Core::QueueSubmissionToken& token);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public void accepted(in QueueSubmissionToken token){
+        AcceptDeferredOutputLayer(this.m_contributor, this.m_outputLayer.frameGeneration, token);
+    }
 }
 
 

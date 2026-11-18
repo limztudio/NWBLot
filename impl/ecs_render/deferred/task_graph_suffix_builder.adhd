@@ -2,116 +2,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/deferred_system.adhd>
+#include <impl/ecs_render/deferred/graph_types.adhd>
+#include <impl/ecs_render/reflection/task_graph_reflection.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/graph_types.adhd.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+class DeferredGraphSuffixInputs{
+    public mut DeferredFrameTargets targets;
+    public GpuGraphResourceId opaqueColor;
+    public GpuGraphResourceId avboitAccumColor;
+    public GpuGraphResourceId avboitAccumExtinction;
+    public GpuGraphResourceId avboitForegroundColor;
+    public GpuGraphResourceId avboitForegroundExtinction;
+    public GpuGraphResourceId refractionResolve;
+    public GpuGraphResourceId refractionDepth;
+    public GpuGraphResourceId currentBindlessSlots;
+    public ReflectionGraphResult reflectionGraph;
+    public ReflectionCompositeInputs reflectionCompositeInputs;
+    public b8 useLaggedLightingHistory = false;
+    public GpuTaskId lightingTask;
+    public GpuTaskId avboitFinalTask;
+    public GpuTaskId refractionResolveTask;
+    public GpuTaskId surfelGiTask;
+    public GpuTaskId hardwareCausticsTask;
+    public in AcquiredPresentationFrame presentationFrame;
+    public in FramebufferDesc presentationFramebufferDesc;
+    public DeferredGraphSuffixInputs(mut DeferredFrameTargets targets, in AcquiredPresentationFrame presentationFrame, in FramebufferDesc presentationFramebufferDesc){
+        this.targets = targets;
+        this.presentationFrame = presentationFrame;
+        this.presentationFramebufferDesc = presentationFramebufferDesc;
+    }
+}
 
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/rhi/framebuffer.h>
-#include <core/graphics/rhi/presentation.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/presentation_contributor.h>
-#include <core/task/gpu/output_layer_contributor.h>
-#include <core/task/gpu/task_graph.h>
+[modular]
+class DeferredGraphSuffixBuilder : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    private mut RendererDeferredSystem m_deferredSystem;
+    private mut GraphicsRuntime m_graphics;
+    private Optional<mut IGpuTaskGraphPresentationContributor> m_presentationContributor;
+    private Optional<mut IGpuTaskGraphOutputLayerContributor> m_outputLayerContributor;
 
+    public DeferredGraphSuffixBuilder(mut GpuTaskGraph graph, mut RendererDeferredSystem deferredSystem, mut GraphicsRuntime graphics,
+        in Optional<mut IGpuTaskGraphPresentationContributor> presentationContributor, in Optional<mut IGpuTaskGraphOutputLayerContributor> outputLayerContributor){
+        this.m_graph = graph;
+        this.m_deferredSystem = deferredSystem;
+        this.m_graphics = graphics;
+        this.m_presentationContributor = presentationContributor;
+        this.m_outputLayerContributor = outputLayerContributor;
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererDeferredSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Composite/present suffix owns terminal color resolve and presentation handoff.
-struct DeferredGraphSuffixInputs{
-    DeferredFrameTargets& targets;
-    Core::GpuGraphResourceId opaqueColor;
-    Core::GpuGraphResourceId avboitAccumColor;
-    Core::GpuGraphResourceId avboitAccumExtinction;
-    Core::GpuGraphResourceId avboitForegroundColor;
-    Core::GpuGraphResourceId avboitForegroundExtinction;
-    Core::GpuGraphResourceId refractionResolve;
-    Core::GpuGraphResourceId refractionDepth;
-    Core::GpuGraphResourceId currentBindlessSlots;
-    RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
-    ReflectionCompositeInputs reflectionCompositeInputs;
-    b8 useLaggedLightingHistory = false;
-    Core::GpuTaskId lightingTask;
-    Core::GpuTaskId avboitFinalTask;
-    Core::GpuTaskId refractionResolveTask;
-    Core::GpuTaskId surfelGiTask;
-    Core::GpuTaskId hardwareCausticsTask;
-    const Core::AcquiredPresentationFrame& presentationFrame;
-    const Core::FramebufferDesc& presentationFramebufferDesc;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphSuffixBuilder final : NoCopy{
-public:
-    DeferredGraphSuffixBuilder(
-        Core::GpuTaskGraph& graph,
-        RendererDeferredSystem& deferredSystem,
-        Core::GraphicsRuntime& graphics,
-        Core::IGpuTaskGraphPresentationContributor* presentationContributor,
-        Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
-    )noexcept
-        : m_graph(graph)
-        , m_deferredSystem(deferredSystem)
-        , m_graphics(graphics)
-        , m_presentationContributor(presentationContributor)
-        , m_outputLayerContributor(outputLayerContributor)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<DeferredGraphSuffixResult> declare(
-        const DeferredGraphSuffixInputs& inputs,
-        const Core::GpuTaskId& shadowVisibilityTask,
-        Core::GpuTimingSubmissionTicket& compositeTimingTicket,
-        Core::GpuTimingSubmissionTicket& presentTimingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
-        Core::GpuTimingFrameTransaction& frameTimingTransaction
-    );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererDeferredSystem& m_deferredSystem;
-    Core::GraphicsRuntime& m_graphics;
-    Core::IGpuTaskGraphPresentationContributor* m_presentationContributor;
-    Core::IGpuTaskGraphOutputLayerContributor* m_outputLayerContributor;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    [cpp_unwind]
+    public Expected<DeferredGraphSuffixResult> declare(mut DeferredGraphSuffixInputs inputs, in borrow GpuTaskId shadowVisibilityTask,
+        mut GpuTimingSubmissionTicket compositeTimingTicket, mut GpuTimingSubmissionTicket presentTimingTicket,
+        mut Optional<GpuTimingMeasure> asyncFinalTiming, mut GpuTimingFrameTransaction frameTimingTransaction);
 }
 
 

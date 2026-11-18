@@ -136,6 +136,11 @@ public:
 
     Value& field(MStringView name);
     [[nodiscard]] const Value* findField(MStringView name)const noexcept;
+    [[nodiscard]] Optional<NotNull<const Value*>> borrowField(MStringView name)const noexcept{
+        if(const Value* value = findField(name))
+            return MakeNotNull(value);
+        return {};
+    }
     [[nodiscard]] b8 hasField(MStringView name)const noexcept{ return findField(name) != nullptr; }
     template<typename Visitor>
     b8 visitField(MStringView name, Visitor&& visitor)const{

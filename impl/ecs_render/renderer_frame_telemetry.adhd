@@ -2,6 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/renderer_frame_pipeline.adhd>
+#include <impl/ecs_render/kernel/renderer_device_diagnostics_label.adhd>
+#include <impl/ecs_render/kernel/renderer_graph_runtime_label.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+#include <impl/ecs_render/kernel/frame_graph_runtime_statistics.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 HasActiveRuntimeQueueTopology(in b8 runtimeStatisticsPresent, in b8 hasQueues, in usize queueCount){
     return runtimeStatisticsPresent && hasQueues && queueCount != 0u;
 }
@@ -14,72 +25,54 @@ b8 MatchesSubmittedPacketTelemetryCount(in usize collectedPacketCount, in u32 na
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+FrameGraphNodeHandle AppendRendererTelemetryPass(mut FrameGraphBuilder builder, mut FrameGraphNodeHandle lastPass, in GpuTimingScopeDefinition scope, in StringView label){
+    const FrameGraphNodeHandle pass = builder.addPass(scope.identity, label);
+    builder.addEdge(lastPass, pass, FrameGraphEdgeKind::DependsOn);
+    lastPass = pass;
+    return pass;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/kernel/frame_graph_runtime_statistics.adhd.h>
-#include <impl/ecs_render/kernel/renderer_device_diagnostics_label.adhd.h>
-#include <impl/ecs_render/kernel/renderer_graph_runtime_label.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/frame_graph_nodes.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
-    if(!m_frameTargets.valid())
+[cpp_unwind]
+b8 RendererFramePipeline::appendFrameGraph(mut FrameGraphBuilder builder){
+    if(!this.m_frameTargets.valid())
         return false;
 
-    const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
-    const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
+    const GpuTaskGraphDeclarationReadView deferredTaskGraphView(this.m_deferredLightingTaskGraph);
+    const GpuCompiledGraphReadView deferredCompiledPlan(this.m_deferredLightingCompiledGraph);
 
-    using Handle = Core::Telemetry::FrameGraphNodeHandle;
-    namespace Edge = Core::Telemetry::FrameGraphEdgeKind;
 
-    const CsgFrameState& csgFrameState = m_preparedCsgFrameState;
-    const b8 hasCsgFrameWork = m_preparedCsgFrameStateValid && !csgFrameState.empty();
+    in CsgFrameState csgFrameState = this.m_preparedCsgFrameState;
+    const b8 hasCsgFrameWork = this.m_preparedCsgFrameStateValid && !csgFrameState.empty();
     const b8 hasOpaqueCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork);
     const b8 hasTransparentCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
-    const b8 hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
-    const b8 hasAvboitWork = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
+    const b8 hasTransparentRenderers = this.m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
+    const b8 hasAvboitWork = this.m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
 
-    Core::GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics{};
-    if(builder.frameIndex() == m_frameGraphSourceFrameIndex)
-        deferredRuntimeStatistics = deferredTaskGraphRuntimeStatistics();
-    Core::Telemetry::FrameGraphPassMetadata rendererFrameMetadata;
-    rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics(deferredRuntimeStatistics, builder.frameIndex(), m_frameGraphSourceFrameIndex);
-    const Core::GpuPhysicalQueueTopology runtimeQueueTopology = deferredCompiledPlan.queueTopology();
-    Core::Alloc::ScratchArena& scratchArena = builder.scratchArena();
-    Vector<Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics, Core::Alloc::ScratchArena> physicalQueueRuntimeStatistics(scratchArena);
-    Vector<Core::GpuTaskGraphPacketSubmissionStatistics, Core::Alloc::ScratchArena> packetSubmissionStatistics(scratchArena);
-    if(rendererFrameMetadata.runtimeStatistics.present && !HasActiveRuntimeQueueTopology(rendererFrameMetadata.runtimeStatistics.present, runtimeQueueTopology.queues != nullptr, runtimeQueueTopology.queueCount))
-        rendererFrameMetadata.runtimeStatistics = {};
+    GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics;
+    if(builder.frameIndex() == this.m_frameGraphSourceFrameIndex)
+        deferredRuntimeStatistics = this.deferredTaskGraphRuntimeStatistics();
+    FrameGraphPassMetadata rendererFrameMetadata;
+    rendererFrameMetadata.runtimeStatistics = BuildFrameGraphRuntimeStatistics(deferredRuntimeStatistics, builder.frameIndex(), this.m_frameGraphSourceFrameIndex);
+    const GpuPhysicalQueueTopology runtimeQueueTopology = deferredCompiledPlan.queueTopology();
+    Vector<FrameGraphPhysicalQueueRuntimeStatistics> physicalQueueRuntimeStatistics;
+    Vector<GpuTaskGraphPacketSubmissionStatistics> packetSubmissionStatistics;
+    if(rendererFrameMetadata.runtimeStatistics.present && !HasActiveRuntimeQueueTopology(rendererFrameMetadata.runtimeStatistics.present, !runtimeQueueTopology.queueSpan().empty(), runtimeQueueTopology.queueCount))
+        rendererFrameMetadata.runtimeStatistics = FrameGraphRuntimeStatistics();
     if(rendererFrameMetadata.runtimeStatistics.present){
         physicalQueueRuntimeStatistics.reserve(runtimeQueueTopology.queueCount);
         for(usize queueIndex = 0u; queueIndex < runtimeQueueTopology.queueCount; ++queueIndex){
-            const Core::GpuPhysicalQueueId queue = runtimeQueueTopology.queues[queueIndex].id;
-            const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queueStatistics = ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+            const GpuPhysicalQueueId queue = runtimeQueueTopology.queueSpan()[queueIndex].id;
+            const FrameGraphPhysicalQueueRuntimeStatistics queueStatistics = BuildFrameGraphPhysicalQueueRuntimeStatistics(
                 deferredCompiledPlan.physicalQueueCompileStatistics(queue),
-                m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(m_deferredLightingCompiledGraph, deferredCompiledPlan, queue),
-                m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(deferredCompiledPlan, queue)
+                this.m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(this.m_deferredLightingCompiledGraph, deferredCompiledPlan, queue),
+                this.m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(deferredCompiledPlan, queue)
             );
-            if(!Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(queueStatistics, rendererFrameMetadata.runtimeStatistics)){
-                rendererFrameMetadata.runtimeStatistics = {};
+            if(!IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(queueStatistics, rendererFrameMetadata.runtimeStatistics)){
+                rendererFrameMetadata.runtimeStatistics = FrameGraphRuntimeStatistics();
                 physicalQueueRuntimeStatistics.clear();
                 break;
             }
@@ -89,193 +82,172 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
     if(rendererFrameMetadata.runtimeStatistics.present){
         packetSubmissionStatistics.reserve(deferredCompiledPlan.packetCount());
         for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){
-            const Core::GpuSubmissionPacketId packet = deferredCompiledPlan.packetIdAt(packetIndex);
+            const GpuSubmissionPacketId packet = deferredCompiledPlan.packetIdAt(packetIndex);
             if(!packet.valid()){
-                rendererFrameMetadata.runtimeStatistics = {};
+                rendererFrameMetadata.runtimeStatistics = FrameGraphRuntimeStatistics();
                 physicalQueueRuntimeStatistics.clear();
                 packetSubmissionStatistics.clear();
                 break;
             }
 
-            const Core::GpuTaskGraphPacketSubmissionStatistics packetStatistics = m_deferredLightingSubmissionTransaction.packetSubmissionStatistics(deferredCompiledPlan, packet);
+            const GpuTaskGraphPacketSubmissionStatistics packetStatistics = this.m_deferredLightingSubmissionTransaction.packetSubmissionStatistics(deferredCompiledPlan, packet);
             if(packetStatistics.valid())
                 packetSubmissionStatistics.push_back(packetStatistics);
         }
         if(rendererFrameMetadata.runtimeStatistics.present && !MatchesSubmittedPacketTelemetryCount(packetSubmissionStatistics.size(), deferredRuntimeStatistics.submission.nativeSubmissionCount)){
-            rendererFrameMetadata.runtimeStatistics = {};
+            rendererFrameMetadata.runtimeStatistics = FrameGraphRuntimeStatistics();
             physicalQueueRuntimeStatistics.clear();
             packetSubmissionStatistics.clear();
         }
     }
-    m_frameGraphRendererLabel.clear();
-    if(!RendererGraphRuntimeLabel{}.append(deferredRuntimeStatistics, runtimeQueueTopology, physicalQueueRuntimeStatistics, deferredCompiledPlan, m_deferredLightingRecordedGraph, m_graphics.getDevice(), m_frameGraphRendererLabel))
+    this.m_frameGraphRendererLabel.clear();
+    RendererGraphRuntimeLabel runtimeLabel;
+    if(!runtimeLabel.append(deferredRuntimeStatistics, runtimeQueueTopology, physicalQueueRuntimeStatistics, deferredCompiledPlan, this.m_deferredLightingRecordedGraph, this.m_graphics.getDevice(), this.m_frameGraphRendererLabel))
         return false;
 
-    RendererDeviceDiagnosticsLabel{}.append(m_graphics, m_frameGraphRendererLabel);
+    RendererDeviceDiagnosticsLabel diagnosticsLabel;
+    diagnosticsLabel.append(this.m_graphics, this.m_frameGraphRendererLabel);
 
-    const Handle rendererFrame = builder.addPass(Name(s_FrameGraphNameEcsRenderFrame), AStringView(m_frameGraphRendererLabel), rendererFrameMetadata);
-    for(const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics : physicalQueueRuntimeStatistics){
+    const FrameGraphNodeHandle rendererFrame = builder.addPass(Name(s_FrameGraphNameEcsRenderFrame), StringView(this.m_frameGraphRendererLabel), rendererFrameMetadata);
+    for(in FrameGraphPhysicalQueueRuntimeStatistics queueStatistics : physicalQueueRuntimeStatistics){
         if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
-            FOUNDATION_ASSERT(false);
+            assert(false);
             return false;
         }
     }
-    for(const Core::GpuTaskGraphPacketSubmissionStatistics& packetStatistics : packetSubmissionStatistics){
-        const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord telemetryStatistics = ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index);
+    for(in GpuTaskGraphPacketSubmissionStatistics packetStatistics : packetSubmissionStatistics){
+        const FrameGraphPacketSubmissionStatisticsRecord telemetryStatistics = BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index);
         if(!builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)){
-            FOUNDATION_ASSERT(false);
+            assert(false);
             return false;
         }
     }
-    const Handle frameSetup = builder.addPass(Name(s_FrameGraphNameEcsRenderFrameSetup), "Frame Setup");
-    const Handle deferredTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderDeferredTargets), "Deferred Targets");
-    const Handle meshViewBuffer = builder.addResource(Name(s_FrameGraphNameEcsRenderMeshViewBuffer), "Mesh View Buffer");
-    const Handle sceneShadingBuffer = builder.addResource(Name(s_FrameGraphNameEcsRenderSceneShadingBuffer), "Scene Shading Buffer");
-    const Handle materialBuffers = builder.addResource(Name(s_FrameGraphNameEcsRenderMaterialDrawBuffers), "Material Draw Buffers");
-    const Handle backBuffer = builder.addExternal(Core::GraphicsFrameGraphNodes::s_Backbuffer, "Back Buffer");
+    const FrameGraphNodeHandle frameSetup = builder.addPass(Name(s_FrameGraphNameEcsRenderFrameSetup), "Frame Setup");
+    const FrameGraphNodeHandle deferredTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderDeferredTargets), "Deferred Targets");
+    const FrameGraphNodeHandle meshViewBuffer = builder.addResource(Name(s_FrameGraphNameEcsRenderMeshViewBuffer), "Mesh View Buffer");
+    const FrameGraphNodeHandle sceneShadingBuffer = builder.addResource(Name(s_FrameGraphNameEcsRenderSceneShadingBuffer), "Scene Shading Buffer");
+    const FrameGraphNodeHandle materialBuffers = builder.addResource(Name(s_FrameGraphNameEcsRenderMaterialDrawBuffers), "Material Draw Buffers");
+    const FrameGraphNodeHandle backBuffer = builder.addExternal(s_Backbuffer, "Back Buffer");
 
-    Handle lastPass = frameSetup;
-    auto appendPass = [&](const Core::GpuTimingScopeDefinition& scope, const AStringView label) -> Handle{
-        const Handle pass = builder.addPass(scope.identity, label);
-        builder.addEdge(lastPass, pass, Edge::DependsOn);
-        lastPass = pass;
-        return pass;
-    };
+    FrameGraphNodeHandle lastPass = frameSetup;
 
-    builder.addEdge(rendererFrame, frameSetup, Edge::DependsOn);
-    builder.addEdge(frameSetup, meshViewBuffer, Edge::Writes);
-    builder.addEdge(frameSetup, sceneShadingBuffer, Edge::Writes);
+    builder.addEdge(rendererFrame, frameSetup, FrameGraphEdgeKind::DependsOn);
+    builder.addEdge(frameSetup, meshViewBuffer, FrameGraphEdgeKind::Writes);
+    builder.addEdge(frameSetup, sceneShadingBuffer, FrameGraphEdgeKind::Writes);
 
-    const Handle deferredClear = appendPass(s_TimingScopeDeferredClear, "Deferred Clear");
-    builder.addEdge(deferredClear, deferredTargets, Edge::Writes);
+    const FrameGraphNodeHandle deferredClear = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeDeferredClear, "Deferred Clear");
+    builder.addEdge(deferredClear, deferredTargets, FrameGraphEdgeKind::Writes);
 
-    const Handle materialUpload = appendPass(s_TimingScopeMaterialUpload, "Material Upload");
-    builder.addEdge(materialUpload, materialBuffers, Edge::Writes);
+    const FrameGraphNodeHandle materialUpload = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeMaterialUpload, "Material Upload");
+    builder.addEdge(materialUpload, materialBuffers, FrameGraphEdgeKind::Writes);
 
-    Handle csgIntervalTargets;
+    FrameGraphNodeHandle csgIntervalTargets;
     if(hasOpaqueCsgFrameWork){
         csgIntervalTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderCsgIntervalTargets), "CSG Interval Targets");
 
-        const Handle csgUpload = appendPass(s_TimingScopeCsgUpload, "CSG Upload");
-        builder.addEdge(csgUpload, csgIntervalTargets, Edge::Writes);
+        const FrameGraphNodeHandle csgUpload = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeCsgUpload, "CSG Upload");
+        builder.addEdge(csgUpload, csgIntervalTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle csgSampleStateUpload = appendPass(s_TimingScopeCsgSampleStateUpload, "CSG Sample State Upload");
-        builder.addEdge(csgSampleStateUpload, csgIntervalTargets, Edge::Writes);
+        const FrameGraphNodeHandle csgSampleStateUpload = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeCsgSampleStateUpload, "CSG Sample State Upload");
+        builder.addEdge(csgSampleStateUpload, csgIntervalTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle csgIntervalPeel = appendPass(s_TimingScopeCsgIntervalPeel, "CSG Interval Peel");
-        builder.addEdge(csgIntervalPeel, csgIntervalTargets, Edge::Writes);
+        const FrameGraphNodeHandle csgIntervalPeel = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeCsgIntervalPeel, "CSG Interval Peel");
+        builder.addEdge(csgIntervalPeel, csgIntervalTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle csgReceiverSurface = appendPass(s_TimingScopeOpaqueCsgReceiverSurface, "Opaque CSG Receiver Surface");
-        builder.addEdge(meshViewBuffer, csgReceiverSurface, Edge::Reads);
-        builder.addEdge(csgReceiverSurface, csgIntervalTargets, Edge::Writes);
+        const FrameGraphNodeHandle csgReceiverSurface = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeOpaqueCsgReceiverSurface, "Opaque CSG Receiver Surface");
+        builder.addEdge(meshViewBuffer, csgReceiverSurface, FrameGraphEdgeKind::Reads);
+        builder.addEdge(csgReceiverSurface, csgIntervalTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle csgReceiverSpanBuild = appendPass(s_TimingScopeCsgReceiverSpanBuild, "CSG Receiver Span Build");
-        builder.addEdge(csgIntervalTargets, csgReceiverSpanBuild, Edge::Reads);
-        builder.addEdge(csgReceiverSpanBuild, csgIntervalTargets, Edge::Writes);
+        const FrameGraphNodeHandle csgReceiverSpanBuild = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeCsgReceiverSpanBuild, "CSG Receiver Span Build");
+        builder.addEdge(csgIntervalTargets, csgReceiverSpanBuild, FrameGraphEdgeKind::Reads);
+        builder.addEdge(csgReceiverSpanBuild, csgIntervalTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle csgIntervalCombine = appendPass(s_TimingScopeCsgIntervalCombine, "CSG Interval Combine");
-        builder.addEdge(csgIntervalTargets, csgIntervalCombine, Edge::Reads);
-        builder.addEdge(csgIntervalCombine, csgIntervalTargets, Edge::Writes);
+        const FrameGraphNodeHandle csgIntervalCombine = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeCsgIntervalCombine, "CSG Interval Combine");
+        builder.addEdge(csgIntervalTargets, csgIntervalCombine, FrameGraphEdgeKind::Reads);
+        builder.addEdge(csgIntervalCombine, csgIntervalTargets, FrameGraphEdgeKind::Writes);
     }
 
-    const Handle opaqueRegular = appendPass(s_TimingScopeOpaqueRegular, "Opaque Regular");
-    builder.addEdge(meshViewBuffer, opaqueRegular, Edge::Reads);
-    builder.addEdge(sceneShadingBuffer, opaqueRegular, Edge::Reads);
-    builder.addEdge(materialBuffers, opaqueRegular, Edge::Reads);
-    builder.addEdge(opaqueRegular, deferredTargets, Edge::Writes);
+    const FrameGraphNodeHandle opaqueRegular = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeOpaqueRegular, "Opaque Regular");
+    builder.addEdge(meshViewBuffer, opaqueRegular, FrameGraphEdgeKind::Reads);
+    builder.addEdge(sceneShadingBuffer, opaqueRegular, FrameGraphEdgeKind::Reads);
+    builder.addEdge(materialBuffers, opaqueRegular, FrameGraphEdgeKind::Reads);
+    builder.addEdge(opaqueRegular, deferredTargets, FrameGraphEdgeKind::Writes);
 
     if(hasOpaqueCsgFrameWork){
-        const Handle opaqueCsg = appendPass(s_TimingScopeOpaqueCsg, "Opaque CSG");
-        builder.addEdge(meshViewBuffer, opaqueCsg, Edge::Reads);
-        builder.addEdge(materialBuffers, opaqueCsg, Edge::Reads);
-        builder.addEdge(csgIntervalTargets, opaqueCsg, Edge::Reads);
-        builder.addEdge(opaqueCsg, deferredTargets, Edge::Writes);
+        const FrameGraphNodeHandle opaqueCsg = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeOpaqueCsg, "Opaque CSG");
+        builder.addEdge(meshViewBuffer, opaqueCsg, FrameGraphEdgeKind::Reads);
+        builder.addEdge(materialBuffers, opaqueCsg, FrameGraphEdgeKind::Reads);
+        builder.addEdge(csgIntervalTargets, opaqueCsg, FrameGraphEdgeKind::Reads);
+        builder.addEdge(opaqueCsg, deferredTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle csgCapFill = appendPass(s_TimingScopeCsgCapFill, "CSG Cap Fill");
-        builder.addEdge(csgIntervalTargets, csgCapFill, Edge::Reads);
-        builder.addEdge(csgCapFill, deferredTargets, Edge::Writes);
+        const FrameGraphNodeHandle csgCapFill = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeCsgCapFill, "CSG Cap Fill");
+        builder.addEdge(csgIntervalTargets, csgCapFill, FrameGraphEdgeKind::Reads);
+        builder.addEdge(csgCapFill, deferredTargets, FrameGraphEdgeKind::Writes);
     }
 
-    Handle avboitTargets;
+    FrameGraphNodeHandle avboitTargets;
     if(hasAvboitWork){
         avboitTargets = builder.addResource(Name(s_FrameGraphNameEcsRenderAvboitTargets), "AVBOIT Targets");
 
-        const Handle avboitClear = appendPass(s_TimingScopeAvboitClear, "AVBOIT Clear");
-        builder.addEdge(avboitClear, avboitTargets, Edge::Writes);
+        const FrameGraphNodeHandle avboitClear = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeAvboitClear, "AVBOIT Clear");
+        builder.addEdge(avboitClear, avboitTargets, FrameGraphEdgeKind::Writes);
     }
     if(hasTransparentRenderers){
         if(hasTransparentCsgFrameWork){
-            const Handle transparentCsgIntervals = appendPass(s_TimingScopeTransparentCsgIntervals, s_TransparentCsgIntervalsLabel);
-            builder.addEdge(deferredTargets, transparentCsgIntervals, Edge::Reads);
-            builder.addEdge(transparentCsgIntervals, avboitTargets, Edge::Writes);
+            const FrameGraphNodeHandle transparentCsgIntervals = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeTransparentCsgIntervals, s_TransparentCsgIntervalsLabel);
+            builder.addEdge(deferredTargets, transparentCsgIntervals, FrameGraphEdgeKind::Reads);
+            builder.addEdge(transparentCsgIntervals, avboitTargets, FrameGraphEdgeKind::Writes);
         }
 
-        const Handle avboitOccupancy = appendPass(s_TimingScopeAvboitOccupancy, "AVBOIT Occupancy");
-        builder.addEdge(meshViewBuffer, avboitOccupancy, Edge::Reads);
-        builder.addEdge(materialBuffers, avboitOccupancy, Edge::Reads);
-        builder.addEdge(avboitOccupancy, avboitTargets, Edge::Writes);
+        const FrameGraphNodeHandle avboitOccupancy = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeAvboitOccupancy, "AVBOIT Occupancy");
+        builder.addEdge(meshViewBuffer, avboitOccupancy, FrameGraphEdgeKind::Reads);
+        builder.addEdge(materialBuffers, avboitOccupancy, FrameGraphEdgeKind::Reads);
+        builder.addEdge(avboitOccupancy, avboitTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle avboitDepthWarp = appendPass(s_TimingScopeAvboitDepthWarp, s_AvboitDepthWarpLabel);
-        builder.addEdge(avboitTargets, avboitDepthWarp, Edge::Reads);
-        builder.addEdge(avboitDepthWarp, avboitTargets, Edge::Writes);
+        const FrameGraphNodeHandle avboitDepthWarp = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeAvboitDepthWarp, s_AvboitDepthWarpLabel);
+        builder.addEdge(avboitTargets, avboitDepthWarp, FrameGraphEdgeKind::Reads);
+        builder.addEdge(avboitDepthWarp, avboitTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle avboitExtinction = appendPass(s_TimingScopeAvboitExtinction, s_AvboitExtinctionLabel);
-        builder.addEdge(avboitTargets, avboitExtinction, Edge::Reads);
-        builder.addEdge(avboitExtinction, avboitTargets, Edge::Writes);
+        const FrameGraphNodeHandle avboitExtinction = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeAvboitExtinction, s_AvboitExtinctionLabel);
+        builder.addEdge(avboitTargets, avboitExtinction, FrameGraphEdgeKind::Reads);
+        builder.addEdge(avboitExtinction, avboitTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle avboitIntegration = appendPass(s_TimingScopeAvboitIntegration, s_AvboitIntegrationLabel);
-        builder.addEdge(avboitTargets, avboitIntegration, Edge::Reads);
-        builder.addEdge(avboitIntegration, avboitTargets, Edge::Writes);
+        const FrameGraphNodeHandle avboitIntegration = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeAvboitIntegration, s_AvboitIntegrationLabel);
+        builder.addEdge(avboitTargets, avboitIntegration, FrameGraphEdgeKind::Reads);
+        builder.addEdge(avboitIntegration, avboitTargets, FrameGraphEdgeKind::Writes);
 
-        const Handle avboitAccumulate = appendPass(s_TimingScopeAvboitAccumulate, "AVBOIT Accumulate");
-        builder.addEdge(avboitTargets, avboitAccumulate, Edge::Reads);
-        builder.addEdge(avboitAccumulate, deferredTargets, Edge::Writes);
+        const FrameGraphNodeHandle avboitAccumulate = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeAvboitAccumulate, "AVBOIT Accumulate");
+        builder.addEdge(avboitTargets, avboitAccumulate, FrameGraphEdgeKind::Reads);
+        builder.addEdge(avboitAccumulate, deferredTargets, FrameGraphEdgeKind::Writes);
     }
 
-    const Handle deferredLighting = appendPass(s_TimingScopeDeferredLighting, s_DeferredLightingLabel);
-    builder.addEdge(deferredTargets, deferredLighting, Edge::Reads);
-    builder.addEdge(deferredLighting, deferredTargets, Edge::Writes);
+    const FrameGraphNodeHandle deferredLighting = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeDeferredLighting, s_DeferredLightingLabel);
+    builder.addEdge(deferredTargets, deferredLighting, FrameGraphEdgeKind::Reads);
+    builder.addEdge(deferredLighting, deferredTargets, FrameGraphEdgeKind::Writes);
 
-    const Handle deferredComposite = appendPass(s_TimingScopeDeferredComposite, s_DeferredCompositeLabel);
-    builder.addEdge(deferredTargets, deferredComposite, Edge::Reads);
+    const FrameGraphNodeHandle deferredComposite = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeDeferredComposite, s_DeferredCompositeLabel);
+    builder.addEdge(deferredTargets, deferredComposite, FrameGraphEdgeKind::Reads);
 
-    const Handle deferredPresent = appendPass(s_TimingScopeDeferredPresent, s_DeferredPresentLabel);
-    builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
-    builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
+    const FrameGraphNodeHandle deferredPresent = AppendRendererTelemetryPass(builder, lastPass, s_TimingScopeDeferredPresent, s_DeferredPresentLabel);
+    builder.addEdge(deferredComposite, deferredPresent, FrameGraphEdgeKind::DependsOn);
+    builder.addEdge(deferredPresent, backBuffer, FrameGraphEdgeKind::Writes);
 
-    if(m_deferredLightingTaskGraphScheduled){
-        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(deferredTaskGraphView, m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, m_deferredLightingSubmissionTransaction, scratchArena))
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
+    if(this.m_deferredLightingTaskGraphScheduled){
+        if(!this.m_deferredLightingTaskGraphQueueAssignmentTelemetry.updateForFrameGraph(deferredTaskGraphView, this.m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, this.m_deferredLightingSubmissionTransaction, builder))
+            warning("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export");
         else{
-            const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
-                .queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,
-                .compiledPlan = &deferredCompiledPlan,
-                .queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,
-            };
-            if(!deferredTaskGraphView.appendFrameGraphTelemetry(m_deferredLightingTaskGraphAnalysis, scratchArena, builder, deferredLightingTelemetryOptions))
-                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
+            if(!deferredTaskGraphView.appendAcceptedFrameGraphTelemetry(this.m_deferredLightingTaskGraphAnalysis, builder, this.m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, this.m_deferredLightingTaskGraphQueueAssignmentTelemetry))
+                warning("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed");
         }
     }
 
     return true;
 }
 
-Core::GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRuntimeStatistics()const noexcept{
-    const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
+GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRuntimeStatistics()const{
+    const GpuCompiledGraphReadView deferredCompiledPlan(this.m_deferredLightingCompiledGraph);
 
-    return Core::CollectGpuTaskGraphRuntimeStatistics(m_deferredLightingCompiledGraph, deferredCompiledPlan, m_deferredLightingRecordedGraph, m_deferredLightingSubmissionTransaction);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    return CollectGpuTaskGraphRuntimeStatistics(this.m_deferredLightingCompiledGraph, deferredCompiledPlan, this.m_deferredLightingRecordedGraph, this.m_deferredLightingSubmissionTransaction);
 }
 
 

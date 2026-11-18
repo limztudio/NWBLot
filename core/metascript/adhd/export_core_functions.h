@@ -8,6 +8,7 @@ NWB_ADHD_EXPORT_MEMBER_METHOD("remove",                   true,  false, false, f
 NWB_ADHD_EXPORT_MEMBER_METHOD("add",                      true,  false, false, false, FirstTypeArg,           "")
 NWB_ADHD_EXPORT_MEMBER_METHOD("tryGet",                   false, false, false, false, FixedType,              "b8")
 
+NWB_ADHD_EXPORT_RECEIVER_METHOD("Shared", "referenceCount", "u32", false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD("AssetRef",      "name",         "Name",          false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("AssetRef", "reset", "void", "", "", false, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("AssetRef", "valid", "b8", "", "", true, false)

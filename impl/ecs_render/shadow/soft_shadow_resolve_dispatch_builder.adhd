@@ -2,48 +2,186 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/soft_shadow_wavelet.adhd.h>
+[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_PASS_COUNT")]
+extern const u32 s_ShadowWaveletResolvePassCount;
+
+[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT")]
+extern const u32 s_ShadowWaveletTransparentResolvePassCount;
+
+class SoftShadowResolveOwnershipFlags{
+    public b8 graphOwnsFirstWaveletInputState = false;
+    public b8 graphOwnsWaveletMomentsEntryState = false;
+    public b8 graphOwnsFirstWaveletOutputState = false;
+    public b8 graphOwnsWaveletGeometryEntryState = false;
+    public b8 graphOwnsUpsampleStaticEntryStates = true;
+    public b8 graphOwnsUpsampleInputColorEntryState = false;
+    public b8 graphOwnsUpsampleVisibilityOutputState = false;
+}
+
+SoftShadowResolveOwnershipFlags ResolveOpaqueSoftShadowOwnershipFlags(in OpaqueSoftShadowResolveOptions options, in u32 resolvePassCount){
+    SoftShadowResolveOwnershipFlags flags;
+    const b8 deferredWaveletInputs = options.phase == SoftShadowOpaqueResolvePhase::WaveletOnly;
+    const b8 oneWaveletResolveTail = !options.dispatchResolve && options.dispatchResolveTail && resolvePassCount == 1u;
+    flags.graphOwnsWaveletGeometryEntryState = options.graphOwnsGeometryEntry;
+    flags.graphOwnsUpsampleStaticEntryStates = true;
+    flags.graphOwnsWaveletMomentsEntryState = deferredWaveletInputs;
+    flags.graphOwnsFirstWaveletInputState = deferredWaveletInputs || (options.graphOwnsTraceToFirstWavelet && !options.temporalActive);
+    flags.graphOwnsFirstWaveletOutputState = options.dispatchResolve && !options.dispatchResolveTail;
+    flags.graphOwnsUpsampleInputColorEntryState = oneWaveletResolveTail;
+    flags.graphOwnsUpsampleVisibilityOutputState = oneWaveletResolveTail;
+    return flags;
+}
+
+SoftShadowResolveOwnershipFlags ResolveTransparentSoftShadowOwnershipFlags(in TransparentSoftShadowResolveOptions options, in u32 resolvePassCount){
+    SoftShadowResolveOwnershipFlags flags;
+    const b8 mergeToWaveletBoundary = options.dispatchResolve && options.splitResolve && !options.dispatchTemporalMerge && options.temporalActive;
+    const b8 oneWaveletResolveTail = !options.dispatchResolve && options.dispatchResolveTail && resolvePassCount == 1u;
+    flags.graphOwnsFirstWaveletInputState = (options.graphOwnsTraceToResolve && !options.temporalActive) || mergeToWaveletBoundary;
+    flags.graphOwnsWaveletMomentsEntryState = mergeToWaveletBoundary;
+    flags.graphOwnsWaveletGeometryEntryState = options.graphOwnsTraceToResolve;
+    flags.graphOwnsUpsampleStaticEntryStates = true;
+    flags.graphOwnsFirstWaveletOutputState = options.dispatchResolve && options.splitResolve;
+    flags.graphOwnsUpsampleInputColorEntryState = oneWaveletResolveTail;
+    flags.graphOwnsUpsampleVisibilityOutputState = oneWaveletResolveTail;
+    return flags;
+}
+
+SoftShadowResolvePassResources MakeSoftShadowPassResources(in TexturePtr input, in TexturePtr moments, in TexturePtr output, in u32 inputSlot, in u32 momentsSlot, in u32 storage){
+    SoftShadowResolvePassResources resources;
+    resources.inputColorTexture = input;
+    resources.momentsTexture = moments;
+    resources.outputTexture = output;
+    resources.inputColor = inputSlot;
+    resources.moments = momentsSlot;
+    resources.outputStorage = storage;
+    return resources;
+}
+
+SoftShadowResolveDispatch BuildOpaqueSoftShadowDispatch(in OpaqueSoftShadowResolveOptions options, in RendererRayTracingState state, mut DeferredFrameTargets targets){
+    TexturePtr opaqueResolveMoments = targets.shadowMomentsA.get();
+    u32 opaqueResolveMomentsSlot = targets.bindless.shadowMomentsA.slot();
+    if(options.frontIsA){
+        opaqueResolveMoments = targets.shadowMomentsB.get();
+        opaqueResolveMomentsSlot = targets.bindless.shadowMomentsB.slot();
+    }
+    TexturePtr opaqueWaveletInput = targets.shadowSoftHalfA.get();
+    u32 opaqueWaveletInputSlot = targets.bindless.shadowSoftHalfA.slot();
+    if(options.temporalActive){
+        if(options.frontIsA){
+            opaqueWaveletInput = targets.shadowHistB.get();
+            opaqueWaveletInputSlot = targets.bindless.shadowHistB.slot();
+        }
+        else{
+            opaqueWaveletInput = targets.shadowHistA.get();
+            opaqueWaveletInputSlot = targets.bindless.shadowHistA.slot();
+        }
+    }
+    SoftShadowResolveDispatch opaqueDispatch;
+    opaqueDispatch.waveletPipeline = state.shadow.m_softShadowResolve.m_scalar.m_wavelet.m_pipeline;
+    opaqueDispatch.upsamplePipeline = state.shadow.m_softShadowResolve.m_scalar.m_upsample.m_pipeline;
+    opaqueDispatch.firstWaveletResources = MakeSoftShadowPassResources(
+        opaqueWaveletInput, opaqueResolveMoments, targets.shadowSoftHalfB.get(),
+        opaqueWaveletInputSlot, opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+    );
+    opaqueDispatch.outputHalfAResources = MakeSoftShadowPassResources(
+        targets.shadowSoftHalfB.get(), opaqueResolveMoments, targets.shadowSoftHalfA.get(),
+        targets.bindless.shadowSoftHalfB.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+    );
+    opaqueDispatch.outputHalfBResources = MakeSoftShadowPassResources(
+        targets.shadowSoftHalfA.get(), opaqueResolveMoments, targets.shadowSoftHalfB.get(),
+        targets.bindless.shadowSoftHalfA.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+    );
+    opaqueDispatch.upsampleResources = MakeSoftShadowPassResources(
+        targets.shadowSoftHalfB.get(), opaqueResolveMoments, targets.shadowSoftHalfB.get(),
+        targets.bindless.shadowSoftHalfB.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+    );
+    opaqueDispatch.visibilityTexture = targets.shadowVisibility.get();
+    opaqueDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();
+    opaqueDispatch.sceneShading = targets.bindless.sceneShading.slot();
+    const SoftShadowResolveOwnershipFlags ownershipFlags = ResolveOpaqueSoftShadowOwnershipFlags(
+        options,
+        s_ShadowWaveletResolvePassCount
+    );
+    opaqueDispatch.temporalMomentsValid = options.temporalActive;
+    opaqueDispatch.graphOwnsWaveletGeometryEntryState = ownershipFlags.graphOwnsWaveletGeometryEntryState;
+    opaqueDispatch.graphOwnsUpsampleStaticEntryStates = ownershipFlags.graphOwnsUpsampleStaticEntryStates;
+    opaqueDispatch.graphOwnsWaveletMomentsEntryState = ownershipFlags.graphOwnsWaveletMomentsEntryState;
+    opaqueDispatch.graphOwnsFirstWaveletInputState = ownershipFlags.graphOwnsFirstWaveletInputState;
+    opaqueDispatch.graphOwnsFirstWaveletOutputState = ownershipFlags.graphOwnsFirstWaveletOutputState;
+    opaqueDispatch.graphOwnsUpsampleInputColorEntryState = ownershipFlags.graphOwnsUpsampleInputColorEntryState;
+    opaqueDispatch.graphOwnsUpsampleVisibilityOutputState = ownershipFlags.graphOwnsUpsampleVisibilityOutputState;
+    opaqueDispatch.firstWaveletWritesHalfA = false;
+    opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
+    opaqueDispatch.waveletPassCount = s_ShadowWaveletResolvePassCount;
+    return opaqueDispatch;
+}
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingState;
-class DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SoftShadowResolveDispatchBuilder final{
-public:
-    [[nodiscard]] static SoftShadowResolveDispatch Opaque(const OpaqueSoftShadowResolveOptions& options, const RendererRayTracingState& state, DeferredFrameTargets& targets)noexcept;
-    [[nodiscard]] static SoftShadowResolveDispatch Transparent(const TransparentSoftShadowResolveOptions& options, const RendererRayTracingState& state, DeferredFrameTargets& targets)noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+SoftShadowResolveDispatch BuildTransparentSoftShadowDispatch(in TransparentSoftShadowResolveOptions options, in RendererRayTracingState state, mut DeferredFrameTargets targets){
+    TexturePtr transparentResolveMoments = targets.transparentMomentsA.get();
+    u32 transparentResolveMomentsSlot = targets.bindless.transparentMomentsA.slot();
+    if(options.frontIsA){
+        transparentResolveMoments = targets.transparentMomentsB.get();
+        transparentResolveMomentsSlot = targets.bindless.transparentMomentsB.slot();
+    }
+    TexturePtr transparentWaveletInput = targets.transparentSoftHalf.get();
+    u32 transparentWaveletInputSlot = targets.bindless.transparentSoftHalf.slot();
+    if(options.temporalActive){
+        if(options.frontIsA){
+            transparentWaveletInput = targets.transparentHistB.get();
+            transparentWaveletInputSlot = targets.bindless.transparentHistB.slot();
+        }
+        else{
+            transparentWaveletInput = targets.transparentHistA.get();
+            transparentWaveletInputSlot = targets.bindless.transparentHistA.slot();
+        }
+    }
+    SoftShadowResolveDispatch transparentDispatch;
+    transparentDispatch.waveletPipeline = state.shadow.m_softShadowResolve.m_rgb.m_wavelet.m_pipeline;
+    transparentDispatch.upsamplePipeline = state.shadow.m_softShadowResolve.m_rgb.m_upsample.m_pipeline;
+    transparentDispatch.firstWaveletResources = MakeSoftShadowPassResources(
+        transparentWaveletInput, transparentResolveMoments, targets.shadowSoftHalfA.get(),
+        transparentWaveletInputSlot, transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+    );
+    transparentDispatch.outputHalfAResources = MakeSoftShadowPassResources(
+        targets.shadowSoftHalfB.get(), transparentResolveMoments, targets.shadowSoftHalfA.get(),
+        targets.bindless.shadowSoftHalfB.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+    );
+    transparentDispatch.outputHalfBResources = MakeSoftShadowPassResources(
+        targets.shadowSoftHalfA.get(), transparentResolveMoments, targets.shadowSoftHalfB.get(),
+        targets.bindless.shadowSoftHalfA.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+    );
+    transparentDispatch.upsampleResources = MakeSoftShadowPassResources(
+        targets.shadowSoftHalfA.get(), transparentResolveMoments, targets.shadowSoftHalfA.get(),
+        targets.bindless.shadowSoftHalfA.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+    );
+    transparentDispatch.visibilityTexture = targets.shadowVisibility.get();
+    transparentDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();
+    transparentDispatch.sceneShading = targets.bindless.sceneShading.slot();
+    const SoftShadowResolveOwnershipFlags ownershipFlags = ResolveTransparentSoftShadowOwnershipFlags(
+        options,
+        s_ShadowWaveletTransparentResolvePassCount
+    );
+    transparentDispatch.temporalMomentsValid = options.temporalActive;
+    transparentDispatch.graphOwnsFirstWaveletInputState = ownershipFlags.graphOwnsFirstWaveletInputState;
+    transparentDispatch.graphOwnsWaveletMomentsEntryState = ownershipFlags.graphOwnsWaveletMomentsEntryState;
+    transparentDispatch.graphOwnsWaveletGeometryEntryState = ownershipFlags.graphOwnsWaveletGeometryEntryState;
+    transparentDispatch.graphOwnsUpsampleStaticEntryStates = ownershipFlags.graphOwnsUpsampleStaticEntryStates;
+    transparentDispatch.graphOwnsFirstWaveletOutputState = ownershipFlags.graphOwnsFirstWaveletOutputState;
+    transparentDispatch.graphOwnsUpsampleInputColorEntryState = ownershipFlags.graphOwnsUpsampleInputColorEntryState;
+    transparentDispatch.graphOwnsUpsampleVisibilityOutputState = ownershipFlags.graphOwnsUpsampleVisibilityOutputState;
+    transparentDispatch.firstWaveletWritesHalfA = true;
+    transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
+    transparentDispatch.waveletPassCount = s_ShadowWaveletTransparentResolvePassCount;
+    return transparentDispatch;
 }
 
 

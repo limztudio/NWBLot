@@ -1,5 +1,7 @@
 # Renderer error cleanup (September 12, 2026)
 
+> **Historical record:** This document preserves the September 12, 2026 cleanup validation snapshot; suite counts, `.cpp` references, and retired headless-GPU/capture target layouts reflect that point in time.
+
 This cleanup repairs the failures left open by the [optical appearance experiment](smoke/REFLECTION_OPTICAL_EXPERIMENT.md) and the additional failures found by broad validation. The final full debug run has zero failures, and every applicable optimized target has a passing result across the full campaign and focused repair runs. The rejected optical optimization remains removed. No performance improvement is claimed by this cleanup. Target counts and headless-GPU evidence below are historical: the headless smoke-test surface was later retired.
 
 ## Repairs and ownership
@@ -46,7 +48,7 @@ Six application client-window captures were acquired at the three frozen poses, 
 | Mid | 1476 / 1476 | 972 / 972 | 0 / 1476 | Rejected |
 | Late | 594 / 594 | 665 / 736 | 0 / 594 | Rejected |
 
-Images, runtime logs, and analysis are retained in `__artifacts/renderer_error_cleanup/csg_controls/`, including `oracle_verification.json`. The 59-case capture harness suite also tests independent projected geometry, region margins, missing cutters, missing receivers with dense red/blue neighbors, contrast and density boundaries, explicit pose selection, and failure without retrying for a more favorable frame. These controls validate transparent clipping and coverage; they are not an optical-CSG transport claim.
+Images, runtime logs, and analysis are retained in `__artifacts/renderer_error_cleanup/csg_controls/`, including `oracle_verification.json`. At that cleanup, the 59-case capture harness suite also tested independent projected geometry, region margins, missing cutters, missing receivers with dense red/blue neighbors, contrast and density boundaries, explicit pose selection, and failure without retrying for a more favorable frame (current capture-harness Python unit tests are split across nine CTest targets: `nwb_testbed_window_capture_{unit,process_unit,termination_unit,platform_unit,analysis_unit,text_area_unit,lifecycle_unit,lifecycle_platform_unit,resize_unit}`). These controls validate transparent clipping and coverage; they are not an optical-CSG transport claim.
 
 ## Capability limits and retained history
 

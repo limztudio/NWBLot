@@ -1,9 +1,11 @@
 # Asset pipeline
 
-The pipeline has three independent executables and one Python orchestrator. Build
-the `nwb_pipeline` CMake target to produce `dependency_computer`, `asset_builder`,
-and `asset_gatherer` (with `.exe` on Windows). `NWB_BUILD_PIPELINE` controls these
-targets and the asset build libraries.
+The `pipeline/` tree contains four executables and one Python orchestrator. Build
+the `nwb_pipeline` CMake target to produce `adhd_compiler`, `dependency_computer`,
+`asset_builder`, and `asset_gatherer` (with `.exe` on Windows); `pipeline/launch.py`
+runs the three asset-cooking stages (`dependency_computer`, `asset_builder`, and
+`asset_gatherer`), while `adhd_compiler` compiles `.adhd` sources during the CMake build.
+`NWB_BUILD_PIPELINE` controls these targets and the asset build libraries.
 
 Run the complete pipeline through the repository launcher:
 
@@ -148,22 +150,27 @@ The C++ dependency entry point is `NWB::Pipeline::DependencyComputer::ComputeAss
 with `AssetBuildOptions` in the same namespace; link `nwb_pipeline_asset_builder`
 to call it. The gather entry point is `NWB::Pipeline::AssetGatherer::GatherAssets`,
 declared with `AssetGatherOptions` in `pipeline/asset_gatherer/gather.adhd`; link
-`nwb_pipeline_asset_gatherer` to call it. Each tool owns its orchestration API and
-implementation. Shared artifact, cache, manifest, and volume-writing support remains
+`nwb_pipeline_asset_gatherer` to call it. Each tool is authored in `.adhd` and owns its orchestration API and
+implementation alongside the shared pipeline CLI/workspace layer (`nwb_pipeline_tools_common`
+with `pipeline/command_line.adhd` and `pipeline/root_discovery.adhd`, `pipeline/cook_workspace.{h,adhd}`,
+`pipeline/volume_workspace.{h,adhd}`, `pipeline/dependency_computer/dependency_workspace.{h,adhd}`,
+and `utilities/cli/` for `nwb_tool_cli` / `nwb_target_console_entry`). Shared artifact, cache, manifest, and volume-writing support remains
 in `core/assets/volume`; asset codecs, metadata parsers, and build registrations
 remain in their owning asset modules.
 
-Library callers gathering independently built graphics assets set
-`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` to
-`NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena)`, declared in
-`core/assets/gather_merge_registry.h`. The caller supplies its operation-owned scratch arena for the registration snapshot.
+Library callers gathering independently built graphics assets configure
+`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` (`NWB::Pipeline::GatherMergeCallback`):
+C++ callers may assign `NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena)`
+(`core/assets/gather_merge_registry.h`), while `.adhd` callers use
+`NWB::Pipeline::RegisteredGatherMerge(workspace)` (`pipeline/volume_workspace.adhd`).
 The graphics asset implementation self-registers its merge hook; the gather tool consumes the core registration contract.
 The generic gather API also accepts a project callback for other metadata merge
-contracts. A callback receives the duplicate virtual identity, an existing payload
-to update, and the incoming payload bytes. Returning `false` rejects the conflict
+contracts. An `AssetGatherMergeFunction` callback receives the duplicate virtual identity,
+the incoming payload bytes, the operation scratch arena, and an existing payload
+to update (`(virtualPath, incomingPayload, scratchArena, existingPayload)`). Returning `false` rejects the conflict
 and preserves the published volume. Callbacks must leave the existing payload
 unchanged when they fail.
 
 ## Library result contracts
 
-Fallible path, metadata, dependency-selection and volume-write producers return values through global `Expected<T, E>`. `DependencyProviderCatalog::selectInputs`, `read` and `resolve` return the selection, parsed document and provider index after admission. `WriteAssetVolume` returns `AssetVolumeWriteResult`, and `ReadBuiltAsset` returns identity/payload-offset data while retaining its caller-owned byte buffer. Build/gather orchestration, registered metadata accumulation and conflict callbacks keep their actual mutation or callback contracts. Check results before consuming them, preserve supplied arenas, and propagate failure before manifest or volume publication. See [produced values and expected failures](../docs/expected_results.md).
+Fallible path, metadata, dependency-selection and volume-write producers return values through global `Expected<T, E>`. `DependencyProviderCatalog::selectInputs` and `resolve` return the selection and provider index after admission, while document reading is owned by `NWB::Pipeline::CookDependencyAccess::read` (`pipeline/dependency_computer/dependency_workspace.{h,adhd}`, exposed through `DependencyProviderCatalog::access`). `WriteAssetVolume` returns `AssetVolumeWriteResult`, and `ReadBuiltAsset` returns identity/payload-offset data while retaining its caller-owned byte buffer. Build/gather orchestration, registered metadata accumulation and conflict callbacks keep their actual mutation or callback contracts. Check results before consuming them, preserve supplied arenas, and propagate failure before manifest or volume publication. See [produced values and expected failures](../docs/expected_results.md).

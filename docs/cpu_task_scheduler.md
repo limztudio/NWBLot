@@ -1,6 +1,6 @@
 # Shared CPU task scheduling
 
-NWB's runtime owns one `NWB::Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Systems own task scopes and data; they borrow the execution service. Asset-builder and FBX-converter processes each construct their own scheduler once at their entry point.
+NWB's runtime owns one `NWB::Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Systems own task scopes and data; they borrow the execution service. The standalone `asset_builder` tool constructs its own scheduler once at entry (`pipeline/asset_builder/module.adhd`).
 
 The CPU execution service belongs to the `core/task` domain: include `<core/task/cpu/scheduler.h>` and link `nwb_cpu_task` for `Core::CpuTaskScheduler`, `Core::CpuTaskScope`, and the associated task types. Allocator primitives remain in `core/alloc`. Scheduler coverage lives in `tests/unit/task/cpu` under `nwb_cpu_task_tests`; processor topology coverage remains in `tests/unit/global`.
 
@@ -111,7 +111,7 @@ Profiling checks cover disabled collection, label/frame attribution, bounded buf
 
 Use bounded batches or `parallelFor()` for fine-grained collections. The shared scheduler accounts for dependencies, structured lifetimes, cancellation, and placement; its overhead depends on graph shape and submission granularity. The contribution cache stores one scope's proofs at a time. Worker-based tiny workloads are sensitive to wakeups, contention, and code placement. Measure representative work before changing chunk policy, notification routing, or cache capacity.
 
-Run opt-in `CpuTaskProfile` and `CpuTaskWaitProfile` sampling cases through the `core/perf` opt-in API. Keep timing experiments separate from ordinary correctness runs; these sampling cases have no timing pass threshold. Stop builds and heavy tests during measurements, warm the workload, alternate or counterbalance candidate/reference order, and record compiler, configuration, host topology, affinity, worker count, sample count, source/binary identity, and validation checksums.
+Enable scheduler profiling through `Frame` CPU perf capture (`Perf::CollectCpuTaskProfile(CpuTaskScheduler&, TimingSink&)` in `core/perf/cpu_task_profile.h`) or dedicated microbenchmarks, keeping timing experiments separate from ordinary `nwb_cpu_task_tests` correctness runs. Stop builds and heavy tests during measurements, warm the workload, alternate or counterbalance candidate/reference order, and record compiler, configuration, host topology, affinity, worker count, sample count, source/binary identity, and validation checksums.
 
 Time submission, execution, and completion joins together when comparing scheduling overhead. Exclude initialization, serial reference calculation, output clearing, validation, and logging from that timed interval. Validate every output cell or checksum against a deterministic reference after every run. Report medians and a stated percentile method, preserve raw samples, and separate physical placement checks from timed work.
 

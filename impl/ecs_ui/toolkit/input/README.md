@@ -2,7 +2,7 @@
 
 The UI input domain owns platform-neutral hit testing and interaction state. It has no ImGui dependency. Native window focus, mouse capture, IME, clipboard, and native selection belong to the OS service boundary. The ECS UI adapter borrows available services and translates supported events into this domain; the router does not implement native service protocols.
 
-`input.adhd` defines routing values, bounds, and orchestration (`router.adhd` and domain routing modules) for target publication, pointer and command transitions, controls, popups, gestures, and actions. `context_staging.adhd` and `context_popup_staging.adhd` own context declaration, popup, and frame staging operations. `target_table.adhd` and `target_validation.adhd` own staged and committed target lookup, validation, and publication. `admission.adhd` owns queued events, binding-profile admission, and held-source validation. `commands.adhd`, `pointer.adhd`, `control.adhd`, and `popup.adhd` define the corresponding input contracts; `bindings.adhd` and `default_key_bindings.adhd` own keyboard profiles. The caller supplies a `Core::Alloc::GlobalArena` that outlives the router and its consumers.
+`event_types.adhd` defines routing values, bounds, and `InputKeyBinding`, while `input.adhd` and `router.adhd` (plus domain routing modules) own target publication, pointer and command transitions, controls, popups, gestures, and actions (`types.adhd` holds internal state records). `context_staging.adhd` and `context_popup_staging.adhd` own context declaration, popup, and frame staging operations. `target_table.adhd` and `target_validation.adhd` own staged and committed target lookup, validation, and publication. `admission.adhd` owns queued events, binding-profile admission, and held-source validation. `commands.adhd`, `pointer.adhd`, `control.adhd`, and `popup.adhd` define the corresponding input contracts; `bindings.adhd` and `default_key_bindings.adhd` own keyboard profiles. `InputRouter` owns its internal state in the caller's mother arena (`Core::Alloc::GlobalArena`, propagated automatically by ADHD without an explicit arena parameter in `.adhd`, or passed as the hidden leading `::ArenaBase&` in generated C++); the arena must outlive the router and its consumers.
 
 ## Events and ownership
 
@@ -26,23 +26,31 @@ Hover is an explicit provider capability and defaults to disabled. Touch positio
 
 The current interaction policy admits one active spatial source. Its primary and context-menu roles share that source. Competing contacts retain their initial scene/UI ownership but stay inert until their own release; they cannot move, release or acquire the active capture after its owner ends. This policy preserves the current single-drag and editor-selection models. A future multi-contact policy can extend source capture records without changing provider input or control commands.
 
-A Release must match an admitted press. Logical `Cancel` disarms submissions while retaining consumed ownership until Release. `PointerPhase::Cancel` terminates only the identified provider source when its release may never arrive; `InputRouter::cancelDevice(device)` terminates all pointer and command sequences from the explicitly named device. An editor bridge forwards a spatial event only when `pointerRouted` is true, so an inert foreign contact cannot alter selection or click tracking.
+A Release must match an admitted press. Logical `Cancel` disarms submissions while retaining consumed ownership until Release. `PointerPhase::Cancel` terminates only the identified provider source when its release may never arrive; `InputRouter::cancelDeviceInput(device)` terminates all pointer and command sequences from the explicitly named device. An editor bridge forwards a spatial event only when `pointerRouted` is true, so an inert foreign contact cannot alter selection or click tracking.
 
 ## Configurable bindings and external devices
 
-`InputRouter::setBindings(bindings, count)` atomically replaces the keyboard profile. An empty profile removes every default shortcut. `restoreDefaultBindings()` reinstalls the engine profile. A binding names a physical key, required modifiers, ignored modifiers, command, selection policy, whether it can address an editor, and an explicit `allowText` policy. Required and ignored modifier bits must be disjoint. Unspecified modifiers must be absent; CapsLock and NumLock do not affect matching. Ambiguous chords, unsupported keys or modifier bits, malformed commands and profiles exceeding 256 bindings are rejected without changing the active profile.
+`InputRouter::setBindings(bindings)` accepts `in Span<InputKeyBinding>` and atomically replaces the keyboard profile. An empty profile removes every default shortcut. `restoreDefaultBindings()` reinstalls the engine profile. A binding names a physical key, required modifiers, ignored modifiers, command, selection policy, whether it can address an editor, and an explicit `allowText` policy. Required and ignored modifier bits must be disjoint. Unspecified modifiers must be absent; CapsLock and NumLock do not affect matching. Ambiguous chords, unsupported keys or modifier bits, malformed commands and profiles exceeding 256 bindings are rejected without changing the active profile.
 
 The default profile retains Tab/Shift+Tab traversal, Enter acceptance, Ctrl+Enter submission, Space activation, Escape cancellation, arrows/Home/End/Page navigation, word movement/deletion, clipboard/history shortcuts, and Menu/Shift+F10 context-menu requests. Shift extends selection on the default movement bindings. Alt editing combinations remain available to native input, including AltGr. Consumed commands suppress their ordinary key-produced character on Win32, X11, and Wayland unless the binding sets `allowText = true`. The default Space binding explicitly permits text, so it still enters a space while an editor is focused; a custom printable `Activate` binding suppresses its character by default. IME composition/commit and compositor text-input callbacks remain owned by native text services.
 
 `UiLayerSystem::setInputBindings()` exposes the profile boundary at the ECS host. Applications may load profiles from their settings store; the toolkit owns copied bindings and requires no file format.
 
-```cpp
-const Ui::InputKeyBinding profile[] = {
-    { .key = Core::Key::W, .command = Ui::InputCommand::Up },
-    { .key = Core::Key::S, .command = Ui::InputCommand::Down },
-    { .key = Core::Key::F8, .command = Ui::InputCommand::FocusNext },
-};
-const b8 accepted = uiLayer.setInputBindings(profile, LengthOf(profile));
+```adhd
+Vector<UiInputKeyBinding> profile;
+UiInputKeyBinding up();
+up.key = keyCodeW;
+up.command = InputCommand::Up;
+profile.push_back(up);
+UiInputKeyBinding down();
+down.key = keyCodeS;
+down.command = InputCommand::Down;
+profile.push_back(down);
+UiInputKeyBinding next();
+next.key = keyCodeF8;
+next.command = InputCommand::FocusNext;
+profile.push_back(next);
+const b8 accepted = uiLayer.setInputBindings(profile);
 ```
 
 External input uses `InputEventType::CommandDown` and `InputEventType::CommandUp` via `InputRouter::queue(event)`. Supply a stable device identity and nonzero control identity in `InputSource`. The native adapter assigns its own device identity; the router does not infer command behavior from that number. The adapter determines repeat timing and serializes delivery on the UI thread. `extend` requests selection extension independently of keyboard modifiers.
@@ -71,7 +79,7 @@ The router prunes gestures when their declaration disappears, changes kind/lifet
 
 ## Layout and action publication
 
-`commitTargets(targets, count, generation)` requires a nonzero generation newer than the committed generation. It validates all target identities, declaration lifetimes, and finite nonnegative geometry before swapping the complete target list. Duplicate IDs, malformed descriptions, invalid generations, and target overflow reject the entire publication and preserve the accepted layout and interaction state. The router retains its own copies rather than pointers into transient builder storage.
+`commitTargets(targets, generation)` (plus the 3- and 4-argument overloads accepting `popups` and `expectedFocusLossGeneration`) takes a `Span<HitTarget>` and a nonzero generation newer than the committed generation. It validates all target identities, declaration lifetimes, and finite nonnegative geometry before swapping the complete target list. Duplicate IDs, malformed descriptions, invalid generations, and target overflow reject the entire publication and preserve the accepted layout and interaction state. The router retains its own copies rather than pointers into transient builder storage.
 
 A prepared CPU layout is not an input layout. The owning context pairs hit targets with the same frozen draw generation. The host publishes that generation only after its exact output has been accepted and successfully presented. GPU retries reuse frozen paint and do not rerun callbacks or drain accepted actions into a newer CPU frame. Input continues using the previous committed layout during preparation and GPU work.
 
@@ -89,7 +97,7 @@ Cancellation has distinct meanings:
 | `FocusGained` | Marks the native window focused without reopening popups, restoring focus or inventing pointer geometry. |
 | `reset()` | Cancels interaction, queued events and the committed layout for resize, device or root invalidation; consumed holds keep their release owner, and action sequences never restart. |
 
-Native pointer capture loss terminates its identified source directly because the OS may never deliver its release. The native adapter follows focus loss with explicit device termination. An idle native capture-release notification preserves known hover. Native adapters call `InputRouter::cancelDevice(device)` alongside their physical owner resets after focus or resource termination. This boundary ends only that device's pointer and command sequences, and invalidates its cursor geometry. The explicit API preserves completed actions and other devices' held sequences. Logical Escape cancellation and `reset()` retain consumed ownership until release; native termination explicitly ends the OS-owned sequences.
+Native pointer capture loss terminates its identified source directly because the OS may never deliver its release. The native adapter follows focus loss with explicit device termination. An idle native capture-release notification preserves known hover. Native adapters call `InputRouter::cancelDeviceInput(device)` alongside their physical owner resets after focus or resource termination. This boundary ends only that device's pointer and command sequences, and invalidates its cursor geometry. The explicit API preserves completed actions and other devices' held sequences. Logical Escape cancellation and `reset()` retain consumed ownership until release; native termination explicitly ends the OS-owned sequences.
 
 Stable widget IDs derive from the host root identity and lifetime generation plus explicit scope/key hashes in `../id.adhd`. Labels and model values do not form identity. The retained context in `../context.adhd` validates current declaration lifetimes and retires removed ECS roots while a GPU frame remains pending.
 
@@ -123,7 +131,7 @@ Every nonempty `PopupScope::parent` must identify an earlier registered, lower-l
 
 The top accepted scope owns pointer routing and focus traversal. Dismissing a child affects its subtree and restores an eligible parent after accepted removal. Closing, fencing or retiring an ancestor retires descendant targets, queued intentions and capture together while preserving unrelated top-level scope chains. Removing and recreating an old target cannot revive its original held intention; its release remains consumed by the original owner. Native focus loss cancels the entire family and fences delayed acceptance.
 
-`popupCount()`, `topPopupToken()` and `popupScope(token)` are read-only observations of accepted copied scopes. A closing scope remains observable until replacement publication or retirement. Returned target/scope pointers are borrowed only until publication, reset or declaration retirement.
+`popupCount()`, `topPopupToken()` and `popupScope(token)` are read-only observations of accepted copied scopes. A closing scope remains observable until replacement publication or retirement. `findTarget(...)` and `popupScope(token)` return `Optional<in HitTarget>` and `Optional<in PopupScope>` borrowed references that remain valid only until publication, reset, or declaration retirement.
 
 Event admission and consumption return their fixed event values in `Expected`. A failed result means rejection or no matching pending event; callers check it before accessing the event. `queue(event)` returns the normalized intent admitted into the queue. Consuming an active gesture retains its baseline, and consuming a completed gesture removes that record. No event value borrows storage from a removed queue entry.
 

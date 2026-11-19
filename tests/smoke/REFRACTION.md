@@ -438,7 +438,7 @@ associate directly from the capture without an entry query (`entryQueries = 0`,
 establish GPU-time shares. Background hits on opaque instances consult the
 screen-space lighting cache directly from hit distance and instance flags before
 reading primitive, barycentric, or `worldToObject` intersection attributes;
-surface reconstruction and `nwbRefractionShadeSurfaceHit` (`materialShadeCalls`)
+surface reconstruction and `NwbRefractionHardwareBackgroundTrace::shadeSurfaceHit` (`materialShadeCalls`)
 run only when a hit is non-opaque or misses the screen cache.
 
 `refraction_query_diagnostics_smoke.py` acquires diagnostic counts and optical
@@ -474,8 +474,10 @@ raw counters, token/readiness metadata, extent evidence and optical checks.
 
 The complex-case gallery is an additional visual inspection fixture. It covers
 `single`, `separate`, `stacked`, `intersecting`, `nested`, `coincident`,
-`coincident_tinted`, `torus`, `same_mesh`, and `prism`, plus twelve exact-duplicate
-references and controls. Select a case interactively
+`coincident_tinted`, `torus`, `same_mesh`, `prism`, `csg_reference`, `csg_cap`,
+`csg_middle`, `csg_uncut`, `identity_reference`, `identity_same_ior`,
+`identity_different_ior`, `crossing_overflow`, `near_air_ordinary`, and
+`near_air_csg`, plus twelve exact-duplicate references and controls. Select a case interactively
 with `--refraction-case <case>` on the smoke launcher. Add `--refraction-geometry`
 to show the same arrangement with colored translucent materials, normal-based
 shading, a neutral backdrop, and refraction disabled. This makes overlapping and
@@ -568,7 +570,10 @@ checks prevent a priority test from passing with indistinguishable materials.
 and raw BMP/PNG captures are written before image comparison so a failed oracle
 can be inspected. The corresponding CTest is
 `nwb_refraction_duplicate_capture_smoke`; CPU-only oracle tests are registered as
-`nwb_refraction_duplicate_analysis_unit`.
+`nwb_refraction_duplicate_analysis_unit`. Additional registered capture CTests in
+`refraction_smoke.cmake` are `nwb_refraction_density_capture_smoke`,
+`nwb_refraction_query_diagnostics_smoke`, `nwb_refraction_gallery_capture_smoke`,
+`nwb_csg_refraction_capture_smoke`, and `nwb_refraction_identity_capture_smoke`.
 
 The caustic-sphere fixture also explicitly enables camera refraction while keeping
 its original glass material, light, receiver, and photon caustics. Launch it with:
@@ -583,11 +588,12 @@ the glass continues casting its refractive shadow and photon caustic. Set
 leaving the caustic producer on the device's natural route. Both preferences
 default to enabled when the environment variables are absent.
 
-`nwb_software_raytracing_optical_smoke` reads back the application framebuffer after
-360 graphics presentation frames, once GPU readback has completed, with a fixed
-1/60-second simulation delta. It requires both
-a refraction resolve and a caustic producer dispatch, clean runtime logs, a
-nonempty image, and orderly shutdown. Its output is
-`Testing/smoke/<config>/caustic_sphere_capture.bmp`. The existing renderer-baseline
+`nwb_software_raytracing_optical_smoke` runs `caustic_optical_smoke.py --software-ray-tracing`
+against `nwb_caustic_sphere_smoke`, capturing all four optical toggle variants
+(`combined`, `reflection_disabled`, `caustics_disabled`, and `refraction_disabled`)
+after 360 graphics presentation frames with a fixed 1/60-second simulation delta into
+`Testing/smoke/<config>/software_optical`. Each variant requires completed GPU readback,
+software shadow and photon-producer dispatches, screen-space refraction resolve, clean
+runtime logs, nonempty images, and orderly shutdown. The existing renderer-baseline
 freeze remains available for interactive/reference captures; an active framebuffer
-observer takes precedence so a stale freeze setting cannot stop its readback.
+observer takes precedence so a stale freeze setting cannot stop readback.

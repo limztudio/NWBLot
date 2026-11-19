@@ -9,7 +9,7 @@ wrapper is removed.
 
 ## Project selection
 
-Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace; the loader entry only delegates. This Testbed-shaped example assumes `Testbed::ProjectPatchFilesystem` is declared in the project-owned `project_patch_filesystem.h`:
+Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace; the loader entry only delegates. (The `.adhd` reference project `CoolStuff/Testbed` configures its namespace via `NAMESPACE "Testbed"` in `CoolStuff/Testbed/CMakeLists.txt` and implements `NWB::ConfigureProjectRuntime` in `CoolStuff/Testbed/project_world_interop.adhd` without `namespace.h`.) This handwritten C++ project example assumes `ExampleApp::ProjectPatchFilesystem` is declared in a project-owned `project_patch_filesystem.h` with `namespace.h` defining `PROJECT_BEGIN`/`PROJECT_END`:
 
 ```cpp
 #include "namespace.h"
@@ -20,9 +20,9 @@ Projects configure graphics and storage before device initialization through the
 #include <core/filesystem/volume_file_system.h>
 #include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
 
-TESTBED_BEGIN
+PROJECT_BEGIN
 
-namespace __hidden_testbed_startup{
+namespace __hidden_project_startup{
 static b8 ConfigureRuntime(NWB::ProjectStartupContext& context)noexcept{
     if(!context.graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
         return false;
@@ -37,18 +37,18 @@ static b8 ConfigureRuntime(NWB::ProjectStartupContext& context)noexcept{
 }
 };
 
-TESTBED_END
+PROJECT_END
 
 b8 NWB::ConfigureProjectRuntime(NWB::ProjectStartupContext& context)noexcept{
-    return Testbed::__hidden_testbed_startup::ConfigureRuntime(context);
+    return ExampleApp::__hidden_project_startup::ConfigureRuntime(context);
 }
 ```
 
 The unary `+` converts the captureless factory lambda to a function pointer for the `noexcept` entry point.
 
-`Testbed::ProjectPatchFilesystem` implements `NWB::Core::Filesystem::IFilesystem`. The local `namespace.h`
-defines `TESTBED_BEGIN`/`TESTBED_END` independently of root `engine_namespace.h`; engine APIs supply their
-namespaces transitively. Other applications use their own namespace and wrappers. Leaving `filesystemFactory`
+`ExampleApp::ProjectPatchFilesystem` implements `NWB::Core::Filesystem::IFilesystem`. Its local `namespace.h`
+defines `PROJECT_BEGIN`/`PROJECT_END` independently of root `engine_namespace.h`; engine APIs supply their
+namespaces transitively. Leaving `filesystemFactory`
 empty selects `VolumeFileSystem` for every mount. A factory may capture an owning reference to the project's
 patch or download service. The engine copies that factory into its graphics device configuration, so captured
 services must remain valid until graphics shutdown. Do not capture startup-local references.
@@ -86,7 +86,7 @@ by destruction.
 
 Paths are canonical engine `Name` keys, including in optimized builds where exact source strings may be absent.
 A remote backend should use its own mapping from these keys to download URLs, preserving the asset identities
-produced by the builder. `fileExists`, `fileSize`, `fileCount`, `listFiles`, `removeFile`, and
+produced by the builder. `fileExists`, `fileSize`, `fileCount`, `removeFile`, and
 `reserveFileCapacity` complete the storage contract. Capacity reservation is an optional optimization for a
 custom implementation and may be a no-op.
 
@@ -122,4 +122,4 @@ projects can schedule asset work through the existing asynchronous asset executo
 Host source-file discovery and compiler/cache scratch files continue to use the platform-independent helpers
 under `global/filesystem`; they are not virtual runtime asset namespaces.
 
-`fileSize(path)` returns `Expected<u64>`; an empty file succeeds with zero. Whole-container reads retain the caller's arena and capacity. Host helpers such as `FileExists` and `FileSize` return `Expected<bool, ErrorCode>` and `Expected<u64, ErrorCode>`; successful missing-path false is distinct from a host error. See [produced values and expected failures](expected_results.md).
+`fileSize(path)` returns `Expected<u64>`; an empty file succeeds with zero. Whole-container reads retain the caller's arena and capacity. Host helpers such as `FileExists` and `FileSize` return `Expected<b8, ErrorCode>` and `Expected<u64, ErrorCode>`; successful missing-path false is distinct from a host error. See [produced values and expected failures](expected_results.md).

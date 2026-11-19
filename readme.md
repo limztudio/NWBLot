@@ -79,7 +79,7 @@ python -m launcher smoke --profiles
 python -m launcher profiles
 ```
 
-The root launcher discovers the `pipeline` command from `pipeline/launch.py`, using the same `launch.py` entry-point convention as projects and utilities. The pipeline launcher accepts build and asset options together, builds the three tools, and runs `dependency_computer`, `asset_builder`, and `asset_gatherer` in order. Use `--skip-build` with existing tools or `--dry-run` to preview the workflow; `--help` lists all options without building. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
+The root launcher discovers the `pipeline` command from `pipeline/launch.py`, using the same `launch.py` entry-point convention as projects and utilities. The pipeline launcher accepts build and asset options together, builds the `nwb_pipeline` target (which builds `adhd_compiler`, `dependency_computer`, `asset_builder`, and `asset_gatherer`), and runs `dependency_computer`, `asset_builder`, and `asset_gatherer` in order. Use `--skip-build` with existing tools or `--dry-run` to preview the workflow; `--help` lists all options without building. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
 
 The `ui-skin` utility owns `utilities/ui_skin/launch.py` and generates artwork and atlas metadata through the same root entry point. See [its guide](utilities/ui_skin/README.md) for regeneration and texture conversion.
 
@@ -87,13 +87,13 @@ Use `--with-profile` to start the log server with a launched application. Use `-
 
 ## Build configurations and outputs
 
-| Configuration | Configuration macro | Clang optimization | Frame pointer |
-| --- | --- | --- | --- |
-| `dbg` | `NWB_DEBUG` | `-O0` | Kept |
-| `opt` | `NWB_OPTIMIZE` | `-O2` | Kept |
-| `fin` | `NWB_FINAL` | `-O3` | Omitted |
+| Configuration | Configuration macro | GNU-style Clang | `clang-cl` | Frame pointer |
+| --- | --- | --- | --- | --- |
+| `dbg` | `NWB_DEBUG` / `FOUNDATION_DEBUG` | `-O0` | `/Od` (`/Ob0`) | Kept (`-fno-omit-frame-pointer` / `/Oy-`) |
+| `opt` | `NWB_OPTIMIZE` / `FOUNDATION_OPTIMIZE` | `-O2` | `/O2` (`/Ob1`) | Kept (`-fno-omit-frame-pointer` / `/Oy-`) |
+| `fin` | `NWB_FINAL` / `FOUNDATION_FINAL` | `-O3` | `/O2` (`/Ob2`) | Omitted (`-fomit-frame-pointer` / `/Oy`) |
 
-CMake defines the corresponding configuration macro directly. Use `defined(NWB_DEBUG)`, `defined(NWB_OPTIMIZE)`, or `defined(NWB_FINAL)` for configuration-specific code. First-party headers do not infer NWB modes from `DEBUG`, `_DEBUG`, `NDEBUG`, or `_NDEBUG`; external compiler/runtime uses of those spellings remain separate.
+CMake defines the corresponding `NWB_*` and `FOUNDATION_*` configuration macros directly. Use `defined(NWB_DEBUG)`, `defined(NWB_OPTIMIZE)`, or `defined(NWB_FINAL)` for engine configuration-specific code (`FOUNDATION_*` for neutral `global/` code). First-party headers do not infer NWB modes from `DEBUG`, `_DEBUG`, `NDEBUG`, or `_NDEBUG`; external compiler/runtime uses of those spellings remain separate.
 
 Use the exact lowercase configuration names `dbg`, `opt`, and `fin`. A single-config build tree defaults an omitted or empty `CMAKE_BUILD_TYPE` to `dbg` and rejects every other nonempty name, including `Debug`, `Release`, `OFF`, `0`, and case variants. Multi-config presets expose the same canonical names. Imported third-party libraries may map those names to their vendor `Debug`/`Release` artifacts; the project configuration names remain unchanged.
 
@@ -134,7 +134,7 @@ Project-owned abstract interfaces retain the lowercase `interface` annotation su
 
 ## Source and dependency registration
 
-`CMakePresets.json` defines supported build variants. Each target's nearest `CMakeLists.txt` owns its source list through `target_sources`; add new C/C++ files there and use `python -m launcher build <target> --configure always` to refresh the build.
+`CMakePresets.json` defines supported build variants, and `configuration/UnityBuild.cmake` enables CMake Unity Build across the repository. Each target's nearest `CMakeLists.txt` owns its source list through `target_sources` (for C/C++ files) and `nwb_target_adhd_sources(<target> NAMESPACE "..." SOURCES ...)` (for `.adhd` files); add new source files there and use `python -m launcher build <target> --configure always` to refresh the build.
 
 Third-party packages are vendored as flat top-level directories under `3rd_parties/`. Each package records its source and version in `nwb_update.txt`. See [Third-Party Packages](https://github.com/limztudio/NWBLot/wiki/Third-Party-Packages) before updating a dependency.
 

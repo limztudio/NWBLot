@@ -26,11 +26,13 @@ than working around it elsewhere.
   lets a single update of a shared library reach every consumer.
 
 ### 1.1 Build wiring for a flattened package
+- `3rd_parties/CMakeLists.txt` includes `configuration/UnityBuild.cmake` (`CMAKE_UNITY_BUILD ON` globally). Vendored packages with colliding translation-unit symbols opt individual source files out via `nwb_skip_unity_build_sources(<files...>)` (for example `basis_universal`, `libclang`, `llvm`, `rmv`, and `zlib`).
 - Register the package with `add_subdirectory(<name>)` in `3rd_parties/CMakeLists.txt`. Add a dependency
   before the packages that consume it (e.g. `zstd` before `rdf`).
 - Editing or fully rewriting a vendored `CMakeLists.txt` is allowed and expected — drop upstream
   `FetchContent`/download steps (the build is offline/vendored), strip `-Werror`-style options that fight the
   engine toolchain, and fix include paths to the flattened layout.
+- For header-only packages, register interface targets with `nwb_declare_vendor_headers(<target> <alias> <include_dir>)`.
 - Suppress vendor warnings with `nwb_disable_vendor_warnings(<target>)`.
 - C/C++ static libs linked into engine targets must match the engine's per-config CRT and
   `_ITERATOR_DEBUG_LEVEL`: add the target to the `nwb_match_engine_runtime` list in `3rd_parties/CMakeLists.txt`

@@ -39,32 +39,40 @@ identity with hardware RT or hardware-path frame rates.
 
 Build these targets in the chosen configuration so their matching runtime assets
 are cooked: `nwb_transparent_multi_smoke`, `nwb_transparent_csg_smoke`,
-`nwb_caustic_sphere_smoke`, `nwb_skinned_caustic_smoke`,
-`nwb_stress_test_smoke`, and `nwb_gi_test_smoke`.
+`nwb_caustic_sphere_smoke`, `nwb_stress_test_smoke`, `nwb_csg_shadow_smoke`,
+and `nwb_csg_caustic_smoke`.
 
 From the repository root, select a matching platform/architecture configure preset and build without launching a scene:
 
 ```text
-python -m launcher build nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_caustic_sphere_smoke nwb_skinned_caustic_smoke nwb_stress_test_smoke nwb_gi_test_smoke --configure-preset <configure-preset> --build-dir <build-directory> --config opt -D NWB_BUILD_TESTS=ON
+python -m launcher build nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_caustic_sphere_smoke nwb_stress_test_smoke nwb_csg_shadow_smoke nwb_csg_caustic_smoke --configure-preset <configure-preset> --build-dir <build-directory> --config opt -D NWB_BUILD_TESTS=ON
 ctest --test-dir <build-directory> -C opt -L software_raytracing --output-on-failure
 ```
 
-The seven scene tests cover overlapping transparent meshes, two clipped CSG poses,
-converged sphere caustics with refraction, animated skinned glass, the full
-20-body scene before/after an odd-sized resize, and the dedicated GI scene.
-They require the Loader disabled policy and software shadow dispatch, reject
-hardware traversal/producer markers, and request selected GPU validation
-outside the Final configuration. Caustic
-cases additionally require the software photon producer. Warnings, errors,
-assertions and validation diagnostics fail the capture harness.
+The `software_raytracing` label covers 13 CTests across two registrations:
 
-These explicit-policy tests do not skip merely because the physical adapter
+- Five explicit-policy tests in `software_raytracing_smokes.cmake`:
+  `nwb_software_raytracing_overlap_smoke` (`nwb_transparent_multi_smoke`),
+  `nwb_software_raytracing_csg_early_smoke` and `nwb_software_raytracing_csg_late_smoke` (`nwb_transparent_csg_smoke`),
+  `nwb_software_raytracing_optical_smoke` (`nwb_caustic_sphere_smoke`), and
+  `nwb_software_raytracing_stress_resize_smoke` (`nwb_stress_test_smoke` across a resize).
+  They force the Loader disabled policy and software shadow dispatch, reject
+  hardware traversal/producer markers, and request selected GPU validation
+  outside the Final configuration; stress/optical cases also require the software
+  photon producer. Warnings, errors, assertions, and validation diagnostics fail
+  the capture harness.
+- Eight CSG tests in `csg_shadow_capture.cmake`: the seven
+  `nwb_csg_shadow_software_*_smoke` tests (`directional`,
+  `directional_center_blocker`, `point`, `point_center_blocker`, `analytic`,
+  `open`, and `approximate`) plus `nwb_csg_caustic_capture_smoke`.
+
+The explicit-policy tests do not skip merely because the physical adapter
 supports RayQuery. The existing natural-capability software smoke remains
 available for adapters that lack RayQuery without an override. Captures are
 written under `<build-directory>/Testing/smoke/<configuration>`.
 
-An eighth test, `nwb_software_raytracing_optical_smoke`, compares four converged
-sphere captures with reflection, refraction and caustics independently disabled.
+Within the five explicit-policy tests, `nwb_software_raytracing_optical_smoke` compares four converged
+sphere captures (`caustic_optical_smoke.py --software-ray-tracing`) with reflection, refraction and caustics independently disabled.
 A fixed striped opaque backdrop supplies screen-space depth and visible
 refractive displacement in all four captures. The test requires each optical
 contribution to be visible and the caustic gain to concentrate on the receiver. It explicitly excludes the hardware-only exterior
@@ -186,7 +194,7 @@ lighting and GPU validation are opt-in:
 | `--lagged-lighting` | Enable frame-lagged lighting and require accepted bootstrap and active-history evidence |
 | `--gpu-validation` | Request selected GPU validation for a diagnostic run |
 | `--gpu-timing-output <path>` | Retain the GPU timing sidecar through `NWB_GPU_TIMING_FILE` |
-| `--timeout <seconds>` | Bound acquisition; default 90 seconds |
+| `--timeout <seconds>` | Bound acquisition; default 150 seconds |
 | `--check-quality` | Apply the fixture's lighting, temporal, and spatial regression limits to full/direct/indirect views |
 | `--check-geometry` | Check four analytical cap probes in every frame; requires static normal or position view |
 | `--check-cap-state` | Require produced, visible caps that own completed depth at 16 probes in every frame; requires static cap_state view |
@@ -244,7 +252,7 @@ from enclosing faces; they do not verify every cap pixel or replace direct and
 indirect lighting comparisons. Failed checks remain in `manifest.json` and make
 the driver fail.
 
-The five state views are authored only under `tests/smoke/assets/`; the smoke
+The six state views are authored only under `tests/smoke/csg_visible_assets/`; the smoke
 fixture selects their materials without adding production diagnostic switches.
 They display the existing current-frame CSG textures through the normal deferred
 material path:
@@ -338,8 +346,7 @@ Runtime software scenes refit the scene BVH from the current GPU mesh roots
 after the per-mesh build/refit work. The CPU topology and instance order remain
 frozen for that frame. Static-only scenes retain their existing reuse path.
 
-The skinned scene smoke exercises the production shader through the selected
-disabled hardware ray tracing route.
+The stress resize smoke (`nwb_software_raytracing_stress_resize_smoke`, backed by the skinned `nwb_stress_test_smoke` scene) exercises animated skinning under the disabled hardware ray tracing route.
 
 Caustic photon emission-target domains remain a separate approximation based
 on CPU geometry bounds; these smoke scenes do not establish coverage for every

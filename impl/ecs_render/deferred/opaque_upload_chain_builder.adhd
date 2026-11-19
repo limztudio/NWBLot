@@ -28,8 +28,15 @@ b8 DeclareOpaqueMaterialUploads(mut GpuTaskGraph graph, in Span<InstanceGpuData>
 
 [cpp_unwind]
 b8 DeclareOpaqueCsgUploads(
-    mut GpuTaskGraph graph, in CsgFrameGpuDataView frame, in CsgClipContextSlots clipSlots, in CsgIntervalSampleStateGpuData intervalState,
-    in GpuGraphResourceId receivers, in GpuGraphResourceId cutters, in GpuGraphResourceId slots, in GpuGraphResourceId samples, mut GpuTaskId dependency
+    mut GpuTaskGraph graph,
+    in CsgFrameGpuDataView frame,
+    in CsgClipContextSlots clipSlots,
+    in CsgIntervalSampleStateGpuData intervalState,
+    in GpuGraphResourceId receivers,
+    in GpuGraphResourceId cutters,
+    in GpuGraphResourceId slots,
+    in GpuGraphResourceId samples,
+    mut GpuTaskId dependency
 ){
     const auto receiverBlob = graph.copyUploadElements<CsgReceiverRangeGpuData>(frame.receiverRanges);
     const auto cutterBlob = graph.copyUploadElements<CsgCutterGpuData>(frame.cutters);

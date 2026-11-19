@@ -99,8 +99,13 @@ Expected<GpuGraphResourceId> ImportAvboitRefractionCaptureBuffer(mut GpuTaskGrap
 
 
 [cpp_unwind]
-b8 AppendRefractionCaptureUpload(mut GpuTaskGraph graph, mut GpuTaskId dependency, in Name identity,
-    in GpuGraphResourceId destination, in Expected<GpuUploadBlobId> blob){
+b8 AppendRefractionCaptureUpload(
+    mut GpuTaskGraph graph,
+    mut GpuTaskId dependency,
+    in Name identity,
+    in GpuGraphResourceId destination,
+    in Expected<GpuUploadBlobId> blob
+){
     if(!destination.valid() || !blob.has_value())
         return false;
     GpuTaskDesc desc = TaskDesc(identity, s_RefractionCaptureUploadLabel, dependency);
@@ -118,9 +123,16 @@ b8 AppendRefractionCaptureUpload(mut GpuTaskGraph graph, mut GpuTaskId dependenc
 }
 
 [cpp_unwind]
-b8 AppendRefractionCaptureCsg(mut GpuTaskGraph graph, mut GpuTaskId dependency, mut RendererCsgSystem csgSystem,
-    in DeferredFrameTargets targets, in CsgFrameGpuDataView frame, in CsgGraphResourceSnapshot csgResources,
-    in MeshFrameBindingSnapshot frameBindings, mut Vector<GpuTaskResourceUse> uses){
+b8 AppendRefractionCaptureCsg(
+    mut GpuTaskGraph graph,
+    mut GpuTaskId dependency,
+    mut RendererCsgSystem csgSystem,
+    in DeferredFrameTargets targets,
+    in CsgFrameGpuDataView frame,
+    in CsgGraphResourceSnapshot csgResources,
+    in MeshFrameBindingSnapshot frameBindings,
+    mut Vector<GpuTaskResourceUse> uses
+){
     uses.reserve(s_RefractionCaptureCsgUseCapacity);
     const auto clip = csgSystem.prepareCsgClipContextSlotData(targets, frame, csgResources, frameBindings);
     if(!clip.has_value())
@@ -303,10 +315,19 @@ b8 AppendRefractionCaptureClear(mut GpuTaskGraph graph, mut GpuTaskId dependency
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> DeclareRefractionCaptureCaps(mut GpuTaskGraph graph, mut RendererCsgSystem csgSystem, in borrow DeferredFrameTargets targets,
-    in CsgGraphResourceSnapshot csgResources, in CsgFrameGpuDataView frame, in Span<GpuTaskResourceUse> commonUses,
-    in Span<GpuTaskResourceUse> csgUses, in GpuGraphResourceId opaqueDepth, in RefractionCaptureAttachments attachments,
-    in Span<GpuTaskResourceSetUse> sampledTextureSet, in borrow GpuTaskId dependency){
+Expected<GpuTaskId> DeclareRefractionCaptureCaps(
+    mut GpuTaskGraph graph,
+    mut RendererCsgSystem csgSystem,
+    in borrow DeferredFrameTargets targets,
+    in CsgGraphResourceSnapshot csgResources,
+    in CsgFrameGpuDataView frame,
+    in Span<GpuTaskResourceUse> commonUses,
+    in Span<GpuTaskResourceUse> csgUses,
+    in GpuGraphResourceId opaqueDepth,
+    in RefractionCaptureAttachments attachments,
+    in Span<GpuTaskResourceSetUse> sampledTextureSet,
+    in borrow GpuTaskId dependency
+){
     if(!csgResources.refractionCapFillPipeline.valid())
         return MakeUnexpected(Failure());
     Vector<GpuTaskResourceUse> uses;
@@ -332,10 +353,20 @@ Expected<GpuTaskId> DeclareRefractionCaptureCaps(mut GpuTaskGraph graph, mut Ren
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> DeclareAvboitRefractionCapture(mut GpuTaskGraph graph, mut RendererMaterialSystem materialSystem, mut RendererCsgSystem csgSystem,
-    in CsgFrameState csgFrameState, in CsgGraphResourceSnapshot csgResources, in MeshFrameBindingSnapshot frameBindings,
-    in borrow MeshViewGpuData meshViewState, in GpuTaskId initialDependency, in b8 enabled, mut DeferredFrameTargets targets,
-    mut ObjectGeometryCacheGraph objectGeometry, mut AvboitGeneratedGeometryReuse generatedGeometry){
+Expected<GpuTaskId> DeclareAvboitRefractionCapture(
+    mut GpuTaskGraph graph,
+    mut RendererMaterialSystem materialSystem,
+    mut RendererCsgSystem csgSystem,
+    in CsgFrameState csgFrameState,
+    in CsgGraphResourceSnapshot csgResources,
+    in MeshFrameBindingSnapshot frameBindings,
+    in borrow MeshViewGpuData meshViewState,
+    in GpuTaskId initialDependency,
+    in b8 enabled,
+    mut DeferredFrameTargets targets,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    mut AvboitGeneratedGeometryReuse generatedGeometry
+){
     GpuTaskId dependency = initialDependency;
     const RefractionCaptureValidationPolicy validationPolicy();
     generatedGeometry.reset();

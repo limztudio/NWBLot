@@ -115,7 +115,7 @@ class UiSearchComboBehaviorSource : ISearchableListDataSource{
     }
     public StringView text(in u64 arg0)const override{ return "full row"; }
     public b8 enabled(in u64 index)const override{ return index < this.count; }
-    public b8 filter(in StringView query) override{
+    public b8 filter(in StringView query)override{
         ++this.filterCalls;
         if(this.failFilter)
             return false;
@@ -276,7 +276,7 @@ class SelectionSource : ISearchableListDataSource{
     }
     public StringView text(in u64 index)const override{ return this.m_source.text(index); }
     public b8 enabled(in u64 index)const override{ return this.m_source.enabled(index); }
-    public b8 filter(in StringView query) override{
+    public b8 filter(in StringView query)override{
         return this.m_probe.apply() && this.m_source.filter(query);
     }
     public in IListDataSource filtered()const override{ return this.m_view; }
@@ -305,6 +305,7 @@ class UiSearchSelectionEpochTests : SearchFixture{
 b8 UiSearchComboReconcilePreview(mut SearchComboState state, in IListDataSource source){ return ReconcileListState(state.combo().listState(), source); }
 void UiSearchComboSelectPreview(mut SearchComboState state, in u64 key){ state.combo().listState().select(key); }
 b8 UiSearchComboScrollPreview(mut SearchComboState state, in f64 offset){ return state.combo().listState().scrollTo(offset); }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

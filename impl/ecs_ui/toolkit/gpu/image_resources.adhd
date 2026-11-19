@@ -330,8 +330,13 @@ Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(mut GpuTaskGraph graph, 
         );
         if(!texture.has_value()){
             if(texture.error() == GpuSampledTextureImportError::Texture)
-                error("GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})", index, page.deref().m_page.deref().binding().atlasIdentity, page.deref().m_page.deref().binding().index,
-                    page.deref().m_page.deref().binding().generation);
+                error(
+                    "GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})"
+                    , index
+                    , page.deref().m_page.deref().binding().atlasIdentity
+                    , page.deref().m_page.deref().binding().index
+                    , page.deref().m_page.deref().binding().generation
+                );
             return MakeUnexpected(Failure());
         }
         resources.push_back(texture.value());
@@ -364,8 +369,13 @@ Expected<GpuSampledGraphResources> DeclareGpuSdfPages(mut GpuTaskGraph graph, in
         );
         if(!texture.has_value()){
             if(texture.error() == GpuSampledTextureImportError::Texture)
-                error("GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})", index, page.deref().m_page.deref().binding().atlasIdentity, page.deref().m_page.deref().binding().index,
-                    page.deref().m_page.deref().binding().generation);
+                error(
+                    "GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})"
+                    , index
+                    , page.deref().m_page.deref().binding().atlasIdentity
+                    , page.deref().m_page.deref().binding().index
+                    , page.deref().m_page.deref().binding().generation
+                );
             return MakeUnexpected(Failure());
         }
         resources.push_back(texture.value());

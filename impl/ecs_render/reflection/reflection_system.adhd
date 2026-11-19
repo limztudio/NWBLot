@@ -60,8 +60,14 @@ class RendererReflectionSystem : NoCopy{
     [cpp_unwind]
     public void pollStatistics(){ this.m_statistics.pollCompleted(); }
     public Expected<ReflectionStatistics> tryGetLatestStatistics()const{ return this.m_statistics.latestStatistics(); }
-    public ReflectionFrameSnapshot snapshotFrameResources(in DeferredFrameTargets targets, in MeshViewBufferSnapshot view, in RayTracingSceneGraphResources scene,
-        in ReflectionSettings settings, in u32 frameIndex, in ReflectionSceneContentStamp stamp)const;
+    public ReflectionFrameSnapshot snapshotFrameResources(
+        in DeferredFrameTargets targets,
+        in MeshViewBufferSnapshot view,
+        in RayTracingSceneGraphResources scene,
+        in ReflectionSettings settings,
+        in u32 frameIndex,
+        in ReflectionSceneContentStamp stamp
+    )const;
 
     [cpp_unwind]
     private void releaseTargets();

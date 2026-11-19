@@ -37,11 +37,11 @@ b8 ValidateSubsystemSubsystemsFieldIsList(in Path nwbFilePath, in b8 isList){
 
 void ReportSelfSubsystemReference(in Path nwbFilePath, in Name subsystemVirtualPath){
     error(
-        "{} '{}': '{}' cannot reference subsystem '{}' itself",
-        s_SubsystemDiagnosticPrefix,
-        nwbFilePath,
-        s_SubsystemSubsystemsFieldName,
-        subsystemVirtualPath.resolvedText()
+        "{} '{}': '{}' cannot reference subsystem '{}' itself"
+        , s_SubsystemDiagnosticPrefix
+        , nwbFilePath
+        , s_SubsystemSubsystemsFieldName
+        , subsystemVirtualPath.resolvedText()
     );
 }
 
@@ -55,11 +55,11 @@ b8 ValidateNotSelfSubsystemReference(in Path nwbFilePath, in Name subsystemVirtu
 
 void ReportRequiredSubsystemFieldMissing(in Path nwbFilePath, in StringView fieldName, in Name assetType){
     error(
-        "{} '{}': required field '{}' is missing for '{}'",
-        s_SubsystemDiagnosticPrefix,
-        nwbFilePath,
-        fieldName,
-        assetType.resolvedText()
+        "{} '{}': required field '{}' is missing for '{}'"
+        , s_SubsystemDiagnosticPrefix
+        , nwbFilePath
+        , fieldName
+        , assetType.resolvedText()
     );
 }
 
@@ -85,11 +85,11 @@ b8 ValidateNonEmptySubsystemArrayField(in Path nwbFilePath, in StringView fieldN
 
 void ReportDuplicateSubsystemArrayFieldEntry(in Path nwbFilePath, in StringView fieldName, in Name entryName){
     error(
-        "{} '{}': '{}' contains duplicate entry '{}'",
-        s_SubsystemDiagnosticPrefix,
-        nwbFilePath,
-        fieldName,
-        entryName.resolvedText()
+        "{} '{}': '{}' contains duplicate entry '{}'"
+        , s_SubsystemDiagnosticPrefix
+        , nwbFilePath
+        , fieldName
+        , entryName.resolvedText()
     );
 }
 
@@ -119,7 +119,11 @@ b8 ReadSubsystemParents(in Path file, in MetascriptValue value, mut ISubsystem s
 }
 
 b8 ReadSubsystemAssetField(
-    in Path file, in MetascriptValue value, in usize index, in SubsystemFieldValueDescriptor descriptor, mut ISubsystem subsystem
+    in Path file,
+    in MetascriptValue value,
+    in usize index,
+    in SubsystemFieldValueDescriptor descriptor,
+    mut ISubsystem subsystem
 ){
     subsystem.clearFieldValues(index);
     if(!descriptor.isArray){

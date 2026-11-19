@@ -377,14 +377,14 @@ class FpsProbe{
         const f64 averageFps = 1.0 / averageFrameSeconds;
         const VectorDouble frameMs = VectorDouble(averageFrameSeconds, this.m_minFrameSeconds, this.m_maxFrameSeconds, 0.0) * 1000.0;
         [essential] info(
-            "{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}",
-            this.m_label,
-            averageFps,
-            frameMs.x,
-            frameMs.y,
-            frameMs.z,
-            this.m_intervalFrames,
-            this.m_intervalSeconds
+            "{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}"
+            , this.m_label
+            , averageFps
+            , frameMs.x
+            , frameMs.y
+            , frameMs.z
+            , this.m_intervalFrames
+            , this.m_intervalSeconds
         );
 
         this.m_intervalSeconds = 0.0;

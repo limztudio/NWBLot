@@ -100,8 +100,15 @@ b8 UnwindWithScopeExitResetPreservesOriginalFailure(mut GpuTaskGraph graph){
 }
 
 [cpp_unwind]
-b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(mut GpuGraphSubmissionTransaction transaction, mut GpuTaskGraph graph, mut GpuCompiledGraph compiledGraph,
-    mut b8 alive, mut u32 destructions, mut u32 discards, mut u32 lateUses){
+b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(
+    mut GpuGraphSubmissionTransaction transaction,
+    mut GpuTaskGraph graph,
+    mut GpuCompiledGraph compiledGraph,
+    mut b8 alive,
+    mut u32 destructions,
+    mut u32 discards,
+    mut u32 lateUses
+){
     b8 bothAdded = false;
     const b8 caught = ThrowsException<GpuPacketResetDiscardFailure>(
         lambda[mut transaction, mut graph, mut compiledGraph, mut alive, mut destructions, mut discards, mut lateUses, mut bothAdded]() -> void{
@@ -118,8 +125,15 @@ b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(mut GpuGraphSubmissionTransact
 }
 
 [cpp_unwind]
-b8 UnwindBorrowedPayloadLifetimeCatchesOriginalFailure(mut GpuGraphSubmissionTransaction transaction, mut GpuTaskGraph graph, mut GpuCompiledGraph compiledGraph,
-    mut b8 alive, mut u32 destructions, mut u32 discards, mut u32 lateUses){
+b8 UnwindBorrowedPayloadLifetimeCatchesOriginalFailure(
+    mut GpuGraphSubmissionTransaction transaction,
+    mut GpuTaskGraph graph,
+    mut GpuCompiledGraph compiledGraph,
+    mut b8 alive,
+    mut u32 destructions,
+    mut u32 discards,
+    mut u32 lateUses
+){
     return ThrowsException<GpuPacketResetOriginalFailure>(
         lambda[mut transaction, mut graph, mut compiledGraph, mut alive, mut destructions, mut discards, mut lateUses]() -> void{
             GpuGraphPayloadLifetimeScope lifetime(transaction, graph, compiledGraph);
@@ -171,7 +185,6 @@ GpuCopyBufferTaskDesc MakeCopyBufferDescWithRegions(in Span<GpuCopyBufferTaskReg
     desc.setRegions(regions);
     return desc;
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

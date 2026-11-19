@@ -4,6 +4,7 @@
 
 #pragma once
 
+
 #include <tests/common/virtual_pages.h>
 #include <global/simd/type.h>
 

@@ -4,6 +4,7 @@
 
 #pragma once
 
+
 #include <global/simdmath.h>
 #include <tests/common/gtest_sdk.h>
 #include <tests/common/floating_point_control.h>

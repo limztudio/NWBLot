@@ -30,11 +30,6 @@ namespace FrameGraphStatisticsCodecDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline EncodedFrameGraphPhysicalQueueId EncodeQueue(const FrameGraphPhysicalQueueId& queue)noexcept{
     return EncodedFrameGraphPhysicalQueueId{ .index = queue.index, .deviceGeneration = queue.deviceGeneration, };
 }
@@ -155,7 +150,6 @@ template<typename OutputT, typename InputT>
 
 [[nodiscard]] EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(u32 nodeIndex, const FrameGraphRuntimeStatistics& statistics)noexcept;
 [[nodiscard]] Expected<FrameGraphRuntimeStatistics> DecodeRuntimeStatistics(const EncodedFrameGraphRuntimeStatistics& encoded)noexcept;
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

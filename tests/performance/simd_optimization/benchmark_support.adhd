@@ -6,6 +6,10 @@
 #include <tests/common/floating_point_environment_guard.adhd>
 #include <utilities/cli/tool_cli.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_UsesSsePairs")]
 extern const b8 s_BenchmarkUsesSsePairs;
 
@@ -371,3 +375,4 @@ VectorDouble ThroughputWorkload<const usize Lanes, Reducer : IDoubleBinaryEvalua
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

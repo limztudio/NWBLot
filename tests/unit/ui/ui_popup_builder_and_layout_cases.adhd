@@ -16,17 +16,17 @@ class CountingEditHost : IEditBoxHost{
     public u32 loans = 0u;
     public u32 publications = 0u;
 
-    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel model) override{
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel model)override{
         ++this.loans;
         EditBoxResult result;
         result.valid = model.setText("borrowed");
         result.textChanged = result.valid;
         return result;
     }
-    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken arg2, mut EditModel model) override{ return this.edit(widget, options, model); }
-    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{ return EditBoxResult(); }
-    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6) override{ return EditBoxResult(); }
-    public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3) override{
+    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken arg2, mut EditModel model)override{ return this.edit(widget, options, model); }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4)override{ return EditBoxResult(); }
+    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6)override{ return EditBoxResult(); }
+    public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3)override{
         ++this.publications;
         return true;
     }

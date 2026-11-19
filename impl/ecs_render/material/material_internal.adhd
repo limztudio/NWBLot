@@ -17,8 +17,13 @@ class MaterialTypedStager : NoCopy{
     private HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRangeCache> m_ranges;
     private MaterialTypedByteContentRangeMap m_mutableRanges;
 
-    public MaterialTypedStager(mut RendererMaterialSystem system, mut World world, in RendererResourceLookupMode lookupMode,
-        mut MaterialTypedByteDataVector bytes, in usize capacity){
+    public MaterialTypedStager(
+        mut RendererMaterialSystem system,
+        mut World world,
+        in RendererResourceLookupMode lookupMode,
+        mut MaterialTypedByteDataVector bytes,
+        in usize capacity
+    ){
         this.m_system = system;
         this.m_world = world;
         this.m_lookupMode = lookupMode;

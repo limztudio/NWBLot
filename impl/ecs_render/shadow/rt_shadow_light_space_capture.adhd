@@ -209,8 +209,14 @@ GpuTimingScopeDefinition LightSpaceShadowFallbackTimingScope(in b8 transparent){
 
 b8 LightSpaceShadowRecorder::resolve(
     in LightSpaceShadowSnapshot snapshot,
-    in u32 frameIndex, in u32 sampleCount, in u32 outputSlot, in b8 transparent,
-    mut CommandList commandList, mut GpuDescriptorHeap heap, mut GpuTimingRecorder timing, mut RhiTexture outputTexture
+    in u32 frameIndex,
+    in u32 sampleCount,
+    in u32 outputSlot,
+    in b8 transparent,
+    mut CommandList commandList,
+    mut GpuDescriptorHeap heap,
+    mut GpuTimingRecorder timing,
+    mut RhiTexture outputTexture
 )const{
     const b8 csg = (snapshot.push.csgFlags & s_CsgShadowFlagEnabled) != 0u;
     const b8 hardwareCsg = (snapshot.push.csgFlags & s_CsgShadowFlagHwCompose) != 0u;

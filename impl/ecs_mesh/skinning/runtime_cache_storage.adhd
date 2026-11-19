@@ -137,8 +137,19 @@ b8 ValidateRuntimeMeshUploadPayload(in MeshSkinningRuntimeInstance instance){
     return true;
 }
 
-b8 AssignRuntimeBuffer<T>(in MeshSkinningRuntimeInstance instance, in StringView suffix, in Span<T> payload, in b8 writable, in StringView label,
-    mut GraphicsRuntime graphics, in b8 raw, in b8 buildInput, in ResourceQueueSharing sharing, in b8 indexBuffer, mut BufferHandle buffer){
+b8 AssignRuntimeBuffer<T>(
+    in MeshSkinningRuntimeInstance instance,
+    in StringView suffix,
+    in Span<T> payload,
+    in b8 writable,
+    in StringView label,
+    mut GraphicsRuntime graphics,
+    in b8 raw,
+    in b8 buildInput,
+    in ResourceQueueSharing sharing,
+    in b8 indexBuffer,
+    mut BufferHandle buffer
+){
     const Name name = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
     if(name == s_NameNone){
         buffer.reset();

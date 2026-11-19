@@ -32,10 +32,18 @@ class DeferredPresentGraphTask{
     private mut GpuTimingSubmissionTicket m_timingTicket;
     private in GpuTaskId m_shadowVisibilityTask;
 
-    public DeferredPresentGraphTask(mut RendererDeferredSystem deferredSystem, mut GraphicsRuntime graphics, mut DeferredFrameTargets targets,
-        in AcquiredPresentationFrame presentationFrame, in GpuGraphResourceId backBuffer, in GpuTaskGraphOutputLayer outputLayer,
-        in Optional<mut IGpuTaskGraphOutputLayerContributor> contributor, mut Optional<GpuTimingMeasure> asyncFinalTiming,
-        mut GpuTimingSubmissionTicket timingTicket, in GpuTaskId shadowVisibilityTask){
+    public DeferredPresentGraphTask(
+        mut RendererDeferredSystem deferredSystem,
+        mut GraphicsRuntime graphics,
+        mut DeferredFrameTargets targets,
+        in AcquiredPresentationFrame presentationFrame,
+        in GpuGraphResourceId backBuffer,
+        in GpuTaskGraphOutputLayer outputLayer,
+        in Optional<mut IGpuTaskGraphOutputLayerContributor> contributor,
+        mut Optional<GpuTimingMeasure> asyncFinalTiming,
+        mut GpuTimingSubmissionTicket timingTicket,
+        in GpuTaskId shadowVisibilityTask
+    ){
         this.m_deferredSystem = deferredSystem;
         this.m_graphics = graphics;
         this.m_targets = targets;

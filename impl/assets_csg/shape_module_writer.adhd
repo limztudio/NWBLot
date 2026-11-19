@@ -27,10 +27,10 @@ b8 ValidateSharedCsgGeneratedIncludeOwner(
         return true;
 
     error(
-        "CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'",
-        moduleInclude,
-        existingModule.resolvedText(),
-        currentModule.resolvedText()
+        "CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'"
+        , moduleInclude
+        , existingModule.resolvedText()
+        , currentModule.resolvedText()
     );
     return false;
 }

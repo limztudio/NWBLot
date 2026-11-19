@@ -50,8 +50,11 @@ void ReportTexConvPairEntry(in StagedFilePairResult result, in u32 index, in Pat
     }
     if(result.backedUp[index] && (result.removalErrors[index].value() != 0 || result.restorationErrors[index].value() != 0)){
         error(
-            "tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})",
-            output, backup, result.removalErrors[index].value(), result.restorationErrors[index].value()
+            "tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})"
+            , output
+            , backup
+            , result.removalErrors[index].value()
+            , result.restorationErrors[index].value()
         );
     }
     if(!result.backedUp[index] && result.removalErrors[index].value() != 0)

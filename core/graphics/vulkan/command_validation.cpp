@@ -25,7 +25,6 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 b8 IsPipelineColorAttachmentFormatClassValid(const Format::Enum format)noexcept{
     if(ConvertFormat(format) == VK_FORMAT_UNDEFINED)
         return false;

@@ -49,8 +49,14 @@ class GpuHazardOwnerImportContext{
     }
 }
 
-GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(in GpuTaskResourceRange range, in GpuPhysicalQueueId sourceQueue,
-    in GpuPhysicalQueueId destinationQueue, in GpuExternalCompletionId completion, in QueueSubmissionToken minimumCompletionToken, in borrow CommandListResourceStateHandoff stateSource){
+GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(
+    in GpuTaskResourceRange range,
+    in GpuPhysicalQueueId sourceQueue,
+    in GpuPhysicalQueueId destinationQueue,
+    in GpuExternalCompletionId completion,
+    in QueueSubmissionToken minimumCompletionToken,
+    in borrow CommandListResourceStateHandoff stateSource
+){
     GpuGraphInitialOwnerHandoffSourceDesc source;
     source.range = range;
     source.sourceQueue = sourceQueue;
@@ -60,7 +66,6 @@ GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(in GpuTaskResou
     source.setStateSource(stateSource);
     return source;
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

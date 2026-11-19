@@ -25,8 +25,14 @@ class FrameGraphAvboitStageInputs{
     public b8 clearTargets = false;
     public b8 refractionCaptureEnabled = false;
 
-    public FrameGraphAvboitStageInputs(mut DeferredFrameTargets targets, in DeferredGraphResourceImportResult resources, in CsgFrameState csgFrameState,
-        in MeshFrameBindingSnapshot frameBindings, in CsgGraphResourceSnapshot csgResources, in MeshViewGpuData meshViewState){
+    public FrameGraphAvboitStageInputs(
+        mut DeferredFrameTargets targets,
+        in DeferredGraphResourceImportResult resources,
+        in CsgFrameState csgFrameState,
+        in MeshFrameBindingSnapshot frameBindings,
+        in CsgGraphResourceSnapshot csgResources,
+        in MeshViewGpuData meshViewState
+    ){
         this.targets = targets;
         this.resources = resources;
         this.csgFrameState = csgFrameState;
@@ -48,9 +54,18 @@ class FrameGraphAvboitPassUploadChain : NoCopy{
         this.m_csgSystem = csg;
     }
     [cpp_unwind]
-    public Expected<FrameGraphAvboitMaterialUploadResult> declare(in FrameGraphAvboitStageInputs inputs, in FramebufferHandle framebuffer,
-        in MaterialPipelinePass pass, in AvboitGeometryPhase phase, in GpuTaskId uploadTask, in b8 intervalOutputsGraphOwned, in b8 hasTransparentRenderers,
-        mut AvboitRasterPassTaskPayload rasterPayload, mut AvboitComputeEmulationTaskPayload computeEmulationPayload, mut AvboitGeneratedGeometryReuse generatedGeometry);
+    public Expected<FrameGraphAvboitMaterialUploadResult> declare(
+        in FrameGraphAvboitStageInputs inputs,
+        in FramebufferHandle framebuffer,
+        in MaterialPipelinePass pass,
+        in AvboitGeometryPhase phase,
+        in GpuTaskId uploadTask,
+        in b8 intervalOutputsGraphOwned,
+        in b8 hasTransparentRenderers,
+        mut AvboitRasterPassTaskPayload rasterPayload,
+        mut AvboitComputeEmulationTaskPayload computeEmulationPayload,
+        mut AvboitGeneratedGeometryReuse generatedGeometry
+    );
 }
 
 class AvboitStageRecordDependencyPolicy{

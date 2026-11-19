@@ -374,11 +374,24 @@ class Builder : NoCopy{
     private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions){ return this.declareEditBox(stableKey,
         options, model, state, actions, Optional<mut BuilderIntegerEditFrame>(), Optional<mut BuilderFloatEditFrame>()); }
     [cpp_unwind]
-    private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions,
-        in Optional<mut BuilderIntegerEditFrame> integerFrame){ return this.declareEditBox(stableKey, options, model, state, actions, integerFrame, Optional<mut BuilderFloatEditFrame>()); }
+    private EditBoxResult declareEditBox(
+        in StringView stableKey,
+        in EditBoxOptions options,
+        mut EditModel model,
+        mut EditBoxState state,
+        in Optional<mut IEditActionSink> actions,
+        in Optional<mut BuilderIntegerEditFrame> integerFrame
+    ){ return this.declareEditBox(stableKey, options, model, state, actions, integerFrame, Optional<mut BuilderFloatEditFrame>()); }
     [cpp_unwind]
-    private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions,
-        in Optional<mut BuilderIntegerEditFrame> integerFrame, in Optional<mut BuilderFloatEditFrame> floatFrame);
+    private EditBoxResult declareEditBox(
+        in StringView stableKey,
+        in EditBoxOptions options,
+        mut EditModel model,
+        mut EditBoxState state,
+        in Optional<mut IEditActionSink> actions,
+        in Optional<mut BuilderIntegerEditFrame> integerFrame,
+        in Optional<mut BuilderFloatEditFrame> floatFrame
+    );
 
     [cpp_unwind]
     private b8 paintTextArea(in BuilderItem item, in LayoutBox box);
@@ -458,14 +471,32 @@ class Builder : NoCopy{
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [cpp_unwind]
-    private ComboResult declareCombo(in StringView stableKey, in borrow IListDataSource source, in ComboOptions options, in Optional<in SearchComboOptions> searchOptions,
-        mut ComboState state){ return this.declareCombo(stableKey, source, options, searchOptions, state, Optional<mut SearchComboState>(), Optional<mut ISearchableListDataSource>()); }
+    private ComboResult declareCombo(
+        in StringView stableKey,
+        in borrow IListDataSource source,
+        in ComboOptions options,
+        in Optional<in SearchComboOptions> searchOptions,
+        mut ComboState state
+    ){ return this.declareCombo(stableKey, source, options, searchOptions, state, Optional<mut SearchComboState>(), Optional<mut ISearchableListDataSource>()); }
     [cpp_unwind]
-    private ComboResult declareCombo(in StringView stableKey, in borrow IListDataSource source, in ComboOptions options, in Optional<in SearchComboOptions> searchOptions, mut ComboState state,
-        in Optional<mut SearchComboState> search){ return this.declareCombo(stableKey, source, options, searchOptions, state, search, Optional<mut ISearchableListDataSource>()); }
+    private ComboResult declareCombo(
+        in StringView stableKey,
+        in borrow IListDataSource source,
+        in ComboOptions options,
+        in Optional<in SearchComboOptions> searchOptions,
+        mut ComboState state,
+        in Optional<mut SearchComboState> search
+    ){ return this.declareCombo(stableKey, source, options, searchOptions, state, search, Optional<mut ISearchableListDataSource>()); }
     [cpp_unwind]
-    private ComboResult declareCombo(in StringView stableKey, in borrow IListDataSource source, in ComboOptions options, in Optional<in SearchComboOptions> searchOptions, mut ComboState state,
-        in Optional<mut SearchComboState> search, in Optional<mut ISearchableListDataSource> searchSource);
+    private ComboResult declareCombo(
+        in StringView stableKey,
+        in borrow IListDataSource source,
+        in ComboOptions options,
+        in Optional<in SearchComboOptions> searchOptions,
+        mut ComboState state,
+        in Optional<mut SearchComboState> search,
+        in Optional<mut ISearchableListDataSource> searchSource
+    );
 
     [cpp_unwind]
     private b8 paintCombo(in BuilderItem item, in LayoutBox box);

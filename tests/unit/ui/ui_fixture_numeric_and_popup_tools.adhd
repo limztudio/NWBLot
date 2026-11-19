@@ -81,8 +81,15 @@ class NumericHost : IEditBoxHost{
     public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model)override{
         return EditBoxResult();
     }
-    public EditBoxResult editNavigated(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model,
-        mut EditNavigationState navigation, mut IEditNavigationResolver resolver, mut IEditActionSink sink)override{
+    public EditBoxResult editNavigated(
+        in WidgetState widget,
+        in EditBoxOptions options,
+        in PopupToken popup,
+        mut EditModel model,
+        mut EditNavigationState navigation,
+        mut IEditNavigationResolver resolver,
+        mut IEditActionSink sink
+    )override{
         return EditBoxResult();
     }
     public EditBoxResult editActions(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel draft, mut IEditActionSink sink)override{

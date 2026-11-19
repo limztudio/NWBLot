@@ -18,9 +18,14 @@ class GraphicsPrefixTimingResolver : NoCopy{
         this.m_pipeline = pipeline;
     }
 
-    public void resolve(in GpuCompiledGraphReadView compiledPlan, in Span<GraphicsPrefixTimingTicket> ownedTickets,
-        mut Span<GraphicsPrefixTimingTicket> timingTickets, mut Span<GpuTaskId> timingTasks,
-        mut b8 asyncSpansOnePacket, mut GraphicsPrefixTimingResolutionResult outResult)const;
+    public void resolve(
+        in GpuCompiledGraphReadView compiledPlan,
+        in Span<GraphicsPrefixTimingTicket> ownedTickets,
+        mut Span<GraphicsPrefixTimingTicket> timingTickets,
+        mut Span<GpuTaskId> timingTasks,
+        mut b8 asyncSpansOnePacket,
+        mut GraphicsPrefixTimingResolutionResult outResult
+    )const;
 }
 
 class SurfelCausticsMergeValidationResult{

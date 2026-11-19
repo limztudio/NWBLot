@@ -160,8 +160,10 @@ b8 AppendPreparedMaterialSurfaceSampledTextures(in MaterialSurfaceInfo materialI
 
 [cpp_unwind]
 b8 AppendPreparedDrawSampledTextures(
-    in HashMap<Name, MaterialSurfaceInfo> materials, in RendererMaterialResourceState resources,
-    in Span<MaterialPassDrawItem> draws, mut MaterialSampledTextureCollector collector
+    in HashMap<Name, MaterialSurfaceInfo> materials,
+    in RendererMaterialResourceState resources,
+    in Span<MaterialPassDrawItem> draws,
+    mut MaterialSampledTextureCollector collector
 ){
     for(in MaterialPassDrawItem draw : draws){
         const auto material = materials.find(draw.pipelineKey.material);
@@ -173,7 +175,9 @@ b8 AppendPreparedDrawSampledTextures(
 
 [cpp_unwind]
 Expected<Vector<TextureHandle>> GatherPreparedMaterialPassSampledTextures(
-    in HashMap<Name, MaterialSurfaceInfo> materials, in RendererMaterialResourceState resources, in Span<MaterialPassDrawItemsView> drawItemSets
+    in HashMap<Name, MaterialSurfaceInfo> materials,
+    in RendererMaterialResourceState resources,
+    in Span<MaterialPassDrawItemsView> drawItemSets
 ){
     Vector<TextureHandle> textures;
     MaterialSampledTextureCollector collector(textures);

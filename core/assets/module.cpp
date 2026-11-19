@@ -14,9 +14,6 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace{
 
 
@@ -40,10 +37,10 @@ template<typename ContextT>
         return true;
 
     NWB_LOGGER_ERROR(
-        FOUNDATION_TEXT("{} failed: invalid asset type '{}', expected '{}'"),
-        Forward<ContextT>(failureContext),
-        ConvertString(asset.assetType().resolvedText()),
-        ConvertString(expectedAssetType.resolvedText())
+        FOUNDATION_TEXT("{} failed: invalid asset type '{}', expected '{}'")
+        , Forward<ContextT>(failureContext)
+        , ConvertString(asset.assetType().resolvedText())
+        , ConvertString(expectedAssetType.resolvedText())
     );
     return false;
 }

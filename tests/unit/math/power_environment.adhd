@@ -5,6 +5,9 @@
 #include <tests/common/floating_point_control.adhd>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<tests/unit/math/power_environment.h>"), cpp_name("::NWB::Tests::MathCases::ConfigurePowerDenormalMode")]
 extern b8 ConfigurePowerDenormalMode(in u32 denormalMode, in b8 unmaskInvalid);
 

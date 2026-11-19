@@ -53,7 +53,7 @@ class FocusHandler : IInputEventHandler{
         }
     }
 
-    public void windowFocusUpdate(in b8 focused) override{
+    public void windowFocusUpdate(in b8 focused)override{
         ASSERT_LT(this.m_focusCount, this.m_focusValues.size());
         this.m_focusValues[this.m_focusCount] = focused;
         ++this.m_focusCount;
@@ -64,7 +64,7 @@ class FocusHandler : IInputEventHandler{
         }
     }
 
-    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers) override{
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
         if(action == InputAction::Release){
             ++this.m_keyReleases;
         }
@@ -86,7 +86,7 @@ class FocusHandler : IInputEventHandler{
         return KeyboardInputResult(this.m_consumeKeys, this.m_blockText);
     }
 
-    public b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 modifiers) override{
+    public b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 modifiers)override{
         if(action == InputAction::Release){
             ++this.m_buttonReleases;
         }
@@ -110,7 +110,7 @@ class SelfDestroyingKeyHandler : IInputEventHandler{
         this.m_owner = owner;
     }
 
-    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers) override{
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
         this.m_dispatcher.removeHandler(this);
         this.m_owner.reset();
         return KeyboardInputResult(true, true);
@@ -126,7 +126,7 @@ class DestroyOtherKeyHandler : IInputEventHandler{
         this.m_victim = victim;
     }
 
-    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers) override{
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
         if(this.m_victim.has_value()){
             this.m_dispatcher.removeHandler(this.m_victim.value());
             this.m_victim.reset();
@@ -152,7 +152,7 @@ class ReplacingKeyHandler : IInputEventHandler{
         this.m_replace = replace;
     }
 
-    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers) override{
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
         ++this.m_calls;
         if(!this.m_replace)
             return KeyboardInputResult(true, false);
@@ -182,7 +182,7 @@ class ThrowingHandler : IInputEventHandler{
         this.m_nestedDispatch = nestedDispatch;
     }
 
-    [cpp_unwind] public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers) override{
+    [cpp_unwind] public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
         ++this.m_keyUpdates;
         if(this.m_nestedDispatch)
             this.m_dispatcher.pointerLeave();
@@ -190,7 +190,7 @@ class ThrowingHandler : IInputEventHandler{
         return KeyboardInputResult(false, false);
     }
 
-    [cpp_unwind] public void pointerLeave() override{ ThrowTestException<u32>(s_DispatchFailure); }
+    [cpp_unwind] public void pointerLeave()override{ ThrowTestException<u32>(s_DispatchFailure); }
 }
 
 
@@ -207,7 +207,7 @@ class PointerLifecycleHandler : IInputEventHandler{
 
     public PointerLifecycleHandler(mut InputDispatcher dispatcher){ this.m_dispatcher = dispatcher; }
 
-    public void windowFocusUpdate(in b8 focused) override{ ++this.m_focusChanges; }
+    public void windowFocusUpdate(in b8 focused)override{ ++this.m_focusChanges; }
 
     private Optional<mut IInputEventHandler> m_addOnLeave;
 
@@ -235,17 +235,17 @@ class PointerLifecycleHandler : IInputEventHandler{
         }
     }
 
-    public void pointerLeave() override{
+    public void pointerLeave()override{
         ++this.m_leaves;
         this.flushAddOnLeave();
     }
 
-    public void pointerCaptureLost() override{
+    public void pointerCaptureLost()override{
         ++this.m_captureLosses;
         this.flushRemoveOnCaptureLoss();
     }
 
-    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers) override{
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
         if(action == InputAction::Release){
             ++this.m_keyReleases;
         }
@@ -624,9 +624,6 @@ void VerifyInputDispatcher_PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelea
     dispatcher.keyboardUpdate(Key::W, 0, InputAction::Release, 0);
     EXPECT_EQ(handler.m_keyReleases, 1u);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

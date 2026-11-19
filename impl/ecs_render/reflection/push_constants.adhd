@@ -4,6 +4,10 @@
 
 #include <impl/ecs_render/reflection/types.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<impl/assets/graphics/reflection/depth_constants.h>"), cpp_name("NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES")]
 extern const u32 s_ReflectionShaderDepthPushBytes;
 [cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES")]

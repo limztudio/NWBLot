@@ -95,7 +95,9 @@ class RendererTaskTimingFeedback : NoCopy{
 
     [cpp_unwind]
     public Expected<GpuTimingSampleAttribution> beginSample(
-        in Name scopeName, in GpuTaskTimingKey key, in GpuPhysicalQueueId expectedQueue,
+        in Name scopeName,
+        in GpuTaskTimingKey key,
+        in GpuPhysicalQueueId expectedQueue,
         in b8 recordsNonCommittingTimingSample
     ){
         if(!CanBeginRendererTaskTimingFeedbackSample(scopeName, this.m_feedbackCollectionScopes, key.valid(), expectedQueue.valid()))
@@ -165,7 +167,9 @@ class RendererTaskTimingFeedback : NoCopy{
 
 [cpp_unwind]
 Expected<GpuTimingSampleAttribution> BeginTaskTimingSample(
-    mut RendererTaskTimingFeedback feedback, in GpuTimingScopeDefinition scope, in GpuTaskRecordContext context
+    mut RendererTaskTimingFeedback feedback,
+    in GpuTimingScopeDefinition scope,
+    in GpuTaskRecordContext context
 ){
     const auto queueInfo = context.compiledPlan.findQueueInfo(context.queue);
     const auto compiledTask = context.compiledPlan.findTask(context.task);

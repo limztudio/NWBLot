@@ -415,11 +415,11 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void SoftShadowTemporalMergeRecorder::record(
-    in ShadowReprojectMergeHeapResources resources, in b8 graphOwnsSoftTraceInputState, in b8 graphOwnsMergeCurrentGeometryEntryState, in b8 graphOwnsMergeStaticReadEntryStates,
+    in ShadowReprojectMergeHeapResources resources,
+    in b8 graphOwnsSoftTraceInputState,
+    in b8 graphOwnsMergeCurrentGeometryEntryState,
+    in b8 graphOwnsMergeStaticReadEntryStates,
     in b8 graphOwnsMergeTemporalEntryStates
 )const{
     const u32 historyValid = EncodeShadowHistoryValidFlag(this.m_historyReadable);

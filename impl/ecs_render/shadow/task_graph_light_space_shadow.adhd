@@ -19,8 +19,13 @@ class LightSpaceShadowGraphInputs{
     public Span<GpuTaskExternalStateSource> stateSources;
 
     public LightSpaceShadowGraphInputs(
-        mut GraphicsRuntime graphics, in borrow b8 shadowPrepared, in LightSpaceShadowSnapshot snapshot, in GpuTaskId dependency,
-        in Span<GpuTaskResourceUse> sceneReads, in Span<GpuTaskResourceSetUse> sceneReadSets, in Span<GpuTaskExternalStateSource> stateSources
+        mut GraphicsRuntime graphics,
+        in borrow b8 shadowPrepared,
+        in LightSpaceShadowSnapshot snapshot,
+        in GpuTaskId dependency,
+        in Span<GpuTaskResourceUse> sceneReads,
+        in Span<GpuTaskResourceSetUse> sceneReadSets,
+        in Span<GpuTaskExternalStateSource> stateSources
     ){
         this.graphics = graphics;
         this.shadowPrepared = shadowPrepared;

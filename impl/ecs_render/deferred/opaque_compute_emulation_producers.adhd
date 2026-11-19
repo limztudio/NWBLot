@@ -34,8 +34,13 @@ class OpaqueComputeEmulationProducerBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     public OpaqueComputeEmulationProducerBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
 
-    private GpuTaskDesc producerDesc(in Name identity, in StringView label, in borrow GpuTaskId dependency, in Span<GpuTaskResourceUse> resources,
-        in Span<GpuTaskResourceSetUse> sets)const{
+    private GpuTaskDesc producerDesc(
+        in Name identity,
+        in StringView label,
+        in borrow GpuTaskId dependency,
+        in Span<GpuTaskResourceUse> resources,
+        in Span<GpuTaskResourceSetUse> sets
+    )const{
         GpuTaskSchedulingHint scheduling;
         scheduling.cost = GpuTaskCostHint::Medium;
         scheduling.forceSubmissionBoundary = false;
@@ -46,8 +51,11 @@ class OpaqueComputeEmulationProducerBuilder : NoCopy{
         task.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling).setDependency(dependency).setResourceUses(resources).setResourceSetUses(sets);
         return task;
     }
-    private void appendSets(in OpaqueComputeEmulationProducerInputs inputs, in GpuTaskResourceSetUse output,
-        mut FixedVector<GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> sets)const{
+    private void appendSets(
+        in OpaqueComputeEmulationProducerInputs inputs,
+        in GpuTaskResourceSetUse output,
+        mut FixedVector<GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> sets
+    )const{
         sets.push_back(inputs.materialGeometrySetUse);
         if(inputs.materialSampledTextureSetUse.resourceSet.valid())
             sets.push_back(inputs.materialSampledTextureSetUse);
@@ -74,8 +82,13 @@ class OpaqueComputeEmulationProducerBuilder : NoCopy{
         return added;
     }
 
-    public Expected<GpuTaskId> declareCsgReceiver(in OpaqueComputeEmulationProducerInputs inputs, in CsgGraphResourceSnapshot csgResources, in GpuTaskResourceSetUse output, in borrow GpuTaskId dependency,
-        mut OpaqueCsgReceiverComputeEmulationGraphTaskPayload payload){
+    public Expected<GpuTaskId> declareCsgReceiver(
+        in OpaqueComputeEmulationProducerInputs inputs,
+        in CsgGraphResourceSnapshot csgResources,
+        in GpuTaskResourceSetUse output,
+        in borrow GpuTaskId dependency,
+        mut OpaqueCsgReceiverComputeEmulationGraphTaskPayload payload
+    ){
         payload.csgResources = csgResources;
         payload.csgFrameBuffersUploaded = inputs.csgFrameBuffersUploaded;
         payload.instanceCount = inputs.instanceCount;

@@ -300,9 +300,14 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFram
 
 [cpp_unwind]
 Expected<b8> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in b8 sceneTlasBuildGraphOwned, in b8 meshBlasBuildsGraphOwned,
-        in b8 meshBlasGeometryBuildInputStatesGraphOwned, in b8 meshSwBvhBuildsGraphOwned, in b8 preparedMeshSwBvhBuildsRecordedByGraph
-    ){
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in b8 sceneTlasBuildGraphOwned,
+    in b8 meshBlasBuildsGraphOwned,
+    in b8 meshBlasGeometryBuildInputStatesGraphOwned,
+    in b8 meshSwBvhBuildsGraphOwned,
+    in b8 preparedMeshSwBvhBuildsRecordedByGraph
+){
     if(!this.m_shadowVisibilityResourcesPreflighted || (!this.m_shadowVisibilityPreparedTargets.has_value() || !SameAddress(this.m_shadowVisibilityPreparedTargets.value(), targets)))
         return MakeUnexpected(Failure());
 

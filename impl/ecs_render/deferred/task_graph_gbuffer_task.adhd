@@ -35,8 +35,13 @@ class GbufferGraphTask{
     public Optional<mut Optional<GpuTimingMeasure>> regularSharedComputeEmulationTiming;
 
     public GbufferGraphTask(
-        mut GraphicsRuntime graphics, mut RendererMaterialSystem materials, mut RendererCsgSystem csg,
-        mut DeferredFrameTargets targets, in GraphicsPrefixTimingTicket ticket, in b8 meshReady, in b8 shadingReady
+        mut GraphicsRuntime graphics,
+        mut RendererMaterialSystem materials,
+        mut RendererCsgSystem csg,
+        mut DeferredFrameTargets targets,
+        in GraphicsPrefixTimingTicket ticket,
+        in b8 meshReady,
+        in b8 shadingReady
     ){
         this.graphics = graphics;
         this.materialSystem = materials;

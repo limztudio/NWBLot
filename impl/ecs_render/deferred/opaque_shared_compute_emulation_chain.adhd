@@ -48,9 +48,16 @@ class OpaqueSharedComputeEmulationChainInputs{
     public b8 materialFrameStatesGraphOwned = false;
     public b8 materialGeometryStatesGraphOwned = false;
 
-    public OpaqueSharedComputeEmulationChainInputs(in DeferredFrameTargets targets, in DeferredGraphResourceImportResult resources,
-        in MeshFrameBindingSnapshot frameBindings, in RegularSharedComputeEmulationGraphPlan plan, in GraphicsPrefixTimingTicket timingTicket,
-        in b8 meshViewSetupReady, in b8 sceneShadingSetupReady, mut Optional<GpuTimingMeasure> sharedComputeEmulationTiming){
+    public OpaqueSharedComputeEmulationChainInputs(
+        in DeferredFrameTargets targets,
+        in DeferredGraphResourceImportResult resources,
+        in MeshFrameBindingSnapshot frameBindings,
+        in RegularSharedComputeEmulationGraphPlan plan,
+        in GraphicsPrefixTimingTicket timingTicket,
+        in b8 meshViewSetupReady,
+        in b8 sceneShadingSetupReady,
+        mut Optional<GpuTimingMeasure> sharedComputeEmulationTiming
+    ){
         this.targets = targets;
         this.resources = resources;
         this.frameBindings = frameBindings;
@@ -71,9 +78,17 @@ class OpaqueSharedComputeEmulationChainBuilder : NoCopy{
         this.m_materialSystem = materialSystem;
     }
 
-    private Expected<GpuTaskId> declarePhase(mut OpaqueSharedComputeEmulationChainInputs inputs, in Name identity, in StringView markerLabel,
-        in borrow GpuTaskId dependency, in SharedComputeEmulationPhase phase, in usize drawIndex, in b8 finishTiming,
-        in Span<GpuTaskResourceUse> resourceUses, in Span<GpuTaskResourceSetUse> resourceSetUses){
+    private Expected<GpuTaskId> declarePhase(
+        mut OpaqueSharedComputeEmulationChainInputs inputs,
+        in Name identity,
+        in StringView markerLabel,
+        in borrow GpuTaskId dependency,
+        in SharedComputeEmulationPhase phase,
+        in usize drawIndex,
+        in b8 finishTiming,
+        in Span<GpuTaskResourceUse> resourceUses,
+        in Span<GpuTaskResourceSetUse> resourceSetUses
+    ){
         GpuTaskDesc desc;
         MakeSharedComputeEmulationPhaseTaskDesc(identity, markerLabel, dependency, resourceUses, resourceSetUses, desc);
         OpaqueRegularSharedComputeEmulationGraphTask payload(this.m_materialSystem, inputs.targets, inputs.timingTicket, inputs.meshViewSetupReady,

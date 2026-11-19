@@ -70,8 +70,13 @@ MaterialPixelShaderPassSpec MaterialShaderPassSpec(in MaterialPixelPass pass){
     return spec;
 }
 
-Expected<Vector<GeneratedMaterialPixelShader>> EmitMaterialPassPixelShaders(in Path cache, in StringView configuration, in Name sharedMesh,
-    in MaterialPixelPass pass, mut Span<MaterialCookEntry> entries){
+Expected<Vector<GeneratedMaterialPixelShader>> EmitMaterialPassPixelShaders(
+    in Path cache,
+    in StringView configuration,
+    in Name sharedMesh,
+    in MaterialPixelPass pass,
+    mut Span<MaterialCookEntry> entries
+){
     const MaterialPixelShaderPassSpec spec = MaterialShaderPassSpec(pass);
     const b8 mainPass = pass == MaterialPixelPass::Surface;
     String label(spec.label);

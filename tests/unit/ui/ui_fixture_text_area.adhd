@@ -134,16 +134,16 @@ class TextAreaHost : IEditBoxHost{
         event.action = value;
         this.m_events.push_back(event);
     }
-    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2) override{
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2)override{
         ++this.ordinaryLoans;
         return EditBoxResult();
     }
-    public EditBoxResult editInPopup(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3) override{ return EditBoxResult(); }
-    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{
+    public EditBoxResult editInPopup(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3)override{ return EditBoxResult(); }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4)override{
         ++this.actionLoans;
         return EditBoxResult();
     }
-    public EditBoxResult editNavigated(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, mut EditNavigationState navigation, mut IEditNavigationResolver resolver, mut IEditActionSink sink) override{
+    public EditBoxResult editNavigated(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, mut EditNavigationState navigation, mut IEditNavigationResolver resolver, mut IEditActionSink sink)override{
         ++this.loans;
         this.lastPopup = popup;
         EditBoxResult result;
@@ -211,7 +211,7 @@ class TextAreaHost : IEditBoxHost{
         result.selectionChanged = model.anchor() != anchor || model.caret() != caret;
         return result;
     }
-    public b8 publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions arg3) override{
+    public b8 publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions arg3)override{
         ++this.publishes;
         this.publications.push_back(AreaPublication());
         mut AreaPublication record = this.publications.back();

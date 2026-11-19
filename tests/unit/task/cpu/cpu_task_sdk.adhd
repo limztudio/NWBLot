@@ -6,6 +6,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <loader/callback_shutdown.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::RetireAfterTask")]
 extern auto RetireAfterTask(in auto state, in auto action);
 [cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::TaskConstructible")]
@@ -28,3 +32,7 @@ extern class ProjectShutdownListener{
 extern class LoaderShutdownGuard{
     void activate();
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

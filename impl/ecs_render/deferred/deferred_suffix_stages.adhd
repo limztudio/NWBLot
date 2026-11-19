@@ -89,9 +89,14 @@ b8 ValidDeferredOutputLayer(in GpuTaskGraph graph, in GpuTaskGraphOutputLayer ou
     });
 }
 
-Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(mut DeferredGraphSuffixInputs inputs, in borrow GpuTaskId shadowVisibilityTask,
-    mut GpuTimingSubmissionTicket compositeTimingTicket, mut GpuTimingSubmissionTicket presentTimingTicket,
-    mut Optional<GpuTimingMeasure> asyncFinalTiming, mut GpuTimingFrameTransaction frameTimingTransaction){
+Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
+    mut DeferredGraphSuffixInputs inputs,
+    in borrow GpuTaskId shadowVisibilityTask,
+    mut GpuTimingSubmissionTicket compositeTimingTicket,
+    mut GpuTimingSubmissionTicket presentTimingTicket,
+    mut Optional<GpuTimingMeasure> asyncFinalTiming,
+    mut GpuTimingFrameTransaction frameTimingTransaction
+){
     DeferredGraphSuffixResult result;
     if(
         !inputs.opaqueColor.valid()

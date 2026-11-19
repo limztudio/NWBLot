@@ -6,6 +6,10 @@
 #include "pow_packed_single.adhd"
 #include <tests/common/test_helpers.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<cerrno>"), cpp_name("EDOM")]
 extern const i32 s_PowEDOM;
 
@@ -180,8 +184,17 @@ VectorSingle EvaluatePow(in u8 variant, in b8 reference, in VectorSingle x, in V
     return PackedDoublePow(x, y);
 }
 
-b8 ObservePowKernel(in u8 variant, in b8 reference, in VectorSingle x, in VectorSingle y, mut Array<u32, 4> bits,
-    mut i32 standardFlags, mut u32 mappedFlags, mut u64 nativeBits, mut i32 storedError){
+b8 ObservePowKernel(
+    in u8 variant,
+    in b8 reference,
+    in VectorSingle x,
+    in VectorSingle y,
+    mut Array<u32, 4> bits,
+    mut i32 standardFlags,
+    mut u32 mappedFlags,
+    mut u64 nativeBits,
+    mut i32 storedError
+){
     WriteRawStatus(0u);
     ClearMappedStatus();
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))

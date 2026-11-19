@@ -431,11 +431,24 @@ GpuTimingScopeDefinition MaterialPassGpuTimingScope(in MaterialPipelinePass pass
     }
 }
 
-void RendererMaterialSystem::renderPreparedAvboitMaterialPass(mut CommandList commands, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
-        in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources,
-        in MeshFrameBindingSnapshot frameBindings, in usize instanceCount, in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned,
-        in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
-        in b8 emulationOutputReused, in Optional<mut Optional<GpuTimingMeasure>> emulationOutputTiming){
+void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
+    mut CommandList commands,
+    in FramebufferHandle framebuffer,
+    in MaterialPipelinePass pass,
+    in AvboitFrameTargets avboitTargets,
+    in MaterialPassDrawItemPartitionsView drawItems,
+    in CsgFrameGpuDataView csgFrameData,
+    in CsgGraphResourceSnapshot csgResources,
+    in MeshFrameBindingSnapshot frameBindings,
+    in usize instanceCount,
+    in usize materialTypedByteCount,
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in b8 emulationOutputEntryStateGraphOwned,
+    in b8 csgEmulationOutputEntryStateGraphOwned,
+    in b8 emulationOutputReused,
+    in Optional<mut Optional<GpuTimingMeasure>> emulationOutputTiming
+){
     auto discardEmulationOutputTiming = lambda[in emulationOutputTiming]() -> void{
         if(!emulationOutputTiming.has_value() || !emulationOutputTiming.value().has_value())
             return;

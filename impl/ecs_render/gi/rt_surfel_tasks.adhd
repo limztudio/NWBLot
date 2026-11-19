@@ -61,8 +61,12 @@ class SurfelGiPhaseTask{
     private SurfelGraphPhase m_phase;
 
     public SurfelGiPhaseTask(
-        mut RendererRayTracingSystem system, mut DeferredFrameTargets targets, in DeferredLightingGraphResources lighting,
-        mut GpuTimingSubmissionTicket ticket, in Optional<mut Optional<GpuTimingMeasure>> timing, in SurfelGraphPhase phase
+        mut RendererRayTracingSystem system,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources lighting,
+        mut GpuTimingSubmissionTicket ticket,
+        in Optional<mut Optional<GpuTimingMeasure>> timing,
+        in SurfelGraphPhase phase
     ){
         this.m_system = system;
         this.m_targets = targets;
@@ -152,81 +156,81 @@ Expected<GpuTaskId> DeclareSurfelInitializationTask(mut RendererRayTracingSystem
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareAgeFreeTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(asyncTiming), SurfelGraphPhase::AgeFree));
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareHashBuildTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(asyncTiming), SurfelGraphPhase::HashBuild));
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareSpawnTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(asyncTiming), SurfelGraphPhase::Spawn));
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareTraceBuildArgsTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(asyncTiming), SurfelGraphPhase::TraceBuildArgs));
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareTraceTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(asyncTiming), SurfelGraphPhase::Trace));
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareResolveTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(asyncTiming), SurfelGraphPhase::Resolve));
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareTerminalTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(), SurfelGraphPhase::Upsample));
 }
 
 Expected<GpuTaskId> SurfelGiTaskBuilder::declareTerminalTask(
-        in GpuTaskDesc desc,
-        in DeferredLightingGraphResources deferredLightingResources,
-        mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
     return this.m_graph.addPayloadTask(desc, SurfelGiPhaseTask(this.m_system, targets, deferredLightingResources, timingTicket, Optional<mut Optional<GpuTimingMeasure>>(asyncTiming), SurfelGraphPhase::Upsample));
 }
 

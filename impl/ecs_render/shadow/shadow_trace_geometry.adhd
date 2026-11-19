@@ -129,8 +129,12 @@ in BufferHandle ShadowTraceMember(in MeshRayTracingResourceSnapshot mesh, in u32
 
 [cpp_unwind]
 b8 AppendShadowTraceBuffer(
-    in BufferHandle buffer, in MeshRayTracingResourceSnapshot mesh, in StringView suffix, in PreparedShadowTraceGeometryRole role,
-    mut ShadowTraceBufferIndex index, mut PreparedShadowTraceGeometryBufferVector prepared
+    in BufferHandle buffer,
+    in MeshRayTracingResourceSnapshot mesh,
+    in StringView suffix,
+    in PreparedShadowTraceGeometryRole role,
+    mut ShadowTraceBufferIndex index,
+    mut PreparedShadowTraceGeometryBufferVector prepared
 ){
     if(!buffer.valid())
         return false;
@@ -159,9 +163,13 @@ b8 AppendShadowTraceBuffer(
 
 [cpp_unwind]
 b8 AppendSelectedShadowTraceBuffers(
-    in Span<mut Buffer> selected, in Span<MeshRayTracingResourceSnapshot> meshes,
-    in u32 member, in StringView suffix, in PreparedShadowTraceGeometryRole role,
-    mut ShadowTraceBufferIndex index, mut PreparedShadowTraceGeometryBufferVector prepared
+    in Span<mut Buffer> selected,
+    in Span<MeshRayTracingResourceSnapshot> meshes,
+    in u32 member,
+    in StringView suffix,
+    in PreparedShadowTraceGeometryRole role,
+    mut ShadowTraceBufferIndex index,
+    mut PreparedShadowTraceGeometryBufferVector prepared
 ){
     for(usize i = 0u; i < selected.size(); ++i){
         mut Buffer buffer = selected[i];

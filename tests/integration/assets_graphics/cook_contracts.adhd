@@ -7,6 +7,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 [cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::StringPointer")]
 extern class StringPointer;
 [cpp_header("<tests/integration/assets_graphics/cook_contract_operands.h>"), cpp_name("::NWB::Tests::GraphicsCookContracts::ThrowingConstIdentifierAppend")]
@@ -37,3 +38,4 @@ static_assert(!is_nothrow_call<in Span<MeshletPositionStreamRef>, in Span<Meshle
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

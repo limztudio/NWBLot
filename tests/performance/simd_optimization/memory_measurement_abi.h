@@ -4,6 +4,7 @@
 
 #pragma once
 
+
 #include <global/compile.h>
 #include <global/type_properties.h>
 

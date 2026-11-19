@@ -421,12 +421,12 @@ b8 RendererRayTracingSystem::prepareMeshBlasResources(mut MeshRayTracingResource
 }
 
 b8 PreparedSceneTlasBuild::capture(
-        in RendererRayTracingState state,
-        in b8 staticScene,
-        in u64 staticSceneHash,
-        in Span<RayTracingInstanceDesc> instances,
-        in Span<RayTracingAccelStructHandle> instanceBlases
-    ){
+    in RendererRayTracingState state,
+    in b8 staticScene,
+    in u64 staticSceneHash,
+    in Span<RayTracingInstanceDesc> instances,
+    in Span<RayTracingAccelStructHandle> instanceBlases
+){
     this.clear();
     if(instances.empty() || instances.size() != instanceBlases.size() || !IsPreparedSceneTlasStorageReady(state, instances.size()))
         return false;

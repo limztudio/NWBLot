@@ -26,7 +26,7 @@ class InitializerProbe : Initializerable{
     public InitializerProbe(in u32 index){ this.m_index = index; }
 
     [cpp_unwind]
-    public b8 initialize() override{
+    public b8 initialize()override{
         mut InitializerState state = TestProcessValue<InitializerState>();
         ++state.initializeCounts[this.m_index];
         state.record(this.m_index);
@@ -45,7 +45,7 @@ class InitializerProbe : Initializerable{
         return true;
     }
 
-    public void finalize() override{
+    public void finalize()override{
         mut InitializerState state = TestProcessValue<InitializerState>();
         ++state.finalizeCounts[this.m_index];
         state.record(this.m_index + s_InitializerCount);

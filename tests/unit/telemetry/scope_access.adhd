@@ -26,4 +26,6 @@ extern const b8 s_ImplicitScopeConversionIsNothrow;
 [cpp_header("<global/named_registry.h>"), cpp_name("::ScopeNameAt")]
 extern Name TestScopeNameAt<T>(in Span<ScopeNonNull<T>> records, in usize index);
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

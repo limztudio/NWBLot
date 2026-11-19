@@ -6,6 +6,10 @@
 #include <tests/common/posix_child.adhd>
 #include <tests/common/test_helpers.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDoubleDetail::MinMaxIntersects")]
 extern b8 GeometryMinMaxIntersects(in VectorDouble minA, in VectorDouble maxA, in VectorDouble minB, in VectorDouble maxB);
 

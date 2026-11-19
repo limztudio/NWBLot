@@ -11,8 +11,10 @@
 const usize s_FirstMeshletIndex = 0u;
 
 b8 ForEachMeshletTriangleCorner<Visitor>(
-    in Span<MeshletDesc> meshlets, in Span<MeshletLocalVertexRef> localVertexRefs,
-    in Span<u8> primitiveIndices, mut forward Visitor visitor
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<u8> primitiveIndices,
+    mut forward Visitor visitor
 )noexcept_like(cast<b8>(!visitor(meshlets[s_FirstMeshletIndex], s_FirstMeshletIndex, localVertexRefs[s_FirstMeshletIndex]))){
     for(usize meshletIndex = s_FirstMeshletIndex; meshletIndex < meshlets.size(); ++meshletIndex){
         in MeshletDesc meshlet = meshlets[meshletIndex];

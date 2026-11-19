@@ -45,8 +45,13 @@ class DeferredGraphSuffixBuilder : NoCopy{
     private Optional<mut IGpuTaskGraphPresentationContributor> m_presentationContributor;
     private Optional<mut IGpuTaskGraphOutputLayerContributor> m_outputLayerContributor;
 
-    public DeferredGraphSuffixBuilder(mut GpuTaskGraph graph, mut RendererDeferredSystem deferredSystem, mut GraphicsRuntime graphics,
-        in Optional<mut IGpuTaskGraphPresentationContributor> presentationContributor, in Optional<mut IGpuTaskGraphOutputLayerContributor> outputLayerContributor){
+    public DeferredGraphSuffixBuilder(
+        mut GpuTaskGraph graph,
+        mut RendererDeferredSystem deferredSystem,
+        mut GraphicsRuntime graphics,
+        in Optional<mut IGpuTaskGraphPresentationContributor> presentationContributor,
+        in Optional<mut IGpuTaskGraphOutputLayerContributor> outputLayerContributor
+    ){
         this.m_graph = graph;
         this.m_deferredSystem = deferredSystem;
         this.m_graphics = graphics;
@@ -55,9 +60,14 @@ class DeferredGraphSuffixBuilder : NoCopy{
     }
 
     [cpp_unwind]
-    public Expected<DeferredGraphSuffixResult> declare(mut DeferredGraphSuffixInputs inputs, in borrow GpuTaskId shadowVisibilityTask,
-        mut GpuTimingSubmissionTicket compositeTimingTicket, mut GpuTimingSubmissionTicket presentTimingTicket,
-        mut Optional<GpuTimingMeasure> asyncFinalTiming, mut GpuTimingFrameTransaction frameTimingTransaction);
+    public Expected<DeferredGraphSuffixResult> declare(
+        mut DeferredGraphSuffixInputs inputs,
+        in borrow GpuTaskId shadowVisibilityTask,
+        mut GpuTimingSubmissionTicket compositeTimingTicket,
+        mut GpuTimingSubmissionTicket presentTimingTicket,
+        mut Optional<GpuTimingMeasure> asyncFinalTiming,
+        mut GpuTimingFrameTransaction frameTimingTransaction
+    );
 }
 
 

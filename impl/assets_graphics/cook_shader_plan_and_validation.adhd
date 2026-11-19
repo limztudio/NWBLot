@@ -308,8 +308,17 @@ b8 PrepareShaderMaterialDependencies(in CookResolvedPaths paths, in Path bindRoo
     return true;
 }
 
-Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(in CookResolvedPaths paths, in Path bindRoot, in Path csgRoot, in Path bxdfRoot, in Path shadowRoot, in IncludeMetadataMap includes,
-    in Span<MaterialBindEntry> binds, in Span<MaterialCookEntry> materials, mut Vector<ShaderCookEntry> entries){
+Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
+    in CookResolvedPaths paths,
+    in Path bindRoot,
+    in Path csgRoot,
+    in Path bxdfRoot,
+    in Path shadowRoot,
+    in IncludeMetadataMap includes,
+    in Span<MaterialBindEntry> binds,
+    in Span<MaterialCookEntry> materials,
+    mut Vector<ShaderCookEntry> entries
+){
     PreparedShaderPlan plan;
     const Expected<usize> capacity = TryComputePreparedShaderEntryCapacity(entries.size());
     if(!capacity.has_value())

@@ -57,8 +57,12 @@ static_assert(s_ShaderResolveWavelet == 1u && s_ShaderResolveUpsample == 2u);
 static_assert(size_of<ShadowRqSoftPushConstants>() >= size_of<ShadowRqPushConstants>());
 
 b8 EnsureShadowResolveStage(
-    in BindingLayoutHandle layout, in Func<64u, AssetRef<ComputeShader>(in ShadowSubsystem)> selector,
-    mut RendererShaderSystem shaders, mut Device device, in StringView variant, mut SoftShadowResolveStageState stage
+    in BindingLayoutHandle layout,
+    in Func<64u, AssetRef<ComputeShader>(in ShadowSubsystem)> selector,
+    mut RendererShaderSystem shaders,
+    mut Device device,
+    in StringView variant,
+    mut SoftShadowResolveStageState stage
 ){
     if(stage.m_pipeline.valid())
         return true;
@@ -67,8 +71,11 @@ b8 EnsureShadowResolveStage(
 }
 
 b8 EnsureResolveChannel(
-    in BindingLayoutHandle layout, in Func<64u, AssetRef<ComputeShader>(in ShadowSubsystem)> selector,
-    mut RendererShaderSystem shaders, mut Device device, mut SoftShadowResolveChannelState channel
+    in BindingLayoutHandle layout,
+    in Func<64u, AssetRef<ComputeShader>(in ShadowSubsystem)> selector,
+    mut RendererShaderSystem shaders,
+    mut Device device,
+    mut SoftShadowResolveChannelState channel
 ){
     if(EnsureShadowResolveStage(layout, selector, shaders, device, s_ShadowResolveWaveletVariant, channel.m_wavelet)
         && EnsureShadowResolveStage(layout, selector, shaders, device, s_ShadowResolveUpsampleVariant, channel.m_upsample))

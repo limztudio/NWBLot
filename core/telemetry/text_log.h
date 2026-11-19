@@ -57,8 +57,6 @@ struct TextLogPayload{
 [[nodiscard]] b8 RecordTextLog(Recorder& recorder, Common::LogType::Enum type, TStringView message, u64 frameIndex = 0u, u32 streamId = 0u);
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

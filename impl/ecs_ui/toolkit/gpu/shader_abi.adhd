@@ -5,6 +5,10 @@
 #include <impl/ecs_ui/toolkit/gpu/push_constants.adhd>
 #include <impl/assets_font_atlas/types.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_VERTEX_ATTRIBUTE_COUNT")]
 extern const u32 s_ShaderUiVertexAttributeCount;
 

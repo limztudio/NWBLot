@@ -78,9 +78,9 @@ class OpticalSceneContext{
 
 class RecordingLayerContributor : IGpuTaskGraphOutputLayerContributor{
     public u32 acceptanceCount = 0u;
-    public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame) override{ return true; }
-    public Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(mut GpuTaskGraph graph) override{ return GpuTaskGraphOutputLayer(); }
-    public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token) override{ ++this.acceptanceCount; }
+    public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame)override{ return true; }
+    public Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(mut GpuTaskGraph graph)override{ return GpuTaskGraphOutputLayer(); }
+    public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override{ ++this.acceptanceCount; }
 }
 
 [ordered]
@@ -92,8 +92,12 @@ class OpaqueCsgClearContext{
         this.graph = GpuTaskGraph(this.testArena);
     }
 }
-Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(mut GpuTaskGraph graph, mut DeferredFrameTargets targets,
-    in GpuTaskId dependency, mut GraphClearTimingRecordState clearTimingState){
+Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(
+    mut GpuTaskGraph graph,
+    mut DeferredFrameTargets targets,
+    in GpuTaskId dependency,
+    mut GraphClearTimingRecordState clearTimingState
+){
     OpaqueCsgIntervalClearInputs inputs;
     inputs.width = targets.width;
     inputs.height = targets.height;
@@ -158,9 +162,6 @@ b8 TryImportRaySceneGraphReads(in RayTracingSceneGraphResources resources, mut R
     return context.scope.read(resources, context.graph).has_value();
 }
 f32x3x4u ZeroOpticalAffineMatrix(){ return f32x3x4u(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f); }
-
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

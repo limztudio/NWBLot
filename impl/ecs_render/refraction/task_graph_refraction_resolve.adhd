@@ -68,8 +68,15 @@ class RefractionResolveGraphTask{
     private mut b8 screenLogged;
     private b8 diagnostics;
 
-    public RefractionResolveGraphTask(mut RendererRayTracingSystem system, in borrow DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources,
-        in borrow b8 ready, mut b8 hardwareLogged, mut b8 screenLogged, in b8 diagnostics){
+    public RefractionResolveGraphTask(
+        mut RendererRayTracingSystem system,
+        in borrow DeferredFrameTargets targets,
+        in RayTracingRefractionGraphResources resources,
+        in borrow b8 ready,
+        mut b8 hardwareLogged,
+        mut b8 screenLogged,
+        in b8 diagnostics
+    ){
         this.system = system;
         this.targets = targets;
         this.resources = resources;

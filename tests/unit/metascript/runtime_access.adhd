@@ -4,6 +4,10 @@
 
 #include <tests/common/value_storage.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::CaptureReturnedValue")]
 extern mut T CaptureReturnedValue<T>(mut TestValueSlot<T> slot, in T value);
 
@@ -64,4 +68,6 @@ extern DiagnosticEventText FormatWideDiagnosticPath(in Path path);
 [cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::DiagnosticTerminator")]
 extern u8 DiagnosticTerminator(in DiagnosticEventText text);
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

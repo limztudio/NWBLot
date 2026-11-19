@@ -49,9 +49,17 @@ b8 IsAvboitComputeEmulationFrameReady(in b8 planMatches, in b8 materialDrawBuffe
 
 #include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
 [cpp_unwind]
-Expected<AvboitPassUploadResult> GatherAvboitPassUpload(mut RendererMaterialSystem materials, in FrameGraphAvboitStageInputs inputs,
-    in FramebufferHandle framebuffer, in MaterialPipelinePass pass, mut MaterialPassDrawItemPartitions drawItems, mut InstanceGpuDataVector instanceData,
-    mut CsgFrameGpuData csgFrameData, mut MaterialTypedInstanceRangeVector materialTypedRanges, mut MaterialTypedByteDataVector materialTypedBytes){
+Expected<AvboitPassUploadResult> GatherAvboitPassUpload(
+    mut RendererMaterialSystem materials,
+    in FrameGraphAvboitStageInputs inputs,
+    in FramebufferHandle framebuffer,
+    in MaterialPipelinePass pass,
+    mut MaterialPassDrawItemPartitions drawItems,
+    mut InstanceGpuDataVector instanceData,
+    mut CsgFrameGpuData csgFrameData,
+    mut MaterialTypedInstanceRangeVector materialTypedRanges,
+    mut MaterialTypedByteDataVector materialTypedBytes
+){
     const AvboitPassUploadReadinessPolicy readinessPolicy();
     AvboitPassUploadResult result;
     materials.gatherMaterialPassDrawItems(
@@ -95,9 +103,16 @@ Expected<AvboitPassUploadResult> GatherAvboitPassUpload(mut RendererMaterialSyst
 }
 
 Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::declare(
-    in FrameGraphAvboitStageInputs inputs, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitGeometryPhase phase,
-    in GpuTaskId uploadTask, in b8 intervalOutputsGraphOwned, in b8 hasTransparentRenderers,
-    mut AvboitRasterPassTaskPayload rasterPayload, mut AvboitComputeEmulationTaskPayload computeEmulationPayload, mut AvboitGeneratedGeometryReuse generatedGeometry
+    in FrameGraphAvboitStageInputs inputs,
+    in FramebufferHandle framebuffer,
+    in MaterialPipelinePass pass,
+    in AvboitGeometryPhase phase,
+    in GpuTaskId uploadTask,
+    in b8 intervalOutputsGraphOwned,
+    in b8 hasTransparentRenderers,
+    mut AvboitRasterPassTaskPayload rasterPayload,
+    mut AvboitComputeEmulationTaskPayload computeEmulationPayload,
+    mut AvboitGeneratedGeometryReuse generatedGeometry
 ){
     FrameGraphAvboitMaterialUploadResult result;
     result.uploadTask = uploadTask;
@@ -226,8 +241,17 @@ Expected<AvboitGeometryPreparationResult> PrepareAvboitMaterialGeometry(mut GpuT
 
 
 [cpp_unwind]
-Expected<b8> DeclareAvboitMaterialUploads(mut GpuTaskGraph graph, mut RendererCsgSystem csgSystem, in FrameGraphAvboitStageInputs inputs, in AvboitGeometryPhase phase,
-    in Span<InstanceGpuData> instanceData, in Span<u8> materialTypedBytes, in CsgFrameGpuDataView csgFrameData, in b8 hasCsgDrawItems, mut GpuTaskId inOutUploadTask){
+Expected<b8> DeclareAvboitMaterialUploads(
+    mut GpuTaskGraph graph,
+    mut RendererCsgSystem csgSystem,
+    in FrameGraphAvboitStageInputs inputs,
+    in AvboitGeometryPhase phase,
+    in Span<InstanceGpuData> instanceData,
+    in Span<u8> materialTypedBytes,
+    in CsgFrameGpuDataView csgFrameData,
+    in b8 hasCsgDrawItems,
+    mut GpuTaskId inOutUploadTask
+){
     if(!inOutUploadTask.valid())
         return MakeUnexpected(Failure());
     if(!AvboitUploadCountsFit(
@@ -300,9 +324,18 @@ Expected<b8> DeclareAvboitMaterialUploads(mut GpuTaskGraph graph, mut RendererCs
 
 
 [cpp_unwind]
-void CaptureAvboitEmulationPlans(in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView frame, in b8 geometryOwned, in b8 sampledTexturesCollected,
-    in b8 intervalOutputsGraphOwned, in usize instanceCount, in usize materialTypedByteCount, mut AliasFreeComputeEmulationGraphPlan plan,
-    mut OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan, mut FrameGraphAvboitMaterialUploadResult result){
+void CaptureAvboitEmulationPlans(
+    in MaterialPassDrawItemPartitionsView drawItems,
+    in CsgFrameGpuDataView frame,
+    in b8 geometryOwned,
+    in b8 sampledTexturesCollected,
+    in b8 intervalOutputsGraphOwned,
+    in usize instanceCount,
+    in usize materialTypedByteCount,
+    mut AliasFreeComputeEmulationGraphPlan plan,
+    mut OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan,
+    mut FrameGraphAvboitMaterialUploadResult result
+){
     // A phase owns one alias-free stream; mixed work keeps local interleaving.
     result.regularComputeEmulationPlanCaptured = CanCaptureRegularAvboitComputeEmulation(drawItems.csg.computeDrawItems.empty(), geometryOwned, sampledTexturesCollected) && plan.capture(drawItems.regular, false);
     result.csgComputeEmulationPlanCaptured = CanCaptureCsgAvboitComputeEmulation(
@@ -335,9 +368,15 @@ void CaptureAvboitEmulationPlans(in MaterialPassDrawItemPartitionsView drawItems
 
 
 [cpp_unwind]
-b8 PrepareAvboitEmulationOutputs(mut GpuTaskGraph graph, in FrameGraphAvboitMaterialUploadResult upload, in AvboitRasterRecordPhaseDesc phaseDesc,
-    mut AvboitRasterPassTaskPayload rasterPayload, in AvboitComputeEmulationTaskPayload computeEmulationPayload,
-    mut Optional<GpuTimingMeasure> computeEmulationTiming, mut AvboitComputeEmulationOutputs result){
+b8 PrepareAvboitEmulationOutputs(
+    mut GpuTaskGraph graph,
+    in FrameGraphAvboitMaterialUploadResult upload,
+    in AvboitRasterRecordPhaseDesc phaseDesc,
+    mut AvboitRasterPassTaskPayload rasterPayload,
+    in AvboitComputeEmulationTaskPayload computeEmulationPayload,
+    mut Optional<GpuTimingMeasure> computeEmulationTiming,
+    mut AvboitComputeEmulationOutputs result
+){
     const AvboitComputeEmulationOutputPolicy outputPolicy();
     const b8 generatedGeometryReused = upload.reusedGeometryProducer.valid();
 

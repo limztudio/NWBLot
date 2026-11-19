@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 const u64 s_GpuBarrierAcceptedTokenValue = 7u;
 
 class GpuBarrierCallbackInvocationState{
@@ -63,8 +62,13 @@ b8 InvokeBarrierCallback(in GpuTaskGraphTaskAcceptedCallback callback){
     return callback.notify(token);
 }
 
-void CheckReorderedCallbackBindings<TCallback>(in GpuTaskGraphDeclarationReadView declarations, in GpuCompiledGraphReadView plan,
-    in Span<GpuTaskId> tasks, in usize callbackCount, mut ScratchStorage scratch){
+void CheckReorderedCallbackBindings<TCallback>(
+    in GpuTaskGraphDeclarationReadView declarations,
+    in GpuCompiledGraphReadView plan,
+    in Span<GpuTaskId> tasks,
+    in usize callbackCount,
+    mut ScratchStorage scratch
+){
     ScratchStorageVector<u32> order(scratch);
     order.reserve(callbackCount);
     GpuBarrierCallbackInvocationState state(order, true);
@@ -97,9 +101,15 @@ void CheckReorderedCallbackBindings<TCallback>(in GpuTaskGraphDeclarationReadVie
     EXPECT_FALSE(bindings.findCallback(GpuTaskId()).has_value());
 }
 
-void ExpectBindingRejectionAndReset<TCallback>(mut GpuTaskCallbackBindings<TCallback> bindings,
-    in GpuTaskGraphDeclarationReadView declarations, in GpuCompiledGraphReadView plan, in GpuSubmissionPacketRange range,
-    in TestArrayData<TCallback> entries, mut ScratchStorageVector<TCallback> callbacks, in TCallback saved){
+void ExpectBindingRejectionAndReset<TCallback>(
+    mut GpuTaskCallbackBindings<TCallback> bindings,
+    in GpuTaskGraphDeclarationReadView declarations,
+    in GpuCompiledGraphReadView plan,
+    in GpuSubmissionPacketRange range,
+    in TestArrayData<TCallback> entries,
+    mut ScratchStorageVector<TCallback> callbacks,
+    in TCallback saved
+){
     EXPECT_FALSE(bindings.resolve(declarations, plan, range, entries, callbacks.size()));
     EXPECT_FALSE(bindings.findCallback(callbacks[0u].task).has_value());
     callbacks.back() = saved;
@@ -107,8 +117,14 @@ void ExpectBindingRejectionAndReset<TCallback>(mut GpuTaskCallbackBindings<TCall
     EXPECT_TRUE(bindings.findCallback(saved.task).has_value());
 }
 
-void CheckInvalidCallbackBindings<TCallback>(in GpuTaskGraphDeclarationReadView declarations, in GpuCompiledGraphReadView plan,
-    in GpuSubmissionPacketRange range, in Span<GpuTaskId> tasks, in usize callbackCount, mut ScratchStorage scratch){
+void CheckInvalidCallbackBindings<TCallback>(
+    in GpuTaskGraphDeclarationReadView declarations,
+    in GpuCompiledGraphReadView plan,
+    in GpuSubmissionPacketRange range,
+    in Span<GpuTaskId> tasks,
+    in usize callbackCount,
+    mut ScratchStorage scratch
+){
     ScratchStorageVector<u32> order(scratch);
     GpuBarrierCallbackInvocationState state(order, false);
     ScratchStorageVector<GpuBarrierCallbackContext> contexts(scratch);

@@ -45,7 +45,13 @@ u32 MeshletUvRefIndex(in MeshletAttributeStreamRef ref){ return ref.uv0; }
 u32 MeshletColorRefIndex(in MeshletAttributeStreamRef ref){ return ref.color; }
 
 void AppendMeshletChannelDeltas<Ref, Projection, Output>(
-    in Span<Ref> refs, in u32 offset, in u32 count, in u32 base, in MeshletRefDeltaWidth width, in Projection project, mut Output bytes
+    in Span<Ref> refs,
+    in u32 offset,
+    in u32 count,
+    in u32 base,
+    in MeshletRefDeltaWidth width,
+    in Projection project,
+    mut Output bytes
 )noexcept_like(AppendOutputByte(bytes, cast<u8>(0u)), cast<u32>(project(refs[0u]))){
     for(u32 i = 0u; i < count; ++i){
         const u32 index = project(refs[offset + i]);
@@ -55,9 +61,16 @@ void AppendMeshletChannelDeltas<Ref, Projection, Output>(
 }
 
 b8 ValidateEncodedMeshletRefDeltas<FailureHandler>(
-    in MeshletDesc meshlet, in usize index, in u32 positionOffset, in u32 attributeOffset,
-    in Span<MeshletPositionStreamRef> positions, in Span<MeshletAttributeStreamRef> attributes,
-    in Span<u8> positionDeltas, in Span<u8> attributeDeltas, in b8 skinRequired, mut copy FailureHandler onFailure
+    in MeshletDesc meshlet,
+    in usize index,
+    in u32 positionOffset,
+    in u32 attributeOffset,
+    in Span<MeshletPositionStreamRef> positions,
+    in Span<MeshletAttributeStreamRef> attributes,
+    in Span<u8> positionDeltas,
+    in Span<u8> attributeDeltas,
+    in b8 skinRequired,
+    mut copy FailureHandler onFailure
 )noexcept_like(
     MeshletFailureResult(onFailure(index, s_InvalidEncodedRefWidthMessage)),
     MeshletFailureResult(onFailure(index, s_EncodedRefByteCountMismatchMessage)),
@@ -81,8 +94,14 @@ b8 ValidateEncodedMeshletRefDeltas<FailureHandler>(
 }
 
 b8 EncodeMeshletRefRange<FailureHandler, PositionOutput, AttributeOutput>(
-    in Span<MeshletPositionStreamRef> positions, in Span<MeshletAttributeStreamRef> attributes, in b8 skinRequired,
-    mut FailureHandler onFailure, mut Span<MeshletDesc> meshlets, mut PositionOutput positionDeltas, mut AttributeOutput attributeDeltas, mut copy usize index
+    in Span<MeshletPositionStreamRef> positions,
+    in Span<MeshletAttributeStreamRef> attributes,
+    in b8 skinRequired,
+    mut FailureHandler onFailure,
+    mut Span<MeshletDesc> meshlets,
+    mut PositionOutput positionDeltas,
+    mut AttributeOutput attributeDeltas,
+    mut copy usize index
 )noexcept_like(
     ClearByteOutput(positionDeltas), ClearByteOutput(attributeDeltas),
     ReserveByteOutput(positionDeltas, positions.size() * size_of<MeshletPositionStreamRef>()),
@@ -135,8 +154,13 @@ b8 EncodeMeshletRefRange<FailureHandler, PositionOutput, AttributeOutput>(
 }
 
 b8 EncodeMeshletRefDeltas<PositionOutput, AttributeOutput, FailureHandler>(
-    in Span<MeshletPositionStreamRef> positions, in Span<MeshletAttributeStreamRef> attributes,
-    in b8 skinRequired, mut copy FailureHandler onFailure, mut Span<MeshletDesc> meshlets, mut PositionOutput positionDeltas, mut AttributeOutput attributeDeltas
+    in Span<MeshletPositionStreamRef> positions,
+    in Span<MeshletAttributeStreamRef> attributes,
+    in b8 skinRequired,
+    mut copy FailureHandler onFailure,
+    mut Span<MeshletDesc> meshlets,
+    mut PositionOutput positionDeltas,
+    mut AttributeOutput attributeDeltas
 )noexcept_like(){
     return EncodeMeshletRefRange(positions, attributes, skinRequired, onFailure, meshlets, positionDeltas, attributeDeltas, cast<usize>(0u));
 }

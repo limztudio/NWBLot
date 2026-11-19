@@ -32,8 +32,11 @@ class OpaqueCsgReceiverComputeEmulationGraphTaskPayload{
     public b8 materialGeometryStatesGraphOwned = false;
 
     public OpaqueCsgReceiverComputeEmulationGraphTaskPayload(
-        mut RendererMaterialSystem materials, in DeferredFrameTargets targets, in GraphicsPrefixTimingTicket ticket,
-        in b8 meshReady, in b8 shadingReady
+        mut RendererMaterialSystem materials,
+        in DeferredFrameTargets targets,
+        in GraphicsPrefixTimingTicket ticket,
+        in b8 meshReady,
+        in b8 shadingReady
     ){
         this.materialSystem = materials;
         this.targets = targets;
@@ -70,8 +73,12 @@ class OpaqueCsgIntervalSampleComputeEmulationGraphTask{
 
     public OpaqueCsgIntervalSampleComputeEmulationGraphTask(
         mut GraphicsRuntime graphics,
-        mut RendererMaterialSystem materials, in DeferredFrameTargets targets, in GraphicsPrefixTimingTicket ticket,
-        in b8 meshReady, in b8 shadingReady, mut Optional<GpuTimingMeasure> timing
+        mut RendererMaterialSystem materials,
+        in DeferredFrameTargets targets,
+        in GraphicsPrefixTimingTicket ticket,
+        in b8 meshReady,
+        in b8 shadingReady,
+        mut Optional<GpuTimingMeasure> timing
     ){
         this.materialSystem = materials;
         this.targets = targets;

@@ -150,15 +150,25 @@ Expected<usize> FindOrBuildMaterialBindTypedLayout(in Name materialInterface, in
     return index;
 }
 
-void CopyMaterialBindTypedLayoutDefaults(in MaterialBindTypedLayout layout, mut u64 hash, mut TypedLayoutBlockVector blocks,
-    mut TypedLayoutFieldVector fields, mut TypedBlockByteVector bytes){
+void CopyMaterialBindTypedLayoutDefaults(
+    in MaterialBindTypedLayout layout,
+    mut u64 hash,
+    mut TypedLayoutBlockVector blocks,
+    mut TypedLayoutFieldVector fields,
+    mut TypedBlockByteVector bytes
+){
     MaterialBindStorage storage;
     storage.copyMaterialBindTypedLayoutDefaults(layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields,
         layout.typedBlockBytes, hash, blocks, fields, bytes);
 }
 
-b8 ApplyMaterialBindTypedLayoutParameters(in MaterialBindTypedLayout layout, in Name name, in MaterialBindParameterMap parameters,
-    mut TypedBlockByteVector bytes, mut ResourceReferenceVector references){
+b8 ApplyMaterialBindTypedLayoutParameters(
+    in MaterialBindTypedLayout layout,
+    in Name name,
+    in MaterialBindParameterMap parameters,
+    mut TypedBlockByteVector bytes,
+    mut ResourceReferenceVector references
+){
     MaterialBindParameterApplication application;
     return application.applyMaterialBindTypedLayoutParametersToStorage(layout.interfacePath, layout.parameterLookup,
         layout.typedLayoutFields, name, parameters, bytes, references);

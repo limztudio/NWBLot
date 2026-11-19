@@ -65,8 +65,14 @@ class FrameGraphAvboitStage : NoCopy{
     private mut RendererAvboitSystem m_avboitSystem;
     private mut RendererTaskTimingFeedback m_timingFeedback;
 
-    public FrameGraphAvboitStage(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererMaterialSystem materials,
-        mut RendererCsgSystem csg, mut RendererAvboitSystem avboit, mut RendererTaskTimingFeedback timing){
+    public FrameGraphAvboitStage(
+        mut GpuTaskGraph graph,
+        mut GraphicsRuntime graphics,
+        mut RendererMaterialSystem materials,
+        mut RendererCsgSystem csg,
+        mut RendererAvboitSystem avboit,
+        mut RendererTaskTimingFeedback timing
+    ){
         this.m_graph = graph;
         this.m_graphics = graphics;
         this.m_materialSystem = materials;
@@ -77,11 +83,23 @@ class FrameGraphAvboitStage : NoCopy{
     [cpp_unwind]
     public Expected<GpuTaskId> declare(in FrameGraphAvboitStageInputs inputs, in FrameGraphAvboitStageTiming timing, mut ObjectGeometryCacheGraph objectGeometry);
     [cpp_unwind]
-    private b8 declareExtinction(in FrameGraphAvboitStageInputs inputs, in FrameGraphAvboitStageTiming timing, in GpuTaskId avboitDepthWarpCompletionTask,
-        in b8 avboitIntervalOutputsGraphOwned, mut ObjectGeometryCacheGraph objectGeometry, mut AvboitGeneratedGeometryReuse generatedGeometry, mut AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder);
+    private b8 declareExtinction(
+        in FrameGraphAvboitStageInputs inputs,
+        in FrameGraphAvboitStageTiming timing,
+        in GpuTaskId avboitDepthWarpCompletionTask,
+        in b8 avboitIntervalOutputsGraphOwned,
+        mut ObjectGeometryCacheGraph objectGeometry,
+        mut AvboitGeneratedGeometryReuse generatedGeometry,
+        mut AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder
+    );
     [cpp_unwind]
-    private b8 declareAccumulation(in FrameGraphAvboitStageInputs inputs, in FrameGraphAvboitStageTiming timing, in b8 avboitIntervalOutputsGraphOwned,
-        mut ObjectGeometryCacheGraph objectGeometry, mut AvboitGeneratedGeometryReuse generatedGeometry);
+    private b8 declareAccumulation(
+        in FrameGraphAvboitStageInputs inputs,
+        in FrameGraphAvboitStageTiming timing,
+        in b8 avboitIntervalOutputsGraphOwned,
+        mut ObjectGeometryCacheGraph objectGeometry,
+        mut AvboitGeneratedGeometryReuse generatedGeometry
+    );
 }
 
 

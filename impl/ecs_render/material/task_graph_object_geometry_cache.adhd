@@ -160,9 +160,12 @@ class ObjectGeometryCacheGraph : NoCopy{
 
     [cpp_unwind]
     private Expected<GpuTaskId> declareDecode(
-        in Span<MaterialPassDrawItem> draw, in MeshFrameBindingSnapshot bindings,
-        in GpuGraphResourceId resource, in borrow GpuTaskId dependency,
-        in GraphicsPrefixTimingTicket ticket, in Optional<in GraphicsPrefixTimingTicket> rebindable
+        in Span<MaterialPassDrawItem> draw,
+        in MeshFrameBindingSnapshot bindings,
+        in GpuGraphResourceId resource,
+        in borrow GpuTaskId dependency,
+        in GraphicsPrefixTimingTicket ticket,
+        in Optional<in GraphicsPrefixTimingTicket> rebindable
     ){
         const MaterialPassDrawItemsView drawSet(Span<MaterialPassDrawItem>(), Span<MaterialPassDrawItem>(), draw);
         const Array<MaterialPassDrawItemsView, 1u> sets(drawSet);
@@ -196,8 +199,12 @@ class ObjectGeometryCacheGraph : NoCopy{
 
     [cpp_unwind]
     public b8 prepare(
-        in Span<MaterialPassDrawItem> draws, in MeshFrameBindingSnapshot bindings, mut GpuTaskId dependency,
-        mut Vector<GpuTaskResourceUse> rasterUses, in GraphicsPrefixTimingTicket ticket, in Optional<in GraphicsPrefixTimingTicket> rebindable
+        in Span<MaterialPassDrawItem> draws,
+        in MeshFrameBindingSnapshot bindings,
+        mut GpuTaskId dependency,
+        mut Vector<GpuTaskResourceUse> rasterUses,
+        in GraphicsPrefixTimingTicket ticket,
+        in Optional<in GraphicsPrefixTimingTicket> rebindable
     ){
         Vector<GpuTaskResourceUse> cacheReads;
         Vector<GpuTaskId> producers;

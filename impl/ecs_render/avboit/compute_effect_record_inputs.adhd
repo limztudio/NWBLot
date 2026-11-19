@@ -25,8 +25,11 @@ class AvboitComputeEffectGraphTask{
     private AvboitComputeEffect m_effect;
 
     public AvboitComputeEffectGraphTask(
-        mut RendererAvboitSystem system, mut AvboitFrameTargets targets, mut GpuTimingSubmissionTicket ticket,
-        in Optional<mut RendererTaskTimingFeedback> feedback, in Optional<in GpuTimingScopeDefinition> scope,
+        mut RendererAvboitSystem system,
+        mut AvboitFrameTargets targets,
+        mut GpuTimingSubmissionTicket ticket,
+        in Optional<mut RendererTaskTimingFeedback> feedback,
+        in Optional<in GpuTimingScopeDefinition> scope,
         in AvboitComputeEffect effect
     ){
         this.m_system = system;

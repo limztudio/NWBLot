@@ -4,6 +4,7 @@
 
 #pragma once
 
+
 #include <core/alloc/scratch.h>
 #include <core/common/logger_registration.h>
 

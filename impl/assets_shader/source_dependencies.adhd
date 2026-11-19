@@ -20,7 +20,10 @@ Expected<b8> CheckShaderIncludeCandidate(in Path candidate){
 }
 
 Expected<Path> ResolveShaderIncludeFile<Directories>(
-    in StringView includeName, in IncludeKind kind, in Path sourceDirectory, in Directories directories
+    in StringView includeName,
+    in IncludeKind kind,
+    in Path sourceDirectory,
+    in Directories directories
 ){
     if(kind == IncludeKind::Relative){
         const Path localCandidate = (sourceDirectory / includeName).lexicallyNormal();
@@ -43,7 +46,10 @@ Expected<Path> ResolveShaderIncludeFile<Directories>(
 }
 
 b8 GatherShaderSourceDependencies<Directories, Dependencies>(
-    in Path sourcePath, in Directories directories, in Span<StringView> plannedMacroIncludes, mut Vector<Dependencies> dependencies
+    in Path sourcePath,
+    in Directories directories,
+    in Span<StringView> plannedMacroIncludes,
+    mut Vector<Dependencies> dependencies
 ){
     dependencies.clear();
     HashSet<String> visited;

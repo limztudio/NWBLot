@@ -17,7 +17,7 @@
 class UnfocusedLoopRenderPass : IRenderPass{
     [cpp_base(IRenderPass, graphics)]
     public UnfocusedLoopRenderPass(mut GraphicsRuntime graphics){}
-    public b8 shouldRenderUnfocused() override{ return true; }
+    public b8 shouldRenderUnfocused()override{ return true; }
 }
 
 class CollectionTestPass : IRenderPass{
@@ -28,12 +28,12 @@ class CollectionTestPass : IRenderPass{
     [cpp_base(IRenderPass, graphics)]
     public CollectionTestPass(mut GraphicsRuntime graphics){}
 
-    public b8 validateResources(in u32 width, in u32 height, in u32 samples) override{
+    public b8 validateResources(in u32 width, in u32 height, in u32 samples)override{
         ++this.validationCount;
         return this.valid;
     }
 
-    public void invalidateResources() override{ ++this.invalidationCount; }
+    public void invalidateResources()override{ ++this.invalidationCount; }
 }
 
 class ClampObserverFailure{}
@@ -42,7 +42,7 @@ class ThrowingClampLogger : Utf8LogSink{
     public u32 clampCount = 0u;
 
     [cpp_unwind]
-    public void receive(in StringView text, in LogType kind) override{
+    public void receive(in StringView text, in LogType kind)override{
         if(text.find("Frame Win32 client size clamped") == usize.max)
             return;
         ++this.clampCount;
@@ -51,7 +51,7 @@ class ThrowingClampLogger : Utf8LogSink{
 }
 
 class LoopLogger : Utf8LogSink{
-    public void receive(in StringView text, in LogType kind) override{
+    public void receive(in StringView text, in LogType kind)override{
         if(kind >= LogType::Warning)
             PrintFrameLog(text);
     }

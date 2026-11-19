@@ -40,16 +40,16 @@ class ThrowOnceTimingSink : TimingSink{
     public ThrowOnceTimingSink(mut TimingRecorder timing){ this.m_timing = timing; }
     public b8 enabled()const override{ return true; }
     [cpp_unwind]
-    public Expected<TimingScopeId> registerScope(in Name scopeName) override{
+    public Expected<TimingScopeId> registerScope(in Name scopeName)override{
         ++this.m_registrationAttempt;
         if(this.m_registrationAttempt == 3u)
             ThrowTestException<RegistrationSentinel>(RegistrationSentinel());
         return this.m_timing.registerScope(scopeName);
     }
-    public void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex) override{
+    public void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex)override{
         this.m_timing.recordSample(scope, seconds, frameIndex);
     }
-    public void publishFrame(in u64 frameIndex) override{ this.m_timing.publishFrame(frameIndex); }
+    public void publishFrame(in u64 frameIndex)override{ this.m_timing.publishFrame(frameIndex); }
 }
 
 class FailOnceTimingSink : TimingSink{
@@ -58,7 +58,7 @@ class FailOnceTimingSink : TimingSink{
     private u32 m_nextScopeIndex = 0u;
     public FailOnceTimingSink(in usize failureAttempt){ this.m_failureAttempt = failureAttempt; }
     public b8 enabled()const override{ return true; }
-    public Expected<TimingScopeId> registerScope(in Name scopeName) override{
+    public Expected<TimingScopeId> registerScope(in Name scopeName)override{
         const usize attempt = this.m_registrationAttempt;
         ++this.m_registrationAttempt;
         if(attempt == this.m_failureAttempt)
@@ -69,8 +69,8 @@ class FailOnceTimingSink : TimingSink{
         scope.generation = 1u;
         return scope;
     }
-    public void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex) override{}
-    public void publishFrame(in u64 frameIndex) override{}
+    public void recordSample(in TimingScopeId scope, in f64 seconds, in u64 frameIndex)override{}
+    public void publishFrame(in u64 frameIndex)override{}
 }
 
 [ordered]
@@ -136,8 +136,14 @@ Expected<Name> DeriveIndexedScopeName(in Name prefix, in usize scopeIndex){
     return DeriveName(prefix, suffix);
 }
 
-void RecordCorrelatorTimestampRange(mut GpuTimingMetricCorrelator correlator, in Name name, in u64 frameIndex, in GpuComparableTimestampRange range,
-    mut ScratchStorage scratch, mut GpuTimingSinkSampleVector samples){
+void RecordCorrelatorTimestampRange(
+    mut GpuTimingMetricCorrelator correlator,
+    in Name name,
+    in u64 frameIndex,
+    in GpuComparableTimestampRange range,
+    mut ScratchStorage scratch,
+    mut GpuTimingSinkSampleVector samples
+){
     correlator.recordTimestampRange(name, frameIndex, range, scratch, samples);
 }
 

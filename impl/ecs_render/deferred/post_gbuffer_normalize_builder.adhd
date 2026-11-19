@@ -26,8 +26,12 @@ class PostGbufferNormalizeInputs{
     public mut Optional<GpuTimingMeasure> asyncPrefixTiming;
     public in GraphicsPrefixTimingTicket timingTicket;
 
-    public PostGbufferNormalizeInputs(in DeferredGraphResourceImportResult resources, in GpuTaskId shadowVisibilityTask,
-        mut Optional<GpuTimingMeasure> asyncPrefixTiming, in GraphicsPrefixTimingTicket timingTicket){
+    public PostGbufferNormalizeInputs(
+        in DeferredGraphResourceImportResult resources,
+        in GpuTaskId shadowVisibilityTask,
+        mut Optional<GpuTimingMeasure> asyncPrefixTiming,
+        in GraphicsPrefixTimingTicket timingTicket
+    ){
         this.resources = resources;
         this.shadowVisibilityTask = shadowVisibilityTask;
         this.asyncPrefixTiming = asyncPrefixTiming;

@@ -152,7 +152,10 @@ Expected<Vector<GpuTaskResourceUse>> GatherPreparedMaterialGeometryUses(in Span<
 
 [cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
-    in Span<MaterialPassDrawItemsView> drawItemSets, in Name identity, in StringView label, mut GpuTaskGraph graph
+    in Span<MaterialPassDrawItemsView> drawItemSets,
+    in Name identity,
+    in StringView label,
+    mut GpuTaskGraph graph
 ){
     const Expected<Vector<GpuTaskResourceUse>> uses = GatherPreparedMaterialGeometryUses(drawItemSets, graph);
     if(!uses.has_value())
@@ -176,7 +179,9 @@ Expected<GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(mut Gpu
 // A failure preserves earlier imports. The returned members follow the input order.
 [cpp_unwind]
 Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterialSampledTextureResources(
-    in Span<TextureHandle> textures, in StringView markerLabel, mut GpuTaskGraph graph
+    in Span<TextureHandle> textures,
+    in StringView markerLabel,
+    mut GpuTaskGraph graph
 ){
     Vector<GpuGraphResourceId> resources;
     resources.reserve(textures.size());
@@ -210,8 +215,11 @@ Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterial
 
 [cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
-    in RendererMaterialSystem materialSystem, in Span<MaterialPassDrawItemsView> drawItemSets,
-    in Name identity, in StringView label, mut GpuTaskGraph graph
+    in RendererMaterialSystem materialSystem,
+    in Span<MaterialPassDrawItemsView> drawItemSets,
+    in Name identity,
+    in StringView label,
+    mut GpuTaskGraph graph
 ){
     const Expected<Vector<TextureHandle>> textures = GatherPreparedMaterialPassSampledTextures(
         materialSystem.materialState().m_surfaceInfos, materialSystem.materialState().m_resourceState, drawItemSets

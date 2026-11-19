@@ -376,8 +376,15 @@ class MaterialDrawGather{
 }
 
 [cpp_unwind]
-void RendererMaterialSystem::gatherDraws(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent,
-    in CsgFrameState csgFrameState, in RendererResourceLookupMode lookupMode, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState, in MaterialPassGatherOutputs outputs){
+void RendererMaterialSystem::gatherDraws(
+    in FramebufferHandle framebuffer,
+    in MaterialPipelinePass pass,
+    in b8 transparent,
+    in CsgFrameState csgFrameState,
+    in RendererResourceLookupMode lookupMode,
+    in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState,
+    in MaterialPassGatherOutputs outputs
+){
     if(!framebuffer.valid())
         return;
     const Optional<mut MeshSystem> meshes = this.m_world.borrowSystem<MeshSystem>();

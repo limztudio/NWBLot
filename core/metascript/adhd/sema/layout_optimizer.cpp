@@ -127,9 +127,6 @@ namespace __hidden_adhd_layout_optimizer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void LayoutOptimizer::SortAndPackFields(const b8 keepFieldOrder, const b8 packSerialize, const usize minimumAlignment, const usize headerPointerCount, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept{
     if(!keepFieldOrder){
         for(usize i = 1u; i < orderedFields.size(); ++i){

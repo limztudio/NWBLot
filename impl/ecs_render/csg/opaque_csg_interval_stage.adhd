@@ -29,8 +29,13 @@ class OpaqueCsgIntervalStageInputs{
     public b8 hasOpaqueDrawItems = false;
     public b8 hasCsgFrameGpuWork = false;
 
-    public OpaqueCsgIntervalStageInputs(in DeferredGraphResourceImportResult resources, in MeshFrameBindingSnapshot frameBindings,
-        in CsgGraphResourceSnapshot csgResources, in MaterialPassDrawItemPartitionsView opaqueDrawItems, in CsgFrameGpuDataView csgFrameData){
+    public OpaqueCsgIntervalStageInputs(
+        in DeferredGraphResourceImportResult resources,
+        in MeshFrameBindingSnapshot frameBindings,
+        in CsgGraphResourceSnapshot csgResources,
+        in MaterialPassDrawItemPartitionsView opaqueDrawItems,
+        in CsgFrameGpuDataView csgFrameData
+    ){
         this.resources = resources;
         this.frameBindings = frameBindings;
         this.csgResources = csgResources;
@@ -50,10 +55,19 @@ class OpaqueCsgIntervalStage : NoCopy{
     private OpaqueCsgIntervalSampleGraphTask m_intervalSamplePayload;
     private OpaqueCsgIntervalSampleComputeEmulationGraphTask m_intervalSampleComputeEmulationPayload;
 
-    public OpaqueCsgIntervalStage(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererMaterialSystem materials,
-        mut RendererCsgSystem csg, mut DeferredFrameTargets targets, in borrow GraphicsPrefixTimingTicket receiverSpanTicket,
-        in borrow GraphicsPrefixTimingTicket intervalCombineTicket, in borrow GraphicsPrefixTimingTicket intervalSampleTicket,
-        in borrow b8 meshReady, in borrow b8 shadingReady, mut Optional<GpuTimingMeasure> computeTiming){
+    public OpaqueCsgIntervalStage(
+        mut GpuTaskGraph graph,
+        mut GraphicsRuntime graphics,
+        mut RendererMaterialSystem materials,
+        mut RendererCsgSystem csg,
+        mut DeferredFrameTargets targets,
+        in borrow GraphicsPrefixTimingTicket receiverSpanTicket,
+        in borrow GraphicsPrefixTimingTicket intervalCombineTicket,
+        in borrow GraphicsPrefixTimingTicket intervalSampleTicket,
+        in borrow b8 meshReady,
+        in borrow b8 shadingReady,
+        mut Optional<GpuTimingMeasure> computeTiming
+    ){
         this.m_graph = graph;
         this.m_materialSystem = materials;
         this.m_intervalSampleComputeEmulationTiming = computeTiming;
@@ -64,9 +78,18 @@ class OpaqueCsgIntervalStage : NoCopy{
     }
 
     [cpp_unwind]
-    public void capturePayloads(in MeshFrameBindingSnapshot frameBindings, in CsgGraphResourceSnapshot csgResources,
-        in MaterialPassDrawItemPartitionsView opaqueDrawItems, in CsgFrameGpuDataView csgFrameData, in usize instanceCount,
-        in usize materialTypedByteCount, in b8 materialDrawBuffersUploaded, in b8 csgFrameBuffersUploaded, in b8 hasOpaqueDrawItems, in b8 hasOpaqueCsgFrameWork);
+    public void capturePayloads(
+        in MeshFrameBindingSnapshot frameBindings,
+        in CsgGraphResourceSnapshot csgResources,
+        in MaterialPassDrawItemPartitionsView opaqueDrawItems,
+        in CsgFrameGpuDataView csgFrameData,
+        in usize instanceCount,
+        in usize materialTypedByteCount,
+        in b8 materialDrawBuffersUploaded,
+        in b8 csgFrameBuffersUploaded,
+        in b8 hasOpaqueDrawItems,
+        in b8 hasOpaqueCsgFrameWork
+    );
     [cpp_unwind]
     public Expected<OpaqueCsgIntervalStageTasks> declare(in OpaqueCsgIntervalStageInputs inputs, mut ObjectGeometryCacheGraph objectGeometry);
 }

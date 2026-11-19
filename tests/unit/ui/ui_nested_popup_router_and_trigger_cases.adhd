@@ -178,7 +178,7 @@ class NestedSearchSource : ISearchableListDataSource{
     }
     public StringView text(in u64 index)const override{ return this.full.text(index); }
     public b8 enabled(in u64 index)const override{ return this.full.enabled(index); }
-    public b8 filter(in StringView query) override{
+    public b8 filter(in StringView query)override{
         ++this.filterCalls;
         const StringView previous = StringView(this.m_query);
         if(previous != query){
@@ -617,6 +617,7 @@ void ExpectNoNestedSourceCallbacks(in UiNestedPopupLoanMutationSource source){
     EXPECT_EQ(source.textCalls.value(), 0u);
     EXPECT_EQ(source.enabledCalls.value(), 0u);
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -445,35 +445,71 @@ class CausticResolveGraphTask{
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in MeshViewBufferSnapshot meshView,
-        in borrow b8 shadowVisibilityPrepared, in b8 hardwareCaustics, mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming){
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in MeshViewBufferSnapshot meshView,
+    in borrow b8 shadowVisibilityPrepared,
+    in b8 hardwareCaustics,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> causticPhotonTiming
+){
     return graph.addPayloadTask(desc, CausticAccumulatorDecayGraphTask(this, this.m_graphics, targets, meshView, shadowVisibilityPrepared, timingTicket, causticPhotonTiming, hardwareCaustics));
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in MeshViewBufferSnapshot meshView, in borrow b8 shadowVisibilityPrepared, in b8 graphOwnsAccumulatorBootstrapClear,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming, mut b8 causticProducerDispatched){
+Expected<GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in MeshViewBufferSnapshot meshView,
+    in borrow b8 shadowVisibilityPrepared,
+    in b8 graphOwnsAccumulatorBootstrapClear,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> causticPhotonTiming,
+    mut b8 causticProducerDispatched
+){
     return graph.addPayloadTask(desc, CausticProducerGraphTask(this, targets, deferredLightingResources, meshView, timingTicket, shadowVisibilityPrepared, causticPhotonTiming, graphOwnsAccumulatorBootstrapClear, causticProducerDispatched, false));
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in MeshViewBufferSnapshot meshView, in borrow b8 shadowVisibilityPrepared, in b8 graphOwnsAccumulatorBootstrapClear,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming, mut b8 causticProducerDispatched){
+Expected<GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in MeshViewBufferSnapshot meshView,
+    in borrow b8 shadowVisibilityPrepared,
+    in b8 graphOwnsAccumulatorBootstrapClear,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> causticPhotonTiming,
+    mut b8 causticProducerDispatched
+){
     return graph.addPayloadTask(desc, CausticProducerGraphTask(this, targets, deferredLightingResources, meshView, timingTicket, shadowVisibilityPrepared, causticPhotonTiming, graphOwnsAccumulatorBootstrapClear, causticProducerDispatched, true));
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsampleTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in borrow b8 causticProducerDispatched,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticResolveTiming){
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsampleTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in borrow b8 causticProducerDispatched,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> causticResolveTiming
+){
     return graph.addPayloadTask(desc, CausticGeometryDownsampleGraphTask(this, this.m_graphics, targets, timingTicket, causticProducerDispatched, causticResolveTiming));
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in borrow b8 causticProducerDispatched,
-        mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticResolveTiming){
+Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in borrow b8 causticProducerDispatched,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> causticResolveTiming
+){
     return graph.addPayloadTask(desc, CausticResolveGraphTask(timingTicket, causticProducerDispatched, causticResolveTiming));
 }
 

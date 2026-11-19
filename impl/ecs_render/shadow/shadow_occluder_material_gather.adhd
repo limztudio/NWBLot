@@ -32,8 +32,15 @@ class ShadowOccluderMaterialGather{
     private mut RayTracingOpticalSceneGather m_opticalScene;
     private mut b8 m_contentComplete;
 
-    public ShadowOccluderMaterialGather(mut RendererMaterialSystem materialSystem, mut ShadowMaterialSampledTextureCollector textures, mut MaterialTypedByteDataVector bytes, mut MaterialTypedConstantRangeMap constants,
-        mut MaterialTypedByteContentRangeMap ranges, mut RayTracingOpticalSceneGather opticalScene, mut b8 contentComplete){
+    public ShadowOccluderMaterialGather(
+        mut RendererMaterialSystem materialSystem,
+        mut ShadowMaterialSampledTextureCollector textures,
+        mut MaterialTypedByteDataVector bytes,
+        mut MaterialTypedConstantRangeMap constants,
+        mut MaterialTypedByteContentRangeMap ranges,
+        mut RayTracingOpticalSceneGather opticalScene,
+        mut b8 contentComplete
+    ){
         this.m_materialSystem = materialSystem;
         this.m_sampledTextureCollector = textures;
         this.m_shadowMaterialTypedBytes = bytes;
@@ -44,8 +51,15 @@ class ShadowOccluderMaterialGather{
     }
 
     [cpp_unwind]
-    public b8 resolve(in EntityID entity, in AssetRef<Material> material, in Optional<in TransformComponent> transform, in u32 meshInstanceIndex, mut NwbRtInstanceMaterialGpu outMaterial, mut InstanceGpuData outInstance,
-        in Optional<mut b8> transparentOccluder){
+    public b8 resolve(
+        in EntityID entity,
+        in AssetRef<Material> material,
+        in Optional<in TransformComponent> transform,
+        in u32 meshInstanceIndex,
+        mut NwbRtInstanceMaterialGpu outMaterial,
+        mut InstanceGpuData outInstance,
+        in Optional<mut b8> transparentOccluder
+    ){
         outMaterial = NwbRtInstanceMaterialGpu();
         outInstance = InstanceGpuData();
         const Expected<mut MaterialSurfaceInfo> result = this.m_materialSystem.findMaterialSurfaceInfo(material);

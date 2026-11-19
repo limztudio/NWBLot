@@ -17,7 +17,9 @@ Expected<GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(in MaterialPassDr
 
 [cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
-    in MaterialPassDrawItemPartitions drawItems, in RendererMaterialSystem materialSystem, mut GpuTaskGraph graph
+    in MaterialPassDrawItemPartitions drawItems,
+    in RendererMaterialSystem materialSystem,
+    mut GpuTaskGraph graph
 ){
     const Array<MaterialPassDrawItemsView, 2u> drawSets(MaterialPassDrawItemsView(drawItems.regular), MaterialPassDrawItemsView(drawItems.csgReceiverSurface));
     return GatherPreparedMaterialSampledTextureResourceSet(materialSystem, drawSets, s_FrameGraphNameRenderGraphicsPrefixGbufferMaterialSampledTextures, "Opaque Material Sampled Textures", graph);

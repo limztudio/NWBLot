@@ -259,8 +259,15 @@ b8 Builder::paintWindowResize(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ComboResult Builder::declareCombo(in StringView stableKey, in borrow IListDataSource source, in ComboOptions options, in Optional<in SearchComboOptions> searchOptions, mut ComboState state,
-    in Optional<mut SearchComboState> search, in Optional<mut ISearchableListDataSource> searchSource){
+ComboResult Builder::declareCombo(
+    in StringView stableKey,
+    in borrow IListDataSource source,
+    in ComboOptions options,
+    in Optional<in SearchComboOptions> searchOptions,
+    mut ComboState state,
+    in Optional<mut SearchComboState> search,
+    in Optional<mut ISearchableListDataSource> searchSource
+){
     ComboResult result;
     if(this.itemDeclarationBlocked() || !IsValidComboDeclarationOptions(options, this.m_comboStyle)){
         this.m_context.fail();

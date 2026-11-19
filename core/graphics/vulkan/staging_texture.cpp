@@ -83,12 +83,6 @@ inline Expected<StagingTextureQueueFamilies> BuildStagingTextureQueueFamilies(Al
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
     if(!ResourceQueueSharing::IsValid(d.queueSharing)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));

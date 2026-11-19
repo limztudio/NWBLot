@@ -23,8 +23,13 @@ class MaterialPassGatherOutputs{
     public mut MaterialTypedInstanceRangeVector materialTypedRanges;
     public mut MaterialTypedByteDataVector materialTypedBytes;
 
-    public MaterialPassGatherOutputs(mut MaterialPassDrawItemPartitions draws, mut InstanceGpuDataVector instances, mut CsgFrameGpuData frame,
-        mut MaterialTypedInstanceRangeVector ranges, mut MaterialTypedByteDataVector bytes){
+    public MaterialPassGatherOutputs(
+        mut MaterialPassDrawItemPartitions draws,
+        mut InstanceGpuDataVector instances,
+        mut CsgFrameGpuData frame,
+        mut MaterialTypedInstanceRangeVector ranges,
+        mut MaterialTypedByteDataVector bytes
+    ){
         this.drawItems = draws;
         this.instanceData = instances;
         this.csgFrameData = frame;
@@ -46,9 +51,17 @@ class RendererMaterialSystem : IPreparedMaterialLookup{
     private mut RendererCsgSystem m_csgSystem;
     private in RendererOpticalVolumeSelection m_opticalVolumes;
 
-    public RendererMaterialSystem(mut World world, mut GraphicsRuntime graphics, mut AssetManager assetManager, mut CsgShapeRegistry csgShapeRegistry,
-        mut RendererMaterialState materialState, mut RendererShaderSystem shaderSystem, mut RendererMeshSystem meshSystem,
-        mut RendererCsgSystem csgSystem, in RendererOpticalVolumeSelection opticalVolumes){
+    public RendererMaterialSystem(
+        mut World world,
+        mut GraphicsRuntime graphics,
+        mut AssetManager assetManager,
+        mut CsgShapeRegistry csgShapeRegistry,
+        mut RendererMaterialState materialState,
+        mut RendererShaderSystem shaderSystem,
+        mut RendererMeshSystem meshSystem,
+        mut RendererCsgSystem csgSystem,
+        in RendererOpticalVolumeSelection opticalVolumes
+    ){
         this.m_world = world;
         this.m_graphics = graphics;
         this.m_drawRecorder = MaterialPassDrawRecorder(graphics);
@@ -67,7 +80,7 @@ class RendererMaterialSystem : IPreparedMaterialLookup{
     public void invalidateResources();
     [cpp_unwind]
     public Expected<mut MaterialSurfaceInfo> createMaterialSurfaceInfo(in AssetRef<Material> materialAsset);
-    public Expected<mut MaterialSurfaceInfo> findMaterialSurfaceInfo(in AssetRef<Material> materialAsset) override;
+    public Expected<mut MaterialSurfaceInfo> findMaterialSurfaceInfo(in AssetRef<Material> materialAsset)override;
     [cpp_unwind]
     public b8 prepareVisibleMaterialSurfaceInfos();
     [cpp_unwind]
@@ -89,31 +102,67 @@ class RendererMaterialSystem : IPreparedMaterialLookup{
     [cpp_unwind]
     public b8 createObjectGeometryPipelineResources(mut MaterialPipelineResources resources);
     [cpp_unwind]
-    public void renderPreparedAvboitMaterialPass(mut CommandList commands, in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in AvboitFrameTargets avboitTargets,
-        in MaterialPassDrawItemPartitionsView drawItems, in CsgFrameGpuDataView csgFrameData, in CsgGraphResourceSnapshot csgResources,
-        in MeshFrameBindingSnapshot frameBindings, in usize instanceCount, in usize materialTypedByteCount, in b8 materialFrameStatesGraphOwned,
-        in b8 materialGeometryStatesGraphOwned, in b8 emulationOutputEntryStateGraphOwned, in b8 csgEmulationOutputEntryStateGraphOwned,
-        in b8 emulationOutputReused, in Optional<mut Optional<GpuTimingMeasure>> emulationOutputTiming);
+    public void renderPreparedAvboitMaterialPass(
+        mut CommandList commands,
+        in FramebufferHandle framebuffer,
+        in MaterialPipelinePass pass,
+        in AvboitFrameTargets avboitTargets,
+        in MaterialPassDrawItemPartitionsView drawItems,
+        in CsgFrameGpuDataView csgFrameData,
+        in CsgGraphResourceSnapshot csgResources,
+        in MeshFrameBindingSnapshot frameBindings,
+        in usize instanceCount,
+        in usize materialTypedByteCount,
+        in b8 materialFrameStatesGraphOwned,
+        in b8 materialGeometryStatesGraphOwned,
+        in b8 emulationOutputEntryStateGraphOwned,
+        in b8 csgEmulationOutputEntryStateGraphOwned,
+        in b8 emulationOutputReused,
+        in Optional<mut Optional<GpuTimingMeasure>> emulationOutputTiming
+    );
     [cpp_unwind]
     public b8 prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState);
     [cpp_unwind]
     public b8 prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in AvboitFrameTargets avboitTargets);
     [cpp_unwind]
-    public void gatherMaterialPassDrawItems(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in RendererResourceLookupMode lookupMode,
-        in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState, mut MaterialPassDrawItemPartitions drawItems, mut InstanceGpuDataVector instanceData, mut CsgFrameGpuData csgFrameData,
-        mut MaterialTypedInstanceRangeVector materialTypedRanges, mut MaterialTypedByteDataVector materialTypedBytes){
+    public void gatherMaterialPassDrawItems(
+        in FramebufferHandle framebuffer,
+        in MaterialPipelinePass pass,
+        in b8 transparent,
+        in CsgFrameState csgFrameState,
+        in RendererResourceLookupMode lookupMode,
+        in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState,
+        mut MaterialPassDrawItemPartitions drawItems,
+        mut InstanceGpuDataVector instanceData,
+        mut CsgFrameGpuData csgFrameData,
+        mut MaterialTypedInstanceRangeVector materialTypedRanges,
+        mut MaterialTypedByteDataVector materialTypedBytes
+    ){
         MaterialPassGatherOutputs outputs(drawItems, instanceData, csgFrameData, materialTypedRanges, materialTypedBytes);
         this.gatherDraws(framebuffer, pass, transparent, csgFrameState, lookupMode, csgWorkRegionMeshViewState, outputs);
     }
     [cpp_unwind]
-    private void gatherDraws(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent,
-        in CsgFrameState csgFrameState, in RendererResourceLookupMode lookupMode, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState, in MaterialPassGatherOutputs outputs);
+    private void gatherDraws(
+        in FramebufferHandle framebuffer,
+        in MaterialPipelinePass pass,
+        in b8 transparent,
+        in CsgFrameState csgFrameState,
+        in RendererResourceLookupMode lookupMode,
+        in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState,
+        in MaterialPassGatherOutputs outputs
+    );
     [cpp_unwind]
     public Expected<Span<u8>> prepareMaterialInstanceMutableTypedBytes(in EntityID entity, in MaterialSurfaceInfo materialInfo, in Optional<in MaterialInstanceComponent> materialInstance);
     public Expected<Span<u8>> findPreparedMaterialInstanceMutableTypedBytes(in EntityID entity, in MaterialSurfaceInfo materialInfo, in Optional<in MaterialInstanceComponent> materialInstance)const override;
     [cpp_unwind]
-    public Expected<ShadowOccluderMaterialContext> appendShadowOccluderMaterialContext(in EntityID entity, in MaterialSurfaceInfo materialInfo, in Optional<in TransformComponent> transform,
-        mut MaterialTypedByteDataVector inOutMaterialTypedBytes, mut MaterialTypedConstantRangeMap inOutConstantRanges, mut MaterialTypedByteContentRangeMap inOutMutableRanges){
+    public Expected<ShadowOccluderMaterialContext> appendShadowOccluderMaterialContext(
+        in EntityID entity,
+        in MaterialSurfaceInfo materialInfo,
+        in Optional<in TransformComponent> transform,
+        mut MaterialTypedByteDataVector inOutMaterialTypedBytes,
+        mut MaterialTypedConstantRangeMap inOutConstantRanges,
+        mut MaterialTypedByteContentRangeMap inOutMutableRanges
+    ){
         const auto constant = FindOrAppendMaterialConstantTypedByteRange(materialInfo.materialName, materialInfo.typedLayoutHash,
             materialInfo.constantTypedBytes, inOutMaterialTypedBytes, inOutConstantRanges);
         if(!constant.has_value())

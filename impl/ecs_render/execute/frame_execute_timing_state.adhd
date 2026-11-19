@@ -143,9 +143,15 @@ class FrameExecuteTimingState : NoCopy{
     }
 
     [cpp_unwind]
-    public Expected<usize> bindNormalTimingTickets(in RendererFramePipeline renderer, in GpuCompiledGraphReadView compiledPlan,
-        in Span<GpuTaskId> graphicsPrefixTimingTasks, in usize graphicsPrefixUniquePacketCount,
-        in RendererAvboitTaskGraphValidation avboitValidation, in b8 hardwareShadowSupported, mut Span<GpuTaskGraphTaskTimingTicket> tickets){
+    public Expected<usize> bindNormalTimingTickets(
+        in RendererFramePipeline renderer,
+        in GpuCompiledGraphReadView compiledPlan,
+        in Span<GpuTaskId> graphicsPrefixTimingTasks,
+        in usize graphicsPrefixUniquePacketCount,
+        in RendererAvboitTaskGraphValidation avboitValidation,
+        in b8 hardwareShadowSupported,
+        mut Span<GpuTaskGraphTaskTimingTicket> tickets
+    ){
         if(!HasExpectedGraphicsPrefixTimingTaskCount(graphicsPrefixTimingTasks.size()))
             return MakeUnexpected(Failure());
         usize ticketCount = 0u;

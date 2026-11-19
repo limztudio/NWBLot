@@ -22,10 +22,6 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-
-
 Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params)noexcept{
     if(params.headlessDevice)
         return params.swapChainFormat;

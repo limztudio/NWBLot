@@ -14,10 +14,19 @@ extern class GpuTaskQueueScoringData;
 
 [cpp_header("<core/task/gpu/compiler_internal.h>"), cpp_name("::BorrowOptionalResult<&::NWB::Core::GpuTaskGraphCompilerDetail::FindTimingFeedbackQueue>")]
 extern Optional<in GpuPhysicalQueueInfo> BorrowTimingFeedbackQueue(
-    in GpuTaskGraphDeclarationReadView graph, in GpuTaskGraphAnalysis analysis, in Span<GpuTaskQueueAssignment> assignments,
-    in Span<u32> assignmentIndices, in GpuPhysicalQueueTopology topology, in GpuTaskSchedulingReachability reachability,
-    in GpuTaskQueueScoringData scoring, in GpuTaskGraphTaskView task, in GpuPhysicalQueueInfo incumbent,
-    in GpuTaskTimingAssignmentKey key, in GpuTaskTimingHistorySnapshot snapshot, in GpuTaskTimingFeedbackPolicy policy, in u64 frameIndex
+    in GpuTaskGraphDeclarationReadView graph,
+    in GpuTaskGraphAnalysis analysis,
+    in Span<GpuTaskQueueAssignment> assignments,
+    in Span<u32> assignmentIndices,
+    in GpuPhysicalQueueTopology topology,
+    in GpuTaskSchedulingReachability reachability,
+    in GpuTaskQueueScoringData scoring,
+    in GpuTaskGraphTaskView task,
+    in GpuPhysicalQueueInfo incumbent,
+    in GpuTaskTimingAssignmentKey key,
+    in GpuTaskTimingHistorySnapshot snapshot,
+    in GpuTaskTimingFeedbackPolicy policy,
+    in u64 frameIndex
 );
 
 
@@ -124,3 +133,4 @@ extern class GpuTaskQueueScoreExclusions;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

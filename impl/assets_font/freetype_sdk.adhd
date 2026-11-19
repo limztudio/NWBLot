@@ -28,6 +28,7 @@ extern const i32 s_FreeTypeLoadNoHinting;
 [cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("FT_LOAD_NO_BITMAP")]
 extern const i32 s_FreeTypeLoadNoBitmap;
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

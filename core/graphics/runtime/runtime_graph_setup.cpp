@@ -86,8 +86,6 @@ public:
 }
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -101,8 +99,6 @@ namespace GraphicsModuleDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 
 Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
@@ -161,9 +157,14 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     if(!scheduler.scheduleGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction)){
         const auto& analysisDiagnostic = analysis.diagnostic();
         const auto& queueDiagnostic = assignments.diagnostic();
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: standalone graph scheduling failed: analysis={} task={} resource={} version={} queue={} queueTask={}")
-            , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
-            , analysisDiagnostic.resourceVersion.index, static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
+        NWB_LOGGER_WARNING(
+            FOUNDATION_TEXT("GraphicsRuntime: standalone graph scheduling failed: analysis={} task={} resource={} version={} queue={} queueTask={}")
+            , static_cast<u32>(analysisDiagnostic.status)
+            , analysisDiagnostic.task.index
+            , analysisDiagnostic.resource.index
+            , analysisDiagnostic.resourceVersion.index
+            , static_cast<u32>(queueDiagnostic.status)
+            , queueDiagnostic.task.index
         );
         return MakeUnexpected(Failure{});
     }
@@ -261,8 +262,6 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     }
     return terminalToken;
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

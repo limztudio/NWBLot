@@ -115,8 +115,14 @@ QueueSubmissionToken MakeQueueToken(in u64 value, in u16 physicalQueueIndex, in 
     token.queue = queue;
     return token;
 }
-GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(in f64 minimumAbsoluteBenefitSeconds, in f64 minimumRelativeBenefit, in u32 minimumFramesBetweenSwitches,
-    in u32 minimumSampleCount, in u32 calibrationIntervalFrames, in b8 enabled){
+GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
+    in f64 minimumAbsoluteBenefitSeconds,
+    in f64 minimumRelativeBenefit,
+    in u32 minimumFramesBetweenSwitches,
+    in u32 minimumSampleCount,
+    in u32 calibrationIntervalFrames,
+    in b8 enabled
+){
     GpuTaskTimingFeedbackPolicy policy;
     policy.minimumAbsoluteBenefitSeconds = minimumAbsoluteBenefitSeconds;
     policy.minimumRelativeBenefit = minimumRelativeBenefit;

@@ -35,8 +35,15 @@ class GpuProbeDescriptors{
     }
 }
 
-b8 LoadGpuProbePipeline(mut ProjectRuntimeContext context, in Name shaderName, in StringView variant,
-    in Name debugName, in StringView owner, in u32 pushBytes, mut ComputePipelineHandle outPipeline){
+b8 LoadGpuProbePipeline(
+    mut ProjectRuntimeContext context,
+    in Name shaderName,
+    in StringView variant,
+    in Name debugName,
+    in StringView owner,
+    in u32 pushBytes,
+    mut ComputePipelineHandle outPipeline
+){
     ShaderHandle shader;
     if(!Load<ComputeShader, ShaderArchivePathResolver>(shaderName, variant, debugName, owner,
         context.graphics, context.assetManager, context.shaderPathResolver, Optional<Name>(), shader))
@@ -107,3 +114,4 @@ GpuTaskCommandRequirements ComputeTransferProbeCommands(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

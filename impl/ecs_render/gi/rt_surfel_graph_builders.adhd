@@ -108,8 +108,16 @@ GpuCopyBufferTaskRegion SurfelBufferCopy(in GpuGraphResourceId source, in GpuGra
     return region;
 }
 
-Expected<GpuTaskId> AddSurfelInitializationClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint scheduling, mut GpuTaskId dependency, in Name identity, in StringView label, in GpuGraphResourceId destination,
-    in u32 value, in GpuTaskExternalStateSource state){
+Expected<GpuTaskId> AddSurfelInitializationClear(
+    mut GpuTaskGraph graph,
+    in GpuTaskSchedulingHint scheduling,
+    mut GpuTaskId dependency,
+    in Name identity,
+    in StringView label,
+    in GpuGraphResourceId destination,
+    in u32 value,
+    in GpuTaskExternalStateSource state
+){
     GpuTaskDesc desc;
     const Array<GpuTaskExternalStateSource, 1u> states(state);
     desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling).setDependency(dependency)
@@ -125,27 +133,27 @@ Expected<GpuTaskId> AddSurfelInitializationClear(mut GpuTaskGraph graph, in GpuT
 
 
 b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
-        in SurfelGiGraphContext context,
-        in DeferredLightingGraphResources deferredLightingResources,
-        in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
-        in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources,
-        in GpuGraphResourceId worldPosition,
-        in GpuGraphResourceId normal,
-        in GpuGraphResourceId surfelIrradiance,
-        in GpuGraphResourceId currentBindlessSlots,
-        in GpuGraphResourceId sceneShading,
-        in GpuGraphResourceId lights,
-        in GpuGraphResourceId materialContextSlots,
-        in Span<GpuGraphResourceId> traceGeometryResources,
-        in GpuGraphResourceSetId traceGeometrySet,
-        in GpuGraphResourceSetId traceMaterialSampledTextureSet,
-        in GpuTaskId effectsTask,
-        in b8 useLaggedLightingHistory,
-        in GpuExternalCompletionId surfelCounterReadbackCompletion,
-        mut DeferredFrameTargets deferredTargets,
-        mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming
-    ){
+    in SurfelGiGraphContext context,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+    in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources,
+    in GpuGraphResourceId worldPosition,
+    in GpuGraphResourceId normal,
+    in GpuGraphResourceId surfelIrradiance,
+    in GpuGraphResourceId currentBindlessSlots,
+    in GpuGraphResourceId sceneShading,
+    in GpuGraphResourceId lights,
+    in GpuGraphResourceId materialContextSlots,
+    in Span<GpuGraphResourceId> traceGeometryResources,
+    in GpuGraphResourceSetId traceGeometrySet,
+    in GpuGraphResourceSetId traceMaterialSampledTextureSet,
+    in GpuTaskId effectsTask,
+    in b8 useLaggedLightingHistory,
+    in GpuExternalCompletionId surfelCounterReadbackCompletion,
+    mut DeferredFrameTargets deferredTargets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming
+){
 
     SurfelGiTaskBuilder surfelGiTasks(context.rayTracing, context.graph);
     this.m_deferredSurfelGiPreparationTask = GpuTaskId();

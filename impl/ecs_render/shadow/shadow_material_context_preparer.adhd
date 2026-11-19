@@ -44,8 +44,12 @@ class ShadowMaterialContextPreparer : NoCopy{
     }
 
     private Expected<u64> prepareBytes(
-        in PreparedShadowMaterialContextRoute route, in b8 staticScene, in usize sceneInstanceCount,
-        in Span<NwbRtInstanceMaterialGpu> instanceMaterials, in Span<InstanceGpuData> shadowInstanceData, in Span<u8> shadowMaterialTypedBytes
+        in PreparedShadowMaterialContextRoute route,
+        in b8 staticScene,
+        in usize sceneInstanceCount,
+        in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+        in Span<InstanceGpuData> shadowInstanceData,
+        in Span<u8> shadowMaterialTypedBytes
     );
 }
 

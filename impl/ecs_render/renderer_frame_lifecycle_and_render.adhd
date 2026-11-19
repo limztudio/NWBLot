@@ -16,6 +16,9 @@
 #include <impl/ecs_scene/components.adhd>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 f32 ResolveMeshViewFramebufferAspectRatio(in u32 width, in u32 height, in f32 fallbackAspectRatio){
     if(width != 0u && height != 0u)
         return cast<f32>(width) / cast<f32>(height);
@@ -111,10 +114,19 @@ b8 LaggedLightingHistoryTokenPending(mut Device device, in u64 historyGeneration
 
 [cpp_unwind]
 void DiscardRendererFramePackets(
-    mut FrameExecuteTimingState timing, mut FrameExecuteRecovery recovery, in GpuCompiledGraphReadView plan,
-    mut GpuGraphSubmissionTransaction transaction, in GpuTaskId shadowPrepareTask, in FrameExecuteCpuSnapshot snapshot,
-    mut GraphicsRuntime graphics, mut RendererMeshSystem mesh, mut RendererDeferredSystem deferred,
-    mut RendererRayTracingState rayTracingState, mut RendererAvboitSystem avboit, mut RendererRayTracingSystem rayTracing, mut DeferredFrameTargets targets
+    mut FrameExecuteTimingState timing,
+    mut FrameExecuteRecovery recovery,
+    in GpuCompiledGraphReadView plan,
+    mut GpuGraphSubmissionTransaction transaction,
+    in GpuTaskId shadowPrepareTask,
+    in FrameExecuteCpuSnapshot snapshot,
+    mut GraphicsRuntime graphics,
+    mut RendererMeshSystem mesh,
+    mut RendererDeferredSystem deferred,
+    mut RendererRayTracingState rayTracingState,
+    mut RendererAvboitSystem avboit,
+    mut RendererRayTracingSystem rayTracing,
+    mut DeferredFrameTargets targets
 ){
     timing.discardAll();
     if(!recovery.discardUnacceptedGraphPackets()){

@@ -173,6 +173,7 @@ b8 UiEditCaretAdoptMutatedLineRecord(mut EditCaretFixture self, in u32 mutation)
     return self.m_geometry.adoptLayout(malformed, "a\nb", self.m_mapping, 3u, EditTextMode::Multiline);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

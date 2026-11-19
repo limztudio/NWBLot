@@ -24,8 +24,15 @@ b8 ShouldPublishDeferredOpaqueFallbackUpsample(in b8 combinedUpsample, in b8 tra
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RecoverOpaqueSoftShadowAllLit(mut RendererRayTracingSystem raytracingSystem, mut DeferredFrameTargets targets, mut b8 opaqueProduced, mut Optional<GpuTimingMeasure> asyncTiming,
-    mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut Optional<GpuTimingMeasure> opaqueResolveTiming, mut CommandList commandList){
+void RecoverOpaqueSoftShadowAllLit(
+    mut RendererRayTracingSystem raytracingSystem,
+    mut DeferredFrameTargets targets,
+    mut b8 opaqueProduced,
+    mut Optional<GpuTimingMeasure> asyncTiming,
+    mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+    mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+    mut CommandList commandList
+){
     raytracingSystem.clearShadowVisibility(commandList, targets);
     // Skipped transparent callbacks still declare this output as UAV. Realign the tracker after the typed fallback clear.
     commandList.setTextureState(targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
@@ -752,9 +759,14 @@ class ShadowVisibilityGraphTask{
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow b8 prepared, in b8 hardwareShadowSupported, in GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow b8 prepared,
+    in b8 hardwareShadowSupported,
+    in GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket
 ){
     return graph.addPayloadTask(desc, ShadowVisibilityGraphTask(
         this,
@@ -770,10 +782,19 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow b8 prepared, in b8 hardwareShadowSupported, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in Optional<in LightSpaceShadowSnapshot> lightSpace,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> asyncTiming,
-    mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut b8 opaqueProduced, mut u32 opaqueFrameIndex
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow b8 prepared,
+    in b8 hardwareShadowSupported,
+    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    in Optional<in LightSpaceShadowSnapshot> lightSpace,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming,
+    mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+    mut b8 opaqueProduced,
+    mut u32 opaqueFrameIndex
 ){
     LightSpaceShadowSnapshot snapshot;
     if(lightSpace.has_value())
@@ -797,10 +818,20 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWaveletTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow u32 opaqueFrameIndex, in b8 hardwareShadowSupported, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 deferUpsample, in b8 deferWavelet,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> asyncTiming,
-    mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut Optional<GpuTimingMeasure> opaqueResolveTiming, mut b8 opaqueProduced
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow u32 opaqueFrameIndex,
+    in b8 hardwareShadowSupported,
+    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    in b8 deferUpsample,
+    in b8 deferWavelet,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming,
+    mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+    mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+    mut b8 opaqueProduced
 ){
     return graph.addPayloadTask(desc, ShadowVisibilityOpaqueFirstWaveletGraphTask(
         this,
@@ -822,9 +853,17 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueFirst
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow u32 opaqueFrameIndex, in b8 hardwareShadowSupported, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket,
-    mut Optional<GpuTimingMeasure> asyncTiming, mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut Optional<GpuTimingMeasure> opaqueResolveTiming, mut b8 opaqueProduced
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow u32 opaqueFrameIndex,
+    in b8 hardwareShadowSupported,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming,
+    mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+    mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+    mut b8 opaqueProduced
 ){
     return graph.addPayloadTask(desc, ShadowVisibilityOpaqueResolveTailGraphTask(
         this,
@@ -842,9 +881,18 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueResol
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTemporalMergeTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in b8 graphOwnsTransparentTemporalMergeEntryStates, in b8 combinedTemporal, in b8 hardwareShadowSupported,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> transparentResolveTiming, mut b8 transparentTraceProduced
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow b8 opaqueProduced,
+    in borrow u32 opaqueFrameIndex,
+    in b8 graphOwnsTransparentTemporalMergeEntryStates,
+    in b8 combinedTemporal,
+    in b8 hardwareShadowSupported,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> transparentResolveTiming,
+    mut b8 transparentTraceProduced
 ){
     return graph.addPayloadTask(desc, ShadowTransparentSoftTemporalMergeGraphTask(
         this,
@@ -864,9 +912,18 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTempor
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFirstWaveletTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in b8 graphOwnsTransparentWaveletInputBoundary, in b8 startsTransparentResolveTiming, in b8 combinedWavelet,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> transparentResolveTiming, mut b8 transparentTraceProduced
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow b8 opaqueProduced,
+    in borrow u32 opaqueFrameIndex,
+    in b8 graphOwnsTransparentWaveletInputBoundary,
+    in b8 startsTransparentResolveTiming,
+    in b8 combinedWavelet,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> transparentResolveTiming,
+    mut b8 transparentTraceProduced
 ){
     return graph.addPayloadTask(desc, ShadowTransparentSoftFirstWaveletGraphTask(
         this,
@@ -886,9 +943,18 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFirstW
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in b8 combinedUpsample, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket,
-    mut Optional<GpuTimingMeasure> asyncTiming, mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut Optional<GpuTimingMeasure> transparentResolveTiming, mut b8 transparentTraceProduced
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow b8 opaqueProduced,
+    in borrow u32 opaqueFrameIndex,
+    in b8 combinedUpsample,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut Optional<GpuTimingMeasure> asyncTiming,
+    mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+    mut Optional<GpuTimingMeasure> transparentResolveTiming,
+    mut b8 transparentTraceProduced
 ){
     return graph.addPayloadTask(desc, ShadowTransparentSoftFoldGraphTask(
         this,
@@ -907,9 +973,15 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFoldTa
 
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
-    mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-    in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in Optional<in LightSpaceShadowSnapshot> lightSpace,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut b8 transparentTraceProduced
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in borrow b8 opaqueProduced,
+    in borrow u32 opaqueFrameIndex,
+    in Optional<in LightSpaceShadowSnapshot> lightSpace,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket,
+    mut b8 transparentTraceProduced
 ){
     LightSpaceShadowSnapshot snapshot;
     if(lightSpace.has_value())

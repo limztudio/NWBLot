@@ -456,8 +456,15 @@ b8 Builder::contextMenuMatches(in BuilderContextMenuFrame frame)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditBoxResult Builder::declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions,
-    in Optional<mut BuilderIntegerEditFrame> integerFrame, in Optional<mut BuilderFloatEditFrame> floatFrame){
+EditBoxResult Builder::declareEditBox(
+    in StringView stableKey,
+    in EditBoxOptions options,
+    mut EditModel model,
+    mut EditBoxState state,
+    in Optional<mut IEditActionSink> actions,
+    in Optional<mut BuilderIntegerEditFrame> integerFrame,
+    in Optional<mut BuilderFloatEditFrame> floatFrame
+){
     if(this.itemDeclarationBlocked() || model.textMode() != EditTextMode::SingleLine){
         this.m_context.fail();
         return EditBoxResult();

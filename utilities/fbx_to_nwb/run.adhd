@@ -252,11 +252,24 @@ i32 ImportFbx(in ToolCli app, in OptionPresence presence, mut ImportOptions opti
     if(!WriteNwbAsset(outputPath, mesh, options.assetType, options.virtualRoot, options.separateAssets,
         result.skeletonJoints, result.skeletonBindPoseMatrices, result.inverseBindMatrices))
         return s_FbxToNwbExitFailure;
-    [essential] info("{}", FormatFbxWriteCompletionReport(
-        PathToGenericString(outputPath), mesh.positions.size(), mesh.normals.size(), mesh.vertexRefs.size(), mesh.indices.size(),
-        options.assetType, assetType.value(), options.separateAssets, options.normalMode, result.sawVertexColors,
-        result.sawVertexUvs, result.skeletonJoints.size(), result.tangentReport
-    ));
+    [essential] info(
+        "{}"
+        , FormatFbxWriteCompletionReport(
+            PathToGenericString(outputPath),
+            mesh.positions.size(),
+            mesh.normals.size(),
+            mesh.vertexRefs.size(),
+            mesh.indices.size(),
+            options.assetType,
+            assetType.value(),
+            options.separateAssets,
+            options.normalMode,
+            result.sawVertexColors,
+            result.sawVertexUvs,
+            result.skeletonJoints.size(),
+            result.tangentReport
+        )
+    );
     return s_FbxToNwbExitSuccess;
 }
 

@@ -4,6 +4,7 @@
 
 #pragma once
 
+
 #include <global/simdmath.h>
 #include <global/simd/collision_triangle.h>
 #include <global/simd/result.h>

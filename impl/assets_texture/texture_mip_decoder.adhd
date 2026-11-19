@@ -83,7 +83,11 @@ void StoreHdrAlpha(in usize offset, in u8 alpha, mut Span<u8> bytes){
 }
 
 b8 DecodeUastcTexels(
-    in TextureMipLevel mip, in Span<u8> source, in b8 alphaOnly, in usize offset, mut Span<u8> output
+    in TextureMipLevel mip,
+    in Span<u8> source,
+    in b8 alphaOnly,
+    in usize offset,
+    mut Span<u8> output
 ){
     const u32 blockWidth = 4u;
     const u32 blockHeight = 4u;
@@ -118,7 +122,10 @@ b8 DecodeUastcTexels(
 }
 
 BasisTranscodeLayout MakeBasisTranscodeLayout(
-    in TextureMipLevel mip, in u32 mipLevel, in u32 elementCount, in u32 rowPitch
+    in TextureMipLevel mip,
+    in u32 mipLevel,
+    in u32 elementCount,
+    in u32 rowPitch
 ){
     BasisTranscodeLayout layout;
     layout.width = mip.width;
@@ -132,8 +139,14 @@ BasisTranscodeLayout MakeBasisTranscodeLayout(
 }
 
 b8 DecodeLdrTextureSlice(
-    in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in u32 slice, in Format format,
-    in usize offset, in usize count, mut Span<u8> output
+    in Texture asset,
+    in TextureMipLevel mip,
+    in u32 mipLevel,
+    in u32 slice,
+    in Format format,
+    in usize offset,
+    in usize count,
+    mut Span<u8> output
 ){
     usize rgbaBytes = count;
     if(format != Format::ASTC_4x4_UNORM && format != Format::BC7_UNORM){
@@ -184,7 +197,12 @@ b8 DecodeLdrTextureSlice(
 }
 
 b8 MergeHdrAlpha(
-    in Texture asset, in TextureMipLevel mip, in u32 slice, in usize offset, in usize count, mut Span<u8> output
+    in Texture asset,
+    in TextureMipLevel mip,
+    in u32 slice,
+    in usize offset,
+    in usize count,
+    mut Span<u8> output
 ){
     usize texels = 0u;
     if(!ValidateHdrRgba16FloatAlphaMergeLayout(mip, count, texels))
@@ -209,8 +227,14 @@ b8 MergeHdrAlpha(
 }
 
 b8 DecodeHdrTextureSlice(
-    in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in u32 slice, in Format format,
-    in usize offset, in usize count, mut Span<u8> output
+    in Texture asset,
+    in TextureMipLevel mip,
+    in u32 mipLevel,
+    in u32 slice,
+    in Format format,
+    in usize offset,
+    in usize count,
+    mut Span<u8> output
 ){
     const Expected<PrimaryUastcSlice> source = TryGetPrimaryUastcSlice(asset.payloadBytes(), asset.primaryPayloadByteCount(), mip, slice);
     if(!source.has_value())
@@ -270,7 +294,12 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(in Texture asset,
 }
 
 b8 TextureMipDecoder::decodeAndUploadStaticTextureMips(
-    in Texture asset, in Format format, mut GraphicsRuntime graphics, in TextureHandle texture, mut QueueSubmissionToken outUploadToken, mut b8 outDecoded
+    in Texture asset,
+    in Format format,
+    mut GraphicsRuntime graphics,
+    in TextureHandle texture,
+    mut QueueSubmissionToken outUploadToken,
+    mut b8 outDecoded
 ){
     outDecoded = false;
     Vector<TextureDecodedMipUpload> decodedMips;

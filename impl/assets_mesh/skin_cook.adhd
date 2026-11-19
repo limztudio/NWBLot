@@ -15,9 +15,9 @@ b8 ValidateSkinCookInverseBindMatrix(in MatrixSingle matrix, in StringView fileP
         return true;
 
     error(
-        "Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix",
-        filePathText,
-        matrixIndex
+        "Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"
+        , filePathText
+        , matrixIndex
     );
     return false;
 }

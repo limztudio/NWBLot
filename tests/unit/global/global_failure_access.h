@@ -4,6 +4,7 @@
 
 #pragma once
 
+
 #include <core/alloc/scratch.h>
 #include <global/append_rollback.h>
 #include <global/binary_little_endian.h>

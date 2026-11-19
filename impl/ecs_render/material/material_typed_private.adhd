@@ -127,8 +127,13 @@ class MaterialTypedByteContentRangeMap : NoCopy{
 }
 
 [cpp_unwind]
-Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(in Name materialName, in u64 typedLayoutHash,
-    in Span<u8> bytes, mut Vector<u8> upload, mut MaterialTypedConstantRangeMap ranges){
+Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(
+    in Name materialName,
+    in u64 typedLayoutHash,
+    in Span<u8> bytes,
+    mut Vector<u8> upload,
+    mut MaterialTypedConstantRangeMap ranges
+){
     MaterialTypedByteRangeKey key;
     key.materialName = materialName;
     key.typedLayoutHash = typedLayoutHash;

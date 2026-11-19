@@ -27,8 +27,17 @@ const u32 s_RefractionDiagnosticVariantCount = 2u;
 
 class RayTraceSceneQueryReadinessPolicy{
     public b8 canPrepareSceneQuery(
-        in b8 hardwareSupported, in b8 traceResourcesPreflighted, in b8 rayQuerySupported, in b8 heapInitialized, in b8 heapHasAccelStructLayout,
-        in b8 hasTlas, in b8 tlasHeapHandleValid, in b8 hasInstanceMaterialBuffer, in b8 hasMaterialTypedBuffer, in b8 hasInstanceBuffer, in b8 hasMaterialContextSlotsBuffer
+        in b8 hardwareSupported,
+        in b8 traceResourcesPreflighted,
+        in b8 rayQuerySupported,
+        in b8 heapInitialized,
+        in b8 heapHasAccelStructLayout,
+        in b8 hasTlas,
+        in b8 tlasHeapHandleValid,
+        in b8 hasInstanceMaterialBuffer,
+        in b8 hasMaterialTypedBuffer,
+        in b8 hasInstanceBuffer,
+        in b8 hasMaterialContextSlotsBuffer
     )const{
         return hardwareSupported && traceResourcesPreflighted && rayQuerySupported && heapInitialized && heapHasAccelStructLayout
             && hasTlas && tlasHeapHandleValid && hasInstanceMaterialBuffer && hasMaterialTypedBuffer && hasInstanceBuffer && hasMaterialContextSlotsBuffer;

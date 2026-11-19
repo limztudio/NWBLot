@@ -10,9 +10,15 @@
 
 [cpp_unwind]
 b8 Load<ShaderT : IShader, Resolver>(
-    in Name shaderName, in StringView variantName, in Name debugName, in StringView owner,
-    mut GraphicsRuntime graphics, in AssetManager assets, mut Resolver resolve,
-    in Optional<Name> archiveStage, mut ShaderHandle outShader
+    in Name shaderName,
+    in StringView variantName,
+    in Name debugName,
+    in StringView owner,
+    mut GraphicsRuntime graphics,
+    in AssetManager assets,
+    mut Resolver resolve,
+    in Optional<Name> archiveStage,
+    mut ShaderHandle outShader
 ){
     const ShaderType stage = cast<ShaderType>(RequireAssetTypeIndex<ShaderT>(s_ShaderAssetTypes));
     const ShaderTypeMask mask = ToMask(stage);

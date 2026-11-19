@@ -59,8 +59,11 @@ CsgClipReceiverTransform ReadCsgClipReceiverTransform(in Optional<in TransformCo
 }
 
 b8 VisitReceiverClipCutters<Visitor>(
-    in CsgShapeRegistry registry, in CsgFrameReceiverLookup lookup, in CsgReceiverDrawState state,
-    in CsgClipWorkBounds receiverBounds, mut forward Visitor visit
+    in CsgShapeRegistry registry,
+    in CsgFrameReceiverLookup lookup,
+    in CsgReceiverDrawState state,
+    in CsgClipWorkBounds receiverBounds,
+    mut forward Visitor visit
 ){
     for(in auto row : lookup.receiverCutters(state)){
         assert(row.has_value());
@@ -83,8 +86,11 @@ b8 VisitReceiverClipCutters<Visitor>(
 }
 
 Expected<CsgReceiverClipDrawInfo> ResolveCsgReceiverClipDrawInfoImpl(
-    in CsgShapeRegistry registry, in CsgFrameReceiverLookup lookup, in CsgReceiverDrawState state,
-    in CsgReceiverCpuBounds bounds, in Optional<in TransformComponent> transform
+    in CsgShapeRegistry registry,
+    in CsgFrameReceiverLookup lookup,
+    in CsgReceiverDrawState state,
+    in CsgReceiverCpuBounds bounds,
+    in Optional<in TransformComponent> transform
 ){
     CsgReceiverClipDrawInfo info;
     const CsgClipReceiverTransform pose = ReadCsgClipReceiverTransform(transform);
@@ -98,9 +104,16 @@ Expected<CsgReceiverClipDrawInfo> ResolveCsgReceiverClipDrawInfoImpl(
 }
 
 Expected<CsgReceiverRangeGpuData> AppendCsgReceiverClipDataImpl(
-    in CsgShapeRegistry registry, in RendererMeshSystem meshes, in CsgFrameReceiverLookup lookup, in CsgReceiverDrawState state,
-    in CsgReceiverCpuBounds bounds, in Optional<in TransformComponent> transform, in u32 frameWidth, in u32 frameHeight,
-    in Optional<in MeshViewGpuData> preparedView, mut CsgFrameGpuData data
+    in CsgShapeRegistry registry,
+    in RendererMeshSystem meshes,
+    in CsgFrameReceiverLookup lookup,
+    in CsgReceiverDrawState state,
+    in CsgReceiverCpuBounds bounds,
+    in Optional<in TransformComponent> transform,
+    in u32 frameWidth,
+    in u32 frameHeight,
+    in Optional<in MeshViewGpuData> preparedView,
+    mut CsgFrameGpuData data
 ){
     if(data.cutters.size() > cast<usize>(u32.max) || !bounds.valid())
         return MakeUnexpected(Failure());

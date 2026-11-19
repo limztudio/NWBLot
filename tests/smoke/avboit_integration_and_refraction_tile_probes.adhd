@@ -167,8 +167,14 @@ class GpuProbeProgress{
 }
 
 [cpp_unwind]
-Expected<GpuTaskId> DeclareTrackedProbeTask<TaskT>(mut GpuTaskGraph graph, in Name probeName, in StringView label,
-    in Span<GpuTaskResourceUse> uses, in TaskT payload, mut GpuProbeProgress progress){
+Expected<GpuTaskId> DeclareTrackedProbeTask<TaskT>(
+    mut GpuTaskGraph graph,
+    in Name probeName,
+    in StringView label,
+    in Span<GpuTaskResourceUse> uses,
+    in TaskT payload,
+    mut GpuProbeProgress progress
+){
     progress.stage = "task declaration";
     GpuTaskDesc desc;
     desc.setIdentity(probeName).setMarkerLabel(label).setResourceUses(uses);
@@ -904,3 +910,4 @@ b8 RunRefractionTileProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectR
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

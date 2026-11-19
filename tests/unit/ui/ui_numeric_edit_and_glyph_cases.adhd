@@ -71,16 +71,16 @@ class UiNumericFormatGuardedOneByteBuffer{
 class UiNumericEditBuilderPlainHost : IEditBoxHost{
     public usize edits = 0u;
 
-    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2) override{
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2)override{
         ++this.edits;
         EditBoxResult result;
         result.valid = true;
         return result;
     }
-    public EditBoxResult editInPopup(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3) override{ return EditBoxResult(); }
-    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{ return EditBoxResult(); }
-    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6) override{ return EditBoxResult(); }
-    public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3) override{ return true; }
+    public EditBoxResult editInPopup(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3)override{ return EditBoxResult(); }
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4)override{ return EditBoxResult(); }
+    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6)override{ return EditBoxResult(); }
+    public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3)override{ return true; }
 }
 
 
@@ -204,6 +204,7 @@ usize UiPaintGlyphPageAddress(in SharedGlyphPage page){
 }
 u64 UiPaintGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
 u8 UiPaintGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1748,7 +1749,6 @@ registration GoogleTestTypedCase(NumericLifetimeTests, RejectedIncompleteSubmitS
 registration GoogleTestTypedCase(NumericLifetimeTests, RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue, VerifyNumericLifetimeTests_RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue);
 registration GoogleTestTypedCase(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestoration, VerifyNumericLifetimeTests_ExternalReplacementControlsLaterAbandonRestoration);
 registration GoogleTestTypedCase(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField, VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraftField);
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,6 +4,7 @@
 
 #pragma once
 
+
 #include <core/assets/bunch/cook.h>
 #include <pipeline/cook_workspace.h>
 #include <core/assets/input_list.h>
@@ -43,8 +44,14 @@ public:
     }
 
     template<typename Visit>
-    [[nodiscard]] b8 extract(const Core::Assets::DiscoveredNwbFile& file, const Name type, const Name path, const Core::Metascript::Value& asset,
-        const Optional<NotNull<const Core::Metascript::Document*>>& document, Visit&& visit)const{
+    [[nodiscard]] b8 extract(
+        const Core::Assets::DiscoveredNwbFile& file,
+        const Name type,
+        const Name path,
+        const Core::Metascript::Value& asset,
+        const Optional<NotNull<const Core::Metascript::Document*>>& document,
+        Visit&& visit
+    )const{
         class Collector final : public Core::Assets::ICookDependencyCollector{
         public:
             explicit Collector(Visit& callback) : m_callback(callback){}

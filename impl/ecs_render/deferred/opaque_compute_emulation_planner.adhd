@@ -59,16 +59,29 @@ class OpaqueComputeEmulationPlanner : NoCopy{
     private b8 m_sharedOutputOwned = false;
     private b8 m_csgOutputOwned = false;
 
-    public OpaqueComputeEmulationPlanner(mut RendererMaterialSystem materials, in DeferredFrameTargets targets,
-        in borrow GraphicsPrefixTimingTicket ticket, in borrow b8 meshReady, in borrow b8 shadingReady){
+    public OpaqueComputeEmulationPlanner(
+        mut RendererMaterialSystem materials,
+        in DeferredFrameTargets targets,
+        in borrow GraphicsPrefixTimingTicket ticket,
+        in borrow b8 meshReady,
+        in borrow b8 shadingReady
+    ){
         this.m_regularPayload = OpaqueRegularComputeEmulationGraphTaskPayload(materials, targets, ticket, meshReady, shadingReady);
         this.m_csgPayload = OpaqueCsgReceiverComputeEmulationGraphTaskPayload(materials, targets, ticket, meshReady, shadingReady);
     }
 
     [cpp_unwind]
-    public void capture(mut GpuTaskGraph graph, in MaterialPassDrawItemPartitions opaqueDrawItems, in CsgFrameGpuData csgFrameData,
-        in MeshFrameBindingSnapshot frameBindings, in b8 hasOpaqueCsgFrameWork, in b8 hasCsgFrameGpuWork,
-        in b8 gbufferMaterialSampledTexturesCollected, mut GbufferGraphTask gbufferPayload, mut Optional<GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming){
+    public void capture(
+        mut GpuTaskGraph graph,
+        in MaterialPassDrawItemPartitions opaqueDrawItems,
+        in CsgFrameGpuData csgFrameData,
+        in MeshFrameBindingSnapshot frameBindings,
+        in b8 hasOpaqueCsgFrameWork,
+        in b8 hasCsgFrameGpuWork,
+        in b8 gbufferMaterialSampledTexturesCollected,
+        mut GbufferGraphTask gbufferPayload,
+        mut Optional<GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming
+    ){
         // Generated-vertex buffers persist per mesh, so only the alias-free regular opaque case hoists compute ahead of raster.
         this.m_regularPayload.frameBindings = frameBindings;
         const b8 opaqueComputeEmulationPlanCaptured =

@@ -488,8 +488,18 @@ b8 SoftwareBvhBuilder::meshSwBvhResourcesReady(in BufferHandle nodeBuffer, in Bu
 }
 
 [cpp_unwind]
-b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in VectorSingle aabbMin, in VectorSingle aabbMax, in GpuDescriptorHandle nodeHeapHandle,
-    in GpuDescriptorHandle parentHeapHandle, mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer){
+b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
+    in u32 positionHeapSlot,
+    in u32 triangleIndexHeapSlot,
+    in u32 primitiveCount,
+    in VectorSingle aabbMin,
+    in VectorSingle aabbMax,
+    in GpuDescriptorHandle nodeHeapHandle,
+    in GpuDescriptorHandle parentHeapHandle,
+    mut CommandList commandList,
+    mut BufferHandle nodeBuffer,
+    mut BufferHandle parentBuffer
+){
     if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !this.meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
@@ -535,8 +545,16 @@ b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 tr
 }
 
 [cpp_unwind]
-b8 SoftwareBvhBuilder::refitMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in GpuDescriptorHandle nodeHeapHandle, in GpuDescriptorHandle parentHeapHandle,
-    mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer){
+b8 SoftwareBvhBuilder::refitMeshSwBvhPrepared(
+    in u32 positionHeapSlot,
+    in u32 triangleIndexHeapSlot,
+    in u32 primitiveCount,
+    in GpuDescriptorHandle nodeHeapHandle,
+    in GpuDescriptorHandle parentHeapHandle,
+    mut CommandList commandList,
+    mut BufferHandle nodeBuffer,
+    mut BufferHandle parentBuffer
+){
     if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !this.meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 

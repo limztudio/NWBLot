@@ -281,8 +281,15 @@ b8 IsConcurrentTextureImageConsistent(in TextureDesc desc, in VkImageCreateInfo 
     return IsTextureImageInfoConsistent(desc, copy);
 }
 
-void InsertCrashMarkers(mut GpuCrashTracker tracker, mut HeapStorage arena, in Span<StringView> names,
-    mut Latch start, mut Latch midpoint, mut TestAtomic<b8> invalid, mut TestAtomic<u32> writers){
+void InsertCrashMarkers(
+    mut GpuCrashTracker tracker,
+    mut HeapStorage arena,
+    in Span<StringView> names,
+    mut Latch start,
+    mut Latch midpoint,
+    mut TestAtomic<b8> invalid,
+    mut TestAtomic<u32> writers
+){
     {
         GpuCrashMarkerTracker local(tracker, arena);
         start.arrive_and_wait();
@@ -749,6 +756,7 @@ NWB_ADHD_GTEST(GpuTextureImagePolicyTests, ImageSharingRequiresCompleteQueueFami
 NWB_ADHD_GTEST(GpuTextureShapePolicyTests, CubeArraysRequireWholeCubesAndSquareFaces, VerifyGpuTextureShapePolicyTests_CubeArraysRequireWholeCubesAndSquareFaces)
 NWB_ADHD_GTEST(GpuTextureShapePolicyTests, ThreeDimensionalDepthDeterminesMipLimit, VerifyGpuTextureShapePolicyTests_ThreeDimensionalDepthDeterminesMipLimit)
 NWB_ADHD_GTEST(GpuTextureTransferLayoutTests, CompressedPaddedSlicesPreserveTouchedByteBoundary, VerifyGpuTextureTransferLayoutTests_CompressedPaddedSlicesPreserveTouchedByteBoundary)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -392,8 +392,13 @@ class DeferredLightingGraphTask{
     }
 }
 
-Expected<GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in b8 useLaggedLightingHistory,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket){
+Expected<GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in b8 useLaggedLightingHistory,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket
+){
     return graph.addPayloadTask(desc, DeferredLightingGraphTask(this, targets, timingTicket, useLaggedLightingHistory));
 }
 
@@ -418,8 +423,13 @@ class DeferredCompositeGraphTask{
     }
 }
 
-Expected<GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in ReflectionCompositeInputs reflectionInputs,
-    mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket){
+Expected<GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
+    mut GpuTaskGraph graph,
+    in GpuTaskDesc desc,
+    in ReflectionCompositeInputs reflectionInputs,
+    mut DeferredFrameTargets targets,
+    mut GpuTimingSubmissionTicket timingTicket
+){
     return graph.addPayloadTask(desc, DeferredCompositeGraphTask(this, targets, timingTicket, reflectionInputs));
 }
 

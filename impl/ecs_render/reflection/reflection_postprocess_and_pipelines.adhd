@@ -11,6 +11,9 @@
 #include <impl/ecs_render/kernel/timing_names.adhd>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ReflectionFeedbackExtentOrDeviceChanged(
     in u32 width,
     in u32 height,
@@ -42,8 +45,17 @@ b8 CanPrepareReflectionHardwarePipelines(in b8 prepareHardware, in b8 rayQuerySu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PrepareReflectionPipeline(mut RendererShaderSystem shaders, mut Device device, mut ComputePipelineHandle pipeline, mut ShaderHandle shader, in ReflectionComputeShaderSelector selector, in Name debugName,
-    in b8 hardware, in BindingLayoutHandle layout, in StringView variant){
+b8 PrepareReflectionPipeline(
+    mut RendererShaderSystem shaders,
+    mut Device device,
+    mut ComputePipelineHandle pipeline,
+    mut ShaderHandle shader,
+    in ReflectionComputeShaderSelector selector,
+    in Name debugName,
+    in b8 hardware,
+    in BindingLayoutHandle layout,
+    in StringView variant
+){
     if(pipeline.valid())
         return true;
     return shaders.loadShader<ComputeShader, ReflectionSubsystem>(selector, variant, debugName, shader) && CreateHeapComputePipeline(device, shader, layout, hardware, pipeline);

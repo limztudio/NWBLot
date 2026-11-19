@@ -66,9 +66,14 @@ class RendererRayTracingSystem : NoCopy{
     private b8 m_shadowVisibilityBackendPipelinePreflighted = false;
 
     public RendererRayTracingSystem(
-        mut World world, mut GraphicsRuntime graphics, mut RendererShaderSystem shaderSystem, mut RendererMeshSystem meshSystem,
-        mut RendererMaterialSystem materialSystem, mut RendererRayTracingState rayTracingState,
-        in RendererOpticalVolumeSelection opticalVolumes, in CsgShapeRegistry csgShapeRegistry
+        mut World world,
+        mut GraphicsRuntime graphics,
+        mut RendererShaderSystem shaderSystem,
+        mut RendererMeshSystem meshSystem,
+        mut RendererMaterialSystem materialSystem,
+        mut RendererRayTracingState rayTracingState,
+        in RendererOpticalVolumeSelection opticalVolumes,
+        in CsgShapeRegistry csgShapeRegistry
     ){
         this.m_world = world;
         this.m_graphics = graphics;
@@ -132,8 +137,13 @@ class RendererRayTracingSystem : NoCopy{
     public b8 preflightShadowVisibilityResources(mut DeferredFrameTargets targets);
     [cpp_unwind]
     public Expected<b8> recordPreflightShadowVisibilityResources(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in b8 sceneTlasBuildGraphOwned, in b8 meshBlasBuildsGraphOwned,
-        in b8 meshBlasGeometryBuildInputStatesGraphOwned, in b8 meshSwBvhBuildsGraphOwned, in b8 preparedMeshSwBvhBuildsRecordedByGraph
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in b8 sceneTlasBuildGraphOwned,
+        in b8 meshBlasBuildsGraphOwned,
+        in b8 meshBlasGeometryBuildInputStatesGraphOwned,
+        in b8 meshSwBvhBuildsGraphOwned,
+        in b8 preparedMeshSwBvhBuildsRecordedByGraph
     );
     public b8 shadowVisibilityResourcesPreflighted()const{ return this.m_shadowVisibilityResourcesPreflighted; }
 
@@ -217,8 +227,13 @@ class RendererRayTracingSystem : NoCopy{
     // The deferred graph declares hardware trace entry resources before recording.
     [cpp_unwind]
     public Expected<u32> renderShadowVisibility(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in b8 splitSoftTransparentFold, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 splitOpaqueSoftResolve, in Optional<in LightSpaceShadowSnapshot> lightSpace
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 splitSoftTransparentFold,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 splitOpaqueSoftResolve,
+        in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
     [cpp_unwind]
     public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources){
@@ -233,66 +248,137 @@ class RendererRayTracingSystem : NoCopy{
         return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, false, Optional<in LightSpaceShadowSnapshot>());
     }
     [cpp_unwind]
-    public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 splitSoftTransparentFold,
-        in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 splitOpaqueSoftResolve){
+    public Expected<u32> renderShadowVisibility(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 splitSoftTransparentFold,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 splitOpaqueSoftResolve
+    ){
         return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, splitOpaqueSoftResolve, Optional<in LightSpaceShadowSnapshot>());
     }
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow b8 prepared, in b8 hardwareShadowSupported, in GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow b8 prepared,
+        in b8 hardwareShadowSupported,
+        in GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket
     );
     // A soft-transparent frame splits opaque visibility and transparent fold in one packet. The opaque task opens timing scopes.
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityOpaqueTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow b8 prepared, in b8 hardwareShadowSupported, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in Optional<in LightSpaceShadowSnapshot> lightSpace,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> asyncTiming,
-        mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut b8 opaqueProduced, mut u32 opaqueFrameIndex
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow b8 prepared,
+        in b8 hardwareShadowSupported,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in Optional<in LightSpaceShadowSnapshot> lightSpace,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming,
+        mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+        mut b8 opaqueProduced,
+        mut u32 opaqueFrameIndex
     );
     // The prepared opaque producer records the trace and geometry downsample first.
     // This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet.
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityOpaqueFirstWaveletTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow u32 opaqueFrameIndex, in b8 hardwareShadowSupported, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 deferUpsample, in b8 deferWavelet,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> asyncTiming,
-        mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut Optional<GpuTimingMeasure> opaqueResolveTiming, mut b8 opaqueProduced
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow u32 opaqueFrameIndex,
+        in b8 hardwareShadowSupported,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 deferUpsample,
+        in b8 deferWavelet,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming,
+        mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+        mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+        mut b8 opaqueProduced
     );
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityOpaqueResolveTailTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow u32 opaqueFrameIndex, in b8 hardwareShadowSupported, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming, mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut Optional<GpuTimingMeasure> opaqueResolveTiming, mut b8 opaqueProduced
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow u32 opaqueFrameIndex,
+        in b8 hardwareShadowSupported,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming,
+        mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+        mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+        mut b8 opaqueProduced
     );
     // The prepared transparent temporal merge receives frozen history/moment entry states and starts the resolve timing interval.
     // Its output reaches the first wavelet through the compiler-owned task handoff.
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftTemporalMergeTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in b8 graphOwnsTransparentTemporalMergeEntryStates, in b8 combinedTemporal, in b8 hardwareShadowSupported,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> transparentResolveTiming, mut b8 transparentTraceProduced
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow b8 opaqueProduced,
+        in borrow u32 opaqueFrameIndex,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates,
+        in b8 combinedTemporal,
+        in b8 hardwareShadowSupported,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> transparentResolveTiming,
+        mut b8 transparentTraceProduced
     );
     // The prepared transparent trace or temporal merge's first wavelet inherits its graph-declared input and output states.
     // The terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftFirstWaveletTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in b8 graphOwnsTransparentWaveletInputBoundary, in b8 startsTransparentResolveTiming, in b8 combinedWavelet,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> transparentResolveTiming, mut b8 transparentTraceProduced
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow b8 opaqueProduced,
+        in borrow u32 opaqueFrameIndex,
+        in b8 graphOwnsTransparentWaveletInputBoundary,
+        in b8 startsTransparentResolveTiming,
+        in b8 combinedWavelet,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> transparentResolveTiming,
+        mut b8 transparentTraceProduced
     );
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftFoldTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in b8 combinedUpsample, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket,
-        mut Optional<GpuTimingMeasure> asyncTiming, mut Optional<GpuTimingMeasure> shadowVisibilityTiming, mut Optional<GpuTimingMeasure> transparentResolveTiming, mut b8 transparentTraceProduced
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow b8 opaqueProduced,
+        in borrow u32 opaqueFrameIndex,
+        in b8 combinedUpsample,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming,
+        mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+        mut Optional<GpuTimingMeasure> transparentResolveTiming,
+        mut b8 transparentTraceProduced
     );
     [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftTraceTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in borrow b8 opaqueProduced, in borrow u32 opaqueFrameIndex, in Optional<in LightSpaceShadowSnapshot> lightSpace,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut b8 transparentTraceProduced
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in borrow b8 opaqueProduced,
+        in borrow u32 opaqueFrameIndex,
+        in Optional<in LightSpaceShadowSnapshot> lightSpace,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut b8 transparentTraceProduced
     );
     [cpp_unwind]
     public void clearShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets);
@@ -301,9 +387,14 @@ class RendererRayTracingSystem : NoCopy{
     // A warm accumulator decays in its own task before the photon producer, sharing its packet; the compiler owns the UAV handoff.
     [cpp_unwind]
     public Expected<GpuTaskId> declareCausticAccumulatorDecayTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in MeshViewBufferSnapshot meshView,
-        in borrow b8 shadowVisibilityPrepared, in b8 hardwareCaustics, mut DeferredFrameTargets targets,
-        mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in MeshViewBufferSnapshot meshView,
+        in borrow b8 shadowVisibilityPrepared,
+        in b8 hardwareCaustics,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> causticPhotonTiming
     );
     // Record the decay dispatch itself. Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler.
     [cpp_unwind]
@@ -311,9 +402,14 @@ class RendererRayTracingSystem : NoCopy{
     // Software visibility consumes graph-declared traversal inputs for opaque shadows and transparent transmittance.
     [cpp_unwind]
     public Expected<u32> renderGpuBvhShadowVisibility(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in b8 splitSoftTransparentFold, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 splitOpaqueSoftResolve,
-        in Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan, in Optional<in LightSpaceShadowSnapshot> lightSpace
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 splitSoftTransparentFold,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 splitOpaqueSoftResolve,
+        in Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan,
+        in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
     [cpp_unwind]
     public Expected<u32> renderGpuBvhShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources){
@@ -328,23 +424,43 @@ class RendererRayTracingSystem : NoCopy{
         return this.renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, false, Optional<in GraphOwnedAdaptiveShadowPlan>(), Optional<in LightSpaceShadowSnapshot>());
     }
     [cpp_unwind]
-    public Expected<u32> renderGpuBvhShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 splitSoftTransparentFold,
-        in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 splitOpaqueSoftResolve){
+    public Expected<u32> renderGpuBvhShadowVisibility(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 splitSoftTransparentFold,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 splitOpaqueSoftResolve
+    ){
         return this.renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, splitOpaqueSoftResolve,
             Optional<in GraphOwnedAdaptiveShadowPlan>(), Optional<in LightSpaceShadowSnapshot>());
     }
     [cpp_unwind]
-    public Expected<u32> renderGpuBvhShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 splitSoftTransparentFold,
-        in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 splitOpaqueSoftResolve, in Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan){
+    public Expected<u32> renderGpuBvhShadowVisibility(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 splitSoftTransparentFold,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 splitOpaqueSoftResolve,
+        in Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan
+    ){
         return this.renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, splitOpaqueSoftResolve, graphOwnedAdaptivePlan, Optional<in LightSpaceShadowSnapshot>());
     }
     [cpp_unwind]
     public b8 prepareGpuBvhCausticResources(mut DeferredFrameTargets targets);
     [cpp_unwind]
     public Expected<GpuTaskId> declareSoftwareCausticsTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in MeshViewBufferSnapshot meshView, in borrow b8 shadowVisibilityPrepared, in b8 graphOwnsAccumulatorBootstrapClear,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming, mut b8 causticProducerDispatched
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in MeshViewBufferSnapshot meshView,
+        in borrow b8 shadowVisibilityPrepared,
+        in b8 graphOwnsAccumulatorBootstrapClear,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> causticPhotonTiming,
+        mut b8 causticProducerDispatched
     );
     public b8 hasCausticWork(in MeshViewBufferSnapshot meshView)const;
     [cpp_unwind]
@@ -357,9 +473,16 @@ class RendererRayTracingSystem : NoCopy{
     public b8 prepareHwCausticResources(mut DeferredFrameTargets targets);
     [cpp_unwind]
     public Expected<GpuTaskId> declareHardwareCausticsTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in DeferredLightingGraphResources deferredLightingResources,
-        in MeshViewBufferSnapshot meshView, in borrow b8 shadowVisibilityPrepared, in b8 graphOwnsAccumulatorBootstrapClear,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticPhotonTiming, mut b8 causticProducerDispatched
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in MeshViewBufferSnapshot meshView,
+        in borrow b8 shadowVisibilityPrepared,
+        in b8 graphOwnsAccumulatorBootstrapClear,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> causticPhotonTiming,
+        mut b8 causticProducerDispatched
     );
     [cpp_unwind]
     public b8 renderHwCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming);
@@ -370,14 +493,21 @@ class RendererRayTracingSystem : NoCopy{
     // Records downsample, resolve prepare, wavelets, upsample after the photon producer. Uses own the UAV-to-SRV handoffs.
     [cpp_unwind]
     public Expected<GpuTaskId> declareCausticGeometryDownsampleTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in borrow b8 causticProducerDispatched,
-        mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticResolveTiming
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in borrow b8 causticProducerDispatched,
+        mut DeferredFrameTargets targets,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> causticResolveTiming
     );
     public CausticResolveActivitySnapshot causticResolveActivitySnapshot(in DeferredFrameTargets targets)const;
     [cpp_unwind]
     public Expected<GpuTaskId> declareCausticResolveTask(
-        mut GpuTaskGraph graph, in GpuTaskDesc desc, in borrow b8 causticProducerDispatched,
-        mut GpuTimingSubmissionTicket timingTicket, mut Optional<GpuTimingMeasure> causticResolveTiming
+        mut GpuTaskGraph graph,
+        in GpuTaskDesc desc,
+        in borrow b8 causticProducerDispatched,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> causticResolveTiming
     );
     [cpp_unwind]
     public Expected<GpuTaskId> declareCausticResolvePrepareTask(in GpuTaskDesc desc, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets);
@@ -417,8 +547,16 @@ class RendererRayTracingSystem : NoCopy{
     public void discardSoftShadowTemporalHistory();
     [cpp_unwind]
     public b8 renderSurfelGiPhases(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in b8 dispatchAgeFree, in b8 dispatchHashBuild, in b8 dispatchSpawn, in b8 dispatchTraceBuildArgs, in b8 dispatchTrace, in b8 dispatchResolve, in b8 dispatchRemaining
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 dispatchAgeFree,
+        in b8 dispatchHashBuild,
+        in b8 dispatchSpawn,
+        in b8 dispatchTraceBuildArgs,
+        in b8 dispatchTrace,
+        in b8 dispatchResolve,
+        in b8 dispatchRemaining
     );
     [cpp_unwind]
     public b8 renderSoftShadowCombinedTemporalMerge(mut CommandList commandList, mut DeferredFrameTargets targets);
@@ -429,20 +567,31 @@ class RendererRayTracingSystem : NoCopy{
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to the shared deferred graph.
     [cpp_unwind]
     public Expected<u32> renderShadowVisibilityOpaque(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in b8 graphOwnsOpaqueTemporalMergeEntryStates, in Optional<in LightSpaceShadowSnapshot> lightSpace
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
     [cpp_unwind]
     public b8 renderSoftOpaqueShadowResolvePhase(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in u32 frameIndex, in b8 hardwareShadowSupported, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in SoftShadowOpaqueResolvePhase phase
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in b8 hardwareShadowSupported,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in SoftShadowOpaqueResolvePhase phase
     );
     [cpp_unwind]
     public b8 renderSoftOpaqueShadowResolveTail(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 hardwareShadowSupported);
     [cpp_unwind]
     public Expected<u32> renderGpuBvhShadowVisibilityOpaque(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in b8 graphOwnsOpaqueTemporalMergeEntryStates, in Optional<in LightSpaceShadowSnapshot> lightSpace
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
     [cpp_unwind]
     public Expected<u32> renderGpuBvhShadowVisibilityOpaque(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 graphOwnsOpaqueTemporalMergeEntryStates){
@@ -450,8 +599,12 @@ class RendererRayTracingSystem : NoCopy{
     }
     [cpp_unwind]
     public b8 renderSoftTransparentShadowTrace(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in u32 frameIndex, in b8 graphOwnsOpaqueToTransparentBoundary, in Optional<in LightSpaceShadowSnapshot> lightSpace
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
     [cpp_unwind]
     public b8 renderSoftTransparentShadowTrace(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 graphOwnsOpaqueToTransparentBoundary){
@@ -474,8 +627,12 @@ class RendererRayTracingSystem : NoCopy{
     private b8 prepareCausticEmissionTargetResources();
     [cpp_unwind]
     private b8 capturePreparedShadowMaterialContext(
-        in PreparedShadowMaterialContextRoute route, in b8 staticScene, in u64 hash,
-        in Span<NwbRtInstanceMaterialGpu> instanceMaterials, in Span<InstanceGpuData> instances, in Span<u8> materialTypedBytes
+        in PreparedShadowMaterialContextRoute route,
+        in b8 staticScene,
+        in u64 hash,
+        in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+        in Span<InstanceGpuData> instances,
+        in Span<u8> materialTypedBytes
     );
     private b8 recordPreparedSceneSwBvhTraversal();
     private b8 preparedTraversalStorageMatchesCurrent()const{
@@ -514,36 +671,70 @@ class RendererRayTracingSystem : NoCopy{
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     [cpp_unwind]
     private void dispatchSoftShadowResolve(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in u32 slotStart, in u32 slotCount, in SoftShadowResolveDispatch dispatch, in b8 dispatchFirstWavelet, in b8 dispatchTail
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 slotStart,
+        in u32 slotCount,
+        in SoftShadowResolveDispatch dispatch,
+        in b8 dispatchFirstWavelet,
+        in b8 dispatchTail
     );
     [cpp_unwind]
     private void dispatchSoftShadowResolve(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 slotStart, in u32 slotCount, in SoftShadowResolveDispatch dispatch){
         this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, slotStart, slotCount, dispatch, true, true);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowResolve(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 slotStart, in u32 slotCount,
-        in SoftShadowResolveDispatch dispatch, in b8 dispatchFirstWavelet){
+    private void dispatchSoftShadowResolve(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 slotStart,
+        in u32 slotCount,
+        in SoftShadowResolveDispatch dispatch,
+        in b8 dispatchFirstWavelet
+    ){
         this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, slotStart, slotCount, dispatch, dispatchFirstWavelet, true);
     }
     [cpp_unwind]
     private void enableSoftShadowResolveBarriers(mut CommandList commandList, mut DeferredFrameTargets targets);
     [cpp_unwind]
     private void dispatchPrimarySoftShadowResolve(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in u32 frameIndex, in u32 softGroupsX, in u32 softGroupsY, in b8 splitOpaqueSoftResolve, in b8 splitSoftTransparentFold, in b8 graphOwnsOpaqueTemporalMergeEntryStates
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 splitOpaqueSoftResolve,
+        in b8 splitSoftTransparentFold,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases.
     // The shared graph gives first downsample states and key handoffs; later transitions stay local.
     [cpp_unwind]
     private void dispatchSoftShadowDenoiseAndTransparentFold(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in u32 frameIndex, in u32 softGroupsX, in u32 softGroupsY,
-        in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve,
-        in b8 graphOwnsOpaqueGeometryToResolveBoundary, in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary,
-        in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 graphOwnsTransparentTemporalMergeEntryStates, in b8 dispatchOpaqueResolveTail,
-        in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary, in b8 dispatchTransparentResolveTail, in b8 splitTransparentResolve,
-        in b8 dispatchTransparentTemporalMerge, in SoftShadowOpaqueResolvePhase opaquePhase
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates,
+        in b8 dispatchOpaqueResolveTail,
+        in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary,
+        in b8 dispatchTransparentResolveTail,
+        in b8 splitTransparentResolve,
+        in b8 dispatchTransparentTemporalMerge,
+        in SoftShadowOpaqueResolvePhase opaquePhase
     );
     [cpp_unwind]
     private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in u32 softGroupsX, in u32 softGroupsY){
@@ -551,106 +742,282 @@ class RendererRayTracingSystem : NoCopy{
             false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, true, true, true, false, false, false, false, false,
             true, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, true, true, false, false,
             false, false, false, true, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             true, false, false, false, false, false, true, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, false, false, false, false, false, true, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, false, false, false, false, true, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, false, false, false, true, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, false, false, true, false, false, false, false,
             SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary, in b8 graphOwnsOpaqueTemporalMergeEntryStates){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates, false, true,
             false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 graphOwnsTransparentTemporalMergeEntryStates){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsTransparentTemporalMergeEntryStates, true, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 graphOwnsTransparentTemporalMergeEntryStates, in b8 dispatchOpaqueResolveTail){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates,
+        in b8 dispatchOpaqueResolveTail
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsTransparentTemporalMergeEntryStates, dispatchOpaqueResolveTail, false, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 graphOwnsTransparentTemporalMergeEntryStates,
-        in b8 dispatchOpaqueResolveTail, in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates,
+        in b8 dispatchOpaqueResolveTail,
+        in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsTransparentTemporalMergeEntryStates, dispatchOpaqueResolveTail, graphOwnsOpaqueTraceToFirstWaveletBoundary, false, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 graphOwnsTransparentTemporalMergeEntryStates,
-        in b8 dispatchOpaqueResolveTail, in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary, in b8 dispatchTransparentResolveTail){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates,
+        in b8 dispatchOpaqueResolveTail,
+        in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary,
+        in b8 dispatchTransparentResolveTail
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsTransparentTemporalMergeEntryStates, dispatchOpaqueResolveTail, graphOwnsOpaqueTraceToFirstWaveletBoundary, dispatchTransparentResolveTail, false, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 graphOwnsTransparentTemporalMergeEntryStates,
-        in b8 dispatchOpaqueResolveTail, in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary, in b8 dispatchTransparentResolveTail, in b8 splitTransparentResolve){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates,
+        in b8 dispatchOpaqueResolveTail,
+        in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary,
+        in b8 dispatchTransparentResolveTail,
+        in b8 splitTransparentResolve
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsTransparentTemporalMergeEntryStates, dispatchOpaqueResolveTail, graphOwnsOpaqueTraceToFirstWaveletBoundary, dispatchTransparentResolveTail, splitTransparentResolve, false, SoftShadowOpaqueResolvePhase::TemporalAndWavelet);
     }
     [cpp_unwind]
-    private void dispatchSoftShadowDenoiseAndTransparentFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex,
-        in u32 softGroupsX, in u32 softGroupsY, in b8 dispatchOpaqueGeometry, in b8 dispatchOpaqueResolve, in b8 dispatchTransparentTrace, in b8 dispatchTransparentResolve, in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-        in b8 graphOwnsOpaqueToTransparentBoundary, in b8 graphOwnsTransparentTraceToResolveBoundary, in b8 graphOwnsOpaqueTemporalMergeEntryStates, in b8 graphOwnsTransparentTemporalMergeEntryStates,
-        in b8 dispatchOpaqueResolveTail, in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary, in b8 dispatchTransparentResolveTail, in b8 splitTransparentResolve, in b8 dispatchTransparentTemporalMerge){
+    private void dispatchSoftShadowDenoiseAndTransparentFold(
+        mut CommandList commandList,
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        in u32 frameIndex,
+        in u32 softGroupsX,
+        in u32 softGroupsY,
+        in b8 dispatchOpaqueGeometry,
+        in b8 dispatchOpaqueResolve,
+        in b8 dispatchTransparentTrace,
+        in b8 dispatchTransparentResolve,
+        in b8 graphOwnsOpaqueGeometryToResolveBoundary,
+        in b8 graphOwnsOpaqueToTransparentBoundary,
+        in b8 graphOwnsTransparentTraceToResolveBoundary,
+        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
+        in b8 graphOwnsTransparentTemporalMergeEntryStates,
+        in b8 dispatchOpaqueResolveTail,
+        in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary,
+        in b8 dispatchTransparentResolveTail,
+        in b8 splitTransparentResolve,
+        in b8 dispatchTransparentTemporalMerge
+    ){
         this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, dispatchOpaqueGeometry, dispatchOpaqueResolve, dispatchTransparentTrace,
             dispatchTransparentResolve, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueToTransparentBoundary, graphOwnsTransparentTraceToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsTransparentTemporalMergeEntryStates, dispatchOpaqueResolveTail, graphOwnsOpaqueTraceToFirstWaveletBoundary, dispatchTransparentResolveTail, splitTransparentResolve, dispatchTransparentTemporalMerge,

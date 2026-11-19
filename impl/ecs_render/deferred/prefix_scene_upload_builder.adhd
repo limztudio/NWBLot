@@ -39,9 +39,14 @@ class PrefixSceneUploadInputs{
     public mut b8 sceneShadingSetupReady;
 
     public PrefixSceneUploadInputs(
-        in MeshViewGpuData meshViewState, mut Optional<GpuTimingMeasure> asyncPrefixTiming,
-        in GraphicsPrefixTimingTicket meshTicket, in GraphicsPrefixTimingTicket shadingTicket, in b8 asyncSpansPacket,
-        in GpuTaskId shadowVisibilityTask, mut b8 meshViewSetupReady, mut b8 sceneShadingSetupReady
+        in MeshViewGpuData meshViewState,
+        mut Optional<GpuTimingMeasure> asyncPrefixTiming,
+        in GraphicsPrefixTimingTicket meshTicket,
+        in GraphicsPrefixTimingTicket shadingTicket,
+        in b8 asyncSpansPacket,
+        in GpuTaskId shadowVisibilityTask,
+        mut b8 meshViewSetupReady,
+        mut b8 sceneShadingSetupReady
     ){
         this.meshViewState = meshViewState;
         this.asyncPrefixTiming = asyncPrefixTiming;

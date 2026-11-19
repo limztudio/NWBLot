@@ -156,6 +156,7 @@ u32 UiPaintOverlayImageHeight(in SharedImageSource image){ return image.deref().
 usize UiPaintOverlayImageMipCount(in SharedImageSource image){ return image.deref().texture().mipLevels().size(); }
 usize UiPaintOverlayVerticesAddress(in DrawSnapshot snapshot){ return TestDataAddress(snapshot.vertices()); }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

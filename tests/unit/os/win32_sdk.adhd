@@ -5,6 +5,10 @@
 #include <tests/common/win32_window_styles.adhd>
 #include "service_sdk.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::Window"), cpp_flags(self_defaulted, small_value)]
 extern class Win32Window;
 [cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::ImeContext"), cpp_flags(self_defaulted, small_value)]
@@ -80,3 +84,4 @@ extern const u32 s_Win32Mousemove;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -89,10 +89,20 @@ GpuTaskTimingMetadata BuildAvboitComputeStageTimingMetadata(in AvboitFrameTarget
 const usize s_AvboitEmulationResourceUseCapacity = s_AvboitEmulationBaseCount + s_AvboitEmulationPlanUseCount;
 
 [cpp_unwind]
-b8 DeclareAvboitRasterRecordPhase(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererMaterialSystem materialSystem,
-    in MeshFrameBindingSnapshot frameBindings, mut ObjectGeometryCacheGraph objectGeometry, in AvboitRasterRecordInputs inputs, in GpuTaskId initialRasterDependency,
-    in Span<GpuTaskResourceUse> baseResourceUses, in AvboitRasterRecordPhaseDesc phaseDesc, mut AvboitRasterPassTaskPayload rasterPayload,
-    mut AvboitComputeEmulationTaskPayload computeEmulationPayload, in AvboitRasterRecordStageOutputs stageOutputs){
+b8 DeclareAvboitRasterRecordPhase(
+    mut GpuTaskGraph graph,
+    mut GraphicsRuntime graphics,
+    mut RendererMaterialSystem materialSystem,
+    in MeshFrameBindingSnapshot frameBindings,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    in AvboitRasterRecordInputs inputs,
+    in GpuTaskId initialRasterDependency,
+    in Span<GpuTaskResourceUse> baseResourceUses,
+    in AvboitRasterRecordPhaseDesc phaseDesc,
+    mut AvboitRasterPassTaskPayload rasterPayload,
+    mut AvboitComputeEmulationTaskPayload computeEmulationPayload,
+    in AvboitRasterRecordStageOutputs stageOutputs
+){
     const b8 generatedGeometryReused = inputs.upload.reusedGeometryProducer.valid();
     if((generatedGeometryReused || inputs.upload.producesReusableGeometry) && (!inputs.upload.regularComputeEmulationPlanCaptured || inputs.upload.csgComputeEmulationPlanCaptured || inputs.upload.sharedComputeEmulationPlanCaptured))
         return false;
@@ -321,9 +331,17 @@ b8 DeclareAvboitRasterRecordPhase(mut GpuTaskGraph graph, mut GraphicsRuntime gr
 }
 
 [cpp_unwind]
-b8 DeclareAvboitOccupancyRecord(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererMaterialSystem materialSystem, mut RendererAvboitSystem avboitSystem,
-    in MeshFrameBindingSnapshot frameBindings, mut ObjectGeometryCacheGraph objectGeometry, in AvboitRasterRecordInputs inputs,
-    mut AvboitRasterPassTaskPayload occupancyPayload, mut AvboitComputeEmulationTaskPayload computeEmulationPayload){
+b8 DeclareAvboitOccupancyRecord(
+    mut GpuTaskGraph graph,
+    mut GraphicsRuntime graphics,
+    mut RendererMaterialSystem materialSystem,
+    mut RendererAvboitSystem avboitSystem,
+    in MeshFrameBindingSnapshot frameBindings,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    in AvboitRasterRecordInputs inputs,
+    mut AvboitRasterPassTaskPayload occupancyPayload,
+    mut AvboitComputeEmulationTaskPayload computeEmulationPayload
+){
     if(!AvboitStageRecordDependencyPolicy().canDeclareRasterRecordPhase(inputs.predecessor.valid(), inputs.upload.uploadTask.valid()))
         return false;
 
@@ -371,9 +389,17 @@ b8 DeclareAvboitOccupancyRecord(mut GpuTaskGraph graph, mut GraphicsRuntime grap
 }
 
 [cpp_unwind]
-b8 DeclareAvboitExtinctionRecord(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererMaterialSystem materialSystem, mut RendererAvboitSystem avboitSystem,
-    in MeshFrameBindingSnapshot frameBindings, mut ObjectGeometryCacheGraph objectGeometry, in AvboitRasterRecordInputs inputs,
-    mut AvboitRasterPassTaskPayload extinctionPayload, mut AvboitComputeEmulationTaskPayload computeEmulationPayload){
+b8 DeclareAvboitExtinctionRecord(
+    mut GpuTaskGraph graph,
+    mut GraphicsRuntime graphics,
+    mut RendererMaterialSystem materialSystem,
+    mut RendererAvboitSystem avboitSystem,
+    in MeshFrameBindingSnapshot frameBindings,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    in AvboitRasterRecordInputs inputs,
+    mut AvboitRasterPassTaskPayload extinctionPayload,
+    mut AvboitComputeEmulationTaskPayload computeEmulationPayload
+){
     if(!AvboitStageRecordDependencyPolicy().canDeclareRasterRecordPhase(inputs.predecessor.valid(), inputs.upload.uploadTask.valid()))
         return false;
 
@@ -424,9 +450,17 @@ b8 DeclareAvboitExtinctionRecord(mut GpuTaskGraph graph, mut GraphicsRuntime gra
 }
 
 [cpp_unwind]
-b8 DeclareAvboitAccumulationRecord(mut GpuTaskGraph graph, mut GraphicsRuntime graphics, mut RendererMaterialSystem materialSystem, mut RendererAvboitSystem avboitSystem,
-    in MeshFrameBindingSnapshot frameBindings, mut ObjectGeometryCacheGraph objectGeometry, in AvboitRasterRecordInputs inputs,
-    mut AvboitRasterPassTaskPayload accumulationPayload, mut AvboitComputeEmulationTaskPayload computeEmulationPayload){
+b8 DeclareAvboitAccumulationRecord(
+    mut GpuTaskGraph graph,
+    mut GraphicsRuntime graphics,
+    mut RendererMaterialSystem materialSystem,
+    mut RendererAvboitSystem avboitSystem,
+    in MeshFrameBindingSnapshot frameBindings,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    in AvboitRasterRecordInputs inputs,
+    mut AvboitRasterPassTaskPayload accumulationPayload,
+    mut AvboitComputeEmulationTaskPayload computeEmulationPayload
+){
     if(!AvboitStageRecordDependencyPolicy().canDeclareRasterRecordPhase(inputs.predecessor.valid(), inputs.upload.uploadTask.valid()))
         return false;
 

@@ -412,8 +412,17 @@ Expected<Span<u8>> FindMutableCacheWithoutInstance(in MaterialInstanceMutableCac
 Expected<Span<u8>> PrepareMutableCacheWithInstance(mut MaterialInstanceMutableCache cache, mut EcsTestWorld context, in EntityID entity, in MaterialSurfaceInfo surface, in borrow MaterialInstanceComponent instance){
     return cache.prepare(context.world, entity, surface, Optional<in MaterialInstanceComponent>(instance));
 }
-b8 ApplyMaterialInstanceOverridesToPrefix(in MaterialInstanceOverrideApplier applier, in u32 entity, in Name material, in Name interfaceName,
-    in MaterialTypedLayoutBlock block, in MaterialTypedLayoutField field, in MaterialInstanceComponent instance, mut Span<u8> bytes, in usize count){
+b8 ApplyMaterialInstanceOverridesToPrefix(
+    in MaterialInstanceOverrideApplier applier,
+    in u32 entity,
+    in Name material,
+    in Name interfaceName,
+    in MaterialTypedLayoutBlock block,
+    in MaterialTypedLayoutField field,
+    in MaterialInstanceComponent instance,
+    mut Span<u8> bytes,
+    in usize count
+){
     return applier.apply(entity, material, interfaceName, SpanOf<MaterialTypedLayoutBlock>(block), SpanOf<MaterialTypedLayoutField>(field), instance, bytes.first(count));
 }
 

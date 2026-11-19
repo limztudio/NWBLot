@@ -34,11 +34,29 @@ class SoftwareBvhBuilder : NoCopy{
     public b8 ensureMeshSwBvhResources(in u32 primitiveCount, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer, mut GpuDescriptorHandle nodeHeapHandle, mut GpuDescriptorHandle parentHeapHandle);
     public b8 meshSwBvhResourcesReady(in BufferHandle nodeBuffer, in BufferHandle parentBuffer, in GpuDescriptorHandle nodeHeapHandle, in GpuDescriptorHandle parentHeapHandle);
     [cpp_unwind]
-    public b8 buildMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in VectorSingle aabbMin, in VectorSingle aabbMax, in GpuDescriptorHandle nodeHeapHandle,
-        in GpuDescriptorHandle parentHeapHandle, mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer);
+    public b8 buildMeshSwBvhPrepared(
+        in u32 positionHeapSlot,
+        in u32 triangleIndexHeapSlot,
+        in u32 primitiveCount,
+        in VectorSingle aabbMin,
+        in VectorSingle aabbMax,
+        in GpuDescriptorHandle nodeHeapHandle,
+        in GpuDescriptorHandle parentHeapHandle,
+        mut CommandList commandList,
+        mut BufferHandle nodeBuffer,
+        mut BufferHandle parentBuffer
+    );
     [cpp_unwind]
-    public b8 refitMeshSwBvhPrepared(in u32 positionHeapSlot, in u32 triangleIndexHeapSlot, in u32 primitiveCount, in GpuDescriptorHandle nodeHeapHandle, in GpuDescriptorHandle parentHeapHandle,
-        mut CommandList commandList, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer);
+    public b8 refitMeshSwBvhPrepared(
+        in u32 positionHeapSlot,
+        in u32 triangleIndexHeapSlot,
+        in u32 primitiveCount,
+        in GpuDescriptorHandle nodeHeapHandle,
+        in GpuDescriptorHandle parentHeapHandle,
+        mut CommandList commandList,
+        mut BufferHandle nodeBuffer,
+        mut BufferHandle parentBuffer
+    );
     [cpp_unwind]
     private b8 ensureBvhSortPipeline();
     [cpp_unwind]

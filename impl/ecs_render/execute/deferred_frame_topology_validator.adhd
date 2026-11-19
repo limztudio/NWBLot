@@ -28,12 +28,20 @@ class DeferredFrameTopologyValidator : NoCopy{
     }
 
     public b8 validate(
-        in GpuCompiledGraphReadView deferredCompiledPlan, in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
-        mut FrameExecuteTimingState timing, in GpuPhysicalQueueId primaryGraphicsQueue,
-        in b8 deferredGraphScheduled, in b8 captureLaggedLightingHistory, in b8 hardwareShadowSupported,
-        in b8 hasOpaqueCsgFrameWork, in b8 hasTransparentRenderers, in b8 clearAvboitTargets,
-        in b8 laggedAsyncLightingSchedule, in b8 laggedLightingHistoryWriterWaitPending,
-        in b8 surfelCounterReadbackCompletionValid, mut DeferredFrameTopologyResult outResult
+        in GpuCompiledGraphReadView deferredCompiledPlan,
+        in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
+        mut FrameExecuteTimingState timing,
+        in GpuPhysicalQueueId primaryGraphicsQueue,
+        in b8 deferredGraphScheduled,
+        in b8 captureLaggedLightingHistory,
+        in b8 hardwareShadowSupported,
+        in b8 hasOpaqueCsgFrameWork,
+        in b8 hasTransparentRenderers,
+        in b8 clearAvboitTargets,
+        in b8 laggedAsyncLightingSchedule,
+        in b8 laggedLightingHistoryWriterWaitPending,
+        in b8 surfelCounterReadbackCompletionValid,
+        mut DeferredFrameTopologyResult outResult
     )const;
 }
 

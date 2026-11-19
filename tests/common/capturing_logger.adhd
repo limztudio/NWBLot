@@ -4,6 +4,10 @@
 
 #include "name_cases.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_header("<tests/common/utf8_log_sink.h>"), cpp_name("::NWB::Tests::Utf8LogSink"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class Utf8LogSink{
     [cpp_flags(unwind)] void receive(in StringView text, in LogType kind);
@@ -20,7 +24,7 @@ class CapturingLogger : Utf8LogSink{
     private Vector<String> m_errors;
     private LogType m_lastType = LogType::Info;
 
-    public void receive(in StringView text, in LogType kind) override{
+    public void receive(in StringView text, in LogType kind)override{
         const auto lock = AcquireFutex(this.m_mutex);
         this.m_lastType = kind;
         AppendArenaElement<String>(this.m_messages);

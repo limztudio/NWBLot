@@ -151,6 +151,7 @@ const StringView s_SimdSpecTransitiveImplSource =
 const StringView s_SimdSpecLaneIndexEdgesSource =
     "f32 Lanes(mut VectorSingle value, in usize index) {\r\n    value[2u] = 1.0f;\r\n    value[index] = 2.0f;\r\n    return value[2u] + value[index];\r\n}\r\n";
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -580,6 +581,7 @@ void VerifyAdhdCompiler_VisitorContractsRejectMutableOrWrongCallbacks(){
     CompileResult shadowed = CompileResult(arena.arena);
     ASSERT_TRUE(Compile("class MetascriptDocument{public b8 visitVariable(in u32 x)const{return true;}} b8 Ok(in MetascriptDocument d){return d.visitVariable(7u);}", "impl/visitor_shadowed.adhd", arena.arena, shadowed));
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

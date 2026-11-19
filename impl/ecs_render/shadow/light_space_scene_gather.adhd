@@ -59,9 +59,14 @@ class LightSpaceShadowSceneGather : NoCopy{
     }
 
     public void appendSoftwareReceiver(
-    in EntityID entity, in b8 transparent, in MatrixSingle objectToWorld, in MatrixSingle worldToObject,
-    in VectorSingle localMin, in VectorSingle localMax, in MeshRayTracingResourceSnapshot mesh
-){
+        in EntityID entity,
+        in b8 transparent,
+        in MatrixSingle objectToWorld,
+        in MatrixSingle worldToObject,
+        in VectorSingle localMin,
+        in VectorSingle localMax,
+        in MeshRayTracingResourceSnapshot mesh
+    ){
         AppendLightSpaceSceneBuffers(mesh, this.m_state.m_csg.gathering, this.m_state.m_sceneBuffers);
         if(this.m_state.m_csg.gathering)
             AppendLightSpaceCsgReceiver(this.m_state.m_csg, entity, transparent, objectToWorld, worldToObject, localMin, localMax, mesh);
@@ -79,9 +84,14 @@ class LightSpaceShadowSceneGather : NoCopy{
     }
 
     public void appendHardwareReceiver(
-    in EntityID entity, in b8 transparent, in u32 instanceIndex, in MatrixSingle objectToWorld,
-    in VectorSingle localMin, in VectorSingle localMax, in MeshRayTracingResourceSnapshot mesh
-){
+        in EntityID entity,
+        in b8 transparent,
+        in u32 instanceIndex,
+        in MatrixSingle objectToWorld,
+        in VectorSingle localMin,
+        in VectorSingle localMax,
+        in MeshRayTracingResourceSnapshot mesh
+    ){
         if(!this.m_state.m_csg.gathering)
             return;
         const MatrixSingle worldToObject = Inverse(objectToWorld);
@@ -164,9 +174,13 @@ class LightSpaceShadowSceneGather : NoCopy{
     }
 
     public void appendSoftwareCaptureIdentity(
-    in EntityID entity, in b8 runtimeMesh, in MeshRayTracingResourceSnapshot mesh,
-    in NwbRtInstanceMaterialGpu material, in InstanceGpuData instance, in RayTracingOpticalInstanceGpu opticalInstance
-){
+        in EntityID entity,
+        in b8 runtimeMesh,
+        in MeshRayTracingResourceSnapshot mesh,
+        in NwbRtInstanceMaterialGpu material,
+        in InstanceGpuData instance,
+        in RayTracingOpticalInstanceGpu opticalInstance
+    ){
         Fnv64AppendValue(this.m_captureSceneIdentity, entity.id);
         Fnv64AppendValue(this.m_captureSceneIdentity, mesh.positionBuffer.get());
         Fnv64AppendValue(this.m_captureSceneIdentity, mesh.triangleIndexBuffer.get());
@@ -191,9 +205,13 @@ class LightSpaceShadowSceneGather : NoCopy{
     }
 
     public void publishSoftwareCaptureIdentity(
-    in u32 instanceCount, in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances,
-    in Span<u8> materialBytes, in Span<TextureHandle> textures, in b8 contentComplete
-){
+        in u32 instanceCount,
+        in Span<NwbRtInstanceMaterialGpu> materials,
+        in Span<InstanceGpuData> instances,
+        in Span<u8> materialBytes,
+        in Span<TextureHandle> textures,
+        in b8 contentComplete
+    ){
         RayTracingSceneIdentityBuilder().appendMaterialBytes(instanceCount, materialBytes, this.m_captureSceneIdentity);
         for(in auto texture : textures)
             Fnv64AppendValue(this.m_captureSceneIdentity, texture.get());
@@ -214,10 +232,15 @@ class LightSpaceShadowSceneGather : NoCopy{
     }
 
     public void publishHardwareCaptureIdentity(
-    in u64 materialHash, in u64 tlasHash, in b8 staticScene, in b8 contentComplete,
-    in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances,
-    in Span<u8> materialBytes, in Span<TextureHandle> textures
-){
+        in u64 materialHash,
+        in u64 tlasHash,
+        in b8 staticScene,
+        in b8 contentComplete,
+        in Span<NwbRtInstanceMaterialGpu> materials,
+        in Span<InstanceGpuData> instances,
+        in Span<u8> materialBytes,
+        in Span<TextureHandle> textures
+    ){
         in CsgShadowSnapshot csg = this.m_state.m_csg.snapshot;
         if(!csg.hasCsg)
             return;

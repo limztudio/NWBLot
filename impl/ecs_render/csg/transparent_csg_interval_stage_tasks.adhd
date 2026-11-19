@@ -54,8 +54,11 @@ b8 IsAvboitCsgIntervalCombineGraphOwned(
 }
 
 Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::declare(
-    in FrameGraphTransparentCsgTaskInputs inputs, mut ObjectGeometryCacheGraph objectGeometry, mut AvboitPreGraphTaskPayload prePayload,
-    mut TransparentCsgIntervalRecordInputs receiverSpanPayload, mut TransparentCsgIntervalRecordInputs intervalCombinePayload
+    in FrameGraphTransparentCsgTaskInputs inputs,
+    mut ObjectGeometryCacheGraph objectGeometry,
+    mut AvboitPreGraphTaskPayload prePayload,
+    mut TransparentCsgIntervalRecordInputs receiverSpanPayload,
+    mut TransparentCsgIntervalRecordInputs intervalCombinePayload
 ){
     FrameGraphTransparentCsgTaskResult result;
 
@@ -220,8 +223,10 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
 
 
 Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::declare(
-    in TransparentCsgIntervalProducerInputs inputs, mut AvboitPreGraphTaskPayload avboitPrePayload,
-    mut TransparentCsgIntervalRecordInputs receiverSpanPayload, mut TransparentCsgIntervalRecordInputs intervalCombinePayload,
+    in TransparentCsgIntervalProducerInputs inputs,
+    mut AvboitPreGraphTaskPayload avboitPrePayload,
+    mut TransparentCsgIntervalRecordInputs receiverSpanPayload,
+    mut TransparentCsgIntervalRecordInputs intervalCombinePayload,
     mut GraphClearTimingRecordState intervalClearTimingState
 ){
 

@@ -136,8 +136,14 @@ void ExpectAcceptedTargets(in InputRouter input, in Span<HitTarget> targets, in 
         ExpectUiAcceptedTarget(input.targets()[index], targets[index], checkOwnerDeclaration);
 }
 
-void ExpectAcceptedInput<const usize Capacity>(in InputRouter input, in UiFixtureAcceptedInputState<Capacity> saved,
-    in b8 checkOwner, in b8 checkFocus, in b8 checkPopups, in b8 checkCapture){
+void ExpectAcceptedInput<const usize Capacity>(
+    in InputRouter input,
+    in UiFixtureAcceptedInputState<Capacity> saved,
+    in b8 checkOwner,
+    in b8 checkFocus,
+    in b8 checkPopups,
+    in b8 checkCapture
+){
     EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
     if(checkPopups)
         EXPECT_EQ(input.popupCount(), saved.popupCount);
@@ -386,5 +392,4 @@ void PressWidgetFixtureKey(mut WidgetFixture self, in KeyEnum value, in b8 repea
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

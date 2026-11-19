@@ -27,8 +27,14 @@ class DeferredGraphResourceImportInputs{
     public b8 capturesLaggedLightingHistory = false;
     public b8 hasCsgFrameWork = false;
 
-    public DeferredGraphResourceImportInputs(in DeferredFrameTargets targets, in DeferredLightingGraphResources lightingResources, in MeshFrameBindingSnapshot frameBindings,
-        in MeshViewBufferSnapshot meshViewSnapshot, in CsgGraphResourceSnapshot csgResources, in RayTracingDeferredGraphResourceSnapshot rayTracingResources){
+    public DeferredGraphResourceImportInputs(
+        in DeferredFrameTargets targets,
+        in DeferredLightingGraphResources lightingResources,
+        in MeshFrameBindingSnapshot frameBindings,
+        in MeshViewBufferSnapshot meshViewSnapshot,
+        in CsgGraphResourceSnapshot csgResources,
+        in RayTracingDeferredGraphResourceSnapshot rayTracingResources
+    ){
         this.targets = targets;
         this.lightingResources = lightingResources;
         this.frameBindings = frameBindings;

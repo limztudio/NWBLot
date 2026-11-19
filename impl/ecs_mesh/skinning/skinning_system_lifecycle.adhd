@@ -181,9 +181,16 @@ AssetRef<ComputeShader> ResolveSkinningPassShader(in SkinningSubsystem subsystem
 }
 
 b8 EnsureSkinningComputePipeline(
-    mut GraphicsRuntime graphics, in AssetManager assets, mut ShaderArchivePathResolver resolver,
-    in ActiveSceneSubsystemsRef active, in SkinningShaderPass pass, in Name debugName,
-    in BindingLayoutHandle layout, in StringView label, mut ShaderHandle shader, mut ComputePipelineHandle pipeline
+    mut GraphicsRuntime graphics,
+    in AssetManager assets,
+    mut ShaderArchivePathResolver resolver,
+    in ActiveSceneSubsystemsRef active,
+    in SkinningShaderPass pass,
+    in Name debugName,
+    in BindingLayoutHandle layout,
+    in StringView label,
+    mut ShaderHandle shader,
+    mut ComputePipelineHandle pipeline
 ){
     if(!active.has_value())
         return false;
@@ -197,9 +204,17 @@ b8 EnsureSkinningComputePipeline(
 }
 
 b8 EnsureSkinningPushConstantPipeline<T>(
-    mut GraphicsRuntime graphics, in AssetManager assets, mut ShaderArchivePathResolver resolver,
-    in ActiveSceneSubsystemsRef active, in SkinningShaderPass pass, in Name debugName,
-    in StringView requirement, in StringView label, mut BindingLayoutHandle layout, mut ShaderHandle shader, mut ComputePipelineHandle pipeline
+    mut GraphicsRuntime graphics,
+    in AssetManager assets,
+    mut ShaderArchivePathResolver resolver,
+    in ActiveSceneSubsystemsRef active,
+    in SkinningShaderPass pass,
+    in Name debugName,
+    in StringView requirement,
+    in StringView label,
+    mut BindingLayoutHandle layout,
+    mut ShaderHandle shader,
+    mut ComputePipelineHandle pipeline
 ){
     mut Device device = graphics.getDevice();
     if(!device.getDescriptorHeap().isInitialized()){

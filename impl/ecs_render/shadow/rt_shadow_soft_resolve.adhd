@@ -88,10 +88,22 @@ b8 ShouldReplaceTransparentSoftTraceWithLightSpace(in b8 lightSpaceReady, in b8 
 
 
 void RecordSoftShadowResolvePass(
-    mut CommandList commandList, mut GpuDescriptorHeap heap, in DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-    in SoftShadowResolveDispatch dispatch, in u32 halfWidth, in u32 halfHeight, in u32 slotStart, in u32 slotCount,
-    in SoftShadowResolvePassResources resources, in u32 stepWidth, in ShadowResolveStage stage, in u32 groupsX, in u32 groupsY,
-    in b8 graphOwnsInputColorState, in b8 graphOwnsOutputState
+    mut CommandList commandList,
+    mut GpuDescriptorHeap heap,
+    in DeferredFrameTargets targets,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in SoftShadowResolveDispatch dispatch,
+    in u32 halfWidth,
+    in u32 halfHeight,
+    in u32 slotStart,
+    in u32 slotCount,
+    in SoftShadowResolvePassResources resources,
+    in u32 stepWidth,
+    in ShadowResolveStage stage,
+    in u32 groupsX,
+    in u32 groupsY,
+    in b8 graphOwnsInputColorState,
+    in b8 graphOwnsOutputState
 ){
     in DeferredBindlessFrameResources bindless = targets.bindless;
     assert(IsValidTexturePtr(resources.inputColorTexture) && IsValidTexturePtr(resources.momentsTexture) && IsValidTexturePtr(resources.outputTexture));

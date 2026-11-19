@@ -488,8 +488,12 @@ b8 TryResolveMaterialBindDependencyInterface(in Path root, in Path dependency, m
     return true;
 }
 
-Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface<PathRange>(in StringView shaderName, in Path includeRoot,
-    in Span<MaterialBindEntry> entries, in PathRange dependencies){
+Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface<PathRange>(
+    in StringView shaderName,
+    in Path includeRoot,
+    in Span<MaterialBindEntry> entries,
+    in PathRange dependencies
+){
     MaterialBindDependency result;
     Path root;
     if(!includeRoot.empty()){

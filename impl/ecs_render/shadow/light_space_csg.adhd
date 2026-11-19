@@ -77,7 +77,8 @@ class LightSpaceCsgState{
 
 u64 BuildLightSpaceCsgCaptureIdentity(
     in LightSpaceCsgState state,
-    in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances,
+    in Span<NwbRtInstanceMaterialGpu> materials,
+    in Span<InstanceGpuData> instances,
     in Span<u8> materialBytes,
     in Span<TextureHandle> textures
 ){

@@ -216,16 +216,16 @@ class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
     }
 
 
-    public b8 captureReady()const { return this.m_captureReady; }
+    public b8 captureReady()const{ return this.m_captureReady; }
 
-    public u64 capturedGraphicsFrameIndex()const { return this.m_completionState.deref().graphicsFrameIndex; }
+    public u64 capturedGraphicsFrameIndex()const{ return this.m_completionState.deref().graphicsFrameIndex; }
 
     public void finish(){
         assert(this.m_captureReady);
         this.requestTerminalQuit();
     }
 
-    public b8 shouldRenderUnfocused() override{ return true; }
+    public b8 shouldRenderUnfocused()override{ return true; }
 
     public b8 validateResources(in u32 width, in u32 height, in u32 samples)override{
         if(this.m_skipped || this.m_failed || width == 0u || height == 0u)
@@ -406,7 +406,7 @@ class FramebufferCapture : IRenderPass, IGpuTaskGraphPresentationContributor{
         this.m_taskGraphPresentationClaimed = false;
     }
 
-    private b8 stagingMatches(in TextureDesc description)const {
+    private b8 stagingMatches(in TextureDesc description)const{
         return
             this.m_readback.valid()
             && this.m_captureDescription.width == description.width

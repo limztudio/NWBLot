@@ -136,8 +136,14 @@ b8 AppendEncodedMip(in BasisMipEncoder encoder, in TextureMipLevelLayout mip, mu
     return true;
 }
 
-b8 EncodeMip(in TextureMipPlanes mip, in TexturePayloadDimension dimension, in TexturePayloadFormat format, in b8 alphaOnly,
-    in TextureMipLevelLayout layout, mut Vector<u8> bytes){
+b8 EncodeMip(
+    in TextureMipPlanes mip,
+    in TexturePayloadDimension dimension,
+    in TexturePayloadFormat format,
+    in b8 alphaOnly,
+    in TextureMipLevelLayout layout,
+    mut Vector<u8> bytes
+){
     const b8 hdr = ResolveTexConvMipHdrMode(alphaOnly, IsHdrTexturePayloadFormat(format));
     BasisMipEncoder encoder(s_EncoderWorkerCount, hdr, dimension);
     for(u32 index = 0u; index < mip.planes.size(); ++index){

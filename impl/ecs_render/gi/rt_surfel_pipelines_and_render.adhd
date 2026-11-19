@@ -408,9 +408,17 @@ extern const u32 s_ShaderSurfelCounterTraceGeometryFailure;
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::renderSurfelGiPhases(
-        mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources,
-        in b8 dispatchAgeFree, in b8 dispatchHashBuild, in b8 dispatchSpawn, in b8 dispatchTraceBuildArgs, in b8 dispatchTrace, in b8 dispatchResolve, in b8 dispatchRemaining
-    ){
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in DeferredLightingGraphResources deferredLightingResources,
+    in b8 dispatchAgeFree,
+    in b8 dispatchHashBuild,
+    in b8 dispatchSpawn,
+    in b8 dispatchTraceBuildArgs,
+    in b8 dispatchTrace,
+    in b8 dispatchResolve,
+    in b8 dispatchRemaining
+){
     if(!this.hasSurfelWork())
         return true;
 

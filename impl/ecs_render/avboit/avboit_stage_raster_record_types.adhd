@@ -45,8 +45,14 @@ class AvboitRasterRecordInputs{
     public mut Optional<GpuTimingMeasure> computeEmulationTiming;
     public GpuTaskId predecessor;
 
-    public AvboitRasterRecordInputs(mut DeferredFrameTargets targets, in DeferredGraphResourceImportResult resources, in FrameGraphAvboitMaterialUploadResult upload,
-        mut GpuTimingSubmissionTicket ticket, mut Optional<GpuTimingMeasure> timing, in GpuTaskId predecessor){
+    public AvboitRasterRecordInputs(
+        mut DeferredFrameTargets targets,
+        in DeferredGraphResourceImportResult resources,
+        in FrameGraphAvboitMaterialUploadResult upload,
+        mut GpuTimingSubmissionTicket ticket,
+        mut Optional<GpuTimingMeasure> timing,
+        in GpuTaskId predecessor
+    ){
         this.targets = targets;
         this.resources = resources;
         this.upload = upload;
@@ -63,8 +69,14 @@ class AvboitRasterRecordStageOutputs{
     public mut Array<GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> sharedComputeEmulationTasks;
     public mut usize sharedComputeEmulationTaskCount;
     public mut GpuTaskId rasterTask;
-    public AvboitRasterRecordStageOutputs(mut GpuTaskId reused, mut GpuTaskId stream, mut GpuTaskId compute, mut Array<GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> shared,
-        mut usize sharedCount, mut GpuTaskId raster){
+    public AvboitRasterRecordStageOutputs(
+        mut GpuTaskId reused,
+        mut GpuTaskId stream,
+        mut GpuTaskId compute,
+        mut Array<GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> shared,
+        mut usize sharedCount,
+        mut GpuTaskId raster
+    ){
         this.reusedGeometryProducer = reused;
         this.streamTask = stream;
         this.computeEmulationTask = compute;

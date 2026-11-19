@@ -112,9 +112,9 @@ GpuTaskId MakeSuiteGpuTaskId(in u32 generation, in u32 index){
 class FrameCacheRuntimeProvider : IRuntimeMeshProvider{
     public EntityID receiver = s_InvalidEntityId;
     public b8 attached = false;
-    public Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity) override{ return MakeUnexpected(Failure()); }
+    public Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity)override{ return MakeUnexpected(Failure()); }
     public b8 hasRuntimeMeshBinding(in EntityID entity)const override{ return this.attached && entity == this.receiver; }
-    public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests) override{}
+    public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests)override{}
 }
 void SetCsgCutterParameters(in VectorSingle parameter, mut CsgCutterComponent cutter){
     const f32x4 stored(parameter);
@@ -212,8 +212,16 @@ Span<u32> EmptySuiteU32Span(){ return Span<u32>(); }
 b8 ResolveSuiteCsgBoxWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgBoxShapeParameters parameters, in CsgClipWorkBounds receiver, mut CsgClipWorkBounds work){
     return ResolveCsgClipWorkBounds(registry, shape, transform, PodBytes(parameters), receiver, work);
 }
-b8 ResolveSuiteCsgTranslatedBoxWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in f32 x, in f32 y, in f32 z,
-    in CsgBoxShapeParameters parameters, in CsgClipWorkBounds receiver, mut CsgClipWorkBounds work){
+b8 ResolveSuiteCsgTranslatedBoxWorkBounds(
+    in CsgShapeRegistry registry,
+    in CsgShapeTypeInfo shape,
+    in f32 x,
+    in f32 y,
+    in f32 z,
+    in CsgBoxShapeParameters parameters,
+    in CsgClipWorkBounds receiver,
+    mut CsgClipWorkBounds work
+){
     return ResolveSuiteCsgBoxWorkBounds(registry, shape, MatrixTranslation(x, y, z), parameters, receiver, work);
 }
 void ExpandSuitePerspectiveWorldBounds(mut CsgFrameWorkRegion region, in VectorSingle minimum, in VectorSingle maximum, in u32 width, in u32 height){

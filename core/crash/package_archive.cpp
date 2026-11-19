@@ -77,7 +77,6 @@ template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageAr
 template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::Build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<::ArenaBase>& packageDirectory);
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

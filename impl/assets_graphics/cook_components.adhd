@@ -91,7 +91,11 @@ Expected<AssetRef<T>> ReadGraphicsComponentReference<T>(in Path file, in Metascr
 }
 
 Expected<AssetRef<T>> ReadSingleGraphicsComponentReference<T, Entry>(
-    in Name virtualPath, in Path file, in MetascriptValue asset, in StringView prefix, mut Entry entry
+    in Name virtualPath,
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    mut Entry entry
 ){
     if(!CheckMetadataAssetMap(file, asset, prefix) || !AssignCookEntryVirtualPath(virtualPath, file, prefix, entry))
         return MakeUnexpected(Failure());

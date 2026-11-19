@@ -9,6 +9,10 @@
 #include <impl/ecs_render/material/material_system.adhd>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class OpaqueCsgIntervalRecordInputs{
     public mut RendererMaterialSystem materialSystem;
     public mut RendererCsgSystem csgSystem;
@@ -22,8 +26,14 @@ class OpaqueCsgIntervalRecordInputs{
     public b8 materialDrawBuffersUploaded = false;
     public b8 csgFrameBuffersUploaded = false;
 
-    public OpaqueCsgIntervalRecordInputs(mut RendererMaterialSystem materialSystem, mut RendererCsgSystem csgSystem, mut DeferredFrameTargets targets,
-        in GraphicsPrefixTimingTicket ticket, in b8 meshReady, in b8 shadingReady){
+    public OpaqueCsgIntervalRecordInputs(
+        mut RendererMaterialSystem materialSystem,
+        mut RendererCsgSystem csgSystem,
+        mut DeferredFrameTargets targets,
+        in GraphicsPrefixTimingTicket ticket,
+        in b8 meshReady,
+        in b8 shadingReady
+    ){
         this.materialSystem = materialSystem;
         this.csgSystem = csgSystem;
         this.targets = targets;
@@ -39,8 +49,15 @@ enum<u8> OpaqueCsgComputeIntervalPass{ ReceiverSpan, Combine }
 class OpaqueCsgComputeIntervalGraphTask{
     public OpaqueCsgIntervalRecordInputs inputs;
     public OpaqueCsgComputeIntervalPass pass;
-    public OpaqueCsgComputeIntervalGraphTask(mut RendererMaterialSystem materials, mut RendererCsgSystem csg, mut DeferredFrameTargets targets,
-        in borrow GraphicsPrefixTimingTicket ticket, in borrow b8 meshReady, in borrow b8 shadingReady, in OpaqueCsgComputeIntervalPass pass){
+    public OpaqueCsgComputeIntervalGraphTask(
+        mut RendererMaterialSystem materials,
+        mut RendererCsgSystem csg,
+        mut DeferredFrameTargets targets,
+        in borrow GraphicsPrefixTimingTicket ticket,
+        in borrow b8 meshReady,
+        in borrow b8 shadingReady,
+        in OpaqueCsgComputeIntervalPass pass
+    ){
         this.inputs = OpaqueCsgIntervalRecordInputs(materials, csg, targets, ticket, meshReady, shadingReady);
         this.pass = pass;
     }
@@ -58,8 +75,15 @@ class OpaqueCsgIntervalSampleGraphTask{
     public b8 csgComputeEmulationOutputStatesGraphOwned = false;
     public Optional<mut Optional<GpuTimingMeasure>> opaqueCsgComputeEmulationTiming;
 
-    public OpaqueCsgIntervalSampleGraphTask(mut GraphicsRuntime graphics, mut RendererMaterialSystem materials, mut RendererCsgSystem csg, mut DeferredFrameTargets targets,
-        in borrow GraphicsPrefixTimingTicket ticket, in borrow b8 meshReady, in borrow b8 shadingReady){
+    public OpaqueCsgIntervalSampleGraphTask(
+        mut GraphicsRuntime graphics,
+        mut RendererMaterialSystem materials,
+        mut RendererCsgSystem csg,
+        mut DeferredFrameTargets targets,
+        in borrow GraphicsPrefixTimingTicket ticket,
+        in borrow b8 meshReady,
+        in borrow b8 shadingReady
+    ){
         this.inputs = OpaqueCsgIntervalRecordInputs(materials, csg, targets, ticket, meshReady, shadingReady);
         this.graphics = graphics;
     }

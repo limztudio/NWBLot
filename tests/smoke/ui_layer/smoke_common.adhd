@@ -278,8 +278,10 @@ b8 SmokePopupMatchesParentGeneration(in InputRouter input, in PopupToken popup, 
 }
 
 b8 CreateSmokeTextAtlasPages(
-    in Span<u8> coverageBytes, in Array<Array<u8, 192u>, 4u> sdfBytes,
-    mut SharedGlyphPage outCoverage, mut Array<SharedSdfAtlasPage, 4u> outSdf
+    in Span<u8> coverageBytes,
+    in Array<Array<u8, 192u>, 4u> sdfBytes,
+    mut SharedGlyphPage outCoverage,
+    mut Array<SharedSdfAtlasPage, 4u> outSdf
 ){
     SharedPool pages();
     GlyphPageBindingRecord<Font> coverage();

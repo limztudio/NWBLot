@@ -278,7 +278,9 @@ b8 InstallUiSmokePaint<T : IUiSmokeScene>(mut UiPaintSlot slot, in Expected<Shar
 }
 
 Expected<Shared<UiSmokeInputSubscription<T>>> SubscribeUiSmokeInput<T : IUiSmokeInputScene>(
-    in SharedPool pool, mut InputDispatcher input, in Expected<Shared<T>> created
+    in SharedPool pool,
+    mut InputDispatcher input,
+    in Expected<Shared<T>> created
 ){
     if(!created.has_value())
         return MakeUnexpected(Failure());

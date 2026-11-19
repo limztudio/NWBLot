@@ -35,11 +35,15 @@ class FrameExecuteStateLifecycleSet : NoCopy{
     public usize acceptedCallbackCount = 0u;
 
     [cpp_unwind]
-    public FrameExecuteStateLifecycleSet(mut RendererFramePipeline renderer, mut DeferredFrameTargets targets,
+    public FrameExecuteStateLifecycleSet(
+        mut RendererFramePipeline renderer,
+        mut DeferredFrameTargets targets,
         in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
         in RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources,
         in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources,
-        in b8 hardwareShadowSupported, in b8 usesLaggedHistory){
+        in b8 hardwareShadowSupported,
+        in b8 usesLaggedHistory
+    ){
         this.shadowPrepareStateLifecycle = ShadowPrepareStateLifecycleContext(renderer);
         this.shadowVisibilityStateLifecycle = ShadowVisibilityStateLifecycleContext(renderer, targets);
         this.softwareCausticsStateLifecycle = SoftwareCausticsStateLifecycleContext(renderer);

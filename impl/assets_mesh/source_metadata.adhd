@@ -164,7 +164,13 @@ b8 ValidateSourceMeshIndices(in Path file, in Span<u32> indices, in usize vertex
 }
 
 b8 ValidateSourceVertexRefStreams<VertexRef>(
-    in Path file, in Span<VertexRef> refs, in usize positions, in usize normals, in usize tangents, in usize uv0, in usize colors
+    in Path file,
+    in Span<VertexRef> refs,
+    in usize positions,
+    in usize normals,
+    in usize tangents,
+    in usize uv0,
+    in usize colors
 ){
     for(in VertexRef ref : refs){
         const StringView invalid = FindOutOfRangeVertexRefStreamName(ref.position, ref.normal, ref.tangent, ref.uv0, ref.color, positions, normals, tangents, uv0, colors);

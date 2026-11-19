@@ -112,12 +112,22 @@ GpuTaskId GraphicsPrefixTaskOrFallback(in GpuTaskId task, in GpuTaskId fallback)
     return fallback;
 }
 
-b8 DeferredFrameTopologyValidator::validate(in GpuCompiledGraphReadView deferredCompiledPlan, in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
-        mut FrameExecuteTimingState timing, in GpuPhysicalQueueId primaryGraphicsQueue,
-        in b8 deferredGraphScheduled, in b8 captureLaggedLightingHistory, in b8 hardwareShadowSupported,
-        in b8 hasOpaqueCsgFrameWork, in b8 hasTransparentRenderers, in b8 clearAvboitTargets,
-        in b8 laggedAsyncLightingSchedule, in b8 laggedLightingHistoryWriterWaitPending,
-        in b8 surfelCounterReadbackCompletionValid, mut DeferredFrameTopologyResult outResult)const{
+b8 DeferredFrameTopologyValidator::validate(
+    in GpuCompiledGraphReadView deferredCompiledPlan,
+    in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
+    mut FrameExecuteTimingState timing,
+    in GpuPhysicalQueueId primaryGraphicsQueue,
+    in b8 deferredGraphScheduled,
+    in b8 captureLaggedLightingHistory,
+    in b8 hardwareShadowSupported,
+    in b8 hasOpaqueCsgFrameWork,
+    in b8 hasTransparentRenderers,
+    in b8 clearAvboitTargets,
+    in b8 laggedAsyncLightingSchedule,
+    in b8 laggedLightingHistoryWriterWaitPending,
+    in b8 surfelCounterReadbackCompletionValid,
+    mut DeferredFrameTopologyResult outResult
+)const{
     ShadowPreparePacketValidator shadowPreparePacketValidator(this.m_pipeline);
     ShadowPreparePacketValidationResult shadowPreparePacket;
     shadowPreparePacketValidator.validate(deferredCompiledPlan, shadowPreparePacket);
@@ -369,9 +379,14 @@ b8 DeferredFrameTopologyValidator::validate(in GpuCompiledGraphReadView deferred
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GraphicsPrefixTimingResolver::resolve(in GpuCompiledGraphReadView compiledPlan, in Span<GraphicsPrefixTimingTicket> ownedTickets,
-        mut Span<GraphicsPrefixTimingTicket> timingTickets, mut Span<GpuTaskId> timingTasks,
-        mut b8 asyncSpansOnePacket, mut GraphicsPrefixTimingResolutionResult outResult)const{
+void GraphicsPrefixTimingResolver::resolve(
+    in GpuCompiledGraphReadView compiledPlan,
+    in Span<GraphicsPrefixTimingTicket> ownedTickets,
+    mut Span<GraphicsPrefixTimingTicket> timingTickets,
+    mut Span<GpuTaskId> timingTasks,
+    mut b8 asyncSpansOnePacket,
+    mut GraphicsPrefixTimingResolutionResult outResult
+)const{
     in RendererFramePipeline pipeline = this.m_pipeline;
     outResult = GraphicsPrefixTimingResolutionResult();
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
@@ -467,11 +482,13 @@ b8 OpaqueEmulationMergeValidator::intervalSampleMerges(in GpuCompiledGraphReadVi
     return compiledPlan.tasksFormContiguousPacketSequence(Span<GpuTaskId>(sequence));
 }
 
-void OpaqueEmulationMergeValidator::validate(in GpuCompiledGraphReadView compiledPlan,
-        in Span<GpuTaskId> timingTasks,
-        in b8 timingBindingsValid,
-        in b8 hasOpaqueCsgFrameWork,
-        mut OpaqueEmulationMergeValidationResult outResult)const{
+void OpaqueEmulationMergeValidator::validate(
+    in GpuCompiledGraphReadView compiledPlan,
+    in Span<GpuTaskId> timingTasks,
+    in b8 timingBindingsValid,
+    in b8 hasOpaqueCsgFrameWork,
+    mut OpaqueEmulationMergeValidationResult outResult
+)const{
     in RendererFramePipeline pipeline = this.m_pipeline;
     outResult = OpaqueEmulationMergeValidationResult();
     Optional<GpuPhysicalQueueInfo> opaqueComputeEmulationQueue;
@@ -545,7 +562,8 @@ void SurfelCausticsMergeValidator::validate(
     in GpuTaskId causticsTask,
     in GpuTaskId terminalPresentationTask,
     in b8 captureLaggedLightingHistory,
-    mut SurfelCausticsMergeValidationResult outResult)const{
+    mut SurfelCausticsMergeValidationResult outResult
+)const{
     in RendererFramePipeline pipeline = this.m_pipeline;
     outResult = SurfelCausticsMergeValidationResult();
     outResult.hardwareCausticsQueue = compiledPlan.findQueueInfoForTask(pipeline.m_causticsGraph.m_deferredHardwareCausticsTask);

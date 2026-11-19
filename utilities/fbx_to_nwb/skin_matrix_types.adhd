@@ -72,9 +72,18 @@ b8 FiniteUfbxMatrix(in MatrixDouble matrix){
 }
 
 MatrixDouble MakeUfbxMatrixDouble(
-    in f64 m00, in f64 m01, in f64 m02, in f64 m03,
-    in f64 m10, in f64 m11, in f64 m12, in f64 m13,
-    in f64 m20, in f64 m21, in f64 m22, in f64 m23
+    in f64 m00,
+    in f64 m01,
+    in f64 m02,
+    in f64 m03,
+    in f64 m10,
+    in f64 m11,
+    in f64 m12,
+    in f64 m13,
+    in f64 m20,
+    in f64 m21,
+    in f64 m22,
+    in f64 m23
 ){
     return MatrixDouble(
         VectorDouble(m00, m01, m02, m03),

@@ -168,12 +168,12 @@ Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTextu
     const Expected<GpuExternalCompletionId> readyResult = graph.importExternalCompletion(completionDesc);
     if(!readyResult.has_value()){
         error(
-            "GpuRenderer: {} {} upload completion import failed (queue={}, generation={}, value={})",
-            desc.completionLabel,
-            desc.index,
-            desc.readinessToken.physicalQueueIndex,
-            desc.readinessToken.deviceGeneration,
-            desc.readinessToken.value
+            "GpuRenderer: {} {} upload completion import failed (queue={}, generation={}, value={})"
+            , desc.completionLabel
+            , desc.index
+            , desc.readinessToken.physicalQueueIndex
+            , desc.readinessToken.deviceGeneration
+            , desc.readinessToken.value
         );
         return MakeUnexpected(GpuSampledTextureImportError::Completion);
     }

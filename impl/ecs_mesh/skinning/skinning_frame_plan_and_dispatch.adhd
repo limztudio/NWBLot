@@ -218,9 +218,14 @@ b8 MeshSkinningFramePlanBuilder::declare(in EntityID entity, in SkinnedMeshBindi
 }
 
 b8 MeshSkinningFramePlanBuilder::declareUploadTask(
-    in MeshSkinningRuntimeInstance instance, in StringView identitySuffix, in StringView markerLabel,
-    in Expected<GpuUploadBlobId> uploadSource, in GpuGraphResourceId destination, in ResourceStates finalState,
-    in StringView retainErrorLabel, in StringView declareErrorLabel
+    in MeshSkinningRuntimeInstance instance,
+    in StringView identitySuffix,
+    in StringView markerLabel,
+    in Expected<GpuUploadBlobId> uploadSource,
+    in GpuGraphResourceId destination,
+    in ResourceStates finalState,
+    in StringView retainErrorLabel,
+    in StringView declareErrorLabel
 ){
     const Name identity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, identitySuffix);
     if(identity == s_NameNone || !uploadSource.has_value()){

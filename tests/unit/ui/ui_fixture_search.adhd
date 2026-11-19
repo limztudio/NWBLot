@@ -84,7 +84,7 @@ class SearchSource : ISearchableListDataSource{
         }
         return this.full.enabled(index);
     }
-    public b8 filter(in StringView query) override{
+    public b8 filter(in StringView query)override{
         ++this.filterCalls;
         if(this.filterMutation.has_value()){
             mut EditModel model = this.filterMutation.value();
@@ -125,16 +125,16 @@ class SearchEditHost : IEditBoxHost{
     public b8 m_changeText = false;
 
     public SearchEditHost(mut Context context){ this.m_context = context; }
-    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2) override{
+    public EditBoxResult edit(in WidgetState arg0, in EditBoxOptions arg1, mut EditModel arg2)override{
         ++this.contextScopedLoans;
         return EditBoxResult();
     }
-    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model) override{
+    public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model)override{
         return EditSearchHostInPopup(this, widget, options, popup, model);
     }
-    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4) override{ return EditBoxResult(); }
-    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6) override{ return EditBoxResult(); }
-    public b8 publish(in WidgetState arg0, in EditBoxView view, in EditBoxPlacement arg2, in EditBoxOptions arg3) override{
+    public EditBoxResult editActions(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut IEditActionSink arg4)override{ return EditBoxResult(); }
+    public EditBoxResult editNavigated(in WidgetState arg0, in EditBoxOptions arg1, in PopupToken arg2, mut EditModel arg3, mut EditNavigationState arg4, mut IEditNavigationResolver arg5, mut IEditActionSink arg6)override{ return EditBoxResult(); }
+    public b8 publish(in WidgetState arg0, in EditBoxView view, in EditBoxPlacement arg2, in EditBoxOptions arg3)override{
         ++this.publications;
         this.publishContextPopup = this.m_context.popupToken();
         this.publishedComposing = view.composing();
@@ -254,4 +254,6 @@ b8 OpenSearchFixture(mut SearchFixture self, in u64 generation){
     return self.acceptSearch(generation) && self.m_search.combo().isOpen();
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

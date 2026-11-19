@@ -16,10 +16,19 @@ Name MakeGpuTelemetryFlippedHashName(in Name base, in u32 lane){
 }
 
 Optional<GpuPhysicalQueueInfo> FindTimingFeedbackQueueValue(
-    in GpuTaskGraphDeclarationReadView declarations, in GpuTaskGraphAnalysis analysis, in Span<GpuTaskQueueAssignment> assignments,
-    in Span<u32> assignmentIndices, in GpuPhysicalQueueTopology topology, in GpuTaskSchedulingReachability reachability,
-    in GpuTaskQueueScoringData scoring, in GpuTaskGraphTaskView task, in GpuPhysicalQueueInfo incumbent,
-    in GpuTaskTimingAssignmentKey key, in GpuTaskTimingHistorySnapshot snapshot, in GpuTaskTimingFeedbackPolicy policy, in u64 frameIndex
+    in GpuTaskGraphDeclarationReadView declarations,
+    in GpuTaskGraphAnalysis analysis,
+    in Span<GpuTaskQueueAssignment> assignments,
+    in Span<u32> assignmentIndices,
+    in GpuPhysicalQueueTopology topology,
+    in GpuTaskSchedulingReachability reachability,
+    in GpuTaskQueueScoringData scoring,
+    in GpuTaskGraphTaskView task,
+    in GpuPhysicalQueueInfo incumbent,
+    in GpuTaskTimingAssignmentKey key,
+    in GpuTaskTimingHistorySnapshot snapshot,
+    in GpuTaskTimingFeedbackPolicy policy,
+    in u64 frameIndex
 ){
     return CopyGpuSnapshotValue<GpuPhysicalQueueInfo>(BorrowTimingFeedbackQueue(declarations, analysis, assignments, assignmentIndices, topology, reachability,
         scoring, task, incumbent, key, snapshot, policy, frameIndex));
@@ -39,6 +48,7 @@ Optional<GpuTaskTimingAssignmentState> FindSnapshotTimingAssignmentValue(in GpuT
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 enum<u8> GpuTelemetryScenario{
     Explicit = 0,
@@ -1863,9 +1873,6 @@ NWB_ADHD_GTEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangin
 NWB_ADHD_GTEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints, VerifyGpuTelemetry_RejectsIncompleteForeignAndReversedEnvelopeEndpoints)
 NWB_ADHD_GTEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex, VerifyGpuTelemetry_ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex)
 NWB_ADHD_GTEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPackets, VerifyGpuTelemetry_RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPackets)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

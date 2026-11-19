@@ -90,20 +90,6 @@ void nwbPhysicsWorldTransform(const NwbPhysicsGpuBodySim body, out float3 outOri
     outOrigin = body.positionInvMass.xyz - nwbPhysicsQuatRotate(localCenter, outRot);
 }
 
-void nwbPhysicsBoxVertices(const float3 center, const float4 rot, const float3 halfExtents, out float3 outVerts[8]){
-    const float3 ax = nwbPhysicsQuatRotate(float3(halfExtents.x, 0.0f, 0.0f), rot);
-    const float3 ay = nwbPhysicsQuatRotate(float3(0.0f, halfExtents.y, 0.0f), rot);
-    const float3 az = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, halfExtents.z), rot);
-    outVerts[0] = center - ax - ay - az;
-    outVerts[1] = center + ax - ay - az;
-    outVerts[2] = center + ax + ay - az;
-    outVerts[3] = center - ax + ay - az;
-    outVerts[4] = center - ax - ay + az;
-    outVerts[5] = center + ax - ay + az;
-    outVerts[6] = center + ax + ay + az;
-    outVerts[7] = center - ax + ay + az;
-}
-
 float nwbPhysicsProjectBoxHalfExtent(const float3 ax, const float3 ay, const float3 az, const float3 halfExtents, const float3 dir){
     return abs(dot(ax, dir)) * halfExtents.x + abs(dot(ay, dir)) * halfExtents.y + abs(dot(az, dir)) * halfExtents.z;
 }
@@ -386,7 +372,10 @@ float3 nwbPhysicsSupportWorld(
 [numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint idx = dispatchThreadID.x;
-    const uint pairCount = g_NwbPhysicsPushConstants.itemCount;
+    const uint counterSlot = g_NwbPhysicsPushConstants.slots1.w;
+    uint pairCount = g_NwbPhysicsPushConstants.itemCount;
+    if(counterSlot != NWB_PHYSICS_INVALID_INDEX)
+        pairCount = min(pairCount, g_NwbPhysicsUintBuffers[counterSlot][1u]);
     if(idx >= pairCount)
         return;
 

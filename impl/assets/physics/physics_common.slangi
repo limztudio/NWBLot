@@ -127,8 +127,6 @@ struct NwbPhysicsGpuJointConstraint{
     float4 linearImpulse;
     float4 angularImpulse;
     float4 limitImpulses;
-    float4 totalLinearImpulse;
-    float4 totalAngularImpulse;
 };
 
 

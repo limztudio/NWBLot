@@ -140,6 +140,7 @@ class PhysicsWorldConfigComponent{
     public u32 maxSubStepsPerFrame = 4u;
     public PhysicsBackendMode backendMode = PhysicsBackendMode::Auto;
     public u32 gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
+    public f32 gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
     public b8 enableSleep = true;
     public b8 enableContinuous = true;
     public b8 enableContactSoftening = true;

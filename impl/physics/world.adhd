@@ -36,6 +36,7 @@ class PhysicsWorld{
     public WorldStepStats m_lastStats;
     public PhysicsBackendMode m_backendMode = PhysicsBackendMode::Auto;
     public u32 m_gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
+    public f32 m_gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
     public b8 m_enableWarmStarting = true;
     public Optional<CustomFilterCallback> m_customFilterCallback;
     public Optional<PreSolveCallback> m_preSolveCallback;
@@ -100,6 +101,11 @@ class PhysicsWorld{
     public PhysicsBackendMode backendMode()const{ return this.m_backendMode; }
     public void setGpuDispatchThreshold(in u32 threshold){ this.m_gpuDispatchThreshold = threshold; }
     public u32 gpuDispatchThreshold()const{ return this.m_gpuDispatchThreshold; }
+    public void setGpuWorkloadFraction(in f32 fraction){
+        if(IsFinite(fraction))
+            this.m_gpuWorkloadFraction = Clamp(fraction, 0.0f, 1.0f);
+    }
+    public f32 gpuWorkloadFraction()const{ return this.m_gpuWorkloadFraction; }
     public void setWarmStarting(in b8 enabled){ this.m_enableWarmStarting = enabled; }
     public in WorldStepStats lastStepStats()const{ return this.m_lastStats; }
     public Span<BodyMoveEvent> bodyMoveEvents()const{ return this.m_bodyMoveEvents; }
@@ -366,7 +372,7 @@ class PhysicsWorld{
         }
 
         if(setIdx < this.m_solverSets.size() && localIdx < this.m_solverSets[setIdx].sims.size()){
-            RemoveBodyFromSolverSet(this.m_bodies, this.m_contacts, this.m_solverSets[setIdx], localIdx);
+            RemoveBodyFromSolverSet(this.m_bodies, this.m_solverSets[setIdx], localIdx);
             if(setIdx >= 3u && this.m_solverSets[setIdx].sims.empty() && this.m_solverSets[setIdx].islands.empty())
                 this.m_freeSolverSetIds.push_back(setIdx);
         }
@@ -1528,7 +1534,7 @@ class PhysicsWorld{
         const u32 oldLocal = this.m_bodies[idx].localIndex;
         BodySim sim = this.m_solverSets[oldSet].sims[oldLocal];
         BodyState state = this.m_solverSets[oldSet].states[oldLocal];
-        RemoveBodyFromSolverSet(this.m_bodies, this.m_contacts, this.m_solverSets[oldSet], oldLocal);
+        RemoveBodyFromSolverSet(this.m_bodies, this.m_solverSets[oldSet], oldLocal);
 
         this.m_bodies[idx].type = newType;
         this.m_bodies[idx].sleepTime = 0.0f;
@@ -1603,7 +1609,7 @@ class PhysicsWorld{
             sim.force = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             sim.torque = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             this.m_bodies[idx].sleepTime = 0.0f;
-            RemoveBodyFromSolverSet(this.m_bodies, this.m_contacts, this.m_solverSets[oldSet], oldLocal);
+            RemoveBodyFromSolverSet(this.m_bodies, this.m_solverSets[oldSet], oldLocal);
             AddBodyToSolverSet(this.m_bodies, this.m_solverSets[s_DisabledSetIndex], sim, state);
             return true;
         }
@@ -1611,7 +1617,7 @@ class PhysicsWorld{
         const u32 oldLocal = this.m_bodies[idx].localIndex;
         const BodySim sim = this.m_solverSets[s_DisabledSetIndex].sims[oldLocal];
         const BodyState state = this.m_solverSets[s_DisabledSetIndex].states[oldLocal];
-        RemoveBodyFromSolverSet(this.m_bodies, this.m_contacts, this.m_solverSets[s_DisabledSetIndex], oldLocal);
+        RemoveBodyFromSolverSet(this.m_bodies, this.m_solverSets[s_DisabledSetIndex], oldLocal);
 
         u32 targetSet = s_AwakeSetIndex;
         if(this.m_bodies[idx].type == BodyType::Static)

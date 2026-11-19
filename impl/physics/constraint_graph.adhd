@@ -361,7 +361,7 @@ void SleepIslandWithGraph(
         sim.torque = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         BodyState emptyState;
         emptyState.flags = sim.flags;
-        RemoveBodyFromSolverSet(bodies, contacts, sets[s_AwakeSetIndex], body.localIndex);
+        RemoveBodyFromSolverSet(bodies, sets[s_AwakeSetIndex], body.localIndex);
         AddBodyToSolverSet(bodies, sets[sleepSetIndex], sim, emptyState);
     }
 

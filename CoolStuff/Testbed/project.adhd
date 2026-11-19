@@ -161,6 +161,8 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         StringView backendName = "CPU";
         if(physicsBackend == 2u)
             backendName = "GPU";
+        else if(physicsBackend == 3u)
+            backendName = "CPU+GPU";
         const String physicsLine = StringFormat("Physics: {} bodies, {} contacts ({})", physicsBodies, physicsContacts, backendName);
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
             const b8 declared =

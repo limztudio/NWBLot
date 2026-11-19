@@ -113,7 +113,7 @@ void WakeIslandInSets(
         BodyState state;
         state.flags = sim.flags;
         body.sleepTime = 0.0f;
-        RemoveBodyFromSolverSet(bodies, contacts, sets[oldSetIndex], body.localIndex);
+        RemoveBodyFromSolverSet(bodies, sets[oldSetIndex], body.localIndex);
         AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
     }
 
@@ -155,7 +155,7 @@ void WakeBodyWithIsland(
         const BodySim sim = sets[setIdx].sims[bodies[bodyId].localIndex];
         BodyState state;
         state.flags = sim.flags;
-        RemoveBodyFromSolverSet(bodies, contacts, sets[setIdx], bodies[bodyId].localIndex);
+        RemoveBodyFromSolverSet(bodies, sets[setIdx], bodies[bodyId].localIndex);
         AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
     }
 }
@@ -217,49 +217,6 @@ u32 MergeIslandsInWorld(
     small.joints.clear();
     DestroyIslandInWorld(islands, freeIslandIds, sets, smallId);
     return bigId;
-}
-
-void LinkContactToIsland(
-    mut Vector<Body> bodies,
-    mut Vector<Island> islands,
-    mut Vector<u32> freeIslandIds,
-    mut Vector<SolverSet> sets,
-    mut Vector<Contact> contacts,
-    mut Vector<Joint> joints,
-    in u32 contactId
-){
-    mut Contact contact = contacts[contactId];
-    if(contact.islandId != s_NullIndex)
-        return;
-
-    const u32 bodyIdA = contact.edges[0u].bodyId;
-    const u32 bodyIdB = contact.edges[1u].bodyId;
-    WakeBodyWithIsland(bodies, islands, sets, contacts, bodyIdA);
-    WakeBodyWithIsland(bodies, islands, sets, contacts, bodyIdB);
-
-    const u32 islandA = bodies[bodyIdA].islandId;
-    const u32 islandB = bodies[bodyIdB].islandId;
-
-    u32 targetIsland = s_NullIndex;
-    if(islandA != s_NullIndex && islandB != s_NullIndex)
-        targetIsland = MergeIslandsInWorld(bodies, islands, freeIslandIds, sets, contacts, joints, islandA, islandB);
-    else if(islandA != s_NullIndex)
-        targetIsland = islandA;
-    else if(islandB != s_NullIndex)
-        targetIsland = islandB;
-
-    if(targetIsland == s_NullIndex)
-        return;
-
-    ContactLink link;
-    link.contactId = contactId;
-    link.bodyIdA = bodyIdA;
-    link.bodyIdB = bodyIdB;
-
-    mut Island island = islands[targetIsland];
-    contact.islandId = targetIsland;
-    contact.islandIndex = cast<u32>(island.contacts.size());
-    island.contacts.push_back(link);
 }
 
 void UnlinkContactFromIsland(mut Vector<Island> islands, mut Vector<Contact> contacts, in u32 contactId){

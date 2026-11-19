@@ -4,7 +4,6 @@
 
 const f32 s_LinearSlop = 0.005f;
 const f32 s_MinCapsuleLength = 0.005f;
-const f32 s_OverlapSlop = 0.0005f;
 const f32 s_SpeculativeDistance = 0.02f;
 const f32 s_MaxSweptSpeculativeDistance = 1.0f;
 const f32 s_MaxBulletSweepDistance = 32.0f;
@@ -22,7 +21,6 @@ const f32 s_MaxContactHertz = 30.0f;
 const f32 s_DefaultContactDampingRatio = 10.0f;
 const f32 s_DefaultMaxLinearVelocity = 400.0f;
 const f32 s_DefaultHitEventThreshold = 1.0f;
-const f32 s_LengthUnitsPerMeter = 1.0f;
 const f32 s_NormalizeEpsilonSq = 1.0e-12f;
 
 const usize s_GraphColorCount = 24u;
@@ -38,7 +36,6 @@ const usize s_ShapeCastMaxIterations = 20u;
 const usize s_TimeOfImpactMaxIterations = 24u;
 const u32 s_GpuGridTableSize = 4096u;
 const u32 s_GpuGridBucketCapacity = 32u;
-const u32 s_GpuGridMaxCellsPerShape = 27u;
 
 const u32 s_NullIndex = u32.max;
 const u32 s_StaticSetIndex = 0u;
@@ -48,8 +45,8 @@ const usize s_TreeCount = 3u;
 const u32 s_TreeStatic = 0u;
 const u32 s_TreeKinematic = 1u;
 const u32 s_TreeDynamic = 2u;
-const usize s_ParallelGrainSize = 16u;
 const u32 s_DefaultGpuBodyThreshold = 32u;
+const f32 s_DefaultGpuWorkloadFraction = 0.7f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

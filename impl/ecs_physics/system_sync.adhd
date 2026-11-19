@@ -52,6 +52,7 @@ void ResolvePhysicsConfigSettings(
                 physicsWorld.setWorldDef(wd);
                 physicsWorld.setBackendMode(cfg.backendMode);
                 physicsWorld.setGpuDispatchThreshold(cfg.gpuDispatchThreshold);
+                physicsWorld.setGpuWorkloadFraction(cfg.gpuWorkloadFraction);
                 physicsWorld.setWarmStarting(cfg.enableWarmStarting);
                 cfg.dirty = false;
             }

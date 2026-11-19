@@ -353,7 +353,7 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(size_of<GpuPhysicsNarrowphaseManifold>(), 176u);
     EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 64u);
     EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 528u);
-    EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 432u);
+    EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 400u);
     EXPECT_EQ(offset_of<GpuPhysicsPushConstants>(gravitySpeculative), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsPushConstants>(slots0), 48u);
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo), 0u);
@@ -365,7 +365,7 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearOffset), 192u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(suspensionSoftness), 240u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearImpulse), 352u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(totalAngularImpulse), 416u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(limitImpulses), 384u);
 
     {
         PhysicsWorld gpuFallbackWorld;
@@ -382,6 +382,8 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
 
         StepWorldWithGpu(gpuFallbackWorld, emptyGpu, 1.0f / 60.0f, 2u, scheduler);
         EXPECT_EQ(gpuFallbackWorld.lastStepStats().backendUsed, ExecutionBackendUsed::Cpu);
+        EXPECT_EQ(gpuFallbackWorld.lastStepStats().cpuSolvedBodyCount, 1u);
+        EXPECT_EQ(gpuFallbackWorld.lastStepStats().gpuSolvedBodyCount, 0u);
         EXPECT_LT(gpuFallbackWorld.tryGetBodyTransform(bId).value().position.y, 5.0f);
     }
 
@@ -1357,6 +1359,322 @@ void VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints(){
     }
 }
 
+void SetupEquivalenceScenarioWorld(mut PhysicsWorld w, mut Vector<BodyId> outBodyIds){
+    BodyDef gDef;
+    gDef.type = BodyType::Static;
+    gDef.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+    const BodyId ground = w.createBody(gDef).value();
+    ShapeDef gSd;
+    ASSERT_TRUE(w.createHullShape(ground, gSd, MakeBoxHull(20.0f, 0.5f, 20.0f, 0.0f).value()).has_value());
+
+    const HullShape box = MakeBoxHull(0.5f, 0.5f, 0.5f, 0.0f).value();
+    const SphereShape sphere = MakeSphereShape(VectorSingle(0.0f), 0.5f).value();
+
+    for(u32 i = 0u; i < 2u; ++i){
+        BodyDef bd;
+        bd.type = BodyType::Dynamic;
+        bd.position = f32x4(-5.0f, 0.5f + cast<f32>(i) * 1.0f, 0.0f, 0.0f);
+        const BodyId bId = w.createBody(bd).value();
+        ShapeDef sd;
+        sd.material.friction = 0.6f;
+        ASSERT_TRUE(w.createHullShape(bId, sd, box).has_value());
+        outBodyIds.push_back(bId);
+    }
+
+    {
+        BodyDef bRest;
+        bRest.type = BodyType::Dynamic;
+        bRest.position = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
+        const BodyId idRest = w.createBody(bRest).value();
+        ShapeDef sdRest;
+        sdRest.material.restitution = 0.4f;
+        ASSERT_TRUE(w.createHullShape(idRest, sdRest, box).has_value());
+        outBodyIds.push_back(idRest);
+
+        BodyDef bBall;
+        bBall.type = BodyType::Dynamic;
+        bBall.position = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
+        const BodyId idBall = w.createBody(bBall).value();
+        ShapeDef sdBall;
+        sdBall.material.restitution = 0.6f;
+        ASSERT_TRUE(w.createSphereShape(idBall, sdBall, sphere).has_value());
+        outBodyIds.push_back(idBall);
+    }
+
+    {
+        BodyDef jDefA;
+        jDefA.type = BodyType::Dynamic;
+        jDefA.position = f32x4(5.0f, 4.0f, 0.0f, 0.0f);
+        const BodyId jA = w.createBody(jDefA).value();
+        ShapeDef jSd;
+        ASSERT_TRUE(w.createSphereShape(jA, jSd, sphere).has_value());
+        outBodyIds.push_back(jA);
+
+        BodyDef jDefB;
+        jDefB.type = BodyType::Dynamic;
+        jDefB.position = f32x4(6.5f, 4.0f, 0.0f, 0.0f);
+        const BodyId jB = w.createBody(jDefB).value();
+        ASSERT_TRUE(w.createSphereShape(jB, jSd, sphere).has_value());
+        outBodyIds.push_back(jB);
+
+        JointDef jd;
+        jd.type = JointType::Distance;
+        jd.bodyIdA = jA;
+        jd.bodyIdB = jB;
+        jd.length = 1.5f;
+        ASSERT_TRUE(w.createJoint(jd).has_value());
+    }
+}
+
+void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
+    CpuTaskScheduler scheduler(2u);
+
+    {
+        PhysicsWorld w;
+        const SphereShape sphere = MakeSphereShape(VectorSingle(0.0f), 0.5f).value();
+        const HullShape box = MakeBoxHull(0.5f, 0.5f, 0.5f, 0.0f).value();
+
+        BodyDef kinDef;
+        kinDef.type = BodyType::Kinematic;
+        kinDef.isAwake = true;
+        kinDef.position = f32x4(3.0f, 0.25f, 0.0f, 0.0f);
+        const BodyId kinId = w.createBody(kinDef).value();
+        ShapeDef kinSd;
+        ASSERT_TRUE(w.createHullShape(kinId, kinSd, MakeBoxHull(10.0f, 0.25f, 1.0f, 0.0f).value()).has_value());
+
+        for(u32 s = 0u; s < 3u; ++s){
+            BodyDef bd;
+            bd.type = BodyType::Dynamic;
+            bd.position = f32x4(-6.0f, 1.0f + cast<f32>(s) * 1.0f, 0.0f, 0.0f);
+            const BodyId bId = w.createBody(bd).value();
+            ShapeDef sd;
+            ASSERT_TRUE(w.createHullShape(bId, sd, box).has_value());
+        }
+
+        for(u32 s = 0u; s < 3u; ++s){
+            BodyDef bd;
+            bd.type = BodyType::Dynamic;
+            bd.position = f32x4(0.0f, 1.0f + cast<f32>(s) * 1.0f, 0.0f, 0.0f);
+            const BodyId bId = w.createBody(bd).value();
+            ShapeDef sd;
+            ASSERT_TRUE(w.createHullShape(bId, sd, box).has_value());
+        }
+
+        {
+            BodyDef jA;
+            jA.type = BodyType::Dynamic;
+            jA.position = f32x4(6.0f, 4.0f, 0.0f, 0.0f);
+            const BodyId bJA = w.createBody(jA).value();
+            ShapeDef sd;
+            ASSERT_TRUE(w.createSphereShape(bJA, sd, sphere).has_value());
+
+            BodyDef jB;
+            jB.type = BodyType::Dynamic;
+            jB.position = f32x4(7.5f, 4.0f, 0.0f, 0.0f);
+            const BodyId bJB = w.createBody(jB).value();
+            ASSERT_TRUE(w.createSphereShape(bJB, sd, sphere).has_value());
+
+            JointDef jd;
+            jd.type = JointType::Distance;
+            jd.bodyIdA = bJA;
+            jd.bodyIdB = bJB;
+            jd.length = 1.5f;
+            ASSERT_TRUE(w.createJoint(jd).has_value());
+        }
+
+        BodyDef bulDef;
+        bulDef.type = BodyType::Dynamic;
+        bulDef.isBullet = true;
+        bulDef.position = f32x4(12.0f, 1.0f, 0.0f, 0.0f);
+        const BodyId bulletId = w.createBody(bulDef).value();
+        ShapeDef bulSd;
+        ASSERT_TRUE(w.createSphereShape(bulletId, bulSd, sphere).has_value());
+
+        BodyDef specDefA;
+        specDefA.type = BodyType::Dynamic;
+        specDefA.gravityScale = 0.0f;
+        specDefA.position = f32x4(-12.0f, 5.0f, 0.0f, 0.0f);
+        const BodyId specA = w.createBody(specDefA).value();
+        ShapeDef specSd;
+        ASSERT_TRUE(w.createSphereShape(specA, specSd, sphere).has_value());
+
+        BodyDef specDefB;
+        specDefB.type = BodyType::Dynamic;
+        specDefB.gravityScale = 0.0f;
+        specDefB.position = f32x4(-12.0f, 6.012f, 0.0f, 0.0f);
+        const BodyId specB = w.createBody(specDefB).value();
+        ASSERT_TRUE(w.createSphereShape(specB, specSd, sphere).has_value());
+
+        const f32 dt = 1.0f / 60.0f;
+        w.flushDirtyBodyMasses();
+        WakeJointConnectedIslands(w);
+        EnlargeFastAndBulletBroadphaseBounds(w, dt);
+        u32 pairCount = 0u;
+        UpdateBroadPhasePairsCpu(w, scheduler, pairCount);
+        CollideContactsCpu(w, dt, scheduler);
+        SplitDirtyAwakeIslands(w);
+
+        SolverWorkPartition part;
+        BuildSolverWorkPartition(w, 0.7f, true, part);
+
+        EXPECT_GT(part.cpuOwnedBodyCount, 0u);
+        EXPECT_GT(part.gpuOwnedBodyCount, 0u);
+        EXPECT_GT(part.cpuComponentCount, 0u);
+        EXPECT_GT(part.gpuComponentCount, 0u);
+        EXPECT_EQ(part.cpuOwnedBodyCount + part.gpuOwnedBodyCount, w.awakeBodyCount());
+
+        for(usize c = 0u; c < s_GraphColorCount; ++c){
+            for(usize i = 0u; i < part.cpuColorContactIds[c].size(); ++i){
+                in Contact contact = w.m_contacts[part.cpuColorContactIds[c][i]];
+                in Body bA = w.m_bodies[contact.edges[0u].bodyId];
+                in Body bB = w.m_bodies[contact.edges[1u].bodyId];
+                if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex && bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
+                    EXPECT_EQ(part.awakeBodyOwner[bA.localIndex], part.awakeBodyOwner[bB.localIndex]);
+                if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex)
+                    EXPECT_EQ(part.awakeBodyOwner[bA.localIndex], cast<u8>(0u));
+                if(bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
+                    EXPECT_EQ(part.awakeBodyOwner[bB.localIndex], cast<u8>(0u));
+            }
+            for(usize i = 0u; i < part.gpuColorContactIds[c].size(); ++i){
+                in Contact contact = w.m_contacts[part.gpuColorContactIds[c][i]];
+                in Body bA = w.m_bodies[contact.edges[0u].bodyId];
+                in Body bB = w.m_bodies[contact.edges[1u].bodyId];
+                if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex && bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
+                    EXPECT_EQ(part.awakeBodyOwner[bA.localIndex], part.awakeBodyOwner[bB.localIndex]);
+                if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex)
+                    EXPECT_EQ(part.awakeBodyOwner[bA.localIndex], cast<u8>(1u));
+                if(bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex)
+                    EXPECT_EQ(part.awakeBodyOwner[bB.localIndex], cast<u8>(1u));
+            }
+        }
+
+        const u32 specLocalA = w.m_bodies[specA.index].localIndex;
+        const u32 specLocalB = w.m_bodies[specB.index].localIndex;
+        EXPECT_EQ(part.awakeBodyOwner[specLocalA], part.awakeBodyOwner[specLocalB]);
+
+        const u32 bulLocal = w.m_bodies[bulletId.index].localIndex;
+        EXPECT_EQ(part.awakeBodyOwner[bulLocal], cast<u8>(0u));
+
+        const u32 kinLocal = w.m_bodies[kinId.index].localIndex;
+        EXPECT_EQ(part.awakeBodyOwner[kinLocal], cast<u8>(0u));
+        const u32 kinGpuSlot = part.awakeToGpuSlot[kinLocal];
+        EXPECT_TRUE(kinGpuSlot != s_NullIndex);
+        EXPECT_EQ(part.gpuAwakeWriteBack[kinGpuSlot], cast<u8>(0u));
+
+        SolverWorkPartition part100;
+        BuildSolverWorkPartition(w, 1.0f, true, part100);
+        EXPECT_EQ(part100.cpuComponentCount, 0u);
+        EXPECT_EQ(part100.cpuOwnedBodyCount, 0u);
+        EXPECT_EQ(part100.gpuOwnedBodyCount, w.awakeBodyCount());
+
+        SolverWorkPartition part0;
+        BuildSolverWorkPartition(w, 0.0f, true, part0);
+        EXPECT_EQ(part0.gpuComponentCount, 0u);
+        EXPECT_EQ(part0.gpuOwnedBodyCount, 0u);
+        EXPECT_EQ(part0.cpuOwnedBodyCount, w.awakeBodyCount());
+    }
+
+    {
+        PhysicsWorld worldUnified;
+        PhysicsWorld worldSplit;
+        Vector<BodyId> idsA;
+        Vector<BodyId> idsB;
+        SetupEquivalenceScenarioWorld(worldUnified, idsA);
+        SetupEquivalenceScenarioWorld(worldSplit, idsB);
+        ASSERT_EQ(idsA.size(), idsB.size());
+
+        const f32 dt = 1.0f / 60.0f;
+        const u32 subStepCount = 4u;
+        const f32 h = dt / cast<f32>(subStepCount);
+        const f32 invH = 1.0f / h;
+
+        for(u32 step = 0u; step < 15u; ++step){
+            SolveStepCpu(worldUnified, dt, subStepCount, scheduler);
+
+            worldSplit.m_bodyMoveEvents.clear();
+            worldSplit.m_contactBeginEvents.clear();
+            worldSplit.m_contactEndEvents.clear();
+            worldSplit.m_contactHitEvents.clear();
+            worldSplit.m_sensorBeginEvents.clear();
+            worldSplit.m_sensorEndEvents.clear();
+            worldSplit.flushDirtyBodyMasses();
+            WakeJointConnectedIslands(worldSplit);
+            EnlargeFastAndBulletBroadphaseBounds(worldSplit, dt);
+            u32 pairCount = 0u;
+            UpdateBroadPhasePairsCpu(worldSplit, scheduler, pairCount);
+            CollideContactsCpu(worldSplit, dt, scheduler);
+            SplitDirtyAwakeIslands(worldSplit);
+
+            SolverWorkPartition part;
+            BuildSolverWorkPartition(worldSplit, 0.5f, true, part);
+            if(step == 0u){
+                EXPECT_GT(part.cpuOwnedBodyCount, 0u);
+                EXPECT_GT(part.gpuOwnedBodyCount, 0u);
+            }
+
+            Vector<u32> gpuOwnedIndices;
+            for(usize g = 0u; g < part.gpuAwakeIndices.size(); ++g){
+                if(part.gpuAwakeWriteBack[g] != 0u)
+                    gpuOwnedIndices.push_back(part.gpuAwakeIndices[g]);
+            }
+
+            Array<Vector<ContactConstraint>, s_GraphColorCount> cpuCons;
+            Array<Vector<ContactConstraint>, s_GraphColorCount> gpuCons;
+            ASSERT_TRUE(PrepareColorContactConstraints(worldSplit, part.cpuColorContactIds, h, scheduler, cpuCons));
+            ASSERT_TRUE(PrepareColorContactConstraints(worldSplit, part.gpuColorContactIds, h, scheduler, gpuCons));
+
+            const f32 jointDefaultHertz = Max(worldSplit.m_def.contactHertz, 30.0f);
+            Vector<JointConstraint> cpuJoints;
+            for(usize ji = 0u; ji < part.cpuJointIds.size(); ++ji){
+                JointConstraint jc;
+                PrepareJointConstraint(worldSplit.m_bodies, worldSplit.m_solverSets, worldSplit.m_joints[part.cpuJointIds[ji]], jointDefaultHertz, h, worldSplit.m_enableWarmStarting, jc);
+                cpuJoints.push_back(jc);
+            }
+            Vector<JointConstraint> gpuJoints;
+            for(usize ji = 0u; ji < part.gpuJointIds.size(); ++ji){
+                JointConstraint jc;
+                PrepareJointConstraint(worldSplit.m_bodies, worldSplit.m_solverSets, worldSplit.m_joints[part.gpuJointIds[ji]], jointDefaultHertz, h, worldSplit.m_enableWarmStarting, jc);
+                gpuJoints.push_back(jc);
+            }
+
+            ASSERT_TRUE(SolvePartitionSubStepsCpu(worldSplit, part.cpuAwakeIndices, cpuCons, cpuJoints, dt, subStepCount, scheduler));
+            ASSERT_TRUE(SolvePartitionSubStepsCpu(worldSplit, gpuOwnedIndices, gpuCons, gpuJoints, dt, subStepCount, scheduler));
+
+            Vector<u32> brokenJointIds;
+            for(usize ji = 0u; ji < cpuJoints.size(); ++ji)
+                StoreJointImpulsesAndCollectBroken(worldSplit, cpuJoints[ji], invH, brokenJointIds);
+            for(usize ji = 0u; ji < gpuJoints.size(); ++ji)
+                StoreJointImpulsesAndCollectBroken(worldSplit, gpuJoints[ji], invH, brokenJointIds);
+            for(usize bi = 0u; bi < brokenJointIds.size(); ++bi)
+                worldSplit.destroyJointInternal(brokenJointIds[bi]);
+
+            for(usize c = 0u; c < s_GraphColorCount; ++c){
+                for(usize idx = 0u; idx < cpuCons[c].size(); ++idx)
+                    StoreContactConstraintImpulsesAndHitEvents(worldSplit, cpuCons[c][idx]);
+                for(usize idx = 0u; idx < gpuCons[c].size(); ++idx)
+                    StoreContactConstraintImpulsesAndHitEvents(worldSplit, gpuCons[c][idx]);
+            }
+
+            SolveBulletContinuousCpu(worldSplit, dt);
+            FinalizeMovedBodiesBroadphaseAndEvents(worldSplit);
+            EvaluateSleepingIslands(worldSplit);
+        }
+
+        for(usize k = 0u; k < idsA.size(); ++k){
+            const Transform3D xfA = worldUnified.tryGetBodyTransform(idsA[k]).value();
+            const Transform3D xfB = worldSplit.tryGetBodyTransform(idsB[k]).value();
+            const f32x4 vA = worldUnified.tryGetLinearVelocity(idsA[k]).value();
+            const f32x4 vB = worldSplit.tryGetLinearVelocity(idsB[k]).value();
+            EXPECT_NEAR(xfA.position.x, xfB.position.x, 1.0e-4f);
+            EXPECT_NEAR(xfA.position.y, xfB.position.y, 1.0e-4f);
+            EXPECT_NEAR(xfA.position.z, xfB.position.z, 1.0e-4f);
+            EXPECT_NEAR(vA.x, vB.x, 1.0e-4f);
+            EXPECT_NEAR(vA.y, vB.y, 1.0e-4f);
+            EXPECT_NEAR(vA.z, vB.z, 1.0e-4f);
+        }
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1377,6 +1695,7 @@ NWB_ADHD_GTEST(PhysicsEdgeCases, JointConstraints3D, VerifyPhysicsEdgeCases_Join
 NWB_ADHD_GTEST(PhysicsEdgeCases, BulletToiContinuousAndCallbacks, VerifyPhysicsEdgeCases_BulletToiContinuousAndCallbacks)
 NWB_ADHD_GTEST(PhysicsEdgeCases, TriangleMeshBvhAndExactQueries, VerifyPhysicsEdgeCases_TriangleMeshBvhAndExactQueries)
 NWB_ADHD_GTEST(PhysicsEdgeCases, ShapeMutatorsCustomMassAndExtendedJoints, VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints)
+NWB_ADHD_GTEST(PhysicsEdgeCases, HybridCpuGpuSolverPartitionAndEquivalence, VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

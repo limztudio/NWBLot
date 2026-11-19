@@ -51,16 +51,6 @@ VectorSingle InverseTransformPoint(in Transform3D xf, in VectorSingle worldPoint
     return VectorSingle(Vector3InverseRotate(VectorSingle(worldPoint - p, 0.0f), q), 0.0f);
 }
 
-Transform3D ComposeTransform(in Transform3D outerXf, in Transform3D innerXf){
-    const VectorSingle qOuter = VectorSingle(outerXf.rotation);
-    const VectorSingle qInner = VectorSingle(innerXf.rotation);
-    const VectorSingle pOuter = VectorSingle(outerXf.position);
-    const VectorSingle pInner = VectorSingle(innerXf.position);
-    const VectorSingle rot = SafeNormalizeQuat(QuaternionMultiply(qOuter, qInner));
-    const VectorSingle pos = pOuter + Vector3Rotate(VectorSingle(pInner, 0.0f), qOuter);
-    return Transform3D(pos, rot);
-}
-
 Transform3D RelativeTransform(in Transform3D frameA, in Transform3D frameB){
     const VectorSingle qA = VectorSingle(frameA.rotation);
     const VectorSingle qB = VectorSingle(frameB.rotation);
@@ -164,13 +154,6 @@ VectorSingle MulMat3Vec(in Mat3 m, in VectorSingle v){
     const f32 y = Vector3Dot(VectorSingle(m.row1), v0).x;
     const f32 z = Vector3Dot(VectorSingle(m.row2), v0).x;
     return VectorSingle(x, y, z, 0.0f);
-}
-
-VectorSingle MulMat3TransposeVec(in Mat3 m, in VectorSingle v){
-    const VectorSingle r0 = VectorSingle(m.row0);
-    const VectorSingle r1 = VectorSingle(m.row1);
-    const VectorSingle r2 = VectorSingle(m.row2);
-    return VectorSingle(r0 * v.x + r1 * v.y + r2 * v.z, 0.0f);
 }
 
 Mat3 MulMat3(in Mat3 a, in Mat3 b){

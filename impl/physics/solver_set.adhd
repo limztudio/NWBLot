@@ -119,7 +119,6 @@ class Contact{
     public f32 rollingResistance = 0.0f;
     public f32 tangentSpeed = 0.0f;
     public u32 flags = 0u;
-    public b8 isMarked = false;
 }
 
 class ContactLink{
@@ -323,7 +322,7 @@ void AddBodyToSolverSet(mut Vector<Body> bodies, mut SolverSet set, in BodySim s
     bodies[sim.bodyId].localIndex = localIdx;
 }
 
-void RemoveBodyFromSolverSet(mut Vector<Body> bodies, mut Vector<Contact> contacts, mut SolverSet set, in u32 localIndex){
+void RemoveBodyFromSolverSet(mut Vector<Body> bodies, mut SolverSet set, in u32 localIndex){
     if(localIndex >= set.sims.size())
         return;
 

@@ -79,6 +79,20 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
+    if(mode == NWB_PHYSICS_BROADPHASE_MODE_FINALIZE_INDIRECT){
+        if(idx == 0u){
+            const uint rawPairs = g_NwbPhysicsUintBuffers[counterSlot][0u];
+            const uint clampedPairs = min(rawPairs, g_NwbPhysicsPushConstants.flags);
+            const uint groupsX = clampedPairs > 0u ? ((clampedPairs + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE) : 0u;
+            const uint indirectSlot = g_NwbPhysicsPushConstants.slots1.z;
+            g_NwbPhysicsUintBuffers[counterSlot][1u] = clampedPairs;
+            g_NwbPhysicsUintBuffers[indirectSlot][0u] = groupsX;
+            g_NwbPhysicsUintBuffers[indirectSlot][1u] = 1u;
+            g_NwbPhysicsUintBuffers[indirectSlot][2u] = 1u;
+        }
+        return;
+    }
+
     if(idx >= shapeCount)
         return;
 
@@ -242,13 +256,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    for(uint idxB = idx + 1u; idxB < shapeCount; ++idxB){
-        const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB];
-        if(!nwbPhysicsShouldCollide(proxyA, proxyB))
-            continue;
-        if(!nwbPhysicsAabbOverlaps(minA, maxA, proxyB.aabbMinPad.xyz, proxyB.aabbMaxPad.xyz))
-            continue;
-        nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, proxyA.bodyIndexTypeShape.x, proxyB.bodyIndexTypeShape.x);
+    if(mode == NWB_PHYSICS_BROADPHASE_MODE_EMIT_PAIRS){
+        for(uint idxB = idx + 1u; idxB < shapeCount; ++idxB){
+            const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB];
+            if(!nwbPhysicsShouldCollide(proxyA, proxyB))
+                continue;
+            if(!nwbPhysicsAabbOverlaps(minA, maxA, proxyB.aabbMinPad.xyz, proxyB.aabbMaxPad.xyz))
+                continue;
+            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, proxyA.bodyIndexTypeShape.x, proxyB.bodyIndexTypeShape.x);
+        }
     }
 }
 

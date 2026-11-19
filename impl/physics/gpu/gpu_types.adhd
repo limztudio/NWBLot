@@ -13,7 +13,6 @@ const u32 s_GpuInvalidIndex = 0xffffffffu;
 
 const u32 s_GpuShapeFlagIsBox = 0x00000001u;
 const u32 s_GpuShapeFlagSensor = 0x00000002u;
-const u32 s_GpuShapeFlagSpeculative = 0x00000004u;
 const u32 s_GpuShapeFlagDynamicBody = 0x00010000u;
 const u32 s_GpuShapeFlagKinematicBody = 0x00020000u;
 
@@ -22,6 +21,7 @@ const u32 s_GpuBroadphaseModeEmitPairs = 1u;
 const u32 s_GpuBroadphaseModeGridClear = 2u;
 const u32 s_GpuBroadphaseModeGridInsert = 3u;
 const u32 s_GpuBroadphaseModeGridEmitPairs = 4u;
+const u32 s_GpuBroadphaseModeFinalizeIndirect = 5u;
 
 const u32 s_GpuGridBucketStride = s_GpuGridBucketCapacity + 1u;
 
@@ -42,7 +42,7 @@ const u32 s_GpuBroadphasePairBytes = 16u;
 const u32 s_GpuNarrowphaseManifoldBytes = 176u;
 const u32 s_GpuContactPointBytes = 64u;
 const u32 s_GpuContactConstraintBytes = 528u;
-const u32 s_GpuJointConstraintBytes = 432u;
+const u32 s_GpuJointConstraintBytes = 400u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,8 +168,6 @@ class GpuPhysicsJointConstraint{
     public f32x4 linearImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 limitImpulses(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 totalLinearImpulse(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 totalAngularImpulse(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 
@@ -221,7 +219,7 @@ static_assert(offset_of<GpuPhysicsJointConstraint>(qA0) == 64u, "JointConstraint
 static_assert(offset_of<GpuPhysicsJointConstraint>(linearOffset) == 192u, "JointConstraint.linearOffset offset mismatch");
 static_assert(offset_of<GpuPhysicsJointConstraint>(suspensionSoftness) == 240u, "JointConstraint.suspensionSoftness offset mismatch");
 static_assert(offset_of<GpuPhysicsJointConstraint>(linearImpulse) == 352u, "JointConstraint.linearImpulse offset mismatch");
-static_assert(offset_of<GpuPhysicsJointConstraint>(totalAngularImpulse) == 416u, "JointConstraint.totalAngularImpulse offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(limitImpulses) == 384u, "JointConstraint.limitImpulses offset mismatch");
 
 static_assert(is_trivially_copyable<GpuPhysicsPushConstants>(), "GpuPhysicsPushConstants must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyState>(), "GpuPhysicsBodyState must stay trivially copyable");

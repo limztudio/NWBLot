@@ -24,20 +24,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<logger/server/crash_ingest.adhd.h>"), cpp_name("::NWB::Log::CrashIngestConfig")]
+[cpp_header("<logger/server/crash_ingest.h>"), cpp_name("::NWB::Log::CrashIngestConfig")]
 extern class CrashIngestConfig{
     Path storageDirectory;
     CrashRetentionConfig retention;
 };
 
-[cpp_header("<logger/server/crash_ingest.adhd.h>"), cpp_name("::NWB::Log::CrashIngestResult")]
+[cpp_header("<logger/server/crash_ingest.h>"), cpp_name("::NWB::Log::CrashIngestResult")]
 extern class CrashIngestResult{
     PlatformOwnedString message;
     LogType type;
     b8 accepted;
 };
 
-[cpp_header("<logger/server/crash_ingest.adhd.h>"), cpp_name("::NWB::Log::ProcessCrashUpload")]
+[cpp_header("<logger/server/crash_ingest.h>"), cpp_name("::NWB::Log::ProcessCrashUpload")]
 extern CrashIngestResult ProcessCrashUpload(mut HeapStorage storage, in Path archive, in CrashIngestConfig config);
 
 

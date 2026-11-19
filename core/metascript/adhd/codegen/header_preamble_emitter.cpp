@@ -169,14 +169,6 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("\r\n");
     }
 
-    if(!unit.topLevelNativeBlocks.empty()){
-        out.append("\r\n");
-        for(const MStringView& rawBlock : unit.topLevelNativeBlocks){
-            AppendTextDiscardCrAndExpandLf(out, rawBlock);
-            out.append("\r\n");
-        }
-    }
-
     out.append("\r\n\r\n////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
 
     if(!namespacePath.empty()){

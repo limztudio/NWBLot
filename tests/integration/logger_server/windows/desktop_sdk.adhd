@@ -125,42 +125,42 @@ extern usize WinGlobalSize(in WinGlobalHandle handle);
 [cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::GlobalFlags")]
 extern u32 WinGlobalFlags(in WinGlobalHandle handle);
 
-[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::LogString"), cpp_flags(no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::LogString"), cpp_flags(no_assign)]
 extern class WinLogString;
 
 [cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::NativeText")]
 extern WinLogString NativeLogText(mut HeapStorage storage, in PlatformStringView text);
 
-[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::MessageItem"), cpp_flags(no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::MessageItem"), cpp_flags(no_assign)]
 extern class WinLogRow;
 
-[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::MessageDeque"), cpp_flags(no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::MessageDeque"), cpp_flags(no_assign)]
 extern class WinMessageDeque{
     void emplace_back(in WinLogString text, in LogType kind);
 };
 
-[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardText"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardText"), cpp_flags(no_copy, no_assign)]
 extern class WinClipboardText{
     WinGlobalHandle native()const;
     void release();
 };
 
-[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardTextFailure"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardTextFailure"), cpp_flags(no_copy, no_assign)]
 extern class WinClipboardFailure;
 
-[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardByteCount")]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardByteCount")]
 extern Expected<usize, ErrorCode> WinClipboardBytes(in usize textCharacters);
 
-[cpp_header("<logger/server/clipboard_text.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::BuildClipboardText")]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::BuildClipboardText")]
 extern Expected<WinClipboardText, WinClipboardFailure> WinBuildClipboardText(in WinMessageDeque messages);
 
-[cpp_header("<logger/server/log_row_painter.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::Draw")]
+[cpp_header("<logger/server/log_row_painter.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::Draw")]
 extern void WinDrawLogRow(mut WinDrawItem item, in WinLogRow row);
 
-[cpp_header("<logger/server/log_row_painter.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::Measure")]
+[cpp_header("<logger/server/log_row_painter.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::Measure")]
 extern void WinMeasureLogRow(in WinWindowHandle parent, in WinWindowHandle child, mut WinMeasureItem item, in WinLogRow row);
 
-[cpp_header("<logger/server/log_row_painter.adhd.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::s_FontHeight")]
+[cpp_header("<logger/server/log_row_painter.h>"), cpp_name("::NWB::Log::FrameDetail::LogRowPainter::s_FontHeight")]
 extern const u32 s_WinLogFontHeight;
 
 

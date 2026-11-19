@@ -2,45 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/callback_shutdown.adhd>
-#include <loader/project_entry.adhd>
-#include "runtime_constants.adhd"
-#include "crash_reporting.adhd"
-#include "resource_mount_resolver.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class LoaderRuntimeFlags{
-    public b8 enableGpuDebug = false;
-    public b8 forceSdrOutput = false;
-    public b8 disableHardwareRayTracing = false;
-    public b8 useStandaloneLogger = false;
-}
-
-b8 ShouldUseStandaloneLogger(in StringView address, in u16 port){
-    return address.empty() || port == s_StandaloneLoggerPort;
-}
-
-b8 ValidateProjectFrameClientSize(in ProjectFrameClientSize size){
-    if(size.width == s_EmptyFrameClientExtent || size.height == s_EmptyFrameClientExtent){
-        [essential] error("Invalid project frame client size: {}x{}", size.width, size.height);
-        return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#include <loader/callback_shutdown.h>
+#include <loader/project_entry.h>
+#include <loader/runtime_constants.adhd.h>
+#include <loader/crash_reporting.adhd.h>
+#include <loader/resource_mount_resolver.adhd.h>
 
 #include <logger/client/module.h>
 
@@ -75,6 +41,25 @@ namespace __hidden_loader{
 
 using namespace NWB::LoaderDetail;
 using CrashArena = NWB::Core::Alloc::PersistentArena;
+
+struct LoaderRuntimeFlags{
+    b8 enableGpuDebug = false;
+    b8 forceSdrOutput = false;
+    b8 disableHardwareRayTracing = false;
+    b8 useStandaloneLogger = false;
+};
+
+[[nodiscard]] b8 ShouldUseStandaloneLogger(const AStringView address, const u16 port)noexcept{
+    return address.empty() || port == s_StandaloneLoggerPort;
+}
+
+[[nodiscard]] b8 ValidateProjectFrameClientSize(const ProjectFrameClientSize& size){
+    if(size.width == s_EmptyFrameClientExtent || size.height == s_EmptyFrameClientExtent){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Invalid project frame client size: {}x{}"), size.width, size.height);
+        return false;
+    }
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -418,12 +403,6 @@ int EntryPoint(const isize argc, CharT** argv, void* inst){
 
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(__hidden_loader::EntryPoint)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

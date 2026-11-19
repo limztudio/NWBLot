@@ -4,7 +4,6 @@
 
 #include <tests/common/posix_child.adhd>
 #include <tests/common/gtest_macros.adhd>
-#include <loader/callback_shutdown.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,11 +23,11 @@ extern usize ReadNullProfileEvents(mut CpuTaskScheduler scheduler, in usize capa
 extern Expected<CpuTaskHandle, CpuTaskAdmissionError> SubmitNullDependencies(mut auto scheduler, in auto action, in usize count);
 [cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::SubmitAfter")]
 extern Expected<CpuTaskHandle, CpuTaskAdmissionError> SubmitAfter(mut CpuTaskScope scope, in auto action, in CpuTaskOptions options, in CpuTaskHandle dependency);
-[cpp_header("<loader/project_entry.adhd.h>"), cpp_name("::NWB::IProjectEntryCallbacks"), cpp_flags(polymorphic_base)]
+[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::IProjectEntryCallbacks"), cpp_flags(polymorphic_base)]
 extern class ProjectShutdownListener{
     [cpp_flags(unwind)] void onShutdown();
 };
-[cpp_header("<loader/callback_shutdown.adhd.h>"), cpp_name("::NWB::LoaderDetail::CallbackShutdownGuard"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<loader/callback_shutdown.h>"), cpp_name("::NWB::LoaderDetail::CallbackShutdownGuard"), cpp_flags(no_copy, no_assign)]
 extern class LoaderShutdownGuard{
     void activate();
 };

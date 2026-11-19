@@ -2,167 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/telemetry/memory_report.adhd>
-#include <logger/telemetry/report_dot.adhd>
-#include <logger/telemetry/report_json.adhd>
-#include <logger/telemetry/report_types.adhd>
-#include <logger/telemetry/report_values.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <logger/global.h>
-
-#include <core/alloc/scratch.h>
-#include <core/telemetry/perf.h>
-
-#include <global/name_hash_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(s_TelemetryReportEventKindCount == static_cast<usize>(Core::Telemetry::EventKind::MemoryFrame) + 1u);
-static_assert(s_TelemetryMemorySourceCount == static_cast<usize>(Core::Perf::MemorySource::HeapBacking) + 1u);
-
-struct TelemetryReport{
-    TelemetryReportSummary summary;
-    AString<Core::Telemetry::TelemetryArena> json;
-    AString<Core::Telemetry::TelemetryArena> perfCsv;
-    AString<Core::Telemetry::TelemetryArena> graph;
-
-
-public:
-    explicit TelemetryReport(Core::Telemetry::TelemetryArena& arena)noexcept
-        : json(arena)
-        , perfCsv(arena)
-        , graph(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TelemetryReportDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameHashTextCodec::s_TextLength + 1u>& outIdentityText)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView& events, Core::Telemetry::TelemetryArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_TelemetryPerfCsvHeader = "source,scope,publish_frame,seconds,min_seconds,max_seconds,last_seconds,sample_count,first_sample_frame,last_sample_frame\n";
-const StringView s_TelemetryPerfSourceCpu = "cpu";
-const StringView s_TelemetryPerfSourceGpu = "gpu";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-usize ComputeTelemetryPerfCsvReserveBytes(in usize eventCount){
-    return s_LogTelemetryReportPerfCsvFixedReserveBytes + eventCount * s_LogTelemetryReportPerfCsvBytesPerEvent;
-}
-
-usize SelectTelemetryEventKindBucket(in usize kindIndex, in usize kindCount, in usize unknownBucket){
-    if(kindIndex < kindCount)
-        return kindIndex;
-    return unknownBucket;
-}
-
-StringView SelectTelemetryPerfSourceText(in u32 sourceIndex){
-    switch(sourceIndex){
-    case 1u:
-        return s_TelemetryPerfSourceCpu;
-    case 2u:
-        return s_TelemetryPerfSourceGpu;
-    default:
-        return s_LogTelemetryReportDotUnknownReportField;
-    }
-}
-
-b8 IsFiniteTimingSecondsTotal(in f64 total){
-    return (bit_cast<u64>(total) & s_LogTelemetryReportTimingSecondsExponentMask) != s_LogTelemetryReportTimingSecondsExponentMask;
-}
-
-void RecordTelemetryFrameRange(in u64 frameIndex, mut TelemetryReportSummary summary){
-    if(!summary.hasFrameRange){
-        summary.hasFrameRange = true;
-        summary.minFrameIndex = frameIndex;
-        summary.maxFrameIndex = frameIndex;
-        return;
-    }
-
-    if(frameIndex < summary.minFrameIndex)
-        summary.minFrameIndex = frameIndex;
-    if(frameIndex > summary.maxFrameIndex)
-        summary.maxFrameIndex = frameIndex;
-}
-
-void AccumulateTelemetryFrameGraphSummary(in usize nodeCount, in usize edgeCount, mut TelemetryReportSummary summary){
-    ++summary.frameGraphFrameCount;
-    summary.frameGraphNodeCount += cast<u64>(nodeCount);
-    summary.frameGraphEdgeCount += cast<u64>(edgeCount);
-    const u32 boundedNodeCount = cast<u32>(nodeCount);
-    const u32 boundedEdgeCount = cast<u32>(edgeCount);
-    if(boundedNodeCount > summary.maxFrameGraphNodeCount)
-        summary.maxFrameGraphNodeCount = boundedNodeCount;
-    if(boundedEdgeCount > summary.maxFrameGraphEdgeCount)
-        summary.maxFrameGraphEdgeCount = boundedEdgeCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#include "report.h"
+
+#include <logger/telemetry/memory_report.adhd.h>
+#include <logger/telemetry/report_dot.adhd.h>
+#include <logger/telemetry/report_format.adhd.h>
+#include <logger/telemetry/report_json.adhd.h>
 
 #include <core/common/name_symbols.h>
 #include <core/telemetry/diagnostic.h>
@@ -973,12 +818,6 @@ Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView&
 
 
 NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

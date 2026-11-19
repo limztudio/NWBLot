@@ -10,11 +10,11 @@
 - **File Extension**: `.adhd`
 - **Compilation Pipeline**: `.adhd` source -> `core/metascript/adhd` compiler (`nwb_adhd_compiler`) -> generated `.adhd.h` / `.adhd.cpp` C++ source and optional `--emit-cpp-externs` / `--depfile` outputs.
 - **Core Guarantees**:
-  1. **Automatic arena propagation**: Root arena owners (`[arena]`, `[arena, asset(...)]`, `[arena, subsystem(...)]`, `[arena, component(...)]`, `[arena, system(...)]`) supply persistent storage. Ordinary arena-backed classes borrow their owner's arena automatically, and local temporary allocations borrow a stack-scoped `ScratchArena`. Explicit `*Arena` types are prohibited outside `native` blocks.
+  1. **Automatic arena propagation**: Root arena owners (`[arena]`, `[arena, asset(...)]`, `[arena, subsystem(...)]`, `[arena, component(...)]`, `[arena, system(...)]`) supply persistent storage. Ordinary arena-backed classes borrow their owner's arena automatically, and local temporary allocations borrow a stack-scoped `ScratchArena`. Explicit `*Arena` types are prohibited in `.adhd`.
   2. **Compile-time layout & serialization**: Non-`[serialize]` classes automatically reorder fields to minimize alignment padding. `[layout(alignment)]` fixes power-of-two ABI alignment while keeping field order; `[serialize]` preserves authored order and generates binary codecs, `.nwb` metadata parsing, and `AssetRef<T>` dependency extraction.
   3. **Explicit mutability, borrowing & lifetime checks**: Mandatory member access specifiers (`public`, `private`, `protected`), parameter modes (`in`, `mut`, `in borrow`, `in cpp_ref`, `mut forward`, `mut copy`), mandatory `this.` qualification, and compile-time lifetime checks for borrowed views and references.
   4. **Built-in parallel multithreading**: First-class `parallel_for` loops and `parallel` task DAG blocks lowered directly to `Core::CpuTaskScheduler` and `Core::CpuTaskScope`.
-  5. **Typed C++ SDK interop**: Built-in `global/` and `core/` `extern` preludes, optional libclang C++ header import, explicit C++ unwind/operator/alias interop attributes, and scoped `native` blocks for engine bootstrap or C-ABI boundaries.
+  5. **Typed C++ SDK interop**: Built-in `global/` and `core/` `extern` preludes, optional libclang C++ header import, explicit C++ unwind/operator/alias interop attributes, and separate `.h`/`.cpp` C++ boundary files bound via typed `extern` declarations (`native` blocks are retired and prohibited).
 
 ---
 
@@ -27,7 +27,7 @@
     2. File-scope `const` compile-time constants and `type` aliases
     3. `enum<SizeType>` and `flag<SizeType>` declarations
     4. `interface` declarations
-    5. `class` (and `[header]` / `extern`) declarations
+    5. `class` and `extern` declarations
     6. Top-level free functions, out-of-line `ClassName::methodName` definitions, asset/cook registrations, and file-scope `static_assert` checks
 - **`class` (Concrete Data + Methods)**:
   - Unifies C++ `class` and `struct` under `class`.
@@ -73,8 +73,8 @@
     type CompareFn = Func<b8(in i32, in i32)>;
     type NameMap<V> = HashMap<Name, V>;
     ```
-- **No `namespace`, No `static`, & Strict Top-Level Scope**:
-  - `.adhd` has no `namespace`, `struct`, `union`, `static`, `template`, `inline`, or `noinline` keywords.
+- **No `namespace`, No `static`, No `native`, & Strict Top-Level Scope**:
+  - `.adhd` has no `namespace`, `struct`, `union`, `static`, `template`, `inline`, `noinline`, or `native` keywords (`native{}` blocks are retired and prohibited; place C++ code in separate `.h`/`.cpp` files bound via typed `extern`).
   - Declaring a `class`, `interface`, `enum`, `flag`, `type`, or function inside another type or local block is a compile-time error; all declarations live at top-level file scope, with stateless helpers written as free functions.
   - A public domain umbrella header may declare `namespace_wrapper NWB_IMPL;` once to export its paired C++ `NWB_IMPL_BEGIN` and `NWB_IMPL_END` macros for that target namespace.
 - **No Raw Pointers & No `null` (`Optional<T>` / `Expected<T, E>` Only)**:
@@ -247,7 +247,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 ## 6. Arena Memory Management Model
 
 1. **No Explicit `*Arena` Types**:
-   - Referencing `ArenaBase`, `AssetArena`, `CookArena`, `GlobalArena`, `GraphicsArena`, `MetaArena`, `PersistentArena`, `ScratchArena`, or `TelemetryArena` outside `native` blocks is a compile-time error.
+   - Referencing `ArenaBase`, `AssetArena`, `CookArena`, `GlobalArena`, `GraphicsArena`, `MetaArena`, `PersistentArena`, `ScratchArena`, or `TelemetryArena` anywhere in `.adhd` is a compile-time error.
 2. **Root Owners (`[arena]`, `[arena, asset(...)]`, `[arena, subsystem(...)]`, `[arena, component(...)]`, `[arena, system(...)]`)**:
    - Asset, subsystem, component, and system classes must pair their role attribute with `arena`.
    - Standalone `[arena]` and `[arena, component("...")]` classes own a `s_ClassArena` (`GlobalArena`).
@@ -268,14 +268,14 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 - **`parallel` DAG Tasks & Callable Dispatch**:
   - Named task blocks support dependency edges (`parallel downstream : upstream{ ... }`) where prerequisites precede dependents, plus `[core(Heavy | Light | Any | MainThread)]` and `[priority(Critical | Normal | Background)]`. Active tasks auto-join before scope exit or at explicit `wait(...)` boundaries.
   - Callable dispatch (`parallel workerFn(i, offset);`) evaluates `in` arguments immediately by value on the submitting thread while passing `mut` arguments and captures by reference into `Core::CpuTaskScope`.
-- **Compile-Time Concurrency Rules**: The checker rejects shared mutation of known non-thread-safe containers across `parallel_for` and concurrent `parallel` blocks. Disjoint slice safety and foreign/C++ aliasing inside external or `native` calls remain the author's responsibility.
+- **Compile-Time Concurrency Rules**: The checker rejects shared mutation of known non-thread-safe containers across `parallel_for` and concurrent `parallel` blocks. Disjoint slice safety and foreign/C++ aliasing inside external `extern` calls remain the author's responsibility.
 
 ---
 
 ## 8. Preprocessor & Macro System
 
 - Preprocessing runs before AST parsing, member reordering, and code generation:
-  - Outside `native`, `#include` resolves `.adhd` files with automatic deduplication (while C++ headers go in typed `extern` attributes or `[header] native`).
+  - `#include` resolves `.adhd` files with automatic deduplication (while C++ headers are bound via `[cpp_header("<...>")]` / `extern "<...>"`).
   - Supports `#define` (object-like and function-like), `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, `#endif`, and `defined(...)`.
   - Macro definitions come from `#define` directives, `--define` / `-D` CLI flags, and CMake `nwb_target_adhd_definitions`. Do not assume C++ target/platform build macros exist in `.adhd` unless explicitly defined for the ADHD pass.
 
@@ -292,7 +292,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
   - Method / constructor / destructor: `[reflect]`, `[owner_result]`, `[cpp_unwind]`, `[cpp_rvalue_overload]`, `[cpp_explicit_bool]`, `[cpp_take_assignment]`, `[cpp_base(Base, param0, ...)]`
   - Free function: `[cpp_unwind]`, `[asset_writer]`, `[cook_entry(...)]`, `[cook_sidecar(s_Ext)]`, `[gather_merge]`, `[cook_registrar]`, `[cook_document]`, `[volume_prepare]`, `[cook_setup]`
   - Diagnostics & scheduling: `[essential]` on `assert`/`info`/`warning`/`error`; `[core(...)]`, `[priority(...)]` on `parallel` / `parallel_for`
-  - `extern` & `native`: `[cpp_name("...")]`, `[cpp_header("<...>")]`, `[cpp_flags(...)]` on `extern`; `[header]`, `[source]` on top-level `native`
+  - `extern`: `[cpp_name("...")]`, `[cpp_header("<...>")]`, `[cpp_flags(...)]` on `extern` declarations
 - **Asset Runtime & Cooking Declarations**:
   - Standalone and family asset registration: `register_asset Type using Registrar;` at file scope using `AssetCodecRegistration<Codec>`, `TypedAssetRegistration<Base, Type, Codec>` (or authored alias), `CompositeRootRegistration<Type>`, `NonStandaloneAssetRegistration<Type>`, or cook-side `FamilyCookRegistration<Family, Member, Codec, Policy>`.
   - Cook attributes emit `NWB_COOK` registry/codec bindings from typed ADHD free functions:
@@ -303,7 +303,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 
 ---
 
-## 10. C++ Interop: Typed `extern` Preludes, Header Importer & `native` Blocks
+## 10. C++ Interop: Typed `extern` Preludes & Header Importer
 
 - **Typed `extern` Declarations**:
   - `extern enum`, `extern flag`, `extern class`, `extern` functions/templates, `extern const`, and `extern registration` bind C++ APIs into `.adhd` type checking using `[cpp_header("<...>")]`, `[cpp_name("...")]`, and `[cpp_flags(...)]`:
@@ -311,12 +311,9 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
     - Callable flags: `scratch_arena`, `borrow_view`, `platform_literal_arg0`, `byte_view_arg0`, `byte_view_arg1`, `unwind`.
   - **Built-in Preludes & On-Demand Headers**: `export_global_prelude.adhd` (collecting `global/**/*.adhd`) and `export_core_prelude.adhd` (collecting `core/**/*.adhd`) are automatically parsed with the compiler. Semantic analysis tracks referenced unshadowed symbols (`requiredGlobalHeaders`) so generated headers include only the headers actually used. User declarations always shadow built-in exports.
 - **Authoring Boundary**:
-  - C++ SDK contracts use typed `extern` preludes; code under `impl/`, `utilities/`, and `pipeline/` includes owning `.adhd` modules directly and implements declarations and control flow in ADHD. The ADHD compiler (`core/metascript/`, `pipeline/adhd_compiler/`) and its bootstrap CLI (`pipeline/command_line.*`, `pipeline/main.cpp`) remain C++.
+  - Raw C++ `native` blocks are retired and prohibited in `.adhd`. C++ code (such as third-party SDK adapters, C-ABI interop, OS window/entry bootstrap in `loader/` and `logger/`, the ADHD compiler `core/metascript/`, and `pipeline/adhd_compiler/`) lives in separate `.h`/`.cpp` files bound into `.adhd` via typed `extern` declarations (`loader/project_entry.adhd`, `logger/rgd/decode.adhd`, `utilities/*_sdk.adhd`, etc.).
 - **libclang C++ Header Importer (`core/metascript/adhd/clang/`)**:
   - `--cpp-header`, `--cpp-include-dir`, `--cpp-define`, `--cpp-arg`, and `--emit-cpp-externs` parse C++ headers using the vendored static libclang (`3rd_parties/llvm`), translate supported declarations into pointer-free `extern` `.adhd` AST nodes (respecting pointer-free, arena, and container mapping rules in `export_cpp_importer.h`), and optionally emit generated `.adhd` `extern` sources.
-- **`native` Interop Blocks**:
-  - `[header] native{ ... }` emits raw C++ declarations/includes into `.adhd.h`; `[source] native{ ... }` emits `.adhd.cpp`-only helpers.
-  - Statement `native(in a, mut b = this.field){ ... }` exposes captured `.adhd` containers with `.data()`/`.size()` and `Func<...>` callbacks with `.cTrampolineLast()`, `.cTrampolineFirst()`, and `.userData()`. Read-only `in` captures and thread safety inside `native` remain an author-verified trusted boundary.
 
 ---
 

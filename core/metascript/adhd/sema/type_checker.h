@@ -58,7 +58,7 @@ class TypeChecker final{
 private:
     [[nodiscard]] static const ScopedVarInfo* FindScopedVar(Span<const ScopedVarInfo> scope, MStringView name, usize* outIndex = nullptr)noexcept;
     [[nodiscard]] static const TemplateParamDecl* FindTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, MStringView name)noexcept;
-    [[nodiscard]] static b8 StatementsContainReturnOrNative(Span<const Stmt* const> stmts)noexcept;
+    [[nodiscard]] static b8 StatementsContainReturn(Span<const Stmt* const> stmts)noexcept;
     [[nodiscard]] static const Expr* UnwrapMemberOrIndexRoot(const Expr* expr)noexcept;
     [[nodiscard]] static b8 DoesSynthesizedClassCtorPassArena(const ClassDecl& ctorCls, MStringView baseClassName, usize argCount, MStringView firstArgBaseType)noexcept;
 
@@ -181,7 +181,6 @@ private:
     b8 m_activeLambdaMutatesContainer = false;
     b8 m_inClassArenaContext = false;
     b8 m_activeParallelBlockUsesScratch = false;
-    b8 m_hasTopLevelNativeBlocks = false;
     b8 m_recordGlobalHeaders = false;
 };
 

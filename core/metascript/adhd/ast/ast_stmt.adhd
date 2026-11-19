@@ -20,7 +20,6 @@ extern enum AdhdStmtKind : u8{
     ParallelForIndex,
     ParallelBlock,
     ParallelCall,
-    NativeBlock,
     Diagnostic
 };
 

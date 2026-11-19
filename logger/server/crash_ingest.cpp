@@ -2,129 +2,47 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/server/arena_names.adhd>
-#include <logger/server/crash_archive_extractor.adhd>
-#include <logger/server/crash_ingest_failure.adhd>
-#include <logger/server/crash_manifest_validator.adhd>
-#include <logger/server/crash_paths.adhd>
-#include <logger/server/crash_retention.adhd>
-#include <logger/server/crash_symbolicate.adhd>
-#include <logger/server/crash_values.adhd>
+#include "crash_ingest.h"
+
+#include <logger/server/arena_names.adhd.h>
+#include <logger/server/crash_archive_extractor.adhd.h>
+#include <logger/server/crash_ingest_failure.adhd.h>
+#include <logger/server/crash_manifest_validator.adhd.h>
+
+#include <global/binary.h>
+#include <global/diagnostics.h>
+#include <global/filesystem/archive.h>
+#include <global/filesystem/retention.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <logger/common.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct CrashIngestConfig{
-    Path storageDirectory;
-    CrashSymbolicationConfig symbolication;
-    CrashRetentionConfig retention;
-
-
-public:
-    explicit CrashIngestConfig(LogArena& arena)noexcept
-        : storageDirectory(arena)
-        , symbolication(arena)
-    {}
-};
-
-struct CrashIngestResult{
-    LogString message;
-    Core::Common::LogType::Enum type = Core::Common::LogType::EssentialInfo;
-    b8 accepted = false;
-
-
-public:
-    explicit CrashIngestResult(LogArena& arena)noexcept
-        : message(arena)
-    {}
-};
-
-
-[[nodiscard]] CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashIngestConfig& config);
-
-template<typename ArchiveArenaT>
-    requires (!IsSame_V<ArchiveArenaT, LogArena>)
-[[nodiscard]] inline CrashIngestResult ProcessCrashUpload(LogArena& arena, const ::Path<ArchiveArenaT>& archivePath, const CrashIngestConfig& config){
-    return ProcessCrashUpload(arena, Path(arena, archivePath), config);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_CrashIngestAcceptedSectionHeader = "\ningest:\n";
-const StringView s_CrashIngestAcceptedRawArchivePrefix = "ingest_status=accepted\nraw_archive=";
-const StringView s_CrashIngestRawNotRetainedWarning = "warning=raw upload archive could not be retained\n";
-
-u8 SelectAcceptedCrashLogTypeIndex(in StringView event){
-    if(event == s_DiagnosticEventAssert)
+namespace NWB::Log{
+inline constexpr AStringView s_CrashIngestAcceptedSectionHeader = "\ningest:\n";
+inline constexpr AStringView s_CrashIngestAcceptedRawArchivePrefix = "ingest_status=accepted\nraw_archive=";
+inline constexpr AStringView s_CrashIngestRawNotRetainedWarning = "warning=raw upload archive could not be retained\n";
+[[nodiscard]] u8 SelectAcceptedCrashLogTypeIndex(const AStringView event)noexcept{
+    if(event == ::DiagnosticEventName::s_Assert)
         return 6u;
-    if(event == s_DiagnosticEventError)
+    if(event == ::DiagnosticEventName::s_Error)
         return 4u;
-    if(event == s_DiagnosticEventFatal)
+    if(event == ::DiagnosticEventName::s_Fatal)
         return 5u;
     return 1u;
 }
-
-void AppendAcceptedCrashIngestDetails(in Path rawPath, in b8 rawArchived, mut String outReport){
+void AppendAcceptedCrashIngestDetails(const ::Path<::ArenaBase>& rawPath, const b8 rawArchived, AString<LogArena>& outReport){
     if(!outReport.empty() && outReport.back() != 10u)
         outReport.append(s_CrashSymbolicateReportLineEnd);
-
     outReport.append(s_CrashIngestAcceptedSectionHeader);
     outReport.append(s_CrashIngestAcceptedRawArchivePrefix);
-    outReport.append(PathToString(rawPath));
+    StringAppendFormat(outReport, "{}", PathToString<char>(rawPath));
     outReport.append(s_CrashSymbolicateReportLineEnd);
     if(!rawArchived)
         outReport.append(s_CrashIngestRawNotRetainedWarning);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/binary.h>
-#include <global/filesystem/archive.h>
-#include <global/filesystem/retention.h>
-#include <global/text_utils.h>
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -403,12 +321,6 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
 
 
 NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

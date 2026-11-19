@@ -77,7 +77,7 @@ b8 PreprocessorIncludes::process(Preprocessor& owner, const MStringView rest, co
 
     const MStringView includePath = rest.substr(1u, closePos - 1u);
     if(!PreprocessorSemantics::IsAllowedIncludePath(includePath, m_allowNwbInclude)){
-        m_errors.push_back(ParseError{line, 1u, MString("outside 'native { ... }', '#include' may only include '.adhd' or '.nwb' files; place C++ '#include' directives inside a 'native' block", m_arena)});
+        m_errors.push_back(ParseError{line, 1u, MString("#include may only include '.adhd' or '.nwb' files; bind C++ headers via typed 'extern' declarations and C++ sources", m_arena)});
         return false;
     }
     MString scopedIncludeKey(m_arena);

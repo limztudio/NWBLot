@@ -85,62 +85,6 @@ Stmt* StmtParser::parseParallelStatement(const SourceSpan span, const Span<const
     return stmt;
 }
 
-Stmt* StmtParser::parseNativeStatement(const SourceSpan span){
-    Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
-    stmt->kind = StmtKind::NativeBlock;
-    stmt->span = span;
-
-    if(m_cursor.match(TokenType::LeftParen)){
-        if(!m_cursor.check(TokenType::RightParen)){
-            for(;;){
-                NativeBinding binding;
-                binding.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
-                binding.mode = MatchParamPassingMode(m_cursor);
-                if(binding.mode == ParamPassingMode::None){
-                    m_cursor.error("native block binding must explicitly specify 'in' or 'mut'");
-                    return nullptr;
-                }
-
-                if(!m_cursor.check(TokenType::Identifier)){
-                    m_cursor.errorExpected("expected binding identifier in native(...)");
-                    return nullptr;
-                }
-                binding.aliasName = m_cursor.current().text;
-                m_cursor.advance();
-
-                if(m_cursor.match(TokenType::Equal)){
-                    binding.sourceExpr = m_exprParser.parseExpression();
-                    if(!binding.sourceExpr)
-                        return nullptr;
-                }
-                else{
-                    Expr* selfId = AllocateAstNode<Expr>(m_cursor.arena());
-                    selfId->kind = ExprKind::Identifier;
-                    selfId->text = binding.aliasName;
-                    selfId->span = binding.span;
-                    binding.sourceExpr = selfId;
-                }
-
-                stmt->nativeBindings.push_back(binding);
-
-                if(m_cursor.check(TokenType::RightParen))
-                    break;
-                if(!m_cursor.expect(TokenType::Comma, "expected ',' or ')' in native(...) binding list"))
-                    return nullptr;
-            }
-        }
-        if(!m_cursor.expect(TokenType::RightParen, "expected ')' after native(...) bindings"))
-            return nullptr;
-    }
-
-    if(!m_cursor.consumeBalancedBracesRaw(stmt->nativeCode))
-        return nullptr;
-
-    while(m_cursor.match(TokenType::Semicolon)){}
-
-    return stmt;
-}
-
 Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const DiagnosticKind::Enum kind, const Span<const ParsedAttribute> attributes){
     Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
     stmt->kind = StmtKind::Diagnostic;

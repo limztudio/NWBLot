@@ -432,8 +432,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             recordBuiltinTypeHeader(expr.lhs->scopeChain[0]);
             recordRequiredHeader(fnInfo->requiredHeader);
             const b8 badArity = isBuiltinFnArityInvalid(*fnInfo);
-            if(!badArity || !m_hasTopLevelNativeBlocks)
-                applyBuiltinFunctionCall(*fnInfo, fnInfo->adhdName, badArity);
+            applyBuiltinFunctionCall(*fnInfo, fnInfo->adhdName, badArity);
             calleeSignatureKnown = expr.isBuiltinCall;
         }
         else{

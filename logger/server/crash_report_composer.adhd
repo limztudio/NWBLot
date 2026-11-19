@@ -2,8 +2,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/server/crash_symbolicate.adhd>
+#include <logger/server/crash_symbolicate_internal.adhd>
 #include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashPackageSummary"), cpp_flags(no_copy, no_assign)]
+extern class CrashPackageSummary{
+    String crashId;
+    String platform;
+    String reasonKind;
+    String artifactStrategy;
+    String event;
+    String triggerExpression;
+    String triggerMessage;
+    String triggerFile;
+    u64 reasonCode;
+    u64 threadId;
+    u64 triggerLine;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

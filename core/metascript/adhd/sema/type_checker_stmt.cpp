@@ -25,16 +25,16 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TypeChecker::StatementsContainReturnOrNative(const Span<const Stmt* const> stmts)noexcept{
+b8 TypeChecker::StatementsContainReturn(const Span<const Stmt* const> stmts)noexcept{
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
-        if(stmt->kind == StmtKind::Return || stmt->kind == StmtKind::NativeBlock)
+        if(stmt->kind == StmtKind::Return)
             return true;
-        if(StatementsContainReturnOrNative(stmt->statements) || StatementsContainReturnOrNative(stmt->elseStatements))
+        if(StatementsContainReturn(stmt->statements) || StatementsContainReturn(stmt->elseStatements))
             return true;
         for(const SwitchCase& sc : stmt->switchCases){
-            if(StatementsContainReturnOrNative(sc.statements))
+            if(StatementsContainReturn(sc.statements))
                 return true;
         }
     }
@@ -99,7 +99,7 @@ b8 TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVect
         }
     }
     if(!method.isConstructor && !method.isDestructor && !IsVoidTypeRef(m_symbols.unwrapTypeAlias(method.returnType))){
-        if(!StatementsContainReturnOrNative(method.body)){
+        if(!StatementsContainReturn(method.body)){
             reportError(errors, method.span, "non-void function or method must contain a 'return' statement");
             ok = false;
         }
@@ -491,35 +491,6 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
         --m_loopDepth;
-        break;
-    }
-    case StmtKind::NativeBlock:{
-        for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
-            NativeBinding& binding = stmt.nativeBindings[i];
-            binding.needsConstShadow = false;
-            for(usize j = 0u; j < i; ++j){
-                if(!binding.aliasName.empty() && stmt.nativeBindings[j].aliasName == binding.aliasName){
-                    reportError(errors, binding.span, "duplicate binding name in 'native(...)' capture list");
-                    ok = false;
-                    break;
-                }
-            }
-            if(binding.sourceExpr){
-                if(binding.mode == ParamPassingMode::Mut)
-                    binding.sourceExpr->isMutArg = true;
-                if(!checkExpr(ownerClass, scope, binding.mode == ParamPassingMode::Mut, method, *binding.sourceExpr, errors))
-                    ok = false;
-                if(
-                    binding.mode == ParamPassingMode::In
-                    && binding.sourceExpr->kind == ExprKind::Identifier
-                    && binding.sourceExpr->text == binding.aliasName
-                    && !binding.sourceExpr->derefNotNull
-                    && FindScopedVar(scope, binding.sourceExpr->text) != nullptr
-                    && !isReceiverConst(ownerClass, method, *binding.sourceExpr, scope)
-                )
-                    binding.needsConstShadow = true;
-            }
-        }
         break;
     }
     case StmtKind::Diagnostic:{

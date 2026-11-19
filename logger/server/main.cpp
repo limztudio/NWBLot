@@ -2,32 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/server/arena_names.adhd>
-#include <logger/server/frame.adhd>
-#include <logger/server/module.adhd>
-#include <logger/server/server_values.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_MainReadinessTokenOptionDescription = "Token returned by the readiness endpoint";
-const StringView s_MainCrashSymbolStoreOptionDescription = "Directory containing crash symbol files";
-const StringView s_MainCrashUploadTokenOptionDescription = "Bearer token required for crash uploads; empty disables upload auth";
-const StringView s_MainCrashRetainPackagesOptionDescription = "Maximum extracted crash packages to keep; zero disables pruning";
-const StringView s_MainCrashRetainRawOptionDescription = "Maximum raw crash uploads to keep; zero disables pruning";
-const StringView s_MainCrashRetainInvalidOptionDescription = "Maximum invalid crash uploads to keep; zero disables pruning";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#include <logger/server/arena_names.adhd.h>
+#include <logger/server/frame.adhd.h>
+#include <logger/server/module.h>
+#include <logger/server/server_values.adhd.h>
 
 #include <core/alloc/module.h>
 #include <core/common/application_entry.h>
@@ -36,6 +14,19 @@ native{
 #include <global/terminal_entry.h>
 
 #include <CLI.hpp>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Log{
+inline constexpr AStringView s_MainReadinessTokenOptionDescription = "Token returned by the readiness endpoint";
+inline constexpr AStringView s_MainCrashSymbolStoreOptionDescription = "Directory containing crash symbol files";
+inline constexpr AStringView s_MainCrashUploadTokenOptionDescription = "Bearer token required for crash uploads; empty disables upload auth";
+inline constexpr AStringView s_MainCrashRetainPackagesOptionDescription = "Maximum extracted crash packages to keep; zero disables pruning";
+inline constexpr AStringView s_MainCrashRetainRawOptionDescription = "Maximum raw crash uploads to keep; zero disables pruning";
+inline constexpr AStringView s_MainCrashRetainInvalidOptionDescription = "Maximum invalid crash uploads to keep; zero disables pruning";
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,12 +113,6 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
 }
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -282,24 +282,9 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                         expr.resolvedCppExportName = JoinScopedCppName(m_arena, staticCls->cppExportName, staticField->name);
                 }
             }
-            else if(
-                !m_hasTopLevelNativeBlocks
-                || hadVarOrMemberLhs
-                || expr.scopeChain.size() != 2u
-                || !isUnshadowedTypeScopeAccess(scope, expr.scopeChain[0])
-                || m_symbols.findClass(expr.scopeChain[0]) != nullptr
-                || m_symbols.findInterface(expr.scopeChain[0]) != nullptr
-                || BuiltinTypeSemantics::IsScalarType(expr.scopeChain[0])
-                || IsStringLikeType(expr.scopeChain[0])
-                || FindBuiltinGenericType(expr.scopeChain[0]) != nullptr
-                || SymbolTable::IsSimdType(expr.scopeChain[0])
-                || SymbolTable::IsUnalignedVectorType(expr.scopeChain[0])
-            ){
+            else{
                 reportError(errors, expr.span, "invalid scope resolution '::'; only 'enum' and 'flag' types and variables support '::' access in adhd");
                 ok = false;
-            }
-            else if(FindBuiltinObjectType(expr.scopeChain[0]) != nullptr){
-                recordBuiltinTypeHeader(expr.scopeChain[0]);
             }
         }
         break;

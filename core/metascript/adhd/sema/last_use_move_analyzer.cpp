@@ -6,8 +6,6 @@
 #include "type_checker.h"
 #include "type_layout_analyzer.h"
 
-#include <global/source_text.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,60 +50,15 @@ namespace __hidden_last_use_move_analyzer{
     return false;
 }
 
-[[nodiscard]] b8 NativeCodeReferencesIdentifier(const MStringView nativeCode, const MStringView varName)noexcept{
-    if(nativeCode.empty() || varName.empty())
-        return false;
-    usize i = 0u;
-    while(i < nativeCode.size()){
-        const MChar ch = nativeCode[i];
-        if(ch == '\'' && i > 0u && (IsAsciiDigit(nativeCode[i - 1u]) || IsAsciiIdentifierChar(nativeCode[i - 1u]))){
-            ++i;
-            continue;
-        }
-        if(ch == '"' || ch == '\''){
-            i = SkipQuotedLiteral(nativeCode, i);
-            continue;
-        }
-        if(i + 1u < nativeCode.size() && ch == '/' && nativeCode[i + 1u] == '/'){
-            while(i < nativeCode.size() && nativeCode[i] != '\n')
-                ++i;
-            continue;
-        }
-        if(i + 1u < nativeCode.size() && ch == '/' && nativeCode[i + 1u] == '*'){
-            const usize closeComment = nativeCode.find("*/", i + 2u);
-            if(closeComment == MStringView::npos)
-                break;
-            i = closeComment + 2u;
-            continue;
-        }
-        if(IsAsciiIdentifierStart(ch)){
-            const usize start = i;
-            while(i < nativeCode.size() && IsAsciiIdentifierChar(nativeCode[i]))
-                ++i;
-            if(nativeCode.substr(start, i - start) == varName)
-                return true;
-            continue;
-        }
-        ++i;
-    }
-    return false;
-}
-
 [[nodiscard]] b8 StmtReferencesIdentifier(const Stmt* stmt, const MStringView varName)noexcept{
     if(!stmt)
         return false;
-    if(stmt->kind == StmtKind::NativeBlock && NativeCodeReferencesIdentifier(stmt->nativeCode, varName))
-        return true;
     if(stmt->initStmt && StmtReferencesIdentifier(stmt->initStmt, varName))
         return true;
     if(ExprReferencesIdentifier(stmt->expr, varName) || ExprReferencesIdentifier(stmt->condition, varName) || ExprReferencesIdentifier(stmt->stepExpr, varName))
         return true;
     for(const Expr* arg : stmt->arguments){
         if(ExprReferencesIdentifier(arg, varName))
-            return true;
-    }
-    for(const NativeBinding& nb : stmt->nativeBindings){
-        if(ExprReferencesIdentifier(nb.sourceExpr, varName))
             return true;
     }
     for(const Stmt* child : stmt->statements){
@@ -144,7 +97,7 @@ namespace __hidden_last_use_move_analyzer{
 [[nodiscard]] b8 StmtMayRetainAlias(const Stmt* stmt, const MStringView alias, const SymbolTable& symbols)noexcept{
     if(!stmt)
         return false;
-    if((stmt->kind == StmtKind::NativeBlock || stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall)
+    if((stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall)
         && StmtReferencesIdentifier(stmt, alias))
         return true;
     if(stmt->kind == StmtKind::VarDecl && stmt->name != alias && stmt->varType
@@ -217,10 +170,6 @@ namespace __hidden_last_use_move_analyzer{
         return true;
     for(const Expr* arg : stmt->arguments){
         if(ExprHasMutLambdaCapture(arg, varName, symbols))
-            return true;
-    }
-    for(const NativeBinding& nb : stmt->nativeBindings){
-        if(ExprHasMutLambdaCapture(nb.sourceExpr, varName, symbols))
             return true;
     }
     if(stmt->initStmt && StmtPreventsMoveAtLastUse(stmt->initStmt, varName, symbols, endedScope ? endedScope : stmt))

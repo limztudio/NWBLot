@@ -7,7 +7,6 @@ extern class MetascriptParserCursor{
     void advance(...);
     b8 check(...)const;
     b8 checkIdentifier(...)const;
-    b8 consumeBalancedBracesRaw(...);
     MetascriptToken current(...)const;
     void error(...);
     void errorExpected(...);

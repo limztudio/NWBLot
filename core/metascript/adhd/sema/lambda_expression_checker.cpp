@@ -123,7 +123,7 @@ b8 LambdaExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     if(m_checker.m_activeLambdaMutatesContainer)
         expr.hasMutContainerCapture = true;
     if(expr.lambdaReturnType && !IsVoidTypeRef(m_checker.m_symbols.unwrapTypeAlias(expr.lambdaReturnType))){
-        if(!m_checker.StatementsContainReturnOrNative(expr.lambdaBody)){
+        if(!m_checker.StatementsContainReturn(expr.lambdaBody)){
             m_checker.reportError(errors, expr.span, "non-void lambda must contain a 'return' statement");
             ok = false;
         }

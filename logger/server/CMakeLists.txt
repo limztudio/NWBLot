@@ -1,9 +1,12 @@
-file(GLOB _nwb_logserver_core_adhd CONFIGURE_DEPENDS LIST_DIRECTORIES false "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
-list(REMOVE_ITEM _nwb_logserver_core_adhd "${CMAKE_CURRENT_LIST_DIR}/main.adhd")
-
 nwb_declare_static_library(nwb_logserver_core)
-nwb_target_adhd_sources(nwb_logserver_core NAMESPACE "NWB::Log" SOURCES ${_nwb_logserver_core_adhd})
-unset(_nwb_logserver_core_adhd)
+nwb_target_adhd_sources(nwb_logserver_core NAMESPACE "NWB::Log" SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
+target_sources(nwb_logserver_core PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/clipboard_text.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/log_row_painter.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
+)
 if(WIN32)
     target_link_libraries(nwb_logserver_core PRIVATE dbghelp)
 endif()
@@ -20,7 +23,7 @@ target_link_libraries(nwb_logserver_core
 )
 
 nwb_declare_executable(nwb_logserver)
-nwb_target_adhd_sources(nwb_logserver NAMESPACE "NWB::Log" SOURCES "${CMAKE_CURRENT_LIST_DIR}/main.adhd")
+target_sources(nwb_logserver PRIVATE "${CMAKE_CURRENT_LIST_DIR}/main.cpp")
 nwb_target_sources_standalone_runtime(nwb_logserver)
 if(WIN32)
     set_target_properties(nwb_logserver PROPERTIES WIN32_EXECUTABLE ON)

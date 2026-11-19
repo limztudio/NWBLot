@@ -229,12 +229,10 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
     b8 inBlockComment = false;
     b8 inRawString = false;
     MString rawStringDelimiter(m_arena);
-    b8 inNativeKeywordPendingBrace = false;
-    u32 nativeBraceDepth = 0u;
     u32 currentLine = 1u;
     usize pos = 0u;
 
-    const auto updateLineScanState = [&](const MStringView lineToScan, const usize startOffset, const b8 updateNativeBraces){
+    const auto updateLineScanState = [&](const MStringView lineToScan, const usize startOffset){
         for(usize scanIdx = startOffset; scanIdx < lineToScan.size();){
             const MChar ch = lineToScan[scanIdx];
             if(ch == '/' && scanIdx + 1u < lineToScan.size() && lineToScan[scanIdx + 1u] == '/')
@@ -271,30 +269,9 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                 continue;
             }
             if(IsAsciiIdentifierStart(ch)){
-                const usize idStart = scanIdx;
                 while(scanIdx < lineToScan.size() && IsAsciiIdentifierChar(lineToScan[scanIdx]))
                     ++scanIdx;
-                if(updateNativeBraces){
-                    const MStringView idText = lineToScan.substr(idStart, scanIdx - idStart);
-                    if(nativeBraceDepth == 0u && PreprocessorSemantics::IsRawBraceBlockKeyword(idText))
-                        inNativeKeywordPendingBrace = true;
-                }
                 continue;
-            }
-            if(updateNativeBraces){
-                if(ch == '{'){
-                    if(inNativeKeywordPendingBrace || nativeBraceDepth > 0u){
-                        ++nativeBraceDepth;
-                        inNativeKeywordPendingBrace = false;
-                    }
-                }
-                else if(ch == '}'){
-                    if(nativeBraceDepth > 0u)
-                        --nativeBraceDepth;
-                }
-                else if(ch == ';' && nativeBraceDepth == 0u){
-                    inNativeKeywordPendingBrace = false;
-                }
             }
             ++scanIdx;
         }
@@ -319,7 +296,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         u32 joinedLines = 0u;
 
         MString joinedBuffer(m_arena);
-        if(!inBlockComment && !inRawString && nativeBraceDepth == 0u){
+        if(!inBlockComment && !inRawString){
             b8 hasBackslashCont = !rawLine.empty() && rawLine.back() == '\\';
             const MStringView initialTrimmed = TrimView(rawLine);
             const b8 isDirectiveLine = !initialTrimmed.empty() && initialTrimmed[0] == '#';
@@ -395,45 +372,36 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         const MStringView trimmed = directiveCandidate;
 
         if(!trimmed.empty() && trimmed[0] == '#'){
-            if(nativeBraceDepth > 0u){
-                if(isActive){
-                    updateLineScanState(rawLine, commentPrefix.size(), true);
-                    outProcessed.append(rawLine.data(), rawLine.size());
-                }
-                outProcessed.push_back('\n');
-            }
-            else{
-                const MStringView afterHash = TrimView(trimmed.substr(1u));
-                if(isActive && !commentPrefix.empty())
-                    outProcessed.append(commentPrefix.data(), commentPrefix.size());
-                if(!handleDirective(afterHash, startLine, depth, currentFileKey, condStack, outProcessed))
-                    return false;
-                outProcessed.push_back('\n');
-            }
+            const MStringView afterHash = TrimView(trimmed.substr(1u));
+            if(isActive && !commentPrefix.empty())
+                outProcessed.append(commentPrefix.data(), commentPrefix.size());
+            if(!handleDirective(afterHash, startLine, depth, currentFileKey, condStack, outProcessed))
+                return false;
+            outProcessed.push_back('\n');
         }
         else if(isActive){
             MString expandedTail(m_arena);
             MStringView expandedView = effectiveLine;
             if(!m_macros.empty()){
                 PreprocessorMacroExpander macroExpander(m_arena, m_macros, m_errors);
-                if(!macroExpander.expandToView(effectiveLine, startLine, expandedTail, expandedView, inNativeKeywordPendingBrace, nativeBraceDepth))
+                if(!macroExpander.expandToView(effectiveLine, startLine, expandedTail, expandedView))
                     return false;
             }
             if(commentPrefix.empty()){
-                updateLineScanState(expandedView, 0u, true);
+                updateLineScanState(expandedView, 0u);
                 outProcessed.append(expandedView.data(), expandedView.size());
             }
             else{
                 MString expandedLine(m_arena);
                 expandedLine.append(commentPrefix.data(), commentPrefix.size());
                 expandedLine.append(expandedView.data(), expandedView.size());
-                updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size(), true);
+                updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size());
                 outProcessed.append(expandedLine.data(), expandedLine.size());
             }
             outProcessed.push_back('\n');
         }
         else{
-            updateLineScanState(effectiveLine, 0u, false);
+            updateLineScanState(effectiveLine, 0u);
             outProcessed.push_back('\n');
         }
 

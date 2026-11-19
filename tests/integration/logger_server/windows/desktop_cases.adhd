@@ -4,8 +4,6 @@
 
 #include "desktop_sdk.adhd"
 #include "../protocol_sdk.adhd"
-#include <logger/server/clipboard_text.adhd>
-#include <logger/server/log_row_painter.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/value_storage.adhd>
 

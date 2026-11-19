@@ -15,7 +15,7 @@ Projects configure graphics and storage before device initialization through the
 #include "namespace.h"
 #include "project_patch_filesystem.h"
 
-#include <loader/project_entry.adhd.h>
+#include <loader/project_entry.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/filesystem/volume_file_system.h>
 #include <impl/assets_graphics/bindless/runtime_abi.adhd.h>

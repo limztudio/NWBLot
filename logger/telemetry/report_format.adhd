@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/telemetry/memory_report.adhd>
+#include <logger/telemetry/report_dot.adhd>
+#include <logger/telemetry/report_json.adhd>
+#include <logger/telemetry/report_types.adhd>
+#include <logger/telemetry/report_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_TelemetryPerfCsvHeader = "source,scope,publish_frame,seconds,min_seconds,max_seconds,last_seconds,sample_count,first_sample_frame,last_sample_frame\n";
+const StringView s_TelemetryPerfSourceCpu = "cpu";
+const StringView s_TelemetryPerfSourceGpu = "gpu";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputeTelemetryPerfCsvReserveBytes(in usize eventCount){
+    return s_LogTelemetryReportPerfCsvFixedReserveBytes + eventCount * s_LogTelemetryReportPerfCsvBytesPerEvent;
+}
+
+usize SelectTelemetryEventKindBucket(in usize kindIndex, in usize kindCount, in usize unknownBucket){
+    if(kindIndex < kindCount)
+        return kindIndex;
+    return unknownBucket;
+}
+
+StringView SelectTelemetryPerfSourceText(in u32 sourceIndex){
+    switch(sourceIndex){
+    case 1u:
+        return s_TelemetryPerfSourceCpu;
+    case 2u:
+        return s_TelemetryPerfSourceGpu;
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
+b8 IsFiniteTimingSecondsTotal(in f64 total){
+    return (bit_cast<u64>(total) & s_LogTelemetryReportTimingSecondsExponentMask) != s_LogTelemetryReportTimingSecondsExponentMask;
+}
+
+void RecordTelemetryFrameRange(in u64 frameIndex, mut TelemetryReportSummary summary){
+    if(!summary.hasFrameRange){
+        summary.hasFrameRange = true;
+        summary.minFrameIndex = frameIndex;
+        summary.maxFrameIndex = frameIndex;
+        return;
+    }
+
+    if(frameIndex < summary.minFrameIndex)
+        summary.minFrameIndex = frameIndex;
+    if(frameIndex > summary.maxFrameIndex)
+        summary.maxFrameIndex = frameIndex;
+}
+
+void AccumulateTelemetryFrameGraphSummary(in usize nodeCount, in usize edgeCount, mut TelemetryReportSummary summary){
+    ++summary.frameGraphFrameCount;
+    summary.frameGraphNodeCount += cast<u64>(nodeCount);
+    summary.frameGraphEdgeCount += cast<u64>(edgeCount);
+    const u32 boundedNodeCount = cast<u32>(nodeCount);
+    const u32 boundedEdgeCount = cast<u32>(edgeCount);
+    if(boundedNodeCount > summary.maxFrameGraphNodeCount)
+        summary.maxFrameGraphNodeCount = boundedNodeCount;
+    if(boundedEdgeCount > summary.maxFrameGraphEdgeCount)
+        summary.maxFrameGraphEdgeCount = boundedEdgeCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

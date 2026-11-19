@@ -2,111 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/rgd/decode.adhd>
-#include <logger/server/crash_paths.adhd>
-#include <logger/server/crash_symbolicate_aftermath.adhd>
-#include <logger/server/crash_symbolicate_android.adhd>
-#include <logger/server/crash_symbolicate_internal.adhd>
-#include <logger/server/crash_symbolicate_linux.adhd>
-#include <logger/server/crash_symbolicate_rgd.adhd>
-#include <logger/server/crash_symbolicate_win32.adhd>
-#include <logger/server/crash_values.adhd>
-#include <logger/server/linux_frame_symbol_resolver.adhd>
-#include <logger/server/minidump_image.adhd>
+#include "crash_symbolicate.h"
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <logger/common.h>
-
-#include <core/alloc/scratch.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using CrashReportText = AString<LogArena>;
-
-inline constexpr AStringView s_ReportLineEnd = ::NWB::Log::s_CrashSymbolicateReportLineEnd;
-
-struct CrashSymbolicationConfig{
-    Path symbolStoreDirectory;
-
-
-public:
-    explicit CrashSymbolicationConfig(LogArena& arena)noexcept
-        : symbolStoreDirectory(arena)
-    {}
-};
-
-struct CrashPackageSummary{
-    CrashReportText crashId;
-    CrashReportText platform;
-    CrashReportText reasonKind;
-    CrashReportText artifactStrategy;
-    CrashReportText event;
-    CrashReportText triggerExpression;
-    CrashReportText triggerMessage;
-    CrashReportText triggerFile;
-    u64 reasonCode = 0u;
-    u64 threadId = 0u;
-    u64 triggerLine = 0u;
-
-
-public:
-    explicit CrashPackageSummary(LogArena& arena)noexcept
-        : crashId(arena)
-        , platform(arena)
-        , reasonKind(arena)
-        , artifactStrategy(arena)
-        , event(arena)
-        , triggerExpression(arena)
-        , triggerMessage(arena)
-        , triggerFile(arena)
-    {}
-};
-
-
-[[nodiscard]] CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, LogArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+#include <logger/rgd/decode.h>
 #include <logger/server/crash_report_composer.adhd.h>
+#include <logger/server/crash_symbolicate_aftermath.adhd.h>
+#include <logger/server/crash_symbolicate_android.adhd.h>
+#include <logger/server/crash_symbolicate_internal.adhd.h>
+#include <logger/server/crash_symbolicate_linux.adhd.h>
+#include <logger/server/crash_symbolicate_rgd.adhd.h>
+#include <logger/server/crash_symbolicate_win32.adhd.h>
+#include <logger/server/linux_frame_symbol_resolver.adhd.h>
+#include <logger/server/minidump_image.adhd.h>
 
 #include <core/crash/package_names.h>
 #include <core/crash/reason_names.h>
@@ -1367,12 +1274,6 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
 
 
 NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

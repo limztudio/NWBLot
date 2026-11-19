@@ -84,9 +84,6 @@ StringView UnitResolvedIncludedFileView(in CompileResult result, in usize idx){ 
 const StringView s_SuiteDedupAdhdSource =
     "#include \"shared_defs.adhd\"\r\n#include \"shared_defs.adhd\"\r\nu32 Compute(in u32 x) {\r\n    return x + kSharedLimit;\r\n}\r\n";
 
-const StringView s_SuiteNativeRawStringSource =
-    "[header]\r\nnative{\r\nstatic constexpr const char* s_Shader = R\"SLANG(struct Out{\r\n#include \"inner.slangi\"\r\n#endif\r\n};\r\n};\r\n)SLANG\";\r\n#include <core/global.h>\r\n}\r\nu32 Ok(in u32 x){ return x; }\r\n";
-
 const StringView s_SuiteReorderFieldsSource =
     "flag<u8> NodeFlags {\r\n    Active,\r\n    Visible,\r\n}\r\nclass TransformNode {\r\n    public b8 dirty = false;\r\n    public u32 entityId = 0;\r\n    public f32x4 translation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n    public u64 handle = 0;\r\n    public NodeFlags flags = NodeFlags::Active;\r\n    public u16 layer = 1;\r\n}\r\n";
 
@@ -156,9 +153,6 @@ const StringView s_SuiteScalarLimitsValidSource =
 const StringView s_SuiteSingleArgExpectedAndNumericBuiltinsSource =
     "Expected<i64> ParseTrimmedInt(in StringView text) {\r\n    const StringView trimmed = TrimView(text);\r\n    if(trimmed.empty()) {\r\n        return MakeUnexpected(Failure());\r\n    }\r\n    StringView number = trimmed;\r\n    if(trimmed.front() == '+') {\r\n        number = trimmed.substr(1u);\r\n    }\r\n    const Expected<i64> parsed = ParseI64(number);\r\n    if(!parsed.has_value()) {\r\n        return MakeUnexpected(parsed.error());\r\n    }\r\n    return parsed.value();\r\n}\r\n";
 
-const StringView s_SuiteNativeBlockParamNoShadowForwardDeclSource =
-    "[header]\r\nnative{\r\n#include <impl/assets_ui_skin/asset.adhd.h>\r\n}\r\nb8 CheckSkin(in UiSkin skin, in Name region) {\r\n    return skin.hasRegion(region);\r\n}\r\n";
-
 const StringView s_SuiteUtf8DecodeBuiltinsValidSource =
     "b8 ValidateUtf8(in StringView text, mut u32 outLastScalar) {\r\n    outLastScalar = 0u;\r\n    usize offset = 0u;\r\n    while(offset < text.size()) {\r\n        u32 codePoint = 0u;\r\n        usize byteCount = 0u;\r\n        if(!TryDecodeUtf8Scalar(text.substr(offset), codePoint, byteCount)) {\r\n            return false;\r\n        }\r\n        if(!TryDecodeUtf8CodePoint(text.substr(offset), outLastScalar, byteCount)) {\r\n            return false;\r\n        }\r\n        if(!IsUtf8ScalarBoundary(text, offset)) {\r\n            return false;\r\n        }\r\n        offset += byteCount;\r\n    }\r\n    return IsUtf8ScalarBoundary(text, offset);\r\n}\r\n";
 
@@ -175,7 +169,7 @@ const StringView s_SuiteBadShorterBlockViewAssignSource =
     "usize BadOuterAssign(in StringView fallback) {\r\n    StringView outer = fallback;\r\n    {\r\n        String inner = \"block\";\r\n        outer = TrimView(inner);\r\n    }\r\n    return outer.size();\r\n}\r\n";
 
 const StringView s_SuiteSingleLetterMacroSuffixSource =
-    "/*\r\n#include <nonexistent_cpp_header.h>\r\n#define UNCLOSED_MACRO(a, b\r\nnative {\r\n*/\r\n#define f 999 /* trailing block comment on define */\r\n#define u 888\r\n#define x 777\r\ni32 ComputeLiteralWithMacros() {\r\n    f32 scale = 1.0f;\r\n    u32 mask = 0x10u + 10u;\r\n    return cast<i32>(scale) + cast<i32>(mask);\r\n}\r\n";
+    "/*\r\n#include <nonexistent_cpp_header.h>\r\n#define UNCLOSED_MACRO(a, b\r\n*/\r\n#define f 999 /* trailing block comment on define */\r\n#define u 888\r\n#define x 777\r\ni32 ComputeLiteralWithMacros() {\r\n    f32 scale = 1.0f;\r\n    u32 mask = 0x10u + 10u;\r\n    return cast<i32>(scale) + cast<i32>(mask);\r\n}\r\n";
 
 const StringView s_SuiteCyclicInterfaceSource =
     "interface IAlpha : IBeta {\r\n    void step();\r\n}\r\ninterface IBeta : IAlpha {\r\n    void tick();\r\n}\r\n";
@@ -232,7 +226,7 @@ const StringView s_SuiteDeducedInstantiationAndSimdHashSource =
     "class Box<T> {\r\n    public T value;\r\n    public Box(in T v) {\r\n        this.value = v;\r\n    }\r\n}\r\nBox<T> WrapInBox<T>(in T v) {\r\n    return Box<T>(v);\r\n}\r\n[reflect]\r\nclass NameTable {\r\n    public Vector<Name> names;\r\n    public HashMap<Name, u32> lookup;\r\n}\r\nusize HashSimdAndWrap(in VectorSingle a, in VectorSingle b) {\r\n    auto wrapped = WrapInBox(42u);\r\n    f32x4 sum(a + b);\r\n    return HashCombineValue(usize(wrapped.value), sum);\r\n}\r\n";
 
 const StringView s_SuiteMotherArenaHierarchyAndGenericSpecSource =
-    "[header]\r\nnative{\r\n}\r\n[arena]\r\nclass RootOwner {\r\n    public MidChild mid = MidChild();\r\n    public Holder<u32> podHolder = Holder<u32>();\r\n    public Holder<String> strHolder = Holder<String>();\r\n}\r\nclass MidChild {\r\n    public LeafChild leaf = LeafChild();\r\n}\r\nclass LeafChild {\r\n    public String label = \"seed\";\r\n}\r\nclass Holder<T> {\r\n    public T value = T();\r\n}\r\nclass MoveOnlyChild {\r\n    public String label = \"owned\";\r\n    public UniquePtr<i32> handle = UniquePtr<i32>();\r\n}\r\n";
+    "[arena]\r\nclass RootOwner {\r\n    public MidChild mid = MidChild();\r\n    public Holder<u32> podHolder = Holder<u32>();\r\n    public Holder<String> strHolder = Holder<String>();\r\n}\r\nclass MidChild {\r\n    public LeafChild leaf = LeafChild();\r\n}\r\nclass LeafChild {\r\n    public String label = \"seed\";\r\n}\r\nclass Holder<T> {\r\n    public T value = T();\r\n}\r\nclass MoveOnlyChild {\r\n    public String label = \"owned\";\r\n    public UniquePtr<i32> handle = UniquePtr<i32>();\r\n}\r\n";
 
 const StringView s_SuiteCoreGlobalExportsShadowAndLayoutSource =
     "enum<u8> Format {\r\n    Custom8 = 0,\r\n}\r\nclass Color {\r\n    public f32 luma = 1.0f;\r\n}\r\nf32 Viewport(in Color c) {\r\n    return c.luma;\r\n}\r\n[serialize]\r\nclass PackedUnalignedMat {\r\n    public u8 tag = 1u;\r\n    public f32x4x4u world = f32x4x4u();\r\n}\r\n[serialize]\r\nclass AlignedBoundsPacket {\r\n    public u8 tag = 1u;\r\n    public BoundingBox bounds = BoundingBox();\r\n}\r\nclass CustomInputHandler : IInputEventHandler {\r\n    public b8 keyboardCharInput(in u32 codePoint, in i32 mods)override {\r\n        return codePoint != 0u || mods != 0;\r\n    }\r\n}\r\nb8 InspectExports(in IFilesystem fs, in Path entryPath, in Span<u8> rawBytes, in f32x4x4u srcMat, mut f32x4x4u dstMat) {\r\n    Color localColor;\r\n    Format localFmt = Format::Custom8;\r\n    in IFilesystem localFs = fs;\r\n    DirectoryEntry entry = DirectoryEntry(entryPath);\r\n    ResourceStates mask = (ResourceStates::ShaderResource | ResourceStates::CopySource) ^ ResourceStates::CopySource;\r\n    MatrixSingle reg = MatrixSingle(srcMat);\r\n    dstMat = f32x4x4u(reg);\r\n    MatrixDecomposition decomp = MatrixDecomposition();\r\n    Sha1Digest digest = ComputeSha1(rawBytes);\r\n    usize alignedBytes = PersistentArenaStructureAlignedSize(64u);\r\n    DescriptorWriteItem emptyWrite = DescriptorWriteItem::None();\r\n    f32x3x4 joint = MatrixIdentity<f32x3x4>();\r\n    joint._14 = 2.0f;\r\n    MatrixSingle ident = MatrixIdentity();\r\n    f32x4x4 identStore = f32x4x4(ident);\r\n    return joint._14 == 2.0f && identStore._11 == 1.0f && localFs.mounted() && CanRepresentU64<u32>(cast<u32>(localFmt)) && Viewport(localColor) > 0.0f && mask == ResourceStates::ShaderResource && digest.bytes[0u] <= 255u && Sha1Digest::s_HexTextLength == 40u && BufferRange::s_AllBytes > 0u && alignedBytes >= 64u && emptyWrite.slot == 0u && !entry.path().empty() && IsFinite(decomp.scale.xyz);\r\n}\r\n";
@@ -279,9 +273,6 @@ void VerifyAdhdPreprocessor_DeduplicatesRepeatedIncludes(){
     CompileResult result = CompileResult(arena.arena);
     ASSERT_TRUE(CompileWithResolver(s_SuiteDedupAdhdSource, "impl/math/compute.adhd", resolver, arena.arena, result));
     EXPECT_EQ(resolver.resolveCallCount, 1u);
-
-    CompileResult rawStringResult = CompileResult(arena.arena);
-    ASSERT_TRUE(CompileWithResolver(s_SuiteNativeRawStringSource, "impl/math/raw_string.adhd", resolver, arena.arena, rawStringResult));
 }
 
 void VerifyAdhdCompiler_ReordersClassFieldsByDescendingAlignmentAndSize(){
@@ -475,22 +466,14 @@ void VerifyAdhdCompiler_RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyR
     ExpectCompileFails(arena, "void BadParSet(in Set<i32> items) {\r\n    parallel_for(in i32 x : items) {\r\n    }\r\n}\r\n", "impl/bad_par_set.adhd");
 }
 
-void VerifyAdhdCompiler_RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks(){
+void VerifyAdhdCompiler_RejectsRetiredNativeBlocks(){
     AdhdTestArena arena = AdhdTestArena();
-
-    CompileResult explicitRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[source]\r\nnative{\r\nstatic constexpr int kOnlyInCpp = 42;\r\n}\r\nconst u32 s_AfterSourceBlock = 7u;\r\n[header]\r\nnative{\r\nstruct ExplicitHeaderTag {};\r\n}\r\n", "impl/explicit_native_targets.adhd", arena.arena, explicitRes));
-    EXPECT_EQ(GeneratedHeaderView(explicitRes).find("kOnlyInCpp"), usize.max);
-    EXPECT_NE(GeneratedSourceView(explicitRes).find("kOnlyInCpp"), usize.max);
-    EXPECT_NE(GeneratedHeaderView(explicitRes).find("ExplicitHeaderTag"), usize.max);
-    EXPECT_EQ(GeneratedSourceView(explicitRes).find("ExplicitHeaderTag"), usize.max);
-    EXPECT_NE(GeneratedHeaderView(explicitRes).find("s_AfterSourceBlock"), usize.max);
-
-    ExpectCompileFailsWithMessage(arena, "native{\r\nstruct MissingTarget {};\r\n}\r\n", "impl/missing_native_target.adhd", "top-level 'native' block must specify '[header]' or '[source]'");
-    ExpectCompileFailsWithMessage(arena, "[header, source]\r\nnative{\r\n}\r\n", "impl/conflict_native.adhd", "duplicate or conflicting target attribute on top-level 'native' block");
-    ExpectCompileFailsWithMessage(arena, "[source(1)]\r\nnative{\r\n}\r\n", "impl/arg_native.adhd", "top-level 'native' target attribute does not accept arguments");
-    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nnative{\r\n}\r\n", "impl/bad_native_attr.adhd", "unsupported attribute on top-level 'native' block; only '[header]' or '[source]' is permitted");
-    ExpectCompileFailsWithMessage(arena, "void ScopedFn() {\r\n    [header]\r\n    native{}\r\n}\r\n", "impl/scoped_native_attr.adhd", "attributes are not permitted on 'native' blocks");
+    const StringView expectedMsg = "'native' blocks are prohibited in adhd; bind C++ headers via typed 'extern' declarations and separate '.h'/'.cpp' files";
+    ExpectCompileFailsWithMessage(arena, "native{\r\nstruct MissingTarget {};\r\n}\r\n", "impl/top_native.adhd", expectedMsg);
+    ExpectCompileFailsWithMessage(arena, "[header]\r\nnative{\r\n}\r\n", "impl/header_native.adhd", expectedMsg);
+    ExpectCompileFailsWithMessage(arena, "[source]\r\nnative{\r\n}\r\n", "impl/source_native.adhd", expectedMsg);
+    ExpectCompileFailsWithMessage(arena, "void ScopedFn(in i32 x) {\r\n    native(in x) {}\r\n}\r\n", "impl/scoped_native.adhd", expectedMsg);
+    ExpectCompileFailsWithMessage(arena, "void ScopedAttrFn() {\r\n    [header]\r\n    native{}\r\n}\r\n", "impl/scoped_native_attr.adhd", expectedMsg);
 }
 
 void VerifyAdhdCompiler_RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndParallelLambdaMutation(){
@@ -517,10 +500,6 @@ void VerifyAdhdCompiler_RejectsSurrogateEscapesMalformedAttributesDependentBound
     EXPECT_NE(GeneratedSourceView(expectedBuiltinsRes).find("::ParseI64("), usize.max);
 
     ExpectCompileFails(arena, "Expected<i32, Failure, u8> BadExpected() { return 0; }\r\n", "impl/bad_expected_args.adhd");
-
-    CompileResult nativeParamRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile(s_SuiteNativeBlockParamNoShadowForwardDeclSource, "impl/ecs_ui/skin_check.adhd", arena.arena, nativeParamRes));
-    EXPECT_EQ(GeneratedHeaderView(nativeParamRes).find("class UiSkin;"), usize.max);
 
     CompileResult utf8DecodeRes = CompileResult(arena.arena);
     ASSERT_TRUE(Compile(s_SuiteUtf8DecodeBuiltinsValidSource, "impl/utf8_decode.adhd", arena.arena, utf8DecodeRes));
@@ -606,7 +585,6 @@ void VerifyAdhdCompiler_PreservesNumericLiteralSuffixesUnderSingleLetterMacrosAn
     ExpectCompileFails(arena, "[reflect, reflect]\r\nvoid DupAttr() {}\r\n", "impl/sim/dup_attr.adhd");
     ExpectCompileFails(arena, s_SuiteCyclicInterfaceSource, "impl/sim/cyclic_iface.adhd");
     ExpectCompileFails(arena, "class BadPair<T, T> {\r\n    public T value;\r\n}\r\n", "impl/sim/dup_tparam.adhd");
-    ExpectCompileFails(arena, "void BadNative(in i32 a, mut i32 b) {\r\n    native(in a, mut a = b) {\r\n    }\r\n}\r\n", "impl/sim/dup_native.adhd");
 }
 
 void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
@@ -637,7 +615,7 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
         addUnary("BAD", "x");
         MetascriptPreprocessorMacroExpander expander(arena.arena, macros, errors);
 
-        const MStringView unchanged = "defined (A) native { A; } F and a long unchanged line";
+        const MStringView unchanged = "defined (A) F and a long unchanged line";
         GlobalString storage("keep", other.arena);
         StringView view = StringView();
         ASSERT_TRUE(expander.expandToView(unchanged, 1u, storage, view));
@@ -658,13 +636,11 @@ void VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures(){
         EXPECT_EQ(MStringView(output), "answer");
         ASSERT_TRUE(expander.expand("A F(A) EMPTY tail", 1u, output));
         EXPECT_EQ(MStringView(output), "answer answer+answer  tail");
-        ASSERT_TRUE(expander.expand("A 1e+A \"A\" /* A */ native { A; } A // A", 1u, output));
-        EXPECT_EQ(MStringView(output), "answer 1e+A \"A\" /* A */ native { A; } answer // A");
+        ASSERT_TRUE(expander.expand("A 1e+A \"A\" /* A */ A // A", 1u, output));
+        EXPECT_EQ(MStringView(output), "answer 1e+A \"A\" /* A */ answer // A");
 
         ASSERT_TRUE(expander.expand("A R\"tag(A)tag\" A /* A", 1u, output));
         EXPECT_EQ(MStringView(output), "answer R\"tag(A)tag\" answer /* A");
-        ASSERT_TRUE(expander.expand(" { A; } A", 1u, output, true, 0u));
-        EXPECT_EQ(MStringView(output), " { A; } answer");
         MetascriptPreprocessorMacro variadic(arena.arena);
         variadic.name = "V";
         variadic.parameters.emplace_back("x", arena.arena);
@@ -1161,19 +1137,8 @@ void VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisito
     EXPECT_NE(hdrView.find("guard.release();"), usize.max);
 }
 
-void VerifyAdhdCompiler_EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety(){
+void VerifyAdhdCompiler_EnforcesUnresolvedParallelMutSafety(){
     AdhdTestArena arena = AdhdTestArena();
-
-    CompileResult nativeRes = CompileResult(arena.arena);
-    const StringView nativeSrc = "void NativeInEdges(mut Vector<i32> items){\r\n    const usize count = 8u;\r\n    usize sum = 0u;\r\n    native(in items, in count, mut sum){\r\n        sum = items.size() + count;\r\n    }\r\n}\r\n";
-    ASSERT_TRUE(Compile(nativeSrc, "impl/sim/native_in_edges.adhd", arena.arena, nativeRes));
-
-    const StringView hdrView = GeneratedHeaderView(nativeRes);
-    const StringView srcView = GeneratedSourceView(nativeRes);
-    EXPECT_TRUE(hdrView.find("::AddressOf(items)") != usize.max || srcView.find("::AddressOf(items)") != usize.max);
-    EXPECT_TRUE(hdrView.find("const auto& items = *__adhd_native_ptr_0;") != usize.max || srcView.find("const auto& items = *__adhd_native_ptr_0;") != usize.max);
-    EXPECT_EQ(hdrView.find("::AddressOf(count)"), usize.max);
-    EXPECT_EQ(srcView.find("::AddressOf(count)"), usize.max);
 
     CompileResult unknownRes = CompileResult(arena.arena);
     const StringView unknownSrc = "void UnresolvedLastUse(in Vector<i32> ro){\r\n    Vector<i32> rw;\r\n    UnknownTake(rw, ro);\r\n}\r\n";
@@ -1580,13 +1545,13 @@ NWB_ADHD_GTEST(AdhdCompiler, SuppressesLastUseMoveForMutCapturedLocalsAndRejects
 NWB_ADHD_GTEST(AdhdCompiler, RejectsDeducedBoundViolationsWrongArityConstRefMutationInCtorAndProhibitedBool, VerifyAdhdCompiler_RejectsDeducedBoundViolationsWrongArityConstRefMutationInCtorAndProhibitedBool)
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind, VerifyAdhdCompiler_ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind)
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules, VerifyAdhdCompiler_ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules)
-NWB_ADHD_GTEST(AdhdCompiler, RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks, VerifyAdhdCompiler_RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks)
+NWB_ADHD_GTEST(AdhdCompiler, RejectsRetiredNativeBlocks, VerifyAdhdCompiler_RejectsRetiredNativeBlocks)
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses, VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses)
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder, VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder)
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesHandleDerefRhiAndAssetExports, VerifyAdhdCompiler_ResolvesHandleDerefRhiAndAssetExports)
 NWB_ADHD_GTEST(AdhdCompiler, QualifiesCrossNamespaceImportsRespectingShadowing, VerifyAdhdCompiler_QualifiesCrossNamespaceImportsRespectingShadowing)
 NWB_ADHD_GTEST(AdhdCompiler, ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors, VerifyAdhdCompiler_ResolvesNestedTemplateReturnAssetFieldsAndDocumentVisitors)
-NWB_ADHD_GTEST(AdhdCompiler, EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety, VerifyAdhdCompiler_EnforcesNativeInConstShadowAndUnresolvedParallelMutSafety)
+NWB_ADHD_GTEST(AdhdCompiler, EnforcesUnresolvedParallelMutSafety, VerifyAdhdCompiler_EnforcesUnresolvedParallelMutSafety)
 NWB_ADHD_GTEST(AdhdCompiler, ImportsCoreCppHeadersWithLibclang, VerifyAdhdCompiler_ImportsCoreCppHeadersWithLibclang)
 NWB_ADHD_GTEST(AdhdCompiler, CompilesExternHeaderAndDeclEdgeCases, VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases)
 NWB_ADHD_GTEST(AdhdCompiler, CompilesModularClassEdgeCases, VerifyAdhdCompiler_CompilesModularClassEdgeCases)

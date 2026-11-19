@@ -101,6 +101,36 @@ struct NwbPhysicsGpuContactConstraint{
     NwbPhysicsGpuContactPoint points[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
 };
 
+struct NwbPhysicsGpuJointConstraint{
+    uint4 indicesTypeFlags;
+    float4 params0;
+    float4 params1;
+    float4 params2;
+    float4 qA0;
+    float4 qB0;
+    float4 rA0;
+    float4 rB0;
+    float4 baseCenterDelta;
+    float4 localAxisA;
+    float4 localAxisB;
+    float4 referenceRotation;
+    float4 linearOffset;
+    float4 linearSoftness;
+    float4 angularSoftness;
+    float4 suspensionSoftness;
+    float4 invIA0;
+    float4 invIA1;
+    float4 invIA2;
+    float4 invIB0;
+    float4 invIB1;
+    float4 invIB2;
+    float4 linearImpulse;
+    float4 angularImpulse;
+    float4 limitImpulses;
+    float4 totalLinearImpulse;
+    float4 totalAngularImpulse;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -110,19 +140,20 @@ struct NwbPhysicsGpuContactConstraint{
 #pragma warning(push)
 #pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbPhysicsUintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<float4, Std430DataLayout> g_NwbPhysicsFloat4Buffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodyState, Std430DataLayout> g_NwbPhysicsBodyStateBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodySim, Std430DataLayout> g_NwbPhysicsBodySimBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuShapeProxy, Std430DataLayout> g_NwbPhysicsShapeProxyBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBroadphasePair, Std430DataLayout> g_NwbPhysicsBroadphasePairBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuNarrowphaseManifold, Std430DataLayout> g_NwbPhysicsNarrowphaseManifoldBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuContactConstraint, Std430DataLayout> g_NwbPhysicsContactConstraintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuJointConstraint, Std430DataLayout> g_NwbPhysicsJointConstraintBuffers[];
 #pragma warning(pop)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hamilton quaternion multiplication matching global/simd/quaternion_arithmetic.h.
 float4 nwbPhysicsQuatMul(const float4 a, const float4 b){
     return float4(
         a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,

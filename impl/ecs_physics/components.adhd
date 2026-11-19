@@ -29,17 +29,19 @@ class RigidBodyComponent{
     public BodyId runtimeBodyId;
 }
 
-[arena, component("collider")]
-class ColliderComponent{
+[arena]
+class ColliderShapeEntry{
     public ShapeType shapeType = ShapeType::Hull;
     public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
     public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
     public f32 radius = 0.5f;
+    public f32 skinRadius = 0.0f;
     public f32 density = 1.0f;
     public f32 friction = 0.6f;
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
+    public f32 tangentSpeed = 0.0f;
     public u32 categoryBits = 0x00000001u;
     public u32 maskBits = u32.max;
     public i32 groupIndex = 0;
@@ -47,20 +49,100 @@ class ColliderComponent{
     public b8 isSensor = false;
     public b8 enableContactEvents = false;
     public b8 enableHitEvents = false;
+    public b8 enableSensorEvents = false;
+    public b8 enablePreSolveEvents = false;
+    public b8 invokeContactCreation = false;
+    public Vector<f32x4> hullPoints;
+    public Vector<f32x4> meshVertices;
+    public Vector<u32> meshIndices;
+}
+
+[arena, component("collider")]
+class ColliderComponent{
+    public ShapeType shapeType = ShapeType::Hull;
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
+    public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    public f32 radius = 0.5f;
+    public f32 skinRadius = 0.0f;
+    public f32 density = 1.0f;
+    public f32 friction = 0.6f;
+    public f32 restitution = 0.0f;
+    public f32 rollingResistance = 0.0f;
+    public f32 tangentSpeed = 0.0f;
+    public u32 categoryBits = 0x00000001u;
+    public u32 maskBits = u32.max;
+    public i32 groupIndex = 0;
+    public b8 isBox = true;
+    public b8 isSensor = false;
+    public b8 enableContactEvents = false;
+    public b8 enableHitEvents = false;
+    public b8 enableSensorEvents = false;
+    public b8 enablePreSolveEvents = false;
+    public b8 invokeContactCreation = false;
+    public Vector<f32x4> hullPoints;
+    public Vector<f32x4> meshVertices;
+    public Vector<u32> meshIndices;
+    public Vector<ColliderShapeEntry> extraShapes;
     public b8 dirty = true;
     public ShapeId runtimeShapeId;
     public BodyId boundBodyId;
 }
 
+[arena, component("joint")]
+class JointComponent{
+    public EntityID bodyEntityA;
+    public EntityID bodyEntityB;
+    public JointType type = JointType::Distance;
+    public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public b8 useReferenceRotation = false;
+    public f32 length = 1.0f;
+    public f32 minLength = 0.0f;
+    public f32 maxLength = s_HugeCoordinate;
+    public b8 enableLimit = false;
+    public f32 lowerLimit = 0.0f;
+    public f32 upperLimit = 0.0f;
+    public b8 enableMotor = false;
+    public f32 motorSpeed = 0.0f;
+    public f32 maxMotorForce = 0.0f;
+    public b8 enableSpring = false;
+    public f32 hertz = 0.0f;
+    public f32 dampingRatio = 1.0f;
+    public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 correctionFactor = 0.3f;
+    public f32 maxTorque = 0.0f;
+    public f32 swingLimit = 0.0f;
+    public f32 suspensionHertz = 4.0f;
+    public f32 suspensionDampingRatio = 0.7f;
+    public f32 breakForce = 0.0f;
+    public f32 breakTorque = 0.0f;
+    public b8 collideConnected = false;
+    public b8 dirty = true;
+    public JointId runtimeJointId;
+    public BodyId boundBodyIdA;
+    public BodyId boundBodyIdB;
+}
+
 [arena, component("physics_world_config")]
 class PhysicsWorldConfigComponent{
     public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
+    public f32 restitutionThreshold = s_RestitutionThreshold;
+    public f32 hitEventThreshold = s_DefaultHitEventThreshold;
+    public f32 contactHertz = s_MaxContactHertz;
+    public f32 contactDampingRatio = s_DefaultContactDampingRatio;
+    public f32 maxLinearVelocity = s_DefaultMaxLinearVelocity;
     public f32 fixedDeltaTime = 1.0f / 60.0f;
     public u32 subStepCount = 4u;
     public u32 maxSubStepsPerFrame = 4u;
     public PhysicsBackendMode backendMode = PhysicsBackendMode::Auto;
     public u32 gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
     public b8 enableSleep = true;
+    public b8 enableContinuous = true;
+    public b8 enableContactSoftening = true;
     public b8 enableWarmStarting = true;
     public b8 paused = false;
     public b8 dirty = true;

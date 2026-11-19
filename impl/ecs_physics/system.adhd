@@ -14,7 +14,8 @@ class PhysicsSystem{
     private PhysicsWorld m_physicsWorld;
     private PhysicsGpuDispatcher m_gpuDispatcher;
     private HashMap<EntityID, BodyId> m_entityBodies;
-    private HashMap<EntityID, ShapeId> m_entityShapes;
+    private HashMap<EntityID, Vector<ShapeId>> m_entityShapes;
+    private HashMap<EntityID, JointId> m_entityJoints;
     private f32 m_accumulator = 0.0f;
     private WorldStepStats m_lastStepStats;
     private b8 m_hasGpu;
@@ -41,6 +42,7 @@ class PhysicsSystem{
         this.writeAccess<PhysicsWorldConfigComponent>();
         this.writeAccess<RigidBodyComponent>();
         this.writeAccess<ColliderComponent>();
+        this.writeAccess<JointComponent>();
         this.writeAccess<TransformComponent>();
     }
 
@@ -71,7 +73,7 @@ class PhysicsSystem{
         b8 paused = false;
         ResolvePhysicsConfigSettings(this.m_world, this.m_physicsWorld, fixedDt, subStepCount, maxSubStepsPerFrame, paused);
 
-        SyncEcsEntitiesToPhysicsWorld(this.m_world, this.m_physicsWorld, this.m_entityBodies, this.m_entityShapes);
+        SyncEcsEntitiesToPhysicsWorld(this.m_world, this.m_physicsWorld, this.m_entityBodies, this.m_entityShapes, this.m_entityJoints);
 
         if(paused || !IsFinite(delta) || delta <= 0.0f)
             return Expected<void, CpuTaskAdmissionError>();

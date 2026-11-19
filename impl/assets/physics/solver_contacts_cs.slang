@@ -160,11 +160,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(restitution <= 0.0f){
             return;
         }
+        const float restThresh = g_NwbPhysicsPushConstants.linearSlop > 0.0f ? g_NwbPhysicsPushConstants.linearSlop : NWB_PHYSICS_RESTITUTION_THRESHOLD;
         for(uint i = 0u; i < pointCount; ++i){
             if(c.points[i].impulsesMass.y <= 0.0f)
                 continue;
             const float relVel = c.points[i].rBRelVel.w;
-            if(relVel > -NWB_PHYSICS_RESTITUTION_THRESHOLD)
+            if(relVel > -restThresh)
                 continue;
             const float3 rA = c.points[i].rABaseSep.xyz;
             const float3 rB = c.points[i].rBRelVel.xyz;
@@ -174,6 +175,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             float impulse = -normalMass * (vn + restitution * relVel);
             if(impulse > 0.0f){
                 c.points[i].impulsesMass.w += impulse;
+                c.points[i].impulsesMass.x = 0.0f;
                 const float3 P = impulse * normal;
                 nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, vA, wA, vB, wB);
             }
@@ -207,15 +209,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         float bias = 0.0f;
         float massScale = 1.0f;
         float impulseScale = 0.0f;
-        if(useBias){
-            if(currentSep > 0.0f){
-                bias = currentSep * invH;
-            }
-            else{
-                bias = biasRate * currentSep;
-                massScale = massScaleCfg;
-                impulseScale = impulseScaleCfg;
-            }
+        if(currentSep > 0.0f){
+            if(!useBias && c.points[i].impulsesMass.x <= 0.0f)
+                continue;
+            bias = currentSep * invH;
+        }
+        else if(useBias){
+            bias = max(biasRate * currentSep, -NWB_PHYSICS_MAX_CONTACT_BIAS_SPEED);
+            massScale = massScaleCfg;
+            impulseScale = impulseScaleCfg;
         }
 
         const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rA));
@@ -233,7 +235,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, vA, wA, vB, wB);
     }
 
-    // 2D tangent friction at manifold center.
     {
         const float3 centerA = c.centerATwistMass.xyz;
         const float3 centerB = c.centerBTwistImpulse.xyz;
@@ -262,7 +263,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         nwbPhysicsApplyPointImpulse(P, centerA, centerB, invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, vA, wA, vB, wB);
     }
 
-    // Twist friction around contact normal.
     const float twistMass = c.centerATwistMass.w;
     if(twistMass > 0.0f && maxLeverArm > 0.0f){
         const float dwN = dot(wB - wA, normal);
@@ -277,16 +277,20 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angP);
     }
 
-    // Rolling resistance.
-    if(rollingResistance > 0.0f && totalNormalImpulse > 0.0f){
+    if(rollingResistance > 0.0f){
         const float3 dw = wB - wA;
         const float3 deltaR = -nwbPhysicsMulSymmetric3(c.rollingMass0, c.rollingMass1, dw);
         const float3 oldR = float3(c.invIA0.w, c.invIA1.w, c.invIA2.w);
         float3 newR = oldR + deltaR;
         const float maxR = rollingResistance * totalNormalImpulse;
-        const float rLenSq = dot(newR, newR);
-        if(rLenSq > maxR * maxR && rLenSq > 1.0e-18f)
-            newR *= maxR * rsqrt(rLenSq);
+        if(maxR <= 0.0f){
+            newR = float3(0.0f, 0.0f, 0.0f);
+        }
+        else{
+            const float rLenSq = dot(newR, newR);
+            if(rLenSq > maxR * maxR && rLenSq > 1.0e-18f)
+                newR *= maxR * rsqrt(rLenSq);
+        }
         const float3 appliedR = newR - oldR;
         c.invIA0.w = newR.x;
         c.invIA1.w = newR.y;

@@ -213,14 +213,12 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
     if(candidates.size() <= s_MaxManifoldPoints)
         return;
 
-    // 0: deepest point.
     usize idx0 = 0u;
     for(usize i = 1u; i < candidates.size(); ++i){
         if(candidates[i].separation < candidates[idx0].separation)
             idx0 = i;
     }
 
-    // 1: farthest from idx0.
     usize idx1 = 0u;
     f32 bestDistSq1 = -1.0f;
     const VectorSingle p0 = VectorSingle(candidates[idx0].position);
@@ -232,7 +230,6 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
         }
     }
 
-    // 2: largest triangle area with p0 and p1.
     usize idx2 = 0u;
     f32 bestArea2 = -1.0f;
     const VectorSingle p1 = VectorSingle(candidates[idx1].position);
@@ -248,7 +245,6 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
         }
     }
 
-    // 3: largest exterior area outside triangle (p0, p1, p2).
     usize idx3 = 0u;
     f32 bestOutsideArea = -1.0f;
     usize fallbackIdx3 = 0u;

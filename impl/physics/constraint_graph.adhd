@@ -88,7 +88,6 @@ void AddContactToGraph(mut ConstraintGraph graph, in Vector<Body> bodies, mut Co
         }
     }
     else{
-        // Dynamic-static/kinematic contacts prefer the upper priority colors (20..22), falling back to 0..19 before overflow.
         b8 found = false;
         for(usize c = s_DynamicColorCount; c < s_OverflowColorIndex; ++c){
             if((staticA || !graph.colors[c].bodySet.getBit(bodyIdA)) && (staticB || !graph.colors[c].bodySet.getBit(bodyIdB))){
@@ -175,8 +174,13 @@ void WakeIslandWithGraph(
     in Island island = islands[islandId];
     for(usize i = 0u; i < island.contacts.size(); ++i){
         const u32 cId = island.contacts[i].contactId;
-        if(cId < contacts.size() && contacts[cId].manifold.pointCount > 0u)
-            AddContactToGraph(graph, bodies, contacts[cId]);
+        if(cId < contacts.size()){
+            in Contact wokenContact = contacts[cId];
+            const b8 isAlive = (wokenContact.flags & cast<u32>(ContactFlags::Alive)) != 0u;
+            const b8 isSensor = (wokenContact.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
+            if(isAlive && !isSensor && wokenContact.manifold.pointCount > 0u)
+                AddContactToGraph(graph, bodies, contacts[cId]);
+        }
     }
 }
 
@@ -201,6 +205,117 @@ void WakeBodyWithGraph(
     }
 
     WakeBodyWithIsland(bodies, islands, sets, contacts, bodyId);
+    if(setIdx >= 3u && setIdx < sets.size() && sets[setIdx].sims.empty() && sets[setIdx].islands.empty())
+        freeSolverSetIds.push_back(setIdx);
+}
+
+u32 MergeIslandsInWorldWithGraph(
+    mut ConstraintGraph graph,
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<u32> freeIslandIds,
+    mut Vector<SolverSet> sets,
+    mut Vector<u32> freeSolverSetIds,
+    mut Vector<Contact> contacts,
+    mut Vector<Joint> joints,
+    in u32 islandIdA,
+    in u32 islandIdB
+){
+    if(islandIdA != s_NullIndex)
+        WakeIslandWithGraph(graph, bodies, islands, sets, freeSolverSetIds, contacts, islandIdA);
+    if(islandIdB != s_NullIndex)
+        WakeIslandWithGraph(graph, bodies, islands, sets, freeSolverSetIds, contacts, islandIdB);
+    return MergeIslandsInWorld(bodies, islands, freeIslandIds, sets, contacts, joints, islandIdA, islandIdB);
+}
+
+void LinkContactToIslandWithGraph(
+    mut ConstraintGraph graph,
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<u32> freeIslandIds,
+    mut Vector<SolverSet> sets,
+    mut Vector<u32> freeSolverSetIds,
+    mut Vector<Contact> contacts,
+    mut Vector<Joint> joints,
+    in u32 contactId
+){
+    mut Contact contact = contacts[contactId];
+    if(contact.islandId != s_NullIndex)
+        return;
+
+    const u32 bodyIdA = contact.edges[0u].bodyId;
+    const u32 bodyIdB = contact.edges[1u].bodyId;
+    WakeBodyWithGraph(graph, bodies, islands, sets, freeSolverSetIds, contacts, bodyIdA);
+    WakeBodyWithGraph(graph, bodies, islands, sets, freeSolverSetIds, contacts, bodyIdB);
+
+    const u32 islandA = bodies[bodyIdA].islandId;
+    const u32 islandB = bodies[bodyIdB].islandId;
+
+    u32 targetIsland = s_NullIndex;
+    if(islandA != s_NullIndex && islandB != s_NullIndex)
+        targetIsland = MergeIslandsInWorldWithGraph(graph, bodies, islands, freeIslandIds, sets, freeSolverSetIds, contacts, joints, islandA, islandB);
+    else if(islandA != s_NullIndex)
+        targetIsland = islandA;
+    else if(islandB != s_NullIndex)
+        targetIsland = islandB;
+
+    if(targetIsland == s_NullIndex)
+        return;
+
+    ContactLink link;
+    link.contactId = contactId;
+    link.bodyIdA = bodyIdA;
+    link.bodyIdB = bodyIdB;
+
+    mut Island island = islands[targetIsland];
+    contact.islandId = targetIsland;
+    contact.islandIndex = cast<u32>(island.contacts.size());
+    island.contacts.push_back(link);
+}
+
+void LinkJointToIslandWithGraph(
+    mut ConstraintGraph graph,
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<u32> freeIslandIds,
+    mut Vector<SolverSet> sets,
+    mut Vector<u32> freeSolverSetIds,
+    mut Vector<Contact> contacts,
+    mut Vector<Joint> joints,
+    in u32 jointId
+){
+    mut Joint joint = joints[jointId];
+    if(joint.islandId != s_NullIndex)
+        return;
+
+    const u32 bodyIdA = joint.edges[0u].bodyId;
+    const u32 bodyIdB = joint.edges[1u].bodyId;
+    WakeBodyWithGraph(graph, bodies, islands, sets, freeSolverSetIds, contacts, bodyIdA);
+    WakeBodyWithGraph(graph, bodies, islands, sets, freeSolverSetIds, contacts, bodyIdB);
+
+    const u32 islandA = bodies[bodyIdA].islandId;
+    const u32 islandB = bodies[bodyIdB].islandId;
+
+    u32 targetIsland = s_NullIndex;
+    if(islandA != s_NullIndex && islandB != s_NullIndex)
+        targetIsland = MergeIslandsInWorldWithGraph(graph, bodies, islands, freeIslandIds, sets, freeSolverSetIds, contacts, joints, islandA, islandB);
+    else if(islandA != s_NullIndex)
+        targetIsland = islandA;
+    else if(islandB != s_NullIndex)
+        targetIsland = islandB;
+
+    if(targetIsland == s_NullIndex)
+        return;
+
+    JointLink link;
+    link.jointId = jointId;
+    link.bodyIdA = bodyIdA;
+    link.bodyIdB = bodyIdB;
+
+    mut Island island = islands[targetIsland];
+    joint.islandId = targetIsland;
+    joint.islandIndex = cast<u32>(island.joints.size());
+    island.joints.push_back(link);
 }
 
 void SleepIslandWithGraph(

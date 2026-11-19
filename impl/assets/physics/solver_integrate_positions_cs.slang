@@ -20,7 +20,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     NwbPhysicsGpuBodyState state = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx];
     const uint flags = asuint(state.deltaPositionFlags.w);
     const float3 v = nwbPhysicsApplyLinearLocks(state.linearVelocityPad.xyz, flags);
-    const float3 w = nwbPhysicsApplyAngularLocks(state.angularVelocityPad.xyz, flags);
+    float3 w = nwbPhysicsApplyAngularLocks(state.angularVelocityPad.xyz, flags);
+    if((flags & NWB_PHYSICS_BODY_FLAG_ALLOW_FAST_ROTATION) == 0u && h > 0.0f){
+        const float wLenSq = dot(w, w);
+        const float maxAngSpeed = NWB_PHYSICS_MAX_ROTATION / h;
+        if(wLenSq > maxAngSpeed * maxAngSpeed && wLenSq > 1.0e-12f)
+            w *= maxAngSpeed * rsqrt(wLenSq);
+    }
 
     const float3 deltaP = state.deltaPositionFlags.xyz + h * v;
     const float4 deltaQ = nwbPhysicsIntegrateDeltaQuat(state.deltaRotation, w, h);

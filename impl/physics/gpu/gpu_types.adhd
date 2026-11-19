@@ -15,9 +15,19 @@ const u32 s_GpuShapeFlagIsBox = 0x00000001u;
 const u32 s_GpuShapeFlagSensor = 0x00000002u;
 const u32 s_GpuShapeFlagSpeculative = 0x00000004u;
 const u32 s_GpuShapeFlagDynamicBody = 0x00010000u;
+const u32 s_GpuShapeFlagKinematicBody = 0x00020000u;
 
 const u32 s_GpuBroadphaseModeUpdateAabbs = 0u;
 const u32 s_GpuBroadphaseModeEmitPairs = 1u;
+const u32 s_GpuBroadphaseModeGridClear = 2u;
+const u32 s_GpuBroadphaseModeGridInsert = 3u;
+const u32 s_GpuBroadphaseModeGridEmitPairs = 4u;
+
+const u32 s_GpuGridBucketStride = s_GpuGridBucketCapacity + 1u;
+
+const u32 s_GpuJointFlagEnableLimit = 0x00000001u;
+const u32 s_GpuJointFlagEnableMotor = 0x00000002u;
+const u32 s_GpuJointFlagEnableSpring = 0x00000004u;
 
 const u32 s_GpuSolverModeWarmStart = 0u;
 const u32 s_GpuSolverModeSolveBias = 1u;
@@ -32,11 +42,13 @@ const u32 s_GpuBroadphasePairBytes = 16u;
 const u32 s_GpuNarrowphaseManifoldBytes = 176u;
 const u32 s_GpuContactPointBytes = 64u;
 const u32 s_GpuContactConstraintBytes = 528u;
+const u32 s_GpuJointConstraintBytes = 432u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[layout(16)]
 class GpuPhysicsPushConstants{
     public u32 itemCount = 0u;
     public u32 itemOffset = 0u;
@@ -51,6 +63,7 @@ class GpuPhysicsPushConstants{
     public u32x4 slots1(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
 }
 
+[layout(16)]
 class GpuPhysicsBodyState{
     public f32x4 linearVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
@@ -58,6 +71,7 @@ class GpuPhysicsBodyState{
     public f32x4 deltaRotation(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
+[layout(16)]
 class GpuPhysicsBodySim{
     public f32x4 positionInvMass(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
@@ -72,6 +86,7 @@ class GpuPhysicsBodySim{
     public f32x4 invInertiaLocalRow2(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+[layout(16)]
 class GpuPhysicsShapeProxy{
     public f32x4 localCenterRadius(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localExtentOrP1(0.0f, 0.0f, 0.0f, 0.0f);
@@ -82,10 +97,12 @@ class GpuPhysicsShapeProxy{
     public u32x4 filterData(0u, 0u, 0u, 0u);
 }
 
+[layout(16)]
 class GpuPhysicsBroadphasePair{
     public u32x4 indices(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
 }
 
+[layout(16)]
 class GpuPhysicsNarrowphaseManifold{
     public u32x4 pairInfo(0u, 0u, 0u, 0u);
     public f32x4 normalPad(0.0f, 1.0f, 0.0f, 0.0f);
@@ -94,6 +111,7 @@ class GpuPhysicsNarrowphaseManifold{
     public u32x4 featureIds(0u, 0u, 0u, 0u);
 }
 
+[layout(16)]
 class GpuPhysicsContactPoint{
     public f32x4 rABaseSep(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rBRelVel(0.0f, 0.0f, 0.0f, 0.0f);
@@ -101,6 +119,7 @@ class GpuPhysicsContactPoint{
     public f32x4 anchorLever(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+[layout(16)]
 class GpuPhysicsContactConstraint{
     public u32x4 indicesCountFlags(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
     public f32x4 normalFriction(0.0f, 1.0f, 0.0f, 0.0f);
@@ -122,6 +141,37 @@ class GpuPhysicsContactConstraint{
     public Array<GpuPhysicsContactPoint, s_MaxManifoldPoints> points;
 }
 
+[layout(16)]
+class GpuPhysicsJointConstraint{
+    public u32x4 indicesTypeFlags(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+    public f32x4 params0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 params1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 params2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 qA0(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 qB0(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 rA0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rB0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 baseCenterDelta(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 linearSoftness(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularSoftness(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 suspensionSoftness(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIA0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIA1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIA2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIB0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIB1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIB2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 linearImpulse(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularImpulse(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 limitImpulses(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 totalLinearImpulse(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 totalAngularImpulse(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -134,6 +184,44 @@ static_assert(size_of<GpuPhysicsBroadphasePair>() == s_GpuBroadphasePairBytes, "
 static_assert(size_of<GpuPhysicsNarrowphaseManifold>() == s_GpuNarrowphaseManifoldBytes, "GpuPhysicsNarrowphaseManifold layout drifted from shader");
 static_assert(size_of<GpuPhysicsContactPoint>() == s_GpuContactPointBytes, "GpuPhysicsContactPoint layout drifted from shader");
 static_assert(size_of<GpuPhysicsContactConstraint>() == s_GpuContactConstraintBytes, "GpuPhysicsContactConstraint layout drifted from shader");
+static_assert(size_of<GpuPhysicsJointConstraint>() == s_GpuJointConstraintBytes, "GpuPhysicsJointConstraint layout drifted from shader");
+
+static_assert(offset_of<GpuPhysicsPushConstants>(itemCount) == 0u, "PushConstants.itemCount offset mismatch");
+static_assert(offset_of<GpuPhysicsPushConstants>(deltaTime) == 16u, "PushConstants.deltaTime offset mismatch");
+static_assert(offset_of<GpuPhysicsPushConstants>(gravitySpeculative) == 32u, "PushConstants.gravitySpeculative offset mismatch");
+static_assert(offset_of<GpuPhysicsPushConstants>(slots0) == 48u, "PushConstants.slots0 offset mismatch");
+static_assert(offset_of<GpuPhysicsPushConstants>(slots1) == 64u, "PushConstants.slots1 offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyState>(linearVelocityPad) == 0u, "BodyState.linearVelocityPad offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyState>(deltaPositionFlags) == 32u, "BodyState.deltaPositionFlags offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyState>(deltaRotation) == 48u, "BodyState.deltaRotation offset mismatch");
+static_assert(offset_of<GpuPhysicsBodySim>(positionInvMass) == 0u, "BodySim.positionInvMass offset mismatch");
+static_assert(offset_of<GpuPhysicsBodySim>(gravityScaleFlags) == 64u, "BodySim.gravityScaleFlags offset mismatch");
+static_assert(offset_of<GpuPhysicsBodySim>(invInertiaWorldRow0) == 80u, "BodySim.invInertiaWorldRow0 offset mismatch");
+static_assert(offset_of<GpuPhysicsBodySim>(invInertiaLocalRow0) == 128u, "BodySim.invInertiaLocalRow0 offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(localCenterRadius) == 0u, "ShapeProxy.localCenterRadius offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(aabbMinPad) == 48u, "ShapeProxy.aabbMinPad offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(bodyIndexTypeShape) == 80u, "ShapeProxy.bodyIndexTypeShape offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeProxy>(filterData) == 96u, "ShapeProxy.filterData offset mismatch");
+static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo) == 0u, "Manifold.pairInfo offset mismatch");
+static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(normalPad) == 16u, "Manifold.normalPad offset mismatch");
+static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(anchorA) == 32u, "Manifold.anchorA offset mismatch");
+static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(anchorBSeparation) == 96u, "Manifold.anchorBSeparation offset mismatch");
+static_assert(offset_of<GpuPhysicsNarrowphaseManifold>(featureIds) == 160u, "Manifold.featureIds offset mismatch");
+static_assert(offset_of<GpuPhysicsContactPoint>(rABaseSep) == 0u, "ContactPoint.rABaseSep offset mismatch");
+static_assert(offset_of<GpuPhysicsContactPoint>(rBRelVel) == 16u, "ContactPoint.rBRelVel offset mismatch");
+static_assert(offset_of<GpuPhysicsContactPoint>(impulsesMass) == 32u, "ContactPoint.impulsesMass offset mismatch");
+static_assert(offset_of<GpuPhysicsContactPoint>(anchorLever) == 48u, "ContactPoint.anchorLever offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(indicesCountFlags) == 0u, "ContactConstraint.indicesCountFlags offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(softnessTangent00) == 96u, "ContactConstraint.softnessTangent00 offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(invIA0) == 144u, "ContactConstraint.invIA0 offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(rollingMass1) == 256u, "ContactConstraint.rollingMass1 offset mismatch");
+static_assert(offset_of<GpuPhysicsContactConstraint>(points) == 272u, "ContactConstraint.points offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(indicesTypeFlags) == 0u, "JointConstraint.indicesTypeFlags offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(qA0) == 64u, "JointConstraint.qA0 offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(linearOffset) == 192u, "JointConstraint.linearOffset offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(suspensionSoftness) == 240u, "JointConstraint.suspensionSoftness offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(linearImpulse) == 352u, "JointConstraint.linearImpulse offset mismatch");
+static_assert(offset_of<GpuPhysicsJointConstraint>(totalAngularImpulse) == 416u, "JointConstraint.totalAngularImpulse offset mismatch");
 
 static_assert(is_trivially_copyable<GpuPhysicsPushConstants>(), "GpuPhysicsPushConstants must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyState>(), "GpuPhysicsBodyState must stay trivially copyable");
@@ -143,6 +231,7 @@ static_assert(is_trivially_copyable<GpuPhysicsBroadphasePair>(), "GpuPhysicsBroa
 static_assert(is_trivially_copyable<GpuPhysicsNarrowphaseManifold>(), "GpuPhysicsNarrowphaseManifold must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsContactPoint>(), "GpuPhysicsContactPoint must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsContactConstraint>(), "GpuPhysicsContactConstraint must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsJointConstraint>(), "GpuPhysicsJointConstraint must stay trivially copyable");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

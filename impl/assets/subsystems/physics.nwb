@@ -4,5 +4,6 @@ asset.broadphase_aabb_cs = "engine/physics/broadphase_aabb_cs";
 asset.narrowphase_cs = "engine/physics/narrowphase_cs";
 asset.solver_integrate_velocities_cs = "engine/physics/solver_integrate_velocities_cs";
 asset.solver_contacts_cs = "engine/physics/solver_contacts_cs";
+asset.solver_joints_cs = "engine/physics/solver_joints_cs";
 asset.solver_integrate_positions_cs = "engine/physics/solver_integrate_positions_cs";
 asset.solver_finalize_bodies_cs = "engine/physics/solver_finalize_bodies_cs";

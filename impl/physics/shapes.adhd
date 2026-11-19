@@ -43,6 +43,28 @@ class HullShape{
     public b8 isBox = false;
 }
 
+class MeshTriangle{
+    public f32x4 v0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 v1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 v2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public Aabb3D aabb;
+}
+
+class MeshBvhNode{
+    public Aabb3D aabb;
+    public u32 leftOrFirst = 0u;
+    public u32 rightOrCount = 0u;
+    public b8 isLeaf = false;
+}
+
+class MeshShape{
+    public Vector<MeshTriangle> triangles;
+    public Vector<MeshBvhNode> nodes;
+    public Aabb3D localAabb;
+    public f32 radius = 0.0f;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -86,13 +108,6 @@ Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32
     hull.vertices.push_back(f32x4( halfX,  halfY,  halfZ, 0.0f));
     hull.vertices.push_back(f32x4(-halfX,  halfY,  halfZ, 0.0f));
 
-    // Faces ordered so every loop is CCW from outside.
-    // Face 0 (+X): 1 -> 2 -> 6 -> 5 (edges 0..3)
-    // Face 1 (-X): 0 -> 4 -> 7 -> 3 (edges 4..7)
-    // Face 2 (+Y): 3 -> 7 -> 6 -> 2 (edges 8..11)
-    // Face 3 (-Y): 0 -> 1 -> 5 -> 4 (edges 12..15)
-    // Face 4 (+Z): 4 -> 5 -> 6 -> 7 (edges 16..19)
-    // Face 5 (-Z): 0 -> 3 -> 2 -> 1 (edges 20..23)
     AppendBoxFace(hull, VectorSingle( 1.0f,  0.0f,  0.0f, 0.0f), halfX, 0u);
     AppendBoxFace(hull, VectorSingle(-1.0f,  0.0f,  0.0f, 0.0f), halfX, 4u);
     AppendBoxFace(hull, VectorSingle( 0.0f,  1.0f,  0.0f, 0.0f), halfY, 8u);
@@ -100,37 +115,31 @@ Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32
     AppendBoxFace(hull, VectorSingle( 0.0f,  0.0f,  1.0f, 0.0f), halfZ, 16u);
     AppendBoxFace(hull, VectorSingle( 0.0f,  0.0f, -1.0f, 0.0f), halfZ, 20u);
 
-    // 0:1->2, 1:2->6, 2:6->5, 3:5->1
     AppendBoxHalfEdge(hull, 1u, 0u, 1u, 22u);
     AppendBoxHalfEdge(hull, 2u, 0u, 2u, 10u);
     AppendBoxHalfEdge(hull, 6u, 0u, 3u, 17u);
     AppendBoxHalfEdge(hull, 5u, 0u, 0u, 13u);
 
-    // 4:0->4, 5:4->7, 6:7->3, 7:3->0
     AppendBoxHalfEdge(hull, 0u, 1u, 5u, 15u);
     AppendBoxHalfEdge(hull, 4u, 1u, 6u, 19u);
     AppendBoxHalfEdge(hull, 7u, 1u, 7u, 8u);
     AppendBoxHalfEdge(hull, 3u, 1u, 4u, 20u);
 
-    // 8:3->7, 9:7->6, 10:6->2, 11:2->3
     AppendBoxHalfEdge(hull, 3u, 2u, 9u, 6u);
     AppendBoxHalfEdge(hull, 7u, 2u, 10u, 18u);
     AppendBoxHalfEdge(hull, 6u, 2u, 11u, 1u);
     AppendBoxHalfEdge(hull, 2u, 2u, 8u, 21u);
 
-    // 12:0->1, 13:1->5, 14:5->4, 15:4->0
     AppendBoxHalfEdge(hull, 0u, 3u, 13u, 23u);
     AppendBoxHalfEdge(hull, 1u, 3u, 14u, 3u);
     AppendBoxHalfEdge(hull, 5u, 3u, 15u, 16u);
     AppendBoxHalfEdge(hull, 4u, 3u, 12u, 4u);
 
-    // 16:4->5, 17:5->6, 18:6->7, 19:7->4
     AppendBoxHalfEdge(hull, 4u, 4u, 17u, 14u);
     AppendBoxHalfEdge(hull, 5u, 4u, 18u, 2u);
     AppendBoxHalfEdge(hull, 6u, 4u, 19u, 9u);
     AppendBoxHalfEdge(hull, 7u, 4u, 16u, 5u);
 
-    // 20:0->3, 21:3->2, 22:2->1, 23:1->0
     AppendBoxHalfEdge(hull, 0u, 5u, 21u, 7u);
     AppendBoxHalfEdge(hull, 3u, 5u, 22u, 11u);
     AppendBoxHalfEdge(hull, 2u, 5u, 23u, 0u);
@@ -222,7 +231,6 @@ MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
     const VectorSingle axis = SafeNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     const f32 deltaI = iAxis - iPerp;
 
-    // Inertia around capsule midpoint: I_perp * E + (I_axis - I_perp) * (axis * axis^T)
     const f32 c00 = iPerp + deltaI * axis.x * axis.x + totalMass * (c.y * c.y + c.z * c.z);
     const f32 c11 = iPerp + deltaI * axis.y * axis.y + totalMass * (c.x * c.x + c.z * c.z);
     const f32 c22 = iPerp + deltaI * axis.z * axis.z + totalMass * (c.x * c.x + c.y * c.y);
@@ -253,13 +261,19 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
         const f32 ix = (1.0f / 3.0f) * mass * (hy * hy + hz * hz);
         const f32 iy = (1.0f / 3.0f) * mass * (hx * hx + hz * hz);
         const f32 iz = (1.0f / 3.0f) * mass * (hx * hx + hy * hy);
+        const Mat3 localI(
+            VectorSingle(ix, 0.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, iy, 0.0f, 0.0f),
+            VectorSingle(0.0f, 0.0f, iz, 0.0f)
+        );
+        const Mat3 rotI = RotateSymmetricMat3(SafeNormalizeQuat(VectorSingle(hull.boxRotation)), localI);
         const VectorSingle c = VectorSingle(hull.centroid);
         outMass.mass = mass;
         outMass.center = hull.centroid;
         outMass.inertia = Mat3(
-            VectorSingle(ix + mass * (c.y * c.y + c.z * c.z), -mass * c.x * c.y, -mass * c.x * c.z, 0.0f),
-            VectorSingle(-mass * c.x * c.y, iy + mass * (c.x * c.x + c.z * c.z), -mass * c.y * c.z, 0.0f),
-            VectorSingle(-mass * c.x * c.z, -mass * c.y * c.z, iz + mass * (c.x * c.x + c.y * c.y), 0.0f)
+            VectorSingle(rotI.row0.x + mass * (c.y * c.y + c.z * c.z), rotI.row0.y - mass * c.x * c.y, rotI.row0.z - mass * c.x * c.z, 0.0f),
+            VectorSingle(rotI.row1.x - mass * c.x * c.y, rotI.row1.y + mass * (c.x * c.x + c.z * c.z), rotI.row1.z - mass * c.y * c.z, 0.0f),
+            VectorSingle(rotI.row2.x - mass * c.x * c.z, rotI.row2.y - mass * c.y * c.z, rotI.row2.z + mass * (c.x * c.x + c.y * c.y), 0.0f)
         );
         return outMass;
     }
@@ -311,7 +325,6 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
     const VectorSingle localCom = comAccum / volume6;
     const VectorSingle worldCom = refPoint + localCom;
 
-    // Shift inertia from refPoint -> localCom, then parallel-axis to body origin.
     const f32 rxx = density * ixx - mass * (localCom.y * localCom.y + localCom.z * localCom.z);
     const f32 ryy = density * iyy - mass * (localCom.x * localCom.x + localCom.z * localCom.z);
     const f32 rzz = density * izz - mass * (localCom.x * localCom.x + localCom.y * localCom.y);
@@ -355,6 +368,140 @@ Aabb3D ComputeHullAabb(in HullShape hull, in Transform3D xf){
     }
     const VectorSingle r = VectorSingle(hull.radius, hull.radius, hull.radius, 0.0f);
     return Aabb3D(minPt - r, maxPt + r);
+}
+
+u32 BuildMeshBvhRecursive(mut MeshShape mesh, mut Vector<u32> triOrder, in usize beginIdx, in usize endIdx){
+    const u32 nodeIdx = cast<u32>(mesh.nodes.size());
+    mesh.nodes.push_back(MeshBvhNode());
+
+    Aabb3D box = mesh.triangles[triOrder[beginIdx]].aabb;
+    for(usize i = beginIdx + 1u; i < endIdx; ++i)
+        box = AabbUnion(box, mesh.triangles[triOrder[i]].aabb);
+    mesh.nodes[nodeIdx].aabb = box;
+
+    const usize triCount = endIdx - beginIdx;
+    if(triCount <= 4u){
+        mesh.nodes[nodeIdx].isLeaf = true;
+        mesh.nodes[nodeIdx].leftOrFirst = cast<u32>(beginIdx);
+        mesh.nodes[nodeIdx].rightOrCount = cast<u32>(triCount);
+        return nodeIdx;
+    }
+
+    const VectorSingle ext = VectorSingle(box.upperBound) - VectorSingle(box.lowerBound);
+    usize splitAxis = 0u;
+    if(ext.y > ext.x && ext.y >= ext.z)
+        splitAxis = 1u;
+    else if(ext.z > ext.x && ext.z > ext.y)
+        splitAxis = 2u;
+
+    const f32 splitMid = (VectorGetByIndex(VectorSingle(box.lowerBound), cast<isize>(splitAxis)) + VectorGetByIndex(VectorSingle(box.upperBound), cast<isize>(splitAxis))) * 0.5f;
+
+    usize midIdx = beginIdx;
+    for(usize i = beginIdx; i < endIdx; ++i){
+        in Aabb3D ta = mesh.triangles[triOrder[i]].aabb;
+        const f32 c = (VectorGetByIndex(VectorSingle(ta.lowerBound), cast<isize>(splitAxis)) + VectorGetByIndex(VectorSingle(ta.upperBound), cast<isize>(splitAxis))) * 0.5f;
+        if(c < splitMid){
+            const u32 tmp = triOrder[i];
+            triOrder[i] = triOrder[midIdx];
+            triOrder[midIdx] = tmp;
+            ++midIdx;
+        }
+    }
+
+    if(midIdx == beginIdx || midIdx == endIdx)
+        midIdx = beginIdx + (triCount / 2u);
+
+    const u32 leftIdx = BuildMeshBvhRecursive(mesh, triOrder, beginIdx, midIdx);
+    const u32 rightIdx = BuildMeshBvhRecursive(mesh, triOrder, midIdx, endIdx);
+    mesh.nodes[nodeIdx].isLeaf = false;
+    mesh.nodes[nodeIdx].leftOrFirst = leftIdx;
+    mesh.nodes[nodeIdx].rightOrCount = rightIdx;
+    return nodeIdx;
+}
+
+Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices, in f32 radius){
+    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u || !IsFinite(radius) || radius < 0.0f)
+        return MakeUnexpected(Failure());
+
+    for(usize i = 0u; i < vertices.size(); ++i){
+        if(!IsValidPositionVec3(VectorSingle(vertices[i])))
+            return MakeUnexpected(Failure());
+    }
+
+    Vector<MeshTriangle> rawTriangles;
+    rawTriangles.reserve(indices.size() / 3u);
+    for(usize i = 0u; i < indices.size(); i += 3u){
+        const u32 i0 = indices[i];
+        const u32 i1 = indices[i + 1u];
+        const u32 i2 = indices[i + 2u];
+        if(i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size())
+            return MakeUnexpected(Failure());
+
+        const VectorSingle p0 = VectorSingle(vertices[i0]);
+        const VectorSingle p1 = VectorSingle(vertices[i1]);
+        const VectorSingle p2 = VectorSingle(vertices[i2]);
+        const VectorSingle cr = Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(p2 - p0, 0.0f));
+        if(Vector3LengthSq(cr).x <= 1.0e-12f)
+            continue;
+
+        MeshTriangle tri;
+        tri.v0 = f32x4(p0, 0.0f);
+        tri.v1 = f32x4(p1, 0.0f);
+        tri.v2 = f32x4(p2, 0.0f);
+        tri.normal = f32x4(SafeNormalizeVec3(cr, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+        tri.aabb = Aabb3D(Min(p0, Min(p1, p2)), Max(p0, Max(p1, p2)));
+        rawTriangles.push_back(tri);
+    }
+
+    if(rawTriangles.empty())
+        return MakeUnexpected(Failure());
+
+    MeshShape mesh;
+    mesh.radius = radius;
+    mesh.triangles.swap(rawTriangles);
+
+    Vector<u32> triOrder;
+    triOrder.resize(mesh.triangles.size());
+    for(usize i = 0u; i < triOrder.size(); ++i)
+        triOrder[i] = cast<u32>(i);
+
+    BuildMeshBvhRecursive(mesh, triOrder, 0u, triOrder.size());
+
+    Vector<MeshTriangle> orderedTris;
+    orderedTris.reserve(mesh.triangles.size());
+    for(usize i = 0u; i < triOrder.size(); ++i)
+        orderedTris.push_back(mesh.triangles[triOrder[i]]);
+    mesh.triangles.swap(orderedTris);
+    mesh.localAabb = mesh.nodes[0u].aabb;
+    if(radius > 0.0f)
+        mesh.localAabb = FattenAabb(mesh.localAabb, radius);
+
+    return mesh;
+}
+
+Aabb3D ComputeMeshAabb(in MeshShape mesh, in Transform3D xf){
+    if(mesh.nodes.empty())
+        return Aabb3D();
+
+    const VectorSingle lMin = VectorSingle(mesh.nodes[0u].aabb.lowerBound);
+    const VectorSingle lMax = VectorSingle(mesh.nodes[0u].aabb.upperBound);
+    VectorSingle wMin = TransformPoint(xf, lMin);
+    VectorSingle wMax = wMin;
+
+    for(u32 mask = 1u; mask < 8u; ++mask){
+        f32 cx = lMin.x;
+        f32 cy = lMin.y;
+        f32 cz = lMin.z;
+        if((mask & 1u) != 0u) cx = lMax.x;
+        if((mask & 2u) != 0u) cy = lMax.y;
+        if((mask & 4u) != 0u) cz = lMax.z;
+        const VectorSingle wp = TransformPoint(xf, VectorSingle(cx, cy, cz, 0.0f));
+        wMin = Min(wMin, wp);
+        wMax = Max(wMax, wp);
+    }
+
+    const VectorSingle r(mesh.radius, mesh.radius, mesh.radius, 0.0f);
+    return Aabb3D(wMin - r, wMax + r);
 }
 
 

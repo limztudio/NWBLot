@@ -61,7 +61,8 @@ class DynamicTree{
 
         const f32 margin = ComputeAabbMargin(aabb);
         const Aabb3D fattened = FattenAabb(aabb, margin);
-        if(AabbContains(this.m_nodes[proxyId].aabb, aabb))
+        const Aabb3D hugeAabb = FattenAabb(fattened, 4.0f * margin);
+        if(AabbContains(this.m_nodes[proxyId].aabb, aabb) && AabbContains(hugeAabb, this.m_nodes[proxyId].aabb))
             return false;
 
         VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
@@ -95,11 +96,19 @@ class DynamicTree{
         return this.m_nodes[proxyId].userData;
     }
 
+    public b8 isValidLeaf(in u32 proxyId)const{
+        if(proxyId >= this.m_nodes.size())
+            return false;
+        in TreeNode n = this.m_nodes[proxyId];
+        return n.height == 0 && n.isLeaf() && n.userData != s_NullIndex;
+    }
+
     public void queryAabb<Callback>(in Aabb3D queryBox, in u32 maskBits, in Callback callback)const{
         if(this.m_root == s_NullIndex)
             return;
 
-        FixedVector<u32, 256u> stack;
+        Vector<u32> stack;
+        stack.reserve(64u);
         stack.push_back(this.m_root);
         while(!stack.empty()){
             const u32 nodeId = stack[stack.size() - 1u];
@@ -118,10 +127,8 @@ class DynamicTree{
                 }
             }
             else{
-                if(stack.size() + 2u <= 256u){
-                    stack.push_back(node.child1);
-                    stack.push_back(node.child2);
-                }
+                stack.push_back(node.child1);
+                stack.push_back(node.child2);
             }
         }
     }
@@ -136,7 +143,8 @@ class DynamicTree{
             return;
 
         f32 maxFraction = 1.0f;
-        FixedVector<u32, 256u> stack;
+        Vector<u32> stack;
+        stack.reserve(64u);
         stack.push_back(this.m_root);
         while(!stack.empty()){
             const u32 nodeId = stack[stack.size() - 1u];
@@ -157,10 +165,8 @@ class DynamicTree{
                 }
             }
             else{
-                if(stack.size() + 2u <= 256u){
-                    stack.push_back(node.child1);
-                    stack.push_back(node.child2);
-                }
+                stack.push_back(node.child1);
+                stack.push_back(node.child2);
             }
         }
     }
@@ -198,6 +204,8 @@ class DynamicTree{
         this.m_nodes[nodeId].height = -1;
         this.m_nodes[nodeId].child1 = s_NullIndex;
         this.m_nodes[nodeId].child2 = s_NullIndex;
+        this.m_nodes[nodeId].userData = s_NullIndex;
+        this.m_nodes[nodeId].categoryBits = 0u;
         this.m_freeList = nodeId;
         if(this.m_nodeCount > 0u)
             --this.m_nodeCount;

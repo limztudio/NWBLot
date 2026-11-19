@@ -62,7 +62,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 l1 = sim.invInertiaLocalRow1.xyz;
     const float3 l2 = sim.invInertiaLocalRow2.xyz;
 
-    // R * L * R^T, where columns of R^T are r0, r1, r2.
     const float3 lr0 = float3(dot(l0, r0), dot(l0, r1), dot(l0, r2));
     const float3 lr1 = float3(dot(l1, r0), dot(l1, r1), dot(l1, r2));
     const float3 lr2 = float3(dot(l2, r0), dot(l2, r1), dot(l2, r2));
@@ -75,13 +74,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     sim.invInertiaWorldRow1 = float4(w1, sim.invInertiaWorldRow1.w);
     sim.invInertiaWorldRow2 = float4(w2, sim.invInertiaWorldRow2.w);
 
+    const uint bodyFlags = asuint(state.deltaPositionFlags.w);
     const float3 v = state.linearVelocityPad.xyz;
     const float3 w = state.angularVelocityPad.xyz;
     const float minExtent = max(sim.invInertiaLocalRow0.w, 1.0e-3f);
     const float linSpeedSq = dot(v, v);
     const float angSpeedSq = dot(w, w) * minExtent * minExtent;
     const float sleepThreshold = sim.gravityScaleFlags.w;
-    if(linSpeedSq + angSpeedSq <= sleepThreshold * sleepThreshold)
+    if((bodyFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && linSpeedSq + angSpeedSq <= sleepThreshold * sleepThreshold)
         sim.gravityScaleFlags.z += dt;
     else
         sim.gravityScaleFlags.z = 0.0f;
